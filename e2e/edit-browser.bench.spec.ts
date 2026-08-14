@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -46,6 +46,7 @@ const BURST_SCENARIO = process.env.EDIT_BROWSER_BENCH_BURST_SCENARIO;
 
 const DEFAULT_BURST_SCENARIOS = [
   { name: 'editing-type', mode: 'edit' as const, input: 'type' as const },
+  { name: 'editing-ordered-type', mode: 'edit' as const, input: 'ordered-type' as const },
   { name: 'editing-backspace', mode: 'edit' as const, input: 'backspace' as const },
   { name: 'editing-delete', mode: 'edit' as const, input: 'delete-forward' as const },
   { name: 'suggesting-type', mode: 'suggest' as const, input: 'type' as const },
@@ -59,9 +60,20 @@ const DEFAULT_BURST_SCENARIOS = [
   { name: 'document-start', mode: 'edit' as const, input: 'document-start' as const },
 ] as const;
 
-const OPTIONAL_BURST_SCENARIOS = [
-  { name: 'editing-ordered-type', mode: 'edit' as const, input: 'ordered-type' as const },
-] as const;
+function collectRuntimeErrors(page: Page): string[] {
+  const runtimeErrors: string[] = [];
+  page.on('pageerror', (error) => runtimeErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') runtimeErrors.push(message.text());
+  });
+  return runtimeErrors;
+}
+
+function assertNoUnexpectedRuntimeErrors(runtimeErrors: readonly string[]): void {
+  // Fail the browser benchmark on every page/console error. There are currently no
+  // known-benign exclusions; add one here only with a concrete product reason.
+  expect(runtimeErrors, 'unexpected page/console runtime errors').toEqual([]);
+}
 
 function isNavigationBurst(name: string): boolean {
   return (
@@ -77,6 +89,7 @@ test('browser editing latency is measurable and structurally stable', async ({
   browserName,
 }) => {
   test.skip(browserName !== 'chromium', 'Event Timing and benchmark baselines use Chromium');
+  const runtimeErrors = collectRuntimeErrors(page);
   await loadHarness(page, (benchPage) => installMeasurementProbe(benchPage, INJECTED_DELAY_MS));
 
   const scenarios = [
@@ -219,11 +232,13 @@ test('browser editing latency is measurable and structurally stable', async ({
     writeFileSync(process.env.EDIT_BROWSER_BENCH_OUTPUT, serialized);
   }
   console.log(`BROWSER_EDIT_BENCHMARK\n${serialized}`);
+  assertNoUnexpectedRuntimeErrors(runtimeErrors);
 });
 
 test('copy and paste latency is measurable and text stays exact', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'clipboard event timing baseline uses Chromium');
   test.setTimeout(180_000);
+  const runtimeErrors = collectRuntimeErrors(page);
   await loadHarness(page, (benchPage) => installMeasurementProbe(benchPage, 0), false);
 
   for (const scenario of [
@@ -281,21 +296,18 @@ test('copy and paste latency is measurable and text stays exact', async ({ page,
       `${scenario.name} paste median task ${summarize(taskSamples).medianMs} ms, frame ${summarize(frameSamples).medianMs} ms`
     );
   }
+  assertNoUnexpectedRuntimeErrors(runtimeErrors);
 });
 
 test('rapid input backlog and retained heap are measurable', async ({ page, browserName }) => {
   test.skip(browserName !== 'chromium', 'CDP input scheduling and precise heap use Chromium');
   test.setTimeout(360_000);
-  const runtimeErrors: string[] = [];
-  page.on('pageerror', (error) => runtimeErrors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') runtimeErrors.push(message.text());
-  });
+  const runtimeErrors = collectRuntimeErrors(page);
 
   const availableScenarios =
     INJECTED_DELAY_MS > 0
       ? [{ name: 'editing-backspace', mode: 'edit' as const, input: 'backspace' as const }]
-      : [...DEFAULT_BURST_SCENARIOS, ...OPTIONAL_BURST_SCENARIOS];
+      : DEFAULT_BURST_SCENARIOS;
   const scenarios = BURST_SCENARIO
     ? availableScenarios.filter((scenario) => scenario.name === BURST_SCENARIO)
     : DEFAULT_BURST_SCENARIOS;
@@ -371,5 +383,5 @@ test('rapid input backlog and retained heap are measurable', async ({ page, brow
     writeFileSync(process.env.EDIT_BROWSER_BURST_OUTPUT, serialized);
   }
   console.log(`BROWSER_EDIT_BURST_BENCHMARK\n${serialized}`);
-  expect(runtimeErrors.filter((message) => message.includes('Maximum update depth'))).toEqual([]);
+  assertNoUnexpectedRuntimeErrors(runtimeErrors);
 });

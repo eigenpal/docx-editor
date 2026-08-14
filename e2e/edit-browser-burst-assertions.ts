@@ -9,6 +9,19 @@ function maxBackspaceRemovals(report: BurstReport): number {
   return Math.min(report.processedEvents, report.initialSelection.offset);
 }
 
+function assertCollapsedCaret(report: BurstReport, offset: number): void {
+  expect(report.finalSelection?.head).toEqual({
+    paragraphId: report.initialSelection.paragraphId,
+    offset,
+  });
+  expect(report.finalSelection?.anchor).toEqual(report.finalSelection?.head);
+}
+
+function assertEditCommitted(report: BurstReport): void {
+  expect(report.canUndo).toBe(true);
+  expect(report.revisionAfter).toBeGreaterThan(report.revisionBefore);
+}
+
 export function assertBurstDocumentState(report: BurstReport): void {
   const before = report.paragraphTextBefore!;
   const after = report.paragraphTextAfter!;
@@ -20,37 +33,38 @@ export function assertBurstDocumentState(report: BurstReport): void {
     expect(after).toBe(
       `${before.slice(0, start)}${'X'.repeat(insertedLength)}${before.slice(start)}`
     );
-    expect(report.canUndo).toBe(true);
-    expect(report.finalSelection?.head.paragraphId).toBe(report.initialSelection.paragraphId);
+    assertCollapsedCaret(report, start + insertedLength);
+    assertEditCommitted(report);
     return;
   }
 
   if (report.name === 'suggesting-type') {
+    // Suggesting inserts are `w:ins` in all-markup: each typed character is visible once.
     const insertedLength = textDelta(report);
-    expect(insertedLength).toBeGreaterThanOrEqual(report.processedEvents);
-    expect(after.slice(0, start + insertedLength)).toBe(
-      `${before.slice(0, start)}${'X'.repeat(insertedLength)}`
+    expect(insertedLength).toBe(report.processedEvents);
+    expect(after).toBe(
+      `${before.slice(0, start)}${'X'.repeat(insertedLength)}${before.slice(start)}`
     );
-    expect(report.canUndo).toBe(true);
-    expect(report.finalSelection?.head.paragraphId).toBe(report.initialSelection.paragraphId);
+    assertCollapsedCaret(report, start + insertedLength);
+    assertEditCommitted(report);
     return;
   }
 
   if (report.name === 'editing-backspace') {
     const removed = maxBackspaceRemovals(report);
     expect(before.length - after.length).toBe(removed);
-    expect(report.canUndo).toBe(true);
-    expect(report.finalSelection?.head.paragraphId).toBe(report.initialSelection.paragraphId);
+    assertCollapsedCaret(report, start - removed);
+    assertEditCommitted(report);
     return;
   }
 
   if (report.name === 'suggesting-backspace') {
-    expect(after).toBe(before);
+    // Suggesting Backspace wraps `w:del` without removing characters from all-markup text.
+    // The caret still walks left one model unit per processed key.
     const moved = maxBackspaceRemovals(report);
-    expect(report.finalSelection?.head.paragraphId).toBe(report.initialSelection.paragraphId);
-    expect(report.finalSelection?.head.offset).toBeLessThanOrEqual(start);
-    expect(report.finalSelection?.head.offset).toBeGreaterThanOrEqual(start - moved);
-    expect(report.canUndo).toBe(true);
+    expect(after).toBe(before);
+    assertCollapsedCaret(report, start - moved);
+    assertEditCommitted(report);
     return;
   }
 
@@ -59,15 +73,14 @@ export function assertBurstDocumentState(report: BurstReport): void {
     const actualInserted = after.slice(start, start + inserted.length);
     expect(actualInserted).toBe(inserted);
     expect(after).toBe(`${before.slice(0, start)}${inserted}${before.slice(start)}`);
-    expect(report.finalSelection?.head).toEqual({
-      paragraphId: report.initialSelection.paragraphId,
-      offset: start + inserted.length,
-    });
+    assertCollapsedCaret(report, start + inserted.length);
+    assertEditCommitted(report);
     return;
   }
 
   if (report.name === 'editing-delete') {
     expect(after.length).toBe(before.length - report.requestedEvents);
-    expect(report.canUndo).toBe(true);
+    assertCollapsedCaret(report, start);
+    assertEditCommitted(report);
   }
 }

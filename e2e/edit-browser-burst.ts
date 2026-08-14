@@ -78,6 +78,8 @@ export interface BurstReport {
   readonly paragraphTextBefore: string | null;
   readonly paragraphTextAfter: string | null;
   readonly canUndo: boolean;
+  readonly revisionBefore: number;
+  readonly revisionAfter: number | null;
   readonly injectedDelayObserved: TimingSummary | null;
 }
 
@@ -442,6 +444,7 @@ export async function runBurst(
       selection: window.__DOCX_EDITOR_E2E__!.benchmarkSelection(),
       paragraphText: window.__DOCX_EDITOR_E2E__!.benchmarkParagraphText(paragraphId),
       canUndo: window.__DOCX_EDITOR_E2E__!.canUndo(),
+      revision: window.__DOCX_EDITOR_E2E__!.layoutRevision(),
     }),
     prepared!.paragraphId
   );
@@ -476,6 +479,8 @@ export async function runBurst(
     paragraphTextBefore,
     paragraphTextAfter: dom.paragraphText,
     canUndo: dom.canUndo,
+    revisionBefore: prepared!.revision,
+    revisionAfter: dom.revision,
     injectedDelayObserved:
       probe.injectedDelayObservedMs.length > 0 ? summarize(probe.injectedDelayObservedMs) : null,
   };

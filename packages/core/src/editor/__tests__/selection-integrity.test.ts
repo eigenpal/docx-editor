@@ -433,7 +433,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
   const long = `<w:p><w:r><w:t>${'word '.repeat(4000)}</w:t></w:r></w:p>`;
 
   /** The surface inside a scroll container, with the viewport happy-dom cannot measure. */
-  function mountScrolled(): {
+  function mountScrolled(options: { pointer?: 'engine' | 'native' } = {}): {
     surface: PaginatedSurface;
     host: HTMLElement;
     scroller: HTMLElement;
@@ -444,9 +444,20 @@ describe('a render never discards a gesture the model has not adopted yet', () =
     scroller.append(host);
     document.body.append(scroller);
     Object.defineProperty(scroller, 'clientHeight', { value: 800, configurable: true });
-    const opened = mountPaginatedSurface(host, docx(long), { scale: 1 });
+    const opened = mountPaginatedSurface(host, docx(long), { scale: 1, ...options });
     if (!opened.ok) throw new Error(opened.reason);
     return { surface: opened.surface, host, scroller };
+  }
+
+  function typeDigit(pages: Element, digit: string): void {
+    pages.dispatchEvent(
+      new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: digit,
+      })
+    );
   }
 
   test('a repaint adopts the live browser selection instead of writing the model over it', async () => {
@@ -665,6 +676,77 @@ describe('a render never discards a gesture the model has not adopted yet', () =
       surface.destroy();
       host.remove();
       scroller.remove();
+      if (descriptor) Object.defineProperty(window.navigator, 'scheduling', descriptor);
+      else delete (window.navigator as Navigator & { scheduling?: unknown }).scheduling;
+    }
+  });
+
+  test('returning to the last mirrored caret during deferred paint still wins the next beforeinput', async () => {
+    // THE EQUALITY CASE THE STALE-ECHO GUARD USED TO SWALLOW.
+    //
+    // `isStaleMirroredCaret` used to treat "DOM caret still equals lastMirroredSelection" as
+    // proof the browser had not moved. A native/touch caret gesture can land on exactly that
+    // pre-edit offset while paint is deferred — the leftover DOM caret and the user's new
+    // caret are the same range. The next character must insert THERE, not at the post-edit
+    // model caret. Provenance is a pointerdown (mouse in native mode, touch in engine mode);
+    // a queued selectionchange echo without one must still be ignored.
+    const descriptor = Object.getOwnPropertyDescriptor(window.navigator, 'scheduling');
+    Object.defineProperty(window.navigator, 'scheduling', {
+      configurable: true,
+      value: { isInputPending: () => true },
+    });
+    const cases: readonly {
+      readonly pointer?: 'engine' | 'native';
+      readonly pointerType: 'mouse' | 'touch';
+    }[] = [{ pointer: 'native', pointerType: 'mouse' }, { pointerType: 'touch' }];
+    try {
+      for (const setup of cases) {
+        const { surface, host, scroller } = mountScrolled(
+          setup.pointer ? { pointer: setup.pointer } : {}
+        );
+        try {
+          const id = surface.session.paragraphIds()[0]!;
+          surface.setSelection({
+            anchor: { paragraphId: id, offset: 0 },
+            head: { paragraphId: id, offset: 0 },
+          });
+          await Promise.resolve();
+          const pages = host.querySelector('.docx-pages');
+          if (!pages) throw new Error('pages layer missing');
+          typeDigit(pages, '1');
+          expect(surface.state().selection.head.offset).toBe(1);
+
+          pages.dispatchEvent(
+            new PointerEvent('pointerdown', {
+              bubbles: true,
+              cancelable: true,
+              button: 0,
+              pointerId: 1,
+              pointerType: setup.pointerType,
+            })
+          );
+          const run = host.querySelector('.docx-page[data-page-index="0"] [data-start]')!;
+          const text = textNodeIn(run);
+          const selection = document.getSelection()!;
+          selection.removeAllRanges();
+          const range = document.createRange();
+          range.setStart(text, 0);
+          range.setEnd(text, 0);
+          selection.addRange(range);
+
+          typeDigit(pages, 'Y');
+          expect(surface.state().selection).toEqual({
+            anchor: { paragraphId: id, offset: 1 },
+            head: { paragraphId: id, offset: 1 },
+          });
+          expect(surface.session.bodyText().slice(0, 2)).toBe('Y1');
+        } finally {
+          surface.destroy();
+          host.remove();
+          scroller.remove();
+        }
+      }
+    } finally {
       if (descriptor) Object.defineProperty(window.navigator, 'scheduling', descriptor);
       else delete (window.navigator as Navigator & { scheduling?: unknown }).scheduling;
     }

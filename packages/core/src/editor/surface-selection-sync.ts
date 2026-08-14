@@ -134,6 +134,14 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let applyingSelection = false;
   let lastMirroredSelection: SemanticSelection | null = null;
   /**
+   * Whether a user selection gesture has happened since the last successful DOM mirror.
+   *
+   * A deferred paint leaves the DOM caret at `lastMirroredSelection`. Equality with that
+   * range is therefore not proof of a stale echo: a native/touch caret can land on exactly
+   * the same offset. Pointerdown/selectstart are the provenance that distinguishes the two.
+   */
+  let userSelectionGesture = false;
+  /**
    * Whether the MODEL holds the newer of the two selections.
    *
    * Set by a deliberate move — a commit's post-edit caret, a navigation, undo — and cleared
@@ -251,18 +259,30 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
 
   /**
    * Whether the DOM caret is still the last value this surface wrote, while the model has
-   * already moved on.
+   * already moved on, AND no user selection gesture has intervened.
    *
    * Deferred paint is the usual case: `commit` raises `modelMoved` and skips `mirrorToDom`
    * until the input queue drains, so the browser keeps showing the PRE-edit caret. That
-   * leftover is not a user gesture. A click, drag or keyboard move that the browser has
-   * already applied will not match `lastMirroredSelection` and must still be adopted.
+   * leftover is not a user gesture. Equality with `lastMirroredSelection` is not enough on
+   * its own: a native or touch caret can return to that exact offset on purpose. A
+   * pointerdown/selectstart since the last mirror is the gesture; a queued selectionchange
+   * echo has neither.
    */
   function isStaleMirroredCaret(): boolean {
-    if (!modelMoved || !lastMirroredSelection) return false;
+    if (!modelMoved || !lastMirroredSelection || userSelectionGesture) return false;
     const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
     return reported !== null && selectionsEqual(reported, lastMirroredSelection);
   }
+
+  function noteUserSelectionGesture(event: Event): void {
+    if (event instanceof PointerEvent && event.button !== 0) return;
+    userSelectionGesture = true;
+  }
+
+  // Native pointer mode binds no engine handlers; touch bypasses them even in engine mode.
+  // Capture here so a caret that lands on the last mirrored offset is still a gesture.
+  pagesLayer.addEventListener('pointerdown', noteUserSelectionGesture, true);
+  pagesLayer.addEventListener('selectstart', noteUserSelectionGesture, true);
 
   return {
     adoptBeforePaint() {
@@ -314,6 +334,9 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       const began = deps.now();
       const next = deps.domSelection?.() ?? deps.selection();
       lastMirroredSelection = next;
+      // This write is the new baseline. Matching DOM carets after it are echoes until the
+      // user starts another selection gesture.
+      userSelectionGesture = false;
       applySelectionToDom(pagesLayer, next, document.getSelection());
       deps.recordSelectionMs(deps.now() - began);
       // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
@@ -334,7 +357,8 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // the last mirrored (pre-edit) offset. Adopting it here — so a click that has not
       // yet produced `selectionchange` still edits the clicked point — would otherwise
       // insert the next character at that stale offset and reorder a typing burst.
-      // A genuine gesture moves the DOM caret off `lastMirroredSelection` and still wins.
+      // A genuine pointer/touch/selectstart gesture still wins, even if it lands on that
+      // same pre-edit offset; a queued echo has no such provenance and is skipped.
       if (isStaleMirroredCaret()) return;
       adoptDomSelection();
     },
