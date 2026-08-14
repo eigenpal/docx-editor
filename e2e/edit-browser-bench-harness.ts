@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const PORT = 5275;
 const FIXTURE = 'synthetic-long-edit.docx';
-const REVIEW_RAIL_ENABLED = process.env.EDIT_BROWSER_BENCH_REVIEW_RAIL !== '0';
+export const REVIEW_RAIL_ENABLED = process.env.EDIT_BROWSER_BENCH_REVIEW_RAIL !== '0';
 
 export const EDIT_BROWSER_BENCH_URL = `http://localhost:${PORT}/?perfE2e=1&fixture=${FIXTURE}&reviewRail=${
   REVIEW_RAIL_ENABLED ? '1' : '0'

@@ -14,6 +14,31 @@ import {
 export const BURST_DURATION_MS = positiveInteger(process.env.EDIT_BROWSER_BENCH_BURST_MS, 5_000);
 export const BURST_RATE_HZ = positiveInteger(process.env.EDIT_BROWSER_BENCH_BURST_HZ, 30);
 
+export const BURST_NAVIGATION_DURATION_MS = positiveInteger(
+  process.env.EDIT_BROWSER_BENCH_BURST_NAV_MS,
+  2_000
+);
+
+export const BURST_ORDERED_DURATION_MS = positiveInteger(
+  process.env.EDIT_BROWSER_BENCH_ORDERED_MS,
+  100
+);
+
+export function burstDurationForScenario(name: string): number {
+  if (name === 'editing-ordered-type') return BURST_ORDERED_DURATION_MS;
+  if (
+    name === 'editing-backspace' ||
+    name === 'suggesting-backspace' ||
+    name === 'arrow-up' ||
+    name === 'word-left' ||
+    name === 'line-start' ||
+    name === 'document-start'
+  ) {
+    return BURST_NAVIGATION_DURATION_MS;
+  }
+  return BURST_DURATION_MS;
+}
+
 interface BurstProbeSnapshot {
   readonly keydowns: number;
   readonly beforeInputs: number;
@@ -52,6 +77,7 @@ export interface BurstReport {
   readonly orderedText: string | null;
   readonly paragraphTextBefore: string | null;
   readonly paragraphTextAfter: string | null;
+  readonly canUndo: boolean;
   readonly injectedDelayObserved: TimingSummary | null;
 }
 
@@ -278,15 +304,20 @@ export async function runBurst(
       window.__DOCX_EDITOR_E2E__!.prepareEditBenchmark(0.5, editingMode, offsetFraction),
     {
       editingMode: scenario.mode,
-      offsetFraction:
-        scenario.input === 'backspace' ||
-        scenario.input === 'arrow-left' ||
-        scenario.input === 'arrow-up' ||
-        scenario.input === 'word-left' ||
-        scenario.input === 'line-start' ||
-        scenario.input === 'document-start'
-          ? 1
-          : 0,
+      offsetFraction: (() => {
+        if (scenario.input === 'backspace') return 0.5;
+        if (scenario.input === 'delete-forward') return 0;
+        if (
+          scenario.input === 'arrow-left' ||
+          scenario.input === 'arrow-up' ||
+          scenario.input === 'word-left' ||
+          scenario.input === 'line-start' ||
+          scenario.input === 'document-start'
+        ) {
+          return 1;
+        }
+        return 0;
+      })(),
     }
   );
   expect(prepared).not.toBeNull();
@@ -313,12 +344,14 @@ export async function runBurst(
   }
   await installBurstProbe(page, injectedDelayMs);
   const client = await page.context().newCDPSession(page);
-  const requestedEvents = Math.max(1, Math.round((BURST_DURATION_MS * BURST_RATE_HZ) / 1_000));
+  const burstDurationMs = burstDurationForScenario(scenario.name);
+  const rateHz = scenario.name === 'editing-ordered-type' ? 100 : BURST_RATE_HZ;
+  const requestedEvents = Math.max(1, Math.round((burstDurationMs * rateHz) / 1_000));
   const orderedText =
     scenario.input === 'ordered-type'
       ? Array.from({ length: requestedEvents }, (_, index) => '1234567890'[index % 10]!).join('')
       : null;
-  const intervalMs = 1_000 / BURST_RATE_HZ;
+  const intervalMs = 1_000 / rateHz;
   const completionLatencyMs: number[] = [];
   const pending: Promise<void>[] = [];
   const dispatchStarted = nodePerformance.now();
@@ -387,8 +420,19 @@ export async function runBurst(
     });
   }
   const drainedAt = nodePerformance.now();
-  await twoFrames(page);
+  for (let frame = 0; frame < 6; frame += 1) await twoFrames(page);
   const probe = await page.evaluate(() => window.__EDIT_BURST_BENCH__!.stop());
+  const processedEvents =
+    scenario.input === 'type' || scenario.input === 'ordered-type'
+      ? probe.beforeInputs
+      : probe.keydowns;
+  if (scenario.input === 'backspace') {
+    await page.waitForFunction(
+      (revisionBefore) => (window.__DOCX_EDITOR_E2E__!.layoutRevision() ?? 0) > revisionBefore,
+      prepared!.revision,
+      { timeout: 15_000 }
+    );
+  }
   const heapAfterBytes = await heapBytes(page);
   const dom = await page.evaluate(
     (paragraphId) => ({
@@ -397,15 +441,12 @@ export async function runBurst(
       engine: window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!,
       selection: window.__DOCX_EDITOR_E2E__!.benchmarkSelection(),
       paragraphText: window.__DOCX_EDITOR_E2E__!.benchmarkParagraphText(paragraphId),
+      canUndo: window.__DOCX_EDITOR_E2E__!.canUndo(),
     }),
     prepared!.paragraphId
   );
   await client.detach();
 
-  const processedEvents =
-    scenario.input === 'type' || scenario.input === 'ordered-type'
-      ? probe.beforeInputs
-      : probe.keydowns;
   return {
     name: scenario.name,
     mode: scenario.mode,
@@ -434,6 +475,7 @@ export async function runBurst(
     orderedText,
     paragraphTextBefore,
     paragraphTextAfter: dom.paragraphText,
+    canUndo: dom.canUndo,
     injectedDelayObserved:
       probe.injectedDelayObservedMs.length > 0 ? summarize(probe.injectedDelayObservedMs) : null,
   };
