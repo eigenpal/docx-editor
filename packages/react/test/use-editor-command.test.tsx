@@ -84,7 +84,7 @@ function mount(node: React.ReactNode): {
  * Select the whole first paragraph, so mark state is derivable.
  *
  * `await act` rather than the sync form: `useEditorState` notifies through a DEFERRED
- * notifier, so the subscriber re-render lands a microtask after the command returns.
+ * notifier, so the subscriber re-render lands after the command returns.
  */
 async function selectAll(editor: DocxEditorInstance): Promise<void> {
   await act(async () => {

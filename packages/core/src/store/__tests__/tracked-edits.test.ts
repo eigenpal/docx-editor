@@ -432,8 +432,55 @@ describe('a tracked deletion', () => {
     // ONE decision, one Accept. A `w:del` per keystroke turned a deleted word into a column
     // of one-letter cards in the review pane.
     expect(out.match(/<w:del\b/g)?.length).toBe(1);
+    const deletion = out.match(/<w:del\b[^>]*>([\s\S]*?)<\/w:del>/)?.[1] ?? '';
+    expect(deletion.match(/<w:r\b/g)?.length).toBe(1);
     expect(out).toContain('ord');
     expect(out).toContain('keep w');
+  });
+
+  test('consecutive deletions merge copied runs only when their formatting agrees', () => {
+    let current = part(
+      '<w:p><w:r><w:rPr><w:b/><w:color w:val="123456"/></w:rPr><w:t>word</w:t></w:r></w:p>'
+    );
+    const id = paragraphId(current);
+    for (const [from, to] of [
+      [3, 4],
+      [2, 3],
+      [1, 2],
+    ] as const) {
+      current = apply(current, {
+        op: 'deleteText',
+        paragraphId: id,
+        start: from,
+        end: to,
+        revision: ADA,
+      });
+    }
+    const deletion = xml(current).match(/<w:del\b[^>]*>([\s\S]*?)<\/w:del>/)?.[1] ?? '';
+    expect(deletion.match(/<w:r\b/g)?.length).toBe(1);
+    expect(deletion).toContain('<w:b');
+    expect(deletion).toContain('w:val="123456"');
+    expect(deletion).toContain('<w:delText>ord</w:delText>');
+
+    let mixed = part(
+      '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>a</w:t></w:r>' +
+        '<w:r><w:rPr><w:i/></w:rPr><w:t>b</w:t></w:r></w:p>'
+    );
+    const mixedId = paragraphId(mixed);
+    for (const [from, to] of [
+      [1, 2],
+      [0, 1],
+    ] as const) {
+      mixed = apply(mixed, {
+        op: 'deleteText',
+        paragraphId: mixedId,
+        start: from,
+        end: to,
+        revision: ADA,
+      });
+    }
+    const mixedDeletion = xml(mixed).match(/<w:del\b[^>]*>([\s\S]*?)<\/w:del>/)?.[1] ?? '';
+    expect(mixedDeletion.match(/<w:r\b/g)?.length).toBe(2);
   });
 
   test('a deletion by ANOTHER author beside yours stays its own decision', () => {

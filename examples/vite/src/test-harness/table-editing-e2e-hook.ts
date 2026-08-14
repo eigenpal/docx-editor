@@ -14,7 +14,11 @@ import {
   findTableInteractionAt,
   tableInteractionIndex,
 } from '../../../../packages/core/src/layout/semantic-table-interaction.ts';
-import { type SemanticLayout, type TableFragmentRecord } from '@docx-editor.dev/core/layout';
+import {
+  paragraphTextFromLayout,
+  type SemanticLayout,
+  type TableFragmentRecord,
+} from '@docx-editor.dev/core/layout';
 import {
   canonicalOoxmlFingerprint,
   diffSemanticDigests,
@@ -63,8 +67,15 @@ export interface DocxEditorE2EHook {
   fontMeasurer(): 'fixed' | 'shaped' | null;
   prepareEditBenchmark(
     fraction: number,
-    mode: SurfaceEditingMode
-  ): { paragraphId: string; revision: number; pageCount: number } | null;
+    mode: SurfaceEditingMode,
+    offsetFraction?: number
+  ): {
+    paragraphId: string;
+    offset: number;
+    textLength: number;
+    revision: number;
+    pageCount: number;
+  } | null;
   benchmarkPerf(): PaginatedSurfacePerf | null;
   undoBenchmarkEdit(): boolean;
   innerTableId(): string | null;
@@ -290,7 +301,7 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
       const editor = getEditor() as DocxEditorInstance | null;
       return editor?.fontMeasurement().measurer ?? null;
     },
-    prepareEditBenchmark(fraction, mode) {
+    prepareEditBenchmark(fraction, mode, offsetFraction = 0) {
       const currentSurface = surface(getEditor());
       const pages = document.querySelector<HTMLElement>('.docx-pages');
       if (!currentSurface || !pages) return null;
@@ -298,13 +309,21 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
       if (paragraphIds.length === 0) return null;
       const bounded = Math.min(1, Math.max(0, fraction));
       const paragraphId = paragraphIds[Math.floor((paragraphIds.length - 1) * bounded)]!;
-      const position = { paragraphId, offset: 0 };
+      const textLength = paragraphTextFromLayout(currentSurface.layout(), paragraphId).length;
+      const offset = Math.round(textLength * Math.min(1, Math.max(0, offsetFraction)));
+      const position = { paragraphId, offset };
       currentSurface.setEditingMode(mode);
       currentSurface.setSelection({ anchor: position, head: position });
       currentSurface.revealPosition(position, { block: 'center' });
       pages.focus({ preventScroll: true });
       const state = currentSurface.state();
-      return { paragraphId, revision: state.revision, pageCount: state.pageCount };
+      return {
+        paragraphId,
+        offset,
+        textLength,
+        revision: state.revision,
+        pageCount: state.pageCount,
+      };
     },
     benchmarkPerf() {
       return surface(getEditor())?.state().perf ?? null;

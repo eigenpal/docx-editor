@@ -429,10 +429,20 @@ function ReviewRoot({
   // collapsed. A key keeps its last height when virtualization unmounts its card, which is
   // deliberate: dropping it would collapse the run and jump every card on screen.
   const slotSizes = useRef(new WeakMap<Element, string>());
+  const slotElements = useRef(new Map<string, Element>());
   const sizeObserver = useRef<ResizeObserver | null>(null);
   const observeSlot = useCallback(
     (node: HTMLElement | null, key: string) => {
-      if (!node || typeof ResizeObserver === 'undefined') return;
+      const previous = slotElements.current.get(key);
+      if (!node) {
+        if (previous) {
+          sizeObserver.current?.unobserve(previous);
+          slotSizes.current.delete(previous);
+          slotElements.current.delete(key);
+        }
+        return;
+      }
+      if (typeof ResizeObserver === 'undefined') return;
       measure(key, node.offsetHeight);
       sizeObserver.current ??= new ResizeObserver((entries) => {
         for (const entry of entries) {
@@ -440,13 +450,24 @@ function ReviewRoot({
           if (owner) measure(owner, (entry.target as HTMLElement).offsetHeight);
         }
       });
-      if (slotSizes.current.get(node) === key) return;
+      if (previous === node && slotSizes.current.get(node) === key) return;
+      if (previous) {
+        sizeObserver.current.unobserve(previous);
+        slotSizes.current.delete(previous);
+      }
       slotSizes.current.set(node, key);
+      slotElements.current.set(key, node);
       sizeObserver.current.observe(node);
     },
     [measure]
   );
-  useEffect(() => () => sizeObserver.current?.disconnect(), []);
+  useEffect(
+    () => () => {
+      sizeObserver.current?.disconnect();
+      slotElements.current.clear();
+    },
+    []
+  );
 
   // Where the rail sits, measured from the PAINTED SURFACE rather than from the viewport.
   //

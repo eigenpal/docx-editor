@@ -33,27 +33,39 @@ export function editorStateActiveSubscriptionCount(): number {
 }
 
 /**
- * Notifications are COALESCED AND DEFERRED to a microtask, for two reasons:
+ * Notifications are COALESCED AND DEFERRED, for two reasons:
  *
  * 1. Correctness. The facade's `change` event fires mid-commit — before the layout
  *    scheduler's synchronous publish inside the same `exec` call. React's
  *    `useSyncExternalStore` reads `getSnapshot` synchronously inside a notification,
  *    and the facade's version-cached `snapshot()` would derive its formatting from the
  *    not-yet-published layout and cache that stale answer for the whole version. A
- *    microtask runs after the commit's synchronous work, so the first read of the new
- *    version sees the published layout.
+ *    microtask runs after the commit's synchronous work, so the first read of the
+ *    new version sees the published layout.
  * 2. Efficiency. One commit can emit `change` AND `selectionChange`; coalescing turns
- *    the burst into a single re-render pass.
+ *    the burst into a single re-render pass. When the browser reports more hardware input
+ *    waiting, a task replaces the usual microtask so key repeat cannot force dozens of
+ *    synchronous React store updates without yielding and trip React's maximum-update-depth
+ *    guard even though the updates are legitimate.
  */
 function deferredNotifier(onStoreChange: () => void): () => void {
   let scheduled = false;
   return () => {
     if (scheduled) return;
     scheduled = true;
-    queueMicrotask(() => {
+    const scheduling = (
+      globalThis as typeof globalThis & {
+        navigator?: {
+          scheduling?: { isInputPending?: (options?: { includeContinuous?: boolean }) => boolean };
+        };
+      }
+    ).navigator?.scheduling;
+    const flush = () => {
       scheduled = false;
       onStoreChange();
-    });
+    };
+    if (scheduling?.isInputPending?.({ includeContinuous: true })) setTimeout(flush, 0);
+    else queueMicrotask(flush);
   };
 }
 

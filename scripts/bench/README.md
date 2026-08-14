@@ -58,6 +58,15 @@ EDIT_BROWSER_BENCH_OUTPUT=/tmp/browser-edit.json bun run bench:edit:browser
 EDIT_BROWSER_BENCH_RUNS=11 EDIT_BROWSER_BENCH_WARMUP=3 bun run bench:edit:browser
 EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 bun run bench:edit:browser
 
+# Reproduce rapid typing/key-repeat backlog, or run the one-minute worst-case soak
+EDIT_BROWSER_BENCH_BURST_MS=5000 EDIT_BROWSER_BENCH_BURST_HZ=30 bun run bench:edit:browser
+EDIT_BROWSER_BENCH_BURST_MS=60000 EDIT_BROWSER_BENCH_BURST_HZ=30 \
+  EDIT_BROWSER_BENCH_BURST_SCENARIO=suggesting-backspace bun run bench:edit:browser
+
+# Isolate review-rail cost; save the burst report separately when needed
+EDIT_BROWSER_BENCH_REVIEW_RAIL=0 bun run bench:edit:browser
+EDIT_BROWSER_BURST_OUTPUT=/tmp/browser-edit-burst.json bun run bench:edit:browser
+
 # Self-test: every measured input task must include this artificial delay
 EDIT_BROWSER_BENCH_DELAY_MS=25 bun run bench:edit:browser
 ```
@@ -69,6 +78,12 @@ characters without undo in editing and suggesting modes, comparing the first and
 and reporting garbage-collected JavaScript heap growth. The environment is pinned to headless Chromium,
 1440×1000 at 1× scale, light mode, reduced motion, one worker, a fixed fixture, fixed edit
 positions, warmups, and fresh undo between samples.
+
+The burst scenarios dispatch trusted input at a fixed rate without waiting for the preceding frame,
+which reproduces hardware key repeat instead of hiding backlog behind Playwright waits. They report
+requested versus processed events, handler and completion latency, post-dispatch drain time, Event
+Timing queue delay, long tasks, maximum frame gap, DOM size, peak heap, and forced-GC heap change.
+The test fails on dropped events, broken virtualization, or React's maximum-update-depth error.
 
 Browser milliseconds cannot be hardware-independent. Use the exact work counters as the CI-safe
 algorithmic gate, and compare repeated browser runs on the same machine. The injected-delay mode

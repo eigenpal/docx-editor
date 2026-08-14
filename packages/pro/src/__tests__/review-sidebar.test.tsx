@@ -245,6 +245,41 @@ describe('the review sidebar', () => {
     expect(editor.surface!.session.bodyText()).toBe('base ');
   });
 
+  test('stops observing a card slot when the card unmounts', async () => {
+    const original = globalThis.ResizeObserver;
+    const observed: Element[] = [];
+    const unobserved: Element[] = [];
+    class ProbeResizeObserver {
+      constructor(_callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        observed.push(target);
+      }
+      unobserve(target: Element) {
+        unobserved.push(target);
+      }
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = ProbeResizeObserver as unknown as typeof ResizeObserver;
+    try {
+      const view = render(
+        <DocxEditorRoot document={TRACKED} modules={[reviewModule()]}>
+          <DocxEditorViewport>
+            <DocxEditorContent />
+            <DocxEditorReview />
+          </DocxEditorViewport>
+        </DocxEditorRoot>
+      );
+      const slot = observed.find((node) => node.classList.contains('docx-review__slot'));
+      expect(slot).toBeDefined();
+      await act(async () => {
+        fireEvent.click(view.getByTestId('review-delete'));
+      });
+      expect(unobserved.includes(slot!)).toBe(true);
+    } finally {
+      globalThis.ResizeObserver = original;
+    }
+  });
+
   test('hides the read-only structural cards by default, and shows them on request', () => {
     // One resolvable insertion plus one structural site (a tracked row insertion,
     // `w:trPr/w:ins`) — the kind of markup a heavily revised contract carries by the dozen.

@@ -30,6 +30,9 @@ function PerformanceBridge() {
 }
 
 export function PerformanceE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
+  const reviewRailEnabled =
+    typeof window === 'undefined' ||
+    new URLSearchParams(window.location.search).get('reviewRail') !== '0';
   const {
     document: bytes,
     fonts,
@@ -51,7 +54,7 @@ export function PerformanceE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
           <DocxEditor.Toolbar />
           <DocxEditor.Viewport className="demo-viewport">
             <DocxEditor.Content />
-            <DocxEditorReview />
+            {reviewRailEnabled ? <DocxEditorReview /> : null}
           </DocxEditor.Viewport>
         </DocxEditor.Root>
       ) : loadError ? (

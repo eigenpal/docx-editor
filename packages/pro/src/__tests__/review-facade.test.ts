@@ -758,6 +758,12 @@ describe('suggesting mode', () => {
     expect(cards).toHaveLength(1);
     expect(rev(cards[0]).revisionKind).toBe('delete');
     expect(cards[0]!.text).toBe('pha');
+    const xml = serializeOoxmlPart(editor.surface!.session.part());
+    const deletion = xml.match(/<w:del\b[^>]*>([\s\S]*?)<\/w:del>/)?.[1] ?? '';
+    // The proposal grows one deleted-text node, not one run per key repeat. Keeping each
+    // struck character in its own run makes rebuild/layout/paint and undo retention grow
+    // quadratically during a held Backspace.
+    expect(deletion.match(/<w:r\b/g) ?? []).toHaveLength(1);
     // Nothing was actually removed — that is what makes rejecting possible.
     expect(bodyTextOf(editor)).toContain('alpha beta');
   });

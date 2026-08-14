@@ -140,7 +140,7 @@ describe('useEditorState', () => {
     const editor = instance!;
     expect(view.getByTestId('page-count').textContent).toBe('1 / 1');
 
-    // Store notifications are coalesced to a microtask (see useEditorState), so async
+    // Store notifications are normally coalesced to a microtask (see useEditorState), so async
     // act is what flushes them.
     await act(async () => {
       editor.surface!.selectAll();
@@ -221,7 +221,6 @@ describe('useEditorCommand', () => {
     expect(instance!.surface!.session.bodyText()).toBe(before);
   });
 });
-
 
 describe('useEditorEvent', () => {
   test('subscribes for the component lifetime and calls the latest handler', () => {

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { performance as nodePerformance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 
 const PORT = 5275;
@@ -10,12 +11,18 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE_SHA256 = createHash('sha256')
   .update(readFileSync(resolve(REPO_ROOT, 'e2e/fixtures', FIXTURE)))
   .digest('hex');
-const URL = `http://localhost:${PORT}/?perfE2e=1&fixture=${FIXTURE}`;
+const REVIEW_RAIL_ENABLED = process.env.EDIT_BROWSER_BENCH_REVIEW_RAIL !== '0';
+const URL = `http://localhost:${PORT}/?perfE2e=1&fixture=${FIXTURE}&reviewRail=${
+  REVIEW_RAIL_ENABLED ? '1' : '0'
+}`;
 const RUNS = positiveInteger(process.env.EDIT_BROWSER_BENCH_RUNS, 7);
 const WARMUP = positiveInteger(process.env.EDIT_BROWSER_BENCH_WARMUP, 2);
 const SUSTAINED_EDITS = positiveInteger(process.env.EDIT_BROWSER_BENCH_SUSTAINED_EDITS, 180);
 const SUSTAINED_WARMUP_EDITS = 20;
 const INJECTED_DELAY_MS = nonNegativeNumber(process.env.EDIT_BROWSER_BENCH_DELAY_MS, 0);
+const BURST_DURATION_MS = positiveInteger(process.env.EDIT_BROWSER_BENCH_BURST_MS, 5_000);
+const BURST_RATE_HZ = positiveInteger(process.env.EDIT_BROWSER_BENCH_BURST_HZ, 30);
+const BURST_SCENARIO = process.env.EDIT_BROWSER_BENCH_BURST_SCENARIO;
 
 interface EnginePerf {
   readonly layoutMs: number;
@@ -88,6 +95,39 @@ interface SustainedReport {
   readonly heapChangeBytes: number | null;
 }
 
+interface BurstProbeSnapshot {
+  readonly keydowns: number;
+  readonly beforeInputs: number;
+  readonly handlerMs: readonly number[];
+  readonly eventDelayMs: readonly number[];
+  readonly longTasksMs: readonly number[];
+  readonly frameGapsMs: readonly number[];
+  readonly heapTimeline: readonly { atMs: number; usedBytes: number }[];
+  readonly injectedDelayObservedMs: readonly number[];
+}
+
+interface BurstReport {
+  readonly name: string;
+  readonly mode: 'edit' | 'suggest';
+  readonly requestedEvents: number;
+  readonly processedEvents: number;
+  readonly dispatchWindowMs: number;
+  readonly drainMs: number;
+  readonly completionLatency: TimingSummary;
+  readonly handler: TimingSummary | null;
+  readonly eventDelay: TimingSummary | null;
+  readonly longTask: TimingSummary | null;
+  readonly maxFrameGapMs: number;
+  readonly heapBeforeBytes: number | null;
+  readonly heapAfterBytes: number | null;
+  readonly heapChangeBytes: number | null;
+  readonly peakObservedHeapBytes: number | null;
+  readonly domNodes: number;
+  readonly materializedPages: number;
+  readonly engine: EnginePerf;
+  readonly injectedDelayObserved: TimingSummary | null;
+}
+
 declare global {
   interface Window {
     __EDIT_BROWSER_BENCH__?: {
@@ -99,6 +139,9 @@ declare global {
         duration: number;
         processingStart: number;
       }>;
+    };
+    __EDIT_BURST_BENCH__?: {
+      stop(): BurstProbeSnapshot;
     };
   }
 }
@@ -223,6 +266,106 @@ async function installMeasurementProbe(page: Page): Promise<void> {
   }, INJECTED_DELAY_MS);
 }
 
+async function installBurstProbe(page: Page, injectedDelayMs = 0): Promise<void> {
+  await page.evaluate((delayMs) => {
+    const started = new WeakMap<Event, number>();
+    const handlerMs: number[] = [];
+    const eventDelayMs: number[] = [];
+    const longTasksMs: number[] = [];
+    const frameGapsMs: number[] = [];
+    const heapTimeline: Array<{ atMs: number; usedBytes: number }> = [];
+    const injectedDelayObservedMs: number[] = [];
+    const installedAt = performance.now();
+    let keydowns = 0;
+    let beforeInputs = 0;
+    let stopped = false;
+    let previousFrame = installedAt;
+    let previousHeapSample = 0;
+
+    const begin = (event: Event): void => {
+      if (!event.isTrusted) return;
+      started.set(event, performance.now());
+      if (event.type === 'keydown') keydowns += 1;
+      else beforeInputs += 1;
+      if (delayMs > 0) {
+        const delayStart = performance.now();
+        const delayEnd = performance.now() + delayMs;
+        while (performance.now() < delayEnd) {
+          // Intentional benchmark self-test delay.
+        }
+        injectedDelayObservedMs.push(performance.now() - delayStart);
+      }
+    };
+    const end = (event: Event): void => {
+      const start = started.get(event);
+      if (start !== undefined) handlerMs.push(performance.now() - start);
+    };
+    document.addEventListener('keydown', begin, { capture: true });
+    document.addEventListener('keydown', end);
+    document.addEventListener('beforeinput', begin, { capture: true });
+    document.addEventListener('beforeinput', end);
+
+    const observers: PerformanceObserver[] = [];
+    if (PerformanceObserver.supportedEntryTypes?.includes('event')) {
+      const eventObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as PerformanceEventTiming[]) {
+          if (entry.name === 'keydown' || entry.name === 'beforeinput') {
+            eventDelayMs.push(entry.processingStart - entry.startTime);
+          }
+        }
+      });
+      eventObserver.observe({ type: 'event', durationThreshold: 16 } as PerformanceObserverInit);
+      observers.push(eventObserver);
+    }
+    if (PerformanceObserver.supportedEntryTypes?.includes('longtask')) {
+      const longTaskObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) longTasksMs.push(entry.duration);
+      });
+      longTaskObserver.observe({ type: 'longtask', buffered: true });
+      observers.push(longTaskObserver);
+    }
+
+    const sampleFrame = (now: number): void => {
+      if (stopped) return;
+      frameGapsMs.push(now - previousFrame);
+      previousFrame = now;
+      if (now - previousHeapSample >= 500) {
+        const memory = (
+          performance as Performance & {
+            memory?: { readonly usedJSHeapSize: number };
+          }
+        ).memory;
+        if (memory)
+          heapTimeline.push({ atMs: now - installedAt, usedBytes: memory.usedJSHeapSize });
+        previousHeapSample = now;
+      }
+      requestAnimationFrame(sampleFrame);
+    };
+    requestAnimationFrame(sampleFrame);
+
+    window.__EDIT_BURST_BENCH__ = {
+      stop() {
+        stopped = true;
+        for (const observer of observers) observer.disconnect();
+        document.removeEventListener('keydown', begin, { capture: true });
+        document.removeEventListener('keydown', end);
+        document.removeEventListener('beforeinput', begin, { capture: true });
+        document.removeEventListener('beforeinput', end);
+        return {
+          keydowns,
+          beforeInputs,
+          handlerMs,
+          eventDelayMs,
+          longTasksMs,
+          frameGapsMs,
+          heapTimeline,
+          injectedDelayObservedMs,
+        };
+      },
+    };
+  }, injectedDelayMs);
+}
+
 async function runEdit(page: Page, text: string, mode: 'edit' | 'suggest'): Promise<BrowserSample> {
   const prepared = await page.evaluate(
     ({ fraction, editingMode }) =>
@@ -246,12 +389,12 @@ async function runEdit(page: Page, text: string, mode: 'edit' | 'suggest'): Prom
   return sample;
 }
 
-async function loadHarness(page: Page): Promise<void> {
+async function loadHarness(page: Page, measurementProbe = true): Promise<void> {
   await page.goto(URL, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.__DOCX_EDITOR_E2E__?.ready());
   await page.waitForFunction(() => window.__DOCX_EDITOR_E2E__?.fontMeasurer() === 'shaped');
   await page.waitForSelector('.docx-page[data-materialized="true"]', { timeout: 60_000 });
-  await installMeasurementProbe(page);
+  if (measurementProbe) await installMeasurementProbe(page);
 }
 
 async function heapBytes(page: Page): Promise<number | null> {
@@ -324,6 +467,117 @@ async function runSustained(page: Page, mode: 'edit' | 'suggest'): Promise<Susta
     heapAfterBytes,
     heapChangeBytes:
       heapBeforeBytes === null || heapAfterBytes === null ? null : heapAfterBytes - heapBeforeBytes,
+  };
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runBurst(
+  page: Page,
+  scenario: {
+    readonly name: string;
+    readonly mode: 'edit' | 'suggest';
+    readonly input: 'type' | 'backspace';
+  },
+  injectedDelayMs = 0
+): Promise<BurstReport> {
+  await loadHarness(page, false);
+  const prepared = await page.evaluate(
+    ({ editingMode, offsetFraction }) =>
+      window.__DOCX_EDITOR_E2E__!.prepareEditBenchmark(0.5, editingMode, offsetFraction),
+    { editingMode: scenario.mode, offsetFraction: scenario.input === 'backspace' ? 1 : 0 }
+  );
+  expect(prepared).not.toBeNull();
+  expect(prepared!.pageCount).toBeGreaterThan(150);
+  await twoFrames(page);
+  const heapBeforeBytes = await heapBytes(page);
+  await installBurstProbe(page, injectedDelayMs);
+  const client = await page.context().newCDPSession(page);
+  const requestedEvents = Math.max(1, Math.round((BURST_DURATION_MS * BURST_RATE_HZ) / 1_000));
+  const intervalMs = 1_000 / BURST_RATE_HZ;
+  const completionLatencyMs: number[] = [];
+  const pending: Promise<void>[] = [];
+  const dispatchStarted = nodePerformance.now();
+
+  for (let index = 0; index < requestedEvents; index += 1) {
+    const due = dispatchStarted + index * intervalMs;
+    const waitMs = due - nodePerformance.now();
+    if (waitMs > 0) await delay(waitMs);
+    const sentAt = nodePerformance.now();
+    const event =
+      scenario.input === 'backspace'
+        ? {
+            type: 'rawKeyDown' as const,
+            key: 'Backspace',
+            code: 'Backspace',
+            windowsVirtualKeyCode: 8,
+            nativeVirtualKeyCode: 51,
+            autoRepeat: index > 0,
+          }
+        : {
+            type: 'char' as const,
+            key: 'X',
+            code: 'KeyX',
+            text: 'X',
+            unmodifiedText: 'X',
+          };
+    pending.push(
+      client.send('Input.dispatchKeyEvent', event).then(() => {
+        completionLatencyMs.push(nodePerformance.now() - sentAt);
+      })
+    );
+  }
+
+  const dispatchEnded = nodePerformance.now();
+  await Promise.all(pending);
+  if (scenario.input === 'backspace') {
+    await client.send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key: 'Backspace',
+      code: 'Backspace',
+      windowsVirtualKeyCode: 8,
+      nativeVirtualKeyCode: 51,
+    });
+  }
+  const drainedAt = nodePerformance.now();
+  await twoFrames(page);
+  const probe = await page.evaluate(() => window.__EDIT_BURST_BENCH__!.stop());
+  const heapAfterBytes = await heapBytes(page);
+  const dom = await page.evaluate(() => ({
+    nodes: document.querySelectorAll('.docx-pages *').length,
+    materializedPages: document.querySelectorAll('.docx-page[data-materialized="true"]').length,
+    engine: window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!,
+  }));
+  await client.detach();
+
+  const processedEvents = scenario.input === 'backspace' ? probe.keydowns : probe.beforeInputs;
+  return {
+    name: scenario.name,
+    mode: scenario.mode,
+    requestedEvents,
+    processedEvents,
+    dispatchWindowMs: dispatchEnded - dispatchStarted,
+    drainMs: drainedAt - dispatchEnded,
+    completionLatency: summarize(completionLatencyMs),
+    handler: probe.handlerMs.length > 0 ? summarize(probe.handlerMs) : null,
+    eventDelay: probe.eventDelayMs.length > 0 ? summarize(probe.eventDelayMs) : null,
+    longTask: probe.longTasksMs.length > 0 ? summarize(probe.longTasksMs) : null,
+    maxFrameGapMs: Math.max(0, ...probe.frameGapsMs),
+    heapBeforeBytes,
+    heapAfterBytes,
+    heapChangeBytes:
+      heapBeforeBytes === null || heapAfterBytes === null ? null : heapAfterBytes - heapBeforeBytes,
+    peakObservedHeapBytes:
+      probe.heapTimeline.length > 0
+        ? Math.max(...probe.heapTimeline.map((sample) => sample.usedBytes))
+        : null,
+    domNodes: dom.nodes,
+    materializedPages: dom.materializedPages,
+    engine: dom.engine,
+    injectedDelayObserved:
+      probe.injectedDelayObservedMs.length > 0 ? summarize(probe.injectedDelayObservedMs) : null,
   };
 }
 
@@ -439,6 +693,7 @@ test('browser editing latency is measurable and structurally stable', async ({
       runs: RUNS,
       warmup: WARMUP,
       sustainedEdits: SUSTAINED_EDITS,
+      reviewRail: REVIEW_RAIL_ENABLED,
       viewport: '1440x1000@1x',
       injectedDelayMs: INJECTED_DELAY_MS,
     },
@@ -458,4 +713,93 @@ test('browser editing latency is measurable and structurally stable', async ({
     writeFileSync(process.env.EDIT_BROWSER_BENCH_OUTPUT, serialized);
   }
   console.log(`BROWSER_EDIT_BENCHMARK\n${serialized}`);
+});
+
+test('rapid input backlog and retained heap are measurable', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'CDP input scheduling and precise heap use Chromium');
+  test.setTimeout(240_000);
+  const runtimeErrors: string[] = [];
+  page.on('pageerror', (error) => runtimeErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') runtimeErrors.push(message.text());
+  });
+
+  const availableScenarios =
+    INJECTED_DELAY_MS > 0
+      ? [{ name: 'editing-backspace', mode: 'edit' as const, input: 'backspace' as const }]
+      : [
+          { name: 'editing-type', mode: 'edit' as const, input: 'type' as const },
+          { name: 'editing-backspace', mode: 'edit' as const, input: 'backspace' as const },
+          { name: 'suggesting-type', mode: 'suggest' as const, input: 'type' as const },
+          { name: 'suggesting-backspace', mode: 'suggest' as const, input: 'backspace' as const },
+        ];
+  const scenarios = BURST_SCENARIO
+    ? availableScenarios.filter((scenario) => scenario.name === BURST_SCENARIO)
+    : availableScenarios;
+  if (scenarios.length === 0) throw new Error(`unknown burst scenario: ${BURST_SCENARIO}`);
+  const reports: BurstReport[] = [];
+  let selfTest:
+    | {
+        readonly baselineHandlerMedianMs: number;
+        readonly delayedHandlerMedianMs: number;
+        readonly observedMedianDeltaMs: number;
+        readonly observedInjectedDelayMs: number;
+      }
+    | undefined;
+
+  for (const scenario of scenarios) {
+    if (INJECTED_DELAY_MS > 0) {
+      const baseline = await runBurst(page, scenario);
+      const delayed = await runBurst(page, scenario, INJECTED_DELAY_MS);
+      const baselineMedian = baseline.handler?.medianMs ?? 0;
+      const delayedMedian = delayed.handler?.medianMs ?? 0;
+      selfTest = {
+        baselineHandlerMedianMs: baselineMedian,
+        delayedHandlerMedianMs: delayedMedian,
+        observedMedianDeltaMs: delayedMedian - baselineMedian,
+        observedInjectedDelayMs: delayed.injectedDelayObserved?.medianMs ?? 0,
+      };
+      reports.push(delayed);
+    } else {
+      reports.push(await runBurst(page, scenario));
+    }
+  }
+
+  for (const report of reports) {
+    expect(report.processedEvents).toBe(report.requestedEvents);
+    expect(report.materializedPages).toBeLessThanOrEqual(8);
+    expect(report.completionLatency.maxMs).toBeGreaterThan(0);
+  }
+  if (selfTest) {
+    expect(selfTest.observedInjectedDelayMs).toBeGreaterThanOrEqual(INJECTED_DELAY_MS * 0.8);
+  }
+
+  const report = {
+    schema: 1,
+    fixture: FIXTURE,
+    fixtureSha256: FIXTURE_SHA256,
+    environment: {
+      browser: browserName,
+      browserVersion: page.context().browser()?.version() ?? 'unknown',
+      platform: process.platform,
+      arch: process.arch,
+    },
+    config: {
+      durationMs: BURST_DURATION_MS,
+      rateHz: BURST_RATE_HZ,
+      injectedDelayMs: INJECTED_DELAY_MS,
+      reviewRail: REVIEW_RAIL_ENABLED,
+      scenario: BURST_SCENARIO ?? 'all',
+      viewport: '1440x1000@1x',
+    },
+    scenarios: reports,
+    runtimeErrors,
+    ...(selfTest ? { selfTest } : {}),
+  };
+  const serialized = JSON.stringify(report, null, 2);
+  if (process.env.EDIT_BROWSER_BURST_OUTPUT) {
+    writeFileSync(process.env.EDIT_BROWSER_BURST_OUTPUT, serialized);
+  }
+  console.log(`BROWSER_EDIT_BURST_BENCHMARK\n${serialized}`);
+  expect(runtimeErrors.filter((message) => message.includes('Maximum update depth'))).toEqual([]);
 });

@@ -38,6 +38,7 @@ import {
   parentNodeOf as parentOf,
   replaceChildren,
 } from '../package/ooxml-edit.ts';
+import { equivalentNodes } from './ooxml-node-equality.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
@@ -521,7 +522,7 @@ export function applyInsertTracked(
     return out;
   };
 
-  let children = mergedRevisions(rebuild(paragraph.children, []));
+  let children = mergedRevisions(mint, rebuild(paragraph.children, []));
   if (!placed) {
     // An empty paragraph, or an offset at the very end with no run to hang it on.
     if (offset !== cursor.offset) {
@@ -688,6 +689,7 @@ export function applyDeleteTracked(
         out.push({
           ...node,
           children: mergedRevisions(
+            mint,
             node.children.map((child) =>
               child.kind === 'run' && !insideDeletion(stack)
                 ? strike([toDeleted(mint, child)])
@@ -746,7 +748,7 @@ export function applyDeleteTracked(
     return out;
   };
 
-  const children = mergedRevisions(rebuild(paragraph.children, []));
+  const children = mergedRevisions(mint, rebuild(paragraph.children, []));
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
 }
 
@@ -758,7 +760,7 @@ export function applyDeleteTracked(
  * and three more on the next keystroke. Same id, same author, same date, side by side: one
  * wrapper holding all their runs.
  */
-function mergedRevisions(nodes: readonly OoxmlNode[]): OoxmlNode[] {
+function mergedRevisions(mint: () => string, nodes: readonly OoxmlNode[]): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   for (const node of nodes) {
     const previous = out[out.length - 1];
@@ -772,13 +774,49 @@ function mergedRevisions(nodes: readonly OoxmlNode[]): OoxmlNode[] {
     ) {
       out[out.length - 1] = {
         ...previous,
-        children: [...previous.children, ...node.children],
+        children: mergedRevisionRuns(mint, previous.children, node.children),
       } as OoxmlNode;
       continue;
     }
     out.push(node);
   }
   return out;
+}
+
+/** Merge the boundary runs when repeated deletion split one formatted run per keypress. */
+function mergedRevisionRuns(
+  mint: () => string,
+  left: readonly OoxmlNode[],
+  right: readonly OoxmlNode[]
+): OoxmlNode[] {
+  const previous = left[left.length - 1];
+  const next = right[0];
+  if (
+    previous?.kind !== 'run' ||
+    next?.kind !== 'run' ||
+    !mergeableTextRun(previous) ||
+    !mergeableTextRun(next)
+  ) {
+    return [...left, ...right];
+  }
+  const previousProperties = previous.children.filter(isRunProperties);
+  const nextProperties = next.children.filter(isRunProperties);
+  if (!equivalentNodes(previousProperties, nextProperties)) return [...left, ...right];
+  const content = coalesced(mint, [
+    ...previous.children.filter((child) => !isRunProperties(child)),
+    ...next.children.filter((child) => !isRunProperties(child)),
+  ]);
+  const merged = { ...previous, children: [...previousProperties, ...content] } as OoxmlNode;
+  return [...left.slice(0, -1), merged, ...right.slice(1)];
+}
+
+/** Only plain text runs are safe to collapse; drawings, breaks and generic atoms stay separate. */
+function mergeableTextRun(run: OoxmlElement): boolean {
+  const content = run.children.filter((child) => !isRunProperties(child));
+  return (
+    content.length > 0 &&
+    content.every((child) => child.kind === 'text' || child.kind === 'deletedText')
+  );
 }
 
 /** Two wrappers are the same revision when their `CT_TrackChange` triple agrees. */
