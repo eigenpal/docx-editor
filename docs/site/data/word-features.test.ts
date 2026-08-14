@@ -40,7 +40,12 @@ describe('word-features — images lane honesty', () => {
   });
 
   test('unsupported non-picture payloads are preserved inertly, not claimed as supported', () => {
-    for (const id of ['images.charts', 'images.smartart', 'images.shapes', 'images.textboxes'] as const) {
+    for (const id of [
+      'images.charts',
+      'images.smartart',
+      'images.shapes',
+      'images.textboxes',
+    ] as const) {
       const row = feature(id);
       expect(row.editing).toBe('none');
       expect(row.rendering).toBe('partial');
@@ -61,5 +66,28 @@ describe('word-features — images lane honesty', () => {
     expect(row.rendering).toBe('full');
     expect(row.editing).toBe('partial');
     expect(row.roundTrip).toBe('full');
+  });
+});
+
+describe('word-features — lossless round-trip contract', () => {
+  test('every tracked construct is full or preserved on round-trip', () => {
+    for (const row of wordFeatures) {
+      expect(['full', 'preserved']).toContain(row.roundTrip);
+    }
+  });
+
+  test('inert constructs proven by the focused preservation fixture stay marked preserved', () => {
+    for (const id of [
+      'lists.picture-bullets',
+      'images.effects',
+      'images.ink',
+      'layout.background',
+      'fields.citations',
+      'fields.legacy-forms',
+      'structure.ole',
+    ]) {
+      expect(feature(id).roundTrip).toBe('preserved');
+    }
+    expect(feature('images.adjustments').roundTrip).toBe('full');
   });
 });

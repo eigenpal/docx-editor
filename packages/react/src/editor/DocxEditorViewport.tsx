@@ -15,8 +15,11 @@ import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import { zoomLevelForShortcut } from './zoom-levels';
+import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
+/** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
+const selectZoomFitting = (snapshot: EditorSnapshot): boolean => snapshot.zoomMode?.type === 'fit';
 
 /** Props for `DocxEditor.Viewport`. @public */
 export interface DocxEditorViewportProps {
@@ -33,6 +36,7 @@ export interface DocxEditorViewportProps {
  * @public
  */
 export function DocxEditorViewport({ className, style, children }: DocxEditorViewportProps) {
+  const scopeClassName = useScopeClassName();
   const editor = useDocxEditor();
   // The open pane is given its own gutter rather than allowed to overlap: the page centres
   // inside the padding box, so reserving the rail's width shifts the sheet left by half of
@@ -42,6 +46,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // whole placement derivation — anchors and all — inside the parent of the painted document,
   // on every selection change, to learn one boolean.
   const paneOpen = useEditorState(selectPaneOpen);
+  const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
   const reserve = (rail?.mounted ?? 0) > 0;
   // The navigation pane needs this element's width to decide whether it has to move the
@@ -81,12 +86,17 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       data-testid="docx-editor-scroll"
       onKeyDownCapture={onKeyDownCapture}
       {...(reserve ? { 'data-review-pane': paneOpen ? 'open' : 'closed' } : {})}
-      className={`docx-editor docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
+      {...(fitting ? { 'data-zoom-fit': '' } : {})}
+      className={`${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
       }`}
       style={{ ...style, ['--docx-nav-shift' as string]: `${shift}px` } as CSSProperties}
     >
-      {children}
+      {/* Everything below this div has a scoped ancestor: either the packaged
+          wrapper above us, or this element, which scoped itself just now. Say
+          so, or parts inside repeat the class under `chrome={false}` and in the
+          Root + Viewport composition path. */}
+      <ScopedByAncestorContext.Provider value={true}>{children}</ScopedByAncestorContext.Provider>
     </div>
   );
 }

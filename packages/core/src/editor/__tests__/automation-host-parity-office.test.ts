@@ -23,6 +23,7 @@ import type {
 } from '../../automation/index.ts';
 import { createBrowserAutomationHost } from '../automation-host.ts';
 import { createDocxEditor } from '../docx-editor.ts';
+import { stubReviewModule } from './review-test-module.ts';
 import {
   CONTENT_TYPES,
   REL_TYPES,
@@ -124,7 +125,11 @@ function serverHost(): AutomationHost {
 
 function browserHost(): AutomationHost {
   const container = document.createElement('div');
-  const editor = createDocxEditor({ container, document: EVERYTHING });
+  const editor = createDocxEditor({
+    container,
+    document: EVERYTHING,
+    modules: [stubReviewModule()],
+  });
   if (!editor.surface) throw new Error('surface failed to mount');
   return createBrowserAutomationHost(editor);
 }

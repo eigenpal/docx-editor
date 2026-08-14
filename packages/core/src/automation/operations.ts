@@ -316,6 +316,13 @@ export type AutomationOperation =
   | { readonly op: 'getNotes'; readonly document: AutomationHandle; readonly noteKind: NoteKind }
   /** One note's story, as a BODY. Two notes in one part are two stories. */
   | { readonly op: 'getNoteBody'; readonly note: AutomationHandle }
+  /**
+   * One note's story as plain text.
+   *
+   * Exactly the same projection as reading `getText` from the body returned by `getNoteBody`,
+   * without requiring that intermediate handle: paragraphs joined by one `\r` paragraph mark.
+   */
+  | { readonly op: 'getNoteText'; readonly note: AutomationHandle }
   /** Whether a note is a footnote or an endnote. */
   | { readonly op: 'getNoteKind'; readonly note: AutomationHandle }
   /**
@@ -440,6 +447,23 @@ export type AutomationOperation =
   /** Whether the thread is resolved (`w15:commentEx/@w15:done`). */
   | { readonly op: 'getCommentResolved'; readonly comment: AutomationHandle }
   /**
+   * Create a top-level comment anchored to a span.
+   *
+   * Empty spans are valid insertion-point comments. A span may cross paragraphs in one story,
+   * but not table-cell boundaries: range markers cannot safely open in one cell and close in
+   * another. `author` and non-empty, single-paragraph `text` are required by this slice.
+   *
+   * Answers the NEW comment whose id is minted inside the package transaction.
+   */
+  | {
+      readonly op: 'insertComment';
+      readonly span: AutomationSpanRef;
+      readonly text: string;
+      readonly author: string;
+      /** ISO-8601. Omitted writes no `@w:date` — inventing one is a content change. */
+      readonly date?: string;
+    }
+  /**
    * Resolve a comment thread, or reopen it.
    *
    * A THREAD: the comment and its replies together, which is what resolving means in Word. Marking
@@ -468,6 +492,14 @@ export type AutomationOperation =
       /** ISO-8601. Omitted writes no `@w:date` — inventing one is a content change. */
       readonly date?: string;
     }
+  /**
+   * Delete one comment object.
+   *
+   * A top-level comment removes its whole thread and anchors. A reply removes only that reply;
+   * its parent and siblings remain. Several delete operations may share one batch and commit as
+   * one package transaction and one undo unit, but they cannot share a batch with any other write.
+   */
+  | { readonly op: 'deleteComment'; readonly comment: AutomationHandle }
   /**
    * The tracked changes of a story, in document order.
    *
@@ -501,6 +533,17 @@ export type AutomationOperation =
   | {
       readonly op: 'selectSpan';
       readonly span: AutomationSpanRef;
+      readonly mode: AutomationSelectionMode;
+    }
+  /**
+   * Put the reader's selection on the range a bookmark currently encloses.
+   *
+   * The bookmark is resolved inside the batch so callers do not need a separate round trip to
+   * obtain an addressable range. Requires the `selection` capability, like `selectSpan`.
+   */
+  | {
+      readonly op: 'selectBookmark';
+      readonly bookmark: AutomationHandle;
       readonly mode: AutomationSelectionMode;
     }
   /**
@@ -551,6 +594,13 @@ export type AutomationOperation =
   | { readonly op: 'getContentControlSubtype'; readonly contentControl: AutomationHandle }
   /** The `ST_Lock` in force, INCLUDING what an enclosing control imposes. */
   | { readonly op: 'getContentControlLock'; readonly contentControl: AutomationHandle }
+  /**
+   * Whether the control declares `w:dataBinding`.
+   *
+   * Presence only: no XPath, namespace mapping, store id, or custom XML content crosses this
+   * protocol boundary, and the binding target is never resolved or fetched.
+   */
+  | { readonly op: 'getContentControlIsBound'; readonly contentControl: AutomationHandle }
   /** Whether the control is showing its placeholder rather than a value (`w:showingPlcHdr`). */
   | { readonly op: 'getContentControlPlaceholderShown'; readonly contentControl: AutomationHandle }
   /** Whether the control removes itself on the first edit (`w:temporary`). */
@@ -694,6 +744,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getFurniture',
   'getNotes',
   'getNoteBody',
+  'getNoteText',
   'getNoteKind',
   'getLists',
   'getListId',
@@ -727,6 +778,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getContentControlFileId',
   'getContentControlSubtype',
   'getContentControlLock',
+  'getContentControlIsBound',
   'getContentControlPlaceholderShown',
   'getContentControlTemporary',
   'getContentControlText',
@@ -742,6 +794,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'splitParagraph',
   'deleteParagraph',
   'selectSpan',
+  'selectBookmark',
   'setFont',
   'setParagraphFormat',
   'setStyle',
@@ -750,8 +803,10 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setListLevel',
   'insertListParagraph',
   'setHyperlink',
+  'insertComment',
   'setCommentResolved',
   'replyToComment',
+  'deleteComment',
   'acceptRevision',
   'rejectRevision',
   'acceptAllRevisions',
@@ -775,6 +830,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
  */
 export const AUTOMATION_SOLITARY_OPERATIONS = [
   'deleteNote',
+  'insertComment',
   'setCommentResolved',
   'replyToComment',
   // A payload write is a package transaction of its own — the data part, the node inside it and

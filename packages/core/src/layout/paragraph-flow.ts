@@ -675,8 +675,17 @@ export function breakParagraph(
     return [];
   }
   /** Carried onto every span so paint and the review surface read one attribution. */
-  const revisionsOf = (piece: FieldAwarePiece): { revisions?: readonly RevisionAttribution[] } =>
-    piece.revisions === undefined ? {} : { revisions: piece.revisions };
+  const revisionsOf = (
+    piece: FieldAwarePiece
+  ): {
+    revisions?: readonly RevisionAttribution[];
+    fieldAtom?: FieldAwarePiece['fieldAtom'];
+  } => ({
+    ...(piece.revisions === undefined ? {} : { revisions: piece.revisions }),
+    // Rides the same carrier for the same reason: only the paragraph walk knows an atom was a
+    // field, and by paint time its result is indistinguishable from ordinary text.
+    ...(piece.fieldAtom === undefined ? {} : { fieldAtom: piece.fieldAtom }),
+  });
   // Mark face (CT_PPr/rPr), not content inheritance — a taller mark grows the last line
   // without shrinking BodyText runs that only inherit the paragraph style.
   const markProps = flow?.markRunProperties ?? inheritedRunProperties;

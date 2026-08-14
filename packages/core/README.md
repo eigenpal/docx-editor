@@ -67,11 +67,10 @@ of unknown extensions still opens, edits, and saves.
 
 ## Fidelity
 
-Everything you do not edit comes back byte for byte, including parts the engine does not model:
-custom XML, embedded fonts, macros, media, unknown extensions. On save, modeled parts are
-re-emitted normalized; everything else is repacked from the original file untouched. Two
-oracles gate this in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic
-digest.
+Untouched content, unsupported OOXML, and package payloads survive editing and save. The
+canonical tree preserves document structure while embedded fonts, macros, media, and other
+payloads pass through untouched. Two oracles gate this in CI: a canonical fingerprint over the
+tree, and a save-and-reopen semantic digest.
 
 ## Untrusted input
 

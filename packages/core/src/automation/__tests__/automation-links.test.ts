@@ -314,4 +314,22 @@ describe('a bookmark is a name over a range', () => {
     expect(response.ok).toBe(false);
     expect(refusal(response)).toBe('invalid-handle');
   });
+
+  test('selecting a missing bookmark refuses the object before asking for a reader', () => {
+    const host = withLinks();
+    const { body } = roots(host);
+    const [bookmark] = bookmarksOf(host, body) as [AutomationHandle];
+    const paragraphs = handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body }] }), 0);
+    expect(
+      host.execute({
+        operations: [{ op: 'deleteParagraph', paragraph: paragraphs[1] as AutomationHandle }],
+      }).ok
+    ).toBe(true);
+
+    const response = host.execute({
+      operations: [{ op: 'selectBookmark', bookmark, mode: 'select' }],
+    });
+    expect(response.ok).toBe(false);
+    expect(refusal(response)).toBe('invalid-handle');
+  });
 });

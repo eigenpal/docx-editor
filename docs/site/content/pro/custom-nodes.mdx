@@ -70,7 +70,7 @@ recognized again, payload included.
 
 <Cards>
   <Card title="Store data on a node" href="#define-a-node">
-    A payload validated by your schema, up to 256 KB, kept in a customXml part.
+    A payload validated by your schema, up to 262,144 UTF-16 code units, kept in a customXml part.
   </Card>
   <Card title="Show a chip and react to clicks" href="#render-the-chips">
     `CustomNodeChrome` paints recognized nodes and gives you the click, hover and rect.
@@ -79,13 +79,13 @@ recognized again, payload included.
     Three functions, one transaction and one undo step each.
   </Card>
   <Card title="Find every node in the document" href="#read-the-nodes">
-    `customNodesOf(editor)` in document order, `dataOf` to get your type back.
+    `customNodesOf(editor)` in body order, `dataOf` to get your type back.
   </Card>
   <Card title="Strip my markup before sending a file out" href="#save-vs-export">
     `saveForExport` applies each definition's `preserveOnExport`.
   </Card>
-  <Card title="Write nodes on a server" href="#patterns">
-    `customNodeXml` builds the same control with no editor and no DOM.
+  <Card title="Write nodes on a server" href="#common-configurations">
+    `customNodeXml` returns control XML plus the required package metadata.
   </Card>
   <Card title="Look up a parameter or an error code" href="/docs/2.x/pro/custom-nodes-reference">
     Every option on `defineCustomNode`, every refusal code, the on-disk format.
@@ -155,11 +155,12 @@ updateCustomNode(editor, Citation, nodeId, { data }); // rewrites in place
 removeCustomNode(editor, nodeId); // node and payload
 ```
 
-Each is one transaction and one undo step, payload included. Each returns
-`{ ok: true, changed: true, nodeId }` or a refusal with a `reason` and a `code`.
+All three writes use one transaction and create one undo step, including payload changes. Successful
+inserts and updates return `{ ok: true, changed: true, nodeId }`; refusals include a `reason` and a
+`code`.
 
-A rewrite replaces the control, so the id you passed names nothing afterwards. Re-point whatever was
-attached to it at the returned one:
+An update replaces the control and returns its new node ID. The ID passed to `updateCustomNode` no
+longer resolves, so update any state that held it:
 
 ```tsx
 const result = updateCustomNode(editor, Citation, card.nodeId, { data: next });
@@ -191,9 +192,9 @@ for (const node of customNodesOf(editor)) {
 }
 ```
 
-`customNodesOf` reads the body in document order and recognizes every definition registered on the
-editor. It derives from the document on every call and there is no change event, so re-read after an
-edit rather than holding the array.
+`customNodesOf` returns recognized nodes from the document body in document order. It excludes
+headers, footers, footnotes and endnotes. Because each call reads the current document and no change
+event exists, call it again after every edit. Do not retain the returned array.
 
 Chrome and read surfaces carry every definition's nodes under one type, so their `data` is
 `unknown`. `dataOf` narrows a node to this definition and validates its payload, so you never write
@@ -214,19 +215,18 @@ customNodesModule({
   nodes: [Citation],
   onDiagnostic: ({ code, name, nodeId, issues }) => {
     // code: 'payload-invalid' | 'payload-missing'
-    console.warn(`${name} ${nodeId}: ${code} — ${issues.join(', ')}`);
+    console.warn(`${name} ${nodeId}: ${code}: ${issues.join(', ')}`);
   },
 });
 ```
 
 ## Save vs export
 
-Usually there is nothing to do here. Word and Word Online render a custom node's text, honor the
-lock, and hand the tag, binding and payload back unchanged, so `editor.save()` is the whole answer.
+Use `editor.save()` for the copy you store. Word and Word Online preserve the node's text, lock, tag,
+binding and payload.
 
-Export is for the case where the recipient should not have the nodes at all: internal annotations,
-markup that means nothing outside your system. Then the file you store and the file they download
-are two different files.
+Use `saveForExport` when recipients must not receive custom-node markup, such as internal
+annotations. Generate that external copy separately from the saved document.
 
 ```ts
 import { saveForExport } from '@docx-editor.dev/pro';
@@ -253,7 +253,7 @@ not become a node again.
   [export](/docs/2.x/pro/custom-nodes-reference#export).
 </Callout>
 
-## Patterns
+## Common configurations
 
 **A mention, no payload.** Everything fits in the tag, so there is no schema and no customXml part.
 `fromDocx` clamps the untrusted strings a `.docx` hands you, or returns `null` to leave the control
@@ -279,8 +279,10 @@ const InternalNote = defineCustomNode({
 });
 ```
 
-**A node written on a server.** `customNodeXml` builds the same control as XML, no editor and no
-DOM. The document opens here with the node recognized:
+**A node written on a server.** `customNodeXml` builds the same control as XML without an editor or
+DOM. For a payload-bearing node, server authoring must also add the payload package parts, their
+relationships and the properties part's content-type override. The document opens here with the
+node recognized:
 
 ```ts
 import { customNodeXml } from '@docx-editor.dev/pro';
@@ -291,8 +293,8 @@ const built = customNodeXml(Citation, { sourceId: 'smith-2024' }, '(Smith 2024)'
 if (built.ok) template.replace('{{citation}}', built.xml);
 ```
 
-`built.store` returns the five parts you must add alongside it. All five are required, or Word offers
-to repair the file. See
+`built.store` returns two parts, two relationships and one content-type override. Add all five items
+or Word offers to repair the file. See
 [server-side authoring](/docs/2.x/pro/custom-nodes-reference#server-side-authoring).
 
 **A card in the review sidebar.** `reviewCard` contributes one card per node, anchored at its range.

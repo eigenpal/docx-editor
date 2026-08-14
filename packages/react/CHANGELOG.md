@@ -1,5 +1,37 @@
 # @eigenpal/docx-js-editor
 
+## 2.2.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.2.1
+
+## 2.2.0
+
+### Minor Changes
+
+- 568ccf7: Localizing the editor now works the way the docs describe it. `<DocxEditor>` takes an `i18n` prop, so a locale no longer needs a `LocaleProvider` around it; a provider still works and now composes when nested instead of resetting the subtree to English. The toolbar's overflow panel also labels its value rows (zoom, line spacing, the style, font and colour pickers) from the active catalogue rather than showing the raw i18n key.
+
+### Patch Changes
+
+- a4d7885: `<DocxEditor>`'s title bar and toolbar now sit on one `--doc-surface` band, closed by a hairline and a soft shadow directly under the toolbar, with the ruler row and the workspace below it on `--doc-bg`. The seam used to be a border under the title bar, which split the band in two and left the toolbar edge to edge on no ground of its own: the toolbar paints a rounded pill, so flush against the frame its radius never showed and the row read as a second flat bar. Hosts were adding their own wrapper to get the packaged chrome to look like the composed demo it is modelled on. Nothing about the API changes, and both surfaces follow the dark palette as before.
+- Updated dependencies [568ccf7]
+  - @docx-editor.dev/i18n@2.2.0
+
+## 2.1.3
+
+### Patch Changes
+
+- 531c47b: `<DocxEditor>` now shows rulers, and `onSave` no longer draws a button. The horizontal ruler compensates for the navigation shift and the review gutter itself, so it only measures correctly in the row above the scroll container — a slot the packaged host is the only thing that can offer, which meant a host mounting it by hand got ticks that drifted off the page. Pass `rulers={false}` for a bare page. Separately, setting `onSave` also rendered an inline-styled Save button into the title bar that a host could not remove; `onSave` is now just the action, and File -> Save still invokes it.
+  - @docx-editor.dev/i18n@2.1.3
+
+## 2.1.2
+
+### Patch Changes
+
+- 4fa91bd: Under the packaged `<DocxEditor>`, `.docx-editor` is now on the editor root and nowhere else. The toolbar, menu bar, navigation pane, context menu, viewport and page-number chip each added the class as their own Tailwind scope, which they only need when there is no scoped ancestor. A host rule like `.my-shell .docx-editor { height: 100% }` therefore also matched the toolbar. Composing from `DocxEditor.Root`, which renders no element, is unchanged: the parts still scope themselves.
+  - @docx-editor.dev/i18n@2.1.2
+
 ## 2.1.1
 
 ### Patch Changes

@@ -5,13 +5,18 @@
 // entryMacro/exitMacro) stays generic payload under `fldChar` — never walked for
 // evaluation, never auto-resolved, never executed.
 //
-// Well-formed complex fields (begin→end within one paragraph) and `fldSimple` each
-// contribute exactly one UTF-16 unit ({@link FIELD_ATOM_CHAR}) to paragraph addressing.
-// Cached result text is not independently addressable. Malformed fields demote: markers
-// contribute nothing and interior result text remains visible/addressable so content
-// never disappears.
+// Well-formed computed fields (begin→end within one paragraph) and `fldSimple` each contribute
+// exactly one UTF-16 unit ({@link FIELD_ATOM_CHAR}) to paragraph addressing. A FORMTEXT field
+// is different: its result is authored form input, so those runs remain normally addressable.
+// Malformed fields demote too: markers contribute nothing and interior result text remains
+// visible/addressable so content never disappears.
 
-import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import {
+  contentControlContentChildren,
+  isContentControl,
+  MAX_CONTENT_CONTROL_NESTING,
+} from './content-control-walk.ts';
+import { isContentRevisionKind, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlFldCharNode,
   OoxmlFldSimpleNode,
@@ -157,6 +162,28 @@ export function isFieldChrome(node: OoxmlNode): boolean {
 }
 
 /**
+ * True when a `w:fldChar` carries `w:ffData` — a LEGACY FORM FIELD (§17.16.17).
+ *
+ * FORMTEXT, FORMCHECKBOX and FORMDROPDOWN are what a fillable Word form is made of, and Word
+ * shades them on sight so a reader can find the blanks. That is the only reason to ask: it is a
+ * presentation question, answered by the element's presence alone.
+ *
+ * Presence ONLY. `w:ffData` can carry entry and exit MACRO names, and the canonical tree keeps
+ * its whole subtree generic and inert on purpose. Walking into it to read a name or a default
+ * would be reading attacker-supplied script references for no gain — the shading does not
+ * depend on what the form field says, only on it being one.
+ */
+export function hasLegacyFormFieldData(node: OoxmlNode): boolean {
+  if (node.kind === 'textValue') return false;
+  if (fldCharType(node) === null) return false;
+  for (const child of node.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.localName === 'ffData' && isWml(child, 'ffData')) return true;
+  }
+  return false;
+}
+
+/**
  * One atomic field span inside a paragraph for caret / delete / selection.
  *
  * `removeNodeIds` lists every node that must leave with the unit (begin…end chrome and
@@ -179,13 +206,28 @@ export interface AtomicFieldSpan {
   readonly formatRunIds: readonly string[];
 }
 
+/** A closed field and the addressing policy its instruction gives its result. */
+export interface ParsedFieldSpan extends AtomicFieldSpan {
+  readonly addressing: 'atomic' | 'editable-result';
+}
+
 interface RunChildRef {
   readonly runId: string;
   readonly node: OoxmlNode;
 }
 
+const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
+
+/** Whether a bounded instruction denotes Word's editable legacy text-form input. */
+export function isEditableFormTextInstruction(raw: string, maxChars = 256): boolean {
+  if (raw.length > maxChars) return false;
+  const collapsed = raw.replace(/\s+/g, ' ').trim().toUpperCase();
+  if (collapsed.length > maxChars) return false;
+  return collapsed.replace(MERGEFORMAT_SUFFIX, '').trim() === 'FORMTEXT';
+}
+
 /**
- * Collect well-formed atomic field spans in document order.
+ * Collect syntactically closed field spans in document order.
  *
  * Demotion (no span emitted — callers surface interior text normally):
  * - `end` without matching `begin`
@@ -197,13 +239,13 @@ interface RunChildRef {
  *
  * Cross-paragraph fields never form: this walk is per paragraph.
  */
-export function atomicFieldSpansOf(
+export function parsedFieldSpansOf(
   paragraph: OoxmlParagraphNode,
   options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
-): readonly AtomicFieldSpan[] {
+): readonly ParsedFieldSpan[] {
   const maxNesting = options?.maxNesting ?? 4;
   const maxInstructionChars = options?.maxInstructionChars ?? 256;
-  const spans: AtomicFieldSpan[] = [];
+  const spans: ParsedFieldSpan[] = [];
 
   // Flatten run children in document order for the complex-field machine.
   // Hyperlink is a run container: fields inside a link are ordinary paragraph text.
@@ -224,7 +266,7 @@ export function atomicFieldSpansOf(
     return ids;
   };
 
-  const visitInline = (child: OoxmlNode): void => {
+  const visitInline = (child: OoxmlNode, sdtDepth = 0): void => {
     if (child.kind === 'fldSimple' || (child.kind === 'generic' && isFldSimple(child))) {
       spans.push({
         kind: 'simple',
@@ -232,6 +274,7 @@ export function atomicFieldSpansOf(
         runId: '',
         removeNodeIds: [child.id],
         formatRunIds: formatRunIdsOfSimple(child),
+        addressing: 'atomic',
       });
       return;
     }
@@ -242,8 +285,30 @@ export function atomicFieldSpansOf(
       }
       return;
     }
-    if (child.kind === 'hyperlink') {
-      for (const inner of child.children) visitInline(inner);
+    // An inline content control flattens into the paragraph's run stream, so a field inside
+    // one is an ordinary field. Layout descends here and this walk did not, so a `w:fldSimple`
+    // in an `w:sdt` was worth one offset to layout and nothing to the store — the same
+    // disagreement, in the same direction, as the revision wrappers below.
+    if (isContentControl(child)) {
+      if (sdtDepth < MAX_CONTENT_CONTROL_NESTING) {
+        for (const inner of contentControlContentChildren(child)) {
+          visitInline(inner, sdtDepth + 1);
+        }
+      }
+      return;
+    }
+    if (
+      child.kind !== 'textValue' &&
+      (child.kind === 'hyperlink' || isContentRevisionKind(child.kind))
+    ) {
+      // Revision wrappers are run containers like `w:hyperlink` is. Not descending made a
+      // field whose RESULT is wrapped in `w:del` disagree with itself: the begin/end markers
+      // formed an atom worth one offset, but the struck result run was not among the nodes
+      // that atom swallowed, so the paragraph counted its characters a SECOND time as
+      // ordinary text. Layout folds them into the atom, the store did not, and every offset
+      // after the field was out by the length of the deleted words — the caret painted in one
+      // place and typing landed elsewhere.
+      for (const inner of child.children) visitInline(inner, sdtDepth);
     }
   };
   for (const child of paragraph.children) visitInline(child);
@@ -260,6 +325,7 @@ export function atomicFieldSpansOf(
     let nesting = 0;
     let nestingOverflow = false;
     let instructionChars = 0;
+    let instruction = '';
     let instructionOverflow = false;
     let phase: 'instruction' | 'result' | 'done' = 'instruction';
     const removeIds: string[] = [];
@@ -285,7 +351,12 @@ export function atomicFieldSpansOf(
         if (nesting === 1 && phase === 'instruction') {
           const chunk = instrTextValue(node);
           instructionChars += chunk.length;
-          if (instructionChars > maxInstructionChars) instructionOverflow = true;
+          if (instructionChars > maxInstructionChars) {
+            instructionOverflow = true;
+            instruction = '';
+          } else if (!instructionOverflow) {
+            instruction += chunk;
+          }
         }
         if (nesting >= 1) removeIds.push(node.id);
         continue;
@@ -317,6 +388,12 @@ export function atomicFieldSpansOf(
         if (phase === 'result' && nesting === 1) {
           if (
             node.kind === 'text' ||
+            // `w:delText` is result content that a tracked deletion struck — still the field's
+            // own text, and still swallowed by the one offset the atom is worth. Leaving it out
+            // let the paragraph count those characters a SECOND time as ordinary text while
+            // layout folded them into the atom, so every offset after such a field was out by
+            // the length of the deleted words.
+            node.kind === 'deletedText' ||
             node.kind === 'tab' ||
             node.kind === 'hardBreak' ||
             node.kind === 'textValue'
@@ -365,11 +442,22 @@ export function atomicFieldSpansOf(
       runId: current.runId,
       removeNodeIds: [...new Set(removeIds)],
       formatRunIds,
+      addressing: isEditableFormTextInstruction(instruction, maxInstructionChars)
+        ? 'editable-result'
+        : 'atomic',
     });
     i = endIndex + 1;
   }
 
   return spans;
+}
+
+/** Collect only fields whose cached result is one atomic model unit. */
+export function atomicFieldSpansOf(
+  paragraph: OoxmlParagraphNode,
+  options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
+): readonly AtomicFieldSpan[] {
+  return parsedFieldSpansOf(paragraph, options).filter((span) => span.addressing === 'atomic');
 }
 
 /** Whether `fldCharType` is a legal ST_FldCharType value (used by tests / guards). */

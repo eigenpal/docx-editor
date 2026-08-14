@@ -17,8 +17,20 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 
 export type { InsertCustomNodeWrite };
 
-/** What a comment write asks for: a reply on a comment's own range, or a thread's state. */
+/** What a comment write asks for: a root, reply, thread state, or one lifecycle deletion. */
 export type AutomationCommentWrite =
+  | {
+      readonly kind: 'create';
+      readonly anchor: {
+        readonly paragraphId: string;
+        readonly start: number;
+        readonly end: number;
+        readonly endParagraphId?: string;
+      };
+      readonly text: string;
+      readonly author: string;
+      readonly date?: string;
+    }
   | {
       readonly kind: 'reply';
       readonly parentCommentId: string;
@@ -32,7 +44,18 @@ export type AutomationCommentWrite =
       readonly author: string;
       readonly date?: string;
     }
-  | { readonly kind: 'resolve'; readonly commentId: string; readonly resolved: boolean };
+  | { readonly kind: 'resolve'; readonly commentId: string; readonly resolved: boolean }
+  | {
+      readonly kind: 'delete';
+      readonly commentId: string;
+      /** Replies are removed alone; roots remove the whole thread and its story anchors. */
+      readonly parentCommentId?: string;
+      /**
+       * When the comment lives in one note of a shared notes part, that note's `w:id`.
+       * StoryScope names the part; this names the note inside it.
+       */
+      readonly noteId?: number;
+    };
 
 export type AutomationCommentWriteResult =
   | { readonly ok: true; readonly changed: boolean; readonly commentId?: string }
@@ -97,7 +120,7 @@ export interface AutomationDocumentPort {
    */
   applyLifecycle(op: TreeDocOp): AutomationPortApplyResult;
   /**
-   * Commit ONE comment write — a reply, or a thread's resolved state — as its own transaction.
+   * Commit comment writes as one package transaction.
    *
    * A third path rather than an op, because a comment is not a tree edit: a reply writes the story
    * markers AND `comments.xml` AND `commentsExtended.xml` AND their relationships AND their
@@ -105,10 +128,13 @@ export interface AutomationDocumentPort {
    * Expressing it as `TreeDocOp`s would mean a second implementation of the same write, and the
    * two would diverge on the part a document happens not to have.
    *
-   * Solitary, like the lifecycle path: the planner refuses these any company, so a batch reaching
-   * here is exactly one write and atomicity still means what it says.
+   * Reply and resolve writes are solitary. Delete writes may be batched with other deletes, so one
+   * `sync()` that removes several objects remains atomic and produces one undo unit.
    */
-  applyCommentWrite(write: AutomationCommentWrite, scope: StoryScope): AutomationCommentWriteResult;
+  applyCommentWrites(
+    writes: readonly AutomationCommentWrite[],
+    scope: StoryScope
+  ): AutomationCommentWriteResult;
   /**
    * Commit ONE custom-node write — the data part, the node in it, and the bound control.
    *

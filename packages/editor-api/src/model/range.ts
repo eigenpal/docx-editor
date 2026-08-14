@@ -44,6 +44,7 @@ import {
 } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
+import { Comment } from './review.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
 
 /**
@@ -220,6 +221,35 @@ export class Range extends ModelObject implements PromisedItem {
     return created;
   }
 
+  /**
+   * Create a top-level comment anchored to exactly this range.
+   *
+   * The author is the identity the runtime was opened with. Empty comment text, a missing author,
+   * stale endpoints, and ranges crossing a table-cell boundary are refused rather than authored
+   * approximately. A collapsed range creates an insertion-point comment.
+   */
+  insertComment(commentText: string): Comment {
+    const target = `${this.path.label}.insertComment`;
+    if (typeof commentText !== 'string' || commentText.length === 0) {
+      fail({ code: 'InvalidArgument', target });
+    }
+    const author = this.internals.author;
+    if (typeof author !== 'string' || author.trim().length === 0) {
+      fail({ code: 'NotSupported', target });
+    }
+    const span = this.#span();
+    const created = Comment.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'insertComment', span, text: commentText, author }),
+      (value) => {
+        if (value.kind !== 'handle') fail({ code: 'GeneralException', target });
+        created.hydrateAddress(value);
+      }
+    );
+    return created;
+  }
+
   /** Add a paragraph before or after the one this range starts or ends in. */
   insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph {
     const target = `${this.path.label}.insertParagraph`;
@@ -246,11 +276,16 @@ export class Range extends ModelObject implements PromisedItem {
   }
 
   /**
-   * Put the reader's selection on this range.
+   * Put the reader's selection on this range and navigate the editor viewport to it.
+   *
+   * The whole range is selected by default. `Start` and `End` instead collapse the caret to that
+   * endpoint and reveal it. An already-visible endpoint stays still; an offscreen one is brought
+   * into view from the editor's layout, including when its page has not been materialized yet.
    *
    * Refused with `NotSupported` where there is no reader — a document opened from bytes on a
-   * server has no caret, and moving one would be a claim about a screen nobody is looking at. The
-   * check is at the CALL rather than at the sync, so the mistake is reported where it was made.
+   * server has no caret or viewport, and moving one would be a claim about a screen nobody is
+   * looking at. The check is at the CALL rather than at the sync, so the mistake is reported where
+   * it was made.
    */
   select(selectionMode_?: SelectionMode): void {
     const target = `${this.path.label}.select`;

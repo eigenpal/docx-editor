@@ -11,14 +11,16 @@
 // a decision that can only answer refusals is not handed back as an object at all.
 
 import { describe, expect, test } from 'bun:test';
+import { REL_TYPES, noteReference, notesPart, richDocx } from './support/furniture.ts';
 import {
-  CONTENT_TYPES,
-  REL_TYPES,
-  noteReference,
-  notesPart,
-  richDocx,
-  type SidePart,
-} from './support/furniture.ts';
+  comment,
+  commentsExtendedPart,
+  commentsOf,
+  commentsPart,
+  noteBodies,
+  reviewed,
+  textsOfComments,
+} from './support/review-comments.ts';
 import {
   handleAt,
   handlesAt,
@@ -33,40 +35,31 @@ import {
 } from './support/protocol.ts';
 import type { AutomationHandle, AutomationHost } from '../protocol.ts';
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
-const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
-
-const commentsPart = (inner: string): SidePart => ({
-  name: 'word/comments.xml',
-  contentType: CONTENT_TYPES.comments,
-  xml: `<w:comments xmlns:w="${W}" xmlns:w14="${W14}">${inner}</w:comments>`,
-});
-
-const commentsExtendedPart = (inner: string): SidePart => ({
-  name: 'word/commentsExtended.xml',
-  contentType:
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml',
-  xml: `<w15:commentsEx xmlns:w15="${W15}">${inner}</w15:commentsEx>`,
-});
-
-const comment = (id: string, author: string, paraId: string, text: string): string =>
-  `<w:comment w:id="${id}" w:author="${author}" w:initials="${author[0] ?? 'x'}" ` +
-  `w:date="2026-01-0${id}T10:00:00Z">` +
-  `<w:p w14:paraId="${paraId}"><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p></w:comment>`;
-
-/** A body with one commented stretch and one tracked insertion and deletion. */
-function reviewed(): AutomationHost {
+function twoReviewedComments(): AutomationHost {
   return open(
     richDocx({
       body:
-        `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>reviewed</w:t></w:r>` +
-        `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r>` +
-        `<w:r><w:t xml:space="preserve"> words</w:t></w:r></w:p>` +
-        `<w:p><w:ins w:id="10" w:author="Ada" w:date="2026-02-01T09:00:00Z">` +
-        `<w:r><w:t>added</w:t></w:r></w:ins>` +
-        `<w:del w:id="11" w:author="Grace" w:date="2026-02-02T09:00:00Z">` +
-        `<w:r><w:delText>gone</w:delText></w:r></w:del></w:p>`,
+        `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>first</w:t></w:r>` +
+        `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>` +
+        `<w:p><w:commentRangeStart w:id="3"/><w:r><w:t>second</w:t></w:r>` +
+        `<w:commentRangeEnd w:id="3"/><w:r><w:commentReference w:id="3"/></w:r></w:p>`,
+      rels: [{ id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' }],
+      parts: [
+        commentsPart(
+          comment('1', 'Ada', '11111111', 'first remark') +
+            comment('3', 'Grace', '33333333', 'second remark')
+        ),
+      ],
+    })
+  );
+}
+
+function nestedReviewedComment(): AutomationHost {
+  return open(
+    richDocx({
+      body:
+        `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>nested</w:t></w:r>` +
+        `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>`,
       rels: [
         { id: 'rId5', type: REL_TYPES.comments, target: 'comments.xml' },
         {
@@ -77,24 +70,24 @@ function reviewed(): AutomationHost {
       ],
       parts: [
         commentsPart(
-          comment('1', 'Ada', '11111111', 'the remark') +
-            comment('2', 'Grace', '22222222', 'a reply')
+          comment('1', 'Ada', '11111111', 'root') +
+            comment('2', 'Grace', '22222222', 'reply') +
+            comment('4', 'Linus', '44444444', 'nested reply')
         ),
         commentsExtendedPart(
-          `<w15:commentEx w15:paraId="11111111" w15:done="0"/>` +
-            `<w15:commentEx w15:paraId="22222222" w15:paraIdParent="11111111" w15:done="0"/>`
+          `<w15:commentEx w15:paraId="11111111"/>` +
+            `<w15:commentEx w15:paraId="22222222" w15:paraIdParent="11111111"/>` +
+            `<w15:commentEx w15:paraId="44444444" w15:paraIdParent="22222222"/>`
         ),
       ],
     })
   );
 }
 
-function commentsOf(host: AutomationHost, body: AutomationHandle): readonly AutomationHandle[] {
-  return handlesAt(host.execute({ operations: [{ op: 'getComments', scope: { body } }] }), 0);
-}
-
-function flagOf(host: AutomationHost, comment: AutomationHandle): boolean {
-  const response = host.execute({ operations: [{ op: 'getCommentResolved', comment }] });
+function flagOf(host: AutomationHost, commentHandle: AutomationHandle): boolean {
+  const response = host.execute({
+    operations: [{ op: 'getCommentResolved', comment: commentHandle }],
+  });
   const result = response.results[0];
   if (result?.status !== 'ok' || result.value.kind !== 'flag') {
     throw new Error(`expected a flag: ${JSON.stringify(response)}`);
@@ -149,31 +142,10 @@ function twoReviewedNotes(): AutomationHost {
   );
 }
 
-/** The body of every footnote, in the order the part writes them. */
-function noteBodies(host: AutomationHost): readonly AutomationHandle[] {
-  const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
-  const notes = handlesAt(
-    host.execute({ operations: [{ op: 'getNotes', document, noteKind: 'footnote' }] }),
-    0
-  );
-  const bodies = host.execute({
-    operations: notes.map((note) => ({ op: 'getNoteBody' as const, note })),
-  });
-  return notes.map((_, index) => handleAt(bodies, index));
-}
-
 function authorsOfRevisions(host: AutomationHost, body: AutomationHandle): readonly string[] {
   const found = revisionsOf(host, body);
   const response = host.execute({
     operations: found.map((revision) => ({ op: 'getRevisionAuthor' as const, revision })),
-  });
-  return found.map((_, index) => textAt(response, index));
-}
-
-function textsOfComments(host: AutomationHost, body: AutomationHandle): readonly string[] {
-  const found = commentsOf(host, body);
-  const response = host.execute({
-    operations: found.map((comment) => ({ op: 'getCommentText' as const, comment })),
   });
   return found.map((_, index) => textAt(response, index));
 }
@@ -193,6 +165,94 @@ describe('a document holds its comments, and a script reads the same ones the ra
     expect(
       textAt(host.execute({ operations: [{ op: 'getCommentText', comment: replies[0]! }] }), 0)
     ).toBe('a reply');
+  });
+
+  test('deleting a reply preserves its parent', () => {
+    const host = reviewed();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    const [reply] = handlesAt(
+      host.execute({ operations: [{ op: 'getCommentReplies', comment: root }] }),
+      0
+    ) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: reply }] }).ok).toBe(true);
+
+    const next = reopen(host);
+    const [kept] = commentsOf(next.host, next.body) as [AutomationHandle];
+    expect(
+      handlesAt(next.host.execute({ operations: [{ op: 'getCommentReplies', comment: kept }] }), 0)
+    ).toEqual([]);
+    expect(
+      textAt(next.host.execute({ operations: [{ op: 'getCommentText', comment: kept }] }), 0)
+    ).toBe('the remark');
+  });
+
+  test('deleting a nested parent reparents descendants instead of deleting them', () => {
+    const host = nestedReviewedComment();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    const [reply] = handlesAt(
+      host.execute({ operations: [{ op: 'getCommentReplies', comment: root }] }),
+      0
+    ) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: reply }] }).ok).toBe(true);
+
+    const next = reopen(host);
+    const [keptRoot] = commentsOf(next.host, next.body) as [AutomationHandle];
+    const [reparented] = handlesAt(
+      next.host.execute({ operations: [{ op: 'getCommentReplies', comment: keptRoot }] }),
+      0
+    ) as [AutomationHandle];
+    expect(
+      textAt(next.host.execute({ operations: [{ op: 'getCommentText', comment: reparented }] }), 0)
+    ).toBe('nested reply');
+  });
+
+  test('deleting a root removes the thread and story anchors', () => {
+    const host = reviewed();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: root }] }).ok).toBe(true);
+    const next = reopen(host);
+    expect(commentsOf(next.host, next.body)).toEqual([]);
+    expect(savedPartBytes(host, 'word/document.xml')).not.toContain('commentRange');
+    expect(savedPartBytes(host, 'word/comments.xml')).not.toContain('the remark');
+  });
+
+  test('several queued deletions share one batch, while mixed writes are refused', () => {
+    const host = twoReviewedComments();
+    const { body } = roots(host);
+    const [first, second] = commentsOf(host, body) as [AutomationHandle, AutomationHandle];
+    const deleted = host.execute({
+      operations: [
+        { op: 'deleteComment', comment: first },
+        { op: 'deleteComment', comment: second },
+      ],
+    });
+    expect(deleted.ok).toBe(true);
+    const next = reopen(host);
+    expect(commentsOf(next.host, next.body)).toEqual([]);
+
+    const mixed = reviewed();
+    const mixedRoots = roots(mixed);
+    const [commentHandle] = commentsOf(mixed, mixedRoots.body) as [AutomationHandle];
+    const response = mixed.execute({
+      operations: [
+        { op: 'deleteComment', comment: commentHandle },
+        { op: 'setCommentResolved', comment: commentHandle, resolved: true },
+      ],
+    });
+    expect(response.ok).toBe(false);
+    expect(refusal(response)).toBe('conflicting-operations');
+    expect(commentsOf(mixed, mixedRoots.body)).toHaveLength(1);
+  });
+
+  test('a stale comment handle is refused before deletion reaches the store', () => {
+    const host = reviewed();
+    const { body } = roots(host);
+    const [root] = commentsOf(host, body) as [AutomationHandle];
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: root }] }).ok).toBe(true);
+    expect(host.execute({ operations: [{ op: 'deleteComment', comment: root }] }).ok).toBe(false);
   });
 
   test('a comment answers who wrote it, when, and what it says', () => {
@@ -404,6 +464,193 @@ describe('a document holds its comments, and a script reads the same ones the ra
   test('a document with no comment part answers no comments rather than refusing', () => {
     const host = open(richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` }));
     expect(commentsOf(host, roots(host).body)).toEqual([]);
+  });
+});
+
+describe('a range creates a root comment through the package transaction', () => {
+  test('a collapsed range is preserved, and author names need not be unique', () => {
+    const host = open(richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` }));
+    const { body } = roots(host);
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0]!;
+    const span = {
+      start: { paragraph, offset: 2 },
+      end: { paragraph, offset: 2 },
+    } as const;
+
+    for (const text of ['first', 'second']) {
+      expect(
+        host.execute({
+          operations: [{ op: 'insertComment', span, text, author: 'Same Reviewer' }],
+        }).results[0]?.status
+      ).toBe('ok');
+    }
+
+    const comments = commentsOf(host, body);
+    expect(comments).toHaveLength(2);
+    for (const item of comments) {
+      expect(
+        spanAt(host.execute({ operations: [{ op: 'getCommentRange', comment: item }] }), 0)
+      ).toEqual({ start: { paragraph, offset: 2 }, end: { paragraph, offset: 2 } });
+      expect(
+        textAt(host.execute({ operations: [{ op: 'getCommentAuthor', comment: item }] }), 0)
+      ).toBe('Same Reviewer');
+    }
+  });
+
+  test('empty text and a range crossing table cells are refused without writing', () => {
+    const host = open(
+      richDocx({
+        body:
+          `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>left</w:t></w:r></w:p></w:tc>` +
+          `<w:tc><w:p><w:r><w:t>right</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
+      })
+    );
+    const { body } = roots(host);
+    const paragraphs = handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body }] }), 0);
+    const before = savedPartBytes(host, 'word/document.xml');
+
+    expect(
+      refusal(
+        host.execute({
+          operations: [
+            {
+              op: 'insertComment',
+              span: {
+                start: { paragraph: paragraphs[0]!, offset: 0 },
+                end: { paragraph: paragraphs[0]!, offset: 1 },
+              },
+              text: '',
+              author: 'Reviewer',
+            },
+          ],
+        })
+      )
+    ).toBe('unsupported-content');
+    expect(
+      refusal(
+        host.execute({
+          operations: [
+            {
+              op: 'insertComment',
+              span: {
+                start: { paragraph: paragraphs[0]!, offset: 0 },
+                end: { paragraph: paragraphs[1]!, offset: 1 },
+              },
+              text: 'unsafe anchor',
+              author: 'Reviewer',
+            },
+          ],
+        })
+      )
+    ).toBe('unsupported-content');
+    expect(savedPartBytes(host, 'word/document.xml')).toBe(before);
+    expect(commentsOf(host, body)).toEqual([]);
+  });
+
+  test('date-only input serializes as normalized xsd:dateTime on w:date', () => {
+    const host = open(richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` }));
+    const { body } = roots(host);
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0]!;
+    const span = {
+      start: { paragraph, offset: 0 },
+      end: { paragraph, offset: 5 },
+    } as const;
+    expect(
+      host.execute({
+        operations: [
+          { op: 'insertComment', span, text: 'dated', author: 'Reviewer', date: '2026-03-09' },
+        ],
+      }).ok
+    ).toBe(true);
+    const xml = savedPartBytes(host, 'word/comments.xml');
+    expect(xml).toContain('w:date="2026-03-09T00:00:00Z"');
+    expect(xml).not.toContain('w:date="2026-03-09"');
+  });
+
+  test('fractional seconds and legal offsets survive on w:date', () => {
+    const host = open(richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` }));
+    const { body } = roots(host);
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0]!;
+    const span = {
+      start: { paragraph, offset: 0 },
+      end: { paragraph, offset: 5 },
+    } as const;
+    expect(
+      host.execute({
+        operations: [
+          {
+            op: 'insertComment',
+            span,
+            text: 'fractional',
+            author: 'Reviewer',
+            date: '2026-03-09T12:30:45.5Z',
+          },
+        ],
+      }).ok
+    ).toBe(true);
+    expect(savedPartBytes(host, 'word/comments.xml')).toContain('w:date="2026-03-09T12:30:45.5Z"');
+
+    const replyHost = reviewed();
+    const { body: replyBody } = roots(replyHost);
+    const [parent] = commentsOf(replyHost, replyBody) as [AutomationHandle];
+    expect(
+      replyHost.execute({
+        operations: [
+          {
+            op: 'replyToComment',
+            comment: parent,
+            text: 'offset',
+            author: 'Linus',
+            date: '2026-04-01T09:00:00+05:30',
+          },
+        ],
+      }).ok
+    ).toBe(true);
+    expect(savedPartBytes(replyHost, 'word/comments.xml')).toContain(
+      'w:date="2026-04-01T09:00:00+05:30"'
+    );
+  });
+
+  test('an offset beyond xsd ±14:00 is refused with no comment write', () => {
+    const host = open(richDocx({ body: `<w:p><w:r><w:t>plain</w:t></w:r></w:p>` }));
+    const { body } = roots(host);
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0]!;
+    const span = {
+      start: { paragraph, offset: 0 },
+      end: { paragraph, offset: 5 },
+    } as const;
+    const beforeDoc = savedPartBytes(host, 'word/document.xml');
+    const beforeComments = savedPartBytes(host, 'word/comments.xml');
+    expect(
+      refusal(
+        host.execute({
+          operations: [
+            {
+              op: 'insertComment',
+              span,
+              text: 'too far east',
+              author: 'Reviewer',
+              date: '2026-03-09T00:00:00+15:00',
+            },
+          ],
+        })
+      )
+    ).toBe('unsupported-content');
+    expect(savedPartBytes(host, 'word/document.xml')).toBe(beforeDoc);
+    expect(savedPartBytes(host, 'word/comments.xml')).toBe(beforeComments);
+    expect(commentsOf(host, body)).toEqual([]);
   });
 });
 

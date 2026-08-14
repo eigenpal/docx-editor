@@ -2,21 +2,13 @@
   "version": 1,
   "comment": "Paired DocxEditorProps / DocxEditorRef members across the React and Vue adapters. Rewritten for the GREENFIELD adapters: the previous contract enumerated the pre-rebuild surface (documentBuffer, commentsSidebarOpen, externalPlugins, showRuler, print, scrollToCommentId, ...), none of which either adapter exports since the strip at 701c1a9f, so every entry reported as missing from BOTH sides and the gate measured nothing.",
   "props": {
-    "paired": [
-      "author",
-      "document",
-      "fonts",
-      "locale",
-      "mode",
-      "modules",
-      "onFontError",
-      "zoom"
-    ],
+    "paired": ["author", "document", "fonts", "locale", "mode", "modules", "onFontError", "zoom"],
     "deferredInVue": {
       "className": "React takes an explicit className prop. Vue applies `class` as a native fallthrough attribute, so it is not a declared prop \u2014 the capability exists on both, the declaration only on React.",
       "onChange": "React takes a callback prop. Vue exposes the same signal as a `change` EMIT, which is the idiomatic Vue form and does not appear in DocxEditorProps.",
       "onReady": "React takes a callback prop. Vue exposes the same signal as a `ready` EMIT.",
       "t": "M6V.1 chrome: React resolves chrome labels through this, defaulting to the bundled English catalogue. Vue's chrome port is task 10V.1, which MUST remove this entry.",
+      "i18n": "M6V.1 chrome: the locale catalogue React's packaged chrome resolves labels through, published as a LocaleProvider around the frame. Vue has `provideLocale` but no packaged chrome to language, so the prop lands with 10V.1 alongside `t`.",
       "title": "M6V.1 chrome title. Deferred to 10V.1 with `t`.",
       "onTitleChange": "M6V.1 chrome title editing. Deferred to 10V.1 with `t`.",
       "onSave": "M6V.1 chrome save control. Deferred to 10V.1 with `t`.",
@@ -26,21 +18,15 @@
       "menu": "The packaged menu bar \u2014 File \u00b7 Format \u00b7 Insert \u00b7 Help \u2014 part of the React-first provider/hooks layer. The ENGINE half is already shared: `CHROME_MENUS` is the core registry both adapters read, every actionable row is a `ChromeSlotId` whose enabled state comes from the same `toolbarCommandState`, and the styles live in the core stylesheet \u2014 so this defers the markup, not the capability.",
       "onOpen": "Open handler for the menu bar's File \u203a Open row. Deferred to the Vue menu bar with `menu`; the engine half (`Editor.load`) is already shared.",
       "contextMenu": "The packaged right-click menu, part of the React-first provider/hooks layer: a compound whose rows ARE the menu bar's rows, so its Vue twin lands with that layer. The ENGINE half is already shared \u2014 `selectAll`, `copy`, `cut` and `paste` are core commands, every row's enabled state comes from the same `Editor.can`, and the surface's pointer controller already ignores non-primary buttons so a right-click reaches a menu with the selection intact \u2014 so this defers the panel, not the capability.",
-      "children": "React renders viewport-extras children inside the sugar viewport (the pro review pane mounts through it). Vue reaches the same via a default slot when its viewport slot lands with the Vue chrome lane."
+      "children": "React renders viewport-extras children inside the sugar viewport (the pro review pane mounts through it). Vue reaches the same via a default slot when its viewport slot lands with the Vue chrome lane.",
+      "zoomMode": "Where the display scale comes from \u2014 a fixed number, or a fit the engine keeps tracking. The CAPABILITY is not deferred at all: the fit runs in the engine, `'auto'` is `createDocxEditor`'s default, and `Editor.getZoomMode`/`setZoomMode` plus `snapshot().zoomMode` are contract members Vue already reaches, so a Vue host gets fit-to-viewport zoom today and can change it through the facade. What is deferred is the declared PROP, with the rest of the Vue prop surface.",
+      "rulers": "React's packaged frame mounts the rulers and takes a boolean to drop them. The Vue host has no ruler slot yet, so there is nothing to toggle; the prop lands there with the ruler chrome."
     },
     "vueExclusive": {}
   },
   "ref": {
     "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters \u2014 every member is declared directly on each side, so nothing is inherited and pairedViaInheritance is empty. Vue used to declare it as `type DocxEditorRef = EditorRefLike & { ... }`; it is now a plain interface matching React, which is stricter parity, not looser.",
-    "paired": [
-      "exec",
-      "focus",
-      "getDocumentHandle",
-      "getEditor",
-      "load",
-      "save",
-      "snapshot"
-    ],
+    "paired": ["exec", "focus", "getDocumentHandle", "getEditor", "load", "save", "snapshot"],
     "pairedViaInheritance": {},
     "vueExclusive": {}
   }

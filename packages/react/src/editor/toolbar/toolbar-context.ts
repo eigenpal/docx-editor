@@ -29,9 +29,18 @@ export function useToolbarContext(): ToolbarContextValue {
   return useContext(ToolbarContext);
 }
 
+/**
+ * The label for an i18n key given a host resolver: the host's translation, else the
+ * locale catalogue. The toolbar ROOT needs this before it publishes its context, so the
+ * resolver is separate from the context read below — a raw key must never reach the DOM.
+ */
+export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: string) => string {
+  const { t: catalogT } = useTranslation();
+  return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
+}
+
 /** The label for an i18n key: the host's translation, else the locale catalogue. */
 export function useToolbarLabel(): (key: string) => string {
   const { t } = useContext(ToolbarContext);
-  const { t: catalogT } = useTranslation();
-  return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
+  return useToolbarLabelFor(t);
 }

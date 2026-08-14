@@ -3,6 +3,7 @@
   "pages": [
     "loading-and-saving",
     "toolbar",
+    "zoom",
     "content-controls",
     "headers-footers",
     "images",

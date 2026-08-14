@@ -173,6 +173,8 @@ export {
   type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
+// Named on `StyleSpanRecord`, so a consumer reading spans needs to be able to name it too.
+export type { FieldAtomMarker } from './field-pieces.ts';
 export {
   AUTO_PARAGRAPH_SPACING_PT,
   MAX_BORDER_SPACE_PT,

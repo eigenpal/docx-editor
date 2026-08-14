@@ -329,6 +329,7 @@ export default [
       'packages/core/src/layout/semantic-hit-test.ts',
       'packages/core/src/store/__tests__/image-resources.test.ts',
       'packages/core/src/store/package/image-resources.ts',
+      'packages/react/test/toolbar-composition.test.tsx',
     ],
     rules: {
       'max-lines': ['error', { max: 1400, skipBlankLines: false, skipComments: false }],

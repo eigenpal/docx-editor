@@ -132,6 +132,7 @@ export declare namespace DocxEditor {
     readonly paragraphs: ParagraphCollection;
     style: string;
     readonly text: string;
+    insertComment(commentText: string): Comment;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(
       text: string,
@@ -293,16 +294,17 @@ export declare namespace DocxEditor {
   // commentsAndRevisions
   // ---------------------------------------------------------------------
 
-  // `authorEmail`, `content` and `delete` are deliberately ABSENT: an author's address is in
-  // people.xml, which this subset does not read; a comment's body is assignable upstream and nothing
-  // here rewrites one; and nothing removes a comment's anchor. `text` is DocxEditor's own read-only
-  // way to reach the body, recorded as unmeasured. See `compat/manifest.json`.
+  // `authorEmail` and `content` are deliberately ABSENT: an author's address is in people.xml,
+  // which this subset does not read, and a comment's body is assignable upstream while nothing here
+  // rewrites one. `text` is DocxEditor's own read-only way to reach the body, recorded as
+  // unmeasured. See `compat/manifest.json`.
   export class Comment {
     readonly authorName: string;
     readonly creationDate: Date;
     readonly id: string;
     readonly replies: CommentReplyCollection;
     resolved: boolean;
+    delete(): void;
     getRange(): Range;
     reply(replyText: string): CommentReply;
   }
@@ -316,6 +318,7 @@ export declare namespace DocxEditor {
     readonly authorName: string;
     readonly creationDate: Date;
     readonly id: string;
+    delete(): void;
   }
 
   export class CommentReplyCollection {

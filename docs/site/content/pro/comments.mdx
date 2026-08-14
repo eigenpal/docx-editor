@@ -67,6 +67,24 @@ function CommentBox() {
 
 The packaged `<DocxEditorReview.AddComment />` and `<DocxEditorReview.Draft />` are this, already built.
 
+### Creating from editor-api
+
+The Pro-licensed Office-shaped API creates the same canonical comment from an explicit range:
+
+```ts
+const matches = context.document.body.search('payment terms');
+matches.load('items');
+await context.sync();
+
+const comment = matches.items[0].insertComment('Confirm this with Legal.');
+await context.sync();
+```
+
+Create the runtime with `{ author: 'Jess Lin' }`. Browser creation also requires the review module
+and a writable, attached editor; server creation uses the licensed server host. The write is one
+package transaction and one browser Undo unit. Collapsed ranges are insertion-point comments.
+Cross-cell anchors and empty comment text are refused rather than rewritten approximately.
+
 ## Replying
 
 `reply(item, text, author?)` threads onto a comment. Replying to a _revision_ also works and produces a comment anchored over that revision's range, because OOXML gives `w:ins` and `w:del` no body of their own:

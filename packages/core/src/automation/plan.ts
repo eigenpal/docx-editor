@@ -23,11 +23,6 @@
 //    `conflicting-operations` — refused, never guessed at. It costs nothing real: the common
 //    shape, one structural edit per paragraph per sync, is untouched.
 //
-// STRUCTURAL COMMANDS ANSWER AFTER THE COMMIT, because the paragraph they name does not exist
-// until then. Every such command leaves a SLOT in a symbolic picture of the story's order; when
-// the transaction lands, the ids the engine actually created are matched to those slots in
-// reading order. No index is ever handed back to a consumer and no DOM is consulted.
-
 import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-ops.ts';
 import {
   findOccurrences,
@@ -54,7 +49,7 @@ import type {
   AutomationSearchOptions,
   AutomationSelectionMode,
 } from './operations.ts';
-import { isAutomationCommand, isSolitaryAutomationCommand } from './operations.ts';
+import { createBatchCommandPolicy } from './batch-command-policy.ts';
 import type {
   AutomationCapabilities,
   AutomationError,
@@ -98,6 +93,12 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import type { ReviewCommentItem } from '../store/store/review-reads.ts';
+import {
+  planDeleteComment,
+  planInsertComment,
+  stagedCommentDate,
+  validatePlannedCommentFields,
+} from './comment-create-plan.ts';
 import {
   contentControlNodeOf,
   contentControlReadOf,
@@ -492,20 +493,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   const selections: { readonly range: ResolvedRange; readonly mode: AutomationSelectionMode }[] =
     [];
-  let hasCommands = false;
-  /** Whether a package-level command has been planned; it may have no company. */
-  let solitaryPlanned = false;
+  const commandPolicy = createBatchCommandPolicy();
   /** The one story this batch writes into, pinned by its first command. */
   let writeStory: StoryPlan | null = null;
 
   /**
-   * Claim the batch's single write story, or refuse a second one.
-   *
-   * A batch is one transaction and a transaction is scoped to one story: `TreePackageStore`
-   * commits per story, so writing a body paragraph and a header paragraph in one batch is two
-   * commits — two revisions, two undo units, and a moment where half the request is published.
-   * The caller sequences them across two syncs, which is exactly what the same rule already
-   * asks of two structural edits to one paragraph.
+   * Claim the batch's single write story, or refuse a second one. `TreePackageStore` commits per
+   * story, so crossing stories would create two revisions, two undo units, and partial publication.
    */
   const pinWrite = (plan: StoryPlan): PlannedOperation | null => {
     if (writeStory === null) {
@@ -519,6 +513,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       `${storyKey(writeStory.reads.story)} then ${storyKey(plan.reads.story)}`
     );
   };
+  const pinCommentStory = (reads: AutomationStoryReads): PlannedOperation | null =>
+    pinWrite(planFor(reads));
 
   /**
    * The comments of one story, or null when the document is gone.
@@ -1649,6 +1645,28 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { ok: true, kind: 'command', ops: [], story: reads.story, answer: () => APPLIED };
   };
 
+  const resolveBookmarkRange = (handle: AutomationHandle) => {
+    const target = handles.resolve(handle, 'bookmark');
+    if (!target || target.kind !== 'bookmark')
+      return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
+    const reads = packageReads.story(target.story);
+    if (!reads) return refuse('invalid-handle', 'that story is not in this document');
+    const bookmark = bookmarkIn(reads, target.name);
+    if (!bookmark)
+      return refuse(
+        'invalid-handle',
+        'this document no longer declares that bookmark',
+        target.name
+      );
+    const point = (marker: { readonly paragraphId: string; readonly offset: number }) => ({
+      story: reads.story,
+      paragraphId: marker.paragraphId,
+      index: reads.indexOf(marker.paragraphId),
+      offset: marker.offset,
+    });
+    return { reads, range: { start: point(bookmark.start), end: point(bookmark.end) } };
+  };
+
   const plan = (operation: AutomationOperation): PlannedOperation => {
     switch (operation.op) {
       case 'getDocument':
@@ -1950,20 +1968,20 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         });
       }
 
-      case 'getNoteBody': {
+      case 'getNoteBody':
+      case 'getNoteText': {
         const target = handles.resolve(operation.note, 'note');
         if (!target || target.kind !== 'note')
           return refuse('invalid-handle', 'that handle does not name a note', 'note');
-        const story: AutomationStoryId = {
-          kind: 'note',
-          noteKind: target.noteKind,
-          noteId: target.noteId,
-        };
+        const story: AutomationStoryId = target;
         // A note DELETED since the handle was minted has no story, and saying so is the point:
-        // answering an empty body would let a script write into a note the document lost.
-        if (!packageReads.story(story))
+        // answering empty text or a body would hide that the document lost it.
+        const reads = packageReads.story(story);
+        if (!reads)
           return refuse('invalid-handle', 'that note is not in this document', storyKey(story));
-        return query({ kind: 'handle', handle: handles.body(story) });
+        return operation.op === 'getNoteText'
+          ? query({ kind: 'text', text: reads.text() })
+          : query({ kind: 'handle', handle: handles.body(story) });
       }
 
       case 'getNoteKind': {
@@ -2149,33 +2167,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'getBookmarkRange': {
-        const target = handles.resolve(operation.bookmark, 'bookmark');
-        if (!target || target.kind !== 'bookmark')
-          return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
-        const reads = packageReads.story(target.story);
-        if (!reads) return refuse('invalid-handle', 'that story is not in this document');
-        const bookmark = bookmarkIn(reads, target.name);
-        // GONE MEANS GONE. The markers left with the text that held them, and a range derived from
-        // where they used to be would point at whatever moved in.
-        if (!bookmark)
-          return refuse(
-            'invalid-handle',
-            'this document no longer declares that bookmark',
-            target.name
-          );
-        const start: ResolvedPoint = {
-          story: reads.story,
-          paragraphId: bookmark.start.paragraphId,
-          index: reads.indexOf(bookmark.start.paragraphId),
-          offset: bookmark.start.offset,
-        };
-        const end: ResolvedPoint = {
-          story: reads.story,
-          paragraphId: bookmark.end.paragraphId,
-          index: reads.indexOf(bookmark.end.paragraphId),
-          offset: bookmark.end.offset,
-        };
-        return query({ kind: 'span', span: spanOf({ start, end }) });
+        const found = resolveBookmarkRange(operation.bookmark);
+        if (!('reads' in found)) return found;
+        return query({ kind: 'span', span: spanOf(found.range) });
       }
 
       case 'getComments': {
@@ -2265,6 +2259,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return query({ kind: 'flag', value: found.item.resolved });
       }
 
+      case 'insertComment':
+        return planInsertComment(operation, handles, packageReads, pinCommentStory);
+
       case 'setCommentResolved': {
         const found = commentAt(operation.comment);
         if (!found.ok) return found.planned;
@@ -2288,20 +2285,20 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'replyToComment': {
         const found = commentAt(operation.comment);
         if (!found.ok) return found.planned;
-        // `CT_TrackChange` makes `@w:author` mandatory. A blank one writes invalid XML rather
-        // than an anonymous remark, so it is refused before anything is staged.
-        if (typeof operation.author !== 'string' || operation.author.trim().length === 0)
-          return refuse('unsupported-content', 'a comment records who wrote it', 'author');
-        if (typeof operation.text !== 'string' || operation.text.length === 0)
-          return refuse('unsupported-content', 'a reply says something', 'text');
-        if (PARAGRAPH_BREAKING.test(operation.text))
-          return refuse('unsupported-content', 'a reply is one paragraph in this slice', 'text');
+        const fields = validatePlannedCommentFields({
+          author: operation.author,
+          text: operation.text,
+          date: operation.date,
+          kind: 'reply',
+        });
+        if (fields) return fields;
         const range = found.item.range;
         if (!range || found.item.orphaned)
           return refuse('invalid-handle', 'that comment has no range to reply over');
         const conflict = pinWrite(planFor(found.reads));
         if (conflict) return conflict;
         const story = found.reads.story;
+        const date = stagedCommentDate(operation.date);
         return {
           ok: true,
           kind: 'commentWrite',
@@ -2318,7 +2315,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             },
             text: operation.text,
             author: operation.author,
-            ...(typeof operation.date === 'string' ? { date: operation.date } : {}),
+            ...(date === undefined ? {} : { date }),
           },
           story: found.reads.story,
           answer: (_post, commentId) =>
@@ -2326,6 +2323,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
               ? APPLIED
               : { kind: 'handle', handle: handles.comment(commentId, story) },
         };
+      }
+
+      case 'deleteComment': {
+        const found = commentAt(operation.comment);
+        if (!found.ok) return found.planned;
+        return planDeleteComment(found.item, found.reads, (reads) => pinWrite(planFor(reads)));
       }
 
       case 'getRevisions': {
@@ -2425,6 +2428,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return planSelect(planFor(story), resolved.value, operation.mode);
       }
 
+      case 'selectBookmark': {
+        const found = resolveBookmarkRange(operation.bookmark);
+        if (!('reads' in found)) return found;
+        return planSelect(planFor(found.reads), found.range, operation.mode);
+      }
+
       case 'getContentControls': {
         const scope = controlScope(operation.scope);
         if (!('reads' in scope)) return scope;
@@ -2514,17 +2523,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return query({ kind: 'text', text: text ?? '' });
       }
 
+      case 'getContentControlIsBound':
       case 'getContentControlPlaceholderShown':
       case 'getContentControlTemporary': {
         const found = controlOf(operation.contentControl);
         if (!('control' in found)) return found;
-        return query({
-          kind: 'flag',
-          value:
-            operation.op === 'getContentControlPlaceholderShown'
+        const value =
+          operation.op === 'getContentControlIsBound'
+            ? found.control.properties.dataBinding !== undefined
+            : operation.op === 'getContentControlPlaceholderShown'
               ? found.control.properties.showingPlaceholder
-              : found.control.properties.temporary,
-        });
+              : found.control.properties.temporary;
+        return query({ kind: 'flag', value });
       }
 
       case 'getContentControlText': {
@@ -2825,26 +2835,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
   return {
     plan(operation) {
-      // ONE PACKAGE TRANSACTION PER BATCH, checked before the operation is even planned: a
-      // lifecycle command beside anything else is two commits, and half a batch published on its
-      // own is the partial application the batch rule exists to prevent.
-      const solitary = isSolitaryAutomationCommand(operation);
-      if ((solitary && hasCommands) || (solitaryPlanned && isAutomationCommand(operation))) {
-        return refuse(
-          'conflicting-operations',
-          'that command commits on its own and cannot share a batch',
-          operation.op
-        );
-      }
+      const conflict = commandPolicy.conflict(operation);
+      if (conflict) return refuse('conflicting-operations', conflict.message, conflict.detail);
       const planned = plan(operation);
-      if (planned.ok && isAutomationCommand(operation)) {
-        hasCommands = true;
-        if (solitary) solitaryPlanned = true;
-      }
+      if (planned.ok) commandPolicy.note(operation);
       return planned;
     },
     get hasCommands() {
-      return hasCommands;
+      return commandPolicy.hasCommands;
     },
     get writeScope() {
       return writeStory?.reads.scope ?? null;

@@ -248,6 +248,39 @@ export type EditorScope =
 export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
 
 /**
+ * What a fit mode fits the page to.
+ *
+ * One member today. It is a union rather than a boolean because Word's other two — the whole
+ * sheet including its height, and the text column inside the margins — are the same
+ * computation with a different numerator, and a later change adds one without breaking the
+ * shape a host already stores.
+ */
+export type ZoomFitTarget = 'pageWidth';
+
+/**
+ * Where the display scale comes from.
+ *
+ * `fixed` is a number the engine holds until someone changes it. `fit` is a number the engine
+ * recomputes whenever the room beside the page changes — a resized window, an opened comments
+ * rail, a docked navigation pane — bounded by `minZoom`/`maxZoom`.
+ *
+ * The bounds are what make one mode serve both cases. The default, `'auto'`, is this fit
+ * bounded at both ends: it leaves a page that fits at 100%, shrinks one that does not, and
+ * stops at 50% — past which it would be trading a scrollbar nobody minds for a page nobody
+ * can read.
+ */
+export type ZoomMode =
+  | { readonly type: 'fixed' }
+  | {
+      readonly type: 'fit';
+      readonly fit: ZoomFitTarget;
+      /** Never shrink past this. Defaults to the contract floor, 0.1. */
+      readonly minZoom?: number;
+      /** Never grow past this. `1` is the "shrink only" rule. Defaults to the ceiling, 5. */
+      readonly maxZoom?: number;
+    };
+
+/**
  * A selection endpoint, in either vocabulary the engine resolves.
  *
  * {@link DocAnchor} addresses a paragraph by its `w14:paraId`, which is what an LLM or an
@@ -570,7 +603,7 @@ export interface Editor {
    * and a host walking a queue with next/previous controls has no other way to learn that a
    * step did nothing. Consult {@link ReviewItemPlacement.activatable} to avoid asking.
    */
-  setActiveReviewItem(key: string | null): ExecResult;
+  setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
 
   /**
    * Revision kinds the caret must never activate, or null for none.
@@ -658,8 +691,28 @@ export interface Editor {
   /**
    * Set the display scale. Values outside a sane range are rejected rather than
    * clamped silently, so a caller learns its input was refused.
+   *
+   * Also LEAVES any fit mode: a reader who picks 150% has said what they want, and a
+   * viewport resize must not take it back off them. Call `setZoomMode` to go back.
    */
   setZoom(zoom: number): ExecResult;
+
+  /** Whether the scale is a number the engine holds, or one it recomputes from the viewport. */
+  getZoomMode(): ZoomMode;
+  /**
+   * Choose between holding a scale and tracking the viewport.
+   *
+   * `'auto'` is the shorthand for {@link ZoomMode}'s bounded page-width fit and the default
+   * for a new editor: a window wide enough for the sheet stays at 100%, and a narrower one
+   * shrinks rather than growing a horizontal scrollbar — down to 50%, past which the page
+   * keeps a legible size and the scrollbar is the better trade. Refused (`invalidArgs`) for a
+   * value that is not a mode, in the same spirit as `setZoom`.
+   *
+   * A fit tracks the scroller's CONTENT box, so anything that reserves width beside the page
+   * — an open comments rail, a docked navigation pane — shrinks the document by exactly what
+   * it took. Nothing else has to be told.
+   */
+  setZoomMode(mode: ZoomMode | 'auto'): ExecResult;
 
   // ─── Geometry ──────────────────────────────────────────────────────────────
   //
@@ -788,6 +841,28 @@ export interface ReviewItemPlacementBase {
   readonly anchorY: number | null;
   readonly pageIndex: number | null;
   readonly isActive: boolean;
+}
+
+/**
+ * How activating a review item places it in the viewport.
+ *
+ * @public
+ */
+export interface ReviewActivationOptions {
+  /**
+   * Where the item lands, or `false` to select it without scrolling at all.
+   *
+   * Default `'centerIfNeeded'`: silent while the item is already on screen, centred when it
+   * has to travel. `'nearest'` scrolls the minimum instead, which parks the item flush
+   * against the edge it came in from; `'start'` puts it near the top, the way a jump to a
+   * heading reads. `false` is for a host whose own list already drives the scroll and does
+   * not want the engine competing with it.
+   *
+   * It governs the reveal of the ITEM. An item in a header, a footer or a note also opens
+   * that story, and opening one always brings its band into view — a story the reader cannot
+   * see is one they cannot read the change in, which is the whole point of activating it.
+   */
+  readonly reveal?: 'start' | 'center' | 'centerIfNeeded' | 'nearest' | false;
 }
 
 /** A comment thread's card. @public */
@@ -1420,6 +1495,18 @@ export interface EditorSnapshot {
    *  read-only document (tables/SDTs/unpreservable) or `mode: 'view'` reports false. */
   readonly editable: boolean;
   readonly zoom: number;
+  /**
+   * Where {@link EditorSnapshot.zoom} came from.
+   *
+   * Both are needed, and neither implies the other: `zoom` is the resolved scale a ruler
+   * multiplies by, `zoomMode` is what a zoom control has to show as selected. A menu that
+   * ticked the entry matching the percentage would tick "75%" while the editor was tracking
+   * the viewport and about to move off it.
+   *
+   * Optional and additive like `pageSetup`; absent means the implementation has not derived
+   * it, and a consumer reads absent as a plain fixed scale.
+   */
+  readonly zoomMode?: ZoomMode;
   readonly selection: DocRange | null;
   /**
    * Whether the selection is a CARET rather than a range. `true` when nothing is loaded.

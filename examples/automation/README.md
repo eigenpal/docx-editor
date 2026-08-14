@@ -17,14 +17,18 @@ const runtime = await DocxEditor.createServer(bytes, { author: 'Payroll bot' });
 try {
   await runtime.run(async (context) => {
     const paragraphs = context.document.body.paragraphs;
-    paragraphs.load('text'); //   1. queue what you want to read
-    await context.sync(); //       2. one round trip
+    paragraphs.load('items'); // 1. ask for the collection's items
+    await context.sync(); //      2. receive those items
 
     for (const paragraph of paragraphs.items) {
-      // 3. queue writes against the objects you now hold
+      paragraph.load('text'); // 3. ask for each item's text
+    }
+    await context.sync(); //      4. receive the text
+
+    for (const paragraph of paragraphs.items) {
       if (paragraph.text.includes('{{name}}')) paragraph.insertText('Ada Lovelace', 'Replace');
     }
-    await context.sync(); //       4. one more round trip, applied all-or-nothing
+    await context.sync(); //      5. apply the edits all-or-nothing
   });
   await Bun.write('out.docx', await runtime.save());
 } finally {
@@ -32,10 +36,32 @@ try {
 }
 ```
 
+The first sync retrieves the collection's items. Only then are the individual paragraphs
+available to ask for their text, so the second sync retrieves those property values.
+
+Bookmarks are discoverable from the story that owns them, without searching for target text first:
+
+```ts
+await runtime.run(async (context) => {
+  const bookmarks = context.document.body.bookmarks;
+  bookmarks.load();
+  await context.sync();
+
+  for (const bookmark of bookmarks.items) bookmark.load('name');
+  await context.sync();
+  console.log(bookmarks.items.map(({ name }) => name));
+});
+```
+
+That collection covers the main body story only. Header and footer bodies have separate bookmark
+collections; there is no document-wide aggregation.
+
 Four rules carry most of the API:
 
 - **Read what you asked for.** A property you did not `load()` throws instead of answering
   `undefined`, so a typo is a failure at the read and not a wrong document three steps later.
+  Navigation-property `expand` is not supported yet: non-empty values fail with
+  `InvalidArgument`, so load the navigation object or collection explicitly.
 - **`sync()` is the only round trip.** Everything between two syncs is one ordered batch that
   either applies whole or not at all.
 - **Objects live inside `run`.** They are proxies into a document the runtime owns; keeping one
@@ -74,6 +100,11 @@ engine, and a server holding bytes should not pay for that.
 at all: the file format makes the author mandatory, a server has no signed-in user, and a
 runtime opened without a name refuses the write rather than putting a placeholder into someone
 else's document.
+
+Deletion needs no author. `Comment.delete()` removes the root thread and anchors;
+`CommentReply.delete()` removes only that reply. Queue several calls before one `sync()` to make
+them one atomic edit and one Undo unit in a browser. Browser comment writes require the Pro review
+module and a writable, attached editor; creating a new root comment is not part of editor-api.
 
 Not every host can do everything, and `runtime.capabilities` says which — `save` is false for a
 browser runtime, `selection`, `scrolling` and `layout` are false for a server one. Branch on it

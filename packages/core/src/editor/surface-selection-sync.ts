@@ -113,6 +113,14 @@ export interface SurfaceSelectionSync {
    * anyway; it never moves FOCUS, so the host's own control keeps it.
    */
   mirrorToDom(claim?: boolean): void;
+  /**
+   * Take up the browser's newest selection immediately before a keyboard/input command.
+   *
+   * `selectionchange` is queued. A native caret can therefore already be visible at the
+   * clicked point while the model still holds the previous range; commands must close that
+   * window synchronously or they edit the stale range.
+   */
+  adoptBeforeInput(): void;
   /** Whether an IME is composing, which suspends repainting. */
   isComposing(): boolean;
   readonly onSelectionChange: () => void;
@@ -210,9 +218,10 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * The diff itself lives in surface-input.ts; this applies it and lands the caret.
    */
   function reconcileParagraphFromDom(paragraphId: string): void {
-    const painted = paintedTextOf(pagesLayer, paragraphId);
+    const modelText = deps.textOf(paragraphId);
+    const painted = paintedTextOf(pagesLayer, paragraphId, modelText);
     if (painted === null) return;
-    const plan = paragraphReplacePlan(paragraphId, deps.textOf(paragraphId), painted);
+    const plan = paragraphReplacePlan(paragraphId, modelText, painted);
     if (!plan) return;
     // Composed text takes the armed caret format like typed text would — same transaction,
     // one undo step. Asked BEFORE the commit (which retires the armed state), and only for
@@ -298,6 +307,15 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       queueMicrotask(() => {
         applyingSelection = false;
       });
+    },
+
+    adoptBeforeInput() {
+      // Engine-owned pointer drags and cell rectangles deliberately outrank the browser's
+      // native selection. Composition has its own DOM readback when it ends.
+      if (applyingSelection || composing) return;
+      if (deps.isGesturing?.()) return;
+      if (deps.holdsCellSelection?.()) return;
+      adoptDomSelection();
     },
 
     isComposing: () => composing,

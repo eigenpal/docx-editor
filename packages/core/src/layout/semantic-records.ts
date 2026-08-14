@@ -20,7 +20,7 @@ import type {
   ParagraphSpacing,
 } from './paragraph-style.ts';
 import type { TabLeader } from './paragraph-tabs.ts';
-import type { ModelRange } from './field-projection.ts';
+import type { FieldAtomMarker, ModelRange } from './field-pieces.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -185,10 +185,22 @@ export interface StyleSpanRecord {
    */
   readonly revisions?: readonly RevisionAttribution[];
   /**
+   * Present when this span is a field's displayed RESULT, for the shading Word draws under one.
+   *
+   * `projected` cannot answer this: it is also set for note marks and inline drawings, so it
+   * says "layout owns these glyphs" rather than "this is a field". Word shades legacy form
+   * fields on a different rule from ordinary ones, which is why the marker distinguishes them.
+   *
+   * States the FACT, never the appearance — whether shading is drawn is a view decision, made
+   * downstream from a host option and the document's own `w:doNotShadeFormData`. Deciding it
+   * here would put the caret into layout's cache key and repaginate on every arrow press.
+   */
+  readonly fieldAtom?: FieldAtomMarker;
+  /**
    * Live PAGE/NUMPAGES/SECTIONPAGES projection (layout-time evaluated text).
    *
-   * Not model-editable until typed fields land: paint treats these as atomic furniture and
-   * selection mapping refuses them the way it refuses markers.
+   * Computed substitutions are not model-editable: paint treats these as atomic furniture
+   * and selection mapping refuses them the way it refuses markers.
    */
   readonly projected?: boolean;
   /**

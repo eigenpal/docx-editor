@@ -39,7 +39,7 @@ import {
 } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useEditorState } from '../useEditorState';
-import { ToolbarContext, type ToolbarTranslate } from './toolbar-context';
+import { ToolbarContext, useToolbarLabelFor, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import {
   ToolbarOverflow,
@@ -111,6 +111,7 @@ import {
   type TableCellFillNamespace,
 } from './TableControls';
 import { TableChromeProvider } from './useTableChrome';
+import { useScopeClassName } from '../scope-context';
 
 /** Contextual table chrome slots appended when the caret is inside a table. */
 const TABLE_CHROME_SLOTS: readonly ArrangementKey[] = [
@@ -280,8 +281,13 @@ function includesTableChromeParts(children: ReactNode, preset: boolean): boolean
 }
 
 function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
+  // Skip the scope class when the packaged wrapper already carries it.
+  const scopeClassName = useScopeClassName();
   const { className, t, onSave, preset = true, overflow: overflowEnabled = true, children } = props;
   const context = useMemo(() => ({ t, onSave }), [t, onSave]);
+  // The overflow panel labels its value rows from the same resolver the parts inside it
+  // use. It runs above `ToolbarContext.Provider`, so it takes the host `t` directly.
+  const label = useToolbarLabelFor(t);
   const image = useEditorState(selectToolbarImage);
   const defaultGroups = useMemo(() => buildDefaultGroups(image), [image]);
   const defaultSlots = useMemo(
@@ -334,7 +340,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
     for (const group of defaultGroups) {
       if (overflow.has(group.id)) {
         const rows = group.entries.flatMap((entry) => {
-          const row = overflowRow(entry, overrides, t, group.labelKey, render);
+          const row = overflowRow(entry, overrides, label, group.labelKey, render);
           if (row === null) return [];
           return [<Fragment key={entry.slot}>{row}</Fragment>];
         });
@@ -391,7 +397,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
         // `Root` renders no DOM — same pattern as `DocxEditorLoading`/`DocxEditorViewport`,
         // so a composed toolbar is styled wherever the host puts it. Nesting under the
         // packaged wrapper is fine; the stylesheet re-applies dark tokens to nested roots.
-        className={`docx-editor docx-toolbar${className ? ` ${className}` : ''}`}
+        className={`${scopeClassName}docx-toolbar${className ? ` ${className}` : ''}`}
         // One row when the bar measures itself, wrapping when it does not: the stylesheet
         // reads this rather than guessing from a breakpoint.
         {...(measuring ? { 'data-overflow': '' } : {})}
@@ -420,7 +426,7 @@ function isHiddenOverride(override: ReactElement | undefined): boolean {
 function overflowRow(
   entry: DefaultEntry,
   overrides: Map<ArrangementKey, ReactElement>,
-  t: ToolbarTranslate | undefined,
+  label: (key: string) => string,
   groupLabelKey: string,
   render: (entry: DefaultEntry) => ReactNode
 ): ReactNode {
@@ -428,7 +434,7 @@ function overflowRow(
   if (isHiddenOverride(override)) return null;
   if (override || isValueSlot(entry.slot)) {
     return (
-      <ToolbarOverflowControl label={labelOf(t, entry, groupLabelKey)}>
+      <ToolbarOverflowControl label={labelOf(label, entry, groupLabelKey)}>
         {render(entry)}
       </ToolbarOverflowControl>
     );
@@ -438,13 +444,12 @@ function overflowRow(
 
 /** A panel control row's label: the slot's own registry label, else its group's. */
 function labelOf(
-  t: ToolbarTranslate | undefined,
+  label: (key: string) => string,
   entry: DefaultEntry,
   groupLabelKey: string
 ): string {
   const control = entry.slot === 'alignment' ? null : chromeControlForSlot(entry.slot);
-  const key = control?.labelKey ?? groupLabelKey;
-  return t?.(key) ?? key;
+  return label(control?.labelKey ?? groupLabelKey);
 }
 
 /** The toolbar with its parts attached as statics. @public */

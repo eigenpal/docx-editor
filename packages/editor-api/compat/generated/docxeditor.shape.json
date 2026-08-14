@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": {
     "package": "docxeditor-declarations (compat/docxeditor/declarations.ts)",
-    "version": "2.1.1"
+    "version": "2.2.1"
   },
   "symbols": {
     "Body": {
@@ -285,6 +285,17 @@
             }
           ]
         },
+        "delete": {
+          "uid": "DocxEditor.Comment#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "getRange": {
           "uid": "DocxEditor.Comment#getRange",
           "kind": "method",
@@ -405,6 +416,17 @@
             {
               "params": [],
               "returns": "Date"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.CommentReply#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
             }
           ]
         },
@@ -1399,6 +1421,22 @@
             {
               "params": [],
               "returns": "string"
+            }
+          ]
+        },
+        "insertComment": {
+          "uid": "DocxEditor.Range#insertComment",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "commentText",
+                  "type": "string"
+                }
+              ],
+              "returns": "Comment"
             }
           ]
         },

@@ -45,7 +45,7 @@ Dark mode has two layers:
 
 It is a display transform only. Dark mode never changes the document itself:
 
-- The saved DOCX is byte-for-byte unaffected; authored colors are preserved as written.
+- Authored document colors are preserved; the display transform is never written into the DOCX.
 - Printing always uses a white page with black text, regardless of `colorMode`.
 - Embedded images, logos, and screenshots are not inverted; they render as authored.
 

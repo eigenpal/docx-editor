@@ -146,7 +146,8 @@ function entryRootAtFlatIndex(toolbar: HTMLElement, index: number): Element | nu
 
 /** Bare parts resolve labels through the locale catalogue; tests address them by key. */
 const label = createT(en);
-const byLabel = (key: string): string => `[aria-label=${JSON.stringify(label(key as TranslationKey))}]`;
+const byLabel = (key: string): string =>
+  `[aria-label=${JSON.stringify(label(key as TranslationKey))}]`;
 
 afterEach(() => {
   cleanup();
@@ -166,12 +167,8 @@ describe('the default arrangement', () => {
       expect(view.container.querySelectorAll(`[data-slot="${slot}"]`).length).toBe(1);
     }
     // Wired controls are live buttons; the labels come from the registry keys.
-    expect(
-      view.container.querySelector(byLabel('formattingBar.boldShortcut'))
-    ).not.toBeNull();
-    expect(
-      view.container.querySelector(byLabel('formattingBar.undoShortcut'))
-    ).not.toBeNull();
+    expect(view.container.querySelector(byLabel('formattingBar.boldShortcut'))).not.toBeNull();
+    expect(view.container.querySelector(byLabel('formattingBar.undoShortcut'))).not.toBeNull();
     // No raw key ever reaches the screen — the guard the resolved-label helpers cannot
     // provide, since they resolve through the same catalogue as the code under test.
     expect(toolbar.textContent).not.toContain('toolbar.');
@@ -229,9 +226,7 @@ describe('the default arrangement', () => {
     expect(view.container.querySelector(byLabel('formattingBar.strikethrough'))).toBeNull();
     expect(toolbarArrangement(toolbar).length).toBe(EXPECTED_ARRANGEMENT.length - 1);
     // Neighbours unaffected: underline still present, alignment group intact.
-    expect(
-      view.container.querySelector(byLabel('formattingBar.underlineShortcut'))
-    ).not.toBeNull();
+    expect(view.container.querySelector(byLabel('formattingBar.underlineShortcut'))).not.toBeNull();
   });
 
   test('preset={false} renders only the children, verbatim, in order', () => {
@@ -273,9 +268,7 @@ describe('live button state', () => {
         <DocxEditorToolbar.Button slot="image.insert" />
       </DocxEditorToolbar>
     );
-    const button = view.container.querySelector(
-      byLabel('toolbar.image')
-    ) as HTMLButtonElement;
+    const button = view.container.querySelector(byLabel('toolbar.image')) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     expect(button.hasAttribute('data-disabled')).toBe(false);
     expect(button.title).not.toBe('not wired to an editor command');
@@ -592,9 +585,11 @@ describe('the shaped parts', () => {
     await act(async () => {
       (value as HTMLButtonElement).click();
     });
+    // The two fits come first and are ticked from the MODE, not from the percentage, so a
+    // reader tracking the viewport at 79% does not see "75%" lit up beside them.
     expect(
       [...stepper.querySelectorAll('[role="option"]')].map((option) => option.textContent)
-    ).toEqual(['50%', '75%', '100%', '125%', '150%', '200%']);
+    ).toEqual(['Automatic', 'Fit width', '25%', '50%', '75%', '100%', '125%', '150%', '200%']);
     await act(async () => {
       (value as HTMLButtonElement).click();
     });
@@ -616,6 +611,44 @@ describe('the shaped parts', () => {
       zoomOut.click();
     });
     expect(editor().snapshot().zoom).toBe(1);
+  });
+
+  // The point of the two fit rows: the tick follows the MODE, not the percentage. Ticking the
+  // level that matches the resolved scale lights up "100%" while the editor is tracking the
+  // viewport and about to move off it.
+  test('the zoom menu ticks the mode, not the percentage', async () => {
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    const stepper = view.container.querySelector('[data-slot="zoom.level"]')!;
+    const rows = () => [...stepper.querySelectorAll('[role="option"]')] as HTMLButtonElement[];
+    // The trigger TOGGLES, so opening an already-open menu closes it. Idempotent on purpose:
+    // these assertions read the menu several times in a row.
+    const openMenu = async () => {
+      if (rows().length === 0) {
+        await act(async () => {
+          (stepper.querySelector('.docx-toolbar__stepper-value') as HTMLButtonElement).click();
+        });
+      }
+      return rows();
+    };
+    const ticked = (rows: HTMLButtonElement[]) =>
+      rows.filter((row) => row.hasAttribute('data-selected')).map((row) => row.textContent);
+
+    // Default is auto, resolved to 100% here. "Automatic" is ticked; "100%" is NOT.
+    expect(editor().snapshot().zoom).toBe(1);
+    expect(ticked(await openMenu())).toEqual(['Automatic']);
+
+    // Picking the level ends the fit, and now the level is what is ticked.
+    await act(async () => {
+      (await openMenu()).find((row) => row.textContent === '100%')!.click();
+    });
+    expect(ticked(await openMenu())).toEqual(['100%']);
+
+    // A fit with bounds this menu cannot offer ticks NOTHING, rather than lighting up a row
+    // that would silently replace those bounds when clicked.
+    await act(async () => {
+      editor().setZoomMode({ type: 'fit', fit: 'pageWidth', maxZoom: 2 });
+    });
+    expect(ticked(await openMenu())).toEqual([]);
   });
 
   test('the font-colour split applies its seed from the main half and a swatch pick from the grid', async () => {
@@ -859,7 +892,11 @@ describe('the FontFamily compound', () => {
     ]);
     expect(
       [...listbox.querySelectorAll('.docx-toolbar__menu-label')].map((label) => label.textContent)
-    ).toEqual([label('font.sansSerif' as TranslationKey), label('font.serif' as TranslationKey), label('font.monospace' as TranslationKey)]);
+    ).toEqual([
+      label('font.sansSerif' as TranslationKey),
+      label('font.serif' as TranslationKey),
+      label('font.monospace' as TranslationKey),
+    ]);
 
     await act(async () => {
       (options[1] as HTMLButtonElement).click();

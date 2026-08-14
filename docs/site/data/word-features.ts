@@ -10,7 +10,7 @@
  * Status axes:
  * - editing:   can the user (or code driving the editor) change it in the editor?
  * - rendering: does it display like Microsoft Word renders it?
- * - roundTrip: does it survive open -> save unchanged?
+ * - roundTrip: does it survive open -> edit -> save -> reopen without loss?
  *
  * Honesty rule: when in doubt, downgrade. A "partial" that turns out to be
  * full delights; a "full" that turns out to be partial burns trust.
@@ -20,7 +20,7 @@ export type FeatureStatus =
   | 'full'
   | 'partial'
   | 'render-only'
-  | 'preserved' // round-trips losslessly, not editable or rendered
+  | 'preserved' // round-trips losslessly as inert content; editing/rendering may be absent
   | 'planned'
   | 'none';
 
@@ -48,7 +48,7 @@ export interface WordFeature {
   roundTrip: FeatureStatus;
   tier: FeatureTier;
   notes?: string;
-  /** Docs page that covers the feature, e.g. '/docs/2.x/guides/tracked-changes'. */
+  /** Docs page that covers the feature, e.g. '/docs/2.x/pro/tracked-changes'. */
   docsLink?: string;
 }
 
@@ -201,7 +201,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Font external leading is excluded from line boxes, and trailing auto-spacing may cross the bottom text margin when the glyphs fit, matching Word’s vertical pagination. The paragraph mark’s w:sz participates in the last line’s metrics, matching Word when a cover-page mark is taller than the visible runs. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends. Automatic spacing (w:beforeAutospacing / w:afterAutospacing, which Word writes on documents from its HTML filter) resolves to Word’s 14pt, or to nothing inside a list item or table cell, rather than to the measurement the flag replaces.',
+      'Space before/after and line spacing (single, multiple, exactly, at least) all reach pagination, so a 1.5- or double-spaced document breaks pages where Word breaks them. Font external leading is excluded from line boxes, and trailing auto-spacing may cross the bottom text margin when the glyphs fit, matching Word’s vertical pagination. The paragraph mark’s w:sz participates in the last line’s metrics, matching Word when a cover-page mark is taller than the visible runs. Contextual spacing drops the gap between same-style neighbours, the way Word’s List Paragraph style intends. Automatic spacing (w:beforeAutospacing / w:afterAutospacing) replaces the authored measurement with 14pt in body paragraphs and 0pt in list items and table cells.',
   },
   {
     id: 'paragraphs.indentation',
@@ -315,9 +315,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'lists',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Not parsed; an image bullet is dropped on save and falls back to no bullet.',
+    notes:
+      'Not rendered or editable; the numPicBullet definition and its authored markup are preserved on save.',
   },
 
   // --- Tables -------------------------------------------------------------
@@ -545,10 +546,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'none',
     rendering: 'partial',
-    roundTrip: 'partial',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'Transparency (opacity) renders and round-trips; brightness, contrast, recolor and artistic effects are dropped.',
+      'Transparency, brightness, contrast and grayscale project where supported; authored adjustment markup is preserved on save.',
   },
   {
     id: 'images.effects',
@@ -556,9 +557,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'partial',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Not painted; effectExtent spacing round-trips, the effect itself may not.',
+    notes:
+      'Not painted or editable; authored effect markup and effectExtent spacing are preserved.',
   },
   {
     id: 'images.charts',
@@ -589,9 +591,9 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Not modeled; dropped on save.',
+    notes: 'Not rendered or editable; ink markup is preserved generically on save.',
   },
 
   // --- Page layout, headers & footers --------------------------------------
@@ -710,9 +712,9 @@ export const wordFeatures: WordFeature[] = [
     category: 'layout',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Parsed but not serialized; dropped on save and not rendered.',
+    notes: 'Not rendered or editable; authored background markup and relationships are preserved.',
   },
   {
     id: 'layout.page-num-format',
@@ -736,8 +738,8 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Full revision model incl. structural changes (paragraph breaks, paragraph props, table rows/cells). Opens cleanly in Word’s review pane.',
-    docsLink: '/docs/2.x/guides/tracked-changes',
+      'Full revision model incl. structural changes (paragraph breaks, paragraph props, table rows/cells). Tracked insertions and deletions around a field result (cross-reference, page number, form field) paint as tracked, not as ordinary text. Opens cleanly in Word’s review pane.',
+    docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
     id: 'review.accept-reject',
@@ -749,7 +751,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes:
       'Per-change accept/reject in the sidebar and through acceptReviewItem/rejectReviewItem, plus revision.accept()/reject() and whole-document revisions.acceptAll()/rejectAll() through the automation object model. The sidebar itself offers no bulk control: resolve the queue with the per-item call over every item.',
-    docsLink: '/docs/2.x/guides/tracked-changes',
+    docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
     id: 'review.comments',
@@ -759,7 +761,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    docsLink: '/docs/2.x/guides/comments',
+    docsLink: '/docs/2.x/pro/comments',
   },
   {
     id: 'review.ai-redlining',
@@ -819,7 +821,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Allowlisted complex PAGE, NUMPAGES, and SECTIONPAGES project in headers/footers at layout time (PAGE respects section pgNumType start/fmt), including fields hosted inside anchored header/footer text boxes. Insertable from React header/footer chrome (including Page X of Y). Other field instructions stay inert; body field evaluation is deferred.',
+      'Allowlisted PAGE, NUMPAGES, and SECTIONPAGES (complex or w:fldSimple) project in headers/footers at layout time (PAGE respects section pgNumType start/fmt), including fields hosted inside anchored header/footer text boxes and allowlisted page fields nested inside a non-page simple field such as STYLEREF. Insertable from React header/footer chrome (including Page X of Y). Other field instructions stay inert; body field evaluation is deferred.',
   },
   {
     id: 'fields.toc',
@@ -840,7 +842,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Last-computed field results display; the field codes themselves round-trip untouched.',
+    notes:
+      'Last-computed field results display for complex fields and w:fldSimple; the field codes themselves round-trip untouched. Painted results carry Word-like grey field shading (always for legacy form fields unless w:doNotShadeFormData; otherwise per the fieldShading option: never / when-selected / always). Field instructions are never executed.',
   },
   {
     id: 'fields.citations',
@@ -848,21 +851,21 @@ export const wordFeatures: WordFeature[] = [
     category: 'fields',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'CITATION/BIBLIOGRAPHY fields and the b:Sources store are not parsed; bibliography data is dropped (any cached result text survives as plain runs).',
+      'CITATION/BIBLIOGRAPHY fields remain inert and the b:Sources store is preserved; citation evaluation and editing are not supported.',
   },
   {
     id: 'fields.legacy-forms',
     name: 'Legacy form fields (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN)',
     category: 'fields',
-    editing: 'none',
+    editing: 'partial',
     rendering: 'partial',
-    roundTrip: 'partial',
+    roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The field result shows as static text; w:ffData (checkbox state, constraints) is dropped and the control is not interactive.',
+      'FORMTEXT result text is inline-editable with character-accurate caret/selection; field markers, instructions, and w:ffData round-trip and tracked edits are preserved. Word-like form-field shading applies unless w:doNotShadeFormData. FORMCHECKBOX and FORMDROPDOWN still render static results; checkbox/dropdown interaction, Tab navigation, ffData constraints, and legacy forms-protection fill mode are not implemented.',
   },
 
   // --- Document structure & content controls ---------------------------------
@@ -910,7 +913,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'customXml parts and w:dataBinding round-trip byte-stable; no binding evaluation.',
+    notes:
+      'customXml parts and w:dataBinding round-trip with structural fidelity; no binding evaluation.',
   },
   {
     id: 'structure.macros',
@@ -929,9 +933,10 @@ export const wordFeatures: WordFeature[] = [
     category: 'structure',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'none',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Embedded objects are dropped; only a fallback preview image, when present, survives.',
+    notes:
+      'Never executed or rendered; OLE markup and embedded binary payloads are preserved through editing and save.',
   },
   {
     id: 'structure.protection',
@@ -955,7 +960,6 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes: 'Live cursors, presence, comment sync, per-author tracked-change attribution.',
-    docsLink: '/docs/2.x/realtime-collaboration',
   },
   {
     id: 'collab.find-replace',
@@ -994,6 +998,17 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     notes: 'en, de, fr, he, hi, pl, pt-BR, tr, zh-CN via @docx-editor.dev/i18n.',
     docsLink: '/docs/2.x/i18n',
+  },
+  {
+    id: 'collab.zoom-fit',
+    name: 'Automatic fit / responsive zoom',
+    category: 'collaboration',
+    editing: 'full',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      "Default zoom mode is `auto`: fit the page width between 50% and 100% so a container narrower than a Letter sheet shrinks the document instead of overflowing. Opening chrome that pads the scroll container (navigation pane, review rail) recomputes the fit from the content box. Hosts can pin a fixed scale with `zoom` alone or `zoomMode={{ type: 'fixed' }}`, or ask for uncapped fit-width. Toolbar Automatic / Fit width / percentage ladder and Ctrl/Cmd+= shortcuts share the same engine-owned mode.",
   },
   {
     id: 'collab.agent-tools',

@@ -27,6 +27,7 @@
 // found: a notes part holds a story per note, and the reader that stopped at one root per part
 // answered nothing for it.
 
+import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -36,6 +37,11 @@ import {
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { collectStoryParagraphs, storyRootsOf } from '../package/story-blocks.ts';
+import {
+  chargePart,
+  createCommentScanBudget,
+  walkCharged,
+} from '../package/comment-lifecycle-scan.ts';
 import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 
@@ -82,7 +88,7 @@ export interface CommentRecord {
   readonly date?: string;
   /** Body paragraphs, as tree nodes, so the surface renders measured text rather than a string. */
   readonly blocks: readonly OoxmlElement[];
-  /** `w14:paraId` of the first body paragraph — the key thread state is stored under. */
+  /** `w14:paraId` of the last body paragraph — the key thread state is stored under. */
   readonly paraId?: string;
   /** `@w16cid:parentId` — the `w:id` of the comment this replies to, when the file names it. */
   readonly parentCommentId?: string;
@@ -283,8 +289,13 @@ export function commentsOfPart(part: OoxmlPart): CommentRecord[] {
         }
         const initials = wml(node, 'initials');
         const date = wml(node, 'date');
-        const first = blocks.find((block) => block.kind === 'paragraph');
-        const paraId = first ? attribute(first, W14_NAMESPACE_URI, 'paraId') : undefined;
+        let last: OoxmlElement | undefined;
+        for (let index = blocks.length - 1; index >= 0; index -= 1) {
+          if (blocks[index]?.kind !== 'paragraph') continue;
+          last = blocks[index];
+          break;
+        }
+        const paraId = last ? attribute(last, W14_NAMESPACE_URI, 'paraId') : undefined;
         // A comment naming ITSELF as parent is a file defect, not a cycle to propagate.
         const rawParent = attribute(node, W16CID_NAMESPACE_URI, 'parentId');
         const parentCommentId = rawParent === id ? undefined : rawParent;
@@ -336,4 +347,27 @@ export function threadStateOfPart(part: OoxmlPart): Map<string, CommentThreadSta
   };
   visit(part.root);
   return states;
+}
+
+/**
+ * Whether the package holds any `w:comment` record — the cheap gate before a reap.
+ *
+ * Overflow cannot prove the package is comment-free, so it returns true and the reap still
+ * runs rather than skipping cleanup.
+ */
+export function hasAnyComment(pkg: OoxmlPackage): boolean {
+  const budget = createCommentScanBudget();
+  for (const part of pkg.parts.values()) {
+    if (!part.name.endsWith('.xml')) continue;
+    if (!chargePart(budget)) return true;
+    let found = false;
+    const finished = walkCharged(part.root, budget, (node) => {
+      if (node.kind !== 'comment') return false;
+      found = true;
+      return true;
+    });
+    if (found) return true;
+    if (!finished) return true;
+  }
+  return false;
 }

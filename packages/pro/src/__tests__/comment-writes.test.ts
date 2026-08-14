@@ -140,6 +140,104 @@ describe('adding a comment', () => {
     expect(store.historyDepth).toBe(0);
   });
 
+  test('invalid XML controls and over-limit values are refused before transact', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const anchor = { paragraphId: target.id, start: 0, end: 3 };
+    const storyBefore = serializeOoxmlPart(store.part);
+
+    const control = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: '\u0001',
+    });
+    expect(control.ok).toBe(false);
+    if (!control.ok) expect(control.reason).toBe('invalid-text');
+
+    const longAuthor = addComment(store, {
+      anchor,
+      author: 'A'.repeat(257),
+      text: 'ok',
+    });
+    expect(longAuthor.ok).toBe(false);
+    if (!longAuthor.ok) expect(longAuthor.reason).toBe('resource-limit');
+
+    const longText = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: 'x'.repeat(65_536),
+    });
+    expect(longText.ok).toBe(false);
+    if (!longText.ok) expect(longText.reason).toBe('resource-limit');
+
+    const badDate = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: 'dated',
+      date: 'not-a-date',
+    });
+    expect(badDate.ok).toBe(false);
+    if (!badDate.ok) expect(badDate.reason).toBe('invalid-property-value');
+
+    expect(serializeOoxmlPart(store.part)).toBe(storyBefore);
+    expect(store.historyDepth).toBe(0);
+  });
+
+  test('valid Unicode and accepted dates commit without save failure', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const text = 'caf\u00e9 \uD83D\uDE00';
+    const added = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 3 },
+      author: 'R\u00e9viewer',
+      text,
+      date: '2026-03-09T12:00:00Z',
+    });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const reopened = readOoxmlPackage(writeOoxmlPackage(store.package));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(validatePackageInvariants(reopened.package).ok).toBe(true);
+    const commentsXml = serializeOoxmlPart(reopened.package.parts.get('/word/comments.xml')!);
+    expect(commentsXml).toContain('café');
+    expect(commentsXml).toContain('😀');
+    expect(commentsXml).toContain('2026-03-09T12:00:00Z');
+  });
+
+  test('date-only input writes normalized xsd:dateTime on w:date', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const added = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 3 },
+      author: 'QA',
+      text: 'dated',
+      date: '2026-03-09',
+    });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const xml = serializeOoxmlPart(store.package.parts.get('/word/comments.xml')!);
+    expect(xml).toContain('w:date="2026-03-09T00:00:00Z"');
+    expect(xml).not.toContain('w:date="2026-03-09"');
+  });
+
+  test('offsets beyond xsd ±14:00 are refused before transact', () => {
+    const store = open();
+    const target = paragraphWithText(store.part, 10);
+    const anchor = { paragraphId: target.id, start: 0, end: 3 };
+    const storyBefore = serializeOoxmlPart(store.part);
+    const result = addComment(store, {
+      anchor,
+      author: 'QA',
+      text: 'too far',
+      date: '2026-03-09T00:00:00+15:00',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('invalid-property-value');
+    expect(serializeOoxmlPart(store.part)).toBe(storyBefore);
+    expect(store.historyDepth).toBe(0);
+  });
+
   test('no date is written when none is given', () => {
     const store = open();
     const target = paragraphWithText(store.part, 10);
@@ -199,6 +297,44 @@ describe('adding a comment', () => {
 });
 
 describe('replying', () => {
+  test('serializes coincident parent/reply markers in Word classic order', () => {
+    // Word accepts a thread only when the shared range serializes as
+    // start_parent, start_reply, end_reply, end_parent, ref_parent, ref_reply.
+    // Interleaved per-comment end→ref pairs (end_r, ref_r, end_p, ref_p) keep
+    // commentsExtended intact in our reader but make Word drop paraIdParent.
+    const store = open();
+    const target = paragraphWithText(store.part, 20);
+    const parent = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 6 },
+      author: 'QA',
+      text: 'parent',
+    });
+    expect(parent.ok).toBe(true);
+    if (!parent.ok) return;
+    const reply = addComment(store, {
+      anchor: { paragraphId: target.id, start: 0, end: 6 },
+      author: 'Dev',
+      text: 'reply',
+      replyToCommentId: parent.commentId,
+    });
+    expect(reply.ok).toBe(true);
+    if (!reply.ok) return;
+
+    const story = serializeOoxmlPart(store.part);
+    const parentStart = story.indexOf(`<w:commentRangeStart w:id="${parent.commentId}"/>`);
+    const replyStart = story.indexOf(`<w:commentRangeStart w:id="${reply.commentId}"/>`);
+    const replyEnd = story.indexOf(`<w:commentRangeEnd w:id="${reply.commentId}"/>`);
+    const parentEnd = story.indexOf(`<w:commentRangeEnd w:id="${parent.commentId}"/>`);
+    const parentReference = story.indexOf(`<w:commentReference w:id="${parent.commentId}"/>`);
+    const replyReference = story.indexOf(`<w:commentReference w:id="${reply.commentId}"/>`);
+    expect(parentStart).toBeGreaterThanOrEqual(0);
+    expect(replyStart).toBeGreaterThan(parentStart);
+    expect(replyEnd).toBeGreaterThan(replyStart);
+    expect(parentEnd).toBeGreaterThan(replyEnd);
+    expect(parentReference).toBeGreaterThan(parentEnd);
+    expect(replyReference).toBeGreaterThan(parentReference);
+  });
+
   test('a reply links to its parent through commentsExtended', () => {
     const store = open();
     const target = paragraphWithText(store.part, 20);
@@ -234,7 +370,9 @@ describe('replying', () => {
     expect(replyParaId).toBeDefined();
 
     const state = threadStateOfPart(extended);
+    expect(state.get(parentParaId!.toUpperCase())).toEqual({ done: false });
     expect(state.get(replyParaId!.toUpperCase())?.parentParaId).toBe(parentParaId!.toUpperCase());
+    expect(state.size).toBe(2);
   });
 
   test('creating the thread part is part of the same transaction', () => {
@@ -315,7 +453,9 @@ describe('replying', () => {
     // reply under the comment instead of beside it.
     const extended = store.package.parts.get('/word/commentsExtended.xml');
     expect(extended).toBeDefined();
-    expect(serializeOoxmlPart(extended!)).toContain(`w15:paraIdParent="${parentParaId}"`);
+    const state = threadStateOfPart(extended!);
+    expect(state.get(parentParaId!)).toEqual({ done: false });
+    expect([...state.values()].some((entry) => entry.parentParaId === parentParaId)).toBe(true);
   });
 
   test('a reply to a comment the part does not hold is refused', () => {
@@ -357,6 +497,7 @@ describe('replying', () => {
     const state = threadStateOfPart(reopened.package.parts.get('/word/commentsExtended.xml')!);
     const replyParaId = comments.find((entry) => entry.id === reply.commentId)?.paraId;
     const parentParaId = comments.find((entry) => entry.id === parent.commentId)?.paraId;
+    expect(state.get(parentParaId!.toUpperCase())).toEqual({ done: false });
     expect(state.get(replyParaId!.toUpperCase())?.parentParaId).toBe(parentParaId!.toUpperCase());
   });
 });

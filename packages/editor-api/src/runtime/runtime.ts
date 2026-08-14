@@ -123,7 +123,10 @@ export function createRuntime(
 export function createRuntime(options: CreateRuntimeOptions): DocxEditorRuntime;
 export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRuntime {
   const host = options.host;
-  const capabilities = host.capabilities;
+  const capabilities: DocumentCapabilities = Object.freeze({
+    ...host.capabilities,
+    save: options.save && host.capabilities.save,
+  });
   const author =
     typeof options.author === 'string' && options.author.trim().length > 0
       ? options.author

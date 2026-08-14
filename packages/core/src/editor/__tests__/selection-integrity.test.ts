@@ -18,7 +18,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { applySelectionToDom, positionFromDomPoint } from '../dom-selection.ts';
-import { paintedTextOf } from '../surface-input.ts';
+import { paintedTextOf, paragraphReplacePlan } from '../surface-input.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 
 // The selection is a property of the DOCUMENT, and the happy-dom document is shared by every
@@ -163,7 +163,90 @@ describe('painted furniture never contributes a model offset', () => {
     // The composition readback diffs this against the model; a marker glyph or a leader's
     // dots leaking in would commit them into the document as real characters.
     const root = paintedListParagraph('p1');
-    expect(paintedTextOf(root, 'p1')).toBe('alpha beta');
+    expect(paintedTextOf(root, 'p1', 'alpha beta')).toBe('alpha beta');
+  });
+});
+
+/**
+ * A paragraph holding a FIELD: `a potential [Scope of the discussions] (the `, where the field
+ * is one model offset and twenty-four painted glyphs.
+ */
+function paintedFieldParagraph(): HTMLElement {
+  const root = document.createElement('div');
+  const line = document.createElement('div');
+  line.className = 'docx-line';
+  const add = (text: string, start: number, end: number, projected = false): void => {
+    const span = document.createElement('span');
+    span.dataset.paragraphId = 'p1';
+    span.dataset.start = String(start);
+    span.dataset.end = String(end);
+    if (projected) {
+      span.dataset.docxField = '';
+      span.setAttribute('contenteditable', 'false');
+    }
+    span.textContent = text;
+    line.append(span);
+  };
+  add('a potential ', 0, 12);
+  add('Scope of the discussions', 12, 13, true);
+  add(' (the ', 13, 19);
+  root.append(line);
+  return root;
+}
+
+const FIELD_MODEL_TEXT = 'a potential ￼ (the ';
+
+describe('the readback over a paragraph containing a field', () => {
+  test('reports the model text, so an untouched field looks untouched', () => {
+    // Joining the PAINTED text made the readback see 23 characters the model does not have,
+    // and the diff explained the difference the only way it could: delete the field, insert
+    // its own rendering as literal characters. One composition anywhere in the paragraph
+    // destroyed the field, permanently and silently.
+    const root = paintedFieldParagraph();
+    expect(paintedTextOf(root, 'p1', FIELD_MODEL_TEXT)).toBe(FIELD_MODEL_TEXT);
+    expect(paragraphReplacePlan('p1', FIELD_MODEL_TEXT, FIELD_MODEL_TEXT)).toBeNull();
+  });
+
+  test('a result broken across spans contributes its model range ONCE', () => {
+    // Line breaking splits a field's result at its spaces and every resulting span republishes
+    // the SAME model range. Emitting the model slice per span repeated the field's characters,
+    // so a four-word result read back as four `￼` where the model has one — and the diff then
+    // inserted the extras into the document as literal object-replacement characters.
+    const root = document.createElement('div');
+    const line = document.createElement('div');
+    line.className = 'docx-line';
+    const add = (text: string, start: number, end: number, projected = false): void => {
+      const span = document.createElement('span');
+      span.dataset.paragraphId = 'p1';
+      span.dataset.start = String(start);
+      span.dataset.end = String(end);
+      if (projected) span.dataset.docxField = '';
+      span.textContent = text;
+      line.append(span);
+    };
+    add('a potential ', 0, 12);
+    add('Scope ', 12, 13, true);
+    add('of the ', 12, 13, true);
+    add('discussions', 12, 13, true);
+    add(' (the ', 13, 19);
+    root.append(line);
+
+    expect(paintedTextOf(root, 'p1', FIELD_MODEL_TEXT)).toBe(FIELD_MODEL_TEXT);
+    expect(paragraphReplacePlan('p1', FIELD_MODEL_TEXT, FIELD_MODEL_TEXT)).toBeNull();
+  });
+
+  test('a real edit elsewhere in the paragraph is still recovered', () => {
+    // The whole point of this path: text the browser wrote that the surface could not
+    // intercept. Keying the field off "the lengths disagree" would have swallowed this,
+    // because a browser edit is a length disagreement too.
+    const root = paintedFieldParagraph();
+    root.querySelector('span')!.textContent = 'a potentialxy ';
+    const painted = paintedTextOf(root, 'p1', FIELD_MODEL_TEXT)!;
+    expect(painted).toBe('a potentialxy ￼ (the ');
+    expect(paragraphReplacePlan('p1', FIELD_MODEL_TEXT, painted)).toEqual({
+      ops: [{ op: 'insertText', paragraphId: 'p1', offset: 11, text: 'xy' }],
+      caret: 13,
+    });
   });
 });
 

@@ -12,6 +12,7 @@
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
+import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
 import { ReviewRailContext } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -25,20 +26,44 @@ import { useNavigationLayoutStore, useNavigationViewportElement } from './naviga
 /** The pane's tabs. Word's Replace tab is a later slice; nothing here pretends it exists. */
 export type NavigationTab = 'headings' | 'find';
 
-const selectPageGeometry = (
-  snapshot: EditorSnapshot
-): { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean } => ({
-  pageSetup: snapshot.pageSetup ?? null,
-  zoom: snapshot.zoom,
-  reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
-});
+/** @internal */
+export interface PaneGeometry {
+  readonly pageSetup: PageSetup | null;
+  readonly zoom: number;
+  readonly reviewPaneOpen: boolean;
+  /** Whether the page's width follows the padding — see `navigationShift`'s `docked`. */
+  readonly fitting: boolean;
+}
 
-const samePageGeometry = (
-  a: { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean },
-  b: { pageSetup: PageSetup | null; zoom: number; reviewPaneOpen: boolean }
-) =>
+/**
+ * The pane's view of the snapshot. Exported for the test that pins `fitting`, which is a rule
+ * about two bounds and deserves to be checked against the real selector rather than a copy.
+ *
+ * @internal
+ */
+export const selectPaneGeometry = (snapshot: EditorSnapshot): PaneGeometry => {
+  const mode = snapshot.zoomMode;
+  return {
+    pageSetup: snapshot.pageSetup ?? null,
+    zoom: snapshot.zoom,
+    reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
+    // BINDING, and bounded at BOTH ends. A fit resting against either of its own bounds has a
+    // page of fixed width and belongs on the proportional branch: at the cap, which the
+    // default `'auto'` sits at on every container with room for the page, and equally at the
+    // floor, which it sits at on one too narrow for the fit to help. Only in between is the
+    // page actually being scaled to the box, which is the condition that makes its width
+    // follow the padding.
+    fitting:
+      mode?.type === 'fit' &&
+      snapshot.zoom < (mode.maxZoom ?? ZOOM_MAX) &&
+      snapshot.zoom > (mode.minZoom ?? ZOOM_MIN),
+  };
+};
+
+const samePageGeometry = (a: PaneGeometry, b: PaneGeometry) =>
   a.zoom === b.zoom &&
   a.reviewPaneOpen === b.reviewPaneOpen &&
+  a.fitting === b.fitting &&
   a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
 
 /** How `useNavigationPane` is configured. @public */
@@ -117,7 +142,10 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   const store = useNavigationLayoutStore();
   const viewport = useNavigationViewportElement();
   const rail = useContext(ReviewRailContext);
-  const { pageSetup, zoom, reviewPaneOpen } = useEditorState(selectPageGeometry, samePageGeometry);
+  const { pageSetup, zoom, reviewPaneOpen, fitting } = useEditorState(
+    selectPaneGeometry,
+    samePageGeometry
+  );
   const [viewportWidth, setViewportWidth] = useState(0);
   const [inlineEndReservation, setInlineEndReservation] = useState(0);
 
@@ -159,8 +187,9 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
       pageWidthPx: twipsToPixels(pageWidthTwips) * zoom,
       reservation: navigationPaneReservation(paneWidth),
       inlineEndReservation,
+      docked: fitting,
     });
-  }, [open, pageWidthTwips, zoom, viewportWidth, paneWidth, inlineEndReservation]);
+  }, [open, pageWidthTwips, zoom, viewportWidth, paneWidth, inlineEndReservation, fitting]);
 
   useEffect(() => {
     if (!store) return undefined;

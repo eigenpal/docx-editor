@@ -353,7 +353,7 @@ import { DocxEditor, useChromeTranslate } from '@docx-editor.dev/react';
 // `constructor` and `toString` off the prototype chain.
 const OVERRIDES = new Map([
   ['contextMenu.cut', 'Cut text'],
-  ['toolbar.bold', 'Heavy'],
+  ['formattingBar.bold', 'Heavy'],
 ]);
 
 function MyToolbar() {
@@ -411,23 +411,40 @@ Each card is a compound. Reorder, hide, and re-icon its parts in place:
 
 ```tsx
 <DocxEditorReview className="my-review">
-  <DocxEditorReview.Card className="my-card">
-    <DocxEditorReview.Avatar className="my-avatar" />
-    <DocxEditorReview.Author />
-    <DocxEditorReview.Time hidden />
-    <DocxEditorReview.Summary />
-    <DocxEditorReview.Accept icon={MyCheck} />
-    <DocxEditorReview.Reject icon={MyCross} />
-    <DocxEditorReview.Replies />
-    <DocxEditorReview.Reply />
-  </DocxEditorReview.Card>
-  <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
+  <DocxEditorReview.List>
+    <DocxEditorReview.Card className="my-card">
+      <DocxEditorReview.Avatar className="my-avatar" />
+      <DocxEditorReview.Author />
+      <DocxEditorReview.Time hidden />
+      <DocxEditorReview.Summary />
+      <DocxEditorReview.Accept icon={MyCheck} />
+      <DocxEditorReview.Reject icon={MyCross} />
+      <DocxEditorReview.Replies />
+      <DocxEditorReview.Reply />
+    </DocxEditorReview.Card>
+    <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
+  </DocxEditorReview.List>
 </DocxEditorReview>
 ```
 
 Every part takes `className`, `asChild`, and `hidden`; the action parts also take `icon`.
 
-For cards that share nothing with the packaged layout, `preset={false}` mounts the rail and its context without the packaged arrangement, so you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap, scale })` is the packaged stacking math if you want it — pass the editor's render scale, or card heights in pixels get compared against anchors in points. Below that, `useReview()` gives you the queue with no chrome at all.
+When the card shares no markup with the packaged one, put the render callback on `List`.
+Root parts remain ordinary siblings, so a custom Add Comment control and custom cards compose:
+
+```tsx
+<DocxEditorReview>
+  <DocxEditorReview.AddComment asChild>
+    <MyAddCommentButton />
+  </DocxEditorReview.AddComment>
+  <DocxEditorReview.List>{(item) => <MyReviewCard item={item} />}</DocxEditorReview.List>
+</DocxEditorReview>
+```
+
+The older root callback form remains supported as shorthand for an implicit `List`, but it
+cannot express root siblings and is not recommended for new code.
+
+When the whole review surface shares nothing with the packaged layout, `preset={false}` mounts the rail and its context without the packaged arrangement, so you can arrange every part yourself. Explicit parts still receive their root-owned positioning; omitted defaults stay omitted. `useStackedReviewPositions(items, heights, { gap, scale: editor.getRenderScale() })` provides the packaged stacking math. See [Tracked changes](/docs/2.x/pro/tracked-changes) for the scale and placement details. Below that, `useReview()` gives you the queue with no chrome at all.
 
 To add host content to some cards and not others, `useReviewItem()` reads the card a child is rendered inside:
 

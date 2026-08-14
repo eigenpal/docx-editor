@@ -243,6 +243,7 @@ export {
   fieldOnOffAttribute,
   fldCharType,
   fldSimpleInstr,
+  hasLegacyFormFieldData,
   instrTextValue,
   isFieldChrome,
   isFldChar,
@@ -422,12 +423,22 @@ export {
   type NoteLifecycleRejection,
   type NoteLifecycleResult,
 } from './note-lifecycle.ts';
-export { cascadeEmptiedComments, deleteCommentThread, hasAnyComment } from './comment-lifecycle.ts';
+export {
+  cascadeEmptiedComments,
+  deleteCommentThread,
+  hasAnyComment,
+  type CommentDeletionOwner,
+} from './comment-lifecycle.ts';
 export {
   NO_TRACKING_SETTINGS,
   readTrackingSettings,
   type DocumentTrackingSettings,
 } from './tracking-settings.ts';
+export {
+  DEFAULT_VIEW_SETTINGS,
+  readViewSettings,
+  type DocumentViewSettings,
+} from './view-settings.ts';
 export {
   CONTENT_CONTROL_ID_MAX,
   CONTENT_CONTROL_PROPERTY_ORDER,

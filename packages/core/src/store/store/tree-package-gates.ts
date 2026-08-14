@@ -2,7 +2,7 @@
 
 import { findNode } from '../package/ooxml-edit.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
-import { hasAnyComment } from '../package/comment-lifecycle.ts';
+import { hasAnyComment } from './comment-reads.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { segmentsOf } from './tree-op-segments.ts';

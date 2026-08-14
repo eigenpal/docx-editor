@@ -14,7 +14,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import { createServer } from '../../runtime/server.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
-import { docx, reopen, serverRuntime, WITH_FURNITURE } from './support/documents.ts';
+import {
+  docx,
+  p,
+  reopen,
+  serverRuntime,
+  WITH_BOOKMARKED_STORIES,
+  WITH_FURNITURE,
+  WITH_NOTE_TEXT_CASES,
+  WITH_REVIEW_DATE_CASES,
+} from './support/documents.ts';
 
 const numbered = (text: string, numId: string, level = 0): string =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="${String(level)}"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>` +
@@ -190,6 +199,94 @@ describe('links and bookmarks are the names a document gives to its own text', (
     });
     expect(found).toEqual({ name: 'Target', text: 'marked' });
   });
+
+  test('a body enumerates an empty bookmark collection without searchable text', async () => {
+    const runtime = await serverRuntime(docx(p('plain')));
+    const found = await runtime.run(async (context) => {
+      const bookmarks = context.document.body.bookmarks;
+      bookmarks.load('items');
+      await context.sync();
+      return bookmarks.items;
+    });
+    expect(found).toEqual([]);
+  });
+
+  test('a body enumerates multiple bookmarks, keeps the first duplicate, and applies load queries', async () => {
+    const runtime = await serverRuntime(WITH_BOOKMARKED_STORIES);
+    const found = await runtime.run(async (context) => {
+      const body = context.document.body;
+      const bookmarks = body.bookmarks;
+      expect(body.bookmarks).toBe(bookmarks);
+      bookmarks.load('items');
+      await context.sync();
+
+      const all = [...bookmarks.items];
+      for (const bookmark of all) bookmark.load('name');
+      await context.sync();
+      const duplicate = all[1]!;
+      const range = duplicate.range;
+      await context.sync();
+      range.load('text');
+      await context.sync();
+
+      bookmarks.load({ select: 'items', skip: 1, top: 1 });
+      await context.sync();
+      const filtered = bookmarks.items[0]!;
+      filtered.load('name');
+      await context.sync();
+      return {
+        names: all.map((bookmark) => bookmark.name),
+        duplicateText: range.text,
+        filtered: filtered.name,
+      };
+    });
+    expect(found).toEqual({
+      names: ['First', 'Duplicate'],
+      duplicateText: 'kept',
+      filtered: 'Duplicate',
+    });
+  });
+
+  test('each body enumerates only the bookmarks in its own story', async () => {
+    const runtime = await serverRuntime(WITH_BOOKMARKED_STORIES);
+    const found = await runtime.run(async (context) => {
+      const main = context.document.body.bookmarks;
+      const sections = context.document.sections;
+      main.load('items');
+      sections.load('items');
+      await context.sync();
+
+      const header = sections.items[0]!.getHeader('Primary');
+      await context.sync();
+      const headerBookmarks = header.bookmarks;
+      headerBookmarks.load('items');
+      await context.sync();
+
+      for (const bookmark of [...main.items, ...headerBookmarks.items]) bookmark.load('name');
+      await context.sync();
+      return {
+        main: main.items.map((bookmark) => bookmark.name),
+        header: headerBookmarks.items.map((bookmark) => bookmark.name),
+      };
+    });
+    expect(found).toEqual({ main: ['First', 'Duplicate'], header: ['Duplicate'] });
+  });
+
+  test('selecting a bookmark without a reader is refused at the call', async () => {
+    const runtime = await serverRuntime(BOOKMARKED);
+    const code = await codeOf(async () =>
+      runtime.run(async (context) => {
+        const whole = context.document.body.search('marked');
+        whole.load('items');
+        await context.sync();
+        const bookmarks = whole.items[0]!.bookmarks;
+        bookmarks.load('items');
+        await context.sync();
+        bookmarks.items[0]!.select();
+      })
+    );
+    expect(code).toBe('NotSupported');
+  });
 });
 
 describe('a section is the page a story is laid out on', () => {
@@ -261,9 +358,180 @@ describe('a section is the page a story is laid out on', () => {
     });
     expect(found).toEqual({ type: 'Footnote', text: 'in the footnote', count: 1 });
   });
+
+  test('note text is unloaded until one post-listing load round fills every item', async () => {
+    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    const found = await runtime.run(async (context) => {
+      const footnotes = context.document.footnotes;
+      const endnotes = context.document.endnotes;
+      footnotes.load();
+      endnotes.load();
+      await context.sync();
+
+      const notes = [...footnotes.items, ...endnotes.items];
+      for (const note of notes) {
+        expect(() => note.text).toThrowError(
+          expect.objectContaining({
+            code: 'PropertyNotLoaded',
+            target: expect.stringContaining('.text'),
+          })
+        );
+        note.load(['text', 'type']);
+      }
+      await context.sync();
+      return notes.map((note) => ({ type: note.type, text: note.text }));
+    });
+    expect(found).toEqual([
+      { type: 'Footnote', text: '' },
+      { type: 'Footnote', text: 'first\t<unsafe>\nline\rsecond' },
+      { type: 'Endnote', text: 'end note' },
+    ]);
+  });
+
+  test('direct note text is exactly the note body text', async () => {
+    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    const found = await runtime.run(async (context) => {
+      const notes = context.document.footnotes;
+      notes.load();
+      await context.sync();
+
+      for (const note of notes.items) {
+        note.load('text');
+        void note.body;
+      }
+      await context.sync();
+      for (const note of notes.items) note.body.load('text');
+      await context.sync();
+      return notes.items.map((note) => [note.text, note.body.text]);
+    });
+    expect(found).toEqual([
+      ['', ''],
+      ['first\t<unsafe>\nline\rsecond', 'first\t<unsafe>\nline\rsecond'],
+    ]);
+  });
+
+  test('a deleted note refuses a later direct text load', async () => {
+    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const notes = context.document.footnotes;
+        notes.load();
+        await context.sync();
+        const note = notes.items[0]!;
+        note.delete();
+        await context.sync();
+        note.load('text');
+        await context.sync();
+      })
+    );
+    expect(code).toBe('InvalidObjectPath');
+  });
 });
 
 describe('comments and tracked changes are what a document says about itself', () => {
+  test('review dates preserve valid stamps and null absent or invalid OOXML values', async () => {
+    const runtime = await serverRuntime(WITH_REVIEW_DATE_CASES);
+    const dates = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      const revisions = context.document.revisions;
+      comments.load('items');
+      revisions.load('items');
+      await context.sync();
+
+      for (const comment of comments.items) {
+        comment.load('creationDate');
+        comment.replies.load('items');
+      }
+      for (const revision of revisions.items) revision.load('date');
+      await context.sync();
+
+      for (const comment of comments.items) {
+        for (const reply of comment.replies.items) reply.load('creationDate');
+      }
+      await context.sync();
+
+      return {
+        comments: comments.items.map((comment) => comment.creationDate),
+        replies: comments.items.map((comment) => comment.replies.items[0]!.creationDate),
+        revisions: revisions.items.map((revision) => revision.date),
+      };
+    });
+
+    expect(dates.comments).toEqual([new Date('2026-01-01T10:00:00Z'), null, null, null]);
+    expect(dates.replies).toEqual([new Date('2026-01-02T10:00:00Z'), null, null, null]);
+    expect(dates.revisions).toEqual([
+      new Date('2026-03-01T10:00:00Z'),
+      null,
+      null,
+      null,
+      null,
+      null,
+      new Date('2026-03-01T04:30:00.123Z'),
+      null,
+      new Date('0099-01-01T00:00:00Z'),
+    ]);
+    expect(dates.revisions[8]!.getTime()).not.toBe(Date.parse('1999-01-01T00:00:00.000Z'));
+  });
+
+  test('deleting a reply removes only that reply and makes its proxy stale', async () => {
+    const runtime = await serverRuntime(WITH_REVIEW_DATE_CASES);
+    const stale = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      const root = comments.items[0]!;
+      root.replies.load('items');
+      await context.sync();
+      const reply = root.replies.items[0]!;
+      reply.delete();
+      await context.sync();
+      return reply;
+    });
+
+    const remaining = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      const root = comments.items[0]!;
+      root.load('id');
+      root.replies.load('items');
+      for (const comment of comments.items) comment.load('id');
+      await context.sync();
+      return {
+        rootIds: comments.items.map((comment) => comment.id),
+        replies: root.replies.items.length,
+      };
+    });
+    expect(remaining).toEqual({ rootIds: ['1', '3', '5', '7'], replies: 0 });
+    await expect(
+      runtime.run(stale, async (context) => {
+        stale.load('id');
+        await context.sync();
+      })
+    ).rejects.toMatchObject({ code: 'InvalidObjectPath' });
+  });
+
+  test('deleting roots is batched atomically and removes their threads', async () => {
+    const runtime = await serverRuntime(WITH_REVIEW_DATE_CASES);
+    await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.delete();
+      comments.items[1]!.delete();
+      await context.sync();
+    });
+    const remaining = await runtime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      for (const comment of comments.items) comment.load('id');
+      await context.sync();
+      return comments.items.map((comment) => comment.id);
+    });
+    expect(remaining).toEqual(['5', '7']);
+  });
+
   test('a tracked insertion is a decision a script can read and accept', async () => {
     const runtime = await serverRuntime(TRACKED);
     const before = await runtime.run(async (context) => {
@@ -298,17 +566,44 @@ describe('comments and tracked changes are what a document says about itself', (
   });
 
   test('a runtime with no author refuses to write a comment rather than inventing one', async () => {
-    // Nothing to reply to in this fixture; the refusal is about the runtime, and it happens at the
-    // call rather than at the sync, which is where the mistake was made.
-    const runtime = await serverRuntime(TRACKED);
+    const runtime = await serverRuntime(docx(p('target')));
     const code = await codeOf(async () =>
       runtime.run(async (context) => {
-        const comments = context.document.comments;
-        comments.load('items');
+        const matches = context.document.body.search('target');
+        matches.load('items');
         await context.sync();
-        return comments.items.length;
+        matches.items[0]!.insertComment('needs an author');
       })
     );
-    expect(code).toBe('no-error');
+    expect(code).toBe('NotSupported');
+  });
+
+  test('empty text is invalid, and a range whose paragraph was deleted becomes stale', async () => {
+    const runtime = await createServer(docx(p('target') + p('survivor')), { author: 'Reviewer' });
+    const empty = await codeOf(async () =>
+      runtime.run(async (context) => {
+        const matches = context.document.body.search('target');
+        matches.load('items');
+        await context.sync();
+        matches.items[0]!.insertComment('');
+      })
+    );
+    expect(empty).toBe('InvalidArgument');
+
+    const stale = await codeOf(async () =>
+      runtime.run(async (context) => {
+        const matches = context.document.body.search('target');
+        const paragraphs = context.document.body.paragraphs;
+        matches.load('items');
+        paragraphs.load('items');
+        await context.sync();
+        const range = matches.items[0]!;
+        paragraphs.items[0]!.delete();
+        await context.sync();
+        range.insertComment('too late');
+        await context.sync();
+      })
+    );
+    expect(stale).toBe('InvalidObjectPath');
   });
 });

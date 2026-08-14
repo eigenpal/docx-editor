@@ -59,6 +59,8 @@ import {
   useTranslation,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
+import { cloneReviewCard, partitionReviewChildren } from './review-composition';
+import { useReviewSlotSizing } from './use-review-slot-sizing';
 import { useReview, type ReviewItemView } from './useReview';
 
 /**
@@ -261,12 +263,14 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   /** Class for each card. The rail's own `className` styles the column; this the boxes in it. */
   card?: { className?: string };
   /**
-   * The cards, or a render prop that replaces the packaged card entirely while keeping the
-   * rail's subscription, anchoring, stacking and virtualization. Nodes are treated as part
-   * overrides for the packaged card instead.
+   * Compound parts for the rail and its implicit List. A function remains supported as the
+   * legacy shorthand for a List render callback, but cannot be combined with root siblings;
+   * prefer an explicit `<Review.List>{item => ...}</Review.List>` in new code.
    *
    * ```tsx
-   * <DocxEditor.Review>{(item) => <MyCard item={item} />}</DocxEditor.Review>
+   * <DocxEditor.Review>
+   *   <DocxEditor.Review.List>{(item) => <MyCard item={item} />}</DocxEditor.Review.List>
+   * </DocxEditor.Review>
    * ```
    */
   children?: ReactNode | ((item: ReviewItemView) => ReactNode);
@@ -281,7 +285,8 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
   furniture?: ReactNode;
   /**
    * Render the packaged arrangement. `false` mounts the rail and its context only, so a host
-   * can lay the cards out itself while keeping the subscription and the anchoring.
+   * can lay the cards out itself while keeping the subscription and the anchoring. Explicit
+   * compound parts still inherit root-owned geometry; no omitted part is added back.
    */
   preset?: boolean;
   /**
@@ -428,46 +433,7 @@ function ReviewRoot({
   // no longer was. The visible symptom was a band of empty rail under a card that had just
   // collapsed. A key keeps its last height when virtualization unmounts its card, which is
   // deliberate: dropping it would collapse the run and jump every card on screen.
-  const slotSizes = useRef(new WeakMap<Element, string>());
-  const slotElements = useRef(new Map<string, Element>());
-  const sizeObserver = useRef<ResizeObserver | null>(null);
-  const observeSlot = useCallback(
-    (node: HTMLElement | null, key: string) => {
-      const previous = slotElements.current.get(key);
-      if (!node) {
-        if (previous) {
-          sizeObserver.current?.unobserve(previous);
-          slotSizes.current.delete(previous);
-          slotElements.current.delete(key);
-        }
-        return;
-      }
-      if (typeof ResizeObserver === 'undefined') return;
-      measure(key, node.offsetHeight);
-      sizeObserver.current ??= new ResizeObserver((entries) => {
-        for (const entry of entries) {
-          const owner = slotSizes.current.get(entry.target);
-          if (owner) measure(owner, (entry.target as HTMLElement).offsetHeight);
-        }
-      });
-      if (previous === node && slotSizes.current.get(node) === key) return;
-      if (previous) {
-        sizeObserver.current.unobserve(previous);
-        slotSizes.current.delete(previous);
-      }
-      slotSizes.current.set(node, key);
-      slotElements.current.set(key, node);
-      sizeObserver.current.observe(node);
-    },
-    [measure]
-  );
-  useEffect(
-    () => () => {
-      sizeObserver.current?.disconnect();
-      slotElements.current.clear();
-    },
-    []
-  );
+  const observeSlot = useReviewSlotSizing(measure);
 
   // Where the rail sits, measured from the PAINTED SURFACE rather than from the viewport.
   //
@@ -734,9 +700,18 @@ function ReviewRoot({
     style: metrics.left === null ? undefined : { left: metrics.left, right: 'auto' },
   };
 
-  // Root-level slots a child can replace in place. A render prop is not an override — it is
-  // the card itself, and travels down to `ReviewList` untouched.
-  const rootParts = typeof children === 'function' ? {} : partOverrides(children);
+  // Root parts and card parts are separate scopes. A root render prop remains the legacy
+  // shorthand for the implicit List's render prop; node children that are not root parts become
+  // that List's card template. Without this partition an AddComment sibling was also forwarded
+  // into every Card, while a root render prop made it impossible to supply AddComment at all.
+  const rootChildren: {
+    parts: Record<string, ReactNode>;
+    rest: ReactNode | ((item: ReviewItemView) => ReactNode);
+  } =
+    typeof children === 'function'
+      ? { parts: {}, rest: children }
+      : partitionReviewChildren(children, 'root');
+  const rootParts = rootChildren.parts;
   // An override REPLACES the packaged element but inherits its wiring: these parts are handed
   // geometry the rail alone can compute — the markers' `scale`/`offset`/`window`, the compose
   // box's `top` — and a host writing `<Review.Markers icon={…}/>` cannot supply any of it.
@@ -753,47 +728,52 @@ function ReviewRoot({
     });
   };
 
-  const affordances = preset ? (
+  const affordances = (
     <>
-      {takeRoot(
-        'AddComment',
-        <ReviewAddComment top={composeTop} drafting={draftAnchorY !== null} />
-      )}
-      {!open || draftAnchorY === null || composeTop === null
+      {preset || 'AddComment' in rootParts
+        ? takeRoot(
+            'AddComment',
+            <ReviewAddComment top={composeTop} drafting={draftAnchorY !== null} />
+          )
+        : null}
+      {!open || draftAnchorY === null || composeTop === null || (!preset && !('Draft' in rootParts))
         ? null
         : takeRoot('Draft', <ReviewDraft top={composeTop} />)}
       {/* Mounted open OR closed: the balloon is how a reader inspects a change whose rail
           card is filtered away, and a closed pane filters ALL of them away. */}
-      {takeRoot('Balloon', <ReviewBalloon />)}
+      {preset || 'Balloon' in rootParts ? takeRoot('Balloon', <ReviewBalloon />) : null}
     </>
-  ) : null;
+  );
 
-  // `preset={false}` hands the panel over verbatim, but a render prop needs the list to run it.
-  const body = !preset
-    ? typeof children === 'function'
-      ? null
-      : children
-    : open
-      ? takeRoot(
-          'List',
-          <ReviewList
-            stack={stack}
-            positions={stacked}
-            collapsed={collapsedKeys}
-            scale={metrics.scale}
-            offset={metrics.top}
-            window={window_}
-          >
-            {children}
-          </ReviewList>
-        )
-      : // Closed, the rail keeps its anchors and drops everything else: a small marker per item
+  const list = (
+    <ReviewList
+      stack={stack}
+      positions={stacked}
+      collapsed={collapsedKeys}
+      scale={metrics.scale}
+      offset={metrics.top}
+      window={window_}
+    >
+      {rootChildren.rest}
+    </ReviewList>
+  );
+  const markers = <ReviewMarkers scale={metrics.scale} offset={metrics.top} window={window_} />;
+  // `preset={false}` supplies no defaults, but an explicit compound part still inherits the
+  // geometry only the root can calculate. Unrecognized host nodes remain verbatim.
+  const body = open
+    ? preset || 'List' in rootParts
+      ? takeRoot('List', list)
+      : typeof rootChildren.rest === 'function'
+        ? null
+        : rootChildren.rest
+    : preset || 'Markers' in rootParts
+      ? // Closed, the rail keeps its anchors and drops everything else: a small marker per item
         // in the margin, which is how a reader sees there is something to read without giving up
         // the width. Clicking one opens the pane on that item.
-        takeRoot(
-          'Markers',
-          <ReviewMarkers scale={metrics.scale} offset={metrics.top} window={window_} />
-        );
+        takeRoot('Markers', markers)
+      : typeof rootChildren.rest === 'function'
+        ? null
+        : rootChildren.rest;
 
   return (
     <ReviewContext.Provider value={value}>
@@ -875,11 +855,14 @@ function ReviewList({
   const { review, measure, cardClassName } = useRail();
   if (hidden) return null;
 
+  const listChildren =
+    typeof children === 'function' ? null : partitionReviewChildren(children, 'list');
   const present = idsOf(review.items);
   const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
 
   if (roots.length === 0) {
-    return typeof children === 'function' ? null : <ReviewEmpty />;
+    if (typeof children === 'function') return null;
+    return listChildren?.parts.Empty ?? <ReviewEmpty />;
   }
 
   return (
@@ -906,9 +889,12 @@ function ReviewList({
             >
               {typeof children === 'function' ? (
                 children(entry)
+              ) : listChildren?.parts.Card &&
+                isValidElement<{ className?: string }>(listChildren.parts.Card) ? (
+                cloneReviewCard(listChildren.parts.Card, cardClassName)
               ) : (
                 <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
-                  {children}
+                  {listChildren?.rest}
                 </ReviewCard>
               )}
             </div>
@@ -1007,12 +993,12 @@ ReviewMarkers.docxReviewPart = 'Markers' as const;
  * @public
  */
 function ReviewAddComment({
-  top,
+  top = null,
   drafting = false,
   className,
   hidden,
   children,
-}: ReviewPartProps & { top: number | null; drafting?: boolean }) {
+}: ReviewPartProps & { top?: number | null; drafting?: boolean }) {
   const { beginDraft } = useRail();
   const t = useReviewLabel();
   // Offered for ANY range, including one inside an existing comment: overlapping comments
@@ -1046,7 +1032,7 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
  *
  * @public
  */
-function ReviewDraft({ top, className, hidden }: ReviewPartProps & { top: number }) {
+function ReviewDraft({ top = 0, className, hidden }: ReviewPartProps & { top?: number }) {
   const { review, endDraft, measure } = useRail();
   const t = useReviewLabel();
   const [text, setText] = useState('');

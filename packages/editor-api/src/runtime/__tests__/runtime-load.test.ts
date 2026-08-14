@@ -13,9 +13,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { describe, expect, test } from 'bun:test';
 import { createRuntime } from '../runtime.ts';
-import type { LoadOption } from '../load-options.ts';
+import { resolveLoadOption, type LoadOption } from '../load-options.ts';
 import { openHost, spyHost } from './support/hosts.ts';
 import { docx, p } from './support/docx.ts';
+import { WITH_NOTE_TEXT_CASES } from '../../model/__tests__/support/documents.ts';
 
 const FOUR = docx(`${p('one')}${p('two')}${p('three')}${p('four')}`);
 
@@ -57,6 +58,36 @@ describe('a property is only readable once a sync has filled it', () => {
       first.load('text');
       await context.sync();
       expect(first.text).toBe('alpha');
+    });
+    runtime.dispose();
+  });
+
+  test('all listed note texts load in one following host round', async () => {
+    const spy = spyHost(openHost(WITH_NOTE_TEXT_CASES));
+    const runtime = createRuntime({ host: spy.host, save: true });
+    await runtime.run(async (context) => {
+      const footnotes = context.document.footnotes;
+      const endnotes = context.document.endnotes;
+      footnotes.load();
+      endnotes.load();
+      await context.sync();
+      spy.reset();
+
+      const notes = [...footnotes.items, ...endnotes.items];
+      for (const note of notes) note.load('text');
+      await context.sync();
+
+      expect(spy.requests).toHaveLength(1);
+      expect(spy.requests[0]!.operations.map((operation) => operation.op)).toEqual([
+        'getNoteText',
+        'getNoteText',
+        'getNoteText',
+      ]);
+      expect(notes.map((note) => note.text)).toEqual([
+        '',
+        'first\t<unsafe>\nline\rsecond',
+        'end note',
+      ]);
     });
     runtime.dispose();
   });
@@ -120,6 +151,24 @@ describe('the shapes load accepts', () => {
     expect(texts).toEqual(['two', 'three']);
     runtime.dispose();
   });
+
+  test('omitted and empty expand preserve ordinary load behavior', async () => {
+    expect(resolveLoadOption({ select: 'text' }, 'document.body')).toEqual({
+      select: ['text'],
+    });
+    expect(resolveLoadOption({ select: 'text', expand: [] }, 'document.body')).toEqual({
+      select: ['text'],
+    });
+
+    const runtime = createRuntime({ host: openHost(), save: true });
+    await runtime.run(async (context) => {
+      const body = context.document.body;
+      body.load({ select: 'text', expand: [] });
+      await context.sync();
+      expect(body.text).toBe('alpha\rbeta');
+    });
+    runtime.dispose();
+  });
 });
 
 describe('what load refuses, at the load call', () => {
@@ -156,6 +205,41 @@ describe('what load refuses, at the load call', () => {
     await runtime.run(async (context) => {
       const body = context.document.body;
       expect(() => body.load('nope')).toThrow();
+      spy.reset();
+      await context.sync();
+      expect(spy.requests).toHaveLength(0);
+    });
+    runtime.dispose();
+  });
+
+  test('every non-empty expand is rejected before a model loader can ignore it', async () => {
+    const values: readonly unknown[] = [
+      'paragraphs',
+      ['paragraphs'],
+      ['paragraphs/items'],
+      [['paragraphs']],
+      { paragraphs: true },
+    ];
+    for (const expand of values) {
+      expect(() => resolveLoadOption({ expand } as LoadOption, 'document.body')).toThrowError(
+        expect.objectContaining({
+          code: 'InvalidArgument',
+          message: 'the argument is not one this API accepts. (document.body.expand)',
+          target: 'document.body.expand',
+        })
+      );
+    }
+
+    const spy = spyHost(openHost());
+    const runtime = createRuntime({ host: spy.host, save: true });
+    await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      expect(() => paragraphs.load({ select: 'items', expand: 'font' })).toThrowError(
+        expect.objectContaining({
+          code: 'InvalidArgument',
+          target: 'document.body.paragraphs.expand',
+        })
+      );
       spy.reset();
       await context.sync();
       expect(spy.requests).toHaveLength(0);

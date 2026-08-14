@@ -10,12 +10,14 @@ import type {
   EditorSnapshot,
   ExecResult,
   FontConfiguration,
+  ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type {
   EditorModule,
   FontConfigurationFragment,
   FontResolver,
 } from '@docx-editor.dev/core/editor';
+import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
@@ -71,6 +73,27 @@ export interface DocxEditorProps {
    * them renders the raw placeholders for those labels.
    */
   t?: (key: string, params?: Record<string, string | number>) => string;
+  /**
+   * The chrome's language: a locale from `@docx-editor.dev/i18n` (or your own partial
+   * over English). Keys the locale leaves out fall back to English rather than showing
+   * the key.
+   *
+   * ```tsx
+   * import { de } from '@docx-editor.dev/i18n';
+   * <DocxEditor i18n={de} />
+   * ```
+   *
+   * Equivalent to wrapping this editor in `<LocaleProvider i18n={de}>`, which is still
+   * the way to set one language for several editors at once — this prop overrides such a
+   * provider for this editor only. Unlike `locale`, which tells the ENGINE what language
+   * the document is in, this decides what the buttons say.
+   *
+   * Hold it at a stable identity: a catalogue written inline (`i18n={{ toolbar: … }}`) is
+   * a new object every render, and the merged catalogue behind it is what the chrome
+   * memoizes its labels on — so an inline one re-renders every toolbar control on each
+   * render of the host. Put your overrides in a module constant, or memoize them.
+   */
+  i18n?: Translations;
   /**
    * Renders the packaged chrome — title bar and toolbar — around the document.
    * Default `true`. Set `false` for the painted surface alone when the host supplies
@@ -139,11 +162,31 @@ export interface DocxEditorProps {
    * `useNavigationPane` / `useDocumentOutline` / `useDocumentSearch`, for a different one.
    */
   navigation?: boolean;
+  /**
+   * Horizontal and vertical rulers, on by default with the packaged chrome.
+   *
+   * They are part of the frame rather than an extra: every editor this
+   * component is modelled on shows them, and the placement is not something a
+   * host can get right from outside. The horizontal ruler applies the
+   * navigation shift and the review gutter itself, so it has to sit ABOVE the
+   * scroll container — mounted inside it, the gutter is counted twice and the
+   * ticks drift off the page. Set `false` for a bare page, or compose
+   * `DocxEditor.HorizontalRuler` / `DocxEditor.VerticalRuler` yourself.
+   */
+  rulers?: boolean;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
   /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */
   mode?: EditorMode;
+  /** A fixed scale. Supplying one also makes the mode fixed unless `zoomMode` says otherwise. */
   zoom?: number;
+  /**
+   * Where the scale comes from. Defaults to `'auto'`: fit the page width, between 50% and
+   * 100%. A fit tracks the room beside the page, so opening comments shrinks the document
+   * instead of pushing it off screen; past the floor it scrolls sideways instead.
+   * `{ type: 'fixed' }` opts out.
+   */
+  zoomMode?: ZoomMode | 'auto';
   locale?: string;
   author?: string;
   /**

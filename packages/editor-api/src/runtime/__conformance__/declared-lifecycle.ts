@@ -44,11 +44,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //   Range          — `contentControls`
 //   Paragraph      — `contentControls`
 //
-// A NULL A DECLARATION CANNOT SAY. `Font#bold`, `Paragraph#alignment` and `#style` are asserted
-// against upstream's own non-nullable declared types, and answer `null` (or `'Mixed'`/`'Unknown'`) at
-// runtime where the characters or paragraphs read disagree or nothing authors a value — the same
-// behavior upstream documents for the same declarations, which is why the declarations are not
-// widened: they would stop matching the reference they are measured against.
+// A NULL THE UPSTREAM DECLARATION CANNOT SAY. Font reads include `null` in this package's public
+// surface because mixed or inherited formatting returns it at runtime; its setters remain the
+// upstream non-nullable types. The independently authored compatibility declaration stays exact to
+// upstream, so the font assertion below removes only that documented read sentinel before comparing.
+// `Paragraph#alignment` and `#style` retain their separately documented `'Mixed'`/`'Unknown'`
+// behavior.
 //
 // The `Declared`/`Mine` naming keeps each assertion readable as a sentence: does mine satisfy the
 // declared one, in the position a consumer would use it.
@@ -78,6 +79,9 @@ import type { DocxEditorRuntime } from '../runtime.ts';
 
 /** True only if `A` is usable everywhere `B` is expected. */
 type Satisfies<A extends B, B> = A extends B ? true : false;
+
+/** Removes this runtime's documented no-agreed-value sentinel from property reads. */
+type WithoutNull<T> = { [K in keyof T]: Exclude<T[K], null> };
 
 /**
  * True only if a call written against `B` compiles against `A`.
@@ -148,6 +152,7 @@ const bodyAnswersItsOwnObjects: Satisfies<
   [Range, Paragraph, RangeCollection]
 > = true;
 const bodyHasParagraphs: Satisfies<Body['paragraphs'], ParagraphCollection> = true;
+const bodyHasBookmarks: Satisfies<Body['bookmarks'], BookmarkCollection> = true;
 
 // ---------------------------------------------------------------------------
 // Ranges and paragraphs
@@ -155,6 +160,11 @@ const bodyHasParagraphs: Satisfies<Body['paragraphs'], ParagraphCollection> = tr
 
 const rangeTextIsAString: Satisfies<Pick<Range, 'text'>, Pick<Declared.Range, 'text'>> = true;
 const rangeSelects: Satisfies<Pick<Range, 'select'>, Pick<Declared.Range, 'select'>> = true;
+const rangeComments: TakesTheSameArguments<
+  Range['insertComment'],
+  Declared.Range['insertComment']
+> = true;
+const rangeCommentIsAComment: Satisfies<ReturnType<Range['insertComment']>, Comment> = true;
 const rangeInsertsText: TakesTheSameArguments<Range['insertText'], Declared.Range['insertText']> =
   true;
 const rangeInsertsAParagraph: TakesTheSameArguments<
@@ -202,10 +212,10 @@ const fontsAreTheSameObject: Satisfies<
   [Font, Font, Font]
 > = true;
 
-// The character formatting, whole: five properties, read and written, compared against the declared
-// ones rather than by argument list, because a property has no argument list to compare.
+// The five character-formatting properties, after removing the read-only `null` sentinel that the
+// upstream declarations omit. Public type tests separately prove that setters do not accept it.
 const fontMatchesTheDeclaredFont: Satisfies<
-  Pick<Font, 'bold' | 'color' | 'italic' | 'name' | 'size'>,
+  WithoutNull<Pick<Font, 'bold' | 'color' | 'italic' | 'name' | 'size'>>,
   Pick<Declared.Font, 'bold' | 'color' | 'italic' | 'name' | 'size'>
 > = true;
 
@@ -361,10 +371,15 @@ const notesAreReachable: Satisfies<
   [NoteItemCollection, NoteItemCollection]
 > = true;
 
-// A comment: who wrote it, when, whether the thread is settled, and answering it.
+// A comment: who wrote it, when, whether the thread is settled, and answering it. OOXML may omit
+// or corrupt the date, so the runtime's nullable read is checked separately from the upstream shape.
 const commentMatchesTheDeclaredComment: Satisfies<
-  Pick<Comment, 'authorName' | 'creationDate' | 'id' | 'resolved'>,
-  Pick<Declared.Comment, 'authorName' | 'creationDate' | 'id' | 'resolved'>
+  Pick<Comment, 'authorName' | 'id' | 'resolved' | 'delete'>,
+  Pick<Declared.Comment, 'authorName' | 'id' | 'resolved' | 'delete'>
+> = true;
+const commentDateMatchesAfterDocumentedNull: Satisfies<
+  WithoutNull<Pick<Comment, 'creationDate'>>,
+  Pick<Declared.Comment, 'creationDate'>
 > = true;
 const commentRepliesTakeText: TakesTheSameArguments<Comment['reply'], Declared.Comment['reply']> =
   true;
@@ -373,8 +388,12 @@ const commentAnswersItsOwnObjects: Satisfies<
   [CommentReplyCollection, Range, CommentReply]
 > = true;
 const replyMatchesTheDeclaredReply: Satisfies<
-  Pick<CommentReply, 'authorName' | 'creationDate' | 'id'>,
-  Pick<Declared.CommentReply, 'authorName' | 'creationDate' | 'id'>
+  Pick<CommentReply, 'authorName' | 'id' | 'delete'>,
+  Pick<Declared.CommentReply, 'authorName' | 'id' | 'delete'>
+> = true;
+const replyDateMatchesAfterDocumentedNull: Satisfies<
+  WithoutNull<Pick<CommentReply, 'creationDate'>>,
+  Pick<Declared.CommentReply, 'creationDate'>
 > = true;
 const commentItemsAreComments: Satisfies<
   [
@@ -391,9 +410,14 @@ const commentsAreReachableBothWays: Satisfies<
 
 // A tracked change, and the decision a reviewer makes about it. The declared `type` union is the
 // whole upstream vocabulary; this model publishes the same union and answers seven of its members.
+// Its date has the same documented nullable OOXML divergence as a comment's.
 const revisionMatchesTheDeclaredRevision: Satisfies<
-  Pick<Revision, 'author' | 'date' | 'type' | 'accept' | 'reject'>,
-  Pick<Declared.Revision, 'author' | 'date' | 'type' | 'accept' | 'reject'>
+  Pick<Revision, 'author' | 'type' | 'accept' | 'reject'>,
+  Pick<Declared.Revision, 'author' | 'type' | 'accept' | 'reject'>
+> = true;
+const revisionDateMatchesAfterDocumentedNull: Satisfies<
+  WithoutNull<Pick<Revision, 'date'>>,
+  Pick<Declared.Revision, 'date'>
 > = true;
 const revisionRangeIsARange: Satisfies<Revision['range'], Range> = true;
 const revisionsAreDecidedInBulk: Satisfies<
@@ -426,6 +450,7 @@ void bodyInsertsAParagraph;
 void bodySearches;
 void bodyAnswersItsOwnObjects;
 void bodyHasParagraphs;
+void bodyHasBookmarks;
 void rangeTextIsAString;
 void rangeSelects;
 void rangeInsertsText;
@@ -462,6 +487,8 @@ void bookmarkRangeIsARange;
 void bookmarkItemsAreBookmarks;
 void rangeReachesItsBookmarks;
 void rangeHyperlinkMatches;
+void rangeComments;
+void rangeCommentIsAComment;
 void pageSetupMatchesTheDeclaredPageSetup;
 void sectionFurnitureTakesTheDeclaredVariant;
 void sectionAnswersItsOwnObjects;
@@ -471,12 +498,15 @@ void noteMatchesTheDeclaredNote;
 void noteDeletes;
 void noteAnswersItsOwnObjects;
 void commentMatchesTheDeclaredComment;
+void commentDateMatchesAfterDocumentedNull;
 void commentRepliesTakeText;
 void commentAnswersItsOwnObjects;
 void replyMatchesTheDeclaredReply;
+void replyDateMatchesAfterDocumentedNull;
 void commentItemsAreComments;
 void commentsAreReachableBothWays;
 void revisionMatchesTheDeclaredRevision;
+void revisionDateMatchesAfterDocumentedNull;
 void revisionRangeIsARange;
 void revisionsAreDecidedInBulk;
 void revisionItemsAreRevisions;

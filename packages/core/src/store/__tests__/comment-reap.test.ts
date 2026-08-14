@@ -15,18 +15,26 @@ import { resolve } from 'node:path';
 import {
   addComment,
   commentAnchorsOfStory,
-  commentPartNameOf,
-  commentsOfPart,
+  findNoteById,
   readOoxmlPackage,
   removeNode,
   TreeDocumentStore,
   TreePackageStore,
   withPart,
-  WML_NAMESPACE_URI,
   type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
 } from '../index.ts';
+import { deleteCommentThread, deleteCommentThreadInStory } from '../package/comment-lifecycle.ts';
+import {
+  commentIds,
+  loadDuplicateBodyHeader,
+  loadDuplicateNotes,
+  markersFor,
+  markersUnder,
+  paragraphContaining,
+  textOf,
+} from './comment-lifecycle-test-support.ts';
 
 const FIXTURE = resolve(
   import.meta.dir,
@@ -37,13 +45,6 @@ function fixture(): OoxmlPackage {
   const pkg = readOoxmlPackage(new Uint8Array(readFileSync(FIXTURE)));
   if (!pkg.ok) throw new Error(pkg.reason);
   return pkg.package;
-}
-
-function textOf(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return node.value;
-  let text = '';
-  for (const child of node.children) text += textOf(child);
-  return text;
 }
 
 /** A body paragraph holding at least `length` characters, and how many it holds. */
@@ -122,33 +123,6 @@ function firstParagraphIn(row: { node: OoxmlNode }): { id: string; length: numbe
     for (const child of node.children) visit(child);
   };
   visit(row.node);
-  return found;
-}
-
-function commentIds(pkg: OoxmlPackage, storyPartName: string): string[] {
-  const part = pkg.parts.get(commentPartNameOf(pkg, storyPartName));
-  return part ? commentsOfPart(part).map((comment) => comment.id) : [];
-}
-
-/** Node ids of every comment marker in a story naming `commentId`. */
-function markersFor(part: OoxmlPart, commentId: string): string[] {
-  const found: string[] = [];
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (
-      node.kind === 'commentRangeStart' ||
-      node.kind === 'commentRangeEnd' ||
-      node.kind === 'commentReference'
-    ) {
-      const id = node.attributes.find(
-        (entry) => entry.localName === 'id' && entry.namespaceUri === WML_NAMESPACE_URI
-      );
-      if (id?.value === commentId) found.push(node.id);
-      return;
-    }
-    for (const child of node.children) visit(child);
-  };
-  visit(part.root);
   return found;
 }
 
@@ -292,5 +266,64 @@ describe('a comment dies with the words it covered', () => {
     });
     expect(result.ok).toBe(true);
     expect(commentIds(store.currentPackage(), mainName)).toContain(commentId);
+  });
+});
+
+describe('story-owned comment deletion does not follow a bare w:id into another story', () => {
+  test('stripping the body leaves a header that reused the same id', () => {
+    const pkg = loadDuplicateBodyHeader();
+    const main = pkg.mainDocumentPart;
+    const stripped = deleteCommentThreadInStory(pkg, '1', { storyPartName: main });
+    if (stripped === null) throw new Error('deletion refused');
+    expect(markersFor(stripped.parts.get(main)!, '1')).toEqual([]);
+    expect(markersFor(stripped.parts.get('/word/header1.xml')!, '1').length).toBe(3);
+    expect(commentIds(stripped, main)).toContain('1');
+  });
+
+  test('deleteCommentThread without an owner defaults to the main story, not every part', () => {
+    const pkg = loadDuplicateBodyHeader();
+    const main = pkg.mainDocumentPart;
+    const stripped = deleteCommentThread(pkg, '1');
+    if (stripped === null) throw new Error('deletion refused');
+    expect(markersFor(stripped.parts.get(main)!, '1')).toEqual([]);
+    expect(markersFor(stripped.parts.get('/word/header1.xml')!, '1').length).toBe(3);
+    expect(commentIds(stripped, main)).toContain('1');
+  });
+
+  test('deleting the body’s commented words leaves a header that reused the same id', () => {
+    const pkg = loadDuplicateBodyHeader();
+    const main = pkg.mainDocumentPart;
+    const target = paragraphContaining(pkg.parts.get(main)!.root, 'body');
+    const store = new TreePackageStore(pkg, pkg.parts.get(main)!);
+    const result = store.transact({ kind: 'body' }, (ctx) => {
+      ctx.apply({ op: 'deleteText', paragraphId: target.id, start: 0, end: target.length });
+    });
+    expect(result.ok).toBe(true);
+    const after = store.currentPackage();
+    expect(markersFor(after.parts.get(main)!, '1')).toEqual([]);
+    expect(markersFor(after.parts.get('/word/header1.xml')!, '1').length).toBe(3);
+    expect(commentIds(after, main)).toContain('1');
+  });
+
+  test('deleting one note’s commented words leaves the neighbour that reused the same id', () => {
+    const pkg = loadDuplicateNotes();
+    const main = pkg.mainDocumentPart;
+    const store = new TreePackageStore(pkg, pkg.parts.get(main)!);
+    const notes = store.partFor({ kind: 'notesPart', noteKind: 'footnote' });
+    if (!notes) throw new Error('footnotes part missing');
+    const note = findNoteById(notes.root, 1);
+    if (!note) throw new Error('footnote 1 missing');
+    const target = paragraphContaining(note, 'one');
+    const result = store.transact({ kind: 'notesPart', noteKind: 'footnote' }, (ctx) => {
+      ctx.apply({ op: 'deleteText', paragraphId: target.id, start: 0, end: target.length });
+    });
+    expect(result.ok).toBe(true);
+    const after = store.currentPackage().parts.get(notes.name)!;
+    const first = findNoteById(after.root, 1);
+    const second = findNoteById(after.root, 2);
+    if (!first || !second) throw new Error('notes missing after reap');
+    expect(markersUnder(first, '1')).toEqual([]);
+    expect(markersUnder(second, '1').length).toBe(3);
+    expect(commentIds(store.currentPackage(), main)).toContain('1');
   });
 });

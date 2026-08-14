@@ -152,7 +152,7 @@ part/prop exports go with it.
 - `ToolbarSeparatorProps`
 - `ToolbarAlignmentComponent` — the merged alignment dropdown part (the four
   `alignment.*` slots behind one merged dropdown trigger); carries `docxSlot:
-  'alignment'`, the group-keyed marker.
+'alignment'`, the group-keyed marker.
 - `ToolbarTranslate` — the toolbar's optional i18n resolver type.
 - `useFontFamily` — the font-picker behavior hook (value / options / setValue /
   isEnabled) over `Editor.getDocumentFonts` + `commandForSlotValue`.
@@ -219,12 +219,12 @@ rest of the notice/banner chrome:
 
 - `DocxEditorFontNotice`
 - `DocxEditorFontNoticeProps`
-The navigation pane rides the same provider/hooks layer: a compound plus three behavior
-hooks over the context-published editor, so its Vue twin is the composable form and lands
-with the rest of that layer. The ENGINE half is already adapter-neutral — the search
-derivation, the session memo, `findMatches`/`selectMatch` and the outline all live in core,
-and Vue reaches them through the same facade. Only the panel and the displacement rule are
-React-only.
+  The navigation pane rides the same provider/hooks layer: a compound plus three behavior
+  hooks over the context-published editor, so its Vue twin is the composable form and lands
+  with the rest of that layer. The ENGINE half is already adapter-neutral — the search
+  derivation, the session memo, `findMatches`/`selectMatch` and the outline all live in core,
+  and Vue reaches them through the same facade. Only the panel and the displacement rule are
+  React-only.
 
 - `DocxEditorNavigation` — the pane compound (`DocxEditor.Navigation`) with Headings and
   Find tabs.
@@ -419,6 +419,12 @@ and their hooks/parts defer to `vue-drawing-authoring-parity`.
   exported from both adapters, so a Vue host can pass a resolver — it just memoizes the
   identity itself.
 - `FontsInput` — the hook's accepted-origin type.
+- `useZoom` — the zoom lifecycle as one hook (resolved scale, mode, fit/step/reset). A hook,
+  so it belongs to the React provider layer that Vue has no twin of. The engine side it wraps
+  is not a divergence at all: `Editor.getZoom`/`setZoom`/`getZoomMode`/`setZoomMode`,
+  `ZoomMode` and `snapshot().zoomMode` are contract members both adapters reach, and the fit
+  itself runs in the engine — a Vue host gets fit-to-viewport zoom with no adapter code.
+- `UseZoomResult` — the hook's return type.
 
 ## Vue-only
 

@@ -58,6 +58,7 @@ import {
   MenuTableGrid,
   type MenuPartComponent,
 } from './parts';
+import { useScopeClassName } from '../scope-context';
 
 /** The pinned part for each registry menu, so the default bar is derived, not hand-listed. */
 const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
@@ -149,6 +150,8 @@ function menuOfChild(child: ReactNode): ChromeMenuId | null {
 }
 
 function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
+  // Skip the scope class when the packaged wrapper already carries it.
+  const scopeClassName = useScopeClassName();
   const {
     className,
     t,
@@ -332,7 +335,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         data-testid="docx-menubar"
         // `docx-editor` self-emitted so a composed menu bar is styled outside the packaged
         // wrapper, as `DocxEditorLoading` and `DocxEditorViewport` already do.
-        className={`docx-editor docx-menubar${className ? ` ${className}` : ''}`}
+        className={`${scopeClassName}docx-menubar${className ? ` ${className}` : ''}`}
         // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled row
         // never receives mousedown, so per-row handlers cannot cover it.
         onMouseDown={guardToolbarMousedown}

@@ -63,6 +63,7 @@
         "bookmarks",
         "hyperlink",
         "style",
+        "insertComment",
         "insertText",
         "insertParagraph",
         "search",
@@ -156,13 +157,22 @@
       "members": ["body", "type", "delete", "getNext"]
     },
     "Comment": {
-      "members": ["authorName", "creationDate", "id", "replies", "resolved", "getRange", "reply"]
+      "members": [
+        "authorName",
+        "creationDate",
+        "id",
+        "replies",
+        "resolved",
+        "delete",
+        "getRange",
+        "reply"
+      ]
     },
     "CommentCollection": {
       "members": ["items", "getFirst"]
     },
     "CommentReply": {
-      "members": ["authorName", "creationDate", "id"]
+      "members": ["authorName", "creationDate", "id", "delete"]
     },
     "CommentReplyCollection": {
       "members": ["items", "getFirst"]
@@ -296,7 +306,7 @@
     },
     {
       "uid": "Word.ContentControl#xmlMapping",
-      "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here."
+      "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here. DocxEditor's own read-only isBound boolean exposes binding presence for advisory preflight without exposing XPath, namespace mappings, store ids, or custom XML content."
     },
     {
       "uid": "Word.Range#start",
@@ -367,16 +377,8 @@
       "reason": "Assignable upstream: writing it REPLACES a comment's body. A comment's body is a story of its own in comments.xml, and this subset transacts one story per batch \u2014 the story the comment is anchored in \u2014 so replacing the body is a write the canonical path does not yet express. Reading a body stays available as DocxEditor's own read-only Comment#text (recorded below), so a script that reports on comments is unaffected; only rewriting somebody else's comment is."
     },
     {
-      "uid": "Word.Comment#delete",
-      "reason": "Deleting a comment means removing its entry from comments.xml, its w15:commentEx entry, and the w:commentRangeStart/End plus w:commentReference in the story \u2014 as one transaction. `addComment` exists in the store lane and its inverse does not, so this would be a partial delete or a second write path. Resolving a thread (Word.Comment#resolved, implemented) is the operation that hides it from a reviewer without losing what was said."
-    },
-    {
       "uid": "Word.CommentReply#content",
       "reason": "See Word.Comment#content."
-    },
-    {
-      "uid": "Word.CommentReply#delete",
-      "reason": "See Word.Comment#delete."
     },
     {
       "uid": "Word.CommentReply#authorEmail",
@@ -389,6 +391,10 @@
     {
       "uid": "Word.CommentReply#text",
       "reason": "See Word.Comment#text."
+    },
+    {
+      "uid": "Word.NoteItem#text",
+      "reason": "Implemented by DocxEditor's object model as a read-only shortcut to the exact plain text returned by NoteItem#body.text. Upstream has no such member to select for exact conformance, so it is recorded as a DocxEditor extension rather than added to the reference shape. The body remains available for structured traversal and edits."
     },
     {
       "uid": "Word.Body#revisions",
@@ -413,9 +419,29 @@
     {
       "uid": "Word.Body#revisions",
       "reason": "Implemented by DocxEditor's object model \u2014 a header or a footnote can carry tracked changes of its own, and a review pass over one story is the natural way to reach them \u2014 but not selected for exact conformance: upstream declares revisions on Document (selected here), not on Body, so there is no reference shape for the story-scoped accessor. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.Body#bookmarks",
+      "reason": "Implemented by DocxEditor's object model as a story-scoped discovery accessor over the same BookmarkCollection that Word exposes on Range. Upstream has no Body#bookmarks member to select for exact conformance, while putting this collection on Document would falsely imply aggregation across the main body, headers, footers and notes. Each Body answers only the bookmarks declared in that body's own story."
     }
   ],
   "divergences": [
+    {
+      "uid": "Word.Comment#creationDate",
+      "note": "Office.js declares Date, but OOXML makes w:date optional and untrusted files can contain an invalid lexical value. DocxEditor returns Date | null rather than inventing a timestamp or exposing Invalid Date; strict consumers must narrow null before using Date methods."
+    },
+    {
+      "uid": "Word.CommentReply#creationDate",
+      "note": "Replies inherit the same nullable date getter as comments because they are CT_Comment records with the same optional, file-authored w:date. The compatibility assertion removes only this documented null before comparing with Office.js Date."
+    },
+    {
+      "uid": "Word.Revision#date",
+      "note": "Office.js declares Date, while CT_TrackChange permits an absent w:date and untrusted input can contain an invalid one. DocxEditor returns Date | null and the compatibility assertion verifies that excluding the documented null leaves the upstream Date shape."
+    },
+    {
+      "uid": "Word.Comment#reply",
+      "note": "Office.js supplies the signed-in author through its host. DocxEditor has no ambient account identity, so createServer(bytes, { author }) and createBrowser(editor, { author }) carry the author explicitly. A missing or blank author refuses with NotSupported before queuing; browser sync can also refuse when the Pro review module, current editing mode, or live host does not permit the write. No static comment-write capability is published because those browser conditions are dynamic."
+    },
     {
       "uid": "Word.Revision#type",
       "note": "The type union is declared in full and seven of its members occur: Insert, Delete, Replace, Property, ParagraphProperty, MovedFrom and MovedTo. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it \u2014 so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
@@ -434,12 +460,20 @@
     },
     {
       "uid": "Word.ContentControlCollection",
-      "note": "getByTag, getByTitle, getFirst, getFirstOrNullObject and ContentControl#setValue are implemented and are NOT in this list's frozen reference fixture, so they are published as DocxEditor's own additions rather than as conformance-checked members. setValue exists because a control's value is not its characters: a dropdown takes a declared item, a date an ISO instant, a checkbox a state, and upstream spreads those over five sibling objects this subset does not ship."
+      "note": "getByTag, getByTitle, getFirst, getFirstOrNullObject, ContentControl#setValue and ContentControl#isBound are implemented and are NOT in this list's frozen reference fixture, so they are published as DocxEditor's own additions rather than as conformance-checked members. setValue exists because a control's value is not its characters: a dropdown takes a declared item, a date an ISO instant, a checkbox a state, and upstream spreads those over five sibling objects this subset does not ship. isBound is a presence-only advisory preflight; sync-time refusal remains authoritative."
     },
     {
       "uid": "Word.Section#getHeader / #getFooter",
       "note": "A section that declares no header of its own INHERITS the previous section's, which is what Word paints, and this is what these members answer. Upstream's own behaviour additionally MINTS an empty header part when none exists anywhere; this subset refuses instead (ItemNotFound), because a read that adds a part to the package is a write, and a getter that writes cannot be batched with reads under one transaction. Shape conformance is unaffected; the divergence is behavioural and recorded here."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getFirst / #getLast, Word.RangeCollection#getFirst, Word.CommentCollection#getFirst, Word.ListCollection#getFirst and every other item accessor",
+      "note": "The object an item accessor answers needs ONE await context.sync() before it can be loaded, written to or passed anywhere — upstream's needs none. Which object the accessor names is the answer to a read, a host handle is DATA in the batch request, and so an operation targeting that object cannot be in the same batch that resolves it. Resolving it in place would mean sending several batches per sync() and giving up 'one sync is one atomic batch', which is the property this runtime exists to guarantee. Source compatibility is unaffected and is held in place by src/runtime/__tests__/runtime-examples.test.ts, which runs a Word sample's own statements and names the extra sync as the only added line; what differs is the number of round trips at runtime. Using the object early is refused (InvalidObjectPath) rather than guessed, and the message names the sync."
+    },
+    {
+      "uid": "OfficeExtension.LoadOption#expand",
+      "note": "The expand query property remains in DocxEditor's public type for source compatibility, but navigation-property expansion is not implemented. Every non-empty value is rejected synchronously as InvalidArgument targeting the loaded object's .expand option; omitted and empty-array values preserve ordinary load behavior. This is explicit rather than accepting a request no model loader consumes."
     }
   ],
-  "$divergencesComment": "Members that ARE selected and DO conform in shape, but whose behaviour differs from upstream in a way a caller can observe. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. Nothing in the tooling reads this list; it is the record that each difference was decided."
+  "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."
 }

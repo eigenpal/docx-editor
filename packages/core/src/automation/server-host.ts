@@ -30,6 +30,10 @@ import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { addComment, setCommentResolved } from '../store/store/comment-writes.ts';
+import {
+  deleteCommentReply,
+  deleteCommentThreadInStory,
+} from '../store/package/comment-lifecycle.ts';
 import { insertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import type {
   AutomationCommentWriteResult,
@@ -189,8 +193,9 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
       }
       return { ok: true, changed: result.change !== null };
     },
-    applyCommentWrite(write, scope): AutomationCommentWriteResult {
+    applyCommentWrites(writes, scope): AutomationCommentWriteResult {
       if (!live) return { ok: false, reason: 'disposed' };
+      if (writes.length === 0) return { ok: true, changed: false };
       const story = store.resolveStory(scope);
       if (!story.ok) return { ok: false, reason: story.reason };
       // The story store keeps a package of its own, and the coordinator's copy carries writes the
@@ -198,16 +203,58 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
       // before and republishing after is the same order the editor's own comment path uses; skip
       // either half and one write silently overwrites the other's parts.
       story.store.graftPackage(() => store.currentPackage());
+      if (writes.every((write) => write.kind === 'delete')) {
+        let refused = false;
+        let changed = false;
+        const transaction = story.store.transact((ctx) => {
+          ctx.applyPackage((current) => {
+            let next = current;
+            for (const write of writes) {
+              if (write.kind !== 'delete') continue;
+              const owner = {
+                storyPartName: story.store.part.name,
+                ...(write.noteId === undefined ? {} : { noteId: write.noteId }),
+              };
+              const deleted =
+                write.parentCommentId === undefined
+                  ? deleteCommentThreadInStory(next, write.commentId, owner)
+                  : deleteCommentReply(next, write.commentId, write.parentCommentId, owner);
+              if (deleted === null) {
+                refused = true;
+                return current;
+              }
+              changed ||= deleted !== next;
+              next = deleted;
+            }
+            return next;
+          });
+        });
+        if (refused || !transaction.ok) return { ok: false, reason: 'comment-delete-refused' };
+        if (changed) store.installPackageSnapshot(story.store.package);
+        return { ok: true, changed };
+      }
+      if (writes.length !== 1) return { ok: false, reason: 'mixed-comment-writes' };
+      const write = writes[0]!;
       const result =
-        write.kind === 'reply'
+        write.kind === 'create'
           ? addComment(story.store, {
               anchor: write.anchor,
               author: write.author,
               text: write.text,
               ...(write.date === undefined ? {} : { date: write.date }),
-              replyToCommentId: write.parentCommentId,
             })
-          : setCommentResolved(story.store, write.commentId, write.resolved);
+          : write.kind === 'reply'
+            ? addComment(story.store, {
+                anchor: write.anchor,
+                author: write.author,
+                text: write.text,
+                ...(write.date === undefined ? {} : { date: write.date }),
+                replyToCommentId: write.parentCommentId,
+              })
+            : write.kind === 'resolve'
+              ? setCommentResolved(story.store, write.commentId, write.resolved)
+              : null;
+      if (result === null) return { ok: false, reason: 'unsupported-comment-write' };
       if (!result.ok) return { ok: false, reason: result.reason };
       store.replacePackageShell(story.store.package);
       return {

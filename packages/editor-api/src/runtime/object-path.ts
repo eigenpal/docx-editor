@@ -114,6 +114,11 @@ export class ObjectPath {
    * Both refusals are `InvalidObjectPath` on purpose: from a consumer's side "this object was
    * released" and "this object is still a promise" are the same mistake — using an object the
    * runtime cannot address yet or any more — and the `target` says which object it was.
+   *
+   * THE CODE IS ONE THING AND THE MESSAGE IS ANOTHER. The two states have different fixes — a
+   * promise needs a `sync()`, a released object needs to have been tracked — so the sentence in
+   * `errors.ts` names both. It described only the released half for a while, which sent a
+   * consumer holding a perfectly good promised object off to `trackedObjects.add(...)`.
    */
   address(): ObjectAddress {
     const state = this.state;

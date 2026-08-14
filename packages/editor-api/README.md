@@ -64,7 +64,7 @@ stack intact. There is no `save()`: the host saves as it already did.
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
-const runtime = DocxEditor.createBrowser(editor);
+const runtime = DocxEditor.createBrowser(editor, { author: 'Demo Reviewer' });
 await runtime.run(async (context) => {
   const heading = context.document.body.paragraphs.getFirstOrNullObject();
   heading.load('text');
@@ -78,6 +78,22 @@ await runtime.run(async (context) => {
 Import it from `/browser` deliberately: reaching a live editor means reaching the painted engine,
 and a server holding bytes should not pay for that.
 
+`author` is optional for source compatibility and ordinary edits, but required by
+`Range.insertComment()` and `Comment.reply()`. A missing identity refuses with `NotSupported`; a
+live comment write also requires the Pro review module and a writable editing mode. There is no
+static comment-write capability because those conditions are dynamic, so callers should handle the
+typed refusal from the call or `sync()`.
+
+`range.insertComment(text)` creates a top-level comment over that exact range and returns the new
+`Comment`. Collapsed ranges create insertion-point comments. Empty text and ranges crossing table
+cells are refused; duplicate author names are ordinary OOXML and are not deduplicated.
+
+`Comment.delete()` removes a root comment, its replies, and its anchors. `CommentReply.delete()`
+removes only that reply and preserves the parent and siblings. Several deletes queued before one
+`sync()` are one atomic transaction and one browser Undo unit. Browser comment writes require the
+Pro review module and a writable, attached editor; server writes are provided by this Pro-licensed
+runtime. Root creation follows the same browser gate and is one Undo unit.
+
 ## Programming model
 
 - A property you did not `load()` throws instead of answering `undefined`, so a typo fails at
@@ -89,6 +105,9 @@ and a server holding bytes should not pay for that.
   syncs deliberately, hand it to `context.trackedObjects`.
 - `getFirstOrNullObject` / `getLastOrNullObject` answer an object whose `isNullObject` is
   `true`, which is the difference between "no such heading" and a crash.
+- Review timestamps come from untrusted, optional OOXML attributes. `Comment.creationDate`,
+  `CommentReply.creationDate`, and `Revision.date` are `Date | null`; narrow `null` before calling
+  `Date` methods.
 
 `runtime.capabilities` says what the host behind a runtime can do: `save` is false in the
 browser; `selection`, `scrolling` and `layout` are false on a server. It is frozen for the
@@ -135,9 +154,10 @@ The editor packages above are Apache 2.0. This one is not — see below.
 This package is licensed under the
 [EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
 You may read, run and modify it internally, free of charge, to evaluate whether it fits your
-application. Production use — a live or customer-facing environment, live or business-operational
-data, or the package embedded in something you offer to others — requires a written commercial
-agreement, and so does redistribution.
+application. Browser comment creation, replies, and deletions also require `@docx-editor.dev/pro`,
+under the same evaluation-only production boundary. Production use — a live or customer-facing environment, live
+or business-operational data, or either package embedded in something you offer to others —
+requires a written commercial agreement, and so does redistribution.
 
 > [!IMPORTANT]
 > Commercial licensing: **[licensing@eigenpal.com](mailto:licensing@eigenpal.com)**.

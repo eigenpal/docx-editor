@@ -4,6 +4,9 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
+import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import {
   applySelectionToDom,
   positionFromDomPoint,
@@ -34,6 +37,135 @@ const LINE = [
   { text: 'hello ', paragraphId: 'p1', start: 0 },
   { text: 'world', paragraphId: 'p1', start: 6 },
 ];
+
+/**
+ * A field's result: many painted glyphs over ONE model offset.
+ *
+ * `[before][field: 1 unit, 24 glyphs][after]`, which is how a computed `REF`
+ * cross-reference is laid out. FORMTEXT results are literal and one-to-one.
+ */
+function paintedFieldLine(): HTMLElement {
+  const root = document.createElement('div');
+  const line = document.createElement('div');
+  line.className = 'docx-line';
+  const add = (text: string, start: number, end: number): void => {
+    const element = document.createElement('span');
+    element.dataset.paragraphId = 'p1';
+    element.dataset.start = String(start);
+    element.dataset.end = String(end);
+    element.textContent = text;
+    line.append(element);
+  };
+  add('a potential ', 0, 12);
+  add('Scope of the discussions', 12, 13);
+  add(' (the ', 13, 19);
+  root.append(line);
+  return root;
+}
+
+describe('a span whose painted text is wider than its model range', () => {
+  // A field paints its whole result but occupies one offset. Deriving an endpoint from the
+  // painted text handed back an offset the paragraph does not have, so the op built from it
+  // was refused — a caret placed just after such a field could not type at all.
+  test('an offset inside the field clamps to its own range', () => {
+    const root = paintedFieldLine();
+    const field = root.querySelectorAll('span')[1]!;
+    // Character 20 of 24 painted — but the field is one unit, so the furthest real position
+    // inside it is its end.
+    expect(positionFromDomPoint(field.firstChild!, 20, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 13,
+    });
+  });
+
+  test('the end of the field is the start of what follows it', () => {
+    const root = paintedFieldLine();
+    const field = root.querySelectorAll('span')[1]!;
+    const after = root.querySelectorAll('span')[2]!;
+    expect(positionFromDomPoint(field.firstChild!, 24, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 13,
+    });
+    expect(positionFromDomPoint(after.firstChild!, 0, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 13,
+    });
+  });
+
+  test('the field as an element endpoint reports its range, not its glyph count', () => {
+    const root = paintedFieldLine();
+    const field = root.querySelectorAll('span')[1]!;
+    expect(positionFromDomPoint(field, 1, root)).toEqual({ paragraphId: 'p1', offset: 13 });
+    expect(positionFromDomPoint(field, 0, root)).toEqual({ paragraphId: 'p1', offset: 12 });
+  });
+
+  test('a caret just after the field round-trips back into the DOM', () => {
+    // The reverse direction has the mirrored trap: the DOM offset is in PAINTED characters,
+    // so a model position must not be handed to a text node as if the two agreed.
+    const root = paintedFieldLine();
+    document.body.append(root);
+    const caret = { paragraphId: 'p1', offset: 13 };
+    expect(applySelectionToDom(root, { anchor: caret, head: caret }, getSelection())).toBe(true);
+    expect(semanticSelectionFromDom(root, getSelection())).toEqual({ anchor: caret, head: caret });
+    root.remove();
+  });
+
+  test('ordinary runs are unaffected', () => {
+    const root = paintedLine(LINE);
+    const span = root.querySelectorAll('span')[1]!;
+    expect(positionFromDomPoint(span.firstChild!, 3, root)).toEqual({
+      paragraphId: 'p1',
+      offset: 9,
+    });
+  });
+});
+
+describe('painted FORMTEXT selection mapping', () => {
+  const paintField = (instruction: string, result: string, formData = ''): HTMLElement => {
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+        `<w:body><w:p>` +
+        `<w:r><w:fldChar w:fldCharType="begin">${formData}</w:fldChar></w:r>` +
+        `<w:r><w:instrText xml:space="preserve"> ${instruction} </w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>${result}</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `</w:p></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const layout = layoutSemanticDocument(parsed.part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+    const root = document.createElement('div');
+    paintSemanticLayout(root, layout, { scale: 1, ariaHidden: false });
+    return root;
+  };
+
+  test('a caret inside a literal form result maps character-for-character', () => {
+    const root = paintField(
+      'FORMTEXT',
+      'Street',
+      '<w:ffData><w:name w:val="Text1"/><w:textInput/></w:ffData>'
+    );
+    const field = root.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+    expect(field).toBeDefined();
+    expect(field.hasAttribute('data-docx-field')).toBe(false);
+    expect(field.getAttribute('contenteditable')).not.toBe('false');
+    expect(positionFromDomPoint(field.firstChild!, 3, root)).toEqual({
+      paragraphId: field.dataset.paragraphId,
+      offset: Number(field.dataset.start) + 3,
+    });
+  });
+
+  test('a computed field remains projected and unmappable inside its cache', () => {
+    const root = paintField('REF Company', 'Street');
+    const field = root.querySelector<HTMLElement>('[data-docx-field]')!;
+    expect(field).toBeDefined();
+    expect(field.getAttribute('contenteditable')).toBe('false');
+    expect(positionFromDomPoint(field.firstChild!, 3, root)).toBeNull();
+  });
+});
 
 describe('a DOM endpoint becomes a model position', () => {
   test('an offset inside a span adds to the span start', () => {

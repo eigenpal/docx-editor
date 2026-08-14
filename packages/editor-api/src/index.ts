@@ -21,7 +21,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * try {
  *   await runtime.run(async (context) => {
  *     const paragraphs = context.document.body.paragraphs;
- *     paragraphs.load('text');
+ *     paragraphs.load('items');
+ *     await context.sync();
+ *
+ *     for (const paragraph of paragraphs.items) paragraph.load('text');
  *     await context.sync();
  *
  *     for (const paragraph of paragraphs.items) {
@@ -41,7 +44,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * // reaching the painted engine. A consumer holding bytes should not pay for that.
  * import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
  *
- * const runtime = DocxEditor.createBrowser(editor);
+ * const runtime = DocxEditor.createBrowser(editor, { author: 'Demo Reviewer' });
  * await runtime.run(async (context) => {
  *   const heading = context.document.body.paragraphs.getFirstOrNullObject();
  *   heading.load('text');

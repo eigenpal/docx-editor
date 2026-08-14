@@ -20,8 +20,14 @@ import type {
   Editor,
   EditorFontError,
   FontConfiguration,
+  ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
-import { createDocxEditor, defaultTableLabel } from '@docx-editor.dev/core/editor';
+import {
+  createDocxEditor,
+  defaultTableLabel,
+  resolveZoomMode,
+  sameZoomMode,
+} from '@docx-editor.dev/core/editor';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type {
   DocxEditorInstance,
@@ -71,7 +77,20 @@ export interface DocxEditorRootProps {
   modules?: readonly EditorModule[];
   /** `'edit'` (default) or `'view'` (read-only). Sampled at mount only. */
   mode?: 'edit' | 'view';
+  /**
+   * A fixed scale. Supplying one also means the mode is fixed, unless `zoomMode` says
+   * otherwise: an app that pinned 100% keeps 100% on every window size.
+   */
   zoom?: number;
+  /**
+   * Where the scale comes from. Defaults to `'auto'`: fit the page width, between 50% and
+   * 100%, so a window with room for the sheet renders at 100% and a narrower one shrinks
+   * rather than growing a horizontal scrollbar — down to the floor, past which it scrolls.
+   *
+   * A fit tracks the room beside the page, so opening the comments rail or docking the
+   * navigation pane shrinks the document by what it took. Pass `{ type: 'fixed' }` to opt out.
+   */
+  zoomMode?: ZoomMode | 'auto';
   /** Fired once per instance, after it is published to the tree (and after any
    *  `DocxEditor.Content` in the same commit has attached its mount point). */
   onReady?: (editor: Editor) => void;
@@ -90,6 +109,20 @@ export interface DocxEditorRootProps {
 }
 
 /**
+ * Whether two `zoomMode` props say the same thing, `'auto'` shorthand included.
+ *
+ * By VALUE, because the prop is an object and a host writing it inline hands over a new one
+ * on every render. Resolving both first makes `'auto'` and its long form compare equal, which
+ * is what a host switching between the two spellings would expect.
+ */
+function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
+  if (a === b) return true;
+  const left = resolveZoomMode(a);
+  const right = resolveZoomMode(b);
+  return left !== null && right !== null && sameZoomMode(left, right);
+}
+
+/**
  * Creates and owns a `DocxEditorInstance` and provides it to the subtree. Renders no
  * DOM — compose it with `DocxEditor.Viewport` + `DocxEditor.Content` for the painted
  * pages, and any hook-built chrome anywhere inside.
@@ -97,7 +130,15 @@ export interface DocxEditorRootProps {
  * @public
  */
 export function DocxEditorRoot(props: DocxEditorRootProps) {
-  const { document: doc, fonts, zoom, tableInteractionLabel, imageDecodePort, children } = props;
+  const {
+    document: doc,
+    fonts,
+    zoom,
+    zoomMode,
+    tableInteractionLabel,
+    imageDecodePort,
+    children,
+  } = props;
   const { t: catalogT } = useTranslation();
   const defaultTranslate = useCallback(
     (key: string, params?: Record<string, string | number>) =>
@@ -125,6 +166,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
       ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
+      ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
       onFontError: (error) => propsRef.current.onFontError?.(error),
@@ -148,9 +190,48 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
 
   // Zoom is a facade parameter, not a remount: tearing the editor down for a zoom
   // change would discard the user's edits and undo history.
+  //
+  // MODE AFTER LEVEL, and both in one effect. `setZoom` leaves any fit mode by design, so
+  // running these in two effects let the order decide the outcome: a host passing both
+  // `zoom={1.5}` and `zoomMode="auto"` would get whichever ran last.
+  //
+  // RE-ASSERTED WHEN THE PROP ITSELF MOVES, which is what these refs are for — and ALSO
+  // after a zoom-prop update while the host still declares a fit/`auto` mode. `setZoom`
+  // exits fit; skipping `setZoomMode` because the mode prop is unchanged would leave the
+  // editor fixed despite the declared mode. Unrelated re-renders still do not re-apply:
+  // mode is an object, and the documented spelling — `zoomMode={{ type: 'fit', fit:
+  // 'pageWidth' }}` — is a fresh literal on every parent render, so an identity dependency
+  // would push a toolbar-picked 150% back to the fit on the host's next keystroke.
+  const applied = useRef<{
+    editor: DocxEditorInstance | null;
+    zoom: number | undefined;
+    mode: ZoomMode | 'auto' | undefined;
+  }>({ editor: null, zoom: undefined, mode: undefined });
   useEffect(() => {
-    if (zoom !== undefined) editor?.setZoom(zoom);
-  }, [editor, zoom]);
+    if (!editor) return;
+    // A new instance has none of this yet, whatever the previous one was told.
+    const fresh = applied.current.editor !== editor;
+    if (fresh) applied.current = { editor, zoom: undefined, mode: undefined };
+
+    let zoomChanged = false;
+    if (zoom !== undefined && zoom !== applied.current.zoom) {
+      applied.current.zoom = zoom;
+      editor.setZoom(zoom);
+      zoomChanged = true;
+    }
+    const previousMode = applied.current.mode;
+    const modeMoved =
+      zoomMode !== undefined &&
+      (previousMode === undefined || !sameZoomProp(previousMode, zoomMode));
+    // Preserve a declared fit after `setZoom` tore it down. Fixed declarations stay fixed.
+    const resolved = zoomMode === undefined ? null : resolveZoomMode(zoomMode);
+    const reassertDeclaredFit =
+      zoomChanged && zoomMode !== undefined && resolved !== null && resolved.type === 'fit';
+    if (modeMoved || reassertDeclaredFit) {
+      applied.current.mode = zoomMode!;
+      editor.setZoomMode(zoomMode!);
+    }
+  }, [editor, zoom, zoomMode]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {

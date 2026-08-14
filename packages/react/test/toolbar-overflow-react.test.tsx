@@ -15,6 +15,20 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
+import { LocaleProvider } from '../src/i18n/index.ts';
+import { en, type Translations } from '@docx-editor.dev/i18n';
+
+/** Every leaf key in the shipped catalogue, dotted. */
+const catalogueKeys = new Set<string>(
+  (function walk(node: Record<string, unknown>, path: string, out: string[]): string[] {
+    for (const [key, value] of Object.entries(node)) {
+      const next = path ? `${path}.${key}` : key;
+      if (value && typeof value === 'object') walk(value as Record<string, unknown>, next, out);
+      else out.push(next);
+    }
+    return out;
+  })(en as unknown as Record<string, unknown>, '', [])
+);
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -212,6 +226,47 @@ describe('toolbar overflow integration', () => {
     expect(panel.querySelector('.docx-toolbar__more-command')).not.toBeNull();
   });
 
+  test('value rows in the panel label from the catalogue, and a provider localizes them', async () => {
+    installResizeObserverMock();
+    // No host `t`: the value rows (zoom, line spacing, pickers) resolved to raw keys while
+    // every command row beside them read as English.
+    const { view } = mountToolbar(<DocxEditorToolbar />);
+    await collapseToolbar(view, { barWidth: 360 });
+
+    await act(async () => {
+      view.getByLabelText('More').click();
+    });
+    const panel = view.getByTestId('toolbar-overflow-panel');
+    const labels = Array.from(panel.querySelectorAll('.docx-toolbar__more-control-label')).map(
+      (node) => node.textContent
+    );
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels).toContain('Zoom');
+    // No label IS a catalogue key. Asserted against the real catalogue rather than
+    // "contains no dot", which would false-fail on the first label ending in a period.
+    for (const text of labels) expect(catalogueKeys.has(text ?? '')).toBe(false);
+    cleanup();
+
+    const de = { _lang: 'de', formattingBar: { groups: { zoom: 'Zoomen' } } } as Translations;
+    const localized = mountToolbar(
+      <LocaleProvider i18n={de}>
+        <DocxEditorToolbar />
+      </LocaleProvider>
+    ).view;
+    await collapseToolbar(localized, { barWidth: 360 });
+    await act(async () => {
+      localized.getByLabelText('More').click();
+    });
+    const localizedLabels = Array.from(
+      localized
+        .getByTestId('toolbar-overflow-panel')
+        .querySelectorAll('.docx-toolbar__more-control-label')
+    ).map((node) => node.textContent);
+    expect(localizedLabels).toContain('Zoomen');
+    // A key the locale leaves out falls through to English, not to the raw key.
+    expect(localizedLabels).toContain('Line spacing');
+  });
+
   test('More dialog closes on Escape, outside click, and command selection', async () => {
     installResizeObserverMock();
     const { view } = mountToolbar(
@@ -367,5 +422,27 @@ describe('toolbar overflow integration', () => {
     expect(rule).toContain('inline-size: min(340px, calc(100vw - 16px))');
     expect(rule).toContain('min-inline-size: min(260px, calc(100vw - 16px))');
     expect(rule).toContain('max-height: min(72vh, 560px)');
+  });
+
+  test('More and its nested Zoom picker are not clipped by overflow containers', () => {
+    const coreCss = readFileSync(
+      new URL('../../core/src/styles/editor.css', import.meta.url),
+      'utf8'
+    );
+    const nestedMenuRule =
+      coreCss.match(
+        /\.docx-toolbar__more-panel:has\(\.docx-toolbar__zoom-menu\)\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(nestedMenuRule).toContain('overflow-y: visible');
+
+    const demoCss = readFileSync(
+      new URL('../../../examples/vite/src/styles.css', import.meta.url),
+      'utf8'
+    );
+    const mobileToolbarRule =
+      demoCss.match(
+        /@media \(max-width: 768px\)\s*\{[\s\S]*?\.docx-editor \[role='toolbar'\]\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(mobileToolbarRule).not.toContain('overflow');
   });
 });

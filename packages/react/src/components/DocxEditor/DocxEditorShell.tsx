@@ -15,6 +15,7 @@ import { OutlineToggleButton } from './OutlineToggleButton';
 import { PageIndicator } from './PageIndicator';
 import { SIDEBAR_DOCUMENT_SHIFT } from '../sidebar/constants';
 import { Z_INDEX } from '../../styles/zIndex';
+import { ScopedByAncestorContext } from '../../editor/scope-context';
 import type { OutlineHeading } from '../DocumentOutline';
 
 /** One tracked change as the engine reports it (`Editor.getTrackedChanges()`). */
@@ -135,154 +136,158 @@ export function DocxEditorShell({
   fileInputs: ReactNode;
 }) {
   return (
-    <LocaleProvider i18n={i18n}>
-      <ErrorProvider>
-        <ErrorBoundary onError={onEditorError}>
-          <div
-            ref={containerRef}
-            className={cn('docx-editor', isDark && 'dark', className)}
-            style={containerStyle}
-            data-testid="docx-editor"
-          >
-            <div style={mainContentStyle}>
-              <div
-                style={{
-                  position: 'relative',
-                  flex: 1,
-                  minHeight: 0,
-                  minWidth: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                {toolbar}
-
+    // The container below carries the scope class, so chrome parts inside it
+    // must not add their own — see editor/scope-context.ts.
+    <ScopedByAncestorContext.Provider value={true}>
+      <LocaleProvider i18n={i18n}>
+        <ErrorProvider>
+          <ErrorBoundary onError={onEditorError}>
+            <div
+              ref={containerRef}
+              className={cn('docx-editor', isDark && 'dark', className)}
+              style={containerStyle}
+              data-testid="docx-editor"
+            >
+              <div style={mainContentStyle}>
                 <div
-                  ref={scrollContainerRef}
-                  className="docx-editor__scroll-container"
-                  style={editorContainerStyle}
-                  onMouseDown={onScrollContainerMouseDown}
+                  style={{
+                    position: 'relative',
+                    flex: 1,
+                    minHeight: 0,
+                    minWidth: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
                 >
-                  {/* Horizontal ruler — sticky-top, scrolls horizontally with
+                  {toolbar}
+
+                  <div
+                    ref={scrollContainerRef}
+                    className="docx-editor__scroll-container"
+                    style={editorContainerStyle}
+                    onMouseDown={onScrollContainerMouseDown}
+                  >
+                    {/* Horizontal ruler — sticky-top, scrolls horizontally with
                       the doc. paddingRight biases the centered ruler so it
                       tracks the page when the comments sidebar shifts the
                       page left. Outline doesn't bias; the page stays centered
                       until minLayoutWidth forces horizontal scroll. */}
-                  {showRuler && (
+                    {showRuler && (
+                      <div
+                        className="flex justify-center py-1 flex-shrink-0 bg-doc-bg"
+                        style={{
+                          position: 'sticky',
+                          top: 0,
+                          // Must sit above the inline HF editor so the ruler stays readable.
+                          zIndex: Z_INDEX.ruler,
+                          paddingLeft: 20,
+                          paddingRight: 20 + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0),
+                          minWidth: minLayoutWidth,
+                          transition: 'padding 0.2s ease',
+                        }}
+                      >
+                        <HorizontalRuler {...horizontalRulerProps} />
+                      </div>
+                    )}
                     <div
-                      className="flex justify-center py-1 flex-shrink-0 bg-doc-bg"
                       style={{
-                        position: 'sticky',
-                        top: 0,
-                        // Must sit above the inline HF editor so the ruler stays readable.
-                        zIndex: Z_INDEX.ruler,
-                        paddingLeft: 20,
-                        paddingRight: 20 + (sidebarOpen ? SIDEBAR_DOCUMENT_SHIFT * 2 : 0),
-                        minWidth: minLayoutWidth,
-                        transition: 'padding 0.2s ease',
-                      }}
-                    >
-                      <HorizontalRuler {...horizontalRulerProps} />
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      display: 'flex',
-                      flex: 1,
-                      minHeight: 0,
-                      position: 'relative',
-                      minWidth: minLayoutWidth,
-                    }}
-                  >
-                    <div
-                      ref={editorContentRef}
-                      style={{
-                        position: 'relative',
+                        display: 'flex',
                         flex: 1,
-                        minWidth: 0,
+                        minHeight: 0,
+                        position: 'relative',
+                        minWidth: minLayoutWidth,
                       }}
-                      onMouseDown={onEditorBgMouseDown}
-                      onContextMenu={onEditorContextMenu}
                     >
-                      {/* Vertical ruler — sits at the editor content's left
+                      <div
+                        ref={editorContentRef}
+                        style={{
+                          position: 'relative',
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                        onMouseDown={onEditorBgMouseDown}
+                        onContextMenu={onEditorContextMenu}
+                      >
+                        {/* Vertical ruler — sits at the editor content's left
                           edge so it scrolls horizontally with the page. */}
-                      {showRuler && !readOnlyProp && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            left: 0,
-                            top: 0,
-                            // Above the inline HF editor so it stays readable on horizontal scroll.
-                            zIndex: Z_INDEX.ruler,
-                            // Must match `.paged-editor__pages` padding-top
-                            // (24 viewport + 24 pages container) in editor.css.
-                            paddingTop: 48,
-                          }}
-                        >
-                          <VerticalRuler {...verticalRulerProps} />
-                        </div>
-                      )}
-                      {/* Brightened highlight for the focused/expanded sidebar item. */}
-                      {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
-                        <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: var(--doc-comment-active-bg) !important; border-bottom-width: 2px !important; border-bottom-style: solid !important; border-bottom-color: var(--doc-comment-active-border) !important; }`}</style>
-                      )}
-                      {expandedSidebarItem?.startsWith('tc-') &&
-                        (() => {
-                          const revId = expandedSidebarItem.split('-')[1];
-                          // The contract addresses a tracked change by its single id;
-                          // the same id styles the insertion and deletion halves.
-                          const tc = trackedChanges.find((c) => String(c.id) === revId);
-                          const activeId = tc?.id ?? revId;
-                          return (
-                            <style>{`
+                        {showRuler && !readOnlyProp && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: 0,
+                              top: 0,
+                              // Above the inline HF editor so it stays readable on horizontal scroll.
+                              zIndex: Z_INDEX.ruler,
+                              // Must match `.paged-editor__pages` padding-top
+                              // (24 viewport + 24 pages container) in editor.css.
+                              paddingTop: 48,
+                            }}
+                          >
+                            <VerticalRuler {...verticalRulerProps} />
+                          </div>
+                        )}
+                        {/* Brightened highlight for the focused/expanded sidebar item. */}
+                        {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
+                          <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: var(--doc-comment-active-bg) !important; border-bottom-width: 2px !important; border-bottom-style: solid !important; border-bottom-color: var(--doc-comment-active-border) !important; }`}</style>
+                        )}
+                        {expandedSidebarItem?.startsWith('tc-') &&
+                          (() => {
+                            const revId = expandedSidebarItem.split('-')[1];
+                            // The contract addresses a tracked change by its single id;
+                            // the same id styles the insertion and deletion halves.
+                            const tc = trackedChanges.find((c) => String(c.id) === revId);
+                            const activeId = tc?.id ?? revId;
+                            return (
+                              <style>{`
                             .paged-editor__pages .docx-insertion[data-revision-id="${activeId}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
                             .paged-editor__pages .docx-deletion[data-revision-id="${activeId}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
                           `}</style>
-                          );
-                        })()}
-                      {pagedArea}
+                            );
+                          })()}
+                        {pagedArea}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {scrollPageInfo.totalPages > 1 && (
-                  <PageIndicator
-                    currentPage={scrollPageInfo.currentPage}
-                    totalPages={scrollPageInfo.totalPages}
-                    visible={scrollPageInfo.visible}
-                  />
-                )}
+                  {scrollPageInfo.totalPages > 1 && (
+                    <PageIndicator
+                      currentPage={scrollPageInfo.currentPage}
+                      totalPages={scrollPageInfo.totalPages}
+                      visible={scrollPageInfo.visible}
+                    />
+                  )}
 
-                {/* When the vertical ruler is shown it overlays the editor's
+                  {/* When the vertical ruler is shown it overlays the editor's
                     left edge (left:0, width RULER_WIDTH); inset the outline
                     toggle/panel past it so they don't render on top. */}
-                {showOutline && (
-                  <DocumentOutline
-                    {...outlineProps}
-                    leftOffset={OUTLINE_LEFT_OFFSET + (showRuler ? RULER_WIDTH : 0)}
-                  />
-                )}
+                  {showOutline && (
+                    <DocumentOutline
+                      {...outlineProps}
+                      leftOffset={OUTLINE_LEFT_OFFSET + (showRuler ? RULER_WIDTH : 0)}
+                    />
+                  )}
 
-                {showOutlineButton && !showOutline && (
-                  <OutlineToggleButton
-                    onClick={onToggleOutline}
-                    // Aligns with the page top: toolbar + horizontal ruler row
-                    // (22 ruler + 8 py-1 padding) + PagedEditor viewport
-                    // padding-top (24) + pages container padding (24).
-                    topPx={toolbarHeight + (showRuler ? 30 : 0) + 48}
-                    scrollLeft={editorScrollLeft}
-                    leftOffset={OUTLINE_BUTTON_LEFT_OFFSET + (showRuler ? RULER_WIDTH : 0)}
-                  />
-                )}
+                  {showOutlineButton && !showOutline && (
+                    <OutlineToggleButton
+                      onClick={onToggleOutline}
+                      // Aligns with the page top: toolbar + horizontal ruler row
+                      // (22 ruler + 8 py-1 padding) + PagedEditor viewport
+                      // padding-top (24) + pages container padding (24).
+                      topPx={toolbarHeight + (showRuler ? 30 : 0) + 48}
+                      scrollLeft={editorScrollLeft}
+                      leftOffset={OUTLINE_BUTTON_LEFT_OFFSET + (showRuler ? RULER_WIDTH : 0)}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
 
-            {overlays}
-            {dialogs}
-            {fileInputs}
-          </div>
-        </ErrorBoundary>
-      </ErrorProvider>
-    </LocaleProvider>
+              {overlays}
+              {dialogs}
+              {fileInputs}
+            </div>
+          </ErrorBoundary>
+        </ErrorProvider>
+      </LocaleProvider>
+    </ScopedByAncestorContext.Provider>
   );
 }

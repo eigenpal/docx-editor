@@ -7,7 +7,7 @@ seoTitle: 'Content controls (SDTs)'
 
 Word content controls (`w:sdt`, Structured Document Tags) are labeled, bounded regions of a document. A control carries a stable `tag`, `title`, and `id`. That stability makes them the natural anchor for templates and programmatic filling: design the template in Word, tag the fillable regions, then fill them by tag from code.
 
-The editor parses controls into the canonical tree, keeps them editable, renders their boundary, and round-trips them losslessly on save, including properties it does not model, such as `w:dataBinding` and `w15:repeatingSection`.
+The editor parses controls into the canonical tree, keeps them editable, renders their boundary, and round-trips them with structural fidelity. Properties it does not model, such as `w:dataBinding` and `w15:repeatingSection`, remain as generic nodes and survive editing and save.
 
 <Callout>
   Content controls are addressed by `tag`, `title`, or `id`. They are not `{{ mustache }}` template

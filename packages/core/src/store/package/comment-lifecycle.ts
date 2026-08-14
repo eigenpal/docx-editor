@@ -16,135 +16,148 @@
 // file whose comment pointed at characters that no longer existed.
 //
 // The test is deliberately narrow. A comment is reaped only when it COVERED characters before
-// the edit and, after it, either nothing in any story names it or its markers still pair with
-// nothing between them. So a comment the file itself shipped orphaned is left exactly as found,
-// shortening a range does not take the remark with it, and — the case that is easy to get
-// wrong — losing only the `w:commentRangeStart` does not either: the `w:commentReference` is
-// what places a comment, and Word keeps one whose reference and words are still there.
+// the edit in THAT story (and, for a notes part, that note) and, after it, either nothing in
+// that story names it or its markers still pair with nothing between them. A neighbour that
+// reused the same `w:id` is a different remark. So a comment the file itself shipped orphaned
+// is left exactly as found, shortening a range does not take the remark with it, and — the
+// case that is easy to get wrong — losing only the `w:commentRangeStart` does not either: the
+// `w:commentReference` is what places a comment, and Word keeps one whose reference and words
+// are still there.
 
-import { findNode, removeNode } from './ooxml-edit.ts';
+import { findNode, removeNode, replaceNode } from './ooxml-edit.ts';
 import { withPart, type OoxmlPackage } from './ooxml-package.ts';
+import { noteIdOf, notesOf } from './note-nodes.ts';
+import { type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 import {
-  WML_NAMESPACE_URI,
-  type OoxmlElement,
-  type OoxmlNode,
-  type OoxmlPart,
-} from './ooxml-tree.ts';
-import { commentAnchorsOfStory, W15_NAMESPACE_URI } from '../store/comment-reads.ts';
+  attribute,
+  chargePart,
+  chargeVisit,
+  collectOwnerAnchorStates,
+  collectOwnerMarkers,
+  commentRecordsIn,
+  commentsPartNameForStory,
+  createCommentScanBudget,
+  idsStillMarked,
+  keyedMetadataIn,
+  metadataPartNamesFor,
+  type CommentScanBudget,
+  type MarkerHits,
+  type OwnerAnchorState,
+  W15_NAMESPACE_URI,
+  W16CID_NAMESPACE_URI,
+} from './comment-lifecycle-scan.ts';
+
+export { hasAnyComment } from '../store/comment-reads.ts';
 
 /** The `w14` namespace, where `paraId` lives — the key thread state is recorded under. */
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
 
-/** The `w16cid` namespace: `@parentId` on `w:comment`, and the `commentsIds.xml` vocabulary. */
-const W16CID_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2016/wordml/cid';
+/**
+ * Which story a comment deletion may strip markers from.
+ *
+ * `w:id` is not unique across stories: a header and the body can both hold comment 1, and a
+ * notes part holds many notes. The handle names one story; deletion must not follow the bare id
+ * into a neighbour.
+ */
+export interface CommentDeletionOwner {
+  /** Canonical name of the part holding the story's markers. */
+  readonly storyPartName: string;
+  /**
+   * When the story is one note inside a shared notes part, that note's `w:id`.
+   * Absent means the whole part is the story (body, header, footer).
+   */
+  readonly noteId?: number;
+}
+
+function defaultOwner(pkg: OoxmlPackage): CommentDeletionOwner {
+  return { storyPartName: pkg.mainDocumentPart };
+}
+
+const notesByIdCache = new WeakMap<OoxmlNode, Map<number, OoxmlNode>>();
+
+/** One O(n) index per notes-part root; lookups are O(1). */
+function notesById(root: OoxmlNode): Map<number, OoxmlNode> {
+  const cached = notesByIdCache.get(root);
+  if (cached) return cached;
+  const indexed = new Map<number, OoxmlNode>();
+  for (const note of notesOf(root)) {
+    const id = noteIdOf(note);
+    if (id !== null) indexed.set(id, note);
+  }
+  notesByIdCache.set(root, indexed);
+  return indexed;
+}
+
+function storyRootOf(pkg: OoxmlPackage, owner: CommentDeletionOwner): OoxmlNode | null {
+  const part = pkg.parts.get(owner.storyPartName);
+  if (!part) return null;
+  if (owner.noteId === undefined) return part.root;
+  return notesById(part.root).get(owner.noteId) ?? null;
+}
 
 /**
- * Parts scanned for anchors in one reap.
- *
- * A cap rather than a walk of everything: the package is attacker-controlled, and the reap runs
- * inside a transaction the user is waiting on. Overflow SKIPS the reap — see
- * {@link cascadeEmptiedComments} for why refusing the edit instead was the wrong answer.
+ * Notes in a shared part are each a story. Expanding `owner` without a `noteId` is what stops
+ * a footnotes.xml walk from treating two notes that reused `w:id` as one remark.
  */
-const MAX_SCANNED_PARTS = 512;
-
-function attribute(
-  node: OoxmlElement,
-  namespaceUri: string,
-  localName: string
-): string | undefined {
-  for (const entry of node.attributes) {
-    if (entry.localName === localName && entry.namespaceUri === namespaceUri) return entry.value;
+function expandOwners(
+  pkg: OoxmlPackage,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): CommentDeletionOwner[] {
+  if (owner.noteId !== undefined) return [owner];
+  const part = pkg.parts.get(owner.storyPartName);
+  if (!part || (part.root.kind !== 'footnotes' && part.root.kind !== 'endnotes')) return [owner];
+  if (!chargePart(budget)) return [];
+  const expanded: CommentDeletionOwner[] = [];
+  for (const note of notesOf(part.root)) {
+    if (!chargeVisit(budget)) return expanded;
+    const id = noteIdOf(note);
+    if (id === null || id <= 0) continue;
+    expanded.push({ storyPartName: owner.storyPartName, noteId: id });
   }
-  return undefined;
+  return expanded.length > 0 ? expanded : [owner];
 }
 
-/** Every `.xml` part, bounded. Null when the package holds more than the reap will look at. */
-function scannableParts(pkg: OoxmlPackage): readonly OoxmlPart[] | null {
-  const parts: OoxmlPart[] = [];
-  for (const part of pkg.parts.values()) {
-    if (!part.name.endsWith('.xml')) continue;
-    if (parts.length >= MAX_SCANNED_PARTS) return null;
-    parts.push(part);
-  }
-  return parts;
-}
-
-/** What a story still says about one comment's anchor. */
-interface AnchorState {
-  /** A paired, non-orphaned range with characters between its markers. */
-  readonly covering: boolean;
-  /** A start matched by an end — the range is usable, whatever its width. */
-  readonly paired: boolean;
-  /** Any `commentRangeStart` / `commentRangeEnd` / `commentReference` naming it, anywhere. */
-  readonly anyMarker: boolean;
-}
-
-/** What every story in the package says about every comment's anchor. */
-function anchorStates(pkg: OoxmlPackage): Map<string, AnchorState> | null {
-  const parts = scannableParts(pkg);
-  if (parts === null) return null;
-  const states = new Map<string, AnchorState>();
-  const note = (id: string, covering: boolean, paired: boolean, anyMarker: boolean): void => {
-    const previous = states.get(id);
-    states.set(id, {
-      covering: covering || (previous?.covering ?? false),
-      paired: paired || (previous?.paired ?? false),
-      anyMarker: anyMarker || (previous?.anyMarker ?? false),
-    });
-  };
-  for (const part of parts) {
-    for (const anchor of commentAnchorsOfStory(part)) {
-      const covering =
-        !anchor.orphaned &&
-        !(
-          anchor.start.paragraphId === anchor.end.paragraphId &&
-          anchor.start.offset === anchor.end.offset
-        );
-      note(anchor.commentId, covering, !anchor.orphaned, true);
+/** Notes the edit removed (typically via reference cascade) — each is still a deletion owner. */
+function vanishedNoteOwners(
+  before: OoxmlPackage,
+  after: OoxmlPackage,
+  budget: CommentScanBudget
+): CommentDeletionOwner[] {
+  const owners: CommentDeletionOwner[] = [];
+  for (const part of before.parts.values()) {
+    if (part.root.kind !== 'footnotes' && part.root.kind !== 'endnotes') continue;
+    if (!chargePart(budget)) return owners;
+    const afterPart = after.parts.get(part.name);
+    const afterIds = afterPart === undefined ? new Set<number>() : notesById(afterPart.root);
+    for (const note of notesOf(part.root)) {
+      if (!chargeVisit(budget)) return owners;
+      const id = noteIdOf(note);
+      if (id === null || id <= 0) continue;
+      if (afterIds.has(id)) continue;
+      owners.push({ storyPartName: part.name, noteId: id });
     }
-    // The REFERENCE is a marker `commentAnchorsOfStory` does not report — it pairs starts
-    // with ends and nothing else — and it is the element that actually places the comment.
-    // A range whose start went with a deleted block still has a reference and an end, and
-    // Word keeps that comment; without counting the reference the reap read "no usable
-    // range" as "this edit emptied it" and deleted a remark whose words were still on screen.
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      if (node.kind === 'commentReference') {
-        const id = attribute(node, WML_NAMESPACE_URI, 'id');
-        if (id !== undefined) note(id, false, false, true);
-        return;
-      }
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    visit(part.root, 0);
   }
-  return states;
+  return owners;
 }
 
-/** Every `w:comment` in the package, by `@w:id`, with the part it lives in. */
-function commentRecords(
-  pkg: OoxmlPackage
-): Map<string, { readonly partName: string; readonly node: OoxmlElement }> {
-  const byId = new Map<string, { partName: string; node: OoxmlElement }>();
-  for (const part of pkg.parts.values()) {
-    if (!part.name.endsWith('.xml')) continue;
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      if (node.kind === 'comment') {
-        const id = attribute(node, WML_NAMESPACE_URI, 'id');
-        if (id !== undefined && !byId.has(id)) byId.set(id, { partName: part.name, node });
-        return;
-      }
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    visit(part.root, 0);
-  }
-  return byId;
+/** What one story (one note, when `noteId` is set) says about every comment's anchor. */
+function anchorStates(
+  pkg: OoxmlPackage,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): Map<string, OwnerAnchorState> | null {
+  const root = storyRootOf(pkg, owner);
+  if (!root) return new Map();
+  if (!chargePart(budget)) return null;
+  const { states, truncated } = collectOwnerAnchorStates(root, budget);
+  return truncated ? null : states;
 }
 
-/** The `w14:paraId` of a comment's first paragraph, upper-cased, when it has one. */
+/** The `w14:paraId` of a comment's last paragraph, upper-cased, when it has one. */
 function paraIdOf(comment: OoxmlElement): string | null {
-  for (const child of comment.children) {
+  for (let index = comment.children.length - 1; index >= 0; index -= 1) {
+    const child = comment.children[index]!;
     if (child.kind !== 'paragraph') continue;
     const value = attribute(child, W14_NAMESPACE_URI, 'paraId');
     return value === undefined ? null : value.toUpperCase();
@@ -152,17 +165,35 @@ function paraIdOf(comment: OoxmlElement): string | null {
   return null;
 }
 
+function recordsForOwner(
+  pkg: OoxmlPackage,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): Map<string, { readonly partName: string; readonly node: OoxmlElement }> {
+  const commentsPart = commentsPartNameForStory(pkg, owner.storyPartName);
+  return commentsPart === null ? new Map() : commentRecordsIn(pkg, commentsPart, budget);
+}
+
+function ownerMetadataParts(
+  pkg: OoxmlPackage,
+  owner: CommentDeletionOwner
+): { readonly extended: string | null; readonly ids: string | null } {
+  const commentsPart = commentsPartNameForStory(pkg, owner.storyPartName);
+  return metadataPartNamesFor(pkg, owner.storyPartName, commentsPart);
+}
+
 /**
- * A comment and every comment that answers it, transitively.
- *
- * Both thread sources are followed, because a file may carry either: `@w15:paraIdParent` in
- * `commentsExtended.xml`, keyed by `w14:paraId`, and `@w16cid:parentId` naming the parent's
- * `w:id` outright. Walking one alone left a reply behind whenever the producer used the other.
- * Coincident anchors are deliberately NOT followed: an independent remark on the same words is
- * shown as a reply, but it is not one, and deleting the first must not delete the second.
+ * A comment and every comment that answers it, transitively, in this story's comments part
+ * and that part's related commentsExtended — never every XML part, so a header comments part
+ * that reused a paraId is not a child of the body's.
  */
-function threadOf(pkg: OoxmlPackage, rootId: string): Set<string> {
-  const records = commentRecords(pkg);
+function threadOf(
+  pkg: OoxmlPackage,
+  rootId: string,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): Set<string> {
+  const records = recordsForOwner(pkg, owner, budget);
   const idByParaId = new Map<string, string>();
   for (const [id, record] of records) {
     const paraId = paraIdOf(record.node);
@@ -180,7 +211,8 @@ function threadOf(pkg: OoxmlPackage, rootId: string): Set<string> {
     const named = attribute(record.node, W16CID_NAMESPACE_URI, 'parentId');
     if (named !== undefined && records.has(named)) link(named, id);
   }
-  for (const entry of extendedEntries(pkg)) {
+  const meta = ownerMetadataParts(pkg, owner);
+  for (const entry of keyedMetadataIn(pkg, [meta.extended], budget)) {
     const paraId = attribute(entry.node, W15_NAMESPACE_URI, 'paraId');
     const parentParaId = attribute(entry.node, W15_NAMESPACE_URI, 'paraIdParent');
     if (paraId === undefined || parentParaId === undefined) continue;
@@ -189,7 +221,6 @@ function threadOf(pkg: OoxmlPackage, rootId: string): Set<string> {
     if (child !== undefined && parent !== undefined) link(parent, child);
   }
 
-  // Breadth-first with a seen set, so a file describing a cycle cannot spin here.
   const thread = new Set<string>([rootId]);
   const queue = [rootId];
   while (queue.length > 0) {
@@ -201,26 +232,6 @@ function threadOf(pkg: OoxmlPackage, rootId: string): Set<string> {
     }
   }
   return thread;
-}
-
-/** Every `w15:commentEx` in the package, with the part it lives in. */
-function extendedEntries(
-  pkg: OoxmlPackage
-): readonly { readonly partName: string; readonly node: OoxmlElement }[] {
-  const entries: { partName: string; node: OoxmlElement }[] = [];
-  for (const part of pkg.parts.values()) {
-    if (!part.name.endsWith('.xml')) continue;
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      if (node.namespaceUri === W15_NAMESPACE_URI && node.localName === 'commentEx') {
-        entries.push({ partName: part.name, node });
-        return;
-      }
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    visit(part.root, 0);
-  }
-  return entries;
 }
 
 /** Remove named nodes from one part in a single rebuild, parents first. */
@@ -241,75 +252,123 @@ function removeFromPart(
   return current === part ? pkg : withPart(pkg, current);
 }
 
+/** Replace one namespaced attribute value on every matching element in a part. */
+function replaceAttributeValues(
+  pkg: OoxmlPackage,
+  partName: string,
+  replacements: ReadonlyMap<string, string>,
+  namespaceUri: string,
+  localName: string
+): OoxmlPackage | null {
+  const part = pkg.parts.get(partName);
+  if (!part || replacements.size === 0) return pkg;
+  let current = part;
+  for (const [nodeId, value] of replacements) {
+    const node = findNode(current, nodeId);
+    if (!node || node.kind === 'textValue') continue;
+    let changed = false;
+    const attributes = node.attributes.map((entry) => {
+      if (
+        entry.kind !== 'genericExtension' ||
+        entry.namespaceUri !== namespaceUri ||
+        entry.localName !== localName
+      ) {
+        return entry;
+      }
+      changed = entry.value !== value;
+      return changed ? { ...entry, value } : entry;
+    });
+    if (!changed) continue;
+    const replacement = { ...node, attributes } as OoxmlElement;
+    const replaced = replaceNode(current, nodeId, replacement, { deferValidation: true });
+    if (!replaced.ok) return null;
+    current = replaced.part;
+  }
+  return current === part ? pkg : withPart(pkg, current);
+}
+
 /**
  * Strip every `w:commentRangeStart` / `w:commentRangeEnd` / `w:commentReference` naming one of
- * `commentIds`, from every story in the package.
+ * `commentIds` in `owner`'s story. A header that reused the same `w:id` keeps its markers.
  *
  * A `w:commentReference` is a RUN CHILD, and a run left holding only its `w:rPr` renders
  * nothing — so an emptied run goes with it, exactly as the text-delete sweep drops one.
- * Otherwise deleting a comment left a stub run at the anchor that the next keystroke joined.
  */
-function stripMarkers(pkg: OoxmlPackage, commentIds: ReadonlySet<string>): OoxmlPackage | null {
+function stripMarkers(
+  pkg: OoxmlPackage,
+  commentIds: ReadonlySet<string>,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): { readonly pkg: OoxmlPackage; readonly truncated: boolean } | null {
+  const part = pkg.parts.get(owner.storyPartName);
+  const root = storyRootOf(pkg, owner);
+  if (!part || !root) return { pkg, truncated: false };
+  if (!chargePart(budget)) return { pkg, truncated: true };
+  const hits = collectOwnerMarkers(root, commentIds, budget);
+  if (hits.truncated) return { pkg, truncated: true };
+  if (hits.doomed.length === 0 && hits.emptiedRuns.length === 0) return { pkg, truncated: false };
+  const next = removeFromPart(pkg, part.name, [...hits.emptiedRuns, ...hits.doomed]);
+  return next === null ? null : { pkg: next, truncated: false };
+}
+
+function removeKeyedParaIdEntries(
+  pkg: OoxmlPackage,
+  paraIds: ReadonlySet<string>,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): OoxmlPackage | null {
+  if (paraIds.size === 0) return pkg;
+  const meta = ownerMetadataParts(pkg, owner);
+  const doomedByPart = new Map<string, string[]>();
+  for (const entry of keyedMetadataIn(pkg, [meta.extended, meta.ids], budget)) {
+    const paraId =
+      attribute(entry.node, W15_NAMESPACE_URI, 'paraId') ??
+      attribute(entry.node, W16CID_NAMESPACE_URI, 'paraId');
+    if (paraId === undefined || !paraIds.has(paraId.toUpperCase())) continue;
+    const bucket = doomedByPart.get(entry.partName);
+    if (bucket) bucket.push(entry.node.id);
+    else doomedByPart.set(entry.partName, [entry.node.id]);
+  }
+  if (budget.truncated) return pkg;
   let next = pkg;
-  for (const part of [...pkg.parts.values()]) {
-    if (!part.name.endsWith('.xml')) continue;
-    const doomed: string[] = [];
-    const emptiedRuns: string[] = [];
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      if (
-        node.kind === 'commentRangeStart' ||
-        node.kind === 'commentRangeEnd' ||
-        node.kind === 'commentReference'
-      ) {
-        const id = attribute(node, WML_NAMESPACE_URI, 'id');
-        if (id !== undefined && commentIds.has(id)) doomed.push(node.id);
-        return;
-      }
-      if (node.kind === 'run') {
-        const survivors = node.children.filter(
-          (child) =>
-            !(
-              child.kind === 'commentReference' &&
-              commentIds.has(attribute(child, WML_NAMESPACE_URI, 'id') ?? '')
-            ) && child.kind !== 'runProperties'
-        );
-        if (
-          survivors.length === 0 &&
-          node.children.some((child) => child.kind === 'commentReference')
-        ) {
-          emptiedRuns.push(node.id);
-          return;
-        }
-      }
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    visit(part.root, 0);
-    if (doomed.length === 0 && emptiedRuns.length === 0) continue;
-    // Emptied runs first: removing the run takes its reference with it, and asking for the
-    // reference afterwards would be a lookup for a node that is already gone.
-    const removed = removeFromPart(next, part.name, [...emptiedRuns, ...doomed]);
+  for (const [partName, nodeIds] of doomedByPart) {
+    const removed = removeFromPart(next, partName, nodeIds);
     if (removed === null) return null;
     next = removed;
   }
   return next;
 }
 
-/**
- * Delete a comment thread outright: body, thread state and story markers.
- *
- * Returns the package unchanged when the id names no comment, and null when a removal was
- * refused — a caller inside a transaction rolls back rather than committing a package whose
- * comment is half gone.
- */
-export function deleteCommentThread(pkg: OoxmlPackage, commentId: string): OoxmlPackage | null {
-  const records = commentRecords(pkg);
+function applyThreadDeletion(
+  pkg: OoxmlPackage,
+  commentId: string,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): OoxmlPackage | null {
+  const records = recordsForOwner(pkg, owner, budget);
   if (!records.has(commentId)) return pkg;
-  const thread = threadOf(pkg, commentId);
+  const thread = threadOf(pkg, commentId, owner, budget);
+  if (budget.truncated) return pkg;
+
+  const stripped = stripMarkers(pkg, thread, owner, budget);
+  if (stripped === null) return null;
+  if (stripped.truncated) return pkg;
+  let next = stripped.pkg;
+
+  // Records stay when another story still names the id, or when the remaining-marker scan
+  // cannot finish: overflow cannot prove the id is unused, so metadata is preserved.
+  const remaining = idsStillMarked(
+    next,
+    thread,
+    commentsPartNameForStory(pkg, owner.storyPartName),
+    budget
+  );
+  if (remaining.truncated) return next;
+  const doomedIds = new Set([...thread].filter((id) => !remaining.marked.has(id)));
 
   const paraIds = new Set<string>();
   const byPart = new Map<string, string[]>();
-  for (const id of thread) {
+  for (const id of doomedIds) {
     const record = records.get(id);
     if (!record) continue;
     const paraId = paraIdOf(record.node);
@@ -319,109 +378,322 @@ export function deleteCommentThread(pkg: OoxmlPackage, commentId: string): Ooxml
     else byPart.set(record.partName, [record.node.id]);
   }
 
-  let next = stripMarkers(pkg, thread);
-  if (next === null) return null;
-
   for (const [partName, nodeIds] of byPart) {
     const removed = removeFromPart(next, partName, nodeIds);
     if (removed === null) return null;
     next = removed;
   }
 
-  // Thread state and `commentsIds.xml` are both keyed by `w14:paraId`, so one pass clears
-  // both: an entry naming a paragraph the package no longer holds is a dangling record Word
-  // has no comment to attach it to.
-  const doomedByPart = new Map<string, string[]>();
-  for (const part of next.parts.values()) {
-    if (!part.name.endsWith('.xml')) continue;
-    const doomed: string[] = [];
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (node.kind === 'textValue' || depth > 64) return;
-      const keyed =
-        (node.namespaceUri === W15_NAMESPACE_URI && node.localName === 'commentEx') ||
-        (node.namespaceUri === W16CID_NAMESPACE_URI && node.localName === 'commentId');
-      if (keyed) {
-        const paraId =
-          attribute(node, W15_NAMESPACE_URI, 'paraId') ??
-          attribute(node, W16CID_NAMESPACE_URI, 'paraId');
-        if (paraId !== undefined && paraIds.has(paraId.toUpperCase())) doomed.push(node.id);
-        return;
-      }
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    visit(part.root, 0);
-    if (doomed.length > 0) doomedByPart.set(part.name, doomed);
+  return removeKeyedParaIdEntries(next, paraIds, owner, budget);
+}
+
+/**
+ * Delete a comment thread: that story's markers, and metadata no other story still names.
+ *
+ * `owner` names the story whose markers may be stripped. Omitted, it is the main document
+ * body — never every XML part. A header or note that reused the same `w:id` is a different
+ * remark; pass its part (and `noteId` when the story is one note) to delete that one.
+ *
+ * Returns the package unchanged when the id names no comment, and null when a removal was
+ * refused — a caller inside a transaction rolls back rather than committing a package whose
+ * comment is half gone.
+ */
+export function deleteCommentThread(
+  pkg: OoxmlPackage,
+  commentId: string,
+  owner?: CommentDeletionOwner
+): OoxmlPackage | null {
+  return applyThreadDeletion(pkg, commentId, owner ?? defaultOwner(pkg), createCommentScanBudget());
+}
+
+/**
+ * Delete a comment thread in one story: that story's markers, and metadata no other story
+ * still names.
+ */
+export function deleteCommentThreadInStory(
+  pkg: OoxmlPackage,
+  commentId: string,
+  owner: CommentDeletionOwner
+): OoxmlPackage | null {
+  return applyThreadDeletion(pkg, commentId, owner, createCommentScanBudget());
+}
+
+/** Test seam: inject a scan budget. Not re-exported from the package barrel. */
+export function deleteCommentThreadWithBudget(
+  pkg: OoxmlPackage,
+  commentId: string,
+  owner: CommentDeletionOwner | undefined,
+  budget: CommentScanBudget
+): OoxmlPackage | null {
+  return applyThreadDeletion(pkg, commentId, owner ?? defaultOwner(pkg), budget);
+}
+
+/**
+ * Delete one reply while preserving its parent, siblings and descendants.
+ *
+ * Descendants are reparented to the deleted reply's parent before its record is removed. Office's
+ * public reply model is flat, but foreign files can carry nested `w15:paraIdParent` or
+ * `w16cid:parentId` links; leaving either link pointed at a missing record would orphan comments
+ * this operation did not ask to delete.
+ *
+ * Marker stripping is scoped to `owner`. The record stays when another story still names the id;
+ * that path strips only this owner's markers and leaves parent links and metadata untouched.
+ * Every bounded scan required for the deletion runs first; truncation returns the original
+ * package so a remaining-marker overflow cannot commit a reparent or a stripped marker.
+ *
+ * Returns the package unchanged when either id no longer names a comment, and null when any
+ * rewrite is refused.
+ */
+export function deleteCommentReply(
+  pkg: OoxmlPackage,
+  commentId: string,
+  parentCommentId: string,
+  owner: CommentDeletionOwner
+): OoxmlPackage | null {
+  return deleteCommentReplyWithBudget(
+    pkg,
+    commentId,
+    parentCommentId,
+    owner,
+    createCommentScanBudget()
+  );
+}
+
+/** Test seam: inject a scan budget. Not re-exported from the package barrel. */
+export function deleteCommentReplyWithBudget(
+  pkg: OoxmlPackage,
+  commentId: string,
+  parentCommentId: string,
+  owner: CommentDeletionOwner,
+  budget: CommentScanBudget
+): OoxmlPackage | null {
+  const records = recordsForOwner(pkg, owner, budget);
+  if (budget.truncated) return pkg;
+  const record = records.get(commentId);
+  const parent = records.get(parentCommentId);
+  if (!record || !parent || commentId === parentCommentId) return pkg;
+
+  const part = pkg.parts.get(owner.storyPartName);
+  const root = storyRootOf(pkg, owner);
+  let hits: MarkerHits = { doomed: [], emptiedRuns: [], truncated: false };
+  if (part && root) {
+    if (!chargePart(budget)) return pkg;
+    hits = collectOwnerMarkers(root, new Set([commentId]), budget);
+    if (hits.truncated) return pkg;
   }
-  for (const [partName, nodeIds] of doomedByPart) {
+
+  const remaining = idsStillMarked(
+    pkg,
+    new Set([commentId]),
+    commentsPartNameForStory(pkg, owner.storyPartName),
+    budget,
+    root
+  );
+  if (remaining.truncated) return pkg;
+
+  const keepRecord = remaining.marked.has(commentId);
+  if (keepRecord) {
+    if (!part || (hits.doomed.length === 0 && hits.emptiedRuns.length === 0)) return pkg;
+    return removeFromPart(pkg, part.name, [...hits.emptiedRuns, ...hits.doomed]);
+  }
+
+  const replyParaId = paraIdOf(record.node);
+  const parentParaId = paraIdOf(parent.node);
+  const childRecordUpdates = new Map<string, Map<string, string>>();
+  for (const candidate of records.values()) {
+    if (attribute(candidate.node, W16CID_NAMESPACE_URI, 'parentId') !== commentId) continue;
+    let updates = childRecordUpdates.get(candidate.partName);
+    if (!updates) {
+      updates = new Map();
+      childRecordUpdates.set(candidate.partName, updates);
+    }
+    updates.set(candidate.node.id, parentCommentId);
+  }
+
+  const extendedUpdates = new Map<string, Map<string, string>>();
+  if (replyParaId !== null && parentParaId !== null) {
+    const meta = ownerMetadataParts(pkg, owner);
+    for (const entry of keyedMetadataIn(pkg, [meta.extended], budget)) {
+      const linked = attribute(entry.node, W15_NAMESPACE_URI, 'paraIdParent');
+      if (linked?.toUpperCase() !== replyParaId) continue;
+      let updates = extendedUpdates.get(entry.partName);
+      if (!updates) {
+        updates = new Map();
+        extendedUpdates.set(entry.partName, updates);
+      }
+      updates.set(entry.node.id, parentParaId);
+    }
+    if (budget.truncated) return pkg;
+  }
+
+  const doomedMeta = new Map<string, string[]>();
+  if (replyParaId !== null) {
+    const meta = ownerMetadataParts(pkg, owner);
+    for (const entry of keyedMetadataIn(pkg, [meta.extended, meta.ids], budget)) {
+      const paraId =
+        attribute(entry.node, W15_NAMESPACE_URI, 'paraId') ??
+        attribute(entry.node, W16CID_NAMESPACE_URI, 'paraId');
+      if (paraId === undefined || paraId.toUpperCase() !== replyParaId) continue;
+      const bucket = doomedMeta.get(entry.partName);
+      if (bucket) bucket.push(entry.node.id);
+      else doomedMeta.set(entry.partName, [entry.node.id]);
+    }
+    if (budget.truncated) return pkg;
+  }
+
+  let next = pkg;
+  for (const [partName, updates] of childRecordUpdates) {
+    const replaced = replaceAttributeValues(
+      next,
+      partName,
+      updates,
+      W16CID_NAMESPACE_URI,
+      'parentId'
+    );
+    if (replaced === null) return null;
+    next = replaced;
+  }
+  for (const [partName, updates] of extendedUpdates) {
+    const replaced = replaceAttributeValues(
+      next,
+      partName,
+      updates,
+      W15_NAMESPACE_URI,
+      'paraIdParent'
+    );
+    if (replaced === null) return null;
+    next = replaced;
+  }
+  if (part && (hits.doomed.length > 0 || hits.emptiedRuns.length > 0)) {
+    const stripped = removeFromPart(next, part.name, [...hits.emptiedRuns, ...hits.doomed]);
+    if (stripped === null) return null;
+    next = stripped;
+  }
+  const withoutRecord = removeFromPart(next, record.partName, [record.node.id]);
+  if (withoutRecord === null) return null;
+  next = withoutRecord;
+  for (const [partName, nodeIds] of doomedMeta) {
     const removed = removeFromPart(next, partName, nodeIds);
     if (removed === null) return null;
     next = removed;
   }
-
   return next;
 }
 
 /**
- * Delete every comment the edit between `before` and `after` emptied.
+ * Delete every comment the edit between `before` and `after` emptied in `owner`'s story.
  *
- * The shape `cascadeDeletedNoteReferences` established: a before/after diff rather than a rule
- * inside each op, because the ops that can empty a range are several (`deleteText`,
- * `deleteBlock`, a row deletion, accepting a tracked deletion) and a rule written into each one
- * drifts.
+ * `owner` omitted is the main document body, matching {@link deleteCommentThread}.
  *
- * THE TEST, exactly. A comment dies when the words it covered are gone and nothing still
- * places it: either every marker naming it went with them, or its markers are all still there
- * with no characters left between them. What it deliberately does NOT do is read "no usable
- * range" as "emptied" — a comment whose `w:commentRangeStart` was carried off by a deleted
- * block still has its reference and its end, and Word keeps it, because the reference is the
- * element that anchors a comment. Reaping there deleted a remark whose text was still on
- * screen, which is the one mistake worse than leaving a stale card.
- *
- * SKIPS rather than refuses when the package is too large to scan. Returning null there made
- * `transact` roll the edit back, so on a package past the part cap every keystroke in a
- * commented paragraph was silently refused and the document read as frozen. A skipped reap
- * leaves a stale card — recoverable, visible, and the behaviour before any of this existed.
- * Null is reserved for a removal that actually failed, which the caller must roll back.
+ * THE TEST, exactly, and per story. A comment dies when the words it covered in that story are
+ * gone and nothing in that story still places it. A neighbour that reused the same `w:id` is
+ * judged under its own owner. Notes that vanished (reference cascade) are reaped as their own
+ * stories so a unique id still loses its `comments.xml` body. Remaining-marker overflow
+ * preserves comments/commentEx/commentId metadata rather than deleting records the scan could
+ * not prove unused. Null is reserved for a removal that actually failed.
  */
 export function cascadeEmptiedComments(
   before: OoxmlPackage,
-  after: OoxmlPackage
+  after: OoxmlPackage,
+  owner?: CommentDeletionOwner
 ): OoxmlPackage | null {
-  const statesBefore = anchorStates(before);
-  const statesAfter = anchorStates(after);
-  if (statesBefore === null || statesAfter === null) return after;
-
-  let next = after;
-  for (const [commentId, was] of statesBefore) {
-    if (!was.covering) continue;
-    const now = statesAfter.get(commentId);
-    // Nothing names it any more, or its markers still pair and cover nothing. Anything else —
-    // a surviving reference, a start carried off leaving an unpaired end — is a comment the
-    // edit did not empty, whatever else it did to the range.
-    const gone = now === undefined || !now.anyMarker;
-    if (!gone && !(now.paired && !now.covering)) continue;
-    const reaped = deleteCommentThread(next, commentId);
-    if (reaped === null) return null;
-    next = reaped;
-  }
-  return next;
+  return cascadeEmptiedCommentsWithBudget(before, after, owner, createCommentScanBudget());
 }
 
-/** Whether the package holds any comment record at all — the cheap gate before a reap. */
-export function hasAnyComment(pkg: OoxmlPackage): boolean {
-  for (const part of pkg.parts.values()) {
-    if (!part.name.endsWith('.xml')) continue;
-    let found = false;
-    const visit = (node: OoxmlNode, depth: number): void => {
-      if (found || node.kind === 'textValue' || depth > 64) return;
-      if (node.kind === 'comment') {
-        found = true;
-        return;
-      }
-      for (const child of node.children) visit(child, depth + 1);
-    };
-    visit(part.root, 0);
-    if (found) return true;
+/** Test seam: inject a scan budget. Not re-exported from the package barrel. */
+export function cascadeEmptiedCommentsWithBudget(
+  before: OoxmlPackage,
+  after: OoxmlPackage,
+  owner: CommentDeletionOwner | undefined,
+  budget: CommentScanBudget
+): OoxmlPackage | null {
+  const scan = budget;
+  const resolved = owner ?? defaultOwner(before);
+  const owners = [...expandOwners(before, resolved, scan)];
+  if (scan.truncated) return after;
+  for (const vanished of vanishedNoteOwners(before, after, scan)) {
+    if (scan.truncated) return after;
+    if (
+      owners.some(
+        (item) => item.storyPartName === vanished.storyPartName && item.noteId === vanished.noteId
+      )
+    ) {
+      continue;
+    }
+    owners.push(vanished);
   }
-  return false;
+
+  let next = after;
+  const pending: { owner: CommentDeletionOwner; commentId: string }[] = [];
+  for (const item of owners) {
+    if (scan.truncated) return after;
+    const statesBefore = anchorStates(before, item, scan);
+    const statesAfter = anchorStates(next, item, scan);
+    if (statesBefore === null || statesAfter === null) return after;
+    for (const [commentId, was] of statesBefore) {
+      if (!was.covering) continue;
+      const now = statesAfter.get(commentId);
+      const gone = now === undefined || !now.anyMarker;
+      if (!gone && !(now.paired && !now.covering)) continue;
+      pending.push({ owner: item, commentId });
+    }
+  }
+
+  // Strip every owning story first, then one remaining-marker scan per comments part, so a
+  // notes-part reap does not walk the package once per note.
+  const threads: { owner: CommentDeletionOwner; ids: Set<string> }[] = [];
+  for (const item of pending) {
+    if (scan.truncated) return after;
+    const ids = threadOf(next, item.commentId, item.owner, scan);
+    if (scan.truncated) return after;
+    const stripped = stripMarkers(next, ids, item.owner, scan);
+    if (stripped === null) return null;
+    if (stripped.truncated) return after;
+    next = stripped.pkg;
+    threads.push({ owner: item.owner, ids });
+  }
+
+  const grouped = new Map<string | null, Set<string>>();
+  for (const item of threads) {
+    const commentsPart = commentsPartNameForStory(next, item.owner.storyPartName);
+    let ids = grouped.get(commentsPart);
+    if (!ids) {
+      ids = new Set();
+      grouped.set(commentsPart, ids);
+    }
+    for (const id of item.ids) ids.add(id);
+  }
+  const keepByPart = new Map<string | null, ReadonlySet<string>>();
+  for (const [commentsPart, ids] of grouped) {
+    const remaining = idsStillMarked(next, ids, commentsPart, scan);
+    keepByPart.set(commentsPart, remaining.truncated ? ids : remaining.marked);
+  }
+
+  for (const item of threads) {
+    const commentsPart = commentsPartNameForStory(next, item.owner.storyPartName);
+    const keep = keepByPart.get(commentsPart) ?? item.ids;
+    const doomedIds = new Set([...item.ids].filter((id) => !keep.has(id)));
+    if (doomedIds.size === 0) continue;
+    const records = recordsForOwner(next, item.owner, scan);
+    const paraIds = new Set<string>();
+    const byPart = new Map<string, string[]>();
+    for (const id of doomedIds) {
+      const record = records.get(id);
+      if (!record) continue;
+      const paraId = paraIdOf(record.node);
+      if (paraId !== null) paraIds.add(paraId);
+      const bucket = byPart.get(record.partName);
+      if (bucket) bucket.push(record.node.id);
+      else byPart.set(record.partName, [record.node.id]);
+    }
+    for (const [partName, nodeIds] of byPart) {
+      const removed = removeFromPart(next, partName, nodeIds);
+      if (removed === null) return null;
+      next = removed;
+    }
+    const cleaned = removeKeyedParaIdEntries(next, paraIds, item.owner, scan);
+    if (cleaned === null) return null;
+    next = cleaned;
+  }
+  return next;
 }

@@ -1,5 +1,41 @@
 # @docx-editor.dev/editor-api
 
+## 2.2.1
+
+### Patch Changes
+
+- Updated dependencies [35f6d04]
+  - @docx-editor.dev/core@2.2.1
+
+## 2.2.0
+
+### Patch Changes
+
+- Updated dependencies [3096225]
+- Updated dependencies [9c25492]
+- Updated dependencies [04c2379]
+- Updated dependencies [f0e4ab9]
+  - @docx-editor.dev/core@2.2.0
+
+## 2.1.3
+
+### Patch Changes
+
+- b96f21b: `InvalidObjectPath` now says which of the two states it means: an object an item accessor answered becomes usable after the next `await context.sync()`, while a released object needs `context.trackedObjects.add(...)`. The message previously described only the released case.
+  - @docx-editor.dev/core@2.1.3
+
+## 2.1.2
+
+### Patch Changes
+
+- Updated dependencies [efd3d76]
+- Updated dependencies [69a97f3]
+- Updated dependencies [ede69f6]
+- Updated dependencies [802ab3e]
+- Updated dependencies [4fa91bd]
+- Updated dependencies [4fa91bd]
+  - @docx-editor.dev/core@2.1.2
+
 ## 2.1.1
 
 ### Patch Changes

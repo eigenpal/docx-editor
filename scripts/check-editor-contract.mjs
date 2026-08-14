@@ -29,14 +29,23 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // M6V.1 chrome props, React-only until 10V.1 ports the chrome to Vue.
   //
   // These are NOT idiomatic-framework divergences like the three above — they are a
-  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all five
+  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all six
   // entries; a divergence with no closing task is how a gate quietly stops meaning
   // anything.
   't',
+  // The catalogue that same chrome resolves through, published as a provider around the
+  // packaged frame. Vue has `provideLocale` already; what it lacks is chrome to language,
+  // so this closes with `t` at 10V.1.
+  'i18n',
   'chrome',
   'title',
   'onTitleChange',
   'onSave',
+  // Same gap, same closing task: the ruler chrome is part of the React frame,
+  // and Vue has no ruler slot yet, so there is no toggle for it to expose. The
+  // ENGINE half is shared — page setup, zoom and the margin/indent commands all
+  // come from core — so this is the chrome, not the capability.
+  'rulers',
   // The link popover is part of the provider/hooks layer, which landed React-first: it is
   // a context-backed hook plus a compound over it, and its Vue twin is the composable form
   // that lands with the rest of that layer. The ENGINE half is already shared — typed
@@ -69,6 +78,15 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   // non-primary buttons so a right-click reaches a menu with the selection intact. The Vue
   // twin is a panel and a placement rule. Removed when the Vue provider/hooks twin lands.
   'contextMenu',
+  // Where the display scale comes from: a fixed number, or a fit the engine keeps tracking.
+  // This is the shallowest gap of the lot — the fit runs in the ENGINE, `'auto'` is
+  // `createDocxEditor`'s default, and `getZoomMode`/`setZoomMode`/`snapshot().zoomMode` are
+  // contract members Vue already reaches through the facade. A Vue host has fit-to-viewport
+  // zoom today and can change the mode; what it cannot do is declare it as a prop. Removed
+  // when the Vue prop surface catches up (the adapter change is a prop, a spread and a
+  // watcher), and blocked on nothing but that: `docs/api/docx-editor-vue` is frozen while
+  // the package is `disconnected`, so the parity contract cannot see a Vue prop added today.
+  'zoomMode',
 ]);
 
 function extractInterfaceBody(source, name) {

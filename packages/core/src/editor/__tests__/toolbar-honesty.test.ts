@@ -198,6 +198,10 @@ describe('the snapshot reference moves whenever the document does', () => {
     // The cache is not simply disabled: a re-derivation that found nothing new must still
     // hand back the previous object, or every subscriber re-renders on every tick.
     const editor = mount(p('alpha'));
+    // Fixed first: the default mode is `auto`, and `setZoom` LEAVES a fit even when the
+    // number is the one the fit had landed on, which is a real state change and correctly
+    // moves the snapshot. What is being tested here is the no-op path.
+    editor.setZoomMode({ type: 'fixed' });
     const before = editor.snapshot();
     expect(editor.setZoom(1)).toEqual({ ok: true, changed: false });
     expect(editor.snapshot()).toBe(before);

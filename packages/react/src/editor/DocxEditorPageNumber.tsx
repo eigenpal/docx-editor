@@ -5,6 +5,7 @@ import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useNavigationViewportElement } from './navigation/navigation-layout';
 import { useEditorState } from './useEditorState';
+import { useScopeClassName } from './scope-context';
 
 const HIDE_DELAY_MS = 600;
 const selectTotalPages = (snapshot: EditorSnapshot): number => snapshot.page.total;
@@ -29,6 +30,7 @@ export interface DocxEditorPageNumberProps {
  * @public
  */
 export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberProps) {
+  const scopeClassName = useScopeClassName();
   const editor = useDocxEditor();
   const viewport = useNavigationViewportElement();
   const total = useEditorState(selectTotalPages);
@@ -63,7 +65,7 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
     : t('viewer.pageIndicator', { current, total });
   return (
     <div
-      className={`docx-editor docx-editor-shell__page-indicator-chip docx-editor__page-number${
+      className={`${scopeClassName}docx-editor-shell__page-indicator-chip docx-editor__page-number${
         className ? ` ${className}` : ''
       }`}
       style={style}

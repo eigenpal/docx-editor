@@ -14,9 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // and initials, and Word's own address comes from `people.xml`, a part this slice does not read.
 // `content` as a WRITABLE property would need a comment body rewrite, which no canonical operation
 // offers — a read-only `content` would be a different contract from upstream's, so the member is
-// omitted and the text is published as DocxEditor's own `text`. `delete` would have to remove the
-// markers and the record together, likewise unbacked. All three are recorded in
-// `compat/manifest.json`.
+// omitted and the text is published as DocxEditor's own `text`.
 //
 // A TRACKED CHANGE IS A DECISION THE ENGINE CAN MAKE. Structural revisions — a row, a cell, a
 // section, the table grid — are ones it refuses to resolve, so they are not answered as objects at
@@ -74,15 +72,61 @@ export type RevisionType =
   | 'ConflictInsert'
   | 'ConflictDelete';
 
+/** Days in `month` (1–12) for a Gregorian `year`, or 0 when the month is out of range. */
+function daysInGregorianMonth(year: number, month: number): number {
+  if (month < 1 || month > 12) return 0;
+  if (month === 2) {
+    const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    return leap ? 29 : 28;
+  }
+  return month === 4 || month === 6 || month === 9 || month === 11 ? 30 : 31;
+}
+
 /**
- * A stamp the file wrote, or `null` where it wrote none.
- *
- * Never invented: a comment with no `@w:date` is a comment nobody dated, and answering "now" would
- * put a time in a caller's report that is not in the document.
+ * File-authored xsd:dateTime with an absolute zone, or `null` when absent, invalid, or
+ * unrepresentable. Timezone-less values are valid xsd:dateTime but cannot become a JavaScript
+ * `Date` without inventing a zone; calendar rollovers and out-of-range offsets are refused.
  */
 function stamp(value: string): Date | null {
   if (value.length === 0) return null;
-  const at = new Date(value);
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/.exec(
+      value.trim()
+    );
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const maxDay = daysInGregorianMonth(year, month);
+  if (year === 0 || maxDay === 0 || day < 1 || day > maxDay) return null;
+
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  if (hour > 23 || minute > 59 || second > 59) return null;
+
+  const fraction = match[7];
+  const ms = fraction === undefined ? 0 : Number(fraction.padEnd(3, '0').slice(0, 3));
+  if (Number.isNaN(ms)) return null;
+
+  const iso =
+    `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.` +
+    `${String(ms).padStart(3, '0')}Z`;
+  const utcMs = Date.parse(iso);
+  if (Number.isNaN(utcMs)) return null;
+
+  const zone = match[8]!;
+  if (zone === 'Z') return new Date(utcMs);
+
+  const offsetHour = Number(zone.slice(1, 3));
+  const offsetMinute = Number(zone.slice(4, 6));
+  if (offsetMinute > 59 || offsetHour > 14 || (offsetHour === 14 && offsetMinute !== 0)) {
+    return null;
+  }
+
+  const sign = zone[0] === '+' ? 1 : -1;
+  const at = new Date(utcMs - sign * (offsetHour * 3_600_000 + offsetMinute * 60_000));
   return Number.isNaN(at.getTime()) ? null : at;
 }
 
@@ -104,9 +148,9 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
     return this.loadedProperty<string>('authorName');
   }
 
-  /** When it was written, or `null` where the file recorded no date. */
-  get creationDate(): Date {
-    return this.loadedProperty<Date>('creationDate');
+  /** When it was written, or `null` where the file recorded no valid date. */
+  get creationDate(): Date | null {
+    return this.loadedProperty<Date | null>('creationDate');
   }
 
   /** The document's own id for it (`w:id` in the comments part). */
@@ -123,6 +167,18 @@ abstract class CommentBase extends ModelObject implements PromisedItem {
    */
   get text(): string {
     return this.loadedProperty<string>('text');
+  }
+
+  /**
+   * Delete this comment object.
+   *
+   * On a top-level comment this removes the whole thread and its anchors. On a reply it removes
+   * only that reply, preserving the parent and siblings. Several deletes queued before one
+   * `sync()` commit atomically as one undo unit.
+   */
+  delete(): void {
+    const comment = this.commentHandle();
+    this.command('delete', () => ({ op: 'deleteComment', comment }));
   }
 
   protected loadCommentFields(request: ResolvedLoadOptions, extra: readonly string[]): void {
@@ -252,10 +308,10 @@ export class CommentReplyCollection extends HandleCollection<CommentReply> {
  * assigning `resolved` marks this comment and everything answering it, which is what Word's own
  * pane does.
  *
- * `authorEmail`, a writable `content`, and `delete` are absent: `CT_Comment` records only an
- * author and initials (Word's addresses live in `people.xml`, which this API does not read), and
- * neither a body rewrite nor a marker-pair removal is an operation the canonical write path
- * offers. The comment's text is published as `text`.
+ * `authorEmail` and a writable `content` are absent: `CT_Comment` records only an author and
+ * initials (Word's addresses live in `people.xml`, which this API does not read), and a body
+ * rewrite is not an operation the canonical write path offers. The comment's text is published
+ * as `text`.
  *
  * @public
  */
@@ -449,9 +505,9 @@ export class Revision extends ModelObject implements PromisedItem {
     return this.loadedProperty<string>('author');
   }
 
-  /** When they proposed it, or `null` where the file recorded no date. */
-  get date(): Date {
-    return this.loadedProperty<Date>('date');
+  /** When they proposed it, or `null` where the file recorded no valid date. */
+  get date(): Date | null {
+    return this.loadedProperty<Date | null>('date');
   }
 
   /** What kind of change it is, by Word's own name for it. */

@@ -66,6 +66,7 @@ import {
 } from '../layout/index.ts';
 import type {
   DocumentEditingMode,
+  ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
   ReviewRevisionKind,
@@ -183,13 +184,13 @@ import {
 } from './embedded-font-faces.ts';
 import {
   mountPaginatedSurface,
-  setPaginatedSurfaceScale,
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
 } from './paginated-surface.ts';
 import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import { surfaceScroller } from './surface-pages.ts';
+import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -202,27 +203,6 @@ export type {
   FontMeasurementState,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
-
-/**
- * Points (the layout's unit) to content pixels at 96dpi (every geometry consumer's unit).
- *
- * The engine lays out in points — twips / 20 — and paints at `zoom * 96/72`. This is that
- * same 96/72, applied once, where layout geometry crosses into the public contract.
- */
-function toContentPixels(box: { x: number; y: number; width: number; height: number }): {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-} {
-  const scale = 96 / 72;
-  return {
-    x: box.x * scale,
-    y: box.y * scale,
-    width: box.width * scale,
-    height: box.height * scale,
-  };
-}
 
 /** The one frozen scope object every snapshot shares, so scope stays reference-equal. */
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
@@ -298,13 +278,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
   const mode = config.mode ?? 'edit';
-  let zoom =
-    config.zoom !== undefined &&
-    Number.isFinite(config.zoom) &&
-    config.zoom >= 0.1 &&
-    config.zoom <= 5
-      ? config.zoom
-      : 1;
 
   let surface: PaginatedSurface | null = null;
   let parseError: string | null = null;
@@ -483,8 +456,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     mountGeneration += 1;
   }
 
-  /** Points to CSS pixels: zoom 1 paints at the browser's 96dpi reading of a 72dpi point. */
-  const scaleOf = (): number => zoom * (96 / 72);
+  // The scale, the mode, and the fit that keeps them agreeing. Callbacks rather than values,
+  // because both are replaced under it — a load rebuilds the surface, `attach` replaces the
+  // container — and a lane handed either directly would go on rescaling the previous one.
+  const zoomLane = createZoomLane(config, {
+    container: () => container,
+    surface: () => surface,
+    bump,
+    emitSelectionChange,
+  });
+  const scaleOf = (): number => zoomLane.scale();
 
   function mountBytes(bytes: Uint8Array): void {
     if (!container) {
@@ -618,10 +599,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         deleted: change.deleted,
         dirty: change.dirty,
       };
+      // A commit can move a fit's numerator: `setPageSetup` directly, and undo by both of its
+      // routes (the keymap's `surface.undo()` and `exec`), neither of which passes a command
+      // hook. Guarded on the authored page width, so a keystroke pays one comparison.
+      zoomLane.refitIfPageResized();
       // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
       bump();
       emitDocumentChange(documentChange);
     });
+    // The page's size is only knowable now — it comes from this document's section properties
+    // — so a fit mode resolves here. Synchronous on purpose: it lands in the same task as the
+    // mount, so the browser paints once at the fitted scale rather than painting 100% and
+    // correcting on the next frame.
+    //
+    // AFTER the subscription above, because a fit that moves the scale EMITS, and a host
+    // handler that throws from that emit would otherwise abort this function with the surface
+    // assigned but `unsubscribeSession` unset — an editor that types but never re-renders.
+    zoomLane.attach();
     // The document arrived: an external store subscribed to `change`/`selectionChange`
     // must learn about it, exactly as it learns about any later commit. Without these a
     // store bound before `load()` never re-reads and keeps rendering "no document".
@@ -684,9 +678,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // mount, so the document opens on the fixed measurer immediately, and when the shaped
   // measurer arrives the surface is remounted FROM THE CURRENT TREE — `session.save()` —
   // so every edit made before fonts resolved survives. What does not survive is the undo
-  // stack and the caret, the honest cost of a full remount; a rescale-in-place path on
-  // the surface would remove it. In the not-yet-attached case there is nothing to
-  // remount: the measurer is simply picked up by the next mount.
+  // stack; the semantic selection is restored after the shaped surface mounts so an
+  // `onReady` selection does not disappear as fonts settle. In the not-yet-attached case
+  // there is nothing to remount: the measurer is simply picked up by the next mount.
   //
   // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
   // with a typed report and the remaining faces admit; a wholly failed resolution leaves
@@ -919,6 +913,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // a mount that throws must leave a recoverable editor, not an empty container
         // with the document gone. Font fidelity is never worth losing the document.
         const saved = surface.session.save();
+        // Selection is facade state just like the live tree. In particular, `onReady` can
+        // set and reveal a range while embedded fonts are still resolving; keeping only the
+        // scroller's offset made that first call travel to the right text and then lose its
+        // highlight when this remount replaced the surface.
+        const savedSelection = surface.state().selection;
         // A remount replaces the whole subtree, so focus lands on `document.body` — the
         // user typing while fonts resolved would silently stop being able to type.
         // Restore it when the OLD surface had it; never steal it otherwise.
@@ -929,7 +928,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           container.contains(document.activeElement);
         try {
           mountBytes(saved);
-          if (hadFocus) surface?.focus();
         } catch (remountError) {
           shapedMeasurer = undefined;
           shapedProducer = undefined;
@@ -939,6 +937,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           }
           reportFontError(toEditorFontError(remountError));
         }
+        if (hadFocus) surface?.focus();
+        surface?.setSelection(savedSelection);
       } else bump();
     } catch (error) {
       if (destroyed || seq !== loadSeq) return;
@@ -986,7 +986,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         surface.session.editable &&
         mode !== 'view' &&
         editingMode !== 'viewing',
-      zoom,
+      zoom: zoomLane.zoom(),
+      zoomMode: zoomLane.mode(),
       selection: selectionRangeOf(surface),
       // Whether the selection is a CARET rather than a range.
       //
@@ -1795,6 +1796,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         pendingBytes = surface.session.save();
         teardownSurface();
       }
+      // BEFORE the container moves, unconditionally. The observer is on a scroller found
+      // through the OLD container, and only the successful-mount path below re-targets it: a
+      // load that failed to parse leaves no surface and no pending bytes, so attaching to a
+      // new element took the `else bump()` branch and left the observer watching an element
+      // this editor no longer uses — and holding it alive if the host dropped it.
+      zoomLane.detach();
       container = el;
       // A probe answers for one document's font set; the new container may live in a
       // different one (an iframe host), so it re-creates on the next derivation.
@@ -1808,6 +1815,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     detach() {
       if (destroyed) return;
+      // Before the container goes: the observer is on an element found THROUGH it, and one
+      // left running would keep re-fitting a document that is no longer mounted.
+      zoomLane.detach();
       if (surface) {
         pendingBytes = surface.session.save();
         teardownSurface();
@@ -2182,8 +2192,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getSelectionPlacement: () => selectionPlacement(),
 
-    getRenderScale: () => scaleOf(),
-
     isReviewPaneOpen: () => reviewPaneOpen,
 
     getEditingMode: () => editingMode,
@@ -2191,7 +2199,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getReviewRevision: () => reviewRevision(),
 
-    setActiveReviewItem(key: string | null): ExecResult {
+    setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult {
       // Dismissing is the only thing a key of `null` can mean here: the caret decides which
       // card is open, and a card the reader closed stays closed until the caret next moves.
       if (key === null) {
@@ -2285,11 +2293,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         lastReviewSelection = { key, from: span.start, to: span.end };
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.
-        // `centerIfNeeded`, not `nearest`: opening a card the reader can already see must
-        // not yank the page, but a card 20 pages away scrolled the MINIMUM distance parked
-        // the change flush against the bottom edge — the reader arrived looking at the last
-        // line of the window rather than at the edit they had just asked to see.
-        surface.revealPosition?.(span.start, { block: 'centerIfNeeded' });
+        // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
+        // see must not yank the page, but a card 20 pages away scrolled the MINIMUM distance
+        // parked the change flush against the bottom edge — the reader arrived looking at the
+        // last line of the window rather than at the edit they had just asked to see. A host
+        // whose own list drives the scroll passes `reveal: false` and gets the selection
+        // without the engine competing for the viewport.
+        const reveal = options?.reveal ?? 'centerIfNeeded';
+        if (reveal !== false) surface.revealPosition?.(span.start, { block: reveal });
       }
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —
@@ -2337,7 +2348,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (activeReviewKeyNow() === key) surface.dismissActiveReview();
       let deleted = false;
       surface.commitReviewOps(() => {
-        deleted = surface!.session.deleteComment(item.id);
+        const note = noteHomeOf(item);
+        const parsed = note === null ? null : parseNoteScopeId(note);
+        deleted = surface!.session.deleteComment(
+          item.id,
+          storyScopeOfReviewItem(item),
+          parsed?.noteId
+        );
         return { committed: deleted };
       });
       if (!deleted) {
@@ -2479,60 +2496,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface?.revealParagraph(blockId) ?? false;
     },
 
-    getZoom: () => zoom,
-    setZoom(next: number): ExecResult {
-      // Refused rather than clamped: a caller that asked for
-      // 0 or NaN has a bug, and silently substituting 1 hides it.
-      if (!Number.isFinite(next) || next < 0.1 || next > 5) {
-        return {
-          ok: false,
-          code: 'invalidArgs',
-          reason: `zoom must be between 0.1 and 5, got ${next}`,
-        };
-      }
-      if (next === zoom) return { ok: true, changed: false };
-      if (surface && !setPaginatedSurfaceScale(surface, next * (96 / 72))) {
-        return {
-          ok: false,
-          code: 'unsupported',
-          reason: `the mounted surface could not apply zoom ${next}`,
-        };
-      }
-      zoom = next;
-      // Zoom is snapshot state: bump and tell subscribers, with the fresh snapshot on the
-      // selectionChange channel (the store listens to both channels either way).
-      bump();
-      emitSelectionChange();
-      return { ok: true, changed: true };
-    },
-
-    /**
-     * Page boxes from the LAYOUT, never from the DOM, in CONTENT PIXELS at 96dpi.
-     *
-     * The unit conversion is the load-bearing part. Layout works in POINTS (twips / 20), and
-     * the surface converts at paint with `scale = zoom * 96/72`; every consumer of this
-     * member works in content pixels — `ruler-ticks.ts` says so in its header and derives
-     * ticks from `PX_PER_INCH = 96`, and React's own ruler computes the same page width
-     * through `twipsToPixels`. Handing points straight out made a Letter page measure 612
-     * where the painted page is 816, so the Vue ruler drew a strip 25% short of its page and
-     * labelled 8.5 inches as six.
-     *
-     * ZOOM IS NOT APPLIED. These are content pixels at 100%; a caller that scales its own
-     * rendering multiplies by `getZoom()`, which is what both rulers already do.
-     *
-     * `layout()` flushes any pending commit first, so a caller measuring straight after an
-     * edit reads the geometry that edit produced rather than the one before it. Virtualized
-     * pages are included: a page with no element yet still has a box, and that is usually
-     * the page a caller is asking about.
-     */
-    getPageGeometry: () =>
-      surface
-        ? surface.layout().pages.map((page) => ({
-            index: page.index,
-            box: toContentPixels(page.box),
-            contentBox: toContentPixels(page.contentBox),
-          }))
-        : [],
+    ...zoomFacadeMembers(zoomLane, () => surface),
 
     relayout(options?: { sync?: boolean }) {
       // `layout()` flushes any commit the scheduler has not published yet; the surface
@@ -2564,6 +2528,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     destroy() {
       destroyed = true;
+      zoomLane.detach();
       disposeEmbeddedFaces();
       teardownSurface();
       container = null;

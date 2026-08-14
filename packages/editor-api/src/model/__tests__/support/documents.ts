@@ -66,6 +66,8 @@ const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relati
 const HEADER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FOOTER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
 const NOTES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
+const ENDNOTES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes';
+const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 const OFFICE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 /**
@@ -116,6 +118,138 @@ export const WITH_FURNITURE: Uint8Array = zipSync({
       '</w:footnotes>'
   ),
 });
+
+/** Footnotes and endnotes covering empty, multi-paragraph, tab, break and untrusted text reads. */
+export const WITH_NOTE_TEXT_CASES: Uint8Array = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+      '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rId9" Type="${NOTES_REL}" Target="footnotes.xml"/>` +
+      `<Relationship Id="rId10" Type="${ENDNOTES_REL}" Target="endnotes.xml"/>` +
+      '</Relationships>'
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p>` +
+      '<w:r><w:footnoteReference w:id="2"/></w:r>' +
+      '<w:r><w:footnoteReference w:id="3"/></w:r>' +
+      '<w:r><w:endnoteReference w:id="4"/></w:r>' +
+      '</w:p></w:body></w:document>'
+  ),
+  'word/footnotes.xml': strToU8(
+    `<w:footnotes xmlns:w="${W}">` +
+      '<w:footnote w:id="2"><w:p/></w:footnote>' +
+      '<w:footnote w:id="3">' +
+      '<w:p><w:r><w:t>first</w:t><w:tab/><w:t>&lt;unsafe&gt;</w:t><w:br/><w:t>line</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>second</w:t></w:r></w:p>' +
+      '</w:footnote></w:footnotes>'
+  ),
+  'word/endnotes.xml': strToU8(
+    `<w:endnotes xmlns:w="${W}">` +
+      '<w:endnote w:id="4"><w:p><w:r><w:t>end note</w:t></w:r></w:p></w:endnote>' +
+      '</w:endnotes>'
+  ),
+});
+
+/** Valid, absent, and invalid file-authored dates on comments, replies, and revisions. */
+export const WITH_REVIEW_DATE_CASES: Uint8Array = (() => {
+  const comment = (id: string, parentId: string | undefined, date: string | undefined): string =>
+    `<w:comment w:id="${id}" w:author="Reviewer" w:initials="R"` +
+    (parentId === undefined ? '' : ` w16cid:parentId="${parentId}"`) +
+    (date === undefined ? '' : ` w:date="${date}"`) +
+    `><w:p><w:r><w:t>comment ${id}</w:t></w:r></w:p></w:comment>`;
+  const anchored = (id: string): string =>
+    `<w:p><w:commentRangeStart w:id="${id}"/><w:r><w:t>anchor ${id}</w:t></w:r>` +
+    `<w:commentRangeEnd w:id="${id}"/><w:r><w:commentReference w:id="${id}"/></w:r></w:p>`;
+  const revision = (id: string, date: string | undefined): string =>
+    `<w:p><w:ins w:id="${id}" w:author="Reviewer"` +
+    (date === undefined ? '' : ` w:date="${date}"`) +
+    `><w:r><w:t>revision ${id}</w:t></w:r></w:ins></w:p>`;
+
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdComments" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>` +
+        anchored('1') +
+        anchored('3') +
+        anchored('5') +
+        anchored('7') +
+        revision('11', '2026-03-01T10:00:00Z') +
+        revision('12', undefined) +
+        revision('13', 'not-a-date') +
+        revision('14', '2026-02-30T10:00:00Z') +
+        revision('15', '2026-04-01T10:00:00') +
+        revision('16', '2026-04-02') +
+        revision('17', '2026-03-01T10:00:00.123+05:30') +
+        revision('18', '2026-03-01T10:00:00+15:00') +
+        revision('19', '0099-01-01T00:00:00Z') +
+        '</w:body></w:document>'
+    ),
+    'word/comments.xml': strToU8(
+      `<w:comments xmlns:w="${W}" xmlns:w16cid="http://schemas.microsoft.com/office/word/2016/wordml/cid">` +
+        comment('1', undefined, '2026-01-01T10:00:00Z') +
+        comment('2', '1', '2026-01-02T10:00:00Z') +
+        comment('3', undefined, undefined) +
+        comment('4', '3', undefined) +
+        comment('5', undefined, 'not-a-date') +
+        comment('6', '5', 'also-not-a-date') +
+        comment('7', undefined, '2026-02-30T10:00:00Z') +
+        comment('8', '7', '2026-04-02') +
+        '</w:comments>'
+    ),
+  });
+})();
+
+/**
+ * Bookmarks in two stories, including a repeated name in the main story.
+ *
+ * `w:id` and bookmark names are story-scoped. Reusing both in the header is intentional: a
+ * story-owned accessor must neither flatten that bookmark into the main body nor confuse the two
+ * ranges.
+ */
+export const WITH_BOOKMARKED_STORIES: Uint8Array = (() => {
+  const parts = unzipSync(WITH_FURNITURE);
+  const main = strFromU8(parts['word/document.xml'] as Uint8Array).replace(
+    '<w:r><w:t>in the body</w:t></w:r>',
+    '<w:bookmarkStart w:id="1" w:name="First"/><w:r><w:t>first</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="1"/>' +
+      '<w:bookmarkStart w:id="2" w:name="Duplicate"/><w:r><w:t>kept</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="2"/>' +
+      '<w:bookmarkStart w:id="3" w:name="Duplicate"/><w:r><w:t>ignored</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="3"/>'
+  );
+  const header = strFromU8(parts['word/header1.xml'] as Uint8Array).replace(
+    '<w:r><w:t>in the header</w:t></w:r>',
+    '<w:bookmarkStart w:id="1" w:name="Duplicate"/><w:r><w:t>header</w:t></w:r>' +
+      '<w:bookmarkEnd w:id="1"/>'
+  );
+  return zipSync({
+    ...parts,
+    'word/document.xml': strToU8(main),
+    'word/header1.xml': strToU8(header),
+  });
+})();
 
 /**
  * A document awkward enough to compare two hosts over: a style cascade, a table with cell

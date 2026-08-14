@@ -49,6 +49,18 @@ import {
 } from './semantic-paint-drawings.ts';
 
 /**
+ * When a field's result is drawn on its grey block, following Word's own View option.
+ *
+ * `when-selected` is Word's default and the reason the option exists at all: a document dense
+ * with cross-references turns largely grey under `always`, and under `never` a reader cannot
+ * tell computed text from typed text at all.
+ */
+export type FieldShadingMode = 'never' | 'when-selected' | 'always';
+
+/** Word's default: shaded only while the caret is inside the field. */
+export const DEFAULT_FIELD_SHADING: FieldShadingMode = 'when-selected';
+
+/**
  * What the run painters need beyond the records: the pixel scale, and the optional
  * family-alias lookup that lets embedded fonts paint without their file-declared family
  * name entering the page-global CSS font namespace.
@@ -81,16 +93,28 @@ export interface PaintContext {
    * a live link there would be the one thing in the furniture that answers a gesture.
    */
   readonly inertLinks?: boolean;
-  /**
-   * Author to colour slot, by order of first appearance across the whole document.
-   *
-   * Resolved once per paint rather than per span: the order is a property of the document, and
-   * deriving it per page would give the same author different colours on different sheets.
-   */
   /** Localized drawing refusal labels (defaults to English fallbacks). */
   readonly drawingStrings?: DrawingPaintStrings;
   /** Host port for ready-image blob URLs; omitted means ready images paint as placeholders. */
   readonly imageUrlPort?: PaintImageUrlPort;
+  /**
+   * How field results are shaded, mirroring what Word draws.
+   *
+   * Word keeps two independent rules, and this is the one for ORDINARY fields (PAGE, REF, TOC):
+   * an application preference, defaulting to `when-selected`, that never reaches the file.
+   * LEGACY FORM FIELDS follow the document's own `w:doNotShadeFormData` instead, which is why
+   * {@link shadeFormFields} is separate — a form's blanks stay findable whatever this says.
+   *
+   * `when-selected` is finished in CSS off a class the surface toggles from the caret, never
+   * here: shading decided at paint time from a caret position would rebuild spans on every
+   * arrow key, and deciding it in layout would do far worse.
+   */
+  readonly fieldShading?: FieldShadingMode;
+  /**
+   * Whether legacy form fields (`w:ffData`) are shaded — the document's `w:doNotShadeFormData`,
+   * inverted at the read so this states what to DO rather than what to skip.
+   */
+  readonly shadeFormFields?: boolean;
 }
 
 /**
@@ -143,6 +167,10 @@ export interface PaintOptions {
   readonly fontAlias?: (family: string) => string | undefined;
   /** See {@link PaintContext.defaultFontFamily}. */
   readonly defaultFontFamily?: string;
+  /** See {@link PaintContext.fieldShading}. */
+  readonly fieldShading?: FieldShadingMode;
+  /** See {@link PaintContext.shadeFormFields}. */
+  readonly shadeFormFields?: boolean;
   /**
    * Relationship id of the header/footer story currently open for editing.
    *
@@ -727,6 +755,37 @@ function positioned(
  * the active-item highlight is set by attribute rather than by building a CSS rule out of an
  * id — comment and revision metadata are attacker-controlled.
  */
+/**
+ * The grey block Word draws behind a field's result.
+ *
+ * A view affordance, never document formatting: it says "this text was computed, not typed",
+ * and Word does not print it. So it lands as a CLASS, not as inline style — the stylesheet owns
+ * the colour and the `@media print` rule that drops it, and it must lose cleanly to a revision
+ * wash, which is inline and therefore outranks it. That ordering is the point: a deleted field
+ * has to read as deleted first and as a field second.
+ *
+ * `when-selected` is not resolved here. Paint has no caret, and giving it one would rebuild
+ * spans on every arrow key; the surface toggles `docx-field-atom--active` from the caret it
+ * already tracks, exactly as it does for the open review item.
+ */
+function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: PaintContext): void {
+  const field = span.fieldAtom;
+  if (!field) return;
+  // Marked whatever the mode, because the mode is a VIEW setting a host can flip without
+  // relaying out, and because the review surface and tests want to find fields regardless.
+  element.dataset.fieldAtom = field.formField ? 'form' : 'field';
+  const shaded = field.formField
+    ? ctx.shadeFormFields !== false
+    : (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) !== 'never';
+  if (!shaded) return;
+  element.classList.add('docx-field-atom');
+  // A form field is shaded outright; an ordinary field defers to the caret unless the host
+  // asked for `always`.
+  if (field.formField || (ctx.fieldShading ?? DEFAULT_FIELD_SHADING) === 'always') {
+    element.classList.add('docx-field-atom--shaded');
+  }
+}
+
 function applyRevisionPresentation(element: HTMLElement, span: StyleSpanRecord): void {
   // A tracked FORMAT change alters no characters, so it has no strike or underline of its own
   // to wear. It still has to be visible: the reader is looking at text whose appearance is
@@ -936,6 +995,7 @@ function paintSpan(
     element.contentEditable = 'false';
   }
   applyRunFaceStyle(element, span.style, ctx);
+  applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
@@ -1115,10 +1175,8 @@ function paintLine(
   element.style.overflow = 'visible';
 
   // Justified lines carry their slack in the gaps BETWEEN spans. Inline flow has no gaps,
-  // so the same slack is reapplied as word spacing rather than being silently dropped.
-  const gap = interSpanGap(line);
-  if (gap > 0) element.style.wordSpacing = `${gap * scale}px`;
-
+  // so each span receives its own published advance below. CSS `word-spacing` is not an
+  // equivalent: Chromium expands NBSPs too, moving painted glyphs away from layout geometry.
   // Per-run band heights, chosen so the browser's line-box math cannot move a glyph:
   // the tallest run's band is the glyph band (own height + space-above leading), and any
   // remaining line-box depth is padding-bottom — Word's auto/atLeast extras sit BELOW the
@@ -1203,11 +1261,13 @@ function paintLine(
     anchorLinkId = null;
   };
 
-  for (const span of line.spans) {
+  for (const [spanIndex, span] of line.spans.entries()) {
     appendDrawingAdvancesBefore(span.range.start);
     appendWrapAdvance(span);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = paintSpan(document, span, ctx, band, leading);
+    const gap = interSpanGapBefore(line, spanIndex);
+    if (gap > 0) painted.style.marginLeft = `${gap * scale}px`;
     const link = span.link;
     if (!link) {
       anchor = null;
@@ -1254,29 +1314,18 @@ function paintLine(
   return element;
 }
 
-/** The extra space layout put between word spans, beyond their own advances. */
-function interSpanGap(line: LineRecord): number {
-  if (line.spans.length < 2) return 0;
-  // Layout justifies only after expandable spaces, so many consecutive pairs (tab→word,
-  // run split without a space) have a zero gap. Averaging those zeros in diluted
-  // `word-spacing` below the real per-space step and every later glyph drifted left of
-  // its published box — caret mid-word included.
-  const gaps: number[] = [];
-  for (let index = 1; index < line.spans.length; index += 1) {
-    const previous = line.spans[index - 1]!;
-    const current = line.spans[index]!;
-    const drawingOccupiesGap = line.drawings?.some(
-      (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
-    );
-    if (drawingOccupiesGap) continue;
-    // A float's wrap zone is an obstacle the line stepped over, not slack to redistribute.
-    // Averaging it in turned the picture's whole width into word spacing on every space.
-    const gap =
-      current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
-    if (gap > 0.25) gaps.push(gap);
-  }
-  if (gaps.length === 0) return 0;
-  return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+/** The layout-published gap before one span, excluding separately painted advances. */
+function interSpanGapBefore(line: LineRecord, index: number): number {
+  if (index <= 0) return 0;
+  const previous = line.spans[index - 1]!;
+  const current = line.spans[index]!;
+  const drawingOccupiesGap = line.drawings?.some(
+    (drawing) => drawing.start >= previous.range.end && drawing.start < current.range.start
+  );
+  if (drawingOccupiesGap) return 0;
+  const gap =
+    current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
+  return gap > 0.25 ? gap : 0;
 }
 
 function paintFragment(
@@ -2385,6 +2434,8 @@ export function paintSemanticLayout(
       ? { emptyTocPlaceholderIds: options.emptyTocPlaceholderIds }
       : {}),
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
+    ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+    ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
