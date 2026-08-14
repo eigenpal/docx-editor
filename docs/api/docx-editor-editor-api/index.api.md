@@ -16,6 +16,7 @@ export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
 
 // @public
 class Body_2 extends ModelObject {
+    get bookmarks(): BookmarkCollection;
     clear(): void;
     get contentControls(): ContentControlCollection;
     get font(): Font;
@@ -186,6 +187,7 @@ export class ContentControl extends ModelObject implements PromisedItem {
     hydrateNull(): void;
     get id(): string;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range_2;
+    get isBound(): boolean;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
@@ -314,7 +316,14 @@ export type DocxEditorErrorCode =
 'PropertyNotLoaded'
 /** A `ClientResult` value was read before the sync that fills it. */
 | 'ValueNotLoaded'
-/** The object is no longer addressable: its run ended and it was not tracked. */
+/**
+* The object cannot be addressed, in either of the two ways that happens.
+*
+* NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
+* becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
+* is terminal. One code because from a consumer's side both are "this object cannot be used
+* here"; the message says which one, because the fix for one is not the fix for the other.
+*/
 | 'InvalidObjectPath'
 /** The object still belongs to a run that has not finished, so it cannot be handed over. */
 | 'ObjectInUse'
@@ -379,18 +388,18 @@ export interface DocxEditorServerRuntime extends DocxEditorRuntime {
 
 // @public
 export class Font extends ModelObject {
-    get bold(): boolean;
+    get bold(): boolean | null;
     set bold(value: boolean);
-    get color(): string;
+    get color(): string | null;
     set color(value: string);
-    get italic(): boolean;
+    get italic(): boolean | null;
     set italic(value: boolean);
-    get name(): string;
+    get name(): string | null;
     set name(value: string);
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, kind: SpanOwner): Font;
     protected onLoad(request: ResolvedLoadOptions): void;
-    get size(): number;
+    get size(): number | null;
     set size(value: number);
 }
 
@@ -471,6 +480,7 @@ export class NoteItem extends ModelObject implements PromisedItem {
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): NoteItem;
+    get text(): string;
     get type(): NoteItemType;
 }
 
@@ -595,6 +605,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     hydrateNull(): void;
     get hyperlink(): string;
     set hyperlink(value: string);
+    insertComment(commentText: string): Comment_2;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
     // @internal
@@ -656,7 +667,7 @@ export class Revision extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Revision;
     get author(): string;
-    get date(): Date;
+    get date(): Date | null;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
