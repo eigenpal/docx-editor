@@ -249,6 +249,21 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     deps.setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
   }
 
+  /**
+   * Whether the DOM caret is still the last value this surface wrote, while the model has
+   * already moved on.
+   *
+   * Deferred paint is the usual case: `commit` raises `modelMoved` and skips `mirrorToDom`
+   * until the input queue drains, so the browser keeps showing the PRE-edit caret. That
+   * leftover is not a user gesture. A click, drag or keyboard move that the browser has
+   * already applied will not match `lastMirroredSelection` and must still be adopted.
+   */
+  function isStaleMirroredCaret(): boolean {
+    if (!modelMoved || !lastMirroredSelection) return false;
+    const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
+    return reported !== null && selectionsEqual(reported, lastMirroredSelection);
+  }
+
   return {
     adoptBeforePaint() {
       // ADOPT BEFORE PAINTING.
@@ -315,6 +330,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       if (applyingSelection || composing) return;
       if (deps.isGesturing?.()) return;
       if (deps.holdsCellSelection?.()) return;
+      // Same window `onSelectionChange` guards: a deferred paint leaves the DOM caret at
+      // the last mirrored (pre-edit) offset. Adopting it here — so a click that has not
+      // yet produced `selectionchange` still edits the clicked point — would otherwise
+      // insert the next character at that stale offset and reorder a typing burst.
+      // A genuine gesture moves the DOM caret off `lastMirroredSelection` and still wins.
+      if (isStaleMirroredCaret()) return;
       adoptDomSelection();
     },
 
@@ -330,10 +351,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // A deferred paint leaves the DOM caret at its PRE-edit offset while the model already
       // holds the post-edit one. A late echo from an earlier mirror must not make that stale
       // DOM caret authoritative again; the pending paint will mirror the newer model value.
-      if (modelMoved && lastMirroredSelection) {
-        const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
-        if (reported && selectionsEqual(reported, lastMirroredSelection)) return;
-      }
+      if (isStaleMirroredCaret()) return;
       if (composing) return;
       if (deps.isGesturing?.()) return;
       if (deps.holdsCellSelection?.()) return;

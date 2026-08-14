@@ -560,6 +560,116 @@ describe('a render never discards a gesture the model has not adopted yet', () =
     }
   });
 
+  test('beforeinput does not re-adopt a stale DOM caret during deferred paint', async () => {
+    // THE PATH A KEYSTROKE ACTUALLY TAKES.
+    //
+    // `surface.type()` is not how a browser delivers characters: `beforeinput` first
+    // adopts the live DOM selection so a click that has not yet produced `selectionchange`
+    // still edits the clicked point. While paint is deferred that DOM caret is still the
+    // PRE-edit one, so adopting it between digits used to insert the next character at
+    // offset zero and reverse the burst.
+    const descriptor = Object.getOwnPropertyDescriptor(window.navigator, 'scheduling');
+    Object.defineProperty(window.navigator, 'scheduling', {
+      configurable: true,
+      value: { isInputPending: () => true },
+    });
+    const { surface, host, scroller } = mountScrolled();
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 0 },
+        head: { paragraphId: id, offset: 0 },
+      });
+      await Promise.resolve();
+      const pages = host.querySelector('.docx-pages');
+      if (!pages) throw new Error('pages layer missing');
+
+      for (const digit of '1234567890') {
+        pages.dispatchEvent(
+          new InputEvent('beforeinput', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertText',
+            data: digit,
+          })
+        );
+        // The browser also queues `selectionchange` after a caret write. During deferred
+        // paint there is no new write, but a late echo of the last one must not reset the
+        // model caret either — the ordered-type benchmark injects this on purpose.
+        document.dispatchEvent(new Event('selectionchange'));
+      }
+
+      expect(surface.session.bodyText().startsWith('1234567890')).toBe(true);
+      expect(surface.state().selection).toEqual({
+        anchor: { paragraphId: id, offset: 10 },
+        head: { paragraphId: id, offset: 10 },
+      });
+    } finally {
+      surface.destroy();
+      host.remove();
+      scroller.remove();
+      if (descriptor) Object.defineProperty(window.navigator, 'scheduling', descriptor);
+      else delete (window.navigator as Navigator & { scheduling?: unknown }).scheduling;
+    }
+  });
+
+  test('a click during deferred paint still wins the next beforeinput', async () => {
+    // The stale-caret guard must not swallow a genuine gesture. Paint is deferred after
+    // the first character, the user clicks later in the still-painted text, and the next
+    // keystroke has to land there rather than after the unpainted insert.
+    const descriptor = Object.getOwnPropertyDescriptor(window.navigator, 'scheduling');
+    Object.defineProperty(window.navigator, 'scheduling', {
+      configurable: true,
+      value: { isInputPending: () => true },
+    });
+    const { surface, host, scroller } = mountScrolled();
+    try {
+      const id = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 0 },
+        head: { paragraphId: id, offset: 0 },
+      });
+      await Promise.resolve();
+      const pages = host.querySelector('.docx-pages');
+      if (!pages) throw new Error('pages layer missing');
+      pages.dispatchEvent(
+        new InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: '1',
+        })
+      );
+      expect(surface.state().selection.head.offset).toBe(1);
+
+      const run = host.querySelector('.docx-page[data-page-index="0"] [data-start]')!;
+      const text = textNodeIn(run);
+      const selection = document.getSelection()!;
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.setStart(text, 4);
+      range.setEnd(text, 4);
+      selection.addRange(range);
+
+      pages.dispatchEvent(
+        new InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: 'Y',
+        })
+      );
+      expect(surface.state().selection.head.offset).toBe(5);
+      expect(surface.session.bodyText().slice(4, 5)).toBe('Y');
+    } finally {
+      surface.destroy();
+      host.remove();
+      scroller.remove();
+      if (descriptor) Object.defineProperty(window.navigator, 'scheduling', descriptor);
+      else delete (window.navigator as Navigator & { scheduling?: unknown }).scheduling;
+    }
+  });
+
   test('an undo with nothing to undo does not disarm the next repaint', async () => {
     // THE FLAG THAT STAYS RAISED.
     //

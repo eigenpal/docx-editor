@@ -56,6 +56,8 @@ export function assertBurstDocumentState(report: BurstReport): void {
 
   if (report.name === 'editing-ordered-type') {
     const inserted = report.orderedText!;
+    const actualInserted = after.slice(start, start + inserted.length);
+    expect(actualInserted).toBe(inserted);
     expect(after).toBe(`${before.slice(0, start)}${inserted}${before.slice(start)}`);
     expect(report.finalSelection?.head).toEqual({
       paragraphId: report.initialSelection.paragraphId,
