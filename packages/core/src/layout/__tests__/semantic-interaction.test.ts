@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
-import { type PageGeometry } from '../semantic-records.ts';
+import { type PageGeometry, type TextMeasurer } from '../semantic-records.ts';
 import {
   caretAt,
   caretStops,
@@ -238,6 +238,24 @@ describe('keyboard navigation', () => {
   test('left and right walk one stop at a time', () => {
     expect(moveCaret(layout, at(P0, 1), 'right')!.position).toEqual(at(P0, 2));
     expect(moveCaret(layout, at(P0, 1), 'left')!.position).toEqual(at(P0, 0));
+  });
+
+  test('left and right derive stops for the active paragraph, not the whole document', () => {
+    const long = lay(load(Array.from({ length: 100 }, () => paragraph('abcdef')).join('')));
+    let measurements = 0;
+    const counting: TextMeasurer = {
+      measure(text, style) {
+        measurements += 1;
+        return measurer.measure(text, style);
+      },
+      lineMetrics: (style) => measurer.lineMetrics(style),
+    };
+    expect(moveCaret(long, at(P0, 1), 'right', null, { measurer: counting })!.position).toEqual(
+      at(P0, 2)
+    );
+    // A whole-document stop build measures hundreds of prefixes here. The local path only
+    // needs the handful of boundaries in "abcdef".
+    expect(measurements).toBeLessThan(20);
   });
 
   test('right at a paragraph end crosses into the next paragraph', () => {

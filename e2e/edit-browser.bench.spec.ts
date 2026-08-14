@@ -125,6 +125,11 @@ interface BurstReport {
   readonly domNodes: number;
   readonly materializedPages: number;
   readonly engine: EnginePerf;
+  readonly initialSelection: { readonly paragraphId: string; readonly offset: number };
+  readonly finalSelection: {
+    readonly anchor: { readonly paragraphId: string; readonly offset: number };
+    readonly head: { readonly paragraphId: string; readonly offset: number };
+  } | null;
   readonly injectedDelayObserved: TimingSummary | null;
 }
 
@@ -479,7 +484,7 @@ async function runBurst(
   scenario: {
     readonly name: string;
     readonly mode: 'edit' | 'suggest';
-    readonly input: 'type' | 'backspace';
+    readonly input: 'type' | 'backspace' | 'arrow-left' | 'arrow-right';
   },
   injectedDelayMs = 0
 ): Promise<BurstReport> {
@@ -487,7 +492,10 @@ async function runBurst(
   const prepared = await page.evaluate(
     ({ editingMode, offsetFraction }) =>
       window.__DOCX_EDITOR_E2E__!.prepareEditBenchmark(0.5, editingMode, offsetFraction),
-    { editingMode: scenario.mode, offsetFraction: scenario.input === 'backspace' ? 1 : 0 }
+    {
+      editingMode: scenario.mode,
+      offsetFraction: scenario.input === 'backspace' || scenario.input === 'arrow-left' ? 1 : 0,
+    }
   );
   expect(prepared).not.toBeNull();
   expect(prepared!.pageCount).toBeGreaterThan(150);
@@ -516,13 +524,22 @@ async function runBurst(
             nativeVirtualKeyCode: 51,
             autoRepeat: index > 0,
           }
-        : {
-            type: 'char' as const,
-            key: 'X',
-            code: 'KeyX',
-            text: 'X',
-            unmodifiedText: 'X',
-          };
+        : scenario.input === 'arrow-left' || scenario.input === 'arrow-right'
+          ? {
+              type: 'rawKeyDown' as const,
+              key: scenario.input === 'arrow-left' ? 'ArrowLeft' : 'ArrowRight',
+              code: scenario.input === 'arrow-left' ? 'ArrowLeft' : 'ArrowRight',
+              windowsVirtualKeyCode: scenario.input === 'arrow-left' ? 37 : 39,
+              nativeVirtualKeyCode: scenario.input === 'arrow-left' ? 123 : 124,
+              autoRepeat: index > 0,
+            }
+          : {
+              type: 'char' as const,
+              key: 'X',
+              code: 'KeyX',
+              text: 'X',
+              unmodifiedText: 'X',
+            };
     pending.push(
       client.send('Input.dispatchKeyEvent', event).then(() => {
         completionLatencyMs.push(nodePerformance.now() - sentAt);
@@ -532,13 +549,15 @@ async function runBurst(
 
   const dispatchEnded = nodePerformance.now();
   await Promise.all(pending);
-  if (scenario.input === 'backspace') {
+  if (scenario.input !== 'type') {
+    const left = scenario.input === 'arrow-left';
+    const backspace = scenario.input === 'backspace';
     await client.send('Input.dispatchKeyEvent', {
       type: 'keyUp',
-      key: 'Backspace',
-      code: 'Backspace',
-      windowsVirtualKeyCode: 8,
-      nativeVirtualKeyCode: 51,
+      key: backspace ? 'Backspace' : left ? 'ArrowLeft' : 'ArrowRight',
+      code: backspace ? 'Backspace' : left ? 'ArrowLeft' : 'ArrowRight',
+      windowsVirtualKeyCode: backspace ? 8 : left ? 37 : 39,
+      nativeVirtualKeyCode: backspace ? 51 : left ? 123 : 124,
     });
   }
   const drainedAt = nodePerformance.now();
@@ -549,10 +568,11 @@ async function runBurst(
     nodes: document.querySelectorAll('.docx-pages *').length,
     materializedPages: document.querySelectorAll('.docx-page[data-materialized="true"]').length,
     engine: window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!,
+    selection: window.__DOCX_EDITOR_E2E__!.benchmarkSelection(),
   }));
   await client.detach();
 
-  const processedEvents = scenario.input === 'backspace' ? probe.keydowns : probe.beforeInputs;
+  const processedEvents = scenario.input === 'type' ? probe.beforeInputs : probe.keydowns;
   return {
     name: scenario.name,
     mode: scenario.mode,
@@ -576,6 +596,8 @@ async function runBurst(
     domNodes: dom.nodes,
     materializedPages: dom.materializedPages,
     engine: dom.engine,
+    initialSelection: { paragraphId: prepared!.paragraphId, offset: prepared!.offset },
+    finalSelection: dom.selection,
     injectedDelayObserved:
       probe.injectedDelayObservedMs.length > 0 ? summarize(probe.injectedDelayObservedMs) : null,
   };
@@ -732,6 +754,8 @@ test('rapid input backlog and retained heap are measurable', async ({ page, brow
           { name: 'editing-backspace', mode: 'edit' as const, input: 'backspace' as const },
           { name: 'suggesting-type', mode: 'suggest' as const, input: 'type' as const },
           { name: 'suggesting-backspace', mode: 'suggest' as const, input: 'backspace' as const },
+          { name: 'arrow-left', mode: 'edit' as const, input: 'arrow-left' as const },
+          { name: 'arrow-right', mode: 'edit' as const, input: 'arrow-right' as const },
         ];
   const scenarios = BURST_SCENARIO
     ? availableScenarios.filter((scenario) => scenario.name === BURST_SCENARIO)
@@ -769,6 +793,12 @@ test('rapid input backlog and retained heap are measurable', async ({ page, brow
     expect(report.processedEvents).toBe(report.requestedEvents);
     expect(report.materializedPages).toBeLessThanOrEqual(8);
     expect(report.completionLatency.maxMs).toBeGreaterThan(0);
+    if (report.name === 'arrow-left' || report.name === 'arrow-right') {
+      expect(report.finalSelection?.head).not.toEqual(report.initialSelection);
+      // The pre-index path is about 40 ms median on this fixture and cannot keep up with
+      // ordinary 30 Hz key repeat. Leave enough CI headroom while still catching that shape.
+      expect(report.handler?.medianMs).toBeLessThan(25);
+    }
   }
   if (selfTest) {
     expect(selfTest.observedInjectedDelayMs).toBeGreaterThanOrEqual(INJECTED_DELAY_MS * 0.8);

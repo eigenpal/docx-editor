@@ -23,6 +23,11 @@ import type {
   TextMeasurer,
 } from './semantic-records.ts';
 import { contentControlsOfLayout, paragraphFragmentsOf } from './semantic-records.ts';
+import {
+  indexCaretStops,
+  ParagraphCaretStopCache,
+  type IndexedCaretStops,
+} from './semantic-caret-stop-index.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 /** A caret position in the model. */
@@ -324,6 +329,8 @@ function visitParagraphFragments(
  * two lines is decided here exactly as `caretAt` decides it. Furniture stories use
  * {@link caretStopsForBlocks} so open header/footer navigation never walks body stops.
  */
+const paragraphCaretStopCache = new ParagraphCaretStopCache<CaretGeometry>();
+
 export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): CaretGeometry[] {
   const stops: CaretGeometry[] = [];
   for (const page of layout.pages) {
@@ -334,6 +341,20 @@ export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): Car
     }
   }
   return stops;
+}
+
+function paragraphCaretStops(
+  layout: SemanticLayout,
+  paragraphId: string,
+  measurer?: TextMeasurer
+): IndexedCaretStops<CaretGeometry> {
+  return paragraphCaretStopCache.get(layout, paragraphId, measurer, () => {
+    const stops: CaretGeometry[] = [];
+    for (const { line, pageIndex } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+      pushLineCaretStops(stops, layout, line, pageIndex, 0, measurer);
+    }
+    return indexCaretStops(stops);
+  });
 }
 
 /**
@@ -757,6 +778,30 @@ export interface MoveCaretOptions {
   readonly measurer?: TextMeasurer;
 }
 
+function moveHorizontalCaret(
+  layout: SemanticLayout,
+  position: SemanticPosition,
+  direction: -1 | 1,
+  measurer?: TextMeasurer
+): { position: SemanticPosition; desiredX: null } | null {
+  const current = paragraphCaretStops(layout, position.paragraphId, measurer);
+  const stops = current.stops;
+  const index = current.index.get(position.paragraphId)?.get(position.offset);
+  if (index === undefined) return null;
+  const localTarget = index + direction;
+  if (localTarget >= 0 && localTarget < stops.length) {
+    return { position: stops[localTarget]!.position, desiredX: null };
+  }
+  const order = documentOrder(layout);
+  const paragraphIndex = documentOrderIndex(layout).get(position.paragraphId);
+  if (paragraphIndex === undefined) return null;
+  const neighbourId = order[paragraphIndex + direction];
+  if (!neighbourId) return { position, desiredX: null };
+  const neighbour = paragraphCaretStops(layout, neighbourId, measurer).stops;
+  const target = direction === -1 ? neighbour[neighbour.length - 1] : neighbour[0];
+  return target ? { position: target.position, desiredX: null } : null;
+}
+
 /**
  * Move a caret.
  *
@@ -771,6 +816,9 @@ export function moveCaret(
   desiredX: number | null = null,
   options: MoveCaretOptions = {}
 ): { position: SemanticPosition; desiredX: number | null } | null {
+  if (!options.stops && (command === 'left' || command === 'right')) {
+    return moveHorizontalCaret(layout, position, command === 'left' ? -1 : 1, options.measurer);
+  }
   const stops = options.stops ? [...options.stops] : caretStops(layout, options.measurer);
   if (stops.length === 0) return null;
   const index = stops.findIndex(

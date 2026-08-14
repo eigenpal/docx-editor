@@ -77,6 +77,10 @@ export interface DocxEditorE2EHook {
     pageCount: number;
   } | null;
   benchmarkPerf(): PaginatedSurfacePerf | null;
+  benchmarkSelection(): {
+    readonly anchor: { readonly paragraphId: string; readonly offset: number };
+    readonly head: { readonly paragraphId: string; readonly offset: number };
+  } | null;
   undoBenchmarkEdit(): boolean;
   innerTableId(): string | null;
   outerTableId(): string | null;
@@ -327,6 +331,9 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
     },
     benchmarkPerf() {
       return surface(getEditor())?.state().perf ?? null;
+    },
+    benchmarkSelection() {
+      return surface(getEditor())?.state().selection ?? null;
     },
     undoBenchmarkEdit() {
       const currentSurface = surface(getEditor());
