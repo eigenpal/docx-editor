@@ -582,23 +582,6 @@
     "convertAllEndnotes": "Converter todas as notas de fim em notas de rodapé",
     "inheritedValue": "(herdado)"
   },
-  "serverAutomation": {
-    "badge": null,
-    "failed": null,
-    "hide": null,
-    "idle": null,
-    "load": null,
-    "loaded": null,
-    "prepare": null,
-    "prepared": null,
-    "query": null,
-    "result": null,
-    "running": null,
-    "show": null,
-    "subtitle": null,
-    "title": null,
-    "license": null
-  },
   "review": {
     "accept": "Aceitar",
     "ariaLabel": "Revisão",

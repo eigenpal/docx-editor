@@ -197,7 +197,6 @@
       "name": "docx-editor-example-vite",
       "dependencies": {
         "@docx-editor.dev/core": "workspace:*",
-        "@docx-editor.dev/editor-api": "workspace:*",
         "@docx-editor.dev/fonts": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
         "@docx-editor.dev/pro": "workspace:*",

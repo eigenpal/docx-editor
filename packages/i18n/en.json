@@ -622,23 +622,6 @@
     "viewing": "Viewing",
     "viewingHint": "Read-only, no edits"
   },
-  "serverAutomation": {
-    "title": "Detached server automation",
-    "subtitle": "Bytes out, detached edits, explicit load back",
-    "badge": "Server",
-    "show": "Show detached server automation recipe",
-    "hide": "Hide detached server automation recipe",
-    "query": "Detached search text",
-    "prepare": "Prepare detached result",
-    "load": "Load result into live editor",
-    "result": "Handoff evidence",
-    "idle": "Prepare a detached result without changing the live document.",
-    "running": "Running the bytes-to-bytes workflow…",
-    "prepared": "Detached bytes are ready. The live document is still unchanged.",
-    "loaded": "The detached bytes were explicitly loaded into the live editor.",
-    "failed": "The detached server workflow failed.",
-    "license": "Editor API features are evaluation-licensed. Production use requires a commercial agreement."
-  },
   "review": {
     "ariaLabel": "Review",
     "empty": "No changes or comments",
