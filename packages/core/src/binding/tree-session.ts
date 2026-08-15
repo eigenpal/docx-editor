@@ -1280,6 +1280,7 @@ export function openTreeSession(
         store.graftPackage(() => packageStore.currentPackage());
         const result = setCommentResolved(store, commentId, resolved);
         if (!result.ok) return false;
+        if (!result.changed) return true;
         // Promoted to a package unit, like a reply: `@w15:done` lives in a sibling part.
         store.restoreHistoryStacks(checkpoint);
         packageStore.replacePackageShell(store.package);

@@ -39,35 +39,32 @@ import {
   createCommentScanBudget,
   idsStillMarked,
   keyedMetadataIn,
-  metadataPartNamesFor,
+  type CommentRecord,
   type CommentScanBudget,
   type MarkerHits,
   type OwnerAnchorState,
   W15_NAMESPACE_URI,
   W16CID_NAMESPACE_URI,
 } from './comment-lifecycle-scan.ts';
+import {
+  expandThread,
+  ownerMetadataParts,
+  threadChildrenOf,
+  type CommentDeletionOwner,
+} from './comment-lifecycle-thread.ts';
+
+export {
+  indexCommentThread,
+  type CommentDeletionOwner,
+  type CommentExIndexEntry,
+  type CommentThreadIndexReason,
+  type CommentThreadIndexResult,
+} from './comment-lifecycle-thread.ts';
 
 export { hasAnyComment } from '../store/comment-reads.ts';
 
 /** The `w14` namespace, where `paraId` lives — the key thread state is recorded under. */
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
-
-/**
- * Which story a comment deletion may strip markers from.
- *
- * `w:id` is not unique across stories: a header and the body can both hold comment 1, and a
- * notes part holds many notes. The handle names one story; deletion must not follow the bare id
- * into a neighbour.
- */
-export interface CommentDeletionOwner {
-  /** Canonical name of the part holding the story's markers. */
-  readonly storyPartName: string;
-  /**
-   * When the story is one note inside a shared notes part, that note's `w:id`.
-   * Absent means the whole part is the story (body, header, footer).
-   */
-  readonly noteId?: number;
-}
 
 function defaultOwner(pkg: OoxmlPackage): CommentDeletionOwner {
   return { storyPartName: pkg.mainDocumentPart };
@@ -169,23 +166,18 @@ function recordsForOwner(
   pkg: OoxmlPackage,
   owner: CommentDeletionOwner,
   budget: CommentScanBudget
-): Map<string, { readonly partName: string; readonly node: OoxmlElement }> {
+): Map<string, CommentRecord> {
   const commentsPart = commentsPartNameForStory(pkg, owner.storyPartName);
   return commentsPart === null ? new Map() : commentRecordsIn(pkg, commentsPart, budget);
-}
-
-function ownerMetadataParts(
-  pkg: OoxmlPackage,
-  owner: CommentDeletionOwner
-): { readonly extended: string | null; readonly ids: string | null } {
-  const commentsPart = commentsPartNameForStory(pkg, owner.storyPartName);
-  return metadataPartNamesFor(pkg, owner.storyPartName, commentsPart);
 }
 
 /**
  * A comment and every comment that answers it, transitively, in this story's comments part
  * and that part's related commentsExtended — never every XML part, so a header comments part
  * that reused a paraId is not a child of the body's.
+ *
+ * Deletion expands first-wins and ignores duplicate-id refusal: overflow is the fail-closed
+ * signal ({@link CommentScanBudget.truncated}), matching the rest of the reap path.
  */
 function threadOf(
   pkg: OoxmlPackage,
@@ -193,45 +185,8 @@ function threadOf(
   owner: CommentDeletionOwner,
   budget: CommentScanBudget
 ): Set<string> {
-  const records = recordsForOwner(pkg, owner, budget);
-  const idByParaId = new Map<string, string>();
-  for (const [id, record] of records) {
-    const paraId = paraIdOf(record.node);
-    if (paraId !== null) idByParaId.set(paraId, id);
-  }
-
-  const childrenOf = new Map<string, string[]>();
-  const link = (parentId: string, childId: string): void => {
-    if (parentId === childId) return;
-    const bucket = childrenOf.get(parentId);
-    if (bucket) bucket.push(childId);
-    else childrenOf.set(parentId, [childId]);
-  };
-  for (const [id, record] of records) {
-    const named = attribute(record.node, W16CID_NAMESPACE_URI, 'parentId');
-    if (named !== undefined && records.has(named)) link(named, id);
-  }
-  const meta = ownerMetadataParts(pkg, owner);
-  for (const entry of keyedMetadataIn(pkg, [meta.extended], budget)) {
-    const paraId = attribute(entry.node, W15_NAMESPACE_URI, 'paraId');
-    const parentParaId = attribute(entry.node, W15_NAMESPACE_URI, 'paraIdParent');
-    if (paraId === undefined || parentParaId === undefined) continue;
-    const child = idByParaId.get(paraId.toUpperCase());
-    const parent = idByParaId.get(parentParaId.toUpperCase());
-    if (child !== undefined && parent !== undefined) link(parent, child);
-  }
-
-  const thread = new Set<string>([rootId]);
-  const queue = [rootId];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    for (const child of childrenOf.get(current) ?? []) {
-      if (thread.has(child)) continue;
-      thread.add(child);
-      queue.push(child);
-    }
-  }
-  return thread;
+  const built = threadChildrenOf(pkg, owner, budget, false);
+  return expandThread(rootId, built.childrenOf, budget);
 }
 
 /** Remove named nodes from one part in a single rebuild, parents first. */

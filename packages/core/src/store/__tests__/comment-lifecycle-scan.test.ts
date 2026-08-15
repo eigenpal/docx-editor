@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   commentsOfPart,
+  readOoxmlPart,
   removeNode,
   serializeOoxmlPart,
   withPart,
@@ -21,12 +22,14 @@ import {
   attribute,
   createCommentScanBudget,
   MAX_COMMENT_SCAN_PARTS,
+  walkCharged,
   W15_NAMESPACE_URI,
   W16CID_NAMESPACE_URI,
 } from '../package/comment-lifecycle-scan.ts';
 import {
   commentIds,
   keyedLocalNames,
+  W,
   loadDuplicateBodyHeader,
   loadIsolatedStoryComments,
   loadNestedReplyComments,
@@ -233,5 +236,33 @@ describe('reply deletion is atomic under truncation and reparents when complete'
     expect(parentIdOf(result, '4')).toBe('2');
     expect(paraIdParentOf(result, '44444444')).toBe('22222222');
     expect(markersFor(result.parts.get('/word/header1.xml')!, '2').length).toBe(3);
+  });
+});
+
+describe('walkCharged depth overflow is fail-closed', () => {
+  function nest(depth: number): ReturnType<typeof readOoxmlPart> {
+    const xml =
+      `<w:document xmlns:w="${W}"><w:body>` +
+      `${'<w:p>'.repeat(depth)}<w:p/>${'</w:p>'.repeat(depth)}` +
+      `</w:body></w:document>`;
+    return readOoxmlPart(xml, {
+      name: '/word/document.xml',
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+    });
+  }
+
+  test('depth 64 finishes; depth 65 marks the shared budget truncated', () => {
+    const atCap = nest(62);
+    if (!atCap.ok) throw new Error(atCap.reason);
+    const capBudget = createCommentScanBudget();
+    expect(walkCharged(atCap.part.root, capBudget, () => false)).toBe(true);
+    expect(capBudget.truncated).toBe(false);
+
+    const overflow = nest(63);
+    if (!overflow.ok) throw new Error(overflow.reason);
+    const overflowBudget = createCommentScanBudget();
+    expect(walkCharged(overflow.part.root, overflowBudget, () => false)).toBe(false);
+    expect(overflowBudget.truncated).toBe(true);
   });
 });

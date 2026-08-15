@@ -222,6 +222,14 @@ const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   guardMousedown,
 });
 
+const { ReviewDraft, ReviewReply } = createReviewComposeParts({
+  useRail,
+  useItem: () => useContext(ReviewItemContext),
+  useLabel: useReviewLabel,
+  guardMousedown,
+  composeKey: COMPOSE_KEY,
+});
+
 const INERT_RAIL: ReviewRailValue = {
   t: undefined,
   cardClassName: undefined,
@@ -338,6 +346,8 @@ import {
   markerIconPath,
 } from './review-icons.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
+import { createReviewComposeParts } from './review-compose-boxes.tsx';
+import { ReviewActionSlot } from './review-action-slot.tsx';
 import { revisionLabelKey } from './review-labels.ts';
 
 /**
@@ -578,13 +588,13 @@ function ReviewRoot({
   // leave one behind for every time someone changed their mind.
   const [draftAnchorY, setDraftAnchorY] = useState<number | null>(null);
   const beginDraft = useCallback(() => {
-    if (!editor) return;
+    if (!editor || readOnly) return;
     // Pin the range before the compose box takes focus, or the browser drops the highlight
     // off the very words the comment is about.
     editor.surface?.retainSelection();
     setReviewPaneOpen(true);
     setDraftAnchorY(editor.getSelectionPlacement()?.anchorY ?? null);
-  }, [editor, setReviewPaneOpen]);
+  }, [editor, readOnly, setReviewPaneOpen]);
   const endDraft = useCallback(() => {
     editor?.surface?.releaseSelection();
     setDraftAnchorY(null);
@@ -1018,14 +1028,14 @@ function ReviewAddComment({
   hidden,
   children,
 }: ReviewPartProps & { top?: number | null; drafting?: boolean }) {
-  const { beginDraft } = useRail();
+  const { beginDraft, readOnly } = useRail();
   const t = useReviewLabel();
   // Offered for ANY range, including one inside an existing comment: overlapping comments
   // are ordinary in OOXML and ordinary in Word, and a reader picking out three words of a
   // commented sentence usually has something new to say about exactly those words. This used
   // to hide whenever a card was open, which was really a fix for the button landing on top of
   // that card — solved instead by moving it onto the page edge, where nothing else sits.
-  if (hidden || drafting || top === null) return null;
+  if (hidden || drafting || top === null || readOnly) return null;
   const shared = {
     type: 'button' as const,
     className: `docx-review__add${className ? ` ${className}` : ''}`,
@@ -1042,114 +1052,6 @@ function ReviewAddComment({
   return <button {...shared}>{icon(ADD_COMMENT_ICON)}</button>;
 }
 ReviewAddComment.docxReviewPart = 'AddComment' as const;
-
-/**
- * The compose box for a new comment.
- *
- * Nothing is written until it is submitted: an empty `w:comment` is a real comment in the
- * file, and committing on open would leave one behind every time somebody changed their mind.
- *
- * @public
- */
-function ReviewDraft({ top = 0, className, hidden }: ReviewPartProps & { top?: number }) {
-  const { review, endDraft, measure } = useRail();
-  const t = useReviewLabel();
-  const [text, setText] = useState('');
-  const [refused, setRefused] = useState(false);
-  const fieldRef = useRef<HTMLInputElement | null>(null);
-  const fieldId = useId();
-
-  useEffect(() => {
-    // `preventScroll`: this input lives inside the document's scroller, and focusing it
-    // normally would scroll the reader away from the text they just selected.
-    fieldRef.current?.focus({ preventScroll: true });
-  }, []);
-
-  const submit = useCallback(() => {
-    if (text.trim().length === 0) return;
-    const landed = review.comment(text.trim());
-    setRefused(!landed);
-    if (landed) {
-      setText('');
-      endDraft();
-    }
-  }, [text, review, endDraft]);
-
-  if (hidden) return null;
-  return (
-    <div
-      className={`docx-review__slot${className ? ` ${className}` : ''}`}
-      style={{ position: 'absolute', top }}
-      ref={(node) => {
-        // Its height feeds the same stacking run, so a card below the compose box moves down
-        // to make room for it rather than being covered by it.
-        measure(node, COMPOSE_KEY);
-      }}
-    >
-      <div className="docx-review__card" data-testid="review-draft" data-draft="">
-        <form
-          className="docx-review__reply-box"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submit();
-          }}
-        >
-          <label className="docx-editor-sr-only" htmlFor={fieldId}>
-            {t('comments.addComment')}
-          </label>
-          <input
-            id={fieldId}
-            ref={fieldRef}
-            data-testid="review-draft-input"
-            className="docx-review__input"
-            value={text}
-            placeholder={t('comments.addComment')}
-            {...(refused ? { 'aria-invalid': true } : {})}
-            onChange={(event) => {
-              setRefused(false);
-              setText(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                endDraft();
-                return;
-              }
-              if (event.key !== 'Enter') return;
-              event.preventDefault();
-              submit();
-            }}
-          />
-          <div className="docx-review__reply-actions">
-            <button
-              type="button"
-              data-testid="review-draft-cancel"
-              className="docx-review__text-button"
-              onMouseDown={guardMousedown}
-              onClick={endDraft}
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              data-testid="review-draft-submit"
-              className="docx-review__submit"
-              disabled={text.trim().length === 0}
-            >
-              {t('common.comment')}
-            </button>
-          </div>
-          {refused ? (
-            <span className="docx-review__refused" role="alert">
-              {t('review.commentRefused')}
-            </span>
-          ) : null}
-        </form>
-      </div>
-    </div>
-  );
-}
-ReviewDraft.docxReviewPart = 'Draft' as const;
 
 /** What a clicked tracked change tells us before any item matching — straight off its DOM. */
 interface BalloonAnchor {
@@ -1776,13 +1678,13 @@ function ReviewAccept({ className, asChild, hidden, children, icon: glyph }: Rev
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.accept');
-  const disabledReason = t('editingMode.viewingHint');
+  const disabledReason = readOnly ? t('editingMode.viewingHint') : null;
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
     'data-testid': 'review-accept',
     'aria-label': label,
-    title: readOnly ? disabledReason : label,
+    title: disabledReason ?? label,
     disabled: readOnly,
     onMouseDown: guardMousedown,
     onClick: (event: React.MouseEvent) => {
@@ -1791,7 +1693,17 @@ function ReviewAccept({ className, asChild, hidden, children, icon: glyph }: Rev
       review.accept(entry);
     },
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild) {
+    return (
+      <ReviewActionSlot
+        engineDisabled={readOnly}
+        disabledReason={disabledReason}
+        slotProps={shared}
+      >
+        {children}
+      </ReviewActionSlot>
+    );
+  }
   return <button {...shared}>{glyph ?? children ?? icon(ACCEPT_ICON)}</button>;
 }
 ReviewAccept.docxReviewPart = 'Accept' as const;
@@ -1803,13 +1715,13 @@ function ReviewReject({ className, asChild, hidden, children, icon: glyph }: Rev
   const t = useReviewLabel();
   if (hidden || !entry || entry.kind !== 'revision' || entry.readOnly) return null;
   const label = t('review.reject');
-  const disabledReason = t('editingMode.viewingHint');
+  const disabledReason = readOnly ? t('editingMode.viewingHint') : null;
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
     'data-testid': 'review-reject',
     'aria-label': label,
-    title: readOnly ? disabledReason : label,
+    title: disabledReason ?? label,
     disabled: readOnly,
     onMouseDown: guardMousedown,
     onClick: (event: React.MouseEvent) => {
@@ -1818,7 +1730,17 @@ function ReviewReject({ className, asChild, hidden, children, icon: glyph }: Rev
       review.reject(entry);
     },
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild) {
+    return (
+      <ReviewActionSlot
+        engineDisabled={readOnly}
+        disabledReason={disabledReason}
+        slotProps={shared}
+      >
+        {children}
+      </ReviewActionSlot>
+    );
+  }
   return <button {...shared}>{glyph ?? children ?? icon(REJECT_ICON)}</button>;
 }
 ReviewReject.docxReviewPart = 'Reject' as const;
@@ -1854,13 +1776,13 @@ function ReviewDelete({ className, asChild, hidden, children, icon: glyph }: Rev
   if (hidden || !entry || entry.kind === 'custom') return null;
   if (entry.kind === 'revision' && entry.readOnly) return null;
   const label = entry.kind === 'comment' ? t('review.deleteComment') : t('review.discardChange');
-  const disabledReason = t('editingMode.viewingHint');
+  const disabledReason = readOnly ? t('editingMode.viewingHint') : null;
   const shared = {
     type: 'button' as const,
     className: `docx-review__action${className ? ` ${className}` : ''}`,
     'data-testid': 'review-delete',
     'aria-label': label,
-    title: readOnly ? disabledReason : label,
+    title: disabledReason ?? label,
     disabled: readOnly,
     onMouseDown: guardMousedown,
     onClick: (event: React.MouseEvent) => {
@@ -1871,7 +1793,17 @@ function ReviewDelete({ className, asChild, hidden, children, icon: glyph }: Rev
       review.remove(entry);
     },
   };
-  if (asChild) return <Slot {...shared}>{children}</Slot>;
+  if (asChild) {
+    return (
+      <ReviewActionSlot
+        engineDisabled={readOnly}
+        disabledReason={disabledReason}
+        slotProps={shared}
+      >
+        {children}
+      </ReviewActionSlot>
+    );
+  }
   return <button {...shared}>{glyph ?? children ?? icon(DELETE_ICON)}</button>;
 }
 ReviewDelete.docxReviewPart = 'Delete' as const;
@@ -1914,101 +1846,6 @@ function ReviewReplies({ className, hidden }: ReviewPartProps) {
   );
 }
 ReviewReplies.docxReviewPart = 'Replies' as const;
-
-/**
- * The reply box.
- *
- * Open only on the ACTIVE card: a rail with a text field on every card is mostly text fields,
- * and the caret landing in a tracked change is what says which conversation the reader is in.
- *
- * Replying to a revision writes a comment over that revision's range — `w:ins` and `w:del`
- * have no body and no thread in OOXML, so there is nowhere else for the text to live.
- *
- * @public
- */
-function ReviewReply({ className, hidden, children }: ReviewPartProps) {
-  const { review } = useRail();
-  const entry = useContext(ReviewItemContext);
-  const t = useReviewLabel();
-  const [draft, setDraft] = useState('');
-  const [refused, setRefused] = useState(false);
-  const fieldId = useId();
-
-  const submit = useCallback(() => {
-    if (!entry || draft.trim().length === 0) return;
-    // The author is AMBIENT (`DocxEditorConfig.author`); the engine refuses rather than writing
-    // `w:author=""`, which `CT_Comment` does not allow. The draft is KEPT on a refusal —
-    // clearing it would throw away what someone just wrote and show nothing in its place.
-    const landed = review.reply(entry, draft.trim());
-    setRefused(!landed);
-    if (landed) setDraft('');
-  }, [entry, draft, review]);
-
-  if (hidden || !entry || !entry.isActive) return null;
-  if (children) return <>{children}</>;
-
-  return (
-    <form
-      className={`docx-review__reply-box${className ? ` ${className}` : ''}`}
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
-      }}
-    >
-      <label className="docx-editor-sr-only" htmlFor={fieldId}>
-        {t('comments.replyPlaceholder')}
-      </label>
-      <input
-        id={fieldId}
-        data-testid="review-reply-input"
-        className="docx-review__input"
-        value={draft}
-        placeholder={t('comments.replyPlaceholder')}
-        {...(refused ? { 'aria-invalid': true, 'data-refused': '' } : {})}
-        onChange={(event) => {
-          setRefused(false);
-          setDraft(event.target.value);
-        }}
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter') return;
-          event.preventDefault();
-          submit();
-        }}
-      />
-      <div className="docx-review__reply-actions">
-        <button
-          type="button"
-          data-testid="review-reply-cancel"
-          className="docx-review__text-button"
-          onMouseDown={guardMousedown}
-          onClick={(event) => {
-            event.stopPropagation();
-            setDraft('');
-            setRefused(false);
-            review.setActive(null);
-          }}
-        >
-          {t('common.cancel')}
-        </button>
-        <button
-          type="submit"
-          data-testid="review-reply-submit"
-          className="docx-review__submit"
-          disabled={draft.trim().length === 0}
-        >
-          {t('review.reply')}
-        </button>
-      </div>
-      {refused ? (
-        <span className="docx-review__refused" role="alert" data-testid="review-reply-refused">
-          {t('review.replyRefused')}
-        </span>
-      ) : null}
-    </form>
-  );
-}
-ReviewReply.docxReviewPart = 'Reply' as const;
 
 /**
  * The review rail compound.

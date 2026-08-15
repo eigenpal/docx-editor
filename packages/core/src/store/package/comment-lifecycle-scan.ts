@@ -8,6 +8,8 @@
 import { resolveInternalTarget } from './opc-names.ts';
 import { relationshipsOf, resolveContentTypeOf } from './package-edit.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
+import { W14_NAMESPACE_URI } from './ooxml-shared.ts';
+import { isValidParaId } from './para-id.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 
 /** The `w15` namespace: `commentsExtended.xml` — `w15:commentEx`. */
@@ -21,17 +23,23 @@ export const COMMENTS_TYPE =
 const COMMENTS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
 const COMMENTS_EXTENDED_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml';
+/** Word still authors the transitional Override on many real files. */
+const COMMENTS_EXTENDED_TYPE_MS = 'application/vnd.ms-word.commentsExtended+xml';
+const COMMENTS_EXTENDED_TYPES = [COMMENTS_EXTENDED_TYPE, COMMENTS_EXTENDED_TYPE_MS] as const;
 const COMMENTS_EXTENDED_REL =
   'http://schemas.microsoft.com/office/2011/relationships/commentsExtended';
 const COMMENTS_IDS_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml';
+const COMMENTS_IDS_TYPE_MS = 'application/vnd.ms-word.commentsIds+xml';
+const COMMENTS_IDS_TYPES = [COMMENTS_IDS_TYPE, COMMENTS_IDS_TYPE_MS] as const;
 const COMMENTS_IDS_REL = 'http://schemas.microsoft.com/office/2016/relationships/commentsIds';
 
 /** Cap on XML parts walked in one remaining-marker / vanished-note scan. */
 export const MAX_COMMENT_SCAN_PARTS = 512;
 /** Cap on nodes visited in one deletion/reap scan. */
 export const MAX_COMMENT_SCAN_VISITED = 50_000;
-const MAX_DEPTH = 64;
+/** Nesting cap for one charged walk. Overflow marks the shared budget truncated. */
+export const MAX_COMMENT_SCAN_DEPTH = 64;
 
 /** Mutable visited-node + part budget shared across one deletion or reap. */
 export interface CommentScanBudget {
@@ -85,7 +93,10 @@ export function walkCharged(
     onText?.(root.value);
     return true;
   }
-  if (depth > MAX_DEPTH) return true;
+  if (depth > MAX_COMMENT_SCAN_DEPTH) {
+    budget.truncated = true;
+    return false;
+  }
   if (visit(root)) return true;
   for (const child of root.children) {
     if (!walkCharged(child, budget, visit, depth + 1, onText)) return false;
@@ -104,19 +115,26 @@ export function attribute(
   return undefined;
 }
 
+function allowsContentType(allowed: string | readonly string[], actual: string | null): boolean {
+  if (actual === null) return false;
+  return typeof allowed === 'string' ? actual === allowed : allowed.includes(actual);
+}
+
 /** A related part of the given type, or null. Wrong types and unsafe targets are skipped. */
 export function relatedTypedPart(
   pkg: OoxmlPackage,
   fromPartName: string,
   relationshipType: string,
-  contentType: string
+  contentType: string | readonly string[]
 ): string | null {
   for (const record of relationshipsOf(pkg, fromPartName)) {
     if (record.type !== relationshipType) continue;
     const resolved = resolveInternalTarget(fromPartName, record.rawTarget);
     if (!resolved.ok) continue;
     if (!pkg.parts.has(resolved.partName)) continue;
-    if (resolveContentTypeOf(pkg, resolved.partName) === contentType) return resolved.partName;
+    if (allowsContentType(contentType, resolveContentTypeOf(pkg, resolved.partName))) {
+      return resolved.partName;
+    }
   }
   return null;
 }
@@ -145,15 +163,15 @@ export function metadataPartNamesFor(
   storyPartName: string,
   commentsPartName: string | null
 ): { readonly extended: string | null; readonly ids: string | null } {
-  const from = (rel: string, type: string): string | null => {
+  const from = (rel: string, type: string | readonly string[]): string | null => {
     const viaStory = relatedTypedPart(pkg, storyPartName, rel, type);
     if (viaStory !== null) return viaStory;
     if (commentsPartName === null || commentsPartName === storyPartName) return null;
     return relatedTypedPart(pkg, commentsPartName, rel, type);
   };
   return {
-    extended: from(COMMENTS_EXTENDED_REL, COMMENTS_EXTENDED_TYPE),
-    ids: from(COMMENTS_IDS_REL, COMMENTS_IDS_TYPE),
+    extended: from(COMMENTS_EXTENDED_REL, COMMENTS_EXTENDED_TYPES),
+    ids: from(COMMENTS_IDS_REL, COMMENTS_IDS_TYPES),
   };
 }
 
@@ -162,22 +180,40 @@ export interface CommentRecord {
   readonly node: OoxmlElement;
 }
 
-/** `w:comment` records in one comments part. Truncation is on the budget. */
+/** First-wins index plus the ids that appeared more than once. Truncation is on the budget. */
+export interface CommentRecordIndex {
+  readonly byId: Map<string, CommentRecord>;
+  readonly duplicateIds: ReadonlySet<string>;
+}
+
+export function indexCommentRecords(
+  pkg: OoxmlPackage,
+  partName: string,
+  budget: CommentScanBudget
+): CommentRecordIndex {
+  const byId = new Map<string, CommentRecord>();
+  const duplicateIds = new Set<string>();
+  const part = pkg.parts.get(partName);
+  if (!part || !chargePart(budget)) return { byId, duplicateIds };
+  walkCharged(part.root, budget, (node) => {
+    if (node.kind !== 'comment') return false;
+    const id = attribute(node, WML_NAMESPACE_URI, 'id');
+    if (id !== undefined) {
+      if (byId.has(id)) duplicateIds.add(id);
+      else byId.set(id, { partName: part.name, node });
+    }
+    return true;
+  });
+  return { byId, duplicateIds };
+}
+
+/** `w:comment` records in one comments part. Truncation is on the budget. First id wins. */
 export function commentRecordsIn(
   pkg: OoxmlPackage,
   partName: string,
   budget: CommentScanBudget
 ): Map<string, CommentRecord> {
-  const byId = new Map<string, CommentRecord>();
-  const part = pkg.parts.get(partName);
-  if (!part || !chargePart(budget)) return byId;
-  walkCharged(part.root, budget, (node) => {
-    if (node.kind !== 'comment') return false;
-    const id = attribute(node, WML_NAMESPACE_URI, 'id');
-    if (id !== undefined && !byId.has(id)) byId.set(id, { partName: part.name, node });
-    return true;
-  });
-  return byId;
+  return indexCommentRecords(pkg, partName, budget).byId;
 }
 
 export interface KeyedMetadataEntry {
@@ -185,7 +221,30 @@ export interface KeyedMetadataEntry {
   readonly node: OoxmlElement;
 }
 
-/** `w15:commentEx` / `w16cid:commentId` in the named metadata parts only. */
+function isKeyedMetadataNode(node: OoxmlElement): boolean {
+  return (
+    (node.namespaceUri === W15_NAMESPACE_URI && node.localName === 'commentEx') ||
+    (node.namespaceUri === W16CID_NAMESPACE_URI && node.localName === 'commentId')
+  );
+}
+
+/** Schema: `commentEx` / `commentId` are valid only as direct children of their part roots. */
+function keyedMetadataBelongsOnRoot(root: OoxmlElement, node: OoxmlElement): boolean {
+  if (node.namespaceUri === W15_NAMESPACE_URI && node.localName === 'commentEx') {
+    return root.namespaceUri === W15_NAMESPACE_URI && root.localName === 'commentsEx';
+  }
+  if (node.namespaceUri === W16CID_NAMESPACE_URI && node.localName === 'commentId') {
+    return root.namespaceUri === W16CID_NAMESPACE_URI && root.localName === 'commentsIds';
+  }
+  return false;
+}
+
+/**
+ * `w15:commentEx` / `w16cid:commentId` in the named metadata parts only.
+ *
+ * Descendants of a keyed node are still walked: a nested duplicate is attacker-controlled
+ * and must be visible to the fail-closed index, not skipped because the outer node matched.
+ */
 export function keyedMetadataIn(
   pkg: OoxmlPackage,
   partNames: readonly (string | null)[],
@@ -197,17 +256,44 @@ export function keyedMetadataIn(
     if (partName === null || seen.has(partName)) continue;
     seen.add(partName);
     const part = pkg.parts.get(partName);
-    if (!part || !chargePart(budget)) continue;
-    walkCharged(part.root, budget, (node) => {
-      const keyed =
-        (node.namespaceUri === W15_NAMESPACE_URI && node.localName === 'commentEx') ||
-        (node.namespaceUri === W16CID_NAMESPACE_URI && node.localName === 'commentId');
-      if (!keyed) return false;
+    if (!part || !chargePart(budget)) break;
+    const finished = walkCharged(part.root, budget, (node) => {
+      if (!isKeyedMetadataNode(node)) return false;
       entries.push({ partName: part.name, node });
-      return true;
+      return false;
     });
+    if (!finished) break;
   }
   return entries;
+}
+
+/** True when any keyed node is nested or sitting on the wrong root. */
+export function keyedMetadataMisplaced(
+  pkg: OoxmlPackage,
+  entries: readonly KeyedMetadataEntry[]
+): boolean {
+  const directByPart = new Map<string, Set<string>>();
+  for (const entry of entries) {
+    let direct = directByPart.get(entry.partName);
+    if (!direct) {
+      const part = pkg.parts.get(entry.partName);
+      if (!part) return true;
+      direct = new Set<string>();
+      for (const child of part.root.children) {
+        if (child.kind !== 'textValue') direct.add(child.id);
+      }
+      directByPart.set(entry.partName, direct);
+    }
+    const part = pkg.parts.get(entry.partName);
+    if (
+      part === undefined ||
+      !direct.has(entry.node.id) ||
+      !keyedMetadataBelongsOnRoot(part.root, entry.node)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -369,4 +455,100 @@ export function collectOwnerAnchorStates(
     }
   );
   return { states, truncated: !finished || budget.truncated };
+}
+
+/** Exact start/end of one comment's range markers under an owner root. */
+export interface CommentMarkerSpan {
+  readonly startParagraphId: string;
+  readonly startOffset: number;
+  readonly endParagraphId: string;
+  readonly endOffset: number;
+}
+
+/**
+ * Paragraph-local start/end of each comment range under `root`.
+ *
+ * Same charged walk as {@link collectOwnerAnchorStates}: one owner story, never the whole
+ * package. Last complete pair wins when a comment is marked more than once in the story.
+ */
+export function collectOwnerCommentSpans(
+  root: OoxmlNode,
+  budget: CommentScanBudget
+): { readonly spans: Map<string, CommentMarkerSpan>; readonly truncated: boolean } {
+  const spans = new Map<string, CommentMarkerSpan>();
+  const open = new Map<string, { readonly paragraphId: string; readonly offset: number }>();
+  let paragraphId: string | null = null;
+  let offset = 0;
+  const finished = walkCharged(
+    root,
+    budget,
+    (node) => {
+      if (node.kind === 'paragraph') {
+        paragraphId = node.id;
+        offset = 0;
+        return false;
+      }
+      if (node.kind === 'commentRangeStart') {
+        const id = attribute(node, WML_NAMESPACE_URI, 'id');
+        if (id !== undefined && paragraphId !== null) open.set(id, { paragraphId, offset });
+        return true;
+      }
+      if (node.kind === 'commentRangeEnd') {
+        const id = attribute(node, WML_NAMESPACE_URI, 'id');
+        if (id !== undefined && paragraphId !== null) {
+          const start = open.get(id);
+          open.delete(id);
+          if (start !== undefined) {
+            spans.set(id, {
+              startParagraphId: start.paragraphId,
+              startOffset: start.offset,
+              endParagraphId: paragraphId,
+              endOffset: offset,
+            });
+          }
+        }
+        return true;
+      }
+      if (node.kind === 'commentReference') return true;
+      if (
+        node.kind === 'tab' ||
+        node.kind === 'hardBreak' ||
+        node.kind === 'noteReference' ||
+        node.kind === 'drawing'
+      ) {
+        offset += 1;
+        return true;
+      }
+      return false;
+    },
+    0,
+    (value) => {
+      offset += value.length;
+    }
+  );
+  return { spans, truncated: !finished || budget.truncated };
+}
+
+/**
+ * Every valid `w14:paraId` in modelled XML parts, charged against the shared budget.
+ *
+ * Resolution mints from this set. Truncation refuses the write rather than risking a
+ * colliding id from an unseen part.
+ */
+export function collectUsedParaIds(
+  pkg: OoxmlPackage,
+  budget: CommentScanBudget
+): { readonly used: Set<string>; readonly truncated: boolean } {
+  const used = new Set<string>();
+  for (const part of pkg.parts.values()) {
+    if (!part.name.endsWith('.xml')) continue;
+    if (!chargePart(budget)) return { used, truncated: true };
+    const finished = walkCharged(part.root, budget, (node) => {
+      const value = attribute(node, W14_NAMESPACE_URI, 'paraId');
+      if (value !== undefined && isValidParaId(value)) used.add(value.toUpperCase());
+      return false;
+    });
+    if (!finished) return { used, truncated: true };
+  }
+  return { used, truncated: budget.truncated };
 }

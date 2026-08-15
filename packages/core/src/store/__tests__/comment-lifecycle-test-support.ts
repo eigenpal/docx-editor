@@ -97,6 +97,65 @@ function load(bytes: Uint8Array): OoxmlPackage {
   return loaded.package;
 }
 
+/** Compact comment package. Extra stories/parts stay optional so tests do not clone ZIP boilerplate. */
+export function loadCommentFixture(spec: {
+  readonly body: string;
+  readonly comments: string;
+  readonly extended?: string;
+  /** Where a present commentsExtended part is related from. Default is the story. */
+  readonly extendedFrom?: 'story' | 'comments';
+  /** Override content type. Word often authors the transitional `vnd.ms-word` spelling. */
+  readonly extendedContentType?: string;
+  readonly header?: string;
+  readonly commentsIds?: string;
+}): OoxmlPackage {
+  const types = [
+    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`,
+    `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>`,
+    `<Override PartName="/word/comments.xml" ContentType="${COMMENTS_CT}"/>`,
+  ];
+  const rels = [`<Relationship Id="rId5" Type="${R}/comments" Target="comments.xml"/>`];
+  const files: Record<string, Uint8Array> = {
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${spec.body}</w:body></w:document>`
+    ),
+    'word/comments.xml': strToU8(spec.comments),
+  };
+  if (spec.header !== undefined) {
+    types.push(`<Override PartName="/word/header1.xml" ContentType="${HEADER_CT}"/>`);
+    rels.push(`<Relationship Id="rId10" Type="${R}/header" Target="header1.xml"/>`);
+    files['word/header1.xml'] = strToU8(`<w:hdr xmlns:w="${W}">${spec.header}</w:hdr>`);
+  }
+  if (spec.extended !== undefined) {
+    types.push(
+      `<Override PartName="/word/commentsExtended.xml" ContentType="${spec.extendedContentType ?? EXTENDED_CT}"/>`
+    );
+    files['word/commentsExtended.xml'] = strToU8(spec.extended);
+    if (spec.extendedFrom === 'comments') {
+      files['word/_rels/comments.xml.rels'] = strToU8(
+        `<Relationships xmlns="${REL}">` +
+          `<Relationship Id="rId6" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>` +
+          `</Relationships>`
+      );
+    } else {
+      rels.push(`<Relationship Id="rId6" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>`);
+    }
+  }
+  if (spec.commentsIds !== undefined) {
+    types.push(`<Override PartName="/word/commentsIds.xml" ContentType="${IDS_CT}"/>`);
+    rels.push(`<Relationship Id="rId7" Type="${IDS_REL}" Target="commentsIds.xml"/>`);
+    files['word/commentsIds.xml'] = strToU8(spec.commentsIds);
+  }
+  files['[Content_Types].xml'] = strToU8(`<Types xmlns="${CT}">${types.join('')}</Types>`);
+  files['word/_rels/document.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}">${rels.join('')}</Relationships>`
+  );
+  return load(zipSync(files));
+}
+
 export function loadUniqueBodyComment(): OoxmlPackage {
   return load(
     zipSync({

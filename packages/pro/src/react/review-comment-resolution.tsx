@@ -5,11 +5,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { Slot } from '@docx-editor.dev/react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { ACCEPT_ICON, REOPEN_ICON, icon } from './review-icons.tsx';
 import type { ReviewActionProps } from './DocxEditorReview.tsx';
 import type { ReviewItemView, UseReviewReturn } from './useReview.ts';
+import { ReviewActionSlot } from './review-action-slot.tsx';
 
 interface ResolutionPartDeps {
   readonly useReview: () => UseReviewReturn;
@@ -27,22 +27,33 @@ export function createCommentResolutionParts(deps: ResolutionPartDeps) {
     const t = deps.useLabel();
     if (hidden || !entry || entry.kind !== 'comment' || entry.resolved) return null;
     const label = t('comments.resolve');
-    const disabledReason = review.commentResolutionDisabledReason;
+    const engineDisabled = review.commentResolutionDisabledReason !== null;
+    const disabledReason = engineDisabled ? t('editingMode.viewingHint') : null;
     const shared = {
       type: 'button' as const,
       className: `docx-review__action${className ? ` ${className}` : ''}`,
       'data-testid': 'review-resolve',
       'aria-label': label,
       title: disabledReason ?? label,
-      disabled: disabledReason !== null,
+      disabled: engineDisabled,
       onMouseDown: deps.guardMousedown,
       onClick: (event: ReactMouseEvent) => {
         event.stopPropagation();
-        if (disabledReason !== null) return;
+        if (engineDisabled) return;
         review.resolve(entry);
       },
     };
-    if (asChild) return <Slot {...shared}>{children}</Slot>;
+    if (asChild) {
+      return (
+        <ReviewActionSlot
+          engineDisabled={engineDisabled}
+          disabledReason={disabledReason}
+          slotProps={shared}
+        >
+          {children}
+        </ReviewActionSlot>
+      );
+    }
     return <button {...shared}>{glyph ?? children ?? icon(ACCEPT_ICON)}</button>;
   }
   ReviewResolve.docxReviewPart = 'Resolve' as const;
@@ -54,22 +65,33 @@ export function createCommentResolutionParts(deps: ResolutionPartDeps) {
     const t = deps.useLabel();
     if (hidden || !entry || entry.kind !== 'comment' || !entry.resolved) return null;
     const label = t('comments.reopen');
-    const disabledReason = review.commentResolutionDisabledReason;
+    const engineDisabled = review.commentResolutionDisabledReason !== null;
+    const disabledReason = engineDisabled ? t('editingMode.viewingHint') : null;
     const shared = {
       type: 'button' as const,
       className: `docx-review__action${className ? ` ${className}` : ''}`,
       'data-testid': 'review-reopen',
       'aria-label': label,
       title: disabledReason ?? label,
-      disabled: disabledReason !== null,
+      disabled: engineDisabled,
       onMouseDown: deps.guardMousedown,
       onClick: (event: ReactMouseEvent) => {
         event.stopPropagation();
-        if (disabledReason !== null) return;
+        if (engineDisabled) return;
         review.reopen(entry);
       },
     };
-    if (asChild) return <Slot {...shared}>{children}</Slot>;
+    if (asChild) {
+      return (
+        <ReviewActionSlot
+          engineDisabled={engineDisabled}
+          disabledReason={disabledReason}
+          slotProps={shared}
+        >
+          {children}
+        </ReviewActionSlot>
+      );
+    }
     return <button {...shared}>{glyph ?? children ?? icon(REOPEN_ICON)}</button>;
   }
   ReviewReopen.docxReviewPart = 'Reopen' as const;

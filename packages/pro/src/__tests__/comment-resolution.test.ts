@@ -61,6 +61,148 @@ function commentOf(editor: DocxEditorInstance) {
   return item;
 }
 
+function commentsOf(editor: DocxEditorInstance) {
+  return editor.getReviewItems().filter((item) => item.kind === 'comment');
+}
+
+const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
+const W16CID = 'http://schemas.microsoft.com/office/word/2016/wordml/cid';
+const EXTENDED_REL = 'http://schemas.microsoft.com/office/2011/relationships/commentsExtended';
+const EXTENDED_CT =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml';
+const HEADER_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
+const HEADER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
+
+function commentXml(id: string, paraId: string, text: string, parentId?: string): string {
+  const parent = parentId === undefined ? '' : ` w16cid:parentId="${parentId}"`;
+  return (
+    `<w:comment w:id="${id}" w:author="Ada"${parent}>` +
+    `<w:p w14:paraId="${paraId}"><w:r><w:t>${text}</w:t></w:r></w:p></w:comment>`
+  );
+}
+
+function nestedSource(kind: 'both' | 'parentId' | 'paraIdParent' | 'coincident'): Uint8Array {
+  const withParentId = kind === 'both' || kind === 'parentId';
+  const withExtended = kind === 'both' || kind === 'paraIdParent';
+  const coincident = kind === 'coincident';
+  const body = coincident
+    ? `<w:p><w:commentRangeStart w:id="1"/><w:commentRangeStart w:id="2"/>` +
+      `<w:commentRangeStart w:id="4"/><w:r><w:t>same</w:t></w:r>` +
+      `<w:commentRangeEnd w:id="4"/><w:commentRangeEnd w:id="2"/>` +
+      `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r>` +
+      `<w:r><w:commentReference w:id="2"/></w:r>` +
+      `<w:r><w:commentReference w:id="4"/></w:r></w:p>`
+    : `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>root</w:t></w:r>` +
+      `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>`;
+  const types =
+    `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+    '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+    (withExtended
+      ? `<Override PartName="/word/commentsExtended.xml" ContentType="${EXTENDED_CT}"/>`
+      : '') +
+    '</Types>';
+  const rels =
+    `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
+    (withExtended
+      ? `<Relationship Id="rIdE" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>`
+      : '') +
+    '</Relationships>';
+  const files: Record<string, Uint8Array> = {
+    '[Content_Types].xml': strToU8(types),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+    'word/comments.xml': strToU8(
+      `<w:comments xmlns:w="${W}" xmlns:w14="${W14}" xmlns:w16cid="${W16CID}">` +
+        commentXml('1', '11111111', 'root') +
+        commentXml('2', '22222222', 'reply', withParentId ? '1' : undefined) +
+        commentXml('4', '44444444', 'nested', withParentId ? '2' : undefined) +
+        '</w:comments>'
+    ),
+    'word/_rels/document.xml.rels': strToU8(rels),
+  };
+  if (withExtended) {
+    files['word/commentsExtended.xml'] = strToU8(
+      `<w15:commentsEx xmlns:w15="${W15}">` +
+        `<w15:commentEx w15:paraId="11111111" w15:done="0"/>` +
+        `<w15:commentEx w15:paraId="22222222" w15:paraIdParent="11111111" w15:done="0"/>` +
+        `<w15:commentEx w15:paraId="44444444" w15:paraIdParent="22222222" w15:done="0"/>` +
+        '</w15:commentsEx>'
+    );
+  }
+  return zipSync(files);
+}
+
+function duplicateRecordSource(): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:commentRangeStart w:id="7"/>` +
+        '<w:r><w:t>commented words</w:t></w:r><w:commentRangeEnd w:id="7"/>' +
+        '<w:r><w:commentReference w:id="7"/></w:r></w:p></w:body></w:document>'
+    ),
+    'word/comments.xml': strToU8(
+      `<w:comments xmlns:w="${W}">` +
+        '<w:comment w:id="7" w:author="Ada"><w:p><w:r><w:t>first</w:t></w:r></w:p></w:comment>' +
+        '<w:comment w:id="7" w:author="Grace"><w:p><w:r><w:t>dup</w:t></w:r></w:p></w:comment>' +
+        '</w:comments>'
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
+    ),
+  });
+}
+
+function bodyAndHeaderMarkersSource(): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        `<Override PartName="/word/header1.xml" ContentType="${HEADER_CT}"/>` +
+        '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        '<w:body><w:p><w:commentRangeStart w:id="7"/>' +
+        '<w:r><w:t>body</w:t></w:r><w:commentRangeEnd w:id="7"/>' +
+        '<w:r><w:commentReference w:id="7"/></w:r></w:p>' +
+        '<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/></w:sectPr></w:body></w:document>'
+    ),
+    'word/header1.xml': strToU8(
+      `<w:hdr xmlns:w="${W}"><w:p><w:commentRangeStart w:id="7"/>` +
+        '<w:r><w:t>hdr</w:t></w:r><w:commentRangeEnd w:id="7"/>' +
+        '<w:r><w:commentReference w:id="7"/></w:r></w:p></w:hdr>'
+    ),
+    'word/comments.xml': strToU8(
+      `<w:comments xmlns:w="${W}"><w:comment w:id="7" w:author="Ada">` +
+        '<w:p><w:r><w:t>shared</w:t></w:r></w:p></w:comment></w:comments>'
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rIdH" Type="${HEADER_REL}" Target="header1.xml"/>` +
+        `<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
+        '</Relationships>'
+    ),
+  });
+}
+
 describe('public comment resolution', () => {
   test('resolves and reopens idempotently without moving the active selection', () => {
     const editor = mount();
@@ -77,6 +219,54 @@ describe('public comment resolution', () => {
     expect(editor.exec({ type: 'undo' }).ok).toBe(true);
     expect(commentOf(editor).resolved).toBe(false);
     expect(editor.setCommentResolved(comment.key, false)).toEqual({ ok: true, changed: false });
+  });
+
+  test('reopens a comment whose commentsExtended uses the transitional content type', async () => {
+    const editor = mount(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+            '<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.ms-word.commentsExtended+xml"/>' +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}"><w:body><w:p><w:commentRangeStart w:id="7"/>` +
+            '<w:r><w:t>hello</w:t></w:r><w:commentRangeEnd w:id="7"/>' +
+            '<w:r><w:commentReference w:id="7"/></w:r></w:p></w:body></w:document>'
+        ),
+        'word/comments.xml': strToU8(
+          `<w:comments xmlns:w="${W}" xmlns:w14="${W14}">` +
+            '<w:comment w:id="7" w:author="Ada" w14:paraId="A0000001">' +
+            '<w:p><w:r><w:t>Check this.</w:t></w:r></w:p></w:comment></w:comments>'
+        ),
+        'word/commentsExtended.xml': strToU8(
+          `<w15:commentsEx xmlns:w15="${W15}"><w15:commentEx w15:paraId="A0000001" w15:done="0"/></w15:commentsEx>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}">` +
+            `<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
+            `<Relationship Id="rIdCE" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>` +
+            '</Relationships>'
+        ),
+      })
+    );
+    expect(editor.setCommentResolved(commentOf(editor).key, true)).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(commentOf(editor).resolved).toBe(true);
+    expect(editor.setCommentResolved(commentOf(editor).key, false)).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(commentOf(editor).resolved).toBe(false);
+    const reopened = mount(new Uint8Array(await editor.save()));
+    expect(commentOf(reopened).resolved).toBe(false);
   });
 
   test('preserves resolved state through save and reopen', async () => {
@@ -120,6 +310,112 @@ describe('public comment resolution', () => {
     expect(editor.getReviewItems().filter((item) => item.kind === 'revision')).toHaveLength(
       revisionCount
     );
+    expect(commentOf(editor).resolved).toBe(true);
+  });
+
+  test('nested descendants in both metadata formats resolve, undo, and reopen together', () => {
+    for (const kind of ['both', 'parentId', 'paraIdParent'] as const) {
+      const editor = mount(nestedSource(kind));
+      const nested = commentsOf(editor).find((item) => item.id === '4');
+      expect(nested?.kind).toBe('comment');
+      expect(editor.setCommentResolved(nested!.key, true)).toEqual({ ok: true, changed: true });
+      expect(commentsOf(editor).every((item) => item.kind === 'comment' && item.resolved)).toBe(
+        true
+      );
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+      expect(commentsOf(editor).every((item) => item.kind === 'comment' && !item.resolved)).toBe(
+        true
+      );
+      expect(editor.setCommentResolved(commentOf(editor).key, false)).toEqual({
+        ok: true,
+        changed: false,
+      });
+    }
+  });
+
+  test('inferred coincident-anchor descendants resolve together', () => {
+    const editor = mount(nestedSource('coincident'));
+    expect(editor.setCommentResolved(commentOf(editor).key, true).ok).toBe(true);
+    expect(commentsOf(editor).every((item) => item.kind === 'comment' && item.resolved)).toBe(true);
+  });
+
+  test('inferred coincident replies stay replies after save and reopen', async () => {
+    const editor = mount(nestedSource('coincident'));
+    expect(editor.setCommentResolved(commentOf(editor).key, true).ok).toBe(true);
+    const reopened = mount(new Uint8Array(await editor.save()));
+    const child = commentsOf(reopened).find((item) => item.id === '2');
+    expect(child?.kind === 'comment' && child.parentId).toBe('1');
+    expect(
+      commentsOf(reopened).filter((item) => item.kind === 'comment' && !item.parentId)
+    ).toHaveLength(1);
+  });
+
+  test('a resolved root with an unresolved descendant repairs the thread', () => {
+    const editor = mount(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+            `<Override PartName="/word/commentsExtended.xml" ContentType="${EXTENDED_CT}"/>` +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}"><w:body>` +
+            `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>root</w:t></w:r>` +
+            `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>` +
+            `<w:p><w:commentRangeStart w:id="2"/><w:r><w:t>reply</w:t></w:r>` +
+            `<w:commentRangeEnd w:id="2"/><w:r><w:commentReference w:id="2"/></w:r></w:p>` +
+            `</w:body></w:document>`
+        ),
+        'word/comments.xml': strToU8(
+          `<w:comments xmlns:w="${W}" xmlns:w14="${W14}">` +
+            commentXml('1', '11111111', 'root') +
+            commentXml('2', '22222222', 'reply') +
+            '</w:comments>'
+        ),
+        'word/commentsExtended.xml': strToU8(
+          `<w15:commentsEx xmlns:w15="${W15}">` +
+            `<w15:commentEx w15:paraId="11111111" w15:done="1"/>` +
+            `<w15:commentEx w15:paraId="22222222" w15:paraIdParent="11111111" w15:done="0"/>` +
+            '</w15:commentsEx>'
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}">` +
+            `<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
+            `<Relationship Id="rIdE" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>` +
+            '</Relationships>'
+        ),
+      })
+    );
+    expect(editor.setCommentResolved(commentOf(editor).key, true)).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(commentsOf(editor).every((item) => item.kind === 'comment' && item.resolved)).toBe(true);
+  });
+
+  test('duplicate comment records refuse before mutation', () => {
+    const editor = mount(duplicateRecordSource());
+    const key = commentsOf(editor)[0]?.key;
+    expect(key).toBeDefined();
+    const refused = editor.setCommentResolved(key!, true);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.code).toBe('ambiguous');
+    expect(commentsOf(editor).every((item) => item.kind === 'comment' && !item.resolved)).toBe(
+      true
+    );
+  });
+
+  test('repeated body and header markers for one record remain resolvable', () => {
+    const editor = mount(bodyAndHeaderMarkersSource());
+    expect(editor.setCommentResolved(commentOf(editor).key, true)).toEqual({
+      ok: true,
+      changed: true,
+    });
     expect(commentOf(editor).resolved).toBe(true);
   });
 });
