@@ -91,6 +91,32 @@ const NOTE_AND_BODY_REVISIONS: Uint8Array = zipSync({
   ),
 });
 
+const DUPLICATE_ENDNOTE_IDS: Uint8Array = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rId10" Type="${OFFICE}/endnotes" Target="endnotes.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:endnoteReference w:id="4"/></w:r></w:p></w:body></w:document>`
+  ),
+  'word/endnotes.xml': strToU8(
+    `<w:endnotes xmlns:w="${W}">` +
+      '<w:endnote w:id="4"><w:p><w:r><w:t>first</w:t></w:r></w:p></w:endnote>' +
+      '<w:endnote w:id="4"><w:p><w:r><w:t>second</w:t></w:r></w:p></w:endnote>' +
+      '</w:endnotes>'
+  ),
+});
+
 const HEADER_AND_BODY_REVISIONS: Uint8Array = zipSync({
   '[Content_Types].xml': strToU8(
     `<Types xmlns="${CT}">` +
@@ -432,6 +458,17 @@ describe('a section is the page a story is laid out on', () => {
       return { type: note.type, text: body.text, count: notes.items.length };
     });
     expect(found).toEqual({ type: 'Footnote', text: 'in the footnote', count: 1 });
+  });
+
+  test('duplicate note identities refuse the collection as document corruption', async () => {
+    const runtime = await createServer(DUPLICATE_ENDNOTE_IDS);
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        context.document.endnotes.load('items');
+        await context.sync();
+      })
+    );
+    expect(code).toBe('GeneralException');
   });
 
   test('note text is unloaded until one post-listing load round fills every item', async () => {

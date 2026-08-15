@@ -527,8 +527,8 @@ export type AutomationOperation =
    * Accept every change in one story, as ONE decision and one undo unit.
    *
    * The document-handle form names the main story. The body-handle form names that story: a
-   * header, footer, or the main body uses the part-wide store op; a note expands to addressed
-   * per-item ops because notes share a part. Both forms agree for the main story.
+   * header, footer, or the main body uses the part-wide store op; a note uses one store
+   * all-decision scoped to that exact canonical note root. Both forms agree for the main story.
    */
   | {
       readonly op: 'acceptAllRevisions';

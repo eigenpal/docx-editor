@@ -94,6 +94,13 @@ export interface RevisionSite {
   readonly propertyChange: boolean;
 }
 
+interface TrackedRowRevision {
+  readonly kind: 'ins' | 'del';
+  rowMarkerCount: number;
+  cellMarkerCount: number;
+  readonly markerIds: string[];
+}
+
 function isTrackedRowSite(
   node: OoxmlElement,
   parentName: string | undefined,
@@ -323,6 +330,110 @@ function tableRowOwning(part: OoxmlPart, nodeId: string): string | null {
 function elementById(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   const found = findNode(part, nodeId);
   return found === null || found.kind === 'textValue' ? null : found;
+}
+
+function matchingRevisionSites(
+  sites: readonly RevisionSite[],
+  address: RevisionAddress | undefined,
+  localName?: string
+): RevisionSite[] {
+  if (address === undefined) return [...sites];
+  return sites.filter((site) => {
+    const own = addressOf(site.node);
+    if (own === null || !sameRevision(own, address)) return false;
+    return localName === undefined || site.node.localName === localName;
+  });
+}
+
+/**
+ * Complete tracked-row decisions among the matched sites.
+ *
+ * One classifier feeds both mutation planning and protection reach, so a row cannot be considered
+ * removable by one path and incomplete by the other.
+ */
+function trackedRowRevisions(
+  part: OoxmlPart,
+  matched: readonly RevisionSite[]
+): ReadonlyMap<string, TrackedRowRevision> | TreeOpRejection {
+  const revisions = new Map<string, TrackedRowRevision>();
+  for (const site of matched) {
+    const markerKind =
+      site.node.localName === 'ins' || site.node.localName === 'cellIns'
+        ? 'ins'
+        : site.node.localName === 'del' || site.node.localName === 'cellDel'
+          ? 'del'
+          : null;
+    const rowSite =
+      markerKind !== null &&
+      ((site.parent?.localName === 'trPr' &&
+        (site.node.localName === 'ins' || site.node.localName === 'del')) ||
+        (site.parent?.localName === 'tcPr' &&
+          (site.node.localName === 'cellIns' || site.node.localName === 'cellDel')));
+    if (!rowSite || markerKind === null) continue;
+    const rowId = tableRowOwning(part, site.node.id);
+    if (rowId === null) return 'unsupported-revision';
+    const existing = revisions.get(rowId);
+    if (existing && existing.kind !== markerKind) return 'unsupported-revision';
+    const entry = existing ?? {
+      kind: markerKind,
+      rowMarkerCount: 0,
+      cellMarkerCount: 0,
+      markerIds: [],
+    };
+    entry.markerIds.push(site.node.id);
+    if (site.parent?.localName === 'trPr') entry.rowMarkerCount += 1;
+    else entry.cellMarkerCount += 1;
+    revisions.set(rowId, entry);
+  }
+  for (const [rowId, revision] of revisions) {
+    const row = elementById(part, rowId);
+    const cellCount = row?.children.filter((child) => child.kind === 'tableCell').length ?? 0;
+    if (
+      revision.rowMarkerCount !== 1 ||
+      cellCount === 0 ||
+      revision.cellMarkerCount !== cellCount
+    ) {
+      return 'unsupported-revision';
+    }
+  }
+  return revisions;
+}
+
+/**
+ * Exact rows a revision decision will remove, using the mutation path's own completeness rules.
+ *
+ * Invalid or unsupported decisions answer no rows here; normal validation still reports their
+ * typed refusal, while protection reach remains conservative around every matched marker.
+ */
+export function removedRowsForRevisionDecision(
+  part: OoxmlPart,
+  action: RevisionOpAction,
+  address: RevisionAddress | undefined,
+  options?: { readonly localName?: string; readonly scopeRootId?: string }
+): readonly OoxmlElement[] {
+  if (
+    options?.scopeRootId !== undefined &&
+    scopedRevisionRoot(part, options.scopeRootId) === null
+  ) {
+    return [];
+  }
+  const matched = matchingRevisionSites(
+    collectRevisionSitesIn(part, options?.scopeRootId),
+    address,
+    options?.localName
+  );
+  const revisions = trackedRowRevisions(part, matched);
+  if (typeof revisions === 'string') return [];
+  const rows: OoxmlElement[] = [];
+  for (const [rowId, revision] of revisions) {
+    const removes =
+      (revision.kind === 'ins' && action === 'reject') ||
+      (revision.kind === 'del' && action === 'accept');
+    if (!removes) continue;
+    const row = elementById(part, rowId);
+    if (row) rows.push(row);
+  }
+  return rows;
 }
 
 /** How one wrapper resolves, given the action. */
@@ -564,16 +675,7 @@ export function resolveRevisions(
     return { ok: false, reason: 'invalid-property-value' };
   }
   const sites = collectRevisionSitesIn(part, options?.scopeRootId);
-  const matched = address
-    ? sites.filter((site) => {
-        const own = addressOf(site.node);
-        if (own === null || !sameRevision(own, address)) return false;
-        if (options?.localName !== undefined && site.node.localName !== options.localName) {
-          return false;
-        }
-        return true;
-      })
-    : sites;
+  const matched = matchingRevisionSites(sites, address, options?.localName);
   if (matched.length === 0) return { ok: false, reason: 'unknown-revision' };
   if (matched.some((site) => site.refused)) return { ok: false, reason: 'unsupported-revision' };
 
@@ -583,56 +685,9 @@ export function resolveRevisions(
   const mergeForward = new Set<string>();
   const removeRows = new Set<string>();
 
-  const rowRevisions = new Map<
-    string,
-    {
-      kind: 'ins' | 'del';
-      rowMarkerCount: number;
-      cellMarkerCount: number;
-      markerIds: string[];
-    }
-  >();
-  for (const site of matched) {
-    const markerKind =
-      site.node.localName === 'ins' || site.node.localName === 'cellIns'
-        ? 'ins'
-        : site.node.localName === 'del' || site.node.localName === 'cellDel'
-          ? 'del'
-          : null;
-    const rowSite =
-      markerKind !== null &&
-      ((site.parent?.localName === 'trPr' &&
-        (site.node.localName === 'ins' || site.node.localName === 'del')) ||
-        (site.parent?.localName === 'tcPr' &&
-          (site.node.localName === 'cellIns' || site.node.localName === 'cellDel')));
-    if (!rowSite || markerKind === null) continue;
-    const rowId = tableRowOwning(part, site.node.id);
-    if (rowId === null) return { ok: false, reason: 'unsupported-revision' };
-    const existing = rowRevisions.get(rowId);
-    if (existing && existing.kind !== markerKind) {
-      return { ok: false, reason: 'unsupported-revision' };
-    }
-    const entry = existing ?? {
-      kind: markerKind,
-      rowMarkerCount: 0,
-      cellMarkerCount: 0,
-      markerIds: [],
-    };
-    entry.markerIds.push(site.node.id);
-    if (site.parent?.localName === 'trPr') entry.rowMarkerCount += 1;
-    else entry.cellMarkerCount += 1;
-    rowRevisions.set(rowId, entry);
-  }
+  const rowRevisions = trackedRowRevisions(part, matched);
+  if (typeof rowRevisions === 'string') return { ok: false, reason: rowRevisions };
   for (const [rowId, revision] of rowRevisions) {
-    const row = elementById(part, rowId);
-    const cellCount = row?.children.filter((child) => child.kind === 'tableCell').length ?? 0;
-    if (
-      revision.rowMarkerCount !== 1 ||
-      cellCount === 0 ||
-      revision.cellMarkerCount !== cellCount
-    ) {
-      return { ok: false, reason: 'unsupported-revision' };
-    }
     const removesRow =
       (revision.kind === 'ins' && action === 'reject') ||
       (revision.kind === 'del' && action === 'accept');

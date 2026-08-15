@@ -16,6 +16,7 @@ import {
   bodyStoryRoot,
   contentControlsIn,
   readOoxmlPart,
+  serializeOoxmlPart,
   storyParagraphs,
   type OoxmlNode,
   type OoxmlPart,
@@ -178,6 +179,50 @@ describe('accepting and rejecting a tracked change meets the lock', () => {
   test('sdtLocked does not refuse a decision about the content it holds', () => {
     const part = lockedWithRevision('sdtLocked');
     expect(refusal(part, { op: 'acceptRevision', revision: QA })).toBeNull();
+  });
+});
+
+describe('tracked-row removal reaches controls in every cell', () => {
+  const marker = (kind: 'ins' | 'del', id = '1') =>
+    `<w:${kind} w:id="${id}" w:author="QA" w:date="${QA.date}"/>`;
+  const cellMarker = (kind: 'ins' | 'del', id = '1') =>
+    `<w:cell${kind === 'ins' ? 'Ins' : 'Del'} w:id="${id}" w:author="QA" w:date="${QA.date}"/>`;
+  const row = (kind: 'ins' | 'del', locked: boolean, id = '1') =>
+    `<w:tbl><w:tr><w:trPr>${marker(kind, id)}</w:trPr>` +
+    `<w:tc><w:tcPr>${cellMarker(kind, id)}</w:tcPr><w:p><w:r><w:t>plain</w:t></w:r></w:p></w:tc>` +
+    `<w:tc><w:tcPr>${cellMarker(kind, id)}</w:tcPr>` +
+    (locked
+      ? `<w:sdt><w:sdtPr><w:lock w:val="sdtLocked"/></w:sdtPr><w:sdtContent>` +
+        `<w:p><w:r><w:t>locked</w:t></w:r></w:p></w:sdtContent></w:sdt>`
+      : `<w:p><w:r><w:t>open</w:t></w:r></w:p>`) +
+    `</w:tc></w:tr></w:tbl>`;
+
+  test('rejecting an inserted row refuses its nested removal lock and preserves bytes', () => {
+    const part = parseDoc(row('ins', true));
+    const before = serializeOoxmlPart(part);
+    expect(refusal(part, { op: 'rejectRevision', revision: QA })).toBe('locked');
+    expect(serializeOoxmlPart(part)).toBe(before);
+    expect(refusal(part, { op: 'acceptRevision', revision: QA })).toBeNull();
+  });
+
+  test('accepting a deleted row refuses its nested removal lock and preserves bytes', () => {
+    const part = parseDoc(row('del', true));
+    const before = serializeOoxmlPart(part);
+    expect(refusal(part, { op: 'acceptAllRevisions' })).toBe('locked');
+    expect(serializeOoxmlPart(part)).toBe(before);
+    expect(refusal(part, { op: 'rejectAllRevisions' })).toBeNull();
+  });
+
+  test('a scoped note ignores a locked sibling row but refuses its locked target row', () => {
+    const part = parseNotes(
+      `<w:footnote w:id="1">${row('del', false, '1')}</w:footnote>` +
+        `<w:footnote w:id="2">${row('del', true, '2')}</w:footnote>`
+    );
+    const notes = part.root.children.filter(
+      (node) => node.kind !== 'textValue' && node.localName === 'footnote'
+    );
+    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: notes[0]!.id })).toBeNull();
+    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: notes[1]!.id })).toBe('locked');
   });
 });
 

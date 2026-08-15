@@ -1963,9 +1963,16 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             String(operation.noteKind)
           );
         const kind = operation.noteKind;
+        const listing = packageReads.noteIds(kind);
+        if (!listing.ok)
+          return refuse(
+            'ambiguous-document',
+            `duplicate ${kind} ids make the collection unaddressable`,
+            listing.duplicateIds.join(',')
+          );
         return query({
           kind: 'handles',
-          handles: packageReads.noteIds(kind).map((noteId) => handles.note(kind, noteId)),
+          handles: listing.ids.map((noteId) => handles.note(kind, noteId)),
         });
       }
 
@@ -1996,7 +2003,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const target = handles.resolve(operation.note, 'note');
         if (!target || target.kind !== 'note')
           return refuse('invalid-handle', 'that handle does not name a note', 'note');
-        if (!packageReads.noteIds(target.noteKind).includes(target.noteId))
+        const listing = packageReads.noteIds(target.noteKind);
+        if (!listing.ok)
+          return refuse(
+            'ambiguous-document',
+            `duplicate ${target.noteKind} ids make the collection unaddressable`,
+            listing.duplicateIds.join(',')
+          );
+        if (!listing.ids.includes(target.noteId))
           return refuse('invalid-handle', 'that note is not in this document');
         return planDeleteNote(target.noteKind, target.noteId);
       }

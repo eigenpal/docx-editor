@@ -111,6 +111,12 @@ export type AutomationErrorCode =
   /** A tracked-change kind this engine preserves but cannot yet accept or reject safely. */
   | 'unsupported-revision'
   /**
+   * File-authored identities are ambiguous, so exposing either object would alias another.
+   *
+   * This is document corruption, not an invalid caller argument or an unsupported capability.
+   */
+  | 'ambiguous-document'
+  /**
    * Two operations in one batch make claims on the same paragraph that cannot both hold.
    *
    * A batch is one ordered transaction, so its commands are planned against the state at its

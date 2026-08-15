@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { AutomationHandle, AutomationHost } from '../protocol.ts';
 import { REL_TYPES, noteReference, notesPart, richDocx } from './support/furniture.ts';
 import { noteBodies } from './support/review-comments.ts';
-import { handlesAt, open, reopen, savedPartBytes } from './support/protocol.ts';
+import { errorAt, handleAt, handlesAt, open, reopen, savedPartBytes } from './support/protocol.ts';
 
 function revisionsOf(host: AutomationHost, body: AutomationHandle): readonly AutomationHandle[] {
   return handlesAt(host.execute({ operations: [{ op: 'getRevisions', body }] }), 0);
@@ -62,5 +62,33 @@ describe('a note revision collection is rooted in exactly one shared-part story'
     const notesXml = savedPartBytes(next.host, 'word/footnotes.xml');
     expect(notesXml).not.toContain('<w:ins');
     expect(notesXml).toContain('<w:del ');
+  });
+});
+
+describe('duplicate note identities fail closed before handles exist', () => {
+  test('getNotes refuses ambiguity and exposes no proxy that can resolve revisions', () => {
+    const triple = `w:id="7" w:author="Same" w:date="2026-04-07T09:00:00Z"`;
+    const host = open(
+      richDocx({
+        body: `<w:p>${noteReference('footnote', 1)}</w:p>`,
+        rels: [{ id: 'rId4', type: REL_TYPES.footnotes, target: 'footnotes.xml' }],
+        parts: [
+          notesPart('footnote', [
+            { id: 1, xml: `<w:p><w:ins ${triple}><w:r><w:t>first</w:t></w:r></w:ins></w:p>` },
+            { id: 1, xml: `<w:p><w:ins ${triple}><w:r><w:t>second</w:t></w:r></w:ins></w:p>` },
+          ]),
+        ],
+      })
+    );
+    const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
+    const before = savedPartBytes(host, 'word/footnotes.xml');
+    const response = host.execute({
+      operations: [{ op: 'getNotes', document, noteKind: 'footnote' }],
+    });
+
+    expect(errorAt(response, 0)).toBe('ambiguous-document');
+    expect(response.changed).toBe(false);
+    expect(savedPartBytes(host, 'word/footnotes.xml')).toBe(before);
+    expect(before.match(/<w:ins\b/g) ?? []).toHaveLength(2);
   });
 });

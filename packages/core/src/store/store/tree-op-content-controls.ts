@@ -55,6 +55,7 @@ import {
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
+import { removedRowsForRevisionDecision, type RevisionOpAction } from './tree-op-revisions.ts';
 import type {
   RevisionAddress,
   TreeDocOp,
@@ -203,7 +204,9 @@ export type TreeOpReach =
   /** Addressed at tracked changes, resolved to the nodes carrying them. */
   | {
       readonly kind: 'revisions';
+      readonly action: RevisionOpAction;
       readonly revision?: RevisionAddress;
+      readonly localName?: string;
       readonly scopeRootId?: string;
     };
 
@@ -333,14 +336,26 @@ const TREE_OP_REACH: {
   // controls the walk passes through on its way down to the link.
   setHyperlinkTarget: (op) => whole(op.linkId),
   removeHyperlink: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.linkId, structural: true }] }),
-  acceptRevision: (op) => ({ kind: 'revisions', revision: op.revision }),
-  rejectRevision: (op) => ({ kind: 'revisions', revision: op.revision }),
+  acceptRevision: (op) => ({
+    kind: 'revisions',
+    action: 'accept',
+    revision: op.revision,
+    ...(op.localName === undefined ? {} : { localName: op.localName }),
+  }),
+  rejectRevision: (op) => ({
+    kind: 'revisions',
+    action: 'reject',
+    revision: op.revision,
+    ...(op.localName === undefined ? {} : { localName: op.localName }),
+  }),
   acceptAllRevisions: (op) => ({
     kind: 'revisions',
+    action: 'accept',
     ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
   }),
   rejectAllRevisions: (op) => ({
     kind: 'revisions',
+    action: 'reject',
     ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
   }),
   // The value path rebuilds `w:sdtContent`; a tag or an alias leaves every child where it was.
@@ -567,7 +582,13 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
     };
   }
   if (reach.kind === 'revisions') {
-    return resolveRevisionReach(part, reach.revision, reach.scopeRootId);
+    return resolveRevisionReach(
+      part,
+      reach.action,
+      reach.revision,
+      reach.localName,
+      reach.scopeRootId
+    );
   }
   const touches: ControlTouch[] = [];
   const unprotected: string[] = [];
@@ -713,7 +734,9 @@ function encloses(span: OffsetSpan | null, range: OffsetSpan, writes: boolean): 
 /** The nodes a revision decision would rewrite, and the controls holding them. */
 function resolveRevisionReach(
   part: OoxmlPart,
+  action: RevisionOpAction,
   revision: RevisionAddress | undefined,
+  localName: string | undefined,
   scopeRootId?: string
 ): ResolvedReach {
   const touches: ControlTouch[] = [];
@@ -727,7 +750,7 @@ function resolveRevisionReach(
   let seen = 0;
   const walk = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
     if (node.kind === 'textValue' || seen > MAX_REVISION_NODES) return;
-    if (isRevisionNode(node, revision)) {
+    if (isRevisionNode(node, revision, localName)) {
       seen += 1;
       if (controls.length === 0) unprotected.push(node.id);
       for (let index = 0; index < controls.length; index += 1) {
@@ -738,8 +761,36 @@ function resolveRevisionReach(
           discarded: false,
         });
       }
-      // A tracked deletion is resolved by REMOVING its content, which takes any control inside
-      // it with it — the same question `deleteBlock` asks.
+      // Only the direction that removes a revision wrapper's content removes nested controls.
+      // The keep direction still reaches the marker and its enclosing controls above.
+      if (revisionNodeRemovesContent(node, action)) {
+        for (const entry of contentControlsIn(node)) {
+          touches.push({
+            control: entry.node,
+            locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
+            removed: true,
+            discarded: false,
+          });
+        }
+      }
+      return;
+    }
+    for (const child of node.children) {
+      walk(child, child.kind === 'contentControl' ? [...controls, child] : controls);
+    }
+  };
+  walk(root, []);
+  // A complete tracked-row decision removes the ROW, not its marker. Ask every control in that
+  // exact row—including sibling cells the marker walk never enters—with ancestor locks in force.
+  const removedRowIds = new Set(
+    removedRowsForRevisionDecision(part, action, revision, {
+      ...(localName === undefined ? {} : { localName }),
+      ...(scopeRootId === undefined ? {} : { scopeRootId }),
+    }).map((row) => row.id)
+  );
+  const walkRemovedRows = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
+    if (node.kind === 'textValue' || removedRowIds.size === 0) return;
+    if (removedRowIds.delete(node.id)) {
       for (const entry of contentControlsIn(node)) {
         touches.push({
           control: entry.node,
@@ -751,10 +802,10 @@ function resolveRevisionReach(
       return;
     }
     for (const child of node.children) {
-      walk(child, child.kind === 'contentControl' ? [...controls, child] : controls);
+      walkRemovedRows(child, child.kind === 'contentControl' ? [...controls, child] : controls);
     }
   };
-  walk(root, []);
+  walkRemovedRows(root, []);
   return { touches, unprotected };
 }
 
@@ -779,10 +830,15 @@ const REVISION_LOCAL_NAMES: ReadonlySet<string> = new Set([
   'cellMerge',
 ]);
 
-function isRevisionNode(node: OoxmlNode, revision: RevisionAddress | undefined): boolean {
+function isRevisionNode(
+  node: OoxmlNode,
+  revision: RevisionAddress | undefined,
+  localName?: string
+): boolean {
   if (node.kind === 'textValue') return false;
   if (node.namespaceUri !== WML_NAMESPACE_URI) return false;
   if (!REVISION_LOCAL_NAMES.has(node.localName)) return false;
+  if (localName !== undefined && node.localName !== localName) return false;
   if (!revision) return true;
   const attribute = (name: string): string | undefined =>
     node.attributes.find(
@@ -792,6 +848,13 @@ function isRevisionNode(node: OoxmlNode, revision: RevisionAddress | undefined):
   if (attribute('author') !== revision.author) return false;
   if (revision.date !== undefined && attribute('date') !== revision.date) return false;
   return true;
+}
+
+function revisionNodeRemovesContent(node: OoxmlNode, action: RevisionOpAction): boolean {
+  if (node.kind === 'textValue') return false;
+  if (node.localName === 'ins' || node.localName === 'moveTo') return action === 'reject';
+  if (node.localName === 'del' || node.localName === 'moveFrom') return action === 'accept';
+  return false;
 }
 
 /**

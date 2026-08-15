@@ -235,6 +235,7 @@ describe('every host refusal arrives as one of this runtime\u2019s codes', () =>
     ['invalid-handle', 'InvalidObjectPath'],
     ['invalid-offset', 'InvalidArgument'],
     ['unsupported-revision', 'NotImplemented'],
+    ['ambiguous-document', 'GeneralException'],
     ['disposed', 'RuntimeDisposed'],
   ];
 
