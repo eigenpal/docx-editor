@@ -139,7 +139,7 @@ export default defineConfig(async () => {
             // `editor` and the `contracts/*` single-file entries are matched above / by the
             // capture.
             {
-              find: /^@docx-editor\.dev\/core\/(binding|layout|output|store|sync|clients|server)$/,
+              find: /^@docx-editor\.dev\/core\/(automation|binding|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
             },
             {

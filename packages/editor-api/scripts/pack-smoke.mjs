@@ -36,6 +36,44 @@ import { strToU8, zipSync } from 'fflate';
 const PACKAGE = path.resolve(import.meta.dirname, '..');
 const CORE_PACKAGE = path.resolve(PACKAGE, '..', 'core');
 const manifest = JSON.parse(readFileSync(path.join(PACKAGE, 'package.json'), 'utf8'));
+const coreManifest = JSON.parse(readFileSync(path.join(CORE_PACKAGE, 'package.json'), 'utf8'));
+
+/** Bare `@docx-editor.dev/core` specifiers a bundle may keep external. */
+function allowedCoreBareSpecifiers(exports) {
+  const allowed = new Set();
+  for (const [subpath, target] of Object.entries(exports)) {
+    if (subpath === './package.json') continue;
+    if (typeof target === 'string') continue;
+    if (typeof target !== 'object') continue;
+    allowed.add(
+      subpath === '.' ? '@docx-editor.dev/core' : `@docx-editor.dev/core${subpath.slice(1)}`
+    );
+  }
+  return allowed;
+}
+
+/** Built output each allowed bare specifier must resolve to. */
+function coreExportTargets(exports) {
+  const targets = new Map();
+  for (const [subpath, target] of Object.entries(exports)) {
+    if (typeof target !== 'object') continue;
+    const bare =
+      subpath === '.' ? '@docx-editor.dev/core' : `@docx-editor.dev/core${subpath.slice(1)}`;
+    targets.set(bare, { import: target.import, require: target.require });
+  }
+  return targets;
+}
+
+const ALLOWED_CORE = allowedCoreBareSpecifiers(coreManifest.exports);
+const CORE_TARGETS = coreExportTargets(coreManifest.exports);
+
+function bareImports(source) {
+  return [
+    ...source.matchAll(
+      /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["']([^"'.][^"']*)["']/g
+    ),
+  ].map((match) => match[1]);
+}
 
 const failures = [];
 function check(ok, message) {
@@ -200,13 +238,31 @@ try {
   // undeclared bundle leak, including the font shaper deliberately externalized for resolution.
   for (const name of ['dist/index.mjs', 'dist/index.js', 'dist/browser.mjs', 'dist/browser.js']) {
     const source = readFileSync(path.join(root, name), 'utf8');
-    const bare = [
-      ...source.matchAll(/(?:\bfrom|\bimport|\brequire\s*\()\s*["']([^"'.][^"']*)["']/g),
-    ].map((match) => match[1]);
-    const unexpected = [...new Set(bare)].filter(
-      (specifier) => !specifier.startsWith('@docx-editor.dev/core/')
+    const bare = [...new Set(bareImports(source))];
+    const nonCore = bare.filter((specifier) => !specifier.startsWith('@docx-editor.dev/core'));
+    check(
+      nonCore.length === 0,
+      `${name} imports ${nonCore.join(', ')} unexpectedly`
     );
-    check(unexpected.length === 0, `${name} imports ${unexpected.join(', ')} unexpectedly`);
+    const coreImports = bare.filter((specifier) => specifier.startsWith('@docx-editor.dev/core'));
+    const disallowedCore = coreImports.filter((specifier) => !ALLOWED_CORE.has(specifier));
+    check(
+      disallowedCore.length === 0,
+      `${name} imports undeclared core subpaths: ${disallowedCore.join(', ')}`
+    );
+    const condition = name.endsWith('.mjs') ? 'import' : 'require';
+    for (const specifier of coreImports) {
+      const target = CORE_TARGETS.get(specifier)?.[condition];
+      check(
+        target,
+        `${name} imports ${specifier}, which has no ${condition} export target in core`
+      );
+      if (!target) continue;
+      check(
+        existsSync(path.join(CORE_PACKAGE, target)),
+        `${name} imports ${specifier}, whose ${condition} target ${target} is not built`
+      );
+    }
   }
 
   // ---- a consumer can import it, both ways -------------------------------------------------

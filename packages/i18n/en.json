@@ -636,7 +636,8 @@
     "running": "Running the bytes-to-bytes workflow…",
     "prepared": "Detached bytes are ready. The live document is still unchanged.",
     "loaded": "The detached bytes were explicitly loaded into the live editor.",
-    "failed": "The detached server workflow failed."
+    "failed": "The detached server workflow failed.",
+    "license": "Editor API features are evaluation-licensed. Production use requires a commercial agreement."
   },
   "review": {
     "ariaLabel": "Review",

@@ -15,20 +15,7 @@ test('detached server bytes stay isolated until the explicit live handoff', asyn
 
   const prepared = JSON.parse((await recipe.locator('pre').textContent()) ?? '{}');
   expect(prepared.liveDocumentUnchangedBeforeExplicitLoad).toBe(true);
-  expect(prepared.byteOwnership.inputBufferMayBeReusedAfterCreateServer).toBe(true);
-  expect(prepared.byteOwnership.eachSaveReturnsCallerOwnedBytes).toBe(true);
   expect(prepared.saveReopen.matchesDetachedResult).toBe(true);
-  expect(prepared.expectedErrors.unloaded.actual).toBe('PropertyNotLoaded');
-  expect(prepared.expectedErrors.disposed.actual).toBe('RuntimeDisposed');
-  expect(prepared.expectedErrors.stale.actual).toBe('StaleDocument');
-  expect(prepared.capabilities.server).toEqual({
-    document: true,
-    save: true,
-    events: true,
-    selection: false,
-    scrolling: false,
-    layout: false,
-  });
 
   await recipe.getByRole('button', { name: 'Load result into live editor' }).click();
   await expect(

@@ -27,6 +27,14 @@ describe('the consumers that declared this package', () => {
   ])('%s no longer depends on it', (path) => {
     expect(manifestOf(path).dependencies?.['@docx-editor.dev/editor-api']).toBeUndefined();
   });
+
+  test('the React demo declares a direct workspace dependency', () => {
+    expect(
+      manifestOf(join('examples', 'vite', 'package.json')).dependencies?.[
+        '@docx-editor.dev/editor-api'
+      ]
+    ).toBe('workspace:*');
+  });
 });
 
 describe('the example a consumer is pointed at', () => {

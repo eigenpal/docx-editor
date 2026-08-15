@@ -596,7 +596,8 @@
     "running": null,
     "show": null,
     "subtitle": null,
-    "title": null
+    "title": null,
+    "license": null
   },
   "review": {
     "accept": "קבל",
