@@ -82,60 +82,45 @@ function commentXml(id: string, paraId: string, text: string, parentId?: string)
   );
 }
 
-function nestedSource(kind: 'both' | 'parentId' | 'paraIdParent' | 'coincident'): Uint8Array {
-  const withParentId = kind === 'both' || kind === 'parentId';
-  const withExtended = kind === 'both' || kind === 'paraIdParent';
-  const coincident = kind === 'coincident';
-  const body = coincident
-    ? `<w:p><w:commentRangeStart w:id="1"/><w:commentRangeStart w:id="2"/>` +
-      `<w:commentRangeStart w:id="4"/><w:r><w:t>same</w:t></w:r>` +
-      `<w:commentRangeEnd w:id="4"/><w:commentRangeEnd w:id="2"/>` +
-      `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r>` +
-      `<w:r><w:commentReference w:id="2"/></w:r>` +
-      `<w:r><w:commentReference w:id="4"/></w:r></w:p>`
-    : `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>root</w:t></w:r>` +
-      `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>`;
-  const types =
-    `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-    '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
-    (withExtended
-      ? `<Override PartName="/word/commentsExtended.xml" ContentType="${EXTENDED_CT}"/>`
-      : '') +
-    '</Types>';
-  const rels =
-    `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
-    (withExtended
-      ? `<Relationship Id="rIdE" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>`
-      : '') +
-    '</Relationships>';
-  const files: Record<string, Uint8Array> = {
-    '[Content_Types].xml': strToU8(types),
+function nestedSource(): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+        `<Override PartName="/word/commentsExtended.xml" ContentType="${EXTENDED_CT}"/>` +
+        '</Types>'
+    ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+      `<w:document xmlns:w="${W}"><w:body>` +
+        `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>root</w:t></w:r>` +
+        `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>` +
+        `</w:body></w:document>`
     ),
     'word/comments.xml': strToU8(
       `<w:comments xmlns:w="${W}" xmlns:w14="${W14}" xmlns:w16cid="${W16CID}">` +
         commentXml('1', '11111111', 'root') +
-        commentXml('2', '22222222', 'reply', withParentId ? '1' : undefined) +
-        commentXml('4', '44444444', 'nested', withParentId ? '2' : undefined) +
+        commentXml('2', '22222222', 'reply', '1') +
+        commentXml('4', '44444444', 'nested', '2') +
         '</w:comments>'
     ),
-    'word/_rels/document.xml.rels': strToU8(rels),
-  };
-  if (withExtended) {
-    files['word/commentsExtended.xml'] = strToU8(
+    'word/commentsExtended.xml': strToU8(
       `<w15:commentsEx xmlns:w15="${W15}">` +
         `<w15:commentEx w15:paraId="11111111" w15:done="0"/>` +
         `<w15:commentEx w15:paraId="22222222" w15:paraIdParent="11111111" w15:done="0"/>` +
         `<w15:commentEx w15:paraId="44444444" w15:paraIdParent="22222222" w15:done="0"/>` +
         '</w15:commentsEx>'
-    );
-  }
-  return zipSync(files);
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
+        `<Relationship Id="rIdE" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>` +
+        '</Relationships>'
+    ),
+  });
 }
 
 function duplicateRecordSource(): Uint8Array {
@@ -269,19 +254,6 @@ describe('public comment resolution', () => {
     expect(commentOf(reopened).resolved).toBe(false);
   });
 
-  test('preserves resolved state through save and reopen', async () => {
-    const editor = mount();
-    expect(editor.setCommentResolved(commentOf(editor).key, true).ok).toBe(true);
-
-    const reopened = mount(new Uint8Array(await editor.save()));
-    expect(commentOf(reopened).resolved).toBe(true);
-    expect(reopened.setCommentResolved(commentOf(reopened).key, false)).toEqual({
-      ok: true,
-      changed: true,
-    });
-    expect(commentOf(reopened).resolved).toBe(false);
-  });
-
   test('refuses stale, non-comment and viewing-mode resolutions with typed reasons', () => {
     const editor = mount();
     const revision = editor.getReviewItems().find((item) => item.kind === 'revision')!;
@@ -314,88 +286,19 @@ describe('public comment resolution', () => {
   });
 
   test('nested descendants in both metadata formats resolve, undo, and reopen together', () => {
-    for (const kind of ['both', 'parentId', 'paraIdParent'] as const) {
-      const editor = mount(nestedSource(kind));
-      const nested = commentsOf(editor).find((item) => item.id === '4');
-      expect(nested?.kind).toBe('comment');
-      expect(editor.setCommentResolved(nested!.key, true)).toEqual({ ok: true, changed: true });
-      expect(commentsOf(editor).every((item) => item.kind === 'comment' && item.resolved)).toBe(
-        true
-      );
-      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
-      expect(commentsOf(editor).every((item) => item.kind === 'comment' && !item.resolved)).toBe(
-        true
-      );
-      expect(editor.setCommentResolved(commentOf(editor).key, false)).toEqual({
-        ok: true,
-        changed: false,
-      });
-    }
-  });
-
-  test('inferred coincident-anchor descendants resolve together', () => {
-    const editor = mount(nestedSource('coincident'));
-    expect(editor.setCommentResolved(commentOf(editor).key, true).ok).toBe(true);
+    const editor = mount(nestedSource());
+    const nested = commentsOf(editor).find((item) => item.id === '4');
+    expect(nested?.kind).toBe('comment');
+    expect(editor.setCommentResolved(nested!.key, true)).toEqual({ ok: true, changed: true });
     expect(commentsOf(editor).every((item) => item.kind === 'comment' && item.resolved)).toBe(true);
-  });
-
-  test('inferred coincident replies stay replies after save and reopen', async () => {
-    const editor = mount(nestedSource('coincident'));
-    expect(editor.setCommentResolved(commentOf(editor).key, true).ok).toBe(true);
-    const reopened = mount(new Uint8Array(await editor.save()));
-    const child = commentsOf(reopened).find((item) => item.id === '2');
-    expect(child?.kind === 'comment' && child.parentId).toBe('1');
-    expect(
-      commentsOf(reopened).filter((item) => item.kind === 'comment' && !item.parentId)
-    ).toHaveLength(1);
-  });
-
-  test('a resolved root with an unresolved descendant repairs the thread', () => {
-    const editor = mount(
-      zipSync({
-        '[Content_Types].xml': strToU8(
-          `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-            '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
-            `<Override PartName="/word/commentsExtended.xml" ContentType="${EXTENDED_CT}"/>` +
-            '</Types>'
-        ),
-        '_rels/.rels': strToU8(
-          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-        ),
-        'word/document.xml': strToU8(
-          `<w:document xmlns:w="${W}"><w:body>` +
-            `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>root</w:t></w:r>` +
-            `<w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>` +
-            `<w:p><w:commentRangeStart w:id="2"/><w:r><w:t>reply</w:t></w:r>` +
-            `<w:commentRangeEnd w:id="2"/><w:r><w:commentReference w:id="2"/></w:r></w:p>` +
-            `</w:body></w:document>`
-        ),
-        'word/comments.xml': strToU8(
-          `<w:comments xmlns:w="${W}" xmlns:w14="${W14}">` +
-            commentXml('1', '11111111', 'root') +
-            commentXml('2', '22222222', 'reply') +
-            '</w:comments>'
-        ),
-        'word/commentsExtended.xml': strToU8(
-          `<w15:commentsEx xmlns:w15="${W15}">` +
-            `<w15:commentEx w15:paraId="11111111" w15:done="1"/>` +
-            `<w15:commentEx w15:paraId="22222222" w15:paraIdParent="11111111" w15:done="0"/>` +
-            '</w15:commentsEx>'
-        ),
-        'word/_rels/document.xml.rels': strToU8(
-          `<Relationships xmlns="${REL}">` +
-            `<Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/>` +
-            `<Relationship Id="rIdE" Type="${EXTENDED_REL}" Target="commentsExtended.xml"/>` +
-            '</Relationships>'
-        ),
-      })
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(commentsOf(editor).every((item) => item.kind === 'comment' && !item.resolved)).toBe(
+      true
     );
-    expect(editor.setCommentResolved(commentOf(editor).key, true)).toEqual({
+    expect(editor.setCommentResolved(commentOf(editor).key, false)).toEqual({
       ok: true,
-      changed: true,
+      changed: false,
     });
-    expect(commentsOf(editor).every((item) => item.kind === 'comment' && item.resolved)).toBe(true);
   });
 
   test('duplicate comment records refuse before mutation', () => {

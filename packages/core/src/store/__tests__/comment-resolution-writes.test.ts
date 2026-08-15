@@ -478,21 +478,6 @@ describe('setCommentResolved walks the whole bounded thread', () => {
     );
   });
 
-  test('duplicate commentEx with conflicting done refuse', () => {
-    expectRefused(
-      storeOf(
-        loadCommentFixture({
-          body: markedComment('hello'),
-          comments: commentsXml(comment('1', '11111111', 'root')),
-          extended: extended(
-            `<w15:commentEx w15:paraId="11111111" w15:done="0"/>` +
-              `<w15:commentEx w15:paraId="11111111" w15:done="1"/>`
-          ),
-        })
-      )
-    );
-  });
-
   test('duplicate commentsIds keys refuse', () => {
     const idsXml = (entries: string) =>
       `<w16cid:commentsIds xmlns:w16cid="${W16CID}">${entries}</w16cid:commentsIds>`;

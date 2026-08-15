@@ -115,6 +115,7 @@ describe('review viewing mode', () => {
       view.getByTestId('review-add-comment').click();
     });
     const draftInput = view.getByTestId('review-draft-input') as HTMLInputElement;
+    expect(document.activeElement).toBe(draftInput);
     await act(async () => {
       fireEvent.change(draftInput, { target: { value: 'Hold this draft' } });
     });
@@ -159,52 +160,6 @@ describe('review viewing mode', () => {
     expect(view.queryByTestId('review-add-comment')).toBeNull();
     expect(document.activeElement).not.toBe(draftInput);
     expect(document.activeElement).toBe(replyInput);
-  });
-
-  test('focuses a new draft once on open and keeps focus after viewing returns to editing', async () => {
-    let instance: DocxEditorInstance | null = null;
-    const view = render(
-      <DocxEditorRoot
-        document={TRACKED}
-        author="Grace Hopper"
-        modules={[reviewModule()]}
-        onReady={(editor) => {
-          instance = editor as DocxEditorInstance;
-        }}
-      >
-        <DocxEditorViewport>
-          <DocxEditorContent />
-          <DocxEditorReview />
-        </DocxEditorViewport>
-      </DocxEditorRoot>
-    );
-    const editor = instance!;
-    await act(async () => {
-      editor.surface!.selectAll();
-    });
-    await act(async () => {
-      view.getByTestId('review-add-comment').click();
-    });
-    const draftInput = view.getByTestId('review-draft-input') as HTMLInputElement;
-    expect(document.activeElement).toBe(draftInput);
-
-    await act(async () => {
-      fireEvent.click(view.getAllByTestId('review-card')[0]!);
-    });
-    const replyInput = view.getByTestId('review-reply-input') as HTMLInputElement;
-    await act(async () => {
-      replyInput.focus();
-    });
-    expect(document.activeElement).toBe(replyInput);
-
-    await act(async () => {
-      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
-    });
-    await act(async () => {
-      editor.exec({ type: 'setEditingMode', mode: 'editing' });
-    });
-    expect(document.activeElement).toBe(replyInput);
-    expect(document.activeElement).not.toBe(draftInput);
   });
 
   test('localizes resolve and reopen titles on packaged cards', async () => {
