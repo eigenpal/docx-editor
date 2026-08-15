@@ -1,5 +1,13 @@
 # @docx-editor.dev/core
 
+## 2.3.1
+
+### Patch Changes
+
+- 1c9b6a2: Long documents now reuse pagination after explicit page and section breaks, avoiding full-document work for ordinary typing, wrap-inducing edits, and character, word, line, vertical, or document-edge caret movement. Rapid typing preserves input order while coalescing pending page, toolbar, and review-rail refreshes, and repeated tracked deletions stay compact instead of adding one OOXML run per keypress.
+- 1c9b6a2: Rapid typing no longer reorders characters when a deferred paint leaves the DOM caret behind the model. Native and touch carets that return to that leftover offset still edit there.
+  - @docx-editor.dev/i18n@2.3.1
+
 ## 2.3.0
 
 ### Patch Changes
