@@ -198,11 +198,12 @@ export class Body extends ModelObject {
   }
 
   /**
-   * The tracked changes in this story that the engine can resolve, in document order.
+   * The tracked changes in this story that this API can publish as typed objects, in document order.
    *
    * DocxEditor's own accessor: upstream reaches revisions from the document, and this story-scoped
-   * one is what makes a header's or a note's changes reachable at all. Recorded in
-   * `compat/manifest.json`.
+   * collection is what makes a header's, footer's, or note's changes reachable at all. Recorded in
+   * `compat/manifest.json`. `items` may omit structural cards; collection-wide decisions still
+   * resolve every store-resolvable revision in this story.
    */
   get revisions(): RevisionCollection {
     this.#revisions ??= RevisionCollection.of(

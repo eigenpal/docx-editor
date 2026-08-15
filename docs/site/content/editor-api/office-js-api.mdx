@@ -109,8 +109,10 @@ This is a deliberate source-shape divergence from Office.js, whose declarations 
 
 Revision enumeration takes three syncs when a report needs range text: one to name the collection
 items, one to load revision metadata and resolve each `range`, and one to load those ranges' text.
-Every returned item is individually actionable, so collection membership is the acceptability
-signal:
+`document.revisions` is the main-body story. `Body.revisions` is story-scoped: a header, footer, or
+note collection resolves only that story. `items` omits structural cards whose exact Word subtype
+this API cannot name, so every listed item is individually actionable. That listing is not the
+collection decision set:
 
 ```ts
 const revisions = context.document.revisions;
@@ -131,20 +133,17 @@ const report = revisions.items.map((revision, index) => ({
   date: revision.date?.toISOString() ?? null,
   type: revision.type,
   text: ranges[index].text,
-  individuallyResolvable: true,
 }));
 ```
 
-Structural revisions are preserved but omitted from `items` because their individual `accept()` and
-`reject()` operations are not supported. This does not make collection-wide decisions partial:
-`acceptAll()` and `rejectAll()` use one canonical transaction and refuse the entire sync if any
-unsupported structural revision remains. No listed revision is resolved in that case. Handle this
-`NotImplemented` refusal and leave the document unchanged, or let a reviewer resolve the structural
-markup in Word. A `Body.revisions` collection in a header, footer, or note resolves only that story;
-other stories sharing its OOXML part are left alone. Browser decisions share the editor's Undo stack;
-one collection-wide decision is one Undo unit. Saving and reopening through the editor facade
-preserves the resulting OOXML but intentionally starts a new browser session, so Undo and selection
-do not survive the reopen.
+Structural revisions are preserved. Some are omitted from `items` because this API cannot type their
+exact Word subtype. Collection-wide decisions still resolve every store-resolvable revision in the
+story, including a complete tracked row, and refuse the entire sync if any `readOnly` or otherwise
+unsupported revision remains. No listed revision is resolved in that case. Handle this
+`NotImplemented` refusal and leave the document unchanged, or let a reviewer resolve the remaining
+markup in Word. Browser decisions share the editor's Undo stack; one collection-wide decision is one
+Undo unit. Saving and reopening through the editor facade preserves the resulting OOXML but
+intentionally starts a new browser session, so Undo and selection do not survive the reopen.
 
 Font reads are nullable for the same fidelity reason. `Font.bold`, `italic`, `color`, `name`, and
 `size` return `boolean | null`, `string | null`, or `number | null` when a range has mixed or

@@ -16,10 +16,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // offers — a read-only `content` would be a different contract from upstream's, so the member is
 // omitted and the text is published as DocxEditor's own `text`.
 //
-// A TRACKED CHANGE IS A DECISION THE ENGINE CAN MAKE. Structural revisions — a row, a cell, a
-// section, the table grid — are ones it refuses to resolve, so they are not answered as objects at
-// all: a revision whose `accept` and `reject` both refuse is worse than an absence, because code
-// walking the collection would stall on it with nothing to read that explains why.
+// A TRACKED CHANGE IS A DECISION THE ENGINE CAN MAKE. Individually unpublishable structural
+// cards — a row, a cell, a section, the table grid, when this API cannot name their Word
+// subtype — are omitted from the listing so code walking `items` never stalls on an object
+// whose `type` we cannot publish. Collection membership is not the collection decision set:
+// `acceptAll` / `rejectAll` still resolve every store-resolvable revision, including a
+// complete tracked row, and refuse atomically when any `readOnly` or otherwise unsupported
+// revision remains.
 
 import {
   ObjectPath,
@@ -44,9 +47,10 @@ import { Range } from './range.ts';
  *
  * The WHOLE upstream vocabulary, because a declaration says what a caller may be handed and a caller
  * switching on it should not have to be told which subset this engine happens to produce. Seven of
- * these actually occur — insert, delete, replace, the two property kinds and the two move halves —
- * because a change to a row, a cell or a section is structural, and this engine reports only the
- * changes it can also accept or reject. See `compat/manifest.json`.
+ * these actually occur as published objects — insert, delete, replace, the two property kinds and
+ * the two move halves. Structural cards whose exact Word subtype this API cannot name are omitted
+ * from `items`; collection-wide decisions still resolve every store-resolvable revision. See
+ * `compat/manifest.json`.
  */
 export type RevisionType =
   | 'None'
@@ -464,12 +468,11 @@ export class CommentCollection extends HandleCollection<Comment> {
 }
 
 /**
- * One tracked change, and a decision the engine can act on.
+ * One tracked change, published when this API can name its Word subtype.
  *
- * Only revisions the engine can actually resolve are answered as objects. Structural ones — a
- * row, a cell, a section, the table grid — are omitted from the collection entirely rather than
- * shipped as objects whose `accept` and `reject` both refuse: code walking the collection would
- * stall on such an item with nothing to read that explains why.
+ * Structural cards whose exact Word subtype cannot be typed — a row, a cell, a section, the table
+ * grid — are omitted from the collection rather than shipped as objects with an unpublishable
+ * `type`. That listing is not the collection decision set: see {@link RevisionCollection}.
  *
  * @public
  */
@@ -572,8 +575,9 @@ export class Revision extends ModelObject implements PromisedItem {
 /**
  * The tracked changes on a document, story or range, as of the batch that loaded them.
  *
- * Carries only the revisions the engine can resolve; see {@link Revision} for what is left out
- * and why.
+ * `items` omits structural cards whose Word subtype this API cannot name; see {@link Revision}.
+ * Collection-wide `acceptAll` / `rejectAll` still resolve every store-resolvable revision in this
+ * story and refuse atomically if any `readOnly` or otherwise unsupported revision remains.
  *
  * @public
  */
@@ -596,13 +600,12 @@ export class RevisionCollection extends HandleCollection<Revision> {
   }
 
   /**
-   * Keep every change, as ONE decision and one undo unit.
+   * Keep every change in this story, as ONE decision and one undo unit.
    *
-   * The engine's own whole-story operation rather than a loop over `accept`: a reviewer who
-   * accepted this collection's changes made one decision, and one undo should take all of them
-   * back. It refuses outright where the story holds a change the engine cannot resolve, which is
-   * the honest answer — accepting the rest would report a story as reviewed while it still carries
-   * pending changes.
+   * Resolves every store-resolvable revision in the story, including complete tracked rows
+   * omitted from `items`. Refuses the sync outright where any `readOnly` or otherwise
+   * unsupported revision remains, rather than reporting the story as reviewed while pending
+   * changes remain.
    */
   acceptAll(): void {
     const body = this.#body;

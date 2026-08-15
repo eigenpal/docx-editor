@@ -576,48 +576,6 @@ async function generateEndnotesTrackedChangesDocx(): Promise<void> {
   console.log(`Created: ${outputPath}`);
 }
 
-/** Small browser fixture with actionable text revisions plus one unsupported tracked row. */
-async function generateRevisionAutomationDocx(): Promise<void> {
-  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p>
-      <w:r><w:t xml:space="preserve">Before </w:t></w:r>
-      <w:ins w:id="10" w:author="Ada Reviewer" w:date="2026-08-01T09:00:00Z"><w:r><w:t>added words</w:t></w:r></w:ins>
-      <w:r><w:t xml:space="preserve"> and </w:t></w:r>
-      <w:del w:id="11" w:author="Grace Reviewer" w:date="2026-08-02T10:30:00Z"><w:r><w:delText>removed words</w:delText></w:r></w:del>
-      <w:r><w:t>.</w:t></w:r>
-    </w:p>
-    <w:tbl>
-      <w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>
-      <w:tblGrid><w:gridCol w:w="3600"/></w:tblGrid>
-      <w:tr>
-        <w:trPr><w:ins w:id="20" w:author="Structural Reviewer" w:date="2026-08-03T11:00:00Z"/></w:trPr>
-        <w:tc><w:tcPr><w:tcW w:w="3600" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Tracked row</w:t></w:r></w:p></w:tc>
-      </w:tr>
-    </w:tbl>
-    <w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
-  </w:body>
-</w:document>`;
-
-  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-</Types>`;
-
-  const zip = new JSZip();
-  zip.file('[Content_Types].xml', contentTypes);
-  zip.file('_rels/.rels', RELS_XML);
-  zip.file('word/document.xml', documentXml);
-
-  const buffer = await zip.generateAsync({ type: 'nodebuffer' });
-  const outputPath = path.join(FIXTURES_DIR, 'revision-automation.docx');
-  fs.writeFileSync(outputPath, buffer);
-  console.log(`Created: ${outputPath}`);
-}
-
 /**
  * Main function
  */
@@ -631,7 +589,6 @@ async function main(): Promise<void> {
   await generateHeaderWithTableDocx();
   await generateHeaderWithTableAndParagraphsDocx();
   await generateEndnotesTrackedChangesDocx();
-  await generateRevisionAutomationDocx();
 
   console.log('\nAll fixtures generated successfully!');
 }

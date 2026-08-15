@@ -126,12 +126,12 @@ export class Document extends ModelObject {
   }
 
   /**
-   * The tracked changes of the main story that the engine can resolve.
+   * The tracked changes of the main-body story that this API can publish as typed objects.
    *
-   * Structural changes — a row, a cell, a section, the table grid — are not in it: they are ones the
-   * engine refuses to accept or reject, and an item whose two verbs both refuse would stall code
-   * walking the collection. `acceptAll`/`rejectAll` refuse outright where the document holds one,
-   * rather than reporting a document as reviewed while pending changes remain.
+   * Structural cards whose exact Word subtype cannot be named are omitted from `items`.
+   * `acceptAll` / `rejectAll` still resolve every store-resolvable revision in the main body
+   * and refuse atomically if any `readOnly` or otherwise unsupported revision remains. Header,
+   * footer, and note revisions live on those stories' own `Body.revisions` collections.
    */
   get revisions(): RevisionCollection {
     this.#revisions ??= RevisionCollection.of(

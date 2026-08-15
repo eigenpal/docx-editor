@@ -526,9 +526,9 @@ export type AutomationOperation =
   /**
    * Accept every change in one story, as ONE decision and one undo unit.
    *
-   * The document-handle form is retained for protocol compatibility and names the main story.
-   * Story-scoped collections use the body-handle form so a note or header never resolves the main
-   * body's changes by accident.
+   * The document-handle form names the main story. The body-handle form names that story: a
+   * header, footer, or the main body uses the part-wide store op; a note expands to addressed
+   * per-item ops because notes share a part. Both forms agree for the main story.
    */
   | {
       readonly op: 'acceptAllRevisions';

@@ -56,6 +56,19 @@ function automationError(
   return Object.freeze(detail === undefined ? { code, message } : { code, message, detail });
 }
 
+/** Map a store story-transaction refusal onto the protocol code a caller can handle. */
+function storeTransactionError(reason: string): AutomationError {
+  const unsupported =
+    reason === 'unsupported-revision' || reason.startsWith('unsupported-revision:');
+  return automationError(
+    unsupported ? 'unsupported-revision' : 'transaction-refused',
+    unsupported
+      ? 'that story contains a tracked change this engine cannot resolve'
+      : 'the document store refused the transaction',
+    reason
+  );
+}
+
 /**
  * A batch that answered nothing: the failure at its index, `skipped` everywhere else.
  *
@@ -270,11 +283,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         return refuse(
           operations,
           firstCommand < 0 ? 0 : firstCommand,
-          automationError(
-            'transaction-refused',
-            'the document store refused the transaction',
-            applied.reason
-          ),
+          storeTransactionError(applied.reason),
           revision
         );
       }

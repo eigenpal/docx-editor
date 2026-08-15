@@ -2,4 +2,4 @@
 '@docx-editor.dev/editor-api': minor
 ---
 
-Fix revision collection decisions so story-scoped collections accept or reject their own header, footer, or note revisions atomically instead of targeting the main body.
+Fix story-scoped revision collections so they resolve every store-resolvable change in that story, including complete tracked rows, and refuse atomically when any unsupported revision remains.

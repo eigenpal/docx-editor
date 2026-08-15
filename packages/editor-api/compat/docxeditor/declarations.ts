@@ -326,9 +326,9 @@ export declare namespace DocxEditor {
     getFirst(): CommentReply;
   }
 
-  // The whole upstream vocabulary is declared, and seven of its members occur: a change to a row, a
-  // cell or a section is structural, and this subset reports only changes it can also accept or
-  // reject. See `compat/manifest.json`.
+  // The whole upstream vocabulary is declared. Seven members occur as published objects; structural
+  // cards whose exact Word subtype this API cannot name are omitted from `items`. Collection-wide
+  // decisions still resolve every store-resolvable revision. See `compat/manifest.json`.
   export class Revision {
     readonly author: string;
     readonly date: Date;

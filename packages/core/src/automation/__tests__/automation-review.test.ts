@@ -6,9 +6,10 @@
 // accept and the object model cannot find — so the protocol asks the SAME question the surface
 // asks, and these tests pin the answers to a real package rather than to a fixture of items.
 //
-// WHAT A REVISION CAN BE ASKED TO DO is narrower than what it can be asked about. A structural
-// revision — a row, a cell, a section, the table grid — is one the engine refuses to resolve, and
-// a decision that can only answer refusals is not handed back as an object at all.
+// WHAT A REVISION CAN BE ASKED TO DO is narrower than what it can be asked about. Structural
+// cards whose Word subtype this protocol cannot name are omitted from the listing. Collection
+// accept/reject still resolve every store-resolvable revision, including a complete tracked row,
+// and refuse atomically when any unsupported one remains.
 
 import { describe, expect, test } from 'bun:test';
 import { REL_TYPES, noteReference, notesPart, richDocx } from './support/furniture.ts';
@@ -756,8 +757,9 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     expect(refusal(response)).toBe('invalid-handle');
   });
 
-  test('a structural change is not answered as a decision, because it cannot be resolved', () => {
-    // A row insertion (`w:trPr/w:ins`) is a revision this engine refuses to accept or reject.
+  test('a structural change is not answered as a typed decision', () => {
+    // Incomplete `w:trPr/w:ins` (no matching `w:cellIns`) is omitted from the listing because
+    // this protocol cannot name its Word subtype. Collection membership is not the decision set.
     const host = open(
       richDocx({
         body:
@@ -767,6 +769,48 @@ describe('a tracked change is a decision, and the ones offered are the ones the 
     );
     const { body } = roots(host);
     expect(revisionsOf(host, body)).toEqual([]);
+  });
+
+  test('accepting a complete tracked row keeps the row and drops the marks', () => {
+    const markup =
+      `<w:tbl><w:tr><w:tc><w:p><w:r><w:t>keep</w:t></w:r></w:p></w:tc></w:tr>` +
+      `<w:tr><w:trPr><w:ins w:id="50" w:author="Ada" w:date="2026-01-03T00:00:00Z"/></w:trPr>` +
+      `<w:tc><w:tcPr><w:cellIns w:id="50" w:author="Ada" w:date="2026-01-03T00:00:00Z"/></w:tcPr>` +
+      `<w:p><w:r><w:t>added row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+    const bytes = richDocx({ body: markup });
+    for (const form of ['body', 'document'] as const) {
+      const host = open(bytes);
+      const { document, body } = roots(host);
+      expect(revisionsOf(host, body)).toEqual([]);
+      const operation =
+        form === 'body'
+          ? ({ op: 'acceptAllRevisions', body } as const)
+          : ({ op: 'acceptAllRevisions', document } as const);
+      expect(host.execute({ operations: [operation] }).ok).toBe(true);
+      const xml = savedPartBytes(reopen(host).host, 'word/document.xml');
+      expect(xml).not.toContain('<w:ins');
+      expect(xml).not.toContain('cellIns');
+      expect(xml).toContain('added row');
+      expect(xml).toContain('keep');
+    }
+  });
+
+  test('an unsupported row refuses the collection without changing the story', () => {
+    const host = open(
+      richDocx({
+        body:
+          `<w:p><w:ins w:id="10" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>` +
+          `<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/></w:trPr>` +
+          `<w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`,
+      })
+    );
+    const { body } = roots(host);
+    const before = savedPartBytes(host, 'word/document.xml');
+    const response = host.execute({ operations: [{ op: 'acceptAllRevisions', body }] });
+    expect(response.ok).toBe(false);
+    expect(refusal(response)).toBe('unsupported-revision');
+    expect(savedPartBytes(host, 'word/document.xml')).toBe(before);
+    expect(revisionsOf(host, body)).toHaveLength(1);
   });
 
   test('two decisions in one batch are one transaction', () => {

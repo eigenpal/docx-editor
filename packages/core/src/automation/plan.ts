@@ -2400,7 +2400,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const plan = planFor(target.reads);
         const conflict = pinWrite(plan);
         if (conflict) return conflict;
-        const ops = revisionCollectionOps(operation, target.reads, target.storyScoped);
+        const ops = revisionCollectionOps(operation, target.reads);
         if (!ops) {
           return refuse(
             'unsupported-revision',

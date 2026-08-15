@@ -12,6 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // owner's when it should be its own. Each test here is a script somebody would actually write.
 
 import { describe, expect, test } from 'bun:test';
+import { strToU8, zipSync } from 'fflate';
 import { createServer } from '../../runtime/server.ts';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import {
@@ -48,6 +49,74 @@ const TRACKED_WITH_UNSUPPORTED_ROW = docx(
     '<w:tbl><w:tr><w:trPr><w:ins w:id="20" w:author="Grace"/></w:trPr>' +
     '<w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
 );
+
+const TRACKED_COMPLETE_ROW = docx(
+  '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>keep</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:trPr><w:ins w:id="50" w:author="Ada" w:date="2026-01-03T00:00:00Z"/></w:trPr>' +
+    '<w:tc><w:tcPr><w:cellIns w:id="50" w:author="Ada" w:date="2026-01-03T00:00:00Z"/></w:tcPr>' +
+    '<w:p><w:r><w:t>added row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const OFFICE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/** One endnote revision and a separate main-body revision, so accepting the note cannot hide a body leak. */
+const NOTE_AND_BODY_REVISIONS: Uint8Array = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rId10" Type="${OFFICE}/endnotes" Target="endnotes.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p>` +
+      '<w:ins w:id="10" w:author="Ada"><w:r><w:t>body kept</w:t></w:r></w:ins>' +
+      '<w:r><w:endnoteReference w:id="4"/></w:r></w:p></w:body></w:document>'
+  ),
+  'word/endnotes.xml': strToU8(
+    `<w:endnotes xmlns:w="${W}">` +
+      '<w:endnote w:id="4"><w:p><w:ins w:id="40" w:author="Note Reviewer">' +
+      '<w:r><w:t>end note</w:t></w:r></w:ins></w:p></w:endnote></w:endnotes>'
+  ),
+});
+
+const HEADER_AND_BODY_REVISIONS: Uint8Array = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rId7" Type="${OFFICE}/header" Target="header1.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}" xmlns:r="${OFFICE}"><w:body><w:p>` +
+      '<w:ins w:id="10" w:author="Ada"><w:r><w:t>body kept</w:t></w:r></w:ins></w:p>' +
+      '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/></w:sectPr>' +
+      '</w:body></w:document>'
+  ),
+  'word/header1.xml': strToU8(
+    `<w:hdr xmlns:w="${W}"><w:p><w:ins w:id="20" w:author="Grace">` +
+      '<w:r><w:t>header added</w:t></w:r></w:ins></w:p></w:hdr>'
+  ),
+});
 
 async function codeOf(run: () => Promise<unknown>): Promise<string> {
   try {
@@ -417,7 +486,7 @@ describe('a section is the page a story is laid out on', () => {
   });
 
   test('a note revision collection accepts its own story rather than the main body', async () => {
-    const runtime = await createServer(WITH_NOTE_TEXT_CASES);
+    const runtime = await createServer(NOTE_AND_BODY_REVISIONS);
     await runtime.run(async (context) => {
       const notes = context.document.endnotes;
       notes.load('items');
@@ -435,16 +504,26 @@ describe('a section is the page a story is laid out on', () => {
     const next = await reopen(runtime);
     const remaining = await next.run(async (context) => {
       const notes = context.document.endnotes;
+      const main = context.document.revisions;
+      const body = context.document.body;
       notes.load('items');
+      main.load('items');
+      body.load('text');
       await context.sync();
-      const body = notes.items[0]!.body;
+      const noteBody = notes.items[0]!.body;
       await context.sync();
-      const revisions = body.revisions;
-      revisions.load('items');
+      const noteRevisions = noteBody.revisions;
+      noteRevisions.load('items');
       await context.sync();
-      return revisions.items.length;
+      return {
+        note: noteRevisions.items.length,
+        main: main.items.length,
+        body: body.text,
+      };
     });
-    expect(remaining).toBe(0);
+    expect(remaining.note).toBe(0);
+    expect(remaining.main).toBe(1);
+    expect(remaining.body).toContain('body kept');
   });
 
   test('a deleted note refuses a later direct text load', async () => {
@@ -604,6 +683,12 @@ describe('comments and tracked changes are what a document says about itself', (
 
   test('accept all reports unsupported structural revisions without changing the story', async () => {
     const runtime = await serverRuntime(TRACKED_WITH_UNSUPPORTED_ROW);
+    const before = await runtime.run(async (context) => {
+      const body = context.document.body;
+      body.load('text');
+      await context.sync();
+      return body.text;
+    });
     const code = await codeOf(() =>
       runtime.run(async (context) => {
         context.document.revisions.acceptAll();
@@ -614,11 +699,82 @@ describe('comments and tracked changes are what a document says about itself', (
 
     const remaining = await runtime.run(async (context) => {
       const revisions = context.document.revisions;
+      const body = context.document.body;
+      revisions.load('items');
+      body.load('text');
+      await context.sync();
+      return { count: revisions.items.length, text: body.text };
+    });
+    expect(remaining).toEqual({ count: 1, text: before });
+  });
+
+  test('accept all resolves a complete tracked row even though it is omitted from items', async () => {
+    const runtime = await serverRuntime(TRACKED_COMPLETE_ROW);
+    await runtime.run(async (context) => {
+      const revisions = context.document.revisions;
       revisions.load('items');
       await context.sync();
-      return revisions.items.length;
+      expect(revisions.items).toHaveLength(0);
+      revisions.acceptAll();
+      await context.sync();
     });
-    expect(remaining).toBe(1);
+    const next = await reopen(runtime);
+    const after = await next.run(async (context) => {
+      const revisions = context.document.revisions;
+      const body = context.document.body;
+      revisions.load('items');
+      body.load('text');
+      await context.sync();
+      return { count: revisions.items.length, text: body.text };
+    });
+    expect(after.count).toBe(0);
+    expect(after.text).toContain('keep');
+    expect(after.text).toContain('added row');
+  });
+
+  test('a header collection resolves its own story rather than the main body', async () => {
+    const runtime = await createServer(HEADER_AND_BODY_REVISIONS);
+    await runtime.run(async (context) => {
+      const sections = context.document.sections;
+      sections.load('items');
+      await context.sync();
+      const header = sections.items[0]!.getHeader('Primary');
+      await context.sync();
+      const revisions = header.revisions;
+      revisions.load('items');
+      await context.sync();
+      expect(revisions.items).toHaveLength(1);
+      revisions.acceptAll();
+      await context.sync();
+    });
+    const next = await reopen(runtime);
+    const remaining = await next.run(async (context) => {
+      const sections = context.document.sections;
+      const main = context.document.revisions;
+      const body = context.document.body;
+      sections.load('items');
+      main.load('items');
+      body.load('text');
+      await context.sync();
+      const header = sections.items[0]!.getHeader('Primary');
+      await context.sync();
+      const headerRevisions = header.revisions;
+      header.load('text');
+      headerRevisions.load('items');
+      await context.sync();
+      return {
+        header: headerRevisions.items.length,
+        headerText: header.text,
+        main: main.items.length,
+        body: body.text,
+      };
+    });
+    expect(remaining).toEqual({
+      header: 0,
+      headerText: 'header added',
+      main: 1,
+      body: 'body kept',
+    });
   });
 
   test('a runtime with no author refuses to write a comment rather than inventing one', async () => {

@@ -12,7 +12,7 @@ type CollectionDecision = Extract<
 >;
 
 type DecisionTarget =
-  | { readonly ok: true; readonly reads: AutomationStoryReads; readonly storyScoped: boolean }
+  | { readonly ok: true; readonly reads: AutomationStoryReads }
   | {
       readonly ok: false;
       readonly code: AutomationErrorCode;
@@ -29,7 +29,7 @@ export function revisionDecisionTarget(
   if ('body' in operation) {
     const story = storyOfHandle(operation.body, 'body', handles, packageReads);
     return story.ok
-      ? { ok: true, reads: story.value, storyScoped: true }
+      ? { ok: true, reads: story.value }
       : {
           ok: false,
           code: story.code,
@@ -46,7 +46,7 @@ export function revisionDecisionTarget(
     };
   }
   return packageReads.body
-    ? { ok: true, reads: packageReads.body, storyScoped: false }
+    ? { ok: true, reads: packageReads.body }
     : {
         ok: false,
         code: 'document-unavailable',
@@ -54,18 +54,19 @@ export function revisionDecisionTarget(
       };
 }
 
-/** Build one atomic collection decision after its target story has been resolved. */
+/**
+ * Build one atomic collection decision after its target story has been resolved.
+ *
+ * A header, footer, or the main body owns its part, so the store's part-wide op is the decision.
+ * Notes share `footnotes.xml` / `endnotes.xml`, so those expand to addressed per-item ops.
+ */
 export function revisionCollectionOps(
   operation: CollectionDecision,
-  reads: AutomationStoryReads,
-  storyScoped: boolean
+  reads: AutomationStoryReads
 ): readonly TreeDocOp[] | null {
-  if (storyScoped) {
-    return revisionDecisionOps(reads, operation.op === 'acceptAllRevisions');
-  }
-  return [
-    operation.op === 'acceptAllRevisions'
-      ? { op: 'acceptAllRevisions' }
-      : { op: 'rejectAllRevisions' },
-  ];
+  const accept = operation.op === 'acceptAllRevisions';
+  const expanded = revisionDecisionOps(reads, accept);
+  if (expanded === null) return null;
+  if (reads.story.kind === 'note') return expanded;
+  return [accept ? { op: 'acceptAllRevisions' } : { op: 'rejectAllRevisions' }];
 }

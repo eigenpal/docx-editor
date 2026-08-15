@@ -94,11 +94,15 @@ removes only that reply and preserves the parent and siblings. Several deletes q
 Pro review module and a writable, attached editor; server writes are provided by this Pro-licensed
 runtime. Root creation follows the same browser gate and is one Undo unit.
 
-`document.revisions.items` contains only revisions whose individual `accept()` and `reject()` are
-supported. Structural tracked changes remain preserved in the file and are not presented as
-actionable objects. `acceptAll()` and `rejectAll()` still inspect the whole document and refuse
-atomically if unsupported structural markup remains; they never resolve only the listed subset.
-Browser decisions join the editor's Undo stack, with one collection decision as one Undo unit.
+`document.revisions` is the main-body story. `Body.revisions` is story-scoped: a header, footer,
+or note collection names that story only. `items` contains revisions this API can publish as typed
+Word objects. Structural cards whose exact subtype cannot be named are omitted from `items` and
+remain preserved in the file. Collection membership is not the collection decision set:
+`acceptAll()` and `rejectAll()` still resolve every store-resolvable revision in that story —
+including a complete tracked row — and refuse atomically if any `readOnly` or otherwise unsupported
+revision remains. They never resolve only the listed subset. Handle a `NotImplemented` refusal and
+leave the document unchanged, or let a reviewer resolve the remaining markup in Word. Browser
+decisions join the editor's Undo stack, with one collection decision as one Undo unit.
 
 ## Programming model
 
