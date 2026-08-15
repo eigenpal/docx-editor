@@ -25,6 +25,15 @@ function load(body: string): OoxmlPart {
   return result.part;
 }
 
+function loadNotes(notes: string): OoxmlPart {
+  const result = readOoxmlPart(`<w:footnotes xmlns:w="${W}">${notes}</w:footnotes>`, {
+    name: '/word/footnotes.xml',
+    contentType: 'app/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
 function apply(part: OoxmlPart, op: TreeDocOp): OoxmlPart {
   const result = applyTreeOp(part, op);
   if (!result.ok) throw new Error(`${result.reason}${result.detail ? `: ${result.detail}` : ''}`);
@@ -314,5 +323,63 @@ describe('accept-all and reject-all', () => {
     );
     expect(refuse(part, { op: 'acceptAllRevisions' })).toBe('unsupported-revision');
     expect(xml(part)).toContain('<w:ins');
+  });
+
+  test('a canonical note-root scope resolves only that note despite colliding identities', () => {
+    const part = loadNotes(
+      `<w:footnote w:id="1"><w:p>${wrap('ins', QA, run('target'))}</w:p>` +
+        `<w:tbl><w:tr><w:trPr><w:ins w:id="8" w:author="Row"/></w:trPr>` +
+        `<w:tc><w:tcPr><w:cellIns w:id="8" w:author="Row"/></w:tcPr>` +
+        `<w:p>${run('tracked row')}</w:p></w:tc></w:tr></w:tbl></w:footnote>` +
+        `<w:footnote w:id="2"><w:p>${wrap('ins', QA, run('sibling'))}</w:p>` +
+        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev"/></w:trPr>` +
+        `<w:tc><w:p>${run('unsupported')}</w:p></w:tc></w:tr></w:tbl></w:footnote>`
+    );
+    const target = part.root.children.find(
+      (node) => node.kind !== 'textValue' && node.localName === 'footnote'
+    );
+    if (!target || target.kind === 'textValue') throw new Error('missing target note');
+
+    const out = xml(apply(part, { op: 'acceptAllRevisions', scopeRootId: target.id }));
+    expect(out).toContain('target');
+    expect(out.match(/<w:ins\b/g) ?? []).toHaveLength(1);
+    expect(out).not.toContain('cellIns');
+    expect(out).toContain('tracked row');
+    expect(out).toContain('sibling');
+    expect(out).toContain('w:id="9"');
+  });
+
+  test('an unsupported revision inside a scoped note refuses atomically', () => {
+    const part = loadNotes(
+      `<w:footnote w:id="1"><w:p>${wrap('ins', QA, run('target'))}</w:p>` +
+        `<w:tbl><w:tr><w:trPr><w:del w:id="9" w:author="Dev"/></w:trPr>` +
+        `<w:tc><w:p>${run('incomplete')}</w:p></w:tc></w:tr></w:tbl></w:footnote>` +
+        `<w:footnote w:id="2"><w:p>${wrap('ins', QA, run('sibling'))}</w:p></w:footnote>`
+    );
+    const target = part.root.children.find(
+      (node) => node.kind !== 'textValue' && node.localName === 'footnote'
+    );
+    if (!target || target.kind === 'textValue') throw new Error('missing target note');
+    const before = xml(part);
+
+    expect(refuse(part, { op: 'acceptAllRevisions', scopeRootId: target.id })).toBe(
+      'unsupported-revision'
+    );
+    expect(xml(part)).toBe(before);
+  });
+
+  test('a scoped all-decision refuses roots that are missing or are not notes', () => {
+    const part = load(`<w:p>${wrap('ins', QA, run('target'))}</w:p>`);
+    const paragraph = part.root.children[0]?.kind === 'textValue' ? null : part.root.children[0];
+    if (!paragraph) throw new Error('missing body');
+    const body = paragraph.children[0];
+    if (!body || body.kind === 'textValue') throw new Error('missing paragraph');
+
+    expect(refuse(part, { op: 'acceptAllRevisions', scopeRootId: '' })).toBe(
+      'invalid-property-value'
+    );
+    expect(refuse(part, { op: 'acceptAllRevisions', scopeRootId: body.id })).toBe(
+      'invalid-property-value'
+    );
   });
 });

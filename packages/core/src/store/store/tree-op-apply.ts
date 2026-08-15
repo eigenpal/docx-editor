@@ -287,9 +287,12 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.revision : undefined;
     const localName =
       op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.localName : undefined;
+    const scopeRootId =
+      op.op === 'acceptAllRevisions' || op.op === 'rejectAllRevisions' ? op.scopeRootId : undefined;
     const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, {
       ...options,
       ...(localName === undefined ? {} : { localName }),
+      ...(scopeRootId === undefined ? {} : { scopeRootId }),
     });
     if (!resolved.ok || !resolved.part || !resolved.effect) {
       return { ok: false, reason: resolved.reason ?? 'tree-invariant' };

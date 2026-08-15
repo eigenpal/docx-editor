@@ -2401,12 +2401,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const conflict = pinWrite(plan);
         if (conflict) return conflict;
         const ops = revisionCollectionOps(operation, target.reads);
-        if (!ops) {
-          return refuse(
-            'unsupported-revision',
-            'that story contains a tracked change this engine cannot resolve'
-          );
-        }
         return {
           ok: true,
           kind: 'command',

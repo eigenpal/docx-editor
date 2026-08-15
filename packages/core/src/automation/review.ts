@@ -17,7 +17,6 @@
 
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
-import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import {
   commentAnchorsOfStory,
   commentsOfPart,
@@ -99,25 +98,6 @@ export interface AutomationRevisionRead {
 /** Every tracked-change item that belongs to one story, including unsupported structural ones. */
 export function revisionItemsInStory(reads: AutomationStoryReads): readonly ReviewRevisionItem[] {
   return Object.freeze(revisionItemsOf(reads.part).filter((item) => inStory(reads, item.ranges)));
-}
-
-/**
- * Addressed ops for a note collection, or `null` when any item is store-`readOnly`.
- *
- * A complete tracked row is `revisionKind: structural` with `readOnly: false` and is included:
- * refusing it here would make collection accept/reject skip a change the store can resolve.
- */
-export function revisionDecisionOps(
-  reads: AutomationStoryReads,
-  accept: boolean
-): readonly TreeDocOp[] | null {
-  const items = revisionItemsInStory(reads);
-  if (items.some((item) => item.readOnly)) return null;
-  return items.flatMap((item) =>
-    item.addresses.map((revision) =>
-      accept ? { op: 'acceptRevision', revision } : { op: 'rejectRevision', revision }
-    )
-  );
 }
 
 /**

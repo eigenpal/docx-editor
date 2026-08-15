@@ -3808,8 +3808,10 @@ export type TreeDocOp = {
     readonly localName?: string;
 } | {
     readonly op: 'acceptAllRevisions';
+    readonly scopeRootId?: string;
 } | {
     readonly op: 'rejectAllRevisions';
+    readonly scopeRootId?: string;
 } | {
     readonly op: 'insertTab';
     readonly paragraphId: string;

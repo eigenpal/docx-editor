@@ -18,7 +18,12 @@
 // Structural revisions are refused unless their complete semantics are implemented. Tracked
 // rows are the supported exception: their row and cell markers resolve as one decision.
 
-import { replaceChildren, type EditOptions } from '../package/ooxml-edit.ts';
+import {
+  findNode,
+  parentNodeOf,
+  replaceChildren,
+  type EditOptions,
+} from '../package/ooxml-edit.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -27,6 +32,7 @@ import {
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
+import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
 
@@ -150,7 +156,7 @@ const subtreeSitesCache = new WeakMap<OoxmlNode, readonly RevisionSite[]>();
  * One walk, so accept-all does not pay a traversal per revision — and paragraphs the last
  * commit did not touch are answered from {@link paragraphSitesCache} rather than re-walked.
  */
-export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
+function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): RevisionSite[] {
   const sites: RevisionSite[] = [];
   const visit = (
     node: OoxmlNode,
@@ -227,8 +233,14 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
     }
     for (const child of node.children) visit(child, node, parent);
   };
-  visit(part.root, null, null);
+  const root = scopeRootId === undefined ? part.root : findNode(part, scopeRootId);
+  if (root !== null) visit(root, null, null);
   return sites;
+}
+
+/** Every revision-bearing element in the part. */
+export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
+  return collectRevisionSitesIn(part);
 }
 
 /**
@@ -238,7 +250,7 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
  * `@w:name` pairs a `moveFrom` RANGE with its `moveTo` RANGE; `@w:id` pairs a range START with
  * its own range END. In a real document the two halves of a named pair carry different ids.
  */
-function namedMoveRanges(part: OoxmlPart): Map<string, MoveRange> {
+function namedMoveRanges(root: OoxmlNode): Map<string, MoveRange> {
   const byName = new Map<string, MoveRange>();
   const bucketFor = (name: string): MoveRange => {
     const existing = byName.get(name);
@@ -285,53 +297,32 @@ function namedMoveRanges(part: OoxmlPart): Map<string, MoveRange> {
       visit(child);
     }
   };
-  visit(part.root);
+  visit(root);
   return byName;
 }
 
 /** The `w:p` a node sits inside, by id, or null when it is not inside one. */
 function paragraphOwning(part: OoxmlPart, nodeId: string): string | null {
-  let found: string | null = null;
-  const visit = (node: OoxmlNode, paragraphId: string | null): void => {
-    if (found !== null || node.kind === 'textValue') return;
-    const owner = node.kind === 'paragraph' ? node.id : paragraphId;
-    if (node.id === nodeId) {
-      found = owner;
-      return;
-    }
-    for (const child of node.children) visit(child, owner);
-  };
-  visit(part.root, null);
-  return found;
+  let current = findNode(part, nodeId);
+  while (current !== null) {
+    if (current.kind === 'paragraph') return current.id;
+    current = parentNodeOf(part, current.id);
+  }
+  return null;
 }
 
 function tableRowOwning(part: OoxmlPart, nodeId: string): string | null {
-  let found: string | null = null;
-  const visit = (node: OoxmlNode, rowId: string | null): void => {
-    if (found !== null || node.kind === 'textValue') return;
-    const owner = node.kind === 'tableRow' ? node.id : rowId;
-    if (node.id === nodeId) {
-      found = owner;
-      return;
-    }
-    for (const child of node.children) visit(child, owner);
-  };
-  visit(part.root, null);
-  return found;
+  let current = findNode(part, nodeId);
+  while (current !== null) {
+    if (current.kind === 'tableRow') return current.id;
+    current = parentNodeOf(part, current.id);
+  }
+  return null;
 }
 
 function elementById(part: OoxmlPart, nodeId: string): OoxmlElement | null {
-  let found: OoxmlElement | null = null;
-  const visit = (node: OoxmlNode): void => {
-    if (found !== null || node.kind === 'textValue') return;
-    if (node.id === nodeId) {
-      found = node;
-      return;
-    }
-    for (const child of node.children) visit(child);
-  };
-  visit(part.root);
-  return found;
+  const found = findNode(part, nodeId);
+  return found === null || found.kind === 'textValue' ? null : found;
 }
 
 /** How one wrapper resolves, given the action. */
@@ -565,9 +556,14 @@ export function resolveRevisions(
   part: OoxmlPart,
   action: RevisionOpAction,
   address: RevisionAddress | undefined,
-  options?: EditOptions & { readonly localName?: string }
+  options?: EditOptions & { readonly localName?: string; readonly scopeRootId?: string }
 ): RevisionResolveResult {
-  const sites = collectRevisionSites(part);
+  const scopeRoot =
+    options?.scopeRootId === undefined ? part.root : scopedRevisionRoot(part, options.scopeRootId);
+  if (scopeRoot === null) {
+    return { ok: false, reason: 'invalid-property-value' };
+  }
+  const sites = collectRevisionSitesIn(part, options?.scopeRootId);
   const matched = address
     ? sites.filter((site) => {
         const own = addressOf(site.node);
@@ -689,7 +685,7 @@ export function resolveRevisions(
     (site) => site.node.kind === 'revisionMoveFrom' || site.node.kind === 'revisionMoveTo'
   );
   if (movesMatched.length > 0) {
-    for (const [, range] of namedMoveRanges(part)) {
+    for (const [, range] of namedMoveRanges(scopeRoot)) {
       if (!range.wrappers.some((wrapper) => actions.has(wrapper.id))) continue;
       for (const wrapper of range.wrappers) addWrapper(wrapper);
       // The range markers describe a move that no longer exists once it is resolved. Leaving

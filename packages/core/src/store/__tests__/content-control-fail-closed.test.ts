@@ -49,6 +49,15 @@ function parseDoc(bodyInner: string): OoxmlPart {
   return result.part;
 }
 
+function parseNotes(notes: string): OoxmlPart {
+  const result = readOoxmlPart(`<w:footnotes xmlns:w="${W}">${notes}</w:footnotes>`, {
+    name: '/word/footnotes.xml',
+    contentType: 'app/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
 function refusal(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   const result = applyTreeOp(part, op);
   return result.ok ? null : result.reason;
@@ -147,6 +156,22 @@ describe('accepting and rejecting a tracked change meets the lock', () => {
         `<w:r><w:t>added</w:t></w:r></w:ins></w:p>`
     );
     expect(refusal(part, { op: 'acceptAllRevisions' })).toBeNull();
+  });
+
+  test('a scoped note decision ignores a sibling lock but still meets its own lock', () => {
+    const revision = `<w:p><w:ins w:id="1" w:author="QA"><w:r><w:t>added</w:t></w:r></w:ins></w:p>`;
+    const locked = (inner: string) =>
+      `<w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr>` +
+      `<w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+    const part = parseNotes(
+      `<w:footnote w:id="1">${revision}</w:footnote>` +
+        `<w:footnote w:id="2">${locked(revision)}</w:footnote>`
+    );
+    const notes = part.root.children.filter(
+      (node) => node.kind !== 'textValue' && node.localName === 'footnote'
+    );
+    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: notes[0]!.id })).toBeNull();
+    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: notes[1]!.id })).toBe('locked');
   });
 
   // `sdtLocked` guards the control, not its content, so a decision about the content is allowed.

@@ -279,14 +279,21 @@ export type TreeDocOp =
     }
   | {
       /**
-       * Accept every revision in the part, in ONE transaction and one history entry.
+       * Accept every revision in the part, or in one exact note root, in ONE transaction and one
+       * history entry.
        *
        * Deliberately not a loop over `acceptRevision`: a reviewer who accepts a document's
        * changes made one decision, and one undo should restore all of them.
        */
       readonly op: 'acceptAllRevisions';
+      /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
+      readonly scopeRootId?: string;
     }
-  | { readonly op: 'rejectAllRevisions' }
+  | {
+      readonly op: 'rejectAllRevisions';
+      /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
+      readonly scopeRootId?: string;
+    }
   | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
   | { readonly op: 'insertPageBreak'; readonly paragraphId: string; readonly offset: number }

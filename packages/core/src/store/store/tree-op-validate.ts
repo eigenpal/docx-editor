@@ -36,6 +36,7 @@ import {
   parseCheckboxValue,
   paragraphPropertiesNodeOf,
 } from './tree-op-nodes.ts';
+import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import {
   validateTableRowOp,
   validateTableColumnOp,
@@ -724,6 +725,13 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (address.date !== undefined && typeof address.date !== 'string') {
         return 'invalid-property-value';
       }
+    } else if (op.scopeRootId !== undefined) {
+      if (typeof op.scopeRootId !== 'string' || op.scopeRootId.length === 0) {
+        return 'invalid-property-value';
+      }
+      // Scoped all-decisions exist only for a story root in a shared notes part. Accepting an
+      // arbitrary subtree would invent public mutation semantics no caller has agreed to.
+      if (scopedRevisionRoot(part, op.scopeRootId) === null) return 'invalid-property-value';
     }
     // Presence and resolvability are decided by the same walk that applies the op, so they
     // are checked there rather than duplicated into a second traversal that could disagree.

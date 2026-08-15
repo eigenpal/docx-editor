@@ -3,7 +3,6 @@ import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
-import { revisionDecisionOps } from './review.ts';
 import { storyOfHandle } from './spans.ts';
 
 type CollectionDecision = Extract<
@@ -58,15 +57,14 @@ export function revisionDecisionTarget(
  * Build one atomic collection decision after its target story has been resolved.
  *
  * A header, footer, or the main body owns its part, so the store's part-wide op is the decision.
- * Notes share `footnotes.xml` / `endnotes.xml`, so those expand to addressed per-item ops.
+ * Notes share `footnotes.xml` / `endnotes.xml`, so one exact canonical note root scopes the same
+ * store-level all-decision. Listing identities never participate in collection mutation.
  */
 export function revisionCollectionOps(
   operation: CollectionDecision,
   reads: AutomationStoryReads
-): readonly TreeDocOp[] | null {
+): readonly TreeDocOp[] {
   const accept = operation.op === 'acceptAllRevisions';
-  const expanded = revisionDecisionOps(reads, accept);
-  if (expanded === null) return null;
-  if (reads.story.kind === 'note') return expanded;
-  return [accept ? { op: 'acceptAllRevisions' } : { op: 'rejectAllRevisions' }];
+  const scope = reads.story.kind === 'note' ? { scopeRootId: reads.root.id } : {};
+  return [accept ? { op: 'acceptAllRevisions', ...scope } : { op: 'rejectAllRevisions', ...scope }];
 }

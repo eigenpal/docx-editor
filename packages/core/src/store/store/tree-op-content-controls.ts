@@ -54,6 +54,7 @@ import {
   type OffsetSpan,
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
+import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type {
   RevisionAddress,
   TreeDocOp,
@@ -200,7 +201,11 @@ export type TreeOpReach =
   /** Addressed at named nodes, optionally at a range of characters inside one. */
   | { readonly kind: 'nodes'; readonly targets: readonly TreeOpTarget[] }
   /** Addressed at tracked changes, resolved to the nodes carrying them. */
-  | { readonly kind: 'revisions'; readonly revision?: RevisionAddress };
+  | {
+      readonly kind: 'revisions';
+      readonly revision?: RevisionAddress;
+      readonly scopeRootId?: string;
+    };
 
 export interface TreeOpTarget {
   readonly nodeId: string;
@@ -330,8 +335,14 @@ const TREE_OP_REACH: {
   removeHyperlink: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.linkId, structural: true }] }),
   acceptRevision: (op) => ({ kind: 'revisions', revision: op.revision }),
   rejectRevision: (op) => ({ kind: 'revisions', revision: op.revision }),
-  acceptAllRevisions: () => ({ kind: 'revisions' }),
-  rejectAllRevisions: () => ({ kind: 'revisions' }),
+  acceptAllRevisions: (op) => ({
+    kind: 'revisions',
+    ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
+  }),
+  rejectAllRevisions: (op) => ({
+    kind: 'revisions',
+    ...(op.scopeRootId === undefined ? {} : { scopeRootId: op.scopeRootId }),
+  }),
   // The value path rebuilds `w:sdtContent`; a tag or an alias leaves every child where it was.
   setContentControlValue: (op) => ({
     kind: 'control',
@@ -556,7 +567,7 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
     };
   }
   if (reach.kind === 'revisions') {
-    return resolveRevisionReach(part, reach.revision);
+    return resolveRevisionReach(part, reach.revision, reach.scopeRootId);
   }
   const touches: ControlTouch[] = [];
   const unprotected: string[] = [];
@@ -702,10 +713,17 @@ function encloses(span: OffsetSpan | null, range: OffsetSpan, writes: boolean): 
 /** The nodes a revision decision would rewrite, and the controls holding them. */
 function resolveRevisionReach(
   part: OoxmlPart,
-  revision: RevisionAddress | undefined
+  revision: RevisionAddress | undefined,
+  scopeRootId?: string
 ): ResolvedReach {
   const touches: ControlTouch[] = [];
   const unprotected: string[] = [];
+  const root = scopeRootId === undefined ? part.root : scopedRevisionRoot(part, scopeRootId);
+  // Reach runs before validation. An invalid scoped root must fail closed here; validation then
+  // reports the malformed canonical address without granting it a narrower protection reach.
+  if (root === null) {
+    return { touches, unprotected: [part.root.id] };
+  }
   let seen = 0;
   const walk = (node: OoxmlNode, controls: readonly OoxmlNode[]): void => {
     if (node.kind === 'textValue' || seen > MAX_REVISION_NODES) return;
@@ -736,7 +754,7 @@ function resolveRevisionReach(
       walk(child, child.kind === 'contentControl' ? [...controls, child] : controls);
     }
   };
-  walk(part.root, []);
+  walk(root, []);
   return { touches, unprotected };
 }
 

@@ -155,7 +155,7 @@ export const WITH_NOTE_TEXT_CASES: Uint8Array = zipSync({
   ),
   'word/endnotes.xml': strToU8(
     `<w:endnotes xmlns:w="${W}">` +
-      '<w:endnote w:id="4"><w:p><w:ins w:id="40" w:author="Note Reviewer" w:date="2026-04-01T10:00:00Z"><w:r><w:t>end note</w:t></w:r></w:ins></w:p></w:endnote>' +
+      '<w:endnote w:id="4"><w:p><w:r><w:t>end note</w:t></w:r></w:p></w:endnote>' +
       '</w:endnotes>'
   ),
 });
