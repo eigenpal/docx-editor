@@ -1,5 +1,12 @@
 # @docx-editor.dev/editor-api
 
+## 2.4.1
+
+### Patch Changes
+
+- 32018ce: Document and test explicit byte ownership for detached server runtimes: `createServer` completes consumption of input bytes and each `save` returns fresh caller-owned bytes.
+  - @docx-editor.dev/core@2.4.1
+
 ## 2.4.0
 
 ### Minor Changes

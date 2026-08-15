@@ -1,5 +1,11 @@
 # @docx-editor.dev/core
 
+## 2.4.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.4.1
+
 ## 2.4.0
 
 ### Patch Changes
