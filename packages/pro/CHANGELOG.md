@@ -1,5 +1,15 @@
 # @docx-editor.dev/pro
 
+## 2.4.0
+
+### Minor Changes
+
+- 525dca9: Add public review-hook and card actions for resolving and reopening comment threads, including viewing-mode refusal state.
+
+### Patch Changes
+
+- 525dca9: Disable review mutation controls while a document is open for viewing instead of presenting actions the engine will refuse.
+
 ## 2.3.1
 
 ## 2.3.0
