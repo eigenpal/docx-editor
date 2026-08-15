@@ -31,8 +31,9 @@ import {
 import {
   findNoteById,
   isNormalNote,
+  MAX_NOTES_PER_PART,
   noteIdOf,
-  notesOf,
+  noteKindOf,
   type NoteKind,
 } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
@@ -142,10 +143,12 @@ export interface AutomationFurnitureRead {
   readonly declared: boolean;
 }
 
-/** A note-kind listing, or the malformed identities that make the whole kind unaddressable. */
+/** A note-kind listing, or the boundedness/identity failure that makes it unaddressable. */
 export type AutomationNoteIdsRead =
   | { readonly ok: true; readonly ids: readonly number[] }
-  | { readonly ok: false; readonly duplicateIds: readonly number[] };
+  | { readonly ok: false; readonly reason: 'truncated' }
+  | { readonly ok: false; readonly reason: 'duplicates'; readonly duplicateIds: readonly number[] }
+  | { readonly ok: false; readonly reason: 'malformed' };
 
 /** Reads over the whole package: its stories, its sections, and what it declares about styles. */
 export interface AutomationPackageReads {
@@ -302,13 +305,27 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
     const ids: number[] = [];
     const seen = new Set<number>();
     const duplicates = new Set<number>();
-    for (const note of notesOf(part.root)) {
+    let candidates = 0;
+    let malformed = false;
+    // This is a COMPLETE direct-child scan, not `notesOf`: that helper deliberately returns a
+    // prefix. Package parsing already bounds the whole XML tree by maxElementCount, so walking
+    // this one children array cannot become an unbounded attacker-controlled traversal.
+    for (const note of part.root.children) {
+      if (noteKindOf(note) !== noteKind) continue;
+      candidates += 1;
+      if (note.kind !== 'note') {
+        malformed = true;
+        continue;
+      }
       // THE SEPARATORS ARE NOT NOTES. Every notes part Word writes begins with a separator and
       // a continuation separator (`w:id` -1 and 0); listing them would report a document with two
       // more footnotes than it has, and hand a caller a story that paints no note anywhere.
       if (!isNormalNote(note)) continue;
       const id = noteIdOf(note);
-      if (id === null) continue;
+      if (id === null) {
+        malformed = true;
+        continue;
+      }
       if (seen.has(id)) duplicates.add(id);
       else {
         seen.add(id);
@@ -316,9 +333,17 @@ export function documentReads(pkg: OoxmlPackage): AutomationPackageReads {
       }
     }
     const result: AutomationNoteIdsRead =
-      duplicates.size === 0
-        ? { ok: true, ids: Object.freeze(ids) }
-        : { ok: false, duplicateIds: Object.freeze([...duplicates]) };
+      candidates > MAX_NOTES_PER_PART
+        ? { ok: false, reason: 'truncated' }
+        : malformed
+          ? { ok: false, reason: 'malformed' }
+          : duplicates.size > 0
+            ? {
+                ok: false,
+                reason: 'duplicates',
+                duplicateIds: Object.freeze([...duplicates]),
+              }
+            : { ok: true, ids: Object.freeze(ids) };
     noteIdsCache.set(noteKind, result);
     return result;
   };

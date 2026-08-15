@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { MAX_NOTES_PER_PART } from '../../store/package/note-nodes.ts';
 import type { AutomationHandle, AutomationHost } from '../protocol.ts';
 import { REL_TYPES, noteReference, notesPart, richDocx } from './support/furniture.ts';
 import { noteBodies } from './support/review-comments.ts';
@@ -90,5 +91,28 @@ describe('duplicate note identities fail closed before handles exist', () => {
     expect(response.changed).toBe(false);
     expect(savedPartBytes(host, 'word/footnotes.xml')).toBe(before);
     expect(before.match(/<w:ins\b/g) ?? []).toHaveLength(2);
+  });
+
+  test('a duplicate beyond the note cap cannot hide behind a truncated prefix', () => {
+    const notes = Array.from({ length: MAX_NOTES_PER_PART - 1 }, (_, index) => ({
+      id: index === MAX_NOTES_PER_PART - 2 ? 1 : index + 1,
+      xml: '<w:p/>',
+    }));
+    const host = open(
+      richDocx({
+        body: `<w:p>${noteReference('footnote', 1)}</w:p>`,
+        rels: [{ id: 'rId4', type: REL_TYPES.footnotes, target: 'footnotes.xml' }],
+        parts: [notesPart('footnote', notes)],
+      })
+    );
+    const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
+    const before = savedPartBytes(host, 'word/footnotes.xml');
+    const response = host.execute({
+      operations: [{ op: 'getNotes', document, noteKind: 'footnote' }],
+    });
+
+    expect(errorAt(response, 0)).toBe('ambiguous-document');
+    expect(response.changed).toBe(false);
+    expect(savedPartBytes(host, 'word/footnotes.xml')).toBe(before);
   });
 });

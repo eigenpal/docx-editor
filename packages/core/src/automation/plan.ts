@@ -1967,8 +1967,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!listing.ok)
           return refuse(
             'ambiguous-document',
-            `duplicate ${kind} ids make the collection unaddressable`,
-            listing.duplicateIds.join(',')
+            `${kind} identities are not completely and unambiguously enumerable`,
+            listing.reason === 'duplicates' ? listing.duplicateIds.join(',') : listing.reason
           );
         return query({
           kind: 'handles',
@@ -2007,8 +2007,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!listing.ok)
           return refuse(
             'ambiguous-document',
-            `duplicate ${target.noteKind} ids make the collection unaddressable`,
-            listing.duplicateIds.join(',')
+            `${target.noteKind} identities are not completely and unambiguously enumerable`,
+            listing.reason === 'duplicates' ? listing.duplicateIds.join(',') : listing.reason
           );
         if (!listing.ids.includes(target.noteId))
           return refuse('invalid-handle', 'that note is not in this document');

@@ -182,6 +182,54 @@ describe('accepting and rejecting a tracked change meets the lock', () => {
   });
 });
 
+describe('all-revision decisions reach nested opposite-direction removals', () => {
+  const locked = (textElement: 't' | 'delText') =>
+    `<w:sdt><w:sdtPr><w:lock w:val="sdtLocked"/></w:sdtPr><w:sdtContent>` +
+    `<w:r><w:${textElement}>locked</w:${textElement}></w:r></w:sdtContent></w:sdt>`;
+
+  test('accept-all unwraps an insertion but refuses its nested locked deletion in note scope', () => {
+    const part = parseNotes(
+      `<w:footnote w:id="1"><w:p>` +
+        `<w:ins w:id="1" w:author="QA"><w:del w:id="2" w:author="QA">` +
+        `${locked('delText')}</w:del></w:ins>` +
+        `</w:p></w:footnote>`
+    );
+    const note = part.root.children.find(
+      (node) => node.kind !== 'textValue' && node.localName === 'footnote'
+    )!;
+    const before = serializeOoxmlPart(part);
+
+    expect(refusal(part, { op: 'acceptAllRevisions', scopeRootId: note.id })).toBe('locked');
+    expect(serializeOoxmlPart(part)).toBe(before);
+    expect(
+      refusal(part, {
+        op: 'acceptRevision',
+        revision: { id: '1', author: 'QA' },
+        localName: 'ins',
+      })
+    ).toBeNull();
+  });
+
+  test('reject-all unwraps a deletion but refuses its nested locked insertion', () => {
+    const part = parseDoc(
+      `<w:p><w:del w:id="1" w:author="QA">` +
+        `<w:ins w:id="2" w:author="QA">${locked('t')}</w:ins>` +
+        `</w:del></w:p>`
+    );
+    const before = serializeOoxmlPart(part);
+
+    expect(refusal(part, { op: 'rejectAllRevisions' })).toBe('locked');
+    expect(serializeOoxmlPart(part)).toBe(before);
+    expect(
+      refusal(part, {
+        op: 'rejectRevision',
+        revision: { id: '1', author: 'QA' },
+        localName: 'del',
+      })
+    ).toBeNull();
+  });
+});
+
 describe('tracked-row removal reaches controls in every cell', () => {
   const marker = (kind: 'ins' | 'del', id = '1') =>
     `<w:${kind} w:id="${id}" w:author="QA" w:date="${QA.date}"/>`;

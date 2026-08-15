@@ -772,8 +772,14 @@ function resolveRevisionReach(
             discarded: false,
           });
         }
+        // Nothing below a discarded wrapper survives this decision. Its controls were marked as
+        // removed above, so descending would only duplicate touches.
+        return;
       }
-      return;
+      // Keeping/restoring this wrapper means unwrapping it into the parent. Nested revisions still
+      // take their own decision during accept-all/reject-all, with the same enclosing controls.
+      // For a directly addressed operation `isRevisionNode` continues to enforce the address and
+      // optional localName, so an unrelated nested wrapper remains untouched.
     }
     for (const child of node.children) {
       walk(child, child.kind === 'contentControl' ? [...controls, child] : controls);
