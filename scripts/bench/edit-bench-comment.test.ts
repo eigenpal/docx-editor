@@ -93,3 +93,81 @@ describe('edit-bench comment rendering', () => {
     expect(body).toContain('| steady-middle-text | 10.00 ms | — | n/a | — |');
   });
 });
+
+function uxReport(overrides: { fixtureSha256?: string; inputMedianMs?: number }) {
+  const median = overrides.inputMedianMs ?? 40;
+  return {
+    schema: 1,
+    fixture: 'synthetic-long-edit.docx',
+    fixtureSha256: overrides.fixtureSha256 ?? 'abc123',
+    environment: { browser: 'chromium', platform: 'linux' },
+    config: { runs: 7, warmup: 2 },
+    scenarios: [
+      {
+        name: 'editing-character',
+        inputTask: {
+          medianMs: median,
+          p95Ms: median * 1.4,
+          minMs: median * 0.8,
+          maxMs: median * 2,
+        },
+        frame: { medianMs: median + 8, p95Ms: median + 20, minMs: median, maxMs: median * 2 },
+      },
+    ],
+  };
+}
+
+describe('browser typing-latency section', () => {
+  test('renders first, with deltas, and subtitles the engine table', () => {
+    const body = renderComment(report({}), report({}), {
+      headUx: uxReport({ inputMedianMs: 30 }),
+      baseUx: uxReport({ inputMedianMs: 40 }),
+    });
+    expect(body).toContain('### Typing latency (browser)');
+    expect(body).toContain('### Engine layout (headless)');
+    expect(body.indexOf('Typing latency')).toBeLessThan(body.indexOf('Engine layout'));
+    expect(body).toContain('| editing-character | 40.00 ms | 30.00 ms | 🟢 -25.0% |');
+  });
+
+  test('head-only browser report renders without deltas', () => {
+    const body = renderComment(report({}), undefined, { headUx: uxReport({}) });
+    expect(body).toContain('### Typing latency (browser)');
+    expect(body).toContain('| editing-character | 40.00 ms |');
+    expect(body).not.toContain('| Base median | Head median | Δ | Head p95 | Frame p95 |');
+  });
+
+  test('a browser fixture mismatch degrades that section to head-only', () => {
+    const body = renderComment(report({}), report({}), {
+      headUx: uxReport({ fixtureSha256: 'new' }),
+      baseUx: uxReport({ fixtureSha256: 'old' }),
+    });
+    expect(body).toContain('Browser baseline not comparable');
+  });
+
+  test('no browser report keeps the original single-table layout', () => {
+    const body = renderComment(report({}), report({}));
+    expect(body).not.toContain('Typing latency');
+    expect(body).not.toContain('Engine layout');
+  });
+
+  test('a scenario removed on head still shows its baseline row', () => {
+    const base = uxReport({});
+    const head = uxReport({});
+    (head.scenarios as Array<{ name: string }>)[0]!.name = 'renamed-ux-scenario';
+    const body = renderComment(report({}), report({}), { headUx: head, baseUx: base });
+    expect(body).toContain('| editing-character | 40.00 ms | — | n/a | — | — |');
+  });
+
+  test('four oversized reports stay under the GitHub comment cap', () => {
+    const oversize = (target: Record<string, unknown>) => ({
+      ...target,
+      padding: 'x'.repeat(40_000),
+    });
+    const body = renderComment(oversize(report({})), oversize(report({})), {
+      headUx: oversize(uxReport({})),
+      baseUx: oversize(uxReport({})),
+    });
+    expect(body.length).toBeLessThan(65_536);
+    expect(body).toContain('… truncated …');
+  });
+});

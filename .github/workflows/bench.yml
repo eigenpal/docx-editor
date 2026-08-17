@@ -1,11 +1,17 @@
 name: Performance benchmark
 
-# Runs the deterministic edit benchmark (scripts/bench/edit-bench.ts) on the PR
-# head and on its merge-base with main, then upserts one sticky PR comment with
-# the before/after table. Wall-clock numbers from a shared runner are
-# informational only — this job never fails on a timing regression. The hard
-# regression gate is the pinned work-counter test
-# (scripts/bench/edit-bench-gates.test.ts) inside `bun run test` in ci.yml.
+# Runs two benchmarks on the PR head and on its baseline, then upserts one
+# sticky PR comment with the before/after tables:
+#   - the browser typing-latency bench (e2e/edit-browser.bench.spec.ts) — the
+#     UX number: keystroke handler and frame latency through the real editor;
+#   - the deterministic edit benchmark (scripts/bench/edit-bench.ts) — the
+#     engine layout pipeline with exact work counters.
+# Wall-clock numbers from a shared runner are informational only — this job
+# never fails on a head-vs-base timing delta. Deterministic gates still apply:
+# the pinned work-counter test (scripts/bench/edit-bench-gates.test.ts) inside
+# `bun run test` in ci.yml, and the browser spec's own structural and
+# self-calibrated gates, which fail the HEAD browser run (this is the only CI
+# execution of that spec). A failing BASELINE run only degrades the comment.
 
 on:
   pull_request:
@@ -45,10 +51,26 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
       - name: Benchmark PR head
         run: |
           mkdir -p bench-out
           bun scripts/bench/edit-bench.ts --runs 10 --json > bench-out/head.json
+
+      - name: Browser-benchmark PR head
+        # The UX measurement: trusted Chromium input through the real adapter,
+        # review rail, and paginated DOM. Only the latency test — clipboard and
+        # burst stay local tools. SUSTAINED_EDITS is trimmed for the spec's 180s
+        # per-test timeout on shared runners; the SAME value must be set on the
+        # baseline run below, or the two reports' medians come from different
+        # sample counts.
+        run: |
+          EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+            EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/head-ux.json" \
+            bunx playwright test --config e2e/edit-browser-bench.config.ts \
+            --grep "browser editing latency"
 
       - name: Benchmark baseline
         run: |
@@ -67,19 +89,29 @@ jobs:
             cd "$RUNNER_TEMP/base"
             bun install --frozen-lockfile
             bun scripts/bench/edit-bench.ts --runs 10 --json > "$GITHUB_WORKSPACE/bench-out/base.json"
+            # Same for the browser bench, using the baseline's own spec. Browser
+            # binaries live in the shared Playwright cache; install still runs in
+            # case the baseline pins a different Playwright build. Failure here
+            # degrades the comment to a head-only UX table rather than failing
+            # the job.
+            if [ -f "$RUNNER_TEMP/base/e2e/edit-browser-bench.config.ts" ]; then
+              bunx playwright install --with-deps chromium || true
+              EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+                EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/base-ux.json" \
+                bunx playwright test --config e2e/edit-browser-bench.config.ts \
+                --grep "browser editing latency" || echo "baseline browser bench failed; continuing"
+            fi
           else
             echo "merge-base has no edit benchmark; skipping baseline"
           fi
 
       - name: Render comment
         run: |
-          if [ -f bench-out/base.json ]; then
-            node scripts/bench/edit-bench-comment.mjs \
-              --head bench-out/head.json --base bench-out/base.json --out bench-out/comment.md
-          else
-            node scripts/bench/edit-bench-comment.mjs \
-              --head bench-out/head.json --out bench-out/comment.md
-          fi
+          ARGS="--head bench-out/head.json --out bench-out/comment.md"
+          [ -f bench-out/base.json ] && ARGS="$ARGS --base bench-out/base.json"
+          [ -f bench-out/head-ux.json ] && ARGS="$ARGS --head-ux bench-out/head-ux.json"
+          [ -f bench-out/base-ux.json ] && ARGS="$ARGS --base-ux bench-out/base-ux.json"
+          node scripts/bench/edit-bench-comment.mjs $ARGS
 
       - name: Upload benchmark artifacts
         if: always()

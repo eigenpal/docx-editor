@@ -1,11 +1,14 @@
-// Render an edit-bench JSON report (plus an optional baseline report) as the
-// markdown body of the sticky PR comment posted by .github/workflows/bench.yml.
+// Render the edit-bench and browser typing-latency JSON reports (plus optional
+// baselines) as the markdown body of the sticky PR comment posted by
+// .github/workflows/bench.yml.
 //
 // Wall-clock numbers come from a shared CI runner, so the comment is advisory:
-// it flags regressions but never fails the job. The deterministic gate stays in
-// scripts/bench/edit-bench-gates.test.ts, which pins the work counters exactly.
+// it flags regressions but never fails the job on a head-vs-base delta. The
+// deterministic gates live elsewhere: edit-bench-gates.test.ts pins the engine
+// work counters, and the browser spec's own structural gates fail its head run.
 //
-// Usage: node scripts/bench/edit-bench-comment.mjs --head head.json [--base base.json] --out comment.md
+// Usage: node scripts/bench/edit-bench-comment.mjs --head head.json [--base base.json]
+//          [--head-ux browser.json] [--base-ux browser-base.json] --out comment.md
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -21,26 +24,47 @@ const MAX_COMMENT_CHARS = 60_000;
 function parseArgs(argv) {
   let head;
   let base;
+  let headUx;
+  let baseUx;
   let out;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--head') head = argv[++index];
     else if (value === '--base') base = argv[++index];
+    else if (value === '--head-ux') headUx = argv[++index];
+    else if (value === '--base-ux') baseUx = argv[++index];
     else if (value === '--out') out = argv[++index];
     else throw new Error(`unknown argument: ${value}`);
   }
   if (!head) throw new Error('--head <report.json> is required');
   if (!out) throw new Error('--out <comment.md> is required');
-  return { head, base, out };
+  return { head, base, headUx, baseUx, out };
 }
 
 function readReport(path) {
   const report = JSON.parse(readFileSync(path, 'utf8'));
   const shapeOk =
     report.schema === 1 &&
+    typeof report.fixtureSha256 === 'string' &&
     Array.isArray(report.scenarios) &&
     report.scenarios.every((scenario) => Number.isFinite(scenario?.total?.medianMs));
   if (!shapeOk) throw new Error(`${path}: not an edit-bench schema-1 report`);
+  return report;
+}
+
+/**
+ * A browser (UX) report from e2e/edit-browser.bench.spec.ts: per-scenario `inputTask`
+ * is the keystroke-handler latency and `frame` the time until the frame presents —
+ * the numbers a typing user actually feels.
+ */
+function readUxReport(path) {
+  const report = JSON.parse(readFileSync(path, 'utf8'));
+  const shapeOk =
+    report.schema === 1 &&
+    typeof report.fixtureSha256 === 'string' &&
+    Array.isArray(report.scenarios) &&
+    report.scenarios.every((scenario) => Number.isFinite(scenario?.inputTask?.medianMs));
+  if (!shapeOk) throw new Error(`${path}: not a browser-bench schema-1 report`);
   return report;
 }
 
@@ -98,12 +122,9 @@ function comparisonNote(head, base) {
   return null;
 }
 
-function detailsBlock(summary, report) {
+function detailsBlock(summary, report, budget) {
   const json = JSON.stringify(report, null, 2);
-  const body =
-    json.length > MAX_COMMENT_CHARS / 2
-      ? `${json.slice(0, MAX_COMMENT_CHARS / 2)}\n… truncated …`
-      : json;
+  const body = json.length > budget ? `${json.slice(0, budget)}\n… truncated …` : json;
   return [
     '<details>',
     `<summary>${summary}</summary>`,
@@ -116,10 +137,53 @@ function detailsBlock(summary, report) {
   ].join('\n');
 }
 
-export function renderComment(head, base) {
+/**
+ * The typing-feel section: keystroke latency measured in a real Chromium through the
+ * full adapter/DOM path. Rendered FIRST — it is the user-facing number; the engine
+ * table below it is the algorithmic detail.
+ */
+function renderUxSection(headUx, baseUx) {
+  if (!headUx) return [];
+  const lines = ['### Typing latency (browser)', ''];
+  const comparable = baseUx && baseUx.fixtureSha256 === headUx.fixtureSha256;
+  if (comparable) {
+    lines.push(
+      '| Scenario | Base median | Head median | Δ | Head p95 | Frame p95 |',
+      '| --- | --- | --- | --- | --- | --- |'
+    );
+    const baseByName = new Map(baseUx.scenarios.map((scenario) => [scenario.name, scenario]));
+    for (const scenario of headUx.scenarios) {
+      const baseScenario = baseByName.get(scenario.name);
+      lines.push(
+        `| ${scenario.name} | ${formatMs(baseScenario?.inputTask.medianMs)} | ${formatMs(scenario.inputTask.medianMs)} | ${baseScenario ? formatDelta(baseScenario.inputTask.medianMs, scenario.inputTask.medianMs) : 'n/a'} | ${formatMs(scenario.inputTask.p95Ms)} | ${formatMs(scenario.frame?.p95Ms)} |`
+      );
+    }
+    const headNames = new Set(headUx.scenarios.map((scenario) => scenario.name));
+    for (const scenario of baseUx.scenarios) {
+      if (headNames.has(scenario.name)) continue;
+      lines.push(
+        `| ${scenario.name} | ${formatMs(scenario.inputTask.medianMs)} | — | n/a | — | — |`
+      );
+    }
+  } else {
+    if (baseUx) lines.push('> Browser baseline not comparable (fixture differs).', '');
+    lines.push('| Scenario | Median | p95 | Frame p95 |', '| --- | --- | --- | --- |');
+    for (const scenario of headUx.scenarios) {
+      lines.push(
+        `| ${scenario.name} | ${formatMs(scenario.inputTask.medianMs)} | ${formatMs(scenario.inputTask.p95Ms)} | ${formatMs(scenario.frame?.p95Ms)} |`
+      );
+    }
+  }
+  lines.push('');
+  return lines;
+}
+
+export function renderComment(head, base, ux = {}) {
   const lines = [COMMENT_MARKER, '## Performance benchmark', ''];
   const note = comparisonNote(head, base);
   const comparable = note === null;
+  lines.push(...renderUxSection(ux.headUx, ux.baseUx));
+  if (ux.headUx) lines.push('### Engine layout (headless)', '');
 
   if (comparable) {
     lines.push(
@@ -169,26 +233,40 @@ export function renderComment(head, base) {
     lines.push('');
   }
 
-  lines.push(detailsBlock('Head report (full JSON)', head));
-  if (base) lines.push('', detailsBlock('Base report (full JSON)', base));
+  // The per-block truncation budget shares MAX_COMMENT_CHARS across however many
+  // blocks render, so the assembled body stays under GitHub's 65,536-char cap
+  // whatever the reports grow to.
+  const blocks = [
+    ['Head report (full JSON)', head],
+    ...(base ? [['Base report (full JSON)', base]] : []),
+    ...(ux.headUx ? [['Browser report (full JSON)', ux.headUx]] : []),
+    ...(ux.headUx && ux.baseUx ? [['Browser baseline (full JSON)', ux.baseUx]] : []),
+  ];
+  const budget = Math.floor(MAX_COMMENT_CHARS / blocks.length);
+  lines.push(blocks.map(([summary, report]) => detailsBlock(summary, report, budget)).join('\n\n'));
   return `${lines.join('\n')}\n`;
+}
+
+/** Optional inputs degrade to absence, loudly: see the base-report rationale below. */
+function readOptional(path, reader, label) {
+  if (!path) return undefined;
+  try {
+    return reader(path);
+  } catch (error) {
+    console.error(`ignoring ${label}: ${error instanceof Error ? error.message : error}`);
+    return undefined;
+  }
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const head = readReport(args.head);
-  let base;
-  if (args.base) {
-    try {
-      base = readReport(args.base);
-    } catch (error) {
-      // Degrade to head-only, but say why: a truncated or shape-drifted base.json
-      // must be distinguishable in CI logs from a merge-base without the bench.
-      console.error(`ignoring base report: ${error instanceof Error ? error.message : error}`);
-      base = undefined;
-    }
-  }
-  writeFileSync(args.out, renderComment(head, base));
+  // Degrade to head-only, but say why: a truncated or shape-drifted base.json
+  // must be distinguishable in CI logs from a merge-base without the bench.
+  const base = readOptional(args.base, readReport, 'base report');
+  const headUx = readOptional(args.headUx, readUxReport, 'browser report');
+  const baseUx = readOptional(args.baseUx, readUxReport, 'browser baseline');
+  writeFileSync(args.out, renderComment(head, base, { headUx, baseUx }));
 }
 
 const invokedDirectly =
