@@ -131,33 +131,32 @@ function numIdForStyle(styleCascade: StyleCascadeTable, styleId: string): string
  * and so it is when nothing delegates, which keeps layout cache identity.
  */
 /**
- * Single-entry memo keyed on raw input identity. Beyond skipping the re-resolve, this is
- * what keeps LEVEL OBJECTS identity-stable across edits: the per-paragraph caches below
- * key derived indent/marker work on the level object, and a fresh linked index per call
- * would orphan every entry on every keystroke.
+ * Memo keyed on the index object, validated against the cascade. A WeakMap so a disposed
+ * document's index releases its entry, and entered under the LINKED index too: layout
+ * links the raw index once per flush, then hands the linked result back through this
+ * function again, and without the self-entry that second call would clobber the memo
+ * every flush. Level-object identity across edits is NOT this memo's doing —
+ * `resolveNumberingStyleLinks` reuses the delegation target's `levels` maps by reference,
+ * so the per-paragraph `perLevel` caches stay warm even on a miss here.
  */
-let linkedIndexMemo: {
-  readonly index: NumberingIndex;
-  readonly styleCascade: StyleCascadeTable;
-  readonly linked: NumberingIndex;
-} | null = null;
+const linkedIndexMemos = new WeakMap<
+  NumberingIndex,
+  { readonly styleCascade: StyleCascadeTable; readonly linked: NumberingIndex }
+>();
 
 export function withNumberingStyleLinks(
   index: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined
 ): NumberingIndex {
   if (!styleCascade) return index;
-  if (
-    linkedIndexMemo &&
-    linkedIndexMemo.index === index &&
-    linkedIndexMemo.styleCascade === styleCascade
-  ) {
-    return linkedIndexMemo.linked;
-  }
+  const memo = linkedIndexMemos.get(index);
+  if (memo && memo.styleCascade === styleCascade) return memo.linked;
   const linked = resolveNumberingStyleLinks(index, (styleId) =>
     numIdForStyle(styleCascade, styleId)
   );
-  linkedIndexMemo = { index, styleCascade, linked };
+  const entry = { styleCascade, linked };
+  linkedIndexMemos.set(index, entry);
+  linkedIndexMemos.set(linked, entry);
   return linked;
 }
 
@@ -305,7 +304,9 @@ export function walkStoryParagraphs(
  * keystroke; without this cache every unchanged paragraph re-ran the full style cascade
  * just to learn (usually) that it has no numbering. Only the counter advance is genuinely
  * sequential. `perLevel` holds level-derived indent/marker work, keyed on the level object
- * (identity-stable via the `withNumberingStyleLinks` memo).
+ * (identity-stable because `resolveNumberingStyleLinks` reuses the target's `levels` maps
+ * by reference) — a WeakMap, so level objects orphaned by a numbering edit take their
+ * entries with them.
  */
 interface ParagraphListPrelude {
   readonly styleCascade: StyleCascadeTable | undefined;
@@ -313,7 +314,10 @@ interface ParagraphListPrelude {
   readonly inheritedParagraphProperties: readonly OoxmlProperty[];
   readonly directProps: readonly OoxmlProperty[];
   readonly inheritedMarkProps: readonly OoxmlProperty[];
-  readonly perLevel: Map<object, { indent: NumberingLevelIndent; markerStyle: ResolvedRunStyle }>;
+  readonly perLevel: WeakMap<
+    object,
+    { indent: NumberingLevelIndent; markerStyle: ResolvedRunStyle }
+  >;
 }
 const paragraphListPreludes = new WeakMap<OoxmlElement, ParagraphListPrelude>();
 
@@ -333,7 +337,7 @@ function paragraphListPrelude(
     inheritedParagraphProperties: cascaded?.inheritedParagraphProperties ?? [],
     directProps: propertiesOf(pPr),
     inheritedMarkProps: cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun),
-    perLevel: new Map(),
+    perLevel: new WeakMap(),
   };
   paragraphListPreludes.set(paragraph, prelude);
   return prelude;
@@ -424,21 +428,23 @@ export function resolveStoryListItems(
 }
 
 /**
- * Memo for {@link withResolvedListItems}, keyed on the RAW inputs by identity — blocks
- * (stable per part via the `storyBlocks` memo), the unlinked numbering index, the style
- * cascade, and the font oracle. Keying on the linked index would never hit:
- * `withNumberingStyleLinks` mints a new object per call when a cascade is present. All
- * inputs are identity-stable across no-change flushes, so one entry suffices; a miss on
- * any input recomputes the sequential full-story counter walk exactly as before.
+ * Memo for {@link withResolvedListItems}, keyed on the blocks array (stable per part via
+ * the `storyBlocks` memo) and validated against the remaining RAW inputs by identity —
+ * the unlinked numbering index, the style cascade, and the font oracle. A WeakMap on the
+ * blocks array so a disposed document's entry dies with its part instead of pinning an
+ * O(document) item map at module scope. A miss on any input recomputes the sequential
+ * full-story counter walk exactly as before.
  */
-let resolvedListItemsMemo: {
-  readonly blocks: readonly OoxmlElement[];
-  readonly rawIndex: NumberingIndex | undefined;
-  readonly styleCascade: StyleCascadeTable | undefined;
-  readonly isFontAvailable: ((family: string) => boolean) | undefined;
-  readonly linkedIndex: NumberingIndex;
-  readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
-} | null = null;
+const resolvedListItemsMemos = new WeakMap<
+  readonly OoxmlElement[],
+  {
+    readonly rawIndex: NumberingIndex | undefined;
+    readonly styleCascade: StyleCascadeTable | undefined;
+    readonly isFontAvailable: ((family: string) => boolean) | undefined;
+    readonly linkedIndex: NumberingIndex;
+    readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+  }
+>();
 
 /**
  * Attach a full-story list-item map to layout options.
@@ -455,6 +461,10 @@ export function withResolvedListItems<
      * Host oracle for "is this font family really loaded". Supplied, a Symbol/Wingdings
      * bullet keeps the file's own private-use codepoint so the authored typeface draws it;
      * absent, it falls back to the Unicode equivalent rather than a tofu box.
+     *
+     * The resolve is memoized on this function's IDENTITY: a host whose answers change
+     * over time (a font finished loading) must supply a new closure at that point, or the
+     * memo will keep serving marker glyphs computed from the old answers.
      */
     readonly isFontAvailable?: (family: string) => boolean;
   },
@@ -468,10 +478,9 @@ export function withResolvedListItems<
   // A caller-supplied item map bypasses the memo: the memo exists for the resolve below,
   // and a pre-supplied map carries its own provenance.
   if (options.listItems === undefined) {
-    const memo = resolvedListItemsMemo;
+    const memo = resolvedListItemsMemos.get(blocks);
     if (
       memo &&
-      memo.blocks === blocks &&
       memo.rawIndex === options.numberingIndex &&
       memo.styleCascade === options.styleCascade &&
       memo.isFontAvailable === options.isFontAvailable
@@ -495,14 +504,13 @@ export function withResolvedListItems<
       ? resolveStoryListItems(blocks, numberingIndex, options.styleCascade, options.isFontAvailable)
       : undefined);
   if (options.listItems === undefined) {
-    resolvedListItemsMemo = {
-      blocks,
+    resolvedListItemsMemos.set(blocks, {
       rawIndex: options.numberingIndex,
       styleCascade: options.styleCascade,
       isFontAvailable: options.isFontAvailable,
       linkedIndex: numberingIndex,
       listItems,
-    };
+    });
   }
   return {
     ...options,

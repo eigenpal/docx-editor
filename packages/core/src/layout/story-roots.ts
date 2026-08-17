@@ -61,7 +61,8 @@ const storyBlocksCache =
  * The story's blocks — paragraphs and tables — in document order, flattening through
  * block-level content-control wrappers under the shared nesting budget.
  *
- * Repeated calls with the same part and display mode return the SAME array instance.
+ * Repeated calls with the same part and display mode return the SAME array instance,
+ * shared by every caller — treat it as read-only; mutating it corrupts later callers.
  */
 export function storyBlocks(
   part: OoxmlPart,
