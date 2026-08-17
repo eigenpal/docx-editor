@@ -125,12 +125,6 @@ function numIdForStyle(styleCascade: StyleCascadeTable, styleId: string): string
 }
 
 /**
- * Resolve `w:numStyleLink` delegation using the document's styles (§17.9.21).
- *
- * Without a style table there is nothing to follow, so the index is returned unchanged —
- * and so it is when nothing delegates, which keeps layout cache identity.
- */
-/**
  * Memo keyed on the index object, validated against the cascade. A WeakMap so a disposed
  * document's index releases its entry, and entered under the LINKED index too: layout
  * links the raw index once per flush, then hands the linked result back through this
@@ -144,6 +138,12 @@ const linkedIndexMemos = new WeakMap<
   { readonly styleCascade: StyleCascadeTable; readonly linked: NumberingIndex }
 >();
 
+/**
+ * Resolve `w:numStyleLink` delegation using the document's styles (§17.9.21).
+ *
+ * Without a style table there is nothing to follow, so the index is returned unchanged —
+ * and so it is when nothing delegates, which keeps layout cache identity.
+ */
 export function withNumberingStyleLinks(
   index: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined
@@ -291,12 +291,6 @@ export function walkStoryParagraphs(
 }
 
 /**
- * Resolve every list paragraph in a story to a {@link ResolvedListItem}, keyed by node id.
- *
- * Non-list paragraphs are absent from the map. Hostile / missing numbering resolves inertly
- * (paragraph omitted — laid out as ordinary text).
- */
-/**
  * Per-paragraph prelude for the story walk below, memoized on the paragraph NODE: which
  * `numPr` a paragraph resolves to — and the cascaded property tiers feeding its indent and
  * marker face — are pure functions of the immutable paragraph and the cascade table. An
@@ -343,6 +337,12 @@ function paragraphListPrelude(
   return prelude;
 }
 
+/**
+ * Resolve every list paragraph in a story to a {@link ResolvedListItem}, keyed by node id.
+ *
+ * Non-list paragraphs are absent from the map. Hostile / missing numbering resolves inertly
+ * (paragraph omitted — laid out as ordinary text).
+ */
 export function resolveStoryListItems(
   blocks: readonly OoxmlElement[],
   index: NumberingIndex,
