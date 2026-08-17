@@ -12,6 +12,7 @@ import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-edi
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
+import type { SymbolFieldSpec } from './field-symbol.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
@@ -169,6 +170,15 @@ export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
 export interface PendingFieldProjection {
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
+  /**
+   * Parsed SYMBOL instruction, or null when the field is not one.
+   *
+   * Captured while the machine still holds the raw instruction — at `separate`, or at the
+   * outermost `end` for the begin/instr/end shape Word also writes — because `onFldCharEnd`
+   * resets the buffer before the flush reads anything. SYMBOL has no cached result in real
+   * files, so the flush renders from this and it wins over any stale cached text.
+   */
+  symbolSpec: SymbolFieldSpec | null;
   /** True when this pending field is a well-formed atomic unit (begin will close). */
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */

@@ -68,6 +68,7 @@ import {
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
+import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
@@ -326,6 +327,18 @@ export function piecesOfParagraph(
       ...(pending.resultLink ? { linkOverride: pending.resultLink } : {}),
       fieldAtom: { formField: pending.formField },
     };
+    // SYMBOL renders from its instruction — Word never trusts a cached result for it, so a
+    // synthesized glyph wins over stale cached text. An unresolvable spec falls through to
+    // the existing branches (cached text or nothing).
+    if (pending.symbolSpec) {
+      const glyph = symbolFieldGlyph(pending.symbolSpec, pending.props, themeFonts);
+      if (glyph) {
+        push(glyph.text, glyph.props, glyph.style, true, start, end, carried);
+        pending = null;
+        openAtomicBeginId = null;
+        return;
+      }
+    }
     if (pending.kind && pageContext) {
       const text = projectPageFieldValue(pending.kind, pageContext);
       push(text, pending.props, pending.style, true, start, end, carried);
@@ -528,6 +541,7 @@ export function piecesOfParagraph(
           openAtomicBeginId = atomic ? grand.id : null;
           pending = {
             kind: null,
+            symbolSpec: null,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),
             atomStart: offset,
@@ -567,6 +581,10 @@ export function piecesOfParagraph(
         const kind = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
           pending.kind = kind && pageContext ? kind : null;
+          // Capture a SYMBOL spec while the machine still holds the raw instruction.
+          if (!pending.kind && !field.instructionOverflow) {
+            pending.symbolSpec = parseSymbolInstruction(field.instruction);
+          }
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
           pending.style = style;
@@ -576,6 +594,16 @@ export function piecesOfParagraph(
 
       if (isFldChar(grand, 'end')) {
         const outermostEnd = field.nesting === 1;
+        // A SYMBOL with no `separate` at all (begin/instr/end) still renders in Word. The
+        // machine's buffer is reset by `onFldCharEnd`, so capture the spec BEFORE advancing.
+        if (
+          outermostEnd &&
+          pending?.atomic &&
+          field.phase === 'instruction' &&
+          !field.instructionOverflow
+        ) {
+          pending.symbolSpec = parseSymbolInstruction(field.instruction);
+        }
         onFldCharEnd(field);
         if (outermostEnd) {
           if (pending?.atomic) commitAtomicField();
@@ -790,6 +818,26 @@ export function piecesOfParagraph(
         });
       }
       return;
+    }
+
+    // A simple SYMBOL renders from its instruction like the complex shape does — there is no
+    // trustworthy cached result to prefer. An unresolvable spec falls through to the cached
+    // display (previous behavior).
+    const symbolSpec = parseSymbolInstruction(fldSimpleInstr(simple) ?? '');
+    if (symbolSpec) {
+      const glyph = symbolFieldGlyph(
+        symbolSpec,
+        display.resultProps ?? inheritedRunProperties,
+        themeFonts
+      );
+      if (glyph) {
+        if (!glyph.style.hidden) {
+          push(glyph.text, glyph.props, glyph.style, true, start, start + 1, {
+            fieldAtom: { formField: false },
+          });
+        }
+        return;
+      }
     }
 
     if (display.text.length === 0) return;

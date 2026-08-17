@@ -12,11 +12,11 @@ import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-s
 import { isSymbolEncodedFamily, mapSymbolPuaText } from './symbol-encoding.ts';
 
 /** PUA page Word adds to a symbol font's byte value (mirrors `symbol-encoding.ts`). */
-const SYMBOL_PUA_BASE = 0xf000;
-const SYMBOL_PUA_END = 0xf0ff;
+export const SYMBOL_PUA_BASE = 0xf000;
+export const SYMBOL_PUA_END = 0xf0ff;
 
 /** `resolveRunStyle` ignores longer family names; match its cap so the override can land. */
-const MAX_SYMBOL_FONT_LENGTH = 128;
+export const MAX_SYMBOL_FONT_LENGTH = 128;
 
 /** One resolved `w:sym` glyph. */
 export interface SymbolGlyph {
@@ -55,11 +55,21 @@ function parseSymbolChar(value: string | undefined): number | null {
   return Number.parseInt(value, 16);
 }
 
-/** A codepoint no glyph should ever be: lone surrogates and BMP noncharacters. */
-function isRenderableCodePoint(code: number): boolean {
-  if (code < 0x20) return false;
+/**
+ * A codepoint no glyph should ever be: controls, lone surrogates, noncharacters — and
+ * U+FFFC, because paragraph flow uses the object replacement character as its inline-object
+ * sentinel, so a file-supplied one would be swallowed as a phantom drawing.
+ *
+ * Shared by `w:sym` resolution and SYMBOL field rendering (`field-symbol.ts`); both feed it
+ * attacker-controlled numbers, so it answers for the full Unicode range, not just the BMP.
+ */
+export function isRenderableCodePoint(code: number): boolean {
+  if (!Number.isInteger(code) || code < 0x20 || code > 0x10ffff) return false;
+  if (code >= 0x7f && code <= 0x9f) return false;
   if (code >= 0xd800 && code <= 0xdfff) return false;
-  if (code === 0xfffe || code === 0xffff) return false;
+  if (code >= 0xfdd0 && code <= 0xfdef) return false;
+  if ((code & 0xfffe) === 0xfffe) return false;
+  if (code === 0xfffc) return false;
   return true;
 }
 
