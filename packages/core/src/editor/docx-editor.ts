@@ -2185,6 +2185,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!surface) {
         return { ok: false, code: 'notFound', reason: 'no document is open' };
       }
+      // The span offsets taken from the placements below outlive this call twice over — they
+      // become the selection AND the activation pin, which then validates itself against that
+      // selection by value. Queued typing landing afterwards would shift the caret out from
+      // under a pin that had just recorded where it was, and the card the reader opened would
+      // close by itself. Same rule as `commentTargetRange` and `replyToReviewItem`.
+      surface.flushPendingInput();
       const placement = reviewPlacements().find((entry) => entry.key === key);
       const item = placement?.item;
       if (!item) {
