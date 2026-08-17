@@ -361,6 +361,23 @@ export function resolveStoryListItems(
 }
 
 /**
+ * Memo for {@link withResolvedListItems}, keyed on the RAW inputs by identity — blocks
+ * (stable per part via the `storyBlocks` memo), the unlinked numbering index, the style
+ * cascade, and the font oracle. Keying on the linked index would never hit:
+ * `withNumberingStyleLinks` mints a new object per call when a cascade is present. All
+ * inputs are identity-stable across no-change flushes, so one entry suffices; a miss on
+ * any input recomputes the sequential full-story counter walk exactly as before.
+ */
+let resolvedListItemsMemo: {
+  readonly blocks: readonly OoxmlElement[];
+  readonly rawIndex: NumberingIndex | undefined;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly isFontAvailable: ((family: string) => boolean) | undefined;
+  readonly linkedIndex: NumberingIndex;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+} | null = null;
+
+/**
  * Attach a full-story list-item map to layout options.
  *
  * Resolves once over `blocks` (body story including table cells) so counters continue across
@@ -385,6 +402,24 @@ export function withResolvedListItems<
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
+  // A caller-supplied item map bypasses the memo: the memo exists for the resolve below,
+  // and a pre-supplied map carries its own provenance.
+  if (options.listItems === undefined) {
+    const memo = resolvedListItemsMemo;
+    if (
+      memo &&
+      memo.blocks === blocks &&
+      memo.rawIndex === options.numberingIndex &&
+      memo.styleCascade === options.styleCascade &&
+      memo.isFontAvailable === options.isFontAvailable
+    ) {
+      return {
+        ...options,
+        numberingIndex: memo.linkedIndex,
+        ...(memo.listItems ? { listItems: memo.listItems } : {}),
+      };
+    }
+  }
   // Published already linked (§17.9.21), so every reader of the index — not just the item
   // map built here — sees the levels a `w:numStyleLink` delegates to.
   const numberingIndex = withNumberingStyleLinks(
@@ -396,6 +431,16 @@ export function withResolvedListItems<
     (numberingIndex.nums.size > 0
       ? resolveStoryListItems(blocks, numberingIndex, options.styleCascade, options.isFontAvailable)
       : undefined);
+  if (options.listItems === undefined) {
+    resolvedListItemsMemo = {
+      blocks,
+      rawIndex: options.numberingIndex,
+      styleCascade: options.styleCascade,
+      isFontAvailable: options.isFontAvailable,
+      linkedIndex: numberingIndex,
+      listItems,
+    };
+  }
   return {
     ...options,
     numberingIndex,

@@ -494,3 +494,74 @@ describe('TreePackageStore — parked story history across delete/restore', () =
     expect(evicting.openedStoryCount()).toBe(2);
   });
 });
+
+describe('TreePackageStore — currentPackage identity memo', () => {
+  test('repeated calls with unchanged authority return the same frozen instance', () => {
+    const store = openPackage(build({}));
+    const first = store.currentPackage();
+    expect(store.currentPackage()).toBe(first);
+    expect(Object.isFrozen(first)).toBe(true);
+  });
+
+  test('a body transact yields a fresh, content-correct snapshot', () => {
+    const store = openPackage(build({}));
+    const before = store.currentPackage();
+    const bodyId = paragraphIds(store.bodyStore().part)[0]!;
+    store.transact({ kind: 'body' }, (ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId: bodyId, offset: 0, text: 'X' });
+    });
+    const after = store.currentPackage();
+    expect(after).not.toBe(before);
+    const main = after.parts.get(after.mainDocumentPart)!;
+    expect(paragraphTextOf(main, paragraphIds(main)[0]!)).toContain('X');
+    expect(store.currentPackage()).toBe(after);
+  });
+
+  test('replacePackageShell invalidates without a revision bump', () => {
+    const store = openPackage(build({}));
+    const before = store.currentPackage();
+    const revBefore = store.packageRevision;
+    store.replacePackageShell(before);
+    expect(store.packageRevision).toBe(revBefore);
+    const after = store.currentPackage();
+    expect(after).not.toBe(before);
+    expect(store.currentPackage()).toBe(after);
+  });
+
+  test('opening a story store invalidates, and undo/redo track the snapshot', () => {
+    const store = openPackage(bodyAndHeaderDoc());
+    const closed = store.currentPackage();
+    const scope: StoryScope = { kind: 'headerFooter', rId: 'rId7' };
+    expect(store.resolveStory(scope).ok).toBe(true);
+    const opened = store.currentPackage();
+    expect(opened).not.toBe(closed);
+
+    const headerId = paragraphIds(store.partFor(scope)!)[0]!;
+    store.transact(scope, (ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId: headerId, offset: 0, text: 'Z' });
+    });
+    const edited = store.currentPackage();
+    expect(edited).not.toBe(opened);
+    expect(paragraphTextOf(edited.parts.get('/word/header1.xml')!, headerId)).toContain('Z');
+
+    store.undo();
+    const undone = store.currentPackage();
+    expect(undone).not.toBe(edited);
+    expect(paragraphTextOf(undone.parts.get('/word/header1.xml')!, headerId)).not.toContain('Z');
+
+    store.redo();
+    const redone = store.currentPackage();
+    expect(paragraphTextOf(redone.parts.get('/word/header1.xml')!, headerId)).toContain('Z');
+  });
+
+  test('installPackageSnapshot invalidates', () => {
+    const store = openPackage(build({}));
+    const before = store.currentPackage();
+    store.installPackageSnapshot(
+      loadPackage(build({ body: '<w:p><w:r><w:t>other</w:t></w:r></w:p>' }))
+    );
+    const after = store.currentPackage();
+    expect(after).not.toBe(before);
+    expect(store.currentPackage()).toBe(after);
+  });
+});

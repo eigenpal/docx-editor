@@ -210,6 +210,21 @@ export class TreePackageStore {
     packageWideEffects: boolean;
   } | null = null;
   private commitCounter = 0;
+  /**
+   * Memo for {@link currentPackage}, keyed on the COMPLETE read set of that method by
+   * object identity: the package shell, the body part, and each open story's part in
+   * map order. Identity is the only sound key — `packageRevision` deliberately is not
+   * part of it, because shell writes (`replacePackageShell`, story-store grafts, lazy
+   * store opens) move `this.pkg` or a `store.part` without bumping the revision.
+   * Packages and parts are frozen-immutable, so a matching tuple proves the merged
+   * snapshot cannot differ; no explicit invalidation exists anywhere.
+   */
+  private currentPackageMemo: {
+    readonly pkg: OoxmlPackage;
+    readonly bodyPart: OoxmlPart;
+    readonly storyParts: readonly OoxmlPart[];
+    readonly result: OoxmlPackage;
+  } | null = null;
 
   constructor(pkg: OoxmlPackage, main: OoxmlPart, options: TreePackageStoreOptions = {}) {
     this.pkg = withPart(pkg, main);
@@ -251,15 +266,41 @@ export class TreePackageStore {
    * The current package with every opened story store's part merged in.
    * Pure snapshot of authority; callers must not mutate.
    *
+   * Memoized on input identity: repeated calls with unchanged authority return the
+   * SAME frozen instance instead of minting a copy per call. Layout asks for this
+   * once per paragraph when keying drawing tokens, so the un-memoized `withPart`
+   * map copies dominated large-document keystroke flushes.
+   *
    * Stores whose parts are absent from the package shell (deleted furniture/notes)
    * stay parked for undo/redo identity but are not re-injected into the snapshot.
    */
   currentPackage(): OoxmlPackage {
+    const memo = this.currentPackageMemo;
+    if (memo && memo.pkg === this.pkg && memo.bodyPart === this.body.part) {
+      let index = 0;
+      let hit = true;
+      for (const store of this.stories.values()) {
+        if (memo.storyParts[index] !== store.part) {
+          hit = false;
+          break;
+        }
+        index += 1;
+      }
+      if (hit && index === memo.storyParts.length) return memo.result;
+    }
     let next = withPart(this.pkg, this.body.part);
+    const storyParts: OoxmlPart[] = [];
     for (const store of this.stories.values()) {
+      storyParts.push(store.part);
       if (!this.pkg.parts.has(store.part.name)) continue;
       next = withPart(next, store.part);
     }
+    this.currentPackageMemo = {
+      pkg: this.pkg,
+      bodyPart: this.body.part,
+      storyParts,
+      result: next,
+    };
     return next;
   }
 

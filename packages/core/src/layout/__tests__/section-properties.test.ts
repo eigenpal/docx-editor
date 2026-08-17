@@ -17,6 +17,7 @@ import {
   enumerateDocumentSections,
   geometryOfSection,
   readSectionProperties,
+  storyBlocks,
 } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -319,5 +320,36 @@ describe('w:pgNumType authored vs default', () => {
     const xml = strFromU8(reopened['word/document.xml']!);
     expect(xml).toMatch(/<w:pgNumType\s*\/>/);
     expect(xml).not.toMatch(/<w:pgNumType[^>]+\w+=/);
+  });
+});
+
+describe('section enumeration and story blocks are memoized per part identity', () => {
+  test('the same part returns the same references; a different part does not', () => {
+    const part = withSection('<w:pgSz w:w="11906" w:h="16838"/>');
+    expect(storyBlocks(part)).toBe(storyBlocks(part));
+    expect(enumerateDocumentSections(part)).toBe(enumerateDocumentSections(part));
+
+    // Parts are immutable — an edit publishes a NEW part object, so a re-parse of the
+    // same bytes stands in for one here.
+    const editedTwin = withSection('<w:pgSz w:w="11906" w:h="16838"/>');
+    expect(storyBlocks(editedTwin)).not.toBe(storyBlocks(part));
+    expect(enumerateDocumentSections(editedTwin)).not.toBe(enumerateDocumentSections(part));
+    expect(enumerateDocumentSections(editedTwin)).toEqual(enumerateDocumentSections(part));
+  });
+
+  test('display modes get distinct, individually stable entries', () => {
+    const part = load(
+      '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="a"/></w:rPr></w:pPr>' +
+        '<w:del w:id="2" w:author="a"><w:r><w:delText>gone</w:delText></w:r></w:del></w:p>' +
+        '<w:p><w:r><w:t>kept</w:t></w:r></w:p>'
+    );
+    const allMarkup = storyBlocks(part, 'all-markup');
+    const proposed = storyBlocks(part, 'proposed');
+    expect(allMarkup).not.toBe(proposed);
+    // The proposed view drops the revision-deleted paragraph; the memo must not
+    // leak one mode's filtering into the other.
+    expect(proposed.length).toBeLessThan(allMarkup.length);
+    expect(storyBlocks(part, 'all-markup')).toBe(allMarkup);
+    expect(storyBlocks(part, 'proposed')).toBe(proposed);
   });
 });

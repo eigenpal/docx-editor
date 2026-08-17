@@ -480,11 +480,15 @@ export function createInlineDrawingLayoutBundle(
     ownerPartName: string,
     reader: InlineDrawingPackageReader
   ): PartDrawingContextSlot => {
+    // Slot first: layout keys a drawing token per paragraph through here, and slot
+    // compatibility between flushes is `resetPackage`'s job (driven by `sync()`), not
+    // this lookup's. Resolving the part on every hit made each token pay a package
+    // snapshot for an answer the slot map already had.
+    const existing = slots.get(ownerPartName);
+    if (existing) return existing;
     const part = resolvePart(ownerPartName, reader);
     partByName.set(ownerPartName, part);
-    let slot = slots.get(ownerPartName);
-    if (slot) return slot;
-    slot = createPartDrawingContextSlot({
+    const slot = createPartDrawingContextSlot({
       ownerPartName,
       part,
       pkg: reader.currentPackage(),

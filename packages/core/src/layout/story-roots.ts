@@ -15,6 +15,7 @@
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
+import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
 
@@ -45,16 +46,38 @@ function acceptStoryBlock(block: OoxmlElement, displayMode: RevisionDisplayMode)
 }
 
 /**
+ * Memoized per part identity: parts are immutable (edits publish a new part object), so
+ * the block list is a pure function of `(part, displayMode)`. Every keystroke flush asks
+ * for the body's blocks from several callers — layout, section enumeration, furniture,
+ * note pagination — and this walk ran fresh for each of them. A bounded WeakRef ring
+ * rather than a plain WeakMap because undo history retains package snapshots by
+ * reference; 16 slots cover one flush's parts (body + header/footer variants + notes).
+ * Callers treat the result as read-only, so a shared array is safe to hand out.
+ */
+const storyBlocksCache = createRecentRootCache<
+  Partial<Record<RevisionDisplayMode, OoxmlElement[]>>
+>(16);
+
+/**
  * The story's blocks — paragraphs and tables — in document order, flattening through
  * block-level content-control wrappers under the shared nesting budget.
+ *
+ * Repeated calls with the same part and display mode return the SAME array instance.
  */
 export function storyBlocks(
   part: OoxmlPart,
   displayMode: RevisionDisplayMode = 'all-markup'
 ): OoxmlElement[] {
+  const perMode = storyBlocksCache.get(part);
+  const cached = perMode?.[displayMode];
+  if (cached) return cached;
   const root = storyRootOf(part);
-  if (!root) return [];
-  return collectFlowBlocks(root.children, 0, (block) => acceptStoryBlock(block, displayMode));
+  const blocks = root
+    ? collectFlowBlocks(root.children, 0, (block) => acceptStoryBlock(block, displayMode))
+    : [];
+  if (perMode) perMode[displayMode] = blocks;
+  else storyBlocksCache.set(part, { [displayMode]: blocks });
+  return blocks;
 }
 
 /**

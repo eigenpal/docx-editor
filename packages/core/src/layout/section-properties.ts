@@ -21,6 +21,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
+import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
@@ -455,8 +456,33 @@ export function enumerateDocumentSectionsBounded(
   return enumerateDocumentSectionsFromBlocks(part, storyBlocks(part, displayMode));
 }
 
+/**
+ * Memoized on the blocks array identity (stable per `(part, displayMode)` thanks to the
+ * `storyBlocks` memo), validated against the part: parts are immutable, so an identical
+ * `(part, blocks)` pair proves the enumeration cannot differ. One flush enumerates
+ * sections from several callers — layout geometry, furniture, note pagination, snapshot
+ * derivation — and each paid the full per-paragraph `w:sectPr` scan. Callers treat the
+ * result as read-only; a shared array is safe. Bounded WeakRef ring, not a WeakMap,
+ * because undo history retains snapshots by reference.
+ */
+const sectionsCache = createRecentRootCache<{
+  readonly part: OoxmlPart;
+  readonly result: DocumentSectionsEnumeration;
+}>(16);
+
 /** Internal shared-list variant for callers that already enumerated the story blocks. */
 export function enumerateDocumentSectionsFromBlocks(
+  part: OoxmlPart,
+  blocks: readonly OoxmlElement[]
+): DocumentSectionsEnumeration {
+  const cached = sectionsCache.get(blocks);
+  if (cached && cached.part === part) return cached.result;
+  const result = enumerateSectionsUncached(part, blocks);
+  sectionsCache.set(blocks, { part, result });
+  return result;
+}
+
+function enumerateSectionsUncached(
   part: OoxmlPart,
   blocks: readonly OoxmlElement[]
 ): DocumentSectionsEnumeration {

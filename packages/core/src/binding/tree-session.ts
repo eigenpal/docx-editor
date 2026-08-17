@@ -1093,8 +1093,8 @@ export function openTreeSession(
         // Package write, not a tree op: the story undo unit names the rId, while the
         // relationship itself is session-persistent across lifecycle package snapshots
         // (see `mergePersistentPackageShell`). Leftover rels are harmless; missing ones are not.
-        // `currentPackage()` mints a fresh object per call, so the identity check compares
-        // against the SAME instance the write was given.
+        // The identity check compares the write's output against the SAME `before` instance
+        // handed to the write; `currentPackage()` being memoized only strengthens that.
         const part = packageStore.partFor(scope);
         if (!part) return null;
         const before = currentPackage();
@@ -1406,8 +1406,8 @@ export function openTreeSession(
       ensureNumberingLevel(numId, level, kind) {
         // Same lane as `ensureListDefinition`: the numbering part lives on the PACKAGE,
         // and the memoized numbering root must forget what it read before this write.
-        // `currentPackage()` mints a fresh object per call, so the identity check must
-        // compare against the SAME instance the write was given.
+        // The identity check compares the write's output against the SAME `before`
+        // instance handed to the write; the `currentPackage()` memo preserves that.
         const before = currentPackage();
         const ensured = ensureNumberingLevel(before, numId, level, kind);
         if (!ensured) return false;
