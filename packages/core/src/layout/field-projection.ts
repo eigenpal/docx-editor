@@ -68,6 +68,7 @@ import {
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
+import { parseButtonInstruction } from './field-button.ts';
 import { captureInstructionSpecs, formFieldResult } from './field-form.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
@@ -359,6 +360,10 @@ export function piecesOfParagraph(
       // Inert non-page field: paint cached result as layout-owned substitution for the
       // single model unit (same as live PAGE) so hit-test/span ranges stay one atom.
       push(pending.cachedText, pending.props, pending.style, true, start, end, carried);
+    } else if (pending.buttonSpec) {
+      // MACROBUTTON / GOTOBUTTON display their text; the macro / target never runs. A cached
+      // result (what Word last painted) wins above — this fills in only when it is empty.
+      push(pending.buttonSpec.display, pending.props, pending.style, true, start, end, carried);
     }
     pending = null;
     openAtomicBeginId = null;
@@ -566,6 +571,7 @@ export function piecesOfParagraph(
             symbolSpec: null,
             linkSpec: null,
             formSpec: null,
+            buttonSpec: null,
             // Bounded ffData STATE read (checkbox checked/size, dropdown entries/selection —
             // macros never); `formField` below stays presence-based so an unreadable payload
             // still shades.
@@ -867,6 +873,21 @@ export function piecesOfParagraph(
         }
         return;
       }
+    }
+
+    // A simple MACROBUTTON / GOTOBUTTON displays everything after its first argument; the
+    // macro / target never runs. A non-empty cached display wins — synthesis fills an empty one.
+    const buttonSpec =
+      display.text.length === 0 ? parseButtonInstruction(fldSimpleInstr(simple) ?? '') : null;
+    if (buttonSpec) {
+      const buttonStyle =
+        display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+      if (buttonStyle.hidden) return;
+      const buttonProps = display.resultProps ?? inheritedRunProperties;
+      push(buttonSpec.display, buttonProps, buttonStyle, true, start, start + 1, {
+        fieldAtom: { formField: false },
+      });
+      return;
     }
 
     if (display.text.length === 0) return;

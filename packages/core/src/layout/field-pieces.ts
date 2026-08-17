@@ -12,6 +12,7 @@ import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-edi
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
+import type { ButtonFieldSpec } from './field-button.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
@@ -217,6 +218,15 @@ export interface PendingFieldProjection {
    * non-empty cached result.
    */
   formSpec: FormFieldKind | null;
+  /**
+   * Parsed MACROBUTTON / GOTOBUTTON instruction, or null when the field is neither.
+   *
+   * Captured at the same points as {@link symbolSpec}. Display text only — the macro / target
+   * is discarded at parse and nothing ever executes or navigates. Unlike SYMBOL, a cached
+   * result WINS when present (it is what Word last painted); the flush synthesizes from this
+   * only when the cache is empty.
+   */
+  buttonSpec: ButtonFieldSpec | null;
   /**
    * Bounded `w:ffData` render state read at `begin` (`legacyFormFieldDataOf` — state only,
    * macros never), or null when absent or malformed. {@link formField} stays presence-based:

@@ -15,6 +15,7 @@
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
+import { parseButtonInstruction, type ButtonFieldSpec } from './field-button.ts';
 import { normalizeFieldInstruction } from './field-instruction.ts';
 import { parseHyperlinkInstruction, type HyperlinkFieldSpec } from './field-link.ts';
 import { parseSymbolInstruction, type SymbolFieldSpec } from './field-symbol.ts';
@@ -49,6 +50,7 @@ export interface CapturedInstructionSpecs {
   symbolSpec: SymbolFieldSpec | null;
   linkSpec: HyperlinkFieldSpec | null;
   formSpec: FormFieldKind | null;
+  buttonSpec: ButtonFieldSpec | null;
 }
 
 /**
@@ -62,6 +64,8 @@ export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: 
   pending.linkSpec = parseHyperlinkInstruction(raw);
   if (pending.linkSpec) return;
   pending.formSpec = parseFormFieldInstruction(raw);
+  if (pending.formSpec) return;
+  pending.buttonSpec = parseButtonInstruction(raw);
 }
 
 /** The synthesized form-field result: text plus the props/style the piece should carry. */
