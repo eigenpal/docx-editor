@@ -21,7 +21,7 @@
 // bun.lock, so the dependency graph sees direct manifest entries only (185 of
 // 2485). Transitive CVEs raise no alert. That gap is why this script exists.
 
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +35,8 @@ const DEFAULT_AUDIT_LEVEL = 'moderate';
 
 const args = process.argv.slice(2);
 const asJson = args.includes('--json');
+/** `--sarif=<path>` also writes SARIF 2.1.0 for GitHub code scanning. */
+const sarifPath = args.find((a) => a.startsWith('--sarif='))?.split('=')[1];
 const levelArg = args.find((a) => a.startsWith('--audit-level='))?.split('=')[1];
 const auditLevel = levelArg ?? DEFAULT_AUDIT_LEVEL;
 if (!SEVERITY_ORDER.includes(auditLevel)) {
@@ -94,14 +96,17 @@ function readJson(path) {
 // --- The published surface -------------------------------------------------
 
 const packagesDir = join(ROOT, 'packages');
-const manifests = readdirSync(packagesDir)
-  .map((dir) => join(packagesDir, dir, 'package.json'))
-  .filter((path) => existsSync(path))
-  .map((path) => readJson(path));
+const sources = readdirSync(packagesDir)
+  .map((dir) => ({ dir, absPath: join(packagesDir, dir, 'package.json') }))
+  .filter((s) => existsSync(s.absPath))
+  .map((s) => ({ ...s, uri: `packages/${s.dir}/package.json`, manifest: readJson(s.absPath) }));
 
+const manifests = sources.map((s) => s.manifest);
 const published = manifests.filter((m) => m.private !== true);
 const publishedNames = new Set(published.map((m) => m.name));
 const byName = new Map(manifests.map((m) => [m.name, m]));
+/** Published package name -> its manifest, for SARIF result locations. */
+const sourceByName = new Map(sources.map((s) => [s.manifest.name, s]));
 
 const lock = parseBunLock(readFileSync(join(ROOT, 'bun.lock'), 'utf8'));
 const packages = lock.packages ?? {};
@@ -223,10 +228,26 @@ for (const [marker, trails] of shipped) {
   trailsByName.set(name, merged);
 }
 
+/**
+ * Anchor a finding to the line that declares the direct dependency it came in
+ * through. A trail reads `@docx-editor.dev/core > fast-xml-parser > strnum`, so
+ * the first hop names the published package and the second names the line to
+ * point at. GitHub code scanning drops any result without a location.
+ */
+function locate(trail) {
+  const [rootName, directDep] = (trail ?? '').split(' > ');
+  const source = sourceByName.get(rootName);
+  if (!source || !directDep) return null;
+  const lines = readFileSync(source.absPath, 'utf8').split('\n');
+  const index = lines.findIndex((line) => line.includes(`"${directDep}"`));
+  return { uri: source.uri, line: index >= 0 ? index + 1 : 1 };
+}
+
 const findings = [];
 for (const [name, list] of Object.entries(advisories)) {
   for (const advisory of list) {
     const id = advisory.github_advisory_id ?? advisory.url?.split('/').pop() ?? String(advisory.id);
+    const paths = [...(trailsByName.get(name) ?? [])].slice(0, 3);
     findings.push({
       name,
       id,
@@ -235,7 +256,8 @@ for (const [name, list] of Object.entries(advisories)) {
       url: advisory.url,
       vulnerableVersions: advisory.vulnerable_versions,
       ignored: ignoreById.has(id),
-      paths: [...(trailsByName.get(name) ?? [])].slice(0, 3),
+      paths,
+      location: locate(paths[0]),
     });
   }
 }
@@ -245,6 +267,74 @@ const threshold = SEVERITY_ORDER.indexOf(auditLevel);
 const blocking = findings.filter(
   (f) => !f.ignored && SEVERITY_ORDER.indexOf(f.severity) >= threshold,
 );
+
+// --- SARIF for the GitHub Security tab --------------------------------------
+
+/** GitHub renders its severity band from this number, not from `level`. */
+const SECURITY_SEVERITY = { critical: '9.0', high: '7.0', moderate: '5.0', low: '3.0', info: '1.0' };
+
+function buildSarif() {
+  const rules = new Map();
+  const results = [];
+  for (const finding of findings) {
+    const blocks = !finding.ignored && SEVERITY_ORDER.indexOf(finding.severity) >= threshold;
+    if (!rules.has(finding.id)) {
+      rules.set(finding.id, {
+        id: finding.id,
+        name: `Advisory/${finding.name}`,
+        shortDescription: { text: `${finding.severity}: ${finding.name}` },
+        fullDescription: { text: finding.title ?? finding.id },
+        helpUri: finding.url,
+        help: { text: `${finding.title}\nAffects ${finding.vulnerableVersions}\n${finding.url}` },
+        defaultConfiguration: { level: blocks ? 'error' : 'note' },
+        properties: { tags: ['security'], 'security-severity': SECURITY_SEVERITY[finding.severity] ?? '1.0' },
+      });
+    }
+    const why = finding.ignored
+      ? ' (accepted in scripts/shipped-advisories-ignore.json)'
+      : blocks
+        ? ''
+        : ` (below the ${auditLevel} threshold)`;
+    // Without a trail the package came straight off the lock, so anchor there
+    // rather than dropping the result on the floor.
+    const at = finding.location ?? { uri: 'bun.lock', line: 1 };
+    results.push({
+      ruleId: finding.id,
+      level: blocks ? 'error' : 'note',
+      message: {
+        text: `${finding.name} ${finding.vulnerableVersions}: ${finding.title}${why}. Reached via ${finding.paths[0] ?? 'bun.lock'}.`,
+      },
+      locations: [
+        {
+          physicalLocation: {
+            artifactLocation: { uri: at.uri },
+            region: { startLine: at.line },
+          },
+        },
+      ],
+    });
+  }
+  return {
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    version: '2.1.0',
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: 'shipped-advisories',
+            informationUri: 'https://github.com/eigenpal/docx-editor/blob/main/scripts/check-shipped-advisories.mjs',
+            rules: [...rules.values()],
+          },
+        },
+        results,
+      },
+    ],
+  };
+}
+
+if (sarifPath) {
+  writeFileSync(sarifPath, `${JSON.stringify(buildSarif(), null, 2)}\n`);
+}
 
 if (asJson) {
   console.log(JSON.stringify({ auditLevel, packages: shipped.size, findings, expired }, null, 2));

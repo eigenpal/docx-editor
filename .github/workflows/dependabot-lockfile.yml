@@ -22,6 +22,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Lets the advisory gate below publish its SARIF to the Security tab.
+  security-events: write
 
 jobs:
   refresh-and-verify:
@@ -65,7 +67,15 @@ jobs:
       # advisories in what we publish. A bump that pulls a vulnerable transitive
       # package fails here rather than at the next release.
       - name: Shipped dependency advisories
-        run: bun run check:shipped-advisories
+        run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
+
+      - name: Upload SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: shipped-advisories.sarif
+          category: shipped-advisories
 
       - name: Lint
         run: bun run lint

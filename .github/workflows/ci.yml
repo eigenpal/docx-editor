@@ -90,6 +90,9 @@ jobs:
   shipped-advisories:
     if: github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -100,7 +103,20 @@ jobs:
           bun-version: latest
 
       - name: Shipped dependency advisories
-        run: bun run check:shipped-advisories
+        run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
+
+      # `always()` so a failing gate still publishes what it found: the run log
+      # is where a finding goes to be forgotten. `continue-on-error` because a
+      # fork PR gets a read-only token and cannot upload — the gate above has
+      # already passed or failed on its own, so a refused upload must not
+      # change the job result.
+      - name: Upload SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: shipped-advisories.sarif
+          category: shipped-advisories
 
   build:
     if: github.actor != 'dependabot[bot]'
