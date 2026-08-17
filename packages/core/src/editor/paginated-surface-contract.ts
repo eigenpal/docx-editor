@@ -373,6 +373,21 @@ export interface PaginatedSurface {
   currentPage(mode?: 'viewport' | 'caret'): number;
   type(text: string): void;
   /**
+   * Queue plain typed text for a batched commit at the caret.
+   *
+   * The DOM input lane's entry: keystrokes arriving in a burst append here and land
+   * through ONE `type()` call — one transaction, one undo step, one layout flush —
+   * when the input queue drains. Every surface-level mutation, selection or scope
+   * move, geometry read, composition start and teardown flushes the buffer first.
+   * Code reading `session` directly (its text or its bytes) sits BELOW the buffer
+   * and must call {@link flushPendingInput} first, as the facade's save/detach
+   * paths do. `type()` itself stays synchronous; automation and commands should
+   * keep calling it directly.
+   */
+  enqueueType(text: string): void;
+  /** Land any queued typed text now, as its own transaction. No-op when empty. */
+  flushPendingInput(): void;
+  /**
    * Insert text whose newlines are PARAGRAPH BOUNDARIES, in one commit.
    *
    * `type` writes its argument into run text verbatim, so a newline reaching it is a

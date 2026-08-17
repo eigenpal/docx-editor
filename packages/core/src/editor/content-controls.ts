@@ -658,6 +658,9 @@ export function execContentControlCommand(
     };
   }
 
+  // A direct session write below `commit`: queued typing must land first, or a
+  // control edit that shrinks the caret paragraph makes the later flush refuse.
+  surface.flushPendingInput();
   const before = surface.session.revision();
   const mark = selectionMarkOf(surface.state().selection);
   const op: TreeDocOp =

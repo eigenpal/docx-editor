@@ -314,6 +314,9 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
   }
   const refusal = viewingRefusal(editor);
   if (refusal) return refusal;
+  // A direct session write below the surface's typing buffer: queued keystrokes
+  // land first so the caret this anchors to is the post-typing one.
+  surface.flushPendingInput();
   const at = input.at ?? surface.state().selection.head;
   const lock = input.lock === undefined ? 'contentLocked' : input.lock;
   // The story the paragraph is IN. The write defaults to the body, so inserting a chip into

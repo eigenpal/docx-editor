@@ -1249,6 +1249,7 @@ export interface PaginatedSurface {
     destroy(): void;
     dismissActiveReview(): void;
     editingMode(): SurfaceEditingMode;
+    enqueueType(text: string): void;
     enterHeaderFooter(args: {
         readonly rId: string;
         readonly pageIndex?: number;
@@ -1266,6 +1267,7 @@ export interface PaginatedSurface {
     exitListOnEmptyItem(): boolean;
     // (undocumented)
     exitNote(): void;
+    flushPendingInput(): void;
     // (undocumented)
     focus(): void;
     formatting(): SurfaceFormatting;

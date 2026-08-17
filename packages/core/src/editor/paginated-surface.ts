@@ -796,6 +796,63 @@ export function mountPaginatedSurface(
     }, 0);
   }
 
+  // ---- Batched typing ----------------------------------------------------
+  //
+  // A keystroke burst used to pay one commit + one synchronous layout PER
+  // CHARACTER, so a backlog of N queued keys blocked the main thread for
+  // N × flush. The DOM input pathway now appends plain `insertText` data here
+  // and lands the whole buffer through ONE `type()` call — one transaction,
+  // one tracked `w:ins`, one undo step, one layout flush. The flush task is a
+  // plain `setTimeout(0)`: queued input events outrank timers, so every key
+  // already waiting appends before the timer fires, and an isolated keystroke
+  // still lands within the same event-loop turn.
+  //
+  // The buffer holds TEXT ONLY, no position: `type()` resolves the model
+  // selection at flush time, and every other way the selection or document can
+  // move flushes the buffer first (`commit` head-flush plus the explicit
+  // flushes on selection, undo/redo, geometry reads, composition, save and
+  // teardown), so the selection at flush time is the selection the first
+  // buffered key saw.
+  let typeBuffer = '';
+  let typeFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  let flushingTypeBuffer = false;
+
+  function flushTypeBuffer(): void {
+    // Reentrancy first, timer second: a reentrant call (host code inside the
+    // flush's own onChange enqueuing more text) must not clear the fresh timer
+    // that new text just armed, or it would sit unflushed until an unrelated
+    // flush point.
+    if (flushingTypeBuffer) return;
+    if (typeFlushTimer !== null) {
+      clearTimeout(typeFlushTimer);
+      typeFlushTimer = null;
+    }
+    if (typeBuffer.length === 0) return;
+    const text = typeBuffer;
+    typeBuffer = '';
+    flushingTypeBuffer = true;
+    try {
+      // `surface` is assigned below; a flush can only run once a caller holds it.
+      surface.type(text);
+    } catch (error) {
+      // A throwing commit must not eat the keystrokes: put them back (ahead of
+      // anything enqueued meanwhile, preserving order) for the next flush point.
+      typeBuffer = text + typeBuffer;
+      throw error;
+    } finally {
+      flushingTypeBuffer = false;
+    }
+  }
+
+  function enqueueType(text: string): void {
+    typeBuffer += text;
+    if (typeFlushTimer !== null) return;
+    typeFlushTimer = setTimeout(() => {
+      typeFlushTimer = null;
+      flushTypeBuffer();
+    }, 0);
+  }
+
   const scheduler = createLayoutScheduler({
     // The DOCUMENT's geometry, exactly as the first paint uses. Omitting it meant the first
     // paint honoured A4 and the first committed edit silently repaginated onto Letter — every
@@ -1869,6 +1926,11 @@ export function mountPaginatedSurface(
    * not report a state change: nothing about the document, selection or revision moved.
    */
   function rematerialize(): void {
+    // The scroll-driven repaint can adopt a pending DOM gesture (adoptBeforePaint),
+    // which moves the selection without passing `setSelection`'s buffer guard;
+    // landing queued typing here first closes that window. Safe: this runs from
+    // a scheduled frame, never inside a render.
+    flushTypeBuffer();
     const nextSet = visiblePages();
     const nextExtent = surfaceExtent(currentLayout, nextSet);
     if (
@@ -1957,6 +2019,10 @@ export function mountPaginatedSurface(
     scope: StoryScope = storyScope(),
     checkSelection = true
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
+    // Direct op lanes (image ops, automation) bypass `commit`; buffered typing
+    // still lands first so their ops address the post-burst document. No-op on
+    // the commit path, whose head-flush already ran.
+    flushTypeBuffer();
     const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
 
@@ -2093,6 +2159,10 @@ export function mountPaginatedSurface(
         }
       | undefined = {}
   ): void {
+    // Any batched typing lands first as its own transaction, so this edit sees
+    // the document and selection the user saw. Reentrancy-guarded: the flush
+    // itself commits through here with an empty buffer.
+    flushTypeBuffer();
     // An edit invalidates the rectangle: its cells' content has changed, and the collapsed
     // DOM selection it installed still points at the PRE-edit anchor. Left standing it kept
     // painting a highlight over text that had moved, kept suppressing selection adoption, and
@@ -2166,6 +2236,20 @@ export function mountPaginatedSurface(
   }
 
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
+    // Buffered typing lands at the OLD caret before a MOVE takes effect —
+    // typing then clicking must not teleport the typed text to the click. A
+    // same-position set (the selection mirror re-adopting the caret it painted,
+    // which a browser echoes after every keystroke) is not a move and must not
+    // break the batch.
+    if (
+      typeBuffer.length > 0 &&
+      (next.anchor.paragraphId !== selection.anchor.paragraphId ||
+        next.anchor.offset !== selection.anchor.offset ||
+        next.head.paragraphId !== selection.head.paragraphId ||
+        next.head.offset !== selection.head.offset)
+    ) {
+      flushTypeBuffer();
+    }
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
     reconcilePendingWith(next);
@@ -2273,6 +2357,9 @@ export function mountPaginatedSurface(
     layout: () => currentLayout,
     selection: () => selection,
     setScopeSelection: (next) => {
+      // Entering or leaving a header/footer moves the caret ACROSS STORIES;
+      // buffered body keystrokes must land in the body first, not the header.
+      flushTypeBuffer();
       selection = next;
       cellSelection = null;
       desiredX = null;
@@ -2322,6 +2409,9 @@ export function mountPaginatedSurface(
   });
 
   function setCellSelection(next: CellSelection | null): void {
+    // A rectangle installs its own text selection; queued typing lands at the
+    // caret it was typed at first.
+    if (next) flushTypeBuffer();
     cellSelection = next;
     if (next) {
       reconcilePendingWith(next.text);
@@ -2959,11 +3049,13 @@ export function mountPaginatedSurface(
     // sharing the store — must not leave a caller reading geometry for a revision the model
     // has left behind. Nothing pending makes this a plain read.
     layout: () => {
+      flushTypeBuffer();
       flushLayout();
       return currentLayout;
     },
     state: currentState,
     currentPage: (mode = 'caret') => {
+      flushTypeBuffer();
       flushLayout();
       if (mode === 'viewport') {
         const page = viewportPage(container, currentLayout, scale);
@@ -3063,6 +3155,9 @@ export function mountPaginatedSurface(
         return false;
       }
     },
+
+    enqueueType,
+    flushPendingInput: flushTypeBuffer,
 
     type(text) {
       // Insert at the selection's START, not at its head. Deleting a selection removes the
@@ -3211,6 +3306,9 @@ export function mountPaginatedSurface(
     },
 
     navigate(command, extend = false) {
+      // Arrow keys move from the caret AFTER the typed text, over the layout
+      // that includes it.
+      flushTypeBuffer();
       let moved = navigateInActiveScope(
         currentLayout,
         selection.head,
@@ -3578,6 +3676,9 @@ export function mountPaginatedSurface(
 
     editingMode: () => editingMode,
     setEditingMode: (mode) => {
+      // Text typed under the OLD mode commits under it — a buffered edit must
+      // not silently become a suggestion (or a viewing-mode refusal).
+      flushTypeBuffer();
       editingMode = mode;
       // The old refusal described the old mode. Left standing, a host rendering it showed
       // "the document is open for viewing" over a document that had just become editable.
@@ -3639,6 +3740,9 @@ export function mountPaginatedSurface(
         options.onChange?.(currentState());
         return;
       }
+      // Batched typing becomes its own undo step BEFORE the rewind, so undo
+      // first removes what was just typed rather than skipping past it.
+      flushTypeBuffer();
       restoreSelection(session.undo());
     },
     redo: () => {
@@ -3647,6 +3751,7 @@ export function mountPaginatedSurface(
         options.onChange?.(currentState());
         return;
       }
+      flushTypeBuffer();
       restoreSelection(session.redo());
     },
     activeScope: () => {
@@ -3655,6 +3760,10 @@ export function mountPaginatedSurface(
       return hfScope!.activeScope();
     },
     setActiveScope: (scope: ViewScope) => {
+      // Buffered typing belongs to the story it was typed in: it must land
+      // BEFORE the active scope flips. A flush after the flip commits the burst
+      // into the wrong story, or gets refused and silently drops it.
+      flushTypeBuffer();
       if (scope.kind === 'note') return noteOps!.enterNote(scope.id);
       // REFUSED BEFORE ANYTHING IS LEFT. A scope this surface does not open — `frame`, or
       // anything a later contract adds — used to fall through to the exit below and only
@@ -3663,13 +3772,23 @@ export function mountPaginatedSurface(
       noteOps?.exitNote();
       return hfScope!.setActiveScope(scope);
     },
-    insertNote: (noteKind) => noteOps!.insertNote(noteKind),
+    insertNote: (noteKind) => {
+      // Inserting a note ENTERS its story; same scope-flip rule as setActiveScope.
+      flushTypeBuffer();
+      return noteOps!.insertNote(noteKind);
+    },
     deleteNote: (noteKind, noteId) => noteOps!.deleteNote(noteKind, noteId),
     convertNote: (fromKind, noteId) => noteOps!.convertNote(fromKind, noteId),
     convertAllNotes: (fromKind) => noteOps!.convertAllNotes(fromKind),
     setNoteProperties: (args) => noteOps!.setNoteProperties(args),
-    enterNote: (scopeId, position) => noteOps!.enterNote(scopeId, position),
-    exitNote: () => noteOps!.exitNote(),
+    enterNote: (scopeId, position) => {
+      flushTypeBuffer();
+      return noteOps!.enterNote(scopeId, position);
+    },
+    exitNote: () => {
+      flushTypeBuffer();
+      return noteOps!.exitNote();
+    },
     notePropertiesState: () => {
       const paragraphId = surface.state().selection.head.paragraphId;
       const key = `${session.packageRevision()}:${paragraphId}`;
@@ -3720,6 +3839,9 @@ export function mountPaginatedSurface(
       return { ok: true, changed: true };
     },
     enterHeaderFooter: (args) => {
+      // Land buffered body typing in the BODY before the scope flips to a
+      // header/footer story (see setActiveScope).
+      flushTypeBuffer();
       const entered = hfScope!.enterHeaderFooter(args);
       if (!entered) return entered;
       // A PROGRAMMATIC enter (review card, automation) must bring the band into view —
@@ -3738,7 +3860,11 @@ export function mountPaginatedSurface(
       }
       return entered;
     },
-    exitHeaderFooter: () => hfScope!.exitHeaderFooter(),
+    exitHeaderFooter: () => {
+      // Escape from a header lands buffered HEADER typing in the header first.
+      flushTypeBuffer();
+      return hfScope!.exitHeaderFooter();
+    },
     headerFooterState: () => hfScope!.headerFooterStateStable(session.packageRevision()),
     ...createHeaderFooterOps({
       applyOps,
@@ -3774,6 +3900,9 @@ export function mountPaginatedSurface(
       tableInteraction.refreshLabels();
     },
     destroy() {
+      // Typed-but-unflushed text lands before teardown, so a detach-then-save
+      // flow keeps the last keystrokes.
+      flushTypeBuffer();
       document.removeEventListener('selectionchange', onSelectionChange);
       pagesLayer.removeEventListener('keydown', onKeyDown);
       pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
@@ -3893,6 +4022,9 @@ export function mountPaginatedSurface(
 
   /** The selection in DOCUMENT order, whichever way the user dragged it. */
   function orderedRange(): { from: SemanticPosition; to: SemanticPosition } {
+    // Queued typing lands first: every range consumer must see the selection
+    // and layout the typed text produced. (No-op mid-flush and when empty.)
+    flushTypeBuffer();
     return orderedRangeOf(currentLayout, selection, paragraphOrder());
   }
 
@@ -3933,6 +4065,10 @@ export function mountPaginatedSurface(
    * deleted vetoes the whole transaction.
    */
   function deleteSelectionPlan(): RangeDeletionPlan {
+    // Every edit op builds its plan from here first, so this is where queued
+    // typing must land: a plan computed against the pre-buffer selection would
+    // edit beside text the user has already typed. (No-op mid-flush.)
+    flushTypeBuffer();
     // A RECTANGLE is not the range it stands in for. Rows one and two of column one, read as
     // a range, run through every cell between them — so deleting through the range empties
     // cells the drag never covered, which is the exact failure the rectangle exists to
@@ -3971,7 +4107,13 @@ export function mountPaginatedSurface(
   // identical behaviour instead of three hand-written keymaps that drift. The handlers
   // themselves are factories over the surface interface: keys, clipboard and `beforeinput` in
   // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
-  const { onSelectionChange, onCompositionStart, onCompositionEnd } = selectionSync;
+  const { onSelectionChange, onCompositionEnd } = selectionSync;
+  // The IME owns the DOM from compositionstart on; buffered plain typing must
+  // be in the document before that handover, not woven into the readback.
+  const onCompositionStart: typeof selectionSync.onCompositionStart = (...args) => {
+    flushTypeBuffer();
+    selectionSync.onCompositionStart(...args);
+  };
 
   /**
    * The pointer lane's handle, assigned once the surface it drives exists.
@@ -4167,6 +4309,9 @@ export function mountPaginatedSurface(
           : null;
       },
       enterHeaderFooter: (info) => {
+        // The pointer lane flips story scope too: land buffered typing first
+        // (see setActiveScope).
+        flushTypeBuffer();
         hfScope?.enterHeaderFooter({
           rId: info.rId,
           pageIndex: info.pageIndex,
@@ -4175,15 +4320,21 @@ export function mountPaginatedSurface(
         });
       },
       enterNote: (scopeId, position, pageIndex) => {
+        flushTypeBuffer();
         noteOps?.enterNote(scopeId, position, pageIndex);
       },
       exitNote: (restoreBody) => {
+        flushTypeBuffer();
         noteOps?.exitNote(restoreBody);
       },
-      exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
+      exitHeaderFooter: () => {
+        flushTypeBuffer();
+        return hfScope?.exitHeaderFooter();
+      },
       enterEmptyHeaderFooter: (kind, pageIndex) => {
         // Creating the part is a WRITE — viewing mode refuses it like every other lane.
         if (editingMode === 'view') return;
+        flushTypeBuffer();
         // Which section owns the page, from the multi-section spans; a single-section
         // document has no spans and every page belongs to section 0.
         const spans = layoutSession.multi?.spans;

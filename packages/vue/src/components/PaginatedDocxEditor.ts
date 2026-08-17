@@ -134,7 +134,14 @@ export const PaginatedDocxEditor = defineComponent({
         surface.value?.setParagraphProperty(localName, attributes),
       formatting: () => surface.value?.formatting() ?? null,
       sectionProperties: () => surface.value?.sectionProperties() ?? null,
-      save: () => surface.value?.session.save() ?? null,
+      save: () => {
+        const mounted = surface.value;
+        if (!mounted) return null;
+        // Queued keystrokes belong in the bytes: an autosave in the same
+        // event-loop turn as the last key must not lose them.
+        mounted.flushPendingInput();
+        return mounted.session.save();
+      },
     };
     expose(api);
 

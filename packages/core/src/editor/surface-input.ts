@@ -352,7 +352,11 @@ export function createBeforeInputHandler(
     }
 
     if (event.inputType === 'insertText' && event.data != null) {
-      surface.type(event.data);
+      // Queued, not committed: a keystroke burst aggregates into one transaction
+      // and one layout flush instead of paying a full flush per character. Every
+      // other input type below still commits synchronously, and each of those
+      // paths flushes the queue first.
+      surface.enqueueType(event.data);
       return;
     }
     if (event.inputType === 'insertFromPaste') {

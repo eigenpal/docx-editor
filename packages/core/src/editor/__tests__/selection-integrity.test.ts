@@ -460,6 +460,15 @@ describe('a render never discards a gesture the model has not adopted yet', () =
     );
   }
 
+  /**
+   * `beforeinput` insertText now QUEUES and lands on a zero-delay task (one commit
+   * per burst); awaiting one timer turn is the browser-faithful point to observe
+   * the committed document, exactly as a real frame would.
+   */
+  function flushTypedText(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   /** Capture-phase listeners happy-dom keeps on the target, used to prove teardown. */
   function capturingListeners(target: EventTarget, type: string): EventListener[] {
     for (const symbol of Object.getOwnPropertySymbols(target)) {
@@ -621,6 +630,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
         // model caret either — the ordered-type benchmark injects this on purpose.
         document.dispatchEvent(new Event('selectionchange'));
       }
+      await flushTypedText();
 
       expect(surface.session.bodyText().startsWith('1234567890')).toBe(true);
       expect(surface.state().selection).toEqual({
@@ -663,6 +673,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
           data: '1',
         })
       );
+      await flushTypedText();
       expect(surface.state().selection.head.offset).toBe(1);
 
       const run = host.querySelector('.docx-page[data-page-index="0"] [data-start]')!;
@@ -682,6 +693,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
           data: 'Y',
         })
       );
+      await flushTypedText();
       expect(surface.state().selection.head.offset).toBe(5);
       expect(surface.session.bodyText().slice(4, 5)).toBe('Y');
     } finally {
@@ -726,6 +738,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
           const pages = host.querySelector('.docx-pages');
           if (!pages) throw new Error('pages layer missing');
           typeDigit(pages, '1');
+          await flushTypedText();
           expect(surface.state().selection.head.offset).toBe(1);
 
           pages.dispatchEvent(
@@ -747,6 +760,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
           selection.addRange(range);
 
           typeDigit(pages, 'Y');
+          await flushTypedText();
           expect(surface.state().selection).toEqual({
             anchor: { paragraphId: id, offset: 1 },
             head: { paragraphId: id, offset: 1 },
@@ -808,11 +822,13 @@ describe('a render never discards a gesture the model has not adopted yet', () =
           pages.dispatchEvent(new Event('selectstart', { bubbles: true, cancelable: true }));
 
           typeDigit(pages, '1');
+          await flushTypedText();
           expect(surface.state().selection.head.offset).toBe(1);
 
           document.dispatchEvent(new Event('selectionchange'));
 
           typeDigit(pages, '2');
+          await flushTypedText();
           expect(surface.session.bodyText().slice(0, 2)).toBe('12');
           expect(surface.state().selection).toEqual({
             anchor: { paragraphId: id, offset: 2 },

@@ -898,6 +898,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // saved bytes are the only copy of the live document while it runs. Hold them:
         // a mount that throws must leave a recoverable editor, not an empty container
         // with the document gone. Font fidelity is never worth losing the document.
+        surface.flushPendingInput();
         const saved = surface.session.save();
         // Selection is facade state just like the live tree. In particular, `onReady` can
         // set and reveal a range while embedded fonts are still resolving; keeping only the
@@ -1344,6 +1345,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * live selection. Null when nothing is selected, or the selection is a caret.
    */
   function commentTargetRange(): { from: SemanticPosition; to: SemanticPosition } | null {
+    // The captured offsets outlive this read (they anchor the comment), so any
+    // queued typing must land before they are taken.
+    surface?.flushPendingInput();
     const selection = surface?.retainedSelection() ?? surface?.state().selection ?? null;
     if (!selection) return null;
     const { anchor, head } = selection;
@@ -1779,6 +1783,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (surface && container === el) return;
       if (surface) {
         // Moving containers: carry the live content, not the original bytes.
+        surface.flushPendingInput();
         pendingBytes = surface.session.save();
         teardownSurface();
       }
@@ -1805,6 +1810,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // left running would keep re-fitting a document that is no longer mounted.
       zoomLane.detach();
       if (surface) {
+        surface.flushPendingInput();
         pendingBytes = surface.session.save();
         teardownSurface();
       }
@@ -1828,6 +1834,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     save() {
       if (!surface) return Promise.reject(editorError('notFound', 'no document is loaded'));
+      // Ctrl+S can race a typing burst: queued keystrokes belong in the bytes.
+      surface.flushPendingInput();
       // A fresh copy, so the returned ArrayBuffer is exactly the document — not a window
       // into a larger allocation.
       const bytes = surface.session.save();
