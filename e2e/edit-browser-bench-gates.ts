@@ -37,6 +37,9 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
 export const HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
   'huge-suggesting-character': { placed: 2, total: 4250, reusedPages: 995, fullPasses: 1 },
   'huge-suggesting-wrap': { placed: 6, total: 4250, reusedPages: 994, fullPasses: 1 },
+  // A 50k-character paste re-places 2,126 paragraphs and reflows half the
+  // thousand pages — the standing tough case this fixture exists to watch.
+  'huge-paste-50k': { placed: 2126, total: 4250, reusedPages: 497, fullPasses: 1 },
 };
 
 /** p95 may spike on loaded CI; 3× median plus 50 ms catches sustained regressions without pinning wall clock. */
@@ -105,14 +108,22 @@ export function assertScenarioLatencyGates(
   assertTimingTail(report.paint, `${report.name} paint`);
   assertTimingTail(report.selection, `${report.name} selection`);
 
-  const engineMedian = report.layout.medianMs + report.paint.medianMs + report.selection.medianMs;
-  expect(
-    engineMedian,
-    `${report.name} engine sub-steps vs inputTask median ${report.inputTask.medianMs} ms`
-  ).toBeLessThanOrEqual(
-    Math.max(report.inputTask.medianMs * ENGINE_TO_INPUT_FACTOR, ENGINE_TO_INPUT_FLOOR_MS)
-  );
+  // Deliberately heavy scenarios exist to REPORT a large engine cost — a 50k
+  // paste reflowing half a thousand-page document is the number, not a bug.
+  // The keystroke-shaped ratio bound stays for everything else.
+  if (!HEAVY_SCENARIOS.has(report.name)) {
+    const engineMedian = report.layout.medianMs + report.paint.medianMs + report.selection.medianMs;
+    expect(
+      engineMedian,
+      `${report.name} engine sub-steps vs inputTask median ${report.inputTask.medianMs} ms`
+    ).toBeLessThanOrEqual(
+      Math.max(report.inputTask.medianMs * ENGINE_TO_INPUT_FACTOR, ENGINE_TO_INPUT_FLOOR_MS)
+    );
+  }
 }
+
+/** Scenarios whose whole point is a large engine cost; the ratio bound above skips them. */
+const HEAVY_SCENARIOS = new Set(['huge-paste-50k']);
 
 export function assertCrossScenarioLatencyGates(reports: readonly ScenarioReport[]): void {
   const character = reports.find((report) => report.name === 'editing-character');

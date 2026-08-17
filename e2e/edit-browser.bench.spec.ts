@@ -224,15 +224,56 @@ test('browser editing latency is measurable and structurally stable', async ({
       cwd: REPO_ROOT,
       stdio: 'inherit',
     });
-    await loadHarness(
-      page,
-      (benchPage) => installMeasurementProbe(benchPage, 0),
-      true,
-      EDIT_BROWSER_HUGE_FIXTURE
-    );
+    // Open-to-ready is itself a tough case at this size — parse, first layout
+    // of ~1,000 pages, shaped fonts, first paint — and nothing tracked it.
+    // Two samples: the cold load and one reload.
+    const openSamples: number[] = [];
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const started = Date.now();
+      await loadHarness(
+        page,
+        (benchPage) => installMeasurementProbe(benchPage, 0),
+        true,
+        EDIT_BROWSER_HUGE_FIXTURE
+      );
+      openSamples.push(Date.now() - started);
+    }
+    const openSummary = summarize(openSamples);
+    const emptySummary = summarize([0]);
+    reports.push({
+      name: 'huge-open-to-ready',
+      mode: 'edit',
+      textLength: 0,
+      inputTask: openSummary,
+      frame: openSummary,
+      eventDuration: summarizeOptional([]),
+      eventDelay: summarizeOptional([]),
+      layout: emptySummary,
+      paint: emptySummary,
+      selection: emptySummary,
+      // Reporting-only row: no edit ran, so there are no work counters to pin.
+      work: {
+        placed: 0,
+        total: 4250,
+        reusedPages: 0,
+        fullPasses: 0,
+        staleDiscards: 0,
+        cancelledRuns: 0,
+      },
+      dom: await page.evaluate(() => ({
+        nodes: document.querySelectorAll('*').length,
+        materializedPages: document.querySelectorAll('.docx-page[data-materialized="true"]').length,
+        selectionSpans: 0,
+      })),
+    });
+
     const hugeScenarios = [
       { name: 'huge-suggesting-character', mode: 'suggest' as const, text: 'X' },
       { name: 'huge-suggesting-wrap', mode: 'suggest' as const, text: 'word '.repeat(20) },
+      // A single 50,000-character paste: one giant op batching cannot help,
+      // exercising run splitting, shaping and pagination ripple. Its real cost
+      // reads from the Frame p95 column.
+      { name: 'huge-paste-50k', mode: 'edit' as const, text: 'word '.repeat(10_000) },
     ];
     for (const scenario of hugeScenarios) {
       const report = await measureScenario(scenario);

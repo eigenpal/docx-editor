@@ -39,7 +39,9 @@ jobs:
   bench:
     if: github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 25
+    # Sized for the three-fixture browser pass (plain + tracked + the generated
+    # ~1,000-page stress document) on both sides.
+    timeout-minutes: 35
     permissions:
       contents: read # checkout + merge-base worktree
       pull-requests: write # upsert the single sticky benchmark comment
