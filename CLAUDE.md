@@ -3,6 +3,22 @@
 WYSIWYG editor and rendering engine for DOCX. Output must match MS Word: fonts,
 theme colors, styles, tables, headers/footers, section layout.
 
+## Communication
+
+Write all replies in ASD-STE100 Simplified Technical English.
+
+- Use the active voice.
+- Keep sentences to 20 words or fewer.
+- Give one idea in each sentence.
+- Use simple tenses: present, past, and future.
+- Use the same word for the same idea each time.
+- Do not use idioms, slang, or jargon.
+- Keep paragraphs to 6 sentences or fewer.
+
+Keep technical items exact. File paths, function names, flags, and numbers do not
+change. For example, write `packages/core/src/layout/semantic-layout.ts` and
+`w:contextualSpacing` in full.
+
 ## Packages
 
 One engine. Thin chrome on top.
