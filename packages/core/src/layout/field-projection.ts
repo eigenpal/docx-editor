@@ -555,6 +555,7 @@ export function piecesOfParagraph(
       if (!consumeScanNode(budget)) {
         abandonPending();
         resetFieldParseState(field);
+        nestedPage.reset();
         if (grand.kind === 'runProperties') continue;
         if (isFldChar(grand, 'begin') || isFldChar(grand, 'separate') || isFldChar(grand, 'end')) {
           continue;
@@ -621,6 +622,7 @@ export function piecesOfParagraph(
 
       if (isFldChar(grand, 'separate')) {
         const outermostSeparate = field.nesting === 1 && field.phase === 'instruction';
+        const separateLevel = field.nesting;
         const kind = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
           pending.kind = kind && pageContext ? kind : null;
@@ -634,10 +636,14 @@ export function piecesOfParagraph(
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
           pending.style = style;
-        } else if (pending?.atomic && field.phase === 'result') {
+        } else if (pending?.atomic && field.phase === 'result' && !field.nestingOverflow) {
           // Inner separate inside the outer atomic result: live-evaluate an allowlisted
           // nested field instead of concatenating its cached digits (fldSimple parity).
-          nestedPage.arm(pageContext ? kind : null);
+          // Level-aware: the tracker arms at ANY nested level 2..MAX_FIELD_NESTING when idle,
+          // and while armed ignores deeper separates (part of the replaced result) and null
+          // duplicates at the tracked level. Overflowed nesting never arms — projection would
+          // be replacing content the atom parser already demoted.
+          nestedPage.onSeparate(pageContext ? kind : null, separateLevel);
         }
         continue;
       }
@@ -655,12 +661,14 @@ export function piecesOfParagraph(
         ) {
           captureInstructionSpecs(pending, field.instruction);
         }
-        // The end closing a skipped inner field appends its live value; an inner result that
-        // existed but was entirely suppressed appends nothing (fldSimple parity).
-        if (field.nesting === 2 && pending?.atomic) {
-          pending.cachedText += nestedPage.liveValue(pageContext);
+        // The end closing the TRACKED inner field appends its live value; an inner result that
+        // existed but was entirely suppressed appends nothing (fldSimple parity). Deeper ends
+        // inside the replaced result return null and leave the tracker armed, so a begin/end
+        // pair nested in a tracked result cannot clear tracking mid-field.
+        const appendedLive = nestedPage.onEnd(field.nesting, pageContext);
+        if (appendedLive !== null && pending?.atomic) {
+          pending.cachedText += appendedLive;
         }
-        nestedPage.reset();
         onFldCharEnd(field);
         if (outermostEnd) {
           if (pending?.atomic) commitAtomicField();
@@ -687,7 +695,13 @@ export function piecesOfParagraph(
         if (isSymbolRunChild(grand)) {
           if (pending.atomic) {
             pending.sawResultContent = true;
-            if (!nestedPage.active && !style.hidden && revisionsVisible(revisions, displayMode)) {
+            if (nestedPage.active) {
+              // A symbol inside the skipped inner cache is result content too: a visible one
+              // keeps the live replacement alive, a suppressed-only cache appends nothing.
+              nestedPage.noteResult(!style.hidden && revisionsVisible(revisions, displayMode));
+              continue;
+            }
+            if (!style.hidden && revisionsVisible(revisions, displayMode)) {
               const glyph = symbolGlyphOf(grand);
               if (glyph?.unicode) {
                 donateResultCapture();
@@ -763,13 +777,13 @@ export function piecesOfParagraph(
           // Atomic unit: cache donates display text/style only — offset already reserved.
           if (nestedPage.active) {
             // Skipped inner cached digits: the live value replaces them at the inner end.
+            // Donation is the FULL result capture — style, revision attribution and enclosing
+            // link — exactly like the ordinary result branch: when the atom's first visible
+            // result content is the nested digits wrapped in `w:ins` or `w:hyperlink`, the
+            // live value that replaces them must paint attributed and linked the same way.
             nestedPage.noteResult(!style.hidden);
             if (style.hidden) continue;
-            if (!pending.capturedResultStyle) {
-              pending.props = props;
-              pending.style = style;
-              pending.capturedResultStyle = true;
-            }
+            donateResultCapture();
             continue;
           }
           if (style.hidden) continue;

@@ -313,8 +313,9 @@ export function isInsideFieldResult(state: ComplexFieldParseState): boolean {
  * each paragraph — the same machine paragraph projection uses — and resets at paragraph
  * boundaries so malformed cross-paragraph fields never count. Allowlisted `w:fldSimple`
  * instructions count too, and a non-page simple field is still descended so a nested complex
- * PAGE inside it is not missed. A complex PAGE nested inside another complex field counts the
- * same way: `onFldCharSeparate` answers per level, so the separate branch below notes it.
+ * PAGE inside it is not missed. A complex PAGE nested inside another complex field's RESULT
+ * counts the same way: `onFldCharSeparate` answers per level, and the separate branch below
+ * notes it when projection can replace it (outer result phase, within the nesting cap).
  * Instruction text is extracted iteratively under the same node/depth/character budgets.
  */
 export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
@@ -332,11 +333,19 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     else hasSectionPages = true;
   };
 
+  // Once a paragraph shows hostile nesting, the atomic-span parser fails closed for the
+  // REST of that paragraph (`parsedFieldSpansOf` refuses the suffix rather than rescanning
+  // it quadratically), so projection paints every later field there verbatim. Detection must
+  // agree for the same suffix, or a footer with one hostile field pays a per-sheet layout
+  // that paints identical text on every page. Cleared at paragraph boundaries.
+  let paragraphPoisoned = false;
+
   const processFieldChild = (grand: OoxmlNode, depth: number): void => {
     if (grand.kind === 'runProperties') return;
 
     if (isFldChar(grand, 'begin')) {
       onFldCharBegin(field);
+      if (field.nestingOverflow) paragraphPoisoned = true;
       return;
     }
 
@@ -346,8 +355,16 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     }
 
     if (isFldChar(grand, 'separate')) {
+      const level = field.nesting;
+      const phase = field.phase;
       const kind = onFldCharSeparate(field);
-      if (kind) note(kind);
+      if (paragraphPoisoned) return;
+      // Note only what projection can actually replace. A top-level (level-1) field always
+      // projects. A NESTED field projects only out of the outer field's RESULT: a page field
+      // inside an outer INSTRUCTION (`IF { PAGE } = 1 "x"`) is never painted at all, and a
+      // field past the nesting cap demotes to verbatim text — noting either buys a per-sheet
+      // relayout that paints identical text on every page.
+      if (kind && (level <= 1 || phase === 'result')) note(kind);
       return;
     }
 
@@ -372,8 +389,10 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
         grand.children.length > 0
       ) {
         const saved = { ...field };
+        const savedPoison = paragraphPoisoned;
         walk(grand, depth + 1);
         Object.assign(field, saved);
+        paragraphPoisoned = savedPoison;
       }
       if (complete() || budget.exhausted) return;
     }
@@ -389,12 +408,14 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     // begin in one paragraph cannot pair with separate/end in another.
     if (node.kind === 'paragraph') {
       resetFieldParseState(field);
+      paragraphPoisoned = false;
       for (const child of node.children) {
         walk(child, depth + 1);
         if (complete()) return;
         if (budget.exhausted) return;
       }
       resetFieldParseState(field);
+      paragraphPoisoned = false;
       return;
     }
 

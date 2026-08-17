@@ -30,16 +30,15 @@ import {
   consumeScanNode,
   createFieldParseState,
   ingestInstrTextBounded,
-  isCollectingInstruction,
   isFldChar,
   isInstrText,
   MAX_STORY_FIELD_SCAN_DEPTH,
   onFldCharBegin,
   onFldCharEnd,
   onFldCharSeparate,
-  type AllowlistedPageField,
   type FieldScanBudget,
 } from './field-instruction.ts';
+import { createNestedPageTracker } from './field-nested-page.ts';
 import { projectPageFieldValue, type FieldPageContext } from './field-page-furniture.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import {
@@ -103,21 +102,16 @@ export function collectSimpleFieldDisplay(args: {
   let sawResultContent = false;
 
   const nested = createFieldParseState();
-  let liveNestedKind: AllowlistedPageField | null = null;
-  let skipCachedNestedResult = false;
-  let nestedResultSeen = false;
-  let nestedResultVisible = false;
+  // Level-aware live evaluation of an allowlisted page field nested in the cache (shared with
+  // the complex-field walk): the machine's level 1 is a complex field directly inside this
+  // `w:fldSimple`, deeper levels are fields nested in ITS cached result, and the tracker skips
+  // the tracked field's digits and appends the live value at that level's matching end only.
+  const tracker = createNestedPageTracker();
 
   const captureStyle = (props: readonly OoxmlProperty[], style: ResolvedRunStyle): void => {
     if (resultProps) return;
     resultProps = props;
     resultStyle = style;
-  };
-
-  const finishLiveNested = (): void => {
-    if (!liveNestedKind || !pageContext) return;
-    if (nestedResultSeen && !nestedResultVisible) return;
-    text += projectPageFieldValue(liveNestedKind, pageContext);
   };
 
   const collect = (node: OoxmlNode, nodeDepth: number, local: readonly RevisionAttribution[]) => {
@@ -133,40 +127,33 @@ export function collectSimpleFieldDisplay(args: {
 
           if (isFldChar(grand, 'begin')) {
             onFldCharBegin(nested);
-            if (nested.nesting === 1) {
-              liveNestedKind = null;
-              skipCachedNestedResult = false;
-              nestedResultSeen = false;
-              nestedResultVisible = false;
-            }
+            if (nested.nesting === 1) tracker.reset();
             continue;
           }
           if (isInstrText(grand)) {
-            if (isCollectingInstruction(nested)) {
-              ingestInstrTextBounded(nested, grand, budget, nodeDepth + 1);
-            }
+            // Bounded per-level ingestion: the machine itself knows whether the INNERMOST
+            // open level still collects. Gating on the level-1 phase here starved every
+            // deeper level's capture, so a PAGE two levels down could never be recognized.
+            ingestInstrTextBounded(nested, grand, budget, nodeDepth + 1);
             continue;
           }
           if (isFldChar(grand, 'separate')) {
+            const separateLevel = nested.nesting;
+            const separatePhase = nested.phase;
             const kind = onFldCharSeparate(nested);
-            if (kind && pageContext) {
-              liveNestedKind = kind;
-              skipCachedNestedResult = true;
-              nestedResultSeen = false;
-              nestedResultVisible = false;
-            } else {
-              liveNestedKind = null;
-              skipCachedNestedResult = false;
+            // A level-1 machine field sits directly in this cache and always projects. A
+            // DEEPER field projects only from a level-1 RESULT (never from an instruction —
+            // that content is not painted) and never past the nesting cap, matching what
+            // `detectStoryPageFields` notes so detection and projection stay one story.
+            if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
+              tracker.onSeparate(pageContext ? kind : null, separateLevel);
             }
             continue;
           }
           if (isFldChar(grand, 'end')) {
-            if (nested.nesting === 1 && skipCachedNestedResult) finishLiveNested();
+            const appendedLive = tracker.onEnd(nested.nesting, pageContext);
+            if (appendedLive !== null) text += appendedLive;
             onFldCharEnd(nested);
-            liveNestedKind = null;
-            skipCachedNestedResult = false;
-            nestedResultSeen = false;
-            nestedResultVisible = false;
             continue;
           }
 
@@ -176,7 +163,10 @@ export function collectSimpleFieldDisplay(args: {
           // `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
           if (isSymbolRunChild(grand)) {
             sawResultContent = true;
-            if (skipCachedNestedResult) continue;
+            if (tracker.active) {
+              tracker.noteResult(!style.hidden && revisionsVisible(local, displayMode));
+              continue;
+            }
             const glyph = symbolGlyphOf(grand);
             if (!glyph?.unicode) continue;
             if (style.hidden || !revisionsVisible(local, displayMode)) continue;
@@ -193,12 +183,9 @@ export function collectSimpleFieldDisplay(args: {
             style.hidden ||
             !revisionsVisible(local, displayMode) ||
             (grand.kind === 'deletedText' && !deleted);
-          if (skipCachedNestedResult) {
-            nestedResultSeen = true;
-            if (!suppressed) {
-              nestedResultVisible = true;
-              captureStyle(props, style);
-            }
+          if (tracker.active) {
+            tracker.noteResult(!suppressed);
+            if (!suppressed) captureStyle(props, style);
             continue;
           }
           if (suppressed) continue;
@@ -208,7 +195,12 @@ export function collectSimpleFieldDisplay(args: {
         continue;
       }
       if (isFldSimple(child)) {
-        const nestedKind = allowlistedPageField(fldSimpleInstr(child) ?? '');
+        // Inside a tracked complex field's skipped cache the simple field is part of the
+        // replaced result: descend so its runs are NOTED (visible cached content keeps the
+        // live replacement alive), never appended on their own.
+        const nestedKind = tracker.active
+          ? null
+          : allowlistedPageField(fldSimpleInstr(child) ?? '');
         if (nestedKind && pageContext) {
           if (!revisionsVisible(local, displayMode)) continue;
           const beforeLen = text.length;
@@ -234,10 +226,6 @@ export function collectSimpleFieldDisplay(args: {
   };
 
   collect(simple, depth, revisions);
-  if (skipCachedNestedResult) {
-    liveNestedKind = null;
-    skipCachedNestedResult = false;
-  }
 
   return { text, resultProps, resultStyle, sawResultContent };
 }
