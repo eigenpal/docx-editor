@@ -3,7 +3,109 @@
 // Extracted from semantic-layout so the flow module stays under the line budget while every
 // published field still participates in equality.
 
-import type { BlockFragmentRecord } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  ParagraphFragmentRecord,
+  TableFragmentRecord,
+} from './semantic-records.ts';
+
+/**
+ * What one field of a fragment record does in the signature.
+ *
+ * - `hashed` — the field is serialized. Every PUBLISHED field belongs here. A published
+ *   field left out converges a freshly built fragment against a stale one and discards the
+ *   new value, so the consumer keeps reading the pre-edit state.
+ * - `covered` — another hashed field ALREADY moves whenever this one moves, so hashing it
+ *   again buys nothing. Only a field with that proof gets this role.
+ *
+ * The maps below are `satisfies Record<keyof …>`, so a new field on a record is a TYPE ERROR
+ * here until somebody classifies it. That guard is the point: `props`, `indent`, `borders`
+ * and `lines.drawings` were each added to a record, missed here, and shipped as a stale-read
+ * bug that only a hand-written test could catch.
+ */
+type SignatureRole = 'hashed' | 'covered';
+
+/**
+ * Every field of a paragraph fragment, classified.
+ *
+ * Order is the record's own declaration order, and it is also the order the values are
+ * serialized in, so a diff of this map is a diff of the signature.
+ */
+const PARAGRAPH_FIELDS = {
+  // The branch this record takes below already separates it from a table fragment.
+  kind: 'covered',
+  id: 'hashed',
+  // `id` is `${paragraphId}#f${fragmentIndex}`, so both are already in it.
+  paragraphId: 'covered',
+  fragmentIndex: 'covered',
+  range: 'hashed',
+  // A paragraph-property change that layout does not read moves no geometry. Without this
+  // the freshly built fragment converged against the old one and was discarded, leaving a
+  // painter or style consumer reading the pre-edit value.
+  props: 'hashed',
+  spacing: 'hashed',
+  // The EFFECTIVE indent, for the same reason `props` is here. A list paragraph's indent
+  // comes from `numbering.xml`, so a renumber that moves the text but no other hashed field
+  // would converge against the stale fragment and leave the ruler reading the pre-edit value.
+  indent: 'hashed',
+  bottomBorder: 'hashed',
+  // Every `w:pBdr` stroke, not just the bottom one. A left rule's colour or width moves
+  // nothing else that is hashed here — `props` carries `pBdr` without its children — so
+  // leaving it out kept the old frame drawn.
+  borders: 'hashed',
+  shading: 'hashed',
+  shadingBox: 'hashed',
+  // The revision on the paragraph MARK. Accepting or rejecting a tracked pilcrow rewrites
+  // `w:pPr/w:rPr/w:ins|w:del` and moves no geometry at all, so nothing else here moves with
+  // it: paint kept drawing the attribution of a decision the document no longer records.
+  //
+  // A mark inside a `w:tc` never reaches this: semantic-table-layout builds its own paragraph
+  // fragment and does not publish the field at all. That is a gap in what a cell publishes,
+  // not one in what this compares.
+  markRevision: 'hashed',
+  marker: 'hashed',
+  // WHOLESALE, not a projection of the fields a line happens to publish today. A line owns
+  // `contentX` (the only alignment carrier on a span-less line), `leading`, `trailingSpacing`,
+  // `deletedRanges` and `drawings`, and each of those was reachable only by adding it here by
+  // hand. Serializing the record itself is what makes the next line field participate on the
+  // day it is published rather than on the day someone notices.
+  //
+  // The price is that a line's own KEY ORDER reaches the string, and the two sites that build
+  // one order their optional keys differently (semantic-layout.ts and semantic-table-layout.ts
+  // disagree about where `drawings` sits). That costs nothing: comparison is positional, and a
+  // body line is only ever compared against the body line at the same index, a cell line
+  // against a cell line inside `rows`. A line cannot change its construction site without
+  // changing the node id in `fragment.id`. Order can only cost a reuse, never restore a stale
+  // value, which is the direction this whole comparison is allowed to fail in.
+  lines: 'hashed',
+  box: 'hashed',
+} as const satisfies Record<keyof ParagraphFragmentRecord, SignatureRole>;
+
+/**
+ * Every field of a table fragment, classified.
+ *
+ * `rows` carries the cells, and a cell carries the paragraph fragments inside it, all
+ * wholesale. That is why a table cell never had the omissions the paragraph branch did.
+ */
+const TABLE_FIELDS = {
+  kind: 'covered',
+  id: 'hashed',
+  tableId: 'hashed',
+  fragmentIndex: 'hashed',
+  nestingDepth: 'hashed',
+  columnEdges: 'hashed',
+  rows: 'hashed',
+  box: 'hashed',
+} as const satisfies Record<keyof TableFragmentRecord, SignatureRole>;
+
+function hashedKeys<Fragment extends object>(
+  fields: Record<keyof Fragment, SignatureRole>
+): readonly (keyof Fragment)[] {
+  return (Object.keys(fields) as (keyof Fragment)[]).filter((key) => fields[key] === 'hashed');
+}
+
+const PARAGRAPH_KEYS = hashedKeys<ParagraphFragmentRecord>(PARAGRAPH_FIELDS);
+const TABLE_KEYS = hashedKeys<TableFragmentRecord>(TABLE_FIELDS);
 
 /** Cached per record, so a fragment is serialized once however often convergence is tested. */
 const signatures = new WeakMap<object, string>();
@@ -11,59 +113,12 @@ const signatures = new WeakMap<object, string>();
 export function fragmentSignature(fragment: BlockFragmentRecord): string {
   const cached = signatures.get(fragment);
   if (cached !== undefined) return cached;
-  // Every PUBLISHED field participates. A field left out converges a freshly built
-  // fragment against a stale one and discards the new value — the exact bug the `props`
-  // note below records for paragraph properties.
+  // An absent optional field serializes as `null` in place rather than vanishing, so the
+  // values stay positionally aligned with the key list that produced them.
   const signature =
     fragment.kind === 'table'
-      ? JSON.stringify([
-          fragment.id,
-          fragment.tableId,
-          fragment.fragmentIndex,
-          fragment.nestingDepth,
-          fragment.columnEdges,
-          fragment.box,
-          fragment.rows,
-        ])
-      : JSON.stringify([
-          fragment.id,
-          fragment.box,
-          fragment.range,
-          // `props` is a PUBLISHED field. A paragraph-property change layout does not read
-          // moves no geometry, so without this the freshly built fragment converged against
-          // the old one and was discarded — leaving a painter or style consumer reading the
-          // pre-edit value.
-          fragment.props,
-          fragment.spacing,
-          // The EFFECTIVE indent, for the same reason `props` is here. A list paragraph's
-          // indent comes from `numbering.xml`, so a renumber that moves the text but no
-          // other hashed field would converge against the stale fragment and leave the
-          // ruler reading the pre-edit value.
-          fragment.indent,
-          fragment.bottomBorder,
-          // Every `w:pBdr` stroke, not just the bottom one. A left rule's colour or width
-          // moves nothing else that is hashed here — `props` carries `pBdr` without its
-          // children — so leaving it out converges the repainted fragment against the stale
-          // one and keeps drawing the old frame.
-          fragment.borders,
-          fragment.shading,
-          fragment.shadingBox,
-          fragment.marker,
-          // `contentX` as well as `box`, because it is published geometry and everything
-          // published participates. It is the ONLY field carrying alignment on a span-less
-          // line, and nothing here guarantees a mover of it also moves `box` or `spans`.
-          fragment.lines.map((line) => [
-            line.id,
-            line.box,
-            line.contentX,
-            line.baseline,
-            line.spans,
-            // Resource resolution changes paint state without moving the line. If drawings
-            // are omitted, pending→ready can falsely converge on an open page and replace
-            // the freshly rebuilt fragment with the previous page's pending record.
-            line.drawings,
-          ]),
-        ]);
+      ? JSON.stringify(TABLE_KEYS.map((key) => fragment[key]))
+      : JSON.stringify(PARAGRAPH_KEYS.map((key) => fragment[key]));
   signatures.set(fragment, signature);
   return signature;
 }
@@ -88,7 +143,13 @@ export function sameFragments(
   return true;
 }
 
-/** Pending anchored drawings on the open page — reference identity for incremental reuse. */
+/**
+ * Pending anchored drawings on the open page — reference identity for incremental reuse.
+ *
+ * Identity is the STRICT side of the trade the fragments make: a rebuilt record compares
+ * unequal even when its content matches, so this can cost a convergence but can never
+ * restore a stale one.
+ */
 export function sameAnchoredDrawings(
   left: readonly import('./drawing-layout.ts').AnchoredDrawingRecord[],
   right: readonly import('./drawing-layout.ts').AnchoredDrawingRecord[]

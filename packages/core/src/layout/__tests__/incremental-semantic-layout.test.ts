@@ -19,7 +19,11 @@ import {
   type SemanticLayout,
 } from '../index.ts';
 import { fragmentSignature, sameFragments } from '../semantic-fragment-signature.ts';
-import type { BlockFragmentRecord } from '../semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  LineRecord,
+  ParagraphFragmentRecord,
+} from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -315,4 +319,124 @@ describe('the cache and the session compose (tasks 9.2, 9.3)', () => {
     expect(sameFragments([pending], [samePending])).toBe(true);
     expect(sameFragments([pending], [ready])).toBe(false);
   });
+});
+
+// Convergence restores the previous pass's open page verbatim, so a published field the
+// signature does not carry comes back at its pre-edit value. Each case below is a state
+// transition that moves ONE field and no geometry, which is exactly what makes it invisible
+// to a hand-written field list.
+describe('every published field of a fragment participates in its signature', () => {
+  const openPageFragment = (): ParagraphFragmentRecord => {
+    const fragment = lay(load(paragraph('open page')), 1).pages[0]!.fragments[0]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph fragment');
+    return fragment;
+  };
+
+  const withFirstLine = (
+    fragment: ParagraphFragmentRecord,
+    patch: Partial<LineRecord>
+  ): ParagraphFragmentRecord => ({
+    ...fragment,
+    lines: fragment.lines.map((line, index) => (index === 0 ? { ...line, ...patch } : line)),
+  });
+
+  // `lines.drawings` belongs to this set too; the pending → ready transition has its own
+  // test above, which arrived with the document that reproduced it.
+  const TRANSITIONS: readonly [
+    string,
+    (base: ParagraphFragmentRecord) => ParagraphFragmentRecord,
+  ][] = [
+    [
+      'accepting the tracked revision on the paragraph mark',
+      (base) => ({
+        ...base,
+        markRevision: { kind: 'insert', id: '7', author: 'A', nodeId: 'revision-7' },
+      }),
+    ],
+    [
+      'a line-spacing rule moving the space above the glyph band',
+      (base) => withFirstLine(base, { leading: base.lines[0]!.leading + 1 }),
+    ],
+    [
+      'a line-spacing rule moving the space below the glyph band',
+      (base) => withFirstLine(base, { trailingSpacing: (base.lines[0]!.trailingSpacing ?? 0) + 1 }),
+    ],
+    [
+      'a deletion the caret must step over appearing on the line',
+      (base) =>
+        withFirstLine(base, {
+          deletedRanges: [{ start: 0, end: 1 }],
+        }),
+    ],
+    [
+      'the model range a line covers moving under equal geometry',
+      (base) =>
+        withFirstLine(base, {
+          range: { ...base.lines[0]!.range, end: base.lines[0]!.range.end + 1 },
+        }),
+    ],
+  ];
+
+  for (const [name, vary] of TRANSITIONS) {
+    test(`${name} changes the signature`, () => {
+      const base = openPageFragment();
+      const moved = vary(base);
+      expect(fragmentSignature(moved)).not.toBe(fragmentSignature(base));
+      expect(sameFragments([base], [moved])).toBe(false);
+    });
+  }
+
+  test('a rebuilt fragment with no change keeps its signature', () => {
+    const base = openPageFragment();
+    const rebuilt: ParagraphFragmentRecord = {
+      ...base,
+      lines: base.lines.map((line) => ({ ...line })),
+    };
+    expect(fragmentSignature(rebuilt)).toBe(fragmentSignature(base));
+    expect(sameFragments([base], [rebuilt])).toBe(true);
+  });
+});
+
+// The review decisions that reach layout as a paragraph-MARK edit. Each rewrites
+// `w:pPr/w:rPr/w:ins|w:del` and moves nothing else a page publishes: the pilcrow keeps its
+// place, the text keeps its metrics, and `props` still reads the one `rPr` it read before.
+// So the fragment signature was the only thing standing between the decision and a page that
+// kept drawing the old attribution.
+describe('a tracked paragraph mark reaches the incremental layout', () => {
+  const TARGET = paragraph('paragraph 12 word word word word word word ');
+  const marked = (rPr: string) =>
+    paragraph('paragraph 12 word word word word word word ', `<w:rPr>${rPr}</w:rPr>`);
+
+  /** Every published field of every page, so a stale one anywhere fails the comparison. */
+  const publishedShapeOf = (layout: SemanticLayout): string => JSON.stringify(layout.pages);
+
+  // `CT_ParaRPr` is a SEQUENCE with `EG_ParaRPrTrackChanges` (`ins? del? moveFrom? moveTo?`)
+  // ahead of `EG_RPrBase`, which is why the mark's revision precedes its `w:b` here and in
+  // `CT_RPR_SEQUENCE` (store/store/tree-op-properties.ts). A fixture in the other order is a
+  // document Word calls damaged, and this reader would accept it and hide that.
+  const DECISIONS: readonly [string, string, string][] = [
+    [
+      'accepting an insertion whose mark keeps its other run properties',
+      '<w:ins w:id="7" w:author="A"/><w:b/>',
+      '<w:b/>',
+    ],
+    ['rejecting a deletion the mark carried', '<w:del w:id="7" w:author="A"/><w:b/>', '<w:b/>'],
+    // Word does not rewrite an author while editing, but two of its own operations produce
+    // exactly this: the Document Inspector under `w:removePersonalInformation`, which
+    // rewrites every `w:author` and leaves `w:id` alone, and Compare or Combine Documents.
+    [
+      'the mark changing hands to another author',
+      '<w:ins w:id="7" w:author="A"/>',
+      '<w:ins w:id="7" w:author="B"/>',
+    ],
+  ];
+
+  for (const [name, before, after] of DECISIONS) {
+    test(`${name} matches a full pass`, () => {
+      const session = createLayoutSession();
+      lay(load(DOCUMENT.replace(TARGET, marked(before))), 1, session);
+      const decided = load(DOCUMENT.replace(TARGET, marked(after)));
+      expect(publishedShapeOf(lay(decided, 2, session))).toBe(publishedShapeOf(lay(decided, 2)));
+    });
+  }
 });
