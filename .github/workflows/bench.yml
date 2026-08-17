@@ -1,0 +1,117 @@
+name: Edit benchmark
+
+# Runs the deterministic edit benchmark (scripts/bench/edit-bench.ts) on the PR
+# head and on its merge-base with main, then upserts one sticky PR comment with
+# the before/after table. Wall-clock numbers from a shared runner are
+# informational only — this job never fails on a timing regression. The hard
+# regression gate is the pinned work-counter test
+# (scripts/bench/edit-bench-gates.test.ts) inside `bun run test` in ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+
+# Least-privilege default; the bench job escalates pull-requests itself.
+permissions:
+  contents: read
+
+# A new push supersedes the previous run's numbers and its pending comment.
+concurrency:
+  group: bench-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read # checkout + merge-base worktree
+      pull-requests: write # upsert the single sticky benchmark comment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          # Full history so the baseline commit is reachable for the worktree.
+          fetch-depth: 0
+          # The bench steps run PR-branch code; keep the token out of .git/config.
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Benchmark PR head
+        run: |
+          mkdir -p bench-out
+          bun scripts/bench/edit-bench.ts --runs 10 --json > bench-out/head.json
+
+      - name: Benchmark baseline
+        run: |
+          # HEAD is the PR merge ref, so this resolves to the main tip the merge
+          # ref was built against — the delta isolates exactly what merging this
+          # PR changes. Do not "fix" this to the branch fork point.
+          BASE=$(git merge-base HEAD "origin/${{ github.base_ref }}")
+          echo "baseline commit: $BASE"
+          git worktree add "$RUNNER_TEMP/base" "$BASE"
+          # Run the baseline's OWN benchmark script against baseline code, so it
+          # measures what main actually did. Comparability is checked later via
+          # fixtureSha256 in the comment script; a baseline without the benchmark
+          # (or without the fixture) simply yields a head-only report.
+          if [ -f "$RUNNER_TEMP/base/scripts/bench/edit-bench.ts" ] && \
+             [ -f "$RUNNER_TEMP/base/e2e/fixtures/synthetic-long-edit.docx" ]; then
+            cd "$RUNNER_TEMP/base"
+            bun install --frozen-lockfile
+            bun scripts/bench/edit-bench.ts --runs 10 --json > "$GITHUB_WORKSPACE/bench-out/base.json"
+          else
+            echo "merge-base has no edit benchmark; skipping baseline"
+          fi
+
+      - name: Render comment
+        run: |
+          if [ -f bench-out/base.json ]; then
+            node scripts/bench/edit-bench-comment.mjs \
+              --head bench-out/head.json --base bench-out/base.json --out bench-out/comment.md
+          else
+            node scripts/bench/edit-bench-comment.mjs \
+              --head bench-out/head.json --out bench-out/comment.md
+          fi
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edit-bench-report
+          path: bench-out/
+          if-no-files-found: ignore
+
+      - name: Upsert PR comment
+        # Fork PRs get a read-only token; their numbers live in the artifact.
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('bench-out/comment.md', 'utf8');
+            // Must equal COMMENT_MARKER in scripts/bench/edit-bench-comment.mjs,
+            // which puts it on the first line of every rendered comment. If they
+            // drift, every push appends a new comment instead of updating one.
+            const marker = '<!-- edit-bench-report -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

@@ -44,6 +44,22 @@ when validating those layers.
 Run timing comparisons sequentially. Concurrent benchmark processes compete for CPU and can hide
 or exaggerate timing changes; the structural work counters remain deterministic either way.
 
+### CI benchmark comment
+
+`.github/workflows/bench.yml` runs `bench:edit --runs 10` on every PR, twice: once on the PR
+merge ref (the PR merged into current `main`) and once on the `main` tip that merge ref was
+built against (using that commit's own copy of the script, in a separate worktree), so the
+delta isolates exactly what merging the PR changes. `scripts/bench/edit-bench-comment.mjs`
+renders both reports into a single sticky PR comment — a per-scenario median table with
+deltas, plus any work-counter changes. Comparability is guarded by the fixture SHA-256: if
+the fixture changed on the PR, or the baseline predates the benchmark, the comment degrades
+to head-only numbers.
+
+Timings in that comment are informational: shared runners are noisy, so the job never fails on
+a wall-clock regression. The hard gate stays in `edit-bench-gates.test.ts`, which pins the
+deterministic work counters inside `bun run test`. Fork PRs cannot receive comments (read-only
+token); their reports are in the `edit-bench-report` workflow artifact.
+
 ### Browser editing benchmark
 
 `bench:edit` deliberately stops after the store and layout pipeline. The browser benchmark drives
