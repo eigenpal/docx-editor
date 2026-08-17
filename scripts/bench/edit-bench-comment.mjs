@@ -48,12 +48,69 @@ function formatMs(value) {
   return typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} ms` : 'n/a';
 }
 
+// Within this band a delta is runner noise, not a signal — shown neutral.
+const NOISE_BAND_PCT = 5;
+
 function formatDelta(baseMs, headMs) {
   if (!Number.isFinite(baseMs) || !Number.isFinite(headMs)) return 'n/a';
-  if (baseMs === 0) return headMs === 0 ? '±0%' : 'n/a';
+  if (baseMs === 0) return headMs === 0 ? '⚪ ±0%' : 'n/a';
   const pct = Number((((headMs - baseMs) / baseMs) * 100).toFixed(1));
   const text = `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
-  return pct > REGRESSION_WARN_PCT ? `${text} ⚠️` : text;
+  if (pct > REGRESSION_WARN_PCT) return `🔴 ${text} ⚠️`;
+  if (pct > NOISE_BAND_PCT) return `🔴 ${text}`;
+  if (pct < -NOISE_BAND_PCT) return `🟢 ${text}`;
+  return `⚪ ${text}`;
+}
+
+/** Compact x-axis labels for the chart; the table above carries the full names. */
+const SCENARIO_SHORT_LABELS = new Map([
+  ['steady-middle-text', 'steady'],
+  ['wrap-middle-text', 'wrap'],
+  ['forced-middle-reflow', 'reflow-mid'],
+  ['forced-early-reflow', 'reflow-early'],
+]);
+
+function shortLabel(name) {
+  return SCENARIO_SHORT_LABELS.get(name) ?? name.slice(0, 14);
+}
+
+/**
+ * Grouped comparison as a mermaid chart (GitHub renders these natively in comments).
+ * Head medians are bars; the baseline is a LINE, not a second bar series — mermaid
+ * overlays bar series at full width, so a second bar would occlude the first. The gray
+ * (#6e7781) is a deliberate neutral for the reference series — identity is carried by
+ * mark shape and the caption, and both colors clear 3:1 contrast on GitHub's light and
+ * dark comment surfaces.
+ */
+function medianChart(head, base) {
+  const names = head.scenarios.map((scenario) => shortLabel(scenario.name));
+  if (names.length === 0) return null;
+  const headValues = head.scenarios.map((scenario) => scenario.total.medianMs);
+  const baseByName = base
+    ? new Map(base.scenarios.map((scenario) => [scenario.name, scenario]))
+    : null;
+  const baseValues = baseByName
+    ? head.scenarios.map((scenario) => baseByName.get(scenario.name)?.total.medianMs ?? 0)
+    : null;
+  const values = [...headValues, ...(baseValues ?? [])].filter((value) => Number.isFinite(value));
+  if (values.length === 0 || values.some((value) => !Number.isFinite(value))) return null;
+  const top = Math.max(1, Math.ceil(Math.max(...values) * 1.15));
+  const series = (list) => `[${list.map((value) => value.toFixed(2)).join(', ')}]`;
+  const lines = [
+    '```mermaid',
+    `%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#0969da${baseValues ? ', #6e7781' : ''}"}}}}%%`,
+    'xychart-beta',
+    `  title "Median edit latency (ms)"`,
+    `  x-axis [${names.map((name) => `"${name}"`).join(', ')}]`,
+    `  y-axis "ms" 0 --> ${top}`,
+    `  bar ${series(headValues)}`,
+    ...(baseValues ? [`  line ${series(baseValues)}`] : []),
+    '```',
+    baseValues
+      ? '🟦 bars: this PR · ⬛ line: `main` baseline'
+      : '🟦 bars: this PR (no comparable baseline)',
+  ];
+  return lines.join('\n');
 }
 
 /** Flatten a work summary into dotted numeric leaves so any schema drift still diffs. */
@@ -111,9 +168,10 @@ function detailsBlock(summary, report) {
 }
 
 export function renderComment(head, base) {
-  const lines = [COMMENT_MARKER, '## Edit benchmark', ''];
+  const lines = [COMMENT_MARKER, '## Performance benchmark', ''];
   const note = comparisonNote(head, base);
   const comparable = note === null;
+  const chart = medianChart(head, comparable ? base : undefined);
 
   if (comparable) {
     lines.push(
@@ -163,12 +221,8 @@ export function renderComment(head, base) {
     lines.push('');
   }
 
-  lines.push(
-    `Timings are medians of ${head.config.runs} runs on a shared GitHub runner — informational only. ` +
-      'The deterministic regression gate is `scripts/bench/edit-bench-gates.test.ts` inside `bun run test`.',
-    '',
-    detailsBlock('Head report (full JSON)', head)
-  );
+  if (chart) lines.push(chart, '');
+  lines.push(detailsBlock('Head report (full JSON)', head));
   if (base) lines.push('', detailsBlock('Base report (full JSON)', base));
   return `${lines.join('\n')}\n`;
 }

@@ -44,14 +44,36 @@ describe('edit-bench comment rendering', () => {
   test('comparable base renders a delta table with the sticky marker first', () => {
     const body = renderComment(report({ medianMs: 8 }), report({ medianMs: 10 }));
     expect(body.startsWith(COMMENT_MARKER)).toBe(true);
-    expect(body).toContain('| steady-middle-text | 10.00 ms | 8.00 ms | -20.0% |');
+    expect(body).toContain('## Performance benchmark');
+    expect(body).toContain('| steady-middle-text | 10.00 ms | 8.00 ms | 🟢 -20.0% |');
     expect(body).toContain('Work counters: unchanged.');
     expect(body).not.toContain('⚠️');
   });
 
   test('a regression past the threshold gets the warning marker', () => {
     const body = renderComment(report({ medianMs: 15 }), report({ medianMs: 10 }));
-    expect(body).toContain('+50.0% ⚠️');
+    expect(body).toContain('🔴 +50.0% ⚠️');
+  });
+
+  test('a delta inside the noise band renders neutral', () => {
+    const body = renderComment(report({ medianMs: 10.3 }), report({ medianMs: 10 }));
+    expect(body).toContain('⚪ +3.0%');
+  });
+
+  test('comparable mode charts head bars against a baseline line', () => {
+    const body = renderComment(report({ medianMs: 8 }), report({ medianMs: 10 }));
+    expect(body).toContain('```mermaid');
+    expect(body).toContain('xychart-beta');
+    expect(body).toContain('bar [8.00]');
+    expect(body).toContain('line [10.00]');
+    expect(body).toContain('line: `main` baseline');
+  });
+
+  test('head-only mode charts a single bar series', () => {
+    const body = renderComment(report({}), undefined);
+    expect(body).toContain('xychart-beta');
+    expect(body).toContain('bar [10.00]');
+    expect(body).not.toContain('line [');
   });
 
   test('changed work counters are listed as deterministic deltas', () => {

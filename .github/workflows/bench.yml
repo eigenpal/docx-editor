@@ -1,4 +1,4 @@
-name: Edit benchmark
+name: Performance benchmark
 
 # Runs the deterministic edit benchmark (scripts/bench/edit-bench.ts) on the PR
 # head and on its merge-base with main, then upserts one sticky PR comment with
