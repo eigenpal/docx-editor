@@ -93,13 +93,13 @@ jobs:
 
       # ---- Interleaved rounds: head, base, base, head. Sample counts are
       # halved per round (two rounds per side aggregate back to full size) and
-      # MUST stay identical across all four, or the medians stop being
+      # MUST stay identical across all rounds, or the medians stop being
       # comparable. Head browser rounds fail the job on the spec's structural
       # gates; baseline rounds only degrade the comment.
 
       - name: Round 1 — PR head
         run: |
-          bun scripts/bench/edit-bench.ts --runs 5 --json > bench-out/head-1.json
+          bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-1.json
           EDIT_BROWSER_BENCH_RUNS=5 \
             EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
             EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
@@ -111,7 +111,7 @@ jobs:
         if: steps.baseline.outputs.engine == 'true'
         run: |
           cd "$RUNNER_TEMP/base"
-          bun scripts/bench/edit-bench.ts --runs 5 --json > "$GITHUB_WORKSPACE/bench-out/base-1.json" \
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-1.json" \
             || { rm -f "$GITHUB_WORKSPACE/bench-out/base-1.json"; echo "baseline engine round 1 failed; continuing"; }
           if [ "${{ steps.baseline.outputs.ux }}" = "true" ]; then
             EDIT_BROWSER_BENCH_RUNS=5 \
@@ -126,7 +126,7 @@ jobs:
         if: steps.baseline.outputs.engine == 'true'
         run: |
           cd "$RUNNER_TEMP/base"
-          bun scripts/bench/edit-bench.ts --runs 5 --json > "$GITHUB_WORKSPACE/bench-out/base-2.json" \
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-2.json" \
             || { rm -f "$GITHUB_WORKSPACE/bench-out/base-2.json"; echo "baseline engine round 2 failed; continuing"; }
           if [ "${{ steps.baseline.outputs.ux }}" = "true" ]; then
             EDIT_BROWSER_BENCH_RUNS=5 \
@@ -142,7 +142,7 @@ jobs:
           # A tolerated baseline crash can orphan its dev server; head must not
           # inherit a red job from an infrastructure leftover on the port.
           (lsof -ti tcp:5275 | xargs -r kill -9) 2>/dev/null || true
-          bun scripts/bench/edit-bench.ts --runs 5 --json > bench-out/head-2.json
+          bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-2.json
           EDIT_BROWSER_BENCH_RUNS=5 \
             EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
             EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
@@ -150,13 +150,38 @@ jobs:
             bunx playwright test --config e2e/edit-browser-bench.config.ts \
             --grep "browser editing latency"
 
+      # Engine-only rounds 3-4: headless runs are ~20s, so the engine table gets
+      # four interleaved rounds per side (H B B H · H B B H — balanced under
+      # linear drift) where the browser, which pays a full dev-server boot per
+      # round, stays at two.
+
+      - name: Engine round 3 — PR head
+        run: bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-3.json
+
+      - name: Engine round 3 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-3.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-3.json"; echo "baseline engine round 3 failed; continuing"; }
+
+      - name: Engine round 4 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-4.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-4.json"; echo "baseline engine round 4 failed; continuing"; }
+
+      - name: Engine round 4 — PR head
+        run: bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-4.json
+
       - name: Render comment
         run: |
           ARGS="--out bench-out/comment.md"
-          for f in bench-out/head-1.json bench-out/head-2.json; do
+          for f in bench-out/head-1.json bench-out/head-2.json bench-out/head-3.json bench-out/head-4.json; do
             [ -f "$f" ] && ARGS="$ARGS --head $f"
           done
-          for f in bench-out/base-1.json bench-out/base-2.json; do
+          for f in bench-out/base-1.json bench-out/base-2.json bench-out/base-3.json bench-out/base-4.json; do
             [ -f "$f" ] && ARGS="$ARGS --base $f"
           done
           for f in bench-out/head-ux-1.json bench-out/head-ux-2.json; do
