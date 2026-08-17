@@ -37,7 +37,7 @@ type HarfBuzzFont = InstanceType<HarfBuzzModule['Font']>;
  */
 export const HARFBUZZ_SHAPING_LIBRARY: VersionedShapingLibrary = Object.freeze({
   name: 'HarfBuzz',
-  version: '14.2.1',
+  version: '14.3.0',
 });
 
 let harfBuzzModule: HarfBuzzModule | null = null;
