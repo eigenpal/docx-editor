@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   check-drift:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 20
     # No pull-requests: write — every `gh pr` call and the push below use the
     # release-pal App token, which carries its own installation permissions.

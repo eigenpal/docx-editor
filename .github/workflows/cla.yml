@@ -25,7 +25,7 @@ permissions:
 
 jobs:
   cla:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # NOTE: the bot login below is hardcoded in three places (this if:,
     # GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL). They must stay in sync; missing
     # this if: when renaming the App would let the bot self-sign again.

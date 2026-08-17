@@ -31,7 +31,7 @@ concurrency:
 jobs:
   bench:
     if: github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 25
     permissions:
       contents: read # checkout + merge-base worktree
