@@ -9,18 +9,15 @@
 // (aligned with `paragraphTextOf` / `segmentsOf`). FORMTEXT results instead keep their literal
 // character offsets because they are user input. Malformed fields demote so content remains.
 //
-// Shipped scope is furniture-only for live page-number evaluation. A simple PAGE /
-// NUMPAGES / SECTIONPAGES field evaluates like its complex twin when a page context is
-// supplied; a non-page `w:fldSimple` still contributes one model unit and paints its
-// cached result, except that allowlisted page fields nested inside that result (complex
-// or simple) are evaluated per sheet rather than concatenated from the saved cache.
-// A complex outer field's atomic cached result gets the same nested evaluation. Other
-// nested field instructions stay inert. Body-side evaluation beyond that is deferred.
+// Shipped scope is furniture-only for live page-number evaluation. Simple and complex
+// PAGE-family fields evaluate alike when a page context is supplied; a non-page field paints
+// its cached result, with allowlisted page fields nested inside that result (complex or
+// simple) evaluated per sheet rather than concatenated from the saved cache. Other nested
+// field instructions stay inert. Body-side evaluation beyond that is deferred.
 //
 // Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
 
 import {
-  fldSimpleInstr,
   hardBreakKind,
   hasLegacyFormFieldData,
   isFldSimple,
@@ -49,7 +46,6 @@ import {
   onFldCharEnd,
   onFldCharSeparate,
   resetFieldParseState,
-  type AllowlistedPageField,
   type StoryPageFieldNeeds,
 } from './field-instruction.ts';
 import {
@@ -61,16 +57,15 @@ import {
   withPageFieldSources,
   type FieldPageContext,
 } from './field-page-furniture.ts';
-import { collectSimpleFieldDisplay } from './field-simple-result.ts';
+import { projectSimpleFieldResult } from './field-simple-result.ts';
+import { createNestedPageTracker } from './field-nested-page.ts';
 import {
   modelTextOfRunChild,
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
-import { parseButtonInstruction } from './field-button.ts';
 import { captureInstructionSpecs, formFieldResult } from './field-form.ts';
-import { parseHyperlinkInstruction } from './field-link.ts';
-import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
+import { symbolFieldGlyph } from './field-symbol.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
@@ -116,7 +111,9 @@ import {
   MAX_CONTENT_CONTROL_NESTING,
 } from '../store/package/content-control-walk.ts';
 
-// Re-export instruction recognition + detection so existing layout-local imports stay stable.
+// Re-exports so existing layout-local imports stay stable: instruction recognition and
+// detection, whole-document page-field finalization (pagination-time values, own module),
+// the piece vocabulary, and the shared run-child text/property vocabulary.
 export {
   MAX_FIELD_INSTRUCTION_CHARS,
   MAX_STORY_FIELD_SCAN_DEPTH,
@@ -126,10 +123,6 @@ export {
   normalizeFieldInstruction,
   type StoryPageFieldNeeds,
 };
-
-// Same for the whole-document page-field finalization, which now lives in its own module: it
-// resolves values that only exist once pagination is done, and shares nothing with this walk
-// but the context type.
 export {
   fieldPageContextToken,
   finalizePageFieldProjection,
@@ -139,9 +132,6 @@ export {
   withPageFieldSources,
   type FieldPageContext,
 };
-
-// The piece vocabulary now lives beside the walk rather than inside it. Same re-export reason:
-// every layout module already imports these from here.
 export {
   type FieldAwarePiece,
   type FieldLinkProjector,
@@ -149,9 +139,6 @@ export {
   type ModelRange,
   type PositionalTab,
 };
-
-// Shared run-child text/property vocabulary — kept re-exported so paragraph-flow and
-// numbering-index keep their import site.
 export { propertiesOfRunContainer, type RunPropertyCascader } from './field-run-text.ts';
 
 /**
@@ -213,11 +200,8 @@ export function piecesOfParagraph(
   let pending: PendingFieldProjection | null = null;
   /** Outermost begin id when the open field is atomic. */
   let openAtomicBeginId: string | null = null;
-  // Live-evaluated allowlisted field nested inside the open atomic result: its cached digits
-  // are skipped and the matching inner end appends the projected value (fldSimple parity).
-  let nestedKind: AllowlistedPageField | null = null;
-  let nestedSeen = false;
-  let nestedVisible = false;
+  // Live-evaluated allowlisted field nested inside the open atomic result (fldSimple parity).
+  const nestedPage = createNestedPageTracker();
   /**
    * The revision wrappers enclosing the run being processed, outermost first.
    *
@@ -357,9 +341,10 @@ export function piecesOfParagraph(
       // Inert non-page field: paint cached result as layout-owned substitution for the
       // single model unit (same as live PAGE) so hit-test/span ranges stay one atom.
       push(pending.cachedText, pending.props, pending.style, true, start, end, carried);
-    } else if (pending.buttonSpec) {
+    } else if (pending.buttonSpec && !pending.sawResultContent) {
       // MACROBUTTON / GOTOBUTTON display their text; the macro / target never runs. A cached
-      // result (what Word last painted) wins above — this fills in only when it is empty.
+      // result (what Word last painted) wins above — this fills in only when the file cached
+      // NONE. A result that existed but was hidden stays hidden (`sawResultContent`).
       push(pending.buttonSpec.display, pending.props, pending.style, true, start, end, carried);
     }
     pending = null;
@@ -541,6 +526,31 @@ export function piecesOfParagraph(
     const props = runPropertiesOf(run, inheritedRunProperties, cascadeRuns);
     const style = resolveRunStyle(props, themeFonts);
 
+    /**
+     * Donate the run's style and attribution to the pending atom's flush, first-wins.
+     *
+     * The first result content that survives to be displayed donates both, because by flush
+     * time the walk has left any wrapper and the live stack is empty again. Locked by their
+     * own flags, not by the stack being non-empty: an UNTRACKED first run leaves the stack
+     * empty, and testing emptiness let a later tracked run donate its revision to the whole
+     * atom — `Section <w:del>3</w:del>` painted "Section 3" struck through entire. Shared by
+     * ordinary result text and a result `w:sym`, so a symbol-only result carries a style and
+     * an attribution too.
+     */
+    const donateResultCapture = (): void => {
+      if (!pending) return;
+      if (!pending.capturedResultStyle) {
+        pending.props = props;
+        pending.style = style;
+        pending.capturedResultStyle = true;
+      }
+      if (!pending.capturedResultRevisions) {
+        pending.resultRevisions = revisions;
+        pending.capturedResultRevisions = true;
+        if (!pending.resultLink && currentLink) pending.resultLink = currentLink;
+      }
+    };
+
     for (const grand of run.children) {
       if (!consumeScanNode(budget)) {
         abandonPending();
@@ -562,7 +572,7 @@ export function piecesOfParagraph(
         onFldCharBegin(field);
         if (field.nesting === 1) {
           abandonPending();
-          nestedKind = null;
+          nestedPage.reset();
           openAtomicBeginId = atomic ? grand.id : null;
           pending = {
             kind: null,
@@ -581,6 +591,7 @@ export function piecesOfParagraph(
             style,
             capturedResultStyle: false,
             cachedText: '',
+            sawResultContent: false,
             buffered: [],
             bufferOffset: offset,
             // A wrapper around the BEGIN marker wraps the whole field, and since
@@ -615,7 +626,9 @@ export function piecesOfParagraph(
           pending.kind = kind && pageContext ? kind : null;
           // Capture the SYMBOL / HYPERLINK / form-field spec while the machine still holds the
           // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
-          if (!pending.kind && !field.instructionOverflow) {
+          // Nesting overflow refuses exactly as PAGE projection does: a >4-deep hostile field
+          // must not synthesize output from whatever outer fragments the buffer kept.
+          if (!pending.kind && !field.instructionOverflow && !field.nestingOverflow) {
             captureInstructionSpecs(pending, field.instruction);
           }
           // Prefer separate-run style until a measurable result run donates one.
@@ -624,9 +637,7 @@ export function piecesOfParagraph(
         } else if (pending?.atomic && field.phase === 'result') {
           // Inner separate inside the outer atomic result: live-evaluate an allowlisted
           // nested field instead of concatenating its cached digits (fldSimple parity).
-          nestedKind = pageContext ? kind : null;
-          nestedSeen = false;
-          nestedVisible = false;
+          nestedPage.arm(pageContext ? kind : null);
         }
         continue;
       }
@@ -639,17 +650,17 @@ export function piecesOfParagraph(
           outermostEnd &&
           pending?.atomic &&
           field.phase === 'instruction' &&
-          !field.instructionOverflow
+          !field.instructionOverflow &&
+          !field.nestingOverflow
         ) {
           captureInstructionSpecs(pending, field.instruction);
         }
         // The end closing a skipped inner field appends its live value; an inner result that
         // existed but was entirely suppressed appends nothing (fldSimple parity).
-        if (field.nesting === 2 && pending?.atomic && nestedKind && pageContext) {
-          if (!nestedSeen || nestedVisible)
-            pending.cachedText += projectPageFieldValue(nestedKind, pageContext);
+        if (field.nesting === 2 && pending?.atomic) {
+          pending.cachedText += nestedPage.liveValue(pageContext);
         }
-        nestedKind = null;
+        nestedPage.reset();
         onFldCharEnd(field);
         if (outermostEnd) {
           if (pending?.atomic) commitAtomicField();
@@ -661,6 +672,12 @@ export function piecesOfParagraph(
       if (isCollectingInstruction(field)) {
         // Only well-formed atomic fields suppress instruction-phase run content.
         // Demoted / malformed opens must not make surrounding text disappear.
+        //
+        // An editable-result FORMTEXT field falls through ON PURPOSE: the offset authority
+        // (`walkParagraph` over `atomicFieldSpansOf`) only zeroes the nodes of ATOMIC spans,
+        // so ordinary `w:t` between its begin and separate keeps real model offsets — and
+        // layout must paint what the store addresses, or every offset after the field lies.
+        // Word would not save such content, but a file that carries it shows it.
         if (pending?.atomic) continue;
       }
 
@@ -668,19 +685,41 @@ export function piecesOfParagraph(
         // A cached result is one plain string and cannot carry a per-glyph font switch, so
         // only a `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
         if (isSymbolRunChild(grand)) {
-          if (
-            pending.atomic &&
-            !nestedKind &&
-            !style.hidden &&
-            revisionsVisible(revisions, displayMode)
-          ) {
-            const glyph = symbolGlyphOf(grand);
-            if (glyph?.unicode) pending.cachedText += glyph.text;
+          if (pending.atomic) {
+            pending.sawResultContent = true;
+            if (!nestedPage.active && !style.hidden && revisionsVisible(revisions, displayMode)) {
+              const glyph = symbolGlyphOf(grand);
+              if (glyph?.unicode) {
+                donateResultCapture();
+                pending.cachedText += glyph.text;
+              }
+            }
+            continue;
           }
+          // Demoted / editable-result field: the sym paints the way it does in an ordinary
+          // run — a projected zero-width glyph piece — instead of vanishing with the atomic
+          // skips. Buffered like the surrounding result text, so it flushes with it.
+          const glyph = symbolGlyphOf(grand);
+          if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode)) continue;
+          const sym = symbolRunStyle(props, glyph, themeFonts);
+          pending.buffered.push({
+            text: glyph.text,
+            props: sym.props,
+            style: sym.style,
+            start: offset,
+            end: offset,
+            projected: true,
+            ...(revisions.length > 0 ? { revisions } : {}),
+            ...(currentLink ? { link: currentLink } : {}),
+            fieldAtom: { formField: pending.formField },
+          });
           continue;
         }
         const text = modelTextOfRunChild(grand);
         if (text.length === 0) continue;
+        // The result EXISTS, whatever suppresses it below — the flush needs the distinction
+        // to keep synthesis from painting over a result the file hid on purpose.
+        if (pending.atomic) pending.sawResultContent = true;
 
         // A field can be tracked as a whole — Word writes a deleted hyperlink as `w:del`
         // around the begin/instr/separate/result/end run — and its result text is BUFFERED
@@ -712,7 +751,7 @@ export function piecesOfParagraph(
         }
 
         if (fieldSuppressed) {
-          if (pending.atomic && nestedKind) nestedSeen = true;
+          if (pending.atomic && nestedPage.active) nestedPage.noteResult(false);
           if (!pending.atomic) {
             offset += text.length;
             pending.bufferOffset = offset;
@@ -722,11 +761,10 @@ export function piecesOfParagraph(
 
         if (pending.atomic) {
           // Atomic unit: cache donates display text/style only — offset already reserved.
-          if (nestedKind) {
+          if (nestedPage.active) {
             // Skipped inner cached digits: the live value replaces them at the inner end.
-            nestedSeen = true;
+            nestedPage.noteResult(!style.hidden);
             if (style.hidden) continue;
-            nestedVisible = true;
             if (!pending.capturedResultStyle) {
               pending.props = props;
               pending.style = style;
@@ -735,24 +773,7 @@ export function piecesOfParagraph(
             continue;
           }
           if (style.hidden) continue;
-          if (!pending.capturedResultStyle) {
-            pending.props = props;
-            pending.style = style;
-            pending.capturedResultStyle = true;
-          }
-          // The first result run that survives to be displayed donates the attribution the
-          // flush will replay, because by then the walk has left the wrapper. See
-          // `resultRevisions` for why first wins.
-          //
-          // Locked by its own flag, not by the stack being non-empty: an UNTRACKED first run
-          // leaves the stack empty, and testing emptiness let a later tracked run donate its
-          // revision to the whole atom. `Section <w:del>3</w:del>` then painted "Section 3"
-          // struck through entire — the engine claiming a deletion over words nobody deleted.
-          if (!pending.capturedResultRevisions) {
-            pending.resultRevisions = revisions;
-            pending.capturedResultRevisions = true;
-            if (!pending.resultLink && currentLink) pending.resultLink = currentLink;
-          }
+          donateResultCapture();
           pending.cachedText += text;
           continue;
         }
@@ -781,7 +802,9 @@ export function piecesOfParagraph(
           end: offset + text.length,
           ...(revisions.length > 0 ? { revisions } : {}),
           ...(currentLink ? { link: currentLink } : {}),
-          ...(pending.editableResult ? { fieldAtom: { formField: pending.formField } } : {}),
+          // EVERY buffered result piece is a field's displayed result — a demoted
+          // (unterminated) field's cache shades exactly like a FORMTEXT's editable one.
+          fieldAtom: { formField: pending.formField },
         });
         offset += text.length;
         pending.bufferOffset = offset;
@@ -828,11 +851,8 @@ export function piecesOfParagraph(
    * Paint a `w:fldSimple` (§17.16.19) as one projected model unit.
    *
    * The instruction lives in `@w:instr` and the last-computed result as child runs — there is
-   * no `separate` marker on the outer field itself. Allowlisted PAGE / NUMPAGES / SECTIONPAGES
-   * evaluate from the page context when one is supplied. Every other instruction paints its
-   * cached result, but nested allowlisted page fields inside that cache still evaluate live
-   * (see {@link collectSimpleFieldDisplay}) so a `STYLEREF` wrapping `PAGE` does not stamp the
-   * saved sheet's number onto every page.
+   * no `separate` marker on the outer field itself. What the unit paints is decided by
+   * {@link projectSimpleFieldResult}; this owns the model offset and OUTER visibility.
    *
    * Attribution comes from `push` reading the live stack — a `w:fldSimple` inside `w:ins` is
    * still inside it here, unlike a complex field's deferred flush.
@@ -843,9 +863,8 @@ export function piecesOfParagraph(
     if (simple.kind === 'textValue') return;
 
     // The atom is one model offset whatever it paints, so a revision enclosing the WHOLE field
-    // is answered here, once, before any of the branches below — including the live page-field
-    // one, which does not go through result collection and so would otherwise paint a deleted
-    // footer number straight into the accepted view.
+    // is answered here, once, before result collection — including the live page-field branch,
+    // which would otherwise paint a deleted footer number straight into the accepted view.
     //
     // The deleted range is recorded whether or not it was laid out, exactly as the complex path
     // and inline drawings do: the offset exists in every display mode and the caret has to step
@@ -855,7 +874,7 @@ export function piecesOfParagraph(
     }
     if (!revisionsVisible(revisions, displayMode)) return;
 
-    const display = collectSimpleFieldDisplay({
+    const projected = projectSimpleFieldResult({
       simple,
       depth,
       pageContext,
@@ -865,83 +884,15 @@ export function piecesOfParagraph(
       inheritedRunProperties,
       cascadeRuns,
       themeFonts,
+      currentLink,
+      projectFieldLink,
     });
-
-    // A simple PAGE/NUMPAGES/SECTIONPAGES field is evaluated like its complex twin when the
-    // caller supplies a page context. The CACHED result is whatever sheet the producer last
-    // saved from, so painting it verbatim would put that page's number on every page —
-    // `detectStoryPageFields` now reports these so furniture actually gets a per-sheet context
-    // to evaluate against.
-    const pageKind = allowlistedPageField(fldSimpleInstr(simple) ?? '');
-    if (pageKind && pageContext) {
-      const live = projectPageFieldValue(pageKind, pageContext);
-      const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
-      if (!style.hidden) {
-        push(live, display.resultProps ?? inheritedRunProperties, style, true, start, start + 1, {
-          fieldAtom: { formField: false },
-        });
-      }
-      return;
-    }
-
-    // A simple SYMBOL renders from its instruction like the complex shape does — there is no
-    // trustworthy cached result to prefer. An unresolvable spec falls through to the cached
-    // display (previous behavior).
-    const symbolSpec = parseSymbolInstruction(fldSimpleInstr(simple) ?? '');
-    if (symbolSpec) {
-      const glyph = symbolFieldGlyph(
-        symbolSpec,
-        display.resultProps ?? inheritedRunProperties,
-        themeFonts
-      );
-      if (glyph) {
-        if (!glyph.style.hidden) {
-          push(glyph.text, glyph.props, glyph.style, true, start, start + 1, {
-            fieldAtom: { formField: false },
-          });
-        }
-        return;
-      }
-    }
-
-    // A simple MACROBUTTON / GOTOBUTTON displays everything after its first argument; the
-    // macro / target never runs. A non-empty cached display wins — synthesis fills an empty one.
-    const buttonSpec =
-      display.text.length === 0 ? parseButtonInstruction(fldSimpleInstr(simple) ?? '') : null;
-    if (buttonSpec) {
-      const buttonStyle =
-        display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
-      if (buttonStyle.hidden) return;
-      const buttonProps = display.resultProps ?? inheritedRunProperties;
-      push(buttonSpec.display, buttonProps, buttonStyle, true, start, start + 1, {
-        fieldAtom: { formField: false },
-      });
-      return;
-    }
-
-    if (display.text.length === 0) return;
-    // Nested live PAGE may replace an empty cached result and leave no donor run; fall back
-    // to inherited properties the same way a top-level simple PAGE does.
-    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
-    if (style.hidden) return;
-    // A simple HYPERLINK links its cached result — but only outside a typed `w:hyperlink`,
-    // whose record `push` already applies and which outranks the field's own instruction.
-    // An empty result never reached here, so an empty result never paints the URL.
-    const linkSpec = currentLink ? null : parseHyperlinkInstruction(fldSimpleInstr(simple) ?? '');
-    const fieldLink = linkSpec ? (projectFieldLink?.(linkSpec) ?? null) : null;
+    if (!projected) return;
     // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field.
-    push(
-      display.text,
-      display.resultProps ?? inheritedRunProperties,
-      style,
-      true,
-      start,
-      start + 1,
-      {
-        fieldAtom: { formField: false },
-        ...(fieldLink ? { linkOverride: fieldLink } : {}),
-      }
-    );
+    push(projected.text, projected.props, projected.style, true, start, start + 1, {
+      fieldAtom: { formField: false },
+      ...(projected.link ? { linkOverride: projected.link } : {}),
+    });
   };
 
   const processInline = (

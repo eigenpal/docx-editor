@@ -95,6 +95,19 @@ describe('a complex MACROBUTTON field', () => {
     expect(pieces[0]).toMatchObject({ start: 0, end: 1, projected: true });
   });
 
+  test('a cached result that exists but is hidden suppresses the display text', () => {
+    // The file cached a result and hid it with w:vanish. Painting the display text there
+    // would resurrect what the document hides; only a truly EMPTY cache synthesizes.
+    const pieces = project(
+      `<w:p>${complexField(
+        ' MACROBUTTON DoThing Click Here ',
+        '<w:r><w:rPr><w:vanish/></w:rPr><w:t>Hidden cache</w:t></w:r>'
+      )}<w:r><w:t>B</w:t></w:r></w:p>`
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['B']);
+    expect(pieces[0]).toMatchObject({ start: 1, end: 2 });
+  });
+
   test('hidden chrome paints nothing but keeps the unit', () => {
     const pieces = project(
       '<w:p><w:r><w:t>A</w:t></w:r>' +
@@ -164,5 +177,16 @@ describe('a simple MACROBUTTON / GOTOBUTTON field', () => {
       'proposed'
     );
     expect(pieces.map((piece) => piece.text)).toEqual([]);
+  });
+
+  test('a hidden cached child run suppresses the display text too', () => {
+    // Mirrors the complex-field rule: a result that exists but is hidden stays hidden.
+    const pieces = project(
+      '<w:p><w:fldSimple w:instr=" MACROBUTTON M Click ">' +
+        '<w:r><w:rPr><w:vanish/></w:rPr><w:t>Hidden</w:t></w:r></w:fldSimple>' +
+        '<w:r><w:t>B</w:t></w:r></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['B']);
+    expect(pieces[0]).toMatchObject({ start: 1, end: 2 });
   });
 });

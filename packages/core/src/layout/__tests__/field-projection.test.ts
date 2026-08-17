@@ -829,3 +829,95 @@ describe('document layout page index and page count', () => {
     }
   });
 });
+
+describe('w:delInstrText — a tracked-deleted field instruction', () => {
+  const paragraphOf = (part: OoxmlPart) => {
+    const find = (node: (typeof part)['root']): (typeof part)['root'] | undefined => {
+      if (node.kind === 'paragraph') return node;
+      if (node.kind === 'textValue') return undefined;
+      for (const child of node.children ?? []) {
+        const hit = find(child);
+        if (hit) return hit;
+      }
+      return undefined;
+    };
+    const paragraph = find(part.root);
+    if (!paragraph) throw new Error('no paragraph');
+    return paragraph;
+  };
+  // Word rewrites `w:instrText` as `w:delInstrText` inside a deletion; the machine must
+  // ingest it per phase exactly like the live form, and it must never paint.
+  const deletedField =
+    '<w:p><w:r><w:t>A</w:t></w:r>' +
+    '<w:del w:id="1" w:author="X">' +
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    '<w:r><w:delInstrText> PAGE </w:delInstrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    '<w:r><w:delText>3</w:delText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+    '</w:del><w:r><w:t>B</w:t></w:r></w:p>';
+
+  test('forms one atom and paints the struck result in all-markup', () => {
+    const pieces = piecesOfParagraph(paragraphOf(parsePart(deletedField)));
+    expect(pieces.map((piece) => piece.text)).toEqual(['A', '3', 'B']);
+    const atom = pieces[1]!;
+    expect(atom).toMatchObject({ start: 1, end: 2, projected: true });
+    expect(atom.revisions?.map((revision) => revision.kind)).toEqual(['delete']);
+    expect(pieces[2]).toMatchObject({ start: 2, end: 3 });
+  });
+
+  test('is gone from the proposed result, unit kept', () => {
+    const pieces = piecesOfParagraph(
+      paragraphOf(parsePart(deletedField)),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'proposed'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['A', 'B']);
+    expect(pieces[1]).toMatchObject({ start: 2, end: 3 });
+  });
+
+  test('shows the pre-deletion document in the original view', () => {
+    const pieces = piecesOfParagraph(
+      paragraphOf(parsePart(deletedField)),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'original'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['A', '3', 'B']);
+  });
+
+  test('the instruction text itself never paints in any mode', () => {
+    for (const mode of ['all-markup', 'proposed', 'original'] as const) {
+      const pieces = piecesOfParagraph(
+        paragraphOf(parsePart(deletedField)),
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mode
+      );
+      expect(pieces.map((piece) => piece.text).join('')).not.toContain('PAGE');
+    }
+  });
+
+  test("a demoted field's buffered result pieces carry the field-atom shading", () => {
+    // No end marker: the field demotes, its cache flushes as ordinary addressable pieces —
+    // which are still a field's displayed result and shade like one.
+    const demoted =
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>cached</w:t></w:r></w:p>';
+    const pieces = piecesOfParagraph(paragraphOf(parsePart(demoted)));
+    expect(pieces.map((piece) => piece.text)).toEqual(['cached']);
+    expect(pieces[0]!.fieldAtom).toEqual({ formField: false });
+  });
+});

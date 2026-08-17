@@ -14,11 +14,16 @@ import {
   type OoxmlNode,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import { parseButtonInstruction } from './field-button.ts';
+import { parseHyperlinkInstruction } from './field-link.ts';
+import type { FieldLinkProjector } from './field-pieces.ts';
 import {
   modelTextOfRunChild,
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
+import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
+import type { SpanLinkRecord } from './semantic-records.ts';
 import { isSymbolRunChild, symbolGlyphOf } from './symbol-run.ts';
 import {
   allowlistedPageField,
@@ -55,6 +60,12 @@ export interface SimpleFieldDisplay {
   readonly text: string;
   readonly resultProps: readonly OoxmlProperty[] | undefined;
   readonly resultStyle: ResolvedRunStyle | undefined;
+  /**
+   * True once ANY cached-result content was seen — hidden, suppressed or visible. An empty
+   * `text` alone cannot tell "no cached result" from "a cached result the file hides", and
+   * synthesis (MACROBUTTON / GOTOBUTTON display) may only fill the first.
+   */
+  readonly sawResultContent: boolean;
 }
 
 /**
@@ -89,6 +100,7 @@ export function collectSimpleFieldDisplay(args: {
   let text = '';
   let resultProps: readonly OoxmlProperty[] | undefined;
   let resultStyle: ResolvedRunStyle | undefined;
+  let sawResultContent = false;
 
   const nested = createFieldParseState();
   let liveNestedKind: AllowlistedPageField | null = null;
@@ -163,16 +175,19 @@ export function collectSimpleFieldDisplay(args: {
           // A collected display string cannot carry a per-glyph font switch, so only a
           // `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
           if (isSymbolRunChild(grand)) {
+            sawResultContent = true;
             if (skipCachedNestedResult) continue;
             const glyph = symbolGlyphOf(grand);
             if (!glyph?.unicode) continue;
             if (style.hidden || !revisionsVisible(local, displayMode)) continue;
+            captureStyle(props, style);
             text += glyph.text;
             continue;
           }
 
           const value = modelTextOfRunChild(grand);
           if (value.length === 0) continue;
+          sawResultContent = true;
           const deleted = revisionsAreDeletion(local);
           const suppressed =
             style.hidden ||
@@ -224,5 +239,88 @@ export function collectSimpleFieldDisplay(args: {
     skipCachedNestedResult = false;
   }
 
-  return { text, resultProps, resultStyle };
+  return { text, resultProps, resultStyle, sawResultContent };
+}
+
+/** The one projected piece a `w:fldSimple` paints over its reserved model unit. */
+export interface SimpleFieldProjection {
+  readonly text: string;
+  readonly props: readonly OoxmlProperty[];
+  readonly style: ResolvedRunStyle;
+  /** The HYPERLINK-instruction link the piece should carry, when one projects. */
+  readonly link?: SpanLinkRecord;
+}
+
+/**
+ * Decide what a `w:fldSimple` (§17.16.19) paints, or null for nothing.
+ *
+ * The caller owns the model offset (the field is one unit whatever it paints) and OUTER
+ * visibility — a revision enclosing the whole field is answered before this runs. This owns
+ * the branch order:
+ *
+ * - Allowlisted PAGE / NUMPAGES / SECTIONPAGES evaluate from the page context when one is
+ *   supplied — the cached result is whatever sheet the producer last saved from.
+ * - A simple SYMBOL renders from its instruction like the complex shape does; there is no
+ *   trustworthy cached result to prefer. An unresolvable spec falls through.
+ * - A simple MACROBUTTON / GOTOBUTTON displays everything after its first argument; the
+ *   macro / target never runs. A non-empty cached display wins — synthesis fills an empty one.
+ * - Otherwise the cached display paints, linked by a HYPERLINK instruction only outside a
+ *   typed `w:hyperlink` (`currentLink`), which outranks the field's own instruction. An empty
+ *   result never paints, URL included.
+ *
+ * A hidden result returns null in every branch: no piece, the unit stays.
+ */
+export function projectSimpleFieldResult(args: {
+  readonly simple: OoxmlNode;
+  readonly depth: number;
+  readonly pageContext?: FieldPageContext;
+  readonly budget: FieldScanBudget;
+  readonly revisions: readonly RevisionAttribution[];
+  readonly displayMode: RevisionDisplayMode;
+  readonly inheritedRunProperties: readonly OoxmlProperty[];
+  readonly cascadeRuns?: SimpleFieldRunCascader;
+  readonly themeFonts?: ThemeFonts;
+  /** The enclosing typed `w:hyperlink` record, which outranks the field's instruction. */
+  readonly currentLink?: SpanLinkRecord;
+  readonly projectFieldLink?: FieldLinkProjector;
+}): SimpleFieldProjection | null {
+  const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
+  const display = collectSimpleFieldDisplay(args);
+  const instr = fldSimpleInstr(simple) ?? '';
+  const props = display.resultProps ?? inheritedRunProperties;
+
+  const pageKind = allowlistedPageField(instr);
+  if (pageKind && pageContext) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return null;
+    return { text: projectPageFieldValue(pageKind, pageContext), props, style };
+  }
+
+  const symbolSpec = parseSymbolInstruction(instr);
+  if (symbolSpec) {
+    const glyph = symbolFieldGlyph(symbolSpec, props, themeFonts);
+    if (glyph) {
+      if (glyph.style.hidden) return null;
+      return { text: glyph.text, props: glyph.props, style: glyph.style };
+    }
+  }
+
+  // Synthesis fills only a result the file never cached: a cached result that exists but is
+  // hidden stays hidden (`sawResultContent`), matching the complex-field flush.
+  const buttonSpec =
+    display.text.length === 0 && !display.sawResultContent ? parseButtonInstruction(instr) : null;
+  if (buttonSpec) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return null;
+    return { text: buttonSpec.display, props, style };
+  }
+
+  if (display.text.length === 0) return null;
+  // Nested live PAGE may replace an empty cached result and leave no donor run; fall back
+  // to inherited properties the same way a top-level simple PAGE does.
+  const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+  if (style.hidden) return null;
+  const linkSpec = args.currentLink ? null : parseHyperlinkInstruction(instr);
+  const fieldLink = linkSpec ? (args.projectFieldLink?.(linkSpec) ?? null) : null;
+  return { text: display.text, props, style, ...(fieldLink ? { link: fieldLink } : {}) };
 }

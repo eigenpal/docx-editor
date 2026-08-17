@@ -81,6 +81,16 @@ export function isRenderableCodePoint(code: number): boolean {
  * the PUA character with the symbol font, which the shaper may still resolve. A bare byte
  * (`@w:char="46"`) on a symbol font is normalized to the 0xF000 page first, because Word
  * accepts both encodings.
+ *
+ * DELIBERATE DIVERGENCE from list markers: `mapSymbolPuaText` takes an `isFontAvailable`
+ * oracle so an INSTALLED symbol font keeps its authentic PUA glyph, and `list-resolve.ts`
+ * accepts one — but no oracle is passed here (nor by `field-symbol.ts`). The parameter is a
+ * public affordance of `withResolvedListItems` that no engine call site supplies today:
+ * `SemanticLayoutOptions` does not carry it, so wiring it into `piecesOfParagraph` means a
+ * new public layout option threaded through paragraph flow AND folded into the fragment
+ * signature / layout cache keys (a font finishing to load must invalidate painted glyphs).
+ * Until a host actually supplies the oracle, both symbol paths always map to the Unicode
+ * equivalent, which every font can draw. Revisit when the list path gains a real producer.
  */
 export function symbolGlyphOf(node: OoxmlNode): SymbolGlyph | null {
   if (!isSymbolRunChild(node)) return null;

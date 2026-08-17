@@ -574,3 +574,39 @@ describe('inertness and security', () => {
     expect(xml.includes('w:dirty')).toBe(true);
   });
 });
+
+describe('w:delInstrText addressing', () => {
+  test('a tracked-deleted field forms one atom and swallows its delInstrText', () => {
+    // Word rewrites `w:instrText` as `w:delInstrText` inside a deletion. The offset
+    // authority must treat it exactly like the live form: instruction chrome, zero model
+    // width, swallowed by the field's one reserved unit.
+    const part = parse(
+      '<w:p><w:r><w:t>A</w:t></w:r>' +
+        '<w:del w:id="1" w:author="X">' +
+        '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:delInstrText> PAGE </w:delInstrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:delText>3</w:delText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+        '</w:del><w:r><w:t>B</w:t></w:r></w:p>'
+    );
+    const paragraph = paragraphOf(part);
+    expect(paragraphTextOf(part, paragraph.id)).toBe(`A${FIELD_ATOM_CHAR}B`);
+    const spans = atomicFieldSpansOf(paragraph);
+    expect(spans).toHaveLength(1);
+    const findDelInstr = (node: OoxmlElement | { kind: 'textValue' }): OoxmlElement | undefined => {
+      if (node.kind === 'textValue') return undefined;
+      if (node.kind === 'generic' && node.localName === 'delInstrText') return node;
+      for (const child of node.children ?? []) {
+        const hit = findDelInstr(child as OoxmlElement);
+        if (hit) return hit;
+      }
+      return undefined;
+    };
+    const delInstr = findDelInstr(paragraph);
+    expect(delInstr).toBeDefined();
+    expect(spans[0]!.removeNodeIds).toContain(delInstr!.id);
+    // The instruction reader accepts the deleted form.
+    expect(instrTextValue(delInstr!)).toBe(' PAGE ');
+  });
+});

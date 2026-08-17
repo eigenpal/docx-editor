@@ -141,6 +141,121 @@ describe('a complex SYMBOL field', () => {
     const pieces = project(`<w:p>${complexField(' SYMBOL 65 \\zz \\h \\j "stray" ')}</w:p>`);
     expect(pieces.map((piece) => piece.text)).toEqual(['A']);
   });
+
+  test('instruction text split across several instrText runs still parses', () => {
+    const pieces = project(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> SYM</w:instrText></w:r>' +
+        '<w:r><w:instrText>BOL 0xF0</w:instrText></w:r>' +
+        '<w:r><w:instrText>FC \\f "Wingdings" </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['✔']);
+    expect(pieces[0]!.style.fontFamily).toBe('Wingdings');
+  });
+
+  test('a decimal code with an unquoted symbol font maps like the hex form', () => {
+    const pieces = project(`<w:p>${complexField(' SYMBOL 61692 \\f Wingdings ')}</w:p>`);
+    // 61692 = 0xF0FC, Wingdings check mark.
+    expect(pieces.map((piece) => piece.text)).toEqual(['✔']);
+  });
+
+  test("a nested inner field's instruction never leaks into the outer capture", () => {
+    // The inner PAGE must neither corrupt the outer SYMBOL nor paint its own text; the outer
+    // instruction is its OWN level-1 fragments, rejoined around the inner field.
+    const pieces = project(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> SYMBOL </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+        '<w:r><w:instrText> 0xF0FC \\f "Wingdings" </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:t>cached</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['✔']);
+  });
+
+  test('\\f beats a theme-resolved run font when themeFonts are supplied', () => {
+    const pieces = piecesOfParagraph(
+      paragraphOf(
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+          '<w:r><w:instrText> SYMBOL 65 \\u \\f "Courier New" </w:instrText></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+          '<w:r><w:rPr><w:rFonts w:asciiTheme="minorHAnsi"/></w:rPr><w:t>x</w:t></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+      ),
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'all-markup',
+      undefined,
+      undefined,
+      { major: 'Georgia', minor: 'Calibri' }
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['A']);
+    expect(pieces[0]!.style.fontFamily).toBe('Courier New');
+  });
+
+  test('hostile >4-deep nesting refuses SYMBOL synthesis from outer fragments', () => {
+    const deep =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>'.repeat(5) +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>'.repeat(5);
+    const pieces = project(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> SYMBOL 0xF0FC \\f "Wingdings" </w:instrText></w:r>' +
+        deep +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual([]);
+  });
+
+  test('a result made of one w:sym donates style and revision attribution', () => {
+    // The sym is the FIRST visible result content, so it captures like ordinary text: the
+    // atom carries the deletion in all-markup instead of painting as unchanged text.
+    const pieces = project(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:del w:id="1" w:author="A"><w:r><w:sym w:font="Wingdings" w:char="F0FC"/></w:r></w:del>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['✔']);
+    expect(pieces[0]!.revisions?.map((revision) => revision.kind)).toEqual(['delete']);
+    // And the deletion resolves away in the proposed result.
+    const proposed = project(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:del w:id="1" w:author="A"><w:r><w:sym w:font="Wingdings" w:char="F0FC"/></w:r></w:del>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+      'proposed'
+    );
+    expect(proposed.map((piece) => piece.text)).toEqual([]);
+  });
+
+  test("a demoted field's result w:sym paints as a projected zero-width glyph", () => {
+    // No end marker: the field demotes and its result is ordinary content — the sym must
+    // paint exactly as it does in an ordinary run instead of vanishing with the atomic skips.
+    const pieces = project(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:t>be</w:t><w:sym w:font="Wingdings" w:char="F0FC"/><w:t>fore</w:t></w:r></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['be', '✔', 'fore']);
+    const glyph = pieces[1]!;
+    expect(glyph).toMatchObject({ start: 2, end: 2, projected: true });
+    expect(glyph.style.fontFamily).toBe('Wingdings');
+    expect(glyph.fieldAtom).toEqual({ formField: false });
+    // Surrounding demoted result text keeps its literal offsets.
+    expect(pieces[2]).toMatchObject({ start: 2, end: 6 });
+  });
 });
 
 describe('a simple SYMBOL field', () => {
@@ -171,5 +286,28 @@ describe('a simple SYMBOL field', () => {
         '<w:r><w:t>cached</w:t></w:r></w:fldSimple></w:p>'
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['cached']);
+  });
+
+  test('a tracked-deleted simple SYMBOL is gone from the proposed result', () => {
+    const pieces = project(
+      '<w:p><w:del w:id="1" w:author="A">' +
+        '<w:fldSimple w:instr=" SYMBOL 0xF0FC \\f &quot;Wingdings&quot; "/></w:del>' +
+        '<w:r><w:t>B</w:t></w:r></w:p>',
+      'proposed'
+    );
+    // The atom's unit is kept — B stays at offset 1 — but nothing paints for it.
+    expect(pieces.map((piece) => piece.text)).toEqual(['B']);
+    expect(pieces[0]).toMatchObject({ start: 1, end: 2 });
+  });
+
+  test('a hidden cached result does not hide the synthesized glyph', () => {
+    // SYMBOL is instruction-authoritative: the vanish belongs to the CACHED result run, and
+    // that run donates nothing. Only a hidden glyph style itself suppresses the paint.
+    const pieces = project(
+      '<w:p><w:fldSimple w:instr=" SYMBOL 0xF0FC \\f &quot;Wingdings&quot; ">' +
+        '<w:r><w:rPr><w:vanish/></w:rPr><w:t>old</w:t></w:r></w:fldSimple>' +
+        '<w:r><w:t>B</w:t></w:r></w:p>'
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['✔', 'B']);
   });
 });

@@ -81,6 +81,12 @@ describe('checkbox state', () => {
     // Malformed size falls back to auto rather than failing the whole read.
     expect(checkboxDataOf('<w:size w:val="abc"/>')).toMatchObject({ sizeHalfPoints: null });
     expect(checkboxDataOf('<w:size/>')).toMatchObject({ sizeHalfPoints: null });
+    // ST_HpsMeasure is UNSIGNED: a negative value is malformed (auto), never a 1pt box.
+    expect(checkboxDataOf('<w:size w:val="-5"/>')).toMatchObject({ sizeHalfPoints: null });
+    // First size wins, same rule as the other state elements.
+    expect(checkboxDataOf('<w:size w:val="24"/><w:size w:val="48"/>')).toMatchObject({
+      sizeHalfPoints: 24,
+    });
   });
 
   test('w:sizeAuto means auto even beside an explicit size', () => {
@@ -110,14 +116,42 @@ describe('dropdown state', () => {
     expect(dropdownDataOf(entries)).toMatchObject({ selectedIndex: 0 });
   });
 
-  test('indices clamp into [0, 63] before range resolution', () => {
+  test('an out-of-range index is absent — never clamped onto another entry', () => {
+    // A negative result must not clamp to 0 and shadow the authored default.
+    expect(dropdownDataOf(`<w:result w:val="-5"/><w:default w:val="1"/>${entries}`)).toMatchObject({
+      selectedIndex: 1,
+    });
     expect(dropdownDataOf(`<w:result w:val="-5"/>${entries}`)).toMatchObject({ selectedIndex: 0 });
+    // Past 63 with a FULL 64-entry list: clamping painted entry 63; absent falls to default.
+    const full = Array.from({ length: 64 }, (_, i) => `<w:listEntry w:val="e${i}"/>`).join('');
+    expect(dropdownDataOf(`<w:result w:val="200"/><w:default w:val="5"/>${full}`)).toMatchObject({
+      selectedIndex: 5,
+    });
+    expect(dropdownDataOf(`<w:result w:val="200"/>${full}`)).toMatchObject({ selectedIndex: 0 });
+    // In [0, 63] but past a short list: default when in range, else 0 (unchanged rule).
     expect(dropdownDataOf(`<w:result w:val="70"/><w:default w:val="2"/>${entries}`)).toMatchObject({
       selectedIndex: 2,
     });
     expect(dropdownDataOf(`<w:result w:val="junk"/>${entries}`)).toMatchObject({
       selectedIndex: 0,
     });
+  });
+
+  test('the node budget failing closed mid-ddList still returns a sane shape', () => {
+    // Flood ffData with siblings so the shared budget is exhausted while entries collect.
+    // The walk must stop, never throw, and anything returned stays within collected bounds.
+    const flood = '<w:listEntry w:val="x"/>'.repeat(300);
+    const data = dropdownDataOf(`<w:result w:val="1"/>${flood}`);
+    if (data !== null) {
+      if (data.kind !== 'dropdown') throw new Error('expected dropdown');
+      expect(data.entries.length).toBeLessThanOrEqual(64);
+      expect(data.selectedIndex).toBeGreaterThanOrEqual(0);
+      if (data.entries.length > 0) {
+        expect(data.selectedIndex).toBeLessThan(data.entries.length);
+      } else {
+        expect(data.selectedIndex).toBe(0);
+      }
+    }
   });
 
   test('an empty list still returns the dropdown shape', () => {

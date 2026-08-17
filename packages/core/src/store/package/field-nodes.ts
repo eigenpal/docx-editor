@@ -91,9 +91,20 @@ export function isFldChar(node: OoxmlNode, type: FldCharType): boolean {
   return fldCharType(node) === type;
 }
 
-/** Typed or generic `w:instrText`. */
+/**
+ * Typed or generic `w:instrText`, and `w:delInstrText` — the form a tracked deletion gives
+ * the instruction (§17.16.13), always generic in the canonical tree.
+ *
+ * One predicate for both on purpose: everything that consumes instruction text (the offset
+ * authority, the layout field machine, span collection) must treat a deleted field's
+ * instruction exactly like a live one — ingested per phase, never painted. Excluding the
+ * deleted form let its `w:delInstrText` fall through those walks as ordinary run content.
+ */
 export function isInstrText(node: OoxmlNode): boolean {
-  return node.kind === 'instrText' || (node.kind === 'generic' && isWml(node, 'instrText'));
+  return (
+    node.kind === 'instrText' ||
+    (node.kind === 'generic' && (isWml(node, 'instrText') || isWml(node, 'delInstrText')))
+  );
 }
 
 /** Typed or generic `w:fldSimple`. */
@@ -189,9 +200,11 @@ export function hasLegacyFormFieldData(node: OoxmlNode): boolean {
  * Legacy form-field render state read from `w:ffData` (§17.16.17), and nothing else.
  *
  * `checkbox`: `sizeHalfPoints` is the explicit `w:size` in half-points, clamped to a sane
- * render range, or null for auto-size (`w:sizeAuto`, absent, or malformed).
- * `dropdown`: `selectedIndex` is already resolved (`w:result`, else `w:default`, else 0) and
- * always in range when `entries` is non-empty; `entries` may be empty (layout paints nothing).
+ * render range, or null for auto-size (`w:sizeAuto`, absent, malformed, or negative —
+ * ST_HpsMeasure is unsigned, so a negative value is invalid, not small).
+ * `dropdown`: `selectedIndex` is already resolved (in-range `w:result`, else in-range
+ * `w:default`, else 0 — an out-of-range index counts as absent) and always in range when
+ * `entries` is non-empty; `entries` may be empty (layout paints nothing).
  */
 export type LegacyFormFieldData =
   | {
@@ -214,8 +227,13 @@ const MAX_DROPDOWN_ENTRY_CHARS = 256;
 /** `w:size` clamp in half-points: 1pt .. 144pt. */
 const MIN_CHECKBOX_SIZE_HALF_POINTS = 2;
 const MAX_CHECKBOX_SIZE_HALF_POINTS = 288;
-/** Largest `w:val` index for `w:result` / `w:default` on `w:ddList` (ST_UnsignedDecimalNumber cap). */
-const MAX_DROPDOWN_INDEX = 63;
+/**
+ * Largest `w:val` index accepted for `w:result` / `w:default` on `w:ddList`: the engine's own
+ * entry cap ({@link MAX_DROPDOWN_ENTRIES} collected entries → indices 0..63), not a schema
+ * limit. An index outside 0..63 is treated as ABSENT, never clamped onto an entry the file
+ * did not choose — clamping let a hostile `w:result` shadow a valid `w:default`.
+ */
+const MAX_DROPDOWN_INDEX = MAX_DROPDOWN_ENTRIES - 1;
 
 type NodeBudget = { left: number };
 
@@ -226,18 +244,36 @@ function onOffElementValue(element: OoxmlNode): boolean {
   return !(raw === '0' || raw === 'false' || raw === 'off');
 }
 
-/** Bounded `w:val` integer parse; null when absent or malformed, clamped otherwise. */
-function clampedIntAttribute(element: OoxmlNode, min: number, max: number): number | null {
+/**
+ * Bounded `w:size` parse (ST_HpsMeasure — half-points, UNSIGNED): null when absent, malformed
+ * or negative (auto size); large values clamp to the render cap. A negative value is not a
+ * small size, it is schema-invalid, so it must not clamp up to a 1pt box.
+ */
+function checkboxSizeAttribute(element: OoxmlNode): number | null {
+  const raw = attributeValue(element, 'val');
+  if (raw === undefined || !/^\d{1,7}$/.test(raw)) return null;
+  const value = Number.parseInt(raw, 10);
+  return Math.min(MAX_CHECKBOX_SIZE_HALF_POINTS, Math.max(MIN_CHECKBOX_SIZE_HALF_POINTS, value));
+}
+
+/**
+ * Bounded index parse for `w:result` / `w:default`: null when absent, malformed, negative or
+ * past {@link MAX_DROPDOWN_INDEX} — out of range means ABSENT, never a clamped neighbor.
+ */
+function dropdownIndexAttribute(element: OoxmlNode): number | null {
   const raw = attributeValue(element, 'val');
   if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return null;
   const value = Number.parseInt(raw, 10);
-  return Math.min(max, Math.max(min, value));
+  return value >= 0 && value <= MAX_DROPDOWN_INDEX ? value : null;
 }
 
 function checkboxDataOf(checkbox: OoxmlNode, budget: NodeBudget): LegacyFormFieldData {
   let checked: boolean | undefined;
   let fallback: boolean | undefined;
   let sizeHalfPoints: number | null = null;
+  // First-wins via its own flag ("first state element wins", like `checked` / `default`
+  // above): `??=` cannot express it here because a malformed first size also resolves null.
+  let sizeSeen = false;
   let sizeAuto = false;
   if (checkbox.kind !== 'textValue') {
     for (const child of checkbox.children) {
@@ -246,11 +282,10 @@ function checkboxDataOf(checkbox: OoxmlNode, budget: NodeBudget): LegacyFormFiel
       if (isWml(child, 'checked')) checked ??= onOffElementValue(child);
       else if (isWml(child, 'default')) fallback ??= onOffElementValue(child);
       else if (isWml(child, 'size')) {
-        sizeHalfPoints = clampedIntAttribute(
-          child,
-          MIN_CHECKBOX_SIZE_HALF_POINTS,
-          MAX_CHECKBOX_SIZE_HALF_POINTS
-        );
+        if (!sizeSeen) {
+          sizeSeen = true;
+          sizeHalfPoints = checkboxSizeAttribute(child);
+        }
       } else if (isWml(child, 'sizeAuto')) sizeAuto = true;
       // Anything else under checkBox is ignored — never descended into.
     }
@@ -270,9 +305,9 @@ function dropdownDataOf(list: OoxmlNode, budget: NodeBudget): LegacyFormFieldDat
     for (const child of list.children) {
       if (budget.left-- <= 0) break;
       if (child.kind === 'textValue') continue;
-      if (isWml(child, 'result')) result ??= clampedIntAttribute(child, 0, MAX_DROPDOWN_INDEX);
+      if (isWml(child, 'result')) result ??= dropdownIndexAttribute(child);
       else if (isWml(child, 'default')) {
-        fallback ??= clampedIntAttribute(child, 0, MAX_DROPDOWN_INDEX);
+        fallback ??= dropdownIndexAttribute(child);
       } else if (isWml(child, 'listEntry')) {
         if (entries.length >= MAX_DROPDOWN_ENTRIES) continue;
         const value = attributeValue(child, 'val');

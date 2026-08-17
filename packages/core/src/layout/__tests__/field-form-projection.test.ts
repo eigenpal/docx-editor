@@ -6,8 +6,13 @@
 // falls back to the previous behavior (cached text or nothing), never a throw.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { piecesOfParagraph } from '../field-projection.ts';
+import {
+  paragraphTextOf,
+  readOoxmlPart,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
+import { piecesOfParagraph, type HyperlinkProjector } from '../field-projection.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -140,6 +145,70 @@ describe('a FORMCHECKBOX field', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['B']);
     expect(pieces[0]).toMatchObject({ start: 1, end: 2 });
   });
+
+  test('checked=0 with default=1 paints the unchecked box — w:checked wins', () => {
+    const pieces = project(
+      `<w:p>${checkboxField('<w:checked w:val="0"/><w:default w:val="1"/>')}</w:p>`
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['☐']);
+  });
+
+  test('a tracked-inserted checkbox glyph carries the insertion in all-markup', () => {
+    const pieces = project(
+      `<w:p><w:ins w:id="1" w:author="A">${checkboxField('<w:checked/>')}</w:ins></w:p>`
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['☒']);
+    expect(pieces[0]!.revisions?.map((revision) => revision.kind)).toEqual(['insert']);
+  });
+
+  test('a checkbox inside w:hyperlink carries the enclosing link', () => {
+    const link = Object.freeze({ id: 'stub', kind: 'external' as const, href: 'https://x.test' });
+    const projectLink: HyperlinkProjector = () => link;
+    const pieces = piecesOfParagraph(
+      paragraphOf(`<w:p><w:hyperlink>${checkboxField('<w:checked/>')}</w:hyperlink></w:p>`),
+      [],
+      undefined,
+      undefined,
+      projectLink
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['☒']);
+    expect(pieces[0]!.link).toBe(link);
+  });
+
+  test("FORMTEXT instruction-phase run text keeps the store's offsets and paints", () => {
+    // An editable-result field is NOT atomic, so the offset authority leaves ordinary `w:t`
+    // between begin and separate addressable. Layout must paint what the store addresses.
+    const body =
+      '<w:p><w:r><w:fldChar w:fldCharType="begin">' +
+      '<w:ffData><w:name w:val="T"/><w:textInput/></w:ffData></w:fldChar></w:r>' +
+      '<w:r><w:instrText> FORMTEXT </w:instrText></w:r>' +
+      '<w:r><w:t>SPILL</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>typed</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    const part = partOf(body);
+    const findParagraph = (node: OoxmlNode): OoxmlNode | undefined => {
+      if (node.kind === 'paragraph') return node;
+      if (node.kind === 'textValue') return undefined;
+      for (const child of node.children ?? []) {
+        const hit = findParagraph(child);
+        if (hit) return hit;
+      }
+      return undefined;
+    };
+    const paragraph = findParagraph(part.root) as OoxmlNode & { id: string };
+    expect(paragraphTextOf(part, paragraph.id)).toBe('SPILLtyped');
+    const pieces = piecesOfParagraph(paragraph);
+    expect(
+      pieces.map((piece) => ({ text: piece.text, start: piece.start, end: piece.end }))
+    ).toEqual([
+      { text: 'SPILL', start: 0, end: 5 },
+      { text: 'typed', start: 5, end: 10 },
+    ]);
+    // The editable result shades as a form field; the instruction-phase spill does not.
+    expect(pieces[0]!.fieldAtom).toBeUndefined();
+    expect(pieces[1]!.fieldAtom).toEqual({ formField: true });
+  });
 });
 
 describe('a FORMDROPDOWN field', () => {
@@ -176,6 +245,19 @@ describe('a FORMDROPDOWN field', () => {
   test('an empty w:ddList paints nothing', () => {
     const pieces = project(
       `<w:p>${dropdownField('<w:result w:val="0"/>')}<w:r><w:t>B</w:t></w:r></w:p>`
+    );
+    expect(pieces.map((piece) => piece.text)).toEqual(['B']);
+    expect(pieces[0]).toMatchObject({ start: 1, end: 2 });
+  });
+
+  test('a cached result that exists but is hidden suppresses entry synthesis', () => {
+    // The file cached a result and hid it. Synthesizing the selected entry would resurrect
+    // what the document hides; only a truly EMPTY cache may synthesize.
+    const pieces = project(
+      `<w:p>${dropdownField(
+        `<w:result w:val="1"/>${ENTRIES}`,
+        '<w:r><w:rPr><w:vanish/></w:rPr><w:t>OldPick</w:t></w:r>'
+      )}<w:r><w:t>B</w:t></w:r></w:p>`
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['B']);
     expect(pieces[0]).toMatchObject({ start: 1, end: 2 });

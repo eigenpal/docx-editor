@@ -243,6 +243,16 @@ export interface PendingFieldProjection {
   capturedResultStyle: boolean;
   /** Cached result text (for inert display or demotion flush). */
   cachedText: string;
+  /**
+   * True once ANY result-phase content was seen — hidden, suppressed or visible.
+   *
+   * `cachedText` alone cannot tell "the file cached no result" from "the file cached one and
+   * hid it": both leave it empty. Synthesis (MACROBUTTON / GOTOBUTTON display text, the
+   * FORMDROPDOWN selected entry) fills only the first — painting over a vanished result would
+   * resurrect what the document hides. FORMCHECKBOX ignores this on purpose: its ffData state
+   * is the authority, and a hidden FIELD is already covered by the flush's style guard.
+   */
+  sawResultContent: boolean;
   /** Demotion-only: ordinary pieces when the field fails to close. */
   buffered: FieldAwarePiece[];
   /** Demotion-only running offset mirror while buffering ordinary pieces. */

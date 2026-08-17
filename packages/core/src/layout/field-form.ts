@@ -8,7 +8,8 @@
 //   cached glyph never wins. ☒ (U+2612) when checked, ☐ (U+2610) when not; an explicit
 //   `w:size` overrides the run's font size, `w:sizeAuto` keeps it.
 // - FORMDROPDOWN prefers its cached result (what Word last painted) and synthesizes the
-//   selected entry only when the cache is empty.
+//   selected entry only when the file cached none at all — a cached result that exists but
+//   is hidden stays hidden.
 //
 // Everything fails closed to the previous behavior (cached text or nothing): an instruction
 // without matching ffData state, an empty entry list, an empty selected entry.
@@ -89,6 +90,8 @@ export function formFieldResult(
     readonly formSpec: FormFieldKind | null;
     readonly formData: LegacyFormFieldData | null;
     readonly cachedText: string;
+    /** Any result-phase content existed, hidden or not — see `PendingFieldProjection`. */
+    readonly sawResultContent: boolean;
     readonly props: readonly OoxmlProperty[];
     readonly style: ResolvedRunStyle;
   },
@@ -109,7 +112,9 @@ export function formFieldResult(
     return { text, props, style: resolveRunStyle(props, themeFonts) };
   }
   if (pending.formSpec === 'dropdown') {
-    if (pending.cachedText.length > 0) return null;
+    // A non-empty cache falls through to paint as-is; a cache that existed but was hidden
+    // suppresses synthesis too — the file said this result is not shown.
+    if (pending.cachedText.length > 0 || pending.sawResultContent) return null;
     if (pending.formData?.kind !== 'dropdown') return null;
     const text = pending.formData.entries[pending.formData.selectedIndex] ?? '';
     if (text.length === 0) return null;

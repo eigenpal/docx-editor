@@ -77,6 +77,19 @@ describe('parseButtonInstruction', () => {
     expect(parseButtonInstruction('MACROBUTTON M a \\* b c')).toEqual({ display: 'a \\* b c' });
   });
 
+  test('a trailing lone backslash is display text, not a switch', () => {
+    expect(parseButtonInstruction('MACROBUTTON M \\')).toEqual({ display: '\\' });
+    expect(parseButtonInstruction('MACROBUTTON M x \\')).toEqual({ display: 'x \\' });
+  });
+
+  test('a quoted display shields a switch-looking tail from stripping', () => {
+    // The tail sits INSIDE one whole-remainder quoted token: the quotes come off, the
+    // "switch" stays — it is the authored display text.
+    expect(parseButtonInstruction('MACROBUTTON M "Click \\* MERGEFORMAT"')).toEqual({
+      display: 'Click \\* MERGEFORMAT',
+    });
+  });
+
   test('the keyword must be the exact token, not a prefix superstring', () => {
     expect(parseButtonInstruction('MACROBUTTONX M text')).toBeNull();
     expect(parseButtonInstruction('GOTOBUTTONS b text')).toBeNull();
