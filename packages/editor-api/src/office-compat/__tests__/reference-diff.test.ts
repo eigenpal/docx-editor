@@ -4,7 +4,10 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-a
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { describe, test, expect } from 'bun:test';
-import { diffReferenceFixtures } from '../../../scripts/lib/reference-diff.mjs';
+import {
+  diffReferenceFixtures,
+  formatReferenceDiff,
+} from '../../../scripts/lib/reference-diff.mjs';
 
 function fixture(symbols) {
   return {
@@ -292,5 +295,72 @@ describe('diffReferenceFixtures', () => {
     expect(diff.changedSymbols[0].uid).toBe('Word.run');
     expect(diff.changedSymbols[0].addedOverloads).toHaveLength(1);
     expect(diff.changedSymbols[0].removedOverloads).toEqual([]);
+  });
+});
+
+/**
+ * Facts a symbol or member carries beside its call shape. Both of these read as
+ * "no differences" until they are compared explicitly: a symbol's own
+ * requirement set has no member to attach to, and a property that becomes a
+ * zero-parameter method of the same return type normalizes to the very same
+ * overload.
+ */
+describe('diffReferenceFixtures on facts beside the call shape', () => {
+  function bodyWith(overrides) {
+    return fixture({
+      Body: {
+        uid: 'Word.Body',
+        kind: 'class',
+        requirementSet: 'WordApi 1.1',
+        members: {
+          style: {
+            uid: 'Word.Body#style',
+            kind: 'property',
+            readonly: false,
+            requirementSet: 'WordApi 1.1',
+            overloads: [{ params: [], returns: 'string' }],
+          },
+        },
+        ...overrides,
+      },
+    });
+  }
+
+  test("reports a symbol's own requirement set moving", () => {
+    const diff = diffReferenceFixtures(bodyWith({}), bodyWith({ requirementSet: 'WordApi 1.9' }));
+
+    expect(diff.changedSymbols).toHaveLength(1);
+    expect(diff.changedSymbols[0].requirementSetChanged).toEqual({
+      from: 'WordApi 1.1',
+      to: 'WordApi 1.9',
+    });
+    expect(formatReferenceDiff(diff)).toContain('requirementSet: WordApi 1.1 -> WordApi 1.9');
+  });
+
+  test('reports a symbol changing kind', () => {
+    const diff = diffReferenceFixtures(bodyWith({}), bodyWith({ kind: 'interface' }));
+
+    expect(diff.changedSymbols[0].kindChanged).toEqual({ from: 'class', to: 'interface' });
+    expect(formatReferenceDiff(diff)).toContain('kind: class -> interface');
+  });
+
+  test('reports a property becoming a method of the same call shape', () => {
+    const previous = bodyWith({});
+    const next = bodyWith({});
+    next.symbols.Body.members.style.kind = 'method';
+    delete next.symbols.Body.members.style.readonly;
+
+    const diff = diffReferenceFixtures(previous, next);
+
+    const memberChange = diff.changedSymbols[0].changedMembers[0];
+    expect(memberChange.uid).toBe('Word.Body#style');
+    expect(memberChange.kindChanged).toEqual({ from: 'property', to: 'method' });
+    expect(formatReferenceDiff(diff)).toContain('kind: property -> method');
+  });
+
+  test('still reports nothing when neither moved', () => {
+    const diff = diffReferenceFixtures(bodyWith({}), bodyWith({}));
+    expect(diff.changedSymbols).toEqual([]);
+    expect(formatReferenceDiff(diff)).toContain('No symbol-level differences');
   });
 });

@@ -54,9 +54,10 @@ bun run compat:generate
 # reference fixture, without overwriting anything (exit code 1 on drift).
 bun run compat:check-drift
 
-# Network: adopt an upstream release that changed no symbol and no member —
-# version string, provenance, and the newly proved source-commit pin only.
-# Refuses (exit code 1) as soon as any shape differs.
+# Network: adopt an upstream release whose reference differs in nothing but the
+# version string. Rewrites reference/word.reference.json (its generatedFrom
+# carries the release), provenance.json, and definitely-typed-commits.json.
+# Refuses (exit code 1) as soon as anything else differs.
 bun run compat:adopt
 ```
 
@@ -82,24 +83,33 @@ upstream data is never written to
 ## Which drift a machine may adopt
 
 Most upstream releases move nothing this directory measures: Microsoft
-republishes, the version string changes, and the manifest-selected shape is
+republishes, the version string changes, and the manifest-selected reference is
 identical. That delta says nothing about the Word API, so
 `.github/workflows/office-compat-drift.yml` adopts it itself with
-`compat:adopt` and opens an ordinary PR. When a symbol or member does move,
-the same workflow opens a tracking issue instead and changes nothing.
+`compat:adopt` and opens an ordinary PR. When anything else moves, the same
+workflow opens a tracking issue instead and changes nothing.
 
 `compat:adopt` is the only path that may record a source-commit pin without a
 maintainer, and it earns that two ways:
 
-- **It refuses shape changes.** One added, removed, or changed symbol or
-  member and it exits 1 with the delta. The version string is the only thing
-  it can carry forward.
+- **It refuses every change but the version string.** The gate compares the two
+  fixtures whole, in a key-sorted canonical form, with only
+  `generatedFrom.version` excluded — deliberately _not_ by asking
+  `reference-diff.mjs`. That diff exists to explain a change to a person, so it
+  compares the fields worth naming in a report; anything it does not compare
+  (overload order, a parameter name, a uid) would read as "no differences" and
+  adopt a Word API change unattended. Comparing the whole fixture makes the
+  gate total by construction: a field added to `reference-normalize.mjs` is
+  covered the day it is added, with no second place to remember.
 - **It proves the commit rather than trusting it.** npm publishes no `gitHead`
   for `@types/*`, so `scripts/lib/definitely-typed-commit.mjs` walks the
   commits touching `types/office-js` and accepts one only when git's blob hash
   of its `index.d.ts` equals the blob hash of the `index.d.ts` inside the
   integrity-verified tarball. A wrong, renamed, or force-pushed-away commit
   cannot pass that comparison, and an unexplained release aborts the adopt.
+  What this establishes is that the declarations at that commit are the
+  published ones — not that the whole tree there was what got published, which
+  a blob comparison cannot show.
 
 What lands is still a PR: full CI, human approval.
 
