@@ -2,120 +2,50 @@
 # Compromised packages (stolen maintainer tokens) are almost always yanked
 # within hours, well before this window elapses.
 #
-# Dependabot v2 has no global default and rejects YAML aliases
-# (dependabot-core#1582), so the cooldown block + groups block are
-# duplicated per entry. The `dev-dependencies` group bundles every
-# patch+minor devDep bump into one PR per directory, so dependabot-lockfile.yml
-# only has to refresh `bun.lock` once per week per directory. Major bumps
-# still get their own PR (real upgrade work).
+# Two npm streams, one grouped PR each per week:
+#
+#   library  — the root workspace minus examples/. `/` covers every workspace
+#              member, so `exclude-paths` is what keeps examples out; a
+#              per-package entry would double-cover and open a second PR for
+#              the same bump (that is where the three harfbuzzjs PRs came from).
+#   examples — the demo apps, grouped across all ten directories at once.
+#
+# Majors stay ungrouped on purpose: they are real upgrade work and need to be
+# revertable on their own. Fold them in by adding 'major' to `update-types`.
+#
+# Dependabot v2 rejects YAML aliases (dependabot-core#1582), so the cooldown
+# and group blocks are spelled out per entry.
 version: 2
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
+    exclude-paths:
+      - 'examples/**'
     schedule:
       interval: 'weekly'
       day: 'monday'
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: 'chore(deps)'
     groups:
-      dev-dependencies:
-        dependency-type: 'development'
+      library:
+        patterns: ['*']
         update-types: ['minor', 'patch']
 
   - package-ecosystem: 'npm'
-    directory: '/packages/editor-api'
+    directories:
+      - '/examples/*'
     schedule:
       interval: 'weekly'
       day: 'monday'
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: 'chore(deps-examples)'
     groups:
-      dev-dependencies:
-        dependency-type: 'development'
-        update-types: ['minor', 'patch']
-
-  - package-ecosystem: 'npm'
-    directory: '/packages/i18n'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: 'development'
-        update-types: ['minor', 'patch']
-
-  - package-ecosystem: 'npm'
-    directory: '/packages/react'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: 'development'
-        update-types: ['minor', 'patch']
-
-  - package-ecosystem: 'npm'
-    directory: '/packages/vue'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: 'development'
-        update-types: ['minor', 'patch']
-
-  - package-ecosystem: 'npm'
-    directory: '/examples/astro'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: 'development'
-        update-types: ['minor', 'patch']
-
-  - package-ecosystem: 'npm'
-    directory: '/examples/remix'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: 'development'
-        update-types: ['minor', 'patch']
-
-  - package-ecosystem: 'npm'
-    directory: '/examples/vite'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: 'development'
-        update-types: ['minor', 'patch']
-
-  - package-ecosystem: 'npm'
-    directory: '/examples/vue'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    cooldown:
-      default-days: 7
-    groups:
-      dev-dependencies:
-        dependency-type: 'development'
+      examples:
+        patterns: ['*']
         update-types: ['minor', 'patch']
 
   - package-ecosystem: 'github-actions'
