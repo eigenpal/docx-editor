@@ -156,16 +156,23 @@ function spreadFloor(headReport, baseReport, name) {
   return Math.max(headReport.spreadPct?.get(name) ?? 0, baseReport?.spreadPct?.get(name) ?? 0);
 }
 
-function spreadNote(headReport, baseReport) {
-  if ((headReport.runCount ?? 1) < 2 && (baseReport?.runCount ?? 1) < 2) return [];
-  const all = [
-    ...(headReport.spreadPct?.values() ?? []),
-    ...(baseReport?.spreadPct?.values() ?? []),
-  ];
-  const worst = all.length > 0 ? Math.max(...all) : 0;
+/** One collapsed glossary for both tables, so the headers stay compact. */
+function legendBlock() {
   return [
-    `Interleaved runs per side: head ${headReport.runCount ?? 1}, base ${baseReport?.runCount ?? 1}. ` +
-      `Deltas inside the same-side spread (worst ${worst.toFixed(1)}%) render neutral.`,
+    '<details>',
+    '<summary>How to read these tables</summary>',
+    '',
+    '- **Base**: the `main` commit this PR builds on. **Head**: this PR.',
+    '- **Median**: the typical sample. **p95**: 95 of 100 samples were faster than this.',
+    '- Browser table: **median/p95** time the keystroke handler blocks the page;',
+    '  **Frame p95** time until the edit is visible on screen.',
+    '- **Δ**: 🟢 faster, 🔴 slower, ⚪ inside the noise. Each side runs interleaved',
+    '  rounds; a delta smaller than the run-to-run spread renders neutral.',
+    '- **Work counters**: exact counts of layout work (paragraphs placed, pages',
+    '  reused, full passes). They are deterministic: a change means different',
+    '  behavior, not just different speed.',
+    '',
+    '</details>',
     '',
   ];
 }
@@ -250,7 +257,6 @@ function renderUxSection(headUx, baseUx) {
       );
     }
     lines.push('');
-    lines.push(...spreadNote(headUx, baseUx));
   } else {
     if (baseUx) lines.push('> Browser baseline not comparable (fixture differs).', '');
     lines.push('| Scenario | Median | p95 | Frame p95 |', '| --- | --- | --- | --- |');
@@ -298,7 +304,7 @@ export function renderComment(head, base, ux = {}) {
       lines.push(`| ${scenario.name} | ${formatMs(scenario.total.medianMs)} | — | n/a | — |`);
     }
     lines.push('');
-    lines.push(...spreadNote(head, base));
+    lines.push(...legendBlock());
     if (counterRows.length > 0) {
       lines.push(
         '**Work counters changed** (deterministic — investigate before merging):',

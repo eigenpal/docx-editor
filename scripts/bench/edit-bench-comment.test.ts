@@ -101,7 +101,7 @@ describe('interleaved-run aggregation', () => {
     const head = aggregateReports([report({ medianMs: 10 }), report({ medianMs: 12 })], engine);
     const body = renderComment(head, aggregateReports([report({ medianMs: 10 })], engine));
     expect(body).toContain('| steady-middle-text | 10.00 ms | 11.00 ms |');
-    expect(body).toContain('Interleaved runs per side: head 2, base 1.');
+    expect(body).toContain('How to read these tables');
   });
 
   test('a delta inside the same-side spread renders neutral, outside it colors', () => {
@@ -111,7 +111,6 @@ describe('interleaved-run aggregation', () => {
     const base = aggregateReports([report({ medianMs: 10 })], engine);
     const noisyBody = renderComment(noisy, base);
     expect(noisyBody).toContain('| ⚪ +20.0% |');
-    expect(noisyBody).toContain('(worst 33.3%) render neutral');
     // Steady runs 12 and 12: zero spread, same +20% delta now colors red.
     const steady = aggregateReports([report({ medianMs: 12 }), report({ medianMs: 12 })], engine);
     expect(renderComment(steady, base)).toContain('| 🔴 +20.0% |');
