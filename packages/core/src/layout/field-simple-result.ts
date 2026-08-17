@@ -9,12 +9,17 @@
 
 import {
   fldSimpleInstr,
-  hardBreakText,
   isFieldChrome,
   isFldSimple,
   type OoxmlNode,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
+import {
+  modelTextOfRunChild,
+  runPropertiesOf,
+  type RunPropertyCascader,
+} from './field-run-text.ts';
+import { isSymbolRunChild, symbolGlyphOf } from './symbol-run.ts';
 import {
   allowlistedPageField,
   consumeScanNode,
@@ -44,54 +49,12 @@ import {
 } from './revision-projection.ts';
 
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
-export type SimpleFieldRunCascader = (
-  inherited: readonly OoxmlProperty[],
-  direct: readonly OoxmlProperty[]
-) => readonly OoxmlProperty[];
+export type SimpleFieldRunCascader = RunPropertyCascader;
 
 export interface SimpleFieldDisplay {
   readonly text: string;
   readonly resultProps: readonly OoxmlProperty[] | undefined;
   readonly resultStyle: ResolvedRunStyle | undefined;
-}
-
-function propertiesOfRunContainer(container: OoxmlNode | undefined): OoxmlProperty[] {
-  if (!container || container.kind === 'textValue') return [];
-  const props: OoxmlProperty[] = [];
-  for (const child of container.children) {
-    if (child.kind === 'textValue') continue;
-    const attributes: Record<string, string> = {};
-    for (const entry of child.attributes) attributes[entry.localName] = entry.value;
-    props.push(
-      Object.keys(attributes).length > 0
-        ? { localName: child.localName, attributes }
-        : { localName: child.localName }
-    );
-  }
-  return props;
-}
-
-function runPropertiesOf(
-  run: OoxmlNode,
-  inherited: readonly OoxmlProperty[],
-  cascadeRuns?: SimpleFieldRunCascader
-): OoxmlProperty[] {
-  const direct = propertiesOfRunContainer(
-    run.kind === 'run' ? run.children.find((grand) => grand.kind === 'runProperties') : undefined
-  );
-  if (cascadeRuns) return [...cascadeRuns(inherited, direct)];
-  return inherited.length === 0 ? direct : [...inherited, ...direct];
-}
-
-function modelTextOfRunChild(grand: OoxmlNode): string {
-  if (grand.kind === 'text' || grand.kind === 'deletedText') {
-    let text = '';
-    for (const value of grand.children) if (value.kind === 'textValue') text += value.value;
-    return text;
-  }
-  if (grand.kind === 'tab') return '\t';
-  if (grand.kind === 'hardBreak') return hardBreakText(grand);
-  return '';
 }
 
 /**
@@ -196,6 +159,17 @@ export function collectSimpleFieldDisplay(args: {
           }
 
           if (isFieldChrome(grand)) continue;
+
+          // A collected display string cannot carry a per-glyph font switch, so only a
+          // `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
+          if (isSymbolRunChild(grand)) {
+            if (skipCachedNestedResult) continue;
+            const glyph = symbolGlyphOf(grand);
+            if (!glyph?.unicode) continue;
+            if (style.hidden || !revisionsVisible(local, displayMode)) continue;
+            text += glyph.text;
+            continue;
+          }
 
           const value = modelTextOfRunChild(grand);
           if (value.length === 0) continue;

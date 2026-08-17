@@ -1,0 +1,111 @@
+// `w:sym` (§17.3.3.30) glyph resolution for layout.
+//
+// The canonical tree keeps `w:sym` generic, and the store's offset authority gives a generic
+// run child ZERO model width — so a resolved symbol is a rendering-only projection: one glyph
+// standing at an insertion point, never a model character. Word stores a symbol font's byte
+// as 0xF000 + byte (the same encoding `symbol-encoding.ts` handles for list bullets); it also
+// accepts the bare byte. Both attributes are attacker-controlled, so parsing fails closed to
+// "no glyph": strict bounded hex, no surrogates, no noncharacters, capped family length.
+
+import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
+import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
+import { isSymbolEncodedFamily, mapSymbolPuaText } from './symbol-encoding.ts';
+
+/** PUA page Word adds to a symbol font's byte value (mirrors `symbol-encoding.ts`). */
+const SYMBOL_PUA_BASE = 0xf000;
+const SYMBOL_PUA_END = 0xf0ff;
+
+/** `resolveRunStyle` ignores longer family names; match its cap so the override can land. */
+const MAX_SYMBOL_FONT_LENGTH = 128;
+
+/** One resolved `w:sym` glyph. */
+export interface SymbolGlyph {
+  /** Exactly one code point. */
+  readonly text: string;
+  /** `@w:font` when present and sane; null keeps the run's own font. */
+  readonly font: string | null;
+  /**
+   * True when {@link text} is a real Unicode character rather than a symbol-font PUA
+   * codepoint — the only kind a plain collected string (which cannot carry a font switch)
+   * may absorb.
+   */
+  readonly unicode: boolean;
+}
+
+/** Typed check for a generic `w:sym` run child. */
+export function isSymbolRunChild(node: OoxmlNode): boolean {
+  return (
+    node.kind === 'generic' && node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'sym'
+  );
+}
+
+function wmlAttribute(node: OoxmlNode, localName: string): string | undefined {
+  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
+  for (const entry of node.attributes) {
+    if (entry.localName !== localName) continue;
+    // Unprefixed attributes on WML elements are common in authored packages.
+    if (entry.namespaceUri === WML_NAMESPACE_URI || entry.namespaceUri === '') return entry.value;
+  }
+  return undefined;
+}
+
+/** ST_ShortHexNumber, parsed strictly: 1–4 hex digits, anything else is no glyph. */
+function parseSymbolChar(value: string | undefined): number | null {
+  if (!value || value.length > 4 || !/^[0-9A-Fa-f]{1,4}$/.test(value)) return null;
+  return Number.parseInt(value, 16);
+}
+
+/** A codepoint no glyph should ever be: lone surrogates and BMP noncharacters. */
+function isRenderableCodePoint(code: number): boolean {
+  if (code < 0x20) return false;
+  if (code >= 0xd800 && code <= 0xdfff) return false;
+  if (code === 0xfffe || code === 0xffff) return false;
+  return true;
+}
+
+/**
+ * Resolve a `w:sym` node to the single glyph it should paint, or null for no glyph.
+ *
+ * Symbol-encoded fonts (Symbol, Wingdings, …) resolve through `mapSymbolPuaText` so a
+ * Word-authored checkbox or bullet gets its real Unicode equivalent; an unmapped code keeps
+ * the PUA character with the symbol font, which the shaper may still resolve. A bare byte
+ * (`@w:char="46"`) on a symbol font is normalized to the 0xF000 page first, because Word
+ * accepts both encodings.
+ */
+export function symbolGlyphOf(node: OoxmlNode): SymbolGlyph | null {
+  if (!isSymbolRunChild(node)) return null;
+  const code = parseSymbolChar(wmlAttribute(node, 'char'));
+  if (code === null) return null;
+  const rawFont = wmlAttribute(node, 'font');
+  const font = rawFont && rawFont.length <= MAX_SYMBOL_FONT_LENGTH ? rawFont : null;
+
+  const symbolEncoded = isSymbolEncodedFamily(font);
+  const effective =
+    symbolEncoded && code <= 0xff && code + SYMBOL_PUA_BASE <= SYMBOL_PUA_END
+      ? code + SYMBOL_PUA_BASE
+      : code;
+  if (symbolEncoded && effective >= SYMBOL_PUA_BASE && effective <= SYMBOL_PUA_END) {
+    const mapped = mapSymbolPuaText(String.fromCodePoint(effective), font);
+    const unicode = mapped.codePointAt(0)! < SYMBOL_PUA_BASE;
+    return { text: mapped, font, unicode };
+  }
+  if (!isRenderableCodePoint(code)) return null;
+  return { text: String.fromCodePoint(code), font, unicode: code < 0xe000 || code > 0xf8ff };
+}
+
+/**
+ * The glyph's resolved style: the run's own properties with `rFonts` overridden to
+ * `@w:font`. No font keeps the run font unchanged.
+ */
+export function symbolRunStyle(
+  runProps: readonly OoxmlProperty[],
+  glyph: SymbolGlyph,
+  themeFonts?: ThemeFonts
+): { readonly props: readonly OoxmlProperty[]; readonly style: ResolvedRunStyle } {
+  if (!glyph.font) return { props: runProps, style: resolveRunStyle(runProps, themeFonts) };
+  const props: readonly OoxmlProperty[] = [
+    ...runProps,
+    { localName: 'rFonts', attributes: { ascii: glyph.font, hAnsi: glyph.font } },
+  ];
+  return { props, style: resolveRunStyle(props, themeFonts) };
+}

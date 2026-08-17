@@ -21,7 +21,6 @@
 import {
   fldSimpleInstr,
   hardBreakKind,
-  hardBreakText,
   hasLegacyFormFieldData,
   isFldSimple,
   type OoxmlNode,
@@ -65,12 +64,19 @@ import {
 } from './field-page-furniture.ts';
 import { collectSimpleFieldDisplay } from './field-simple-result.ts';
 import {
+  modelTextOfRunChild,
+  runPropertiesOf,
+  type RunPropertyCascader,
+} from './field-run-text.ts';
+import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
+import {
   appendModelRange,
   positionalTabOf,
   type FieldAtomMarker,
   type FieldAwarePiece,
   type ModelRange,
   type MutableModelRange,
+  type PendingFieldProjection,
   type PositionalTab,
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
@@ -144,11 +150,9 @@ export {
   type PositionalTab,
 };
 
-/** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
-export type RunPropertyCascader = (
-  inherited: readonly OoxmlProperty[],
-  direct: readonly OoxmlProperty[]
-) => readonly OoxmlProperty[];
+// Shared run-child text/property vocabulary — kept re-exported so paragraph-flow and
+// numbering-index keep their import site.
+export { propertiesOfRunContainer, type RunPropertyCascader } from './field-run-text.ts';
 
 /**
  * How layout turns a typed `w:hyperlink` node into the sanitized record spans carry.
@@ -159,110 +163,6 @@ export type RunPropertyCascader = (
  * the right degradation: text is never lost for want of a target.
  */
 export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
-
-function runPropertiesOf(
-  run: OoxmlNode,
-  inherited: readonly OoxmlProperty[],
-  cascadeRuns?: RunPropertyCascader
-): OoxmlProperty[] {
-  const direct = propertiesOfRunContainer(
-    run.kind === 'run' ? run.children.find((grand) => grand.kind === 'runProperties') : undefined
-  );
-  if (cascadeRuns) return [...cascadeRuns(inherited, direct)];
-  return inherited.length === 0 ? direct : [...inherited, ...direct];
-}
-
-export function propertiesOfRunContainer(container: OoxmlNode | undefined): OoxmlProperty[] {
-  if (!container || container.kind === 'textValue') return [];
-  const props: OoxmlProperty[] = [];
-  for (const child of container.children) {
-    if (child.kind === 'textValue') continue;
-    const attributes: Record<string, string> = {};
-    for (const entry of child.attributes) attributes[entry.localName] = entry.value;
-    props.push(
-      Object.keys(attributes).length > 0
-        ? { localName: child.localName, attributes }
-        : { localName: child.localName }
-    );
-  }
-  return props;
-}
-
-/** Model text contributed by one typed run child (same vocabulary as `paragraphTextOf`). */
-function modelTextOfRunChild(grand: OoxmlNode): string {
-  // `w:delText` holds real characters at a real position, so it counts in the model offset
-  // space exactly like `w:t`. Whether it is LAID OUT is a separate question, answered by the
-  // enclosing revision and the display mode.
-  if (grand.kind === 'text' || grand.kind === 'deletedText') {
-    let text = '';
-    for (const value of grand.children) if (value.kind === 'textValue') text += value.value;
-    return text;
-  }
-  if (grand.kind === 'tab') return '\t';
-  if (grand.kind === 'hardBreak') return hardBreakText(grand);
-  return '';
-}
-
-/**
- * Pending live or inert-cache projection for one atomic field unit.
- *
- * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text
- * is not independently addressable — it only donates display text and result-run style.
- * Missing `end` demotes: buffered cache is flushed as ordinary pieces with real lengths.
- */
-interface PendingFieldProjection {
-  /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
-  kind: AllowlistedPageField | null;
-  /** True when this pending field is a well-formed atomic unit (begin will close). */
-  atomic: boolean;
-  /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */
-  editableResult: boolean;
-  atomStart: number;
-  props: readonly OoxmlProperty[];
-  style: ResolvedRunStyle;
-  capturedResultStyle: boolean;
-  /** Cached result text (for inert display or demotion flush). */
-  cachedText: string;
-  /** Demotion-only: ordinary pieces when the field fails to close. */
-  buffered: FieldAwarePiece[];
-  /** Demotion-only running offset mirror while buffering ordinary pieces. */
-  bufferOffset: number;
-  /**
-   * The revision wrappers this field's displayed text sits inside, captured while the walk was
-   * still INSIDE them.
-   *
-   * An ATOMIC field's result is buffered at the run that carries it and flushed at `fldChar
-   * end`, by which point the depth-first walk has left the wrapper and restored the live stack
-   * to empty. Reading the live stack at flush time therefore attributed a tracked field result
-   * to nothing at all, and it painted as ordinary unchanged text — a deletion with no strike,
-   * an insertion with no underline.
-   *
-   * Both shapes reach here: a `w:del` around only the RESULT run with `begin`/`end` outside it
-   * (how Word records a form field whose value was replaced), and a wrapper around the whole
-   * `begin`…`end` sequence. The second used to demote instead — `atomicFieldSpansOf` did not
-   * descend into revision wrappers — until that walk was widened so the store and layout would
-   * stop disagreeing about what such a field is worth. Anything reasoning about "a wrapped field
-   * never forms an atom" is out of date; `commitAtomicField` now has to resolve visibility
-   * itself, because it can be reached with a stack that the display mode resolves away.
-   *
-   * A field whose result runs carry DIFFERENT stacks collapses to the first: the atom is one
-   * model unit and Word treats a field as one decision, so splitting it would invent a boundary
-   * the model does not have.
-   */
-  resultRevisions: readonly RevisionAttribution[];
-  /** Whether {@link resultRevisions} has been donated yet — an EMPTY stack is a real answer. */
-  capturedResultRevisions: boolean;
-  /** `w:ffData` on the begin marker — a legacy form field, which Word shades on its own rule. */
-  formField: boolean;
-  /**
-   * The link enclosing the displayed result, captured at `begin` for the same reason.
-   *
-   * Reachable where the revision capture is not: `atomicFieldSpansOf` DOES descend into
-   * `w:hyperlink`, so a field inside a link is still an atom, and without this its result was
-   * the one run in the link painting with no href.
-   */
-  resultLink?: SpanLinkRecord;
-}
 
 /**
  * Flatten a paragraph into measurable pieces, projecting allowlisted page fields when a
@@ -564,6 +464,16 @@ export function piecesOfParagraph(
         push('\t', props, style, false, offset, offset, { positionalTab: positional });
       return;
     }
+    // A `w:sym` is generic in the canonical tree, so the store gives it NO model width. The
+    // glyph is therefore a projected piece at a zero-width range — paint emits it as
+    // furniture (no `data-start`) and every surrounding offset stays where the store put it.
+    if (isSymbolRunChild(grand)) {
+      const glyph = symbolGlyphOf(grand);
+      if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode)) return;
+      const sym = symbolRunStyle(props, glyph, themeFonts);
+      push(glyph.text, sym.props, sym.style, true, offset, offset);
+      return;
+    }
     const text = modelTextOfRunChild(grand);
     if (text.length === 0) return;
     // A revision the display mode resolves away is suppressed the same way `w:vanish` is, and
@@ -681,6 +591,15 @@ export function piecesOfParagraph(
       }
 
       if (pending && isInsideFieldResult(field)) {
+        // A cached result is one plain string and cannot carry a per-glyph font switch, so
+        // only a `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
+        if (isSymbolRunChild(grand)) {
+          if (pending.atomic && !style.hidden && revisionsVisible(revisions, displayMode)) {
+            const glyph = symbolGlyphOf(grand);
+            if (glyph?.unicode) pending.cachedText += glyph.text;
+          }
+          continue;
+        }
         const text = modelTextOfRunChild(grand);
         if (text.length === 0) continue;
 

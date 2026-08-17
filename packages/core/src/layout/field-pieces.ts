@@ -11,6 +11,7 @@
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
+import type { AllowlistedPageField } from './field-instruction.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
@@ -153,4 +154,68 @@ export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
       ? { leader: leader as NonNullable<PositionalTab['leader']> }
       : {}),
   };
+}
+
+/**
+ * Pending live or inert-cache projection for one atomic field unit.
+ *
+ * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text
+ * is not independently addressable — it only donates display text and result-run style.
+ * Missing `end` demotes: buffered cache is flushed as ordinary pieces with real lengths.
+ *
+ * The state only; the machinery that fills and flushes it stays closure-bound inside
+ * `piecesOfParagraph`.
+ */
+export interface PendingFieldProjection {
+  /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
+  kind: AllowlistedPageField | null;
+  /** True when this pending field is a well-formed atomic unit (begin will close). */
+  atomic: boolean;
+  /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */
+  editableResult: boolean;
+  atomStart: number;
+  props: readonly OoxmlProperty[];
+  style: ResolvedRunStyle;
+  capturedResultStyle: boolean;
+  /** Cached result text (for inert display or demotion flush). */
+  cachedText: string;
+  /** Demotion-only: ordinary pieces when the field fails to close. */
+  buffered: FieldAwarePiece[];
+  /** Demotion-only running offset mirror while buffering ordinary pieces. */
+  bufferOffset: number;
+  /**
+   * The revision wrappers this field's displayed text sits inside, captured while the walk was
+   * still INSIDE them.
+   *
+   * An ATOMIC field's result is buffered at the run that carries it and flushed at `fldChar
+   * end`, by which point the depth-first walk has left the wrapper and restored the live stack
+   * to empty. Reading the live stack at flush time therefore attributed a tracked field result
+   * to nothing at all, and it painted as ordinary unchanged text — a deletion with no strike,
+   * an insertion with no underline.
+   *
+   * Both shapes reach here: a `w:del` around only the RESULT run with `begin`/`end` outside it
+   * (how Word records a form field whose value was replaced), and a wrapper around the whole
+   * `begin`…`end` sequence. The second used to demote instead — `atomicFieldSpansOf` did not
+   * descend into revision wrappers — until that walk was widened so the store and layout would
+   * stop disagreeing about what such a field is worth. Anything reasoning about "a wrapped field
+   * never forms an atom" is out of date; `commitAtomicField` now has to resolve visibility
+   * itself, because it can be reached with a stack that the display mode resolves away.
+   *
+   * A field whose result runs carry DIFFERENT stacks collapses to the first: the atom is one
+   * model unit and Word treats a field as one decision, so splitting it would invent a boundary
+   * the model does not have.
+   */
+  resultRevisions: readonly RevisionAttribution[];
+  /** Whether {@link resultRevisions} has been donated yet — an EMPTY stack is a real answer. */
+  capturedResultRevisions: boolean;
+  /** `w:ffData` on the begin marker — a legacy form field, which Word shades on its own rule. */
+  formField: boolean;
+  /**
+   * The link enclosing the displayed result, captured at `begin` for the same reason.
+   *
+   * Reachable where the revision capture is not: `atomicFieldSpansOf` DOES descend into
+   * `w:hyperlink`, so a field inside a link is still an atom, and without this its result was
+   * the one run in the link painting with no href.
+   */
+  resultLink?: SpanLinkRecord;
 }
