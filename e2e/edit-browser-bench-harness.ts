@@ -4,11 +4,21 @@ import { fileURLToPath } from 'node:url';
 
 const PORT = 5275;
 const FIXTURE = 'synthetic-long-edit.docx';
+/**
+ * The tough companion fixture: ~170+ pages of NUMBERED clauses with ~310 dense tracked
+ * replacements — the paths (list cascade, tracked-run structure, review cards) the plain
+ * fixture never exercises.
+ */
+export const EDIT_BROWSER_TRACKED_FIXTURE = 'synthetic-tracked-numbered.docx';
 export const REVIEW_RAIL_ENABLED = process.env.EDIT_BROWSER_BENCH_REVIEW_RAIL !== '0';
 
-export const EDIT_BROWSER_BENCH_URL = `http://localhost:${PORT}/?perfE2e=1&fixture=${FIXTURE}&reviewRail=${
-  REVIEW_RAIL_ENABLED ? '1' : '0'
-}`;
+export function editBrowserBenchUrl(fixture: string = FIXTURE): string {
+  return `http://localhost:${PORT}/?perfE2e=1&fixture=${fixture}&reviewRail=${
+    REVIEW_RAIL_ENABLED ? '1' : '0'
+  }`;
+}
+
+export const EDIT_BROWSER_BENCH_URL = editBrowserBenchUrl();
 
 export interface EnginePerf {
   readonly layoutMs: number;
@@ -104,9 +114,10 @@ export async function delay(ms: number): Promise<void> {
 export async function loadHarness(
   page: Page,
   installMeasurementProbe: (page: Page) => Promise<void>,
-  measurementProbe = true
+  measurementProbe = true,
+  fixture: string = FIXTURE
 ): Promise<void> {
-  await page.goto(EDIT_BROWSER_BENCH_URL, { waitUntil: 'domcontentloaded' });
+  await page.goto(editBrowserBenchUrl(fixture), { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!window.__DOCX_EDITOR_E2E__?.ready());
   await page.waitForFunction(() => window.__DOCX_EDITOR_E2E__?.fontMeasurer() === 'shaped');
   await page.waitForSelector('.docx-page[data-materialized="true"]', { timeout: 60_000 });

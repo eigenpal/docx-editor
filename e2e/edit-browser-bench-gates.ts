@@ -4,12 +4,34 @@ import { type ScenarioReport, type SustainedReport } from './edit-browser-bench-
 import { type BurstReport } from './edit-browser-burst.js';
 
 /** Matches headless `bench:edit` steady-middle-text on the synthetic fixture. */
-const EXPECTED_LAYOUT_WORK = {
+export const EXPECTED_LAYOUT_WORK = {
   placed: 13,
   total: 3200,
   reusedPages: 154,
   fullPasses: 1,
 } as const;
+
+export interface ExpectedLayoutWork {
+  readonly placed: number;
+  readonly total: number;
+  readonly reusedPages: number;
+  readonly fullPasses: number;
+}
+
+/**
+ * Pinned per scenario for the tracked + numbered fixture
+ * (synthetic-tracked-numbered.docx): its page geometry and edit shapes differ
+ * from the plain fixture's, and a wrap insert places more paragraphs than a
+ * single character.
+ */
+export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
+  'tracked-editing-character': { placed: 3, total: 620, reusedPages: 145, fullPasses: 1 },
+  'tracked-suggesting-character': { placed: 3, total: 620, reusedPages: 145, fullPasses: 1 },
+  // A 100-character tracked insert reflows roughly half the numbered clauses —
+  // the going rate for a wrap in a dense review document, and exactly the load
+  // this fixture exists to keep honest.
+  'tracked-suggesting-wrap': { placed: 311, total: 620, reusedPages: 72, fullPasses: 1 },
+};
 
 /** p95 may spike on loaded CI; 3× median plus 50 ms catches sustained regressions without pinning wall clock. */
 const TIMING_P95_FACTOR = 3;
@@ -62,8 +84,11 @@ function assertTimingTail(summary: TimingSummary, label: string): void {
   );
 }
 
-export function assertScenarioLatencyGates(report: ScenarioReport): void {
-  expect(report.work).toMatchObject(EXPECTED_LAYOUT_WORK);
+export function assertScenarioLatencyGates(
+  report: ScenarioReport,
+  expectedWork: ExpectedLayoutWork = EXPECTED_LAYOUT_WORK
+): void {
+  expect(report.work).toMatchObject(expectedWork);
   expect(report.work.staleDiscards).toBeGreaterThanOrEqual(0);
   expect(report.work.cancelledRuns).toBeGreaterThanOrEqual(0);
   expect(report.dom.materializedPages).toBeLessThanOrEqual(8);

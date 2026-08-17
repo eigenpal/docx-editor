@@ -7,9 +7,11 @@ import {
   assertCrossScenarioLatencyGates,
   assertScenarioLatencyGates,
   assertSustainedLatencyGates,
+  TRACKED_EXPECTED_LAYOUT_WORK,
 } from './edit-browser-bench-gates.js';
 import {
   EDIT_BROWSER_FIXTURE,
+  EDIT_BROWSER_TRACKED_FIXTURE,
   REPO_ROOT,
   REVIEW_RAIL_ENABLED,
   loadHarness,
@@ -89,6 +91,9 @@ test('browser editing latency is measurable and structurally stable', async ({
   browserName,
 }) => {
   test.skip(browserName !== 'chromium', 'Event Timing and benchmark baselines use Chromium');
+  // Two fixtures now run in one test (plain + tracked/numbered); the default
+  // 180 s budget was sized for one.
+  test.setTimeout(360_000);
   const runtimeErrors = collectRuntimeErrors(page);
   await loadHarness(page, (benchPage) => installMeasurementProbe(benchPage, INJECTED_DELAY_MS));
 
@@ -100,7 +105,11 @@ test('browser editing latency is measurable and structurally stable', async ({
   ];
   const reports: ScenarioReport[] = [];
 
-  for (const scenario of scenarios) {
+  async function measureScenario(scenario: {
+    name: string;
+    mode: 'edit' | 'suggest';
+    text: string;
+  }): Promise<ScenarioReport> {
     const samples = [];
     const selfTestBaselineSamples = [];
     for (let round = 0; round < WARMUP + RUNS; round += 1) {
@@ -144,7 +153,7 @@ test('browser editing latency is measurable and structurally stable', async ({
             )
           ).medianMs
         : null;
-    reports.push({
+    return {
       name: scenario.name,
       mode: scenario.mode,
       textLength: scenario.text.length,
@@ -171,11 +180,40 @@ test('browser editing latency is measurable and structurally stable', async ({
       ...(baselineInputTask && observedMedianDeltaMs !== null
         ? { selfTest: { baselineInputTask, observedMedianDeltaMs } }
         : {}),
-    });
+    };
   }
+
+  for (const scenario of scenarios) reports.push(await measureScenario(scenario));
 
   for (const report of reports) assertScenarioLatencyGates(report);
   assertCrossScenarioLatencyGates(reports);
+
+  // ---- The tough companion pass: the same measurement over the tracked +
+  // numbered fixture (~170+ pages of numbered clauses, ~310 dense tracked
+  // replacements, review rail loaded). The plain fixture exercises pagination
+  // breadth; this one exercises the paths that dominate real review documents —
+  // list cascade, tracked-run structure, revision cards. Scenario names are
+  // distinct so both sets share one report; work counters are pinned to this
+  // fixture's own values. Skipped in the injected-delay self-test, which
+  // validates the measurement itself, not the document.
+  if (INJECTED_DELAY_MS === 0) {
+    await loadHarness(
+      page,
+      (benchPage) => installMeasurementProbe(benchPage, 0),
+      true,
+      EDIT_BROWSER_TRACKED_FIXTURE
+    );
+    const trackedScenarios = [
+      { name: 'tracked-editing-character', mode: 'edit' as const, text: 'X' },
+      { name: 'tracked-suggesting-character', mode: 'suggest' as const, text: 'X' },
+      { name: 'tracked-suggesting-wrap', mode: 'suggest' as const, text: 'word '.repeat(20) },
+    ];
+    for (const scenario of trackedScenarios) {
+      const report = await measureScenario(scenario);
+      reports.push(report);
+      assertScenarioLatencyGates(report, TRACKED_EXPECTED_LAYOUT_WORK[scenario.name]!);
+    }
+  }
 
   const sustained =
     INJECTED_DELAY_MS > 0

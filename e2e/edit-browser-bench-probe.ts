@@ -166,7 +166,9 @@ export async function runEdit(
     sampleCount
   );
   const sample = await page.evaluate(() => window.__EDIT_BROWSER_BENCH__!.samples.at(-1)!);
-  expect(sample.engine.total).toBeGreaterThan(3_000);
+  // Both benchmark fixtures are long documents; the plain one holds 3,200
+  // paragraphs and the tracked/numbered one 620 much larger clauses.
+  expect(sample.engine.total).toBeGreaterThan(600);
   expect(sample.materializedPages).toBeLessThanOrEqual(8);
   expect(await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.undoBenchmarkEdit())).toBe(true);
   await twoFrames(page);
