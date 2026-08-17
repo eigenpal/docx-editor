@@ -2,15 +2,18 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { execSync } from 'node:child_process';
 import {
   assertBurstLatencyGates,
   assertCrossScenarioLatencyGates,
   assertScenarioLatencyGates,
   assertSustainedLatencyGates,
+  HUGE_EXPECTED_LAYOUT_WORK,
   TRACKED_EXPECTED_LAYOUT_WORK,
 } from './edit-browser-bench-gates.js';
 import {
   EDIT_BROWSER_FIXTURE,
+  EDIT_BROWSER_HUGE_FIXTURE,
   EDIT_BROWSER_TRACKED_FIXTURE,
   REPO_ROOT,
   REVIEW_RAIL_ENABLED,
@@ -91,9 +94,9 @@ test('browser editing latency is measurable and structurally stable', async ({
   browserName,
 }) => {
   test.skip(browserName !== 'chromium', 'Event Timing and benchmark baselines use Chromium');
-  // Two fixtures now run in one test (plain + tracked/numbered); the default
-  // 180 s budget was sized for one.
-  test.setTimeout(360_000);
+  // Three fixtures now run in one test (plain + tracked/numbered + the
+  // ~1,000-page stress document); the default 180 s budget was sized for one.
+  test.setTimeout(480_000);
   const runtimeErrors = collectRuntimeErrors(page);
   await loadHarness(page, (benchPage) => installMeasurementProbe(benchPage, INJECTED_DELAY_MS));
 
@@ -212,6 +215,29 @@ test('browser editing latency is measurable and structurally stable', async ({
       const report = await measureScenario(scenario);
       reports.push(report);
       assertScenarioLatencyGates(report, TRACKED_EXPECTED_LAYOUT_WORK[scenario.name]!);
+    }
+
+    // ---- The stress pass: ~1,000 pages, ~1,060 tracked changes. The fixture
+    // is deterministic but too large to commit, so it regenerates on demand.
+    // Suggest mode only — the review workload is what documents this size are.
+    execSync('bun scripts/create-synthetic-tracked-fixture.mjs --huge', {
+      cwd: REPO_ROOT,
+      stdio: 'inherit',
+    });
+    await loadHarness(
+      page,
+      (benchPage) => installMeasurementProbe(benchPage, 0),
+      true,
+      EDIT_BROWSER_HUGE_FIXTURE
+    );
+    const hugeScenarios = [
+      { name: 'huge-suggesting-character', mode: 'suggest' as const, text: 'X' },
+      { name: 'huge-suggesting-wrap', mode: 'suggest' as const, text: 'word '.repeat(20) },
+    ];
+    for (const scenario of hugeScenarios) {
+      const report = await measureScenario(scenario);
+      reports.push(report);
+      assertScenarioLatencyGates(report, HUGE_EXPECTED_LAYOUT_WORK[scenario.name]!);
     }
   }
 

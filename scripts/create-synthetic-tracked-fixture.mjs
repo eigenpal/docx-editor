@@ -8,9 +8,15 @@
  * clauses are long enough that ~620 of them paginate to roughly 200 pages. All text and
  * review metadata are synthetic.
  *
+ * `--huge` writes the stress variant instead: ~4,250 clauses (~1,000 browser
+ * pages) with a tracked replacement on every 4th clause (~1,060 tracked
+ * changes). It is deliberately NOT committed — the bytes are deterministic, so
+ * whoever needs it (the browser benchmark, a local session) regenerates it.
+ *
  * Usage:
  *   bun scripts/create-synthetic-tracked-fixture.mjs
  *   bun scripts/create-synthetic-tracked-fixture.mjs --check
+ *   bun scripts/create-synthetic-tracked-fixture.mjs --huge
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -18,9 +24,14 @@ import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const out = resolve(root, 'e2e/fixtures/synthetic-tracked-numbered.docx');
+const huge = process.argv.includes('--huge');
+const out = resolve(
+  root,
+  huge ? 'e2e/fixtures/synthetic-huge-tracked.docx' : 'e2e/fixtures/synthetic-tracked-numbered.docx'
+);
 const fixedDate = new Date(Date.UTC(2020, 0, 1));
-const clauseCount = 620;
+const clauseCount = huge ? 4_250 : 620;
+const trackedEvery = huge ? 4 : 2;
 const headingEvery = 15;
 
 const words = [
@@ -128,7 +139,7 @@ function clause(index) {
   }
   const lead = `The Supplier shall ensure that ${sentence(index, 52, 0)} `;
   const tail = ` measured monthly during supported hours, excluding planned maintenance for ${sentence(index, 64, 7)}, reported in accordance with paragraph ${((index * 3) % 40) + 1} of this Schedule.`;
-  const tracked = index % 2 === 0;
+  const tracked = index % trackedEvery === 0;
   const middle = tracked
     ? `<w:del w:id="${index * 2}" w:author="${authors[index % authors.length]}" w:date="2020-01-01T00:00:00Z"><w:r><w:delText xml:space="preserve">shall not exceed ${(index % 6) + 1} in any calendar month</w:delText></w:r></w:del>` +
       `<w:ins w:id="${index * 2 + 1}" w:author="${authors[index % authors.length]}" w:date="2020-01-01T00:00:00Z"><w:r><w:t xml:space="preserve">shall not exceed ${(index % 4) + 1} in any calendar month</w:t></w:r></w:ins>`

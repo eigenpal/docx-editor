@@ -33,6 +33,12 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
   'tracked-suggesting-wrap': { placed: 311, total: 620, reusedPages: 72, fullPasses: 1 },
 };
 
+/** Pinned for the ~1,000-page stress fixture (synthetic-huge-tracked.docx). */
+export const HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
+  'huge-suggesting-character': { placed: 2, total: 4250, reusedPages: 995, fullPasses: 1 },
+  'huge-suggesting-wrap': { placed: 6, total: 4250, reusedPages: 994, fullPasses: 1 },
+};
+
 /** p95 may spike on loaded CI; 3× median plus 50 ms catches sustained regressions without pinning wall clock. */
 const TIMING_P95_FACTOR = 3;
 const TIMING_P95_FLOOR_MS = 50;

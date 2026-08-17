@@ -10,6 +10,11 @@ const FIXTURE = 'synthetic-long-edit.docx';
  * fixture never exercises.
  */
 export const EDIT_BROWSER_TRACKED_FIXTURE = 'synthetic-tracked-numbered.docx';
+/**
+ * The stress fixture: ~1,000 pages, ~1,060 tracked changes. Deterministic but
+ * uncommitted — regenerate with `bun scripts/create-synthetic-tracked-fixture.mjs --huge`.
+ */
+export const EDIT_BROWSER_HUGE_FIXTURE = 'synthetic-huge-tracked.docx';
 export const REVIEW_RAIL_ENABLED = process.env.EDIT_BROWSER_BENCH_REVIEW_RAIL !== '0';
 
 export function editBrowserBenchUrl(fixture: string = FIXTURE): string {
