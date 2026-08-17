@@ -1,0 +1,16 @@
+{
+  "$comment": [
+    "Accepted advisories for scripts/check-shipped-advisories.mjs.",
+    "",
+    "Add an entry only when the advisory is genuinely unreachable from how we use",
+    "the package, or when no patched version exists yet. Write the reason for a",
+    "reader who does not already know the code.",
+    "",
+    "`expires` is required and the gate fails once the date passes. That is the",
+    "point: an accepted risk gets re-reviewed, never silently inherited. Use a",
+    "short window (a release cycle or two), not a year.",
+    "",
+    "Shape: { id, package, reason, expires } with expires as YYYY-MM-DD."
+  ],
+  "ignore": []
+}

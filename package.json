@@ -49,6 +49,7 @@
     "check:license-headers": "bun run check:pro-license-headers && bun run check:editor-api-license-headers",
     "check:parity-contract": "node scripts/check-parity-contract.mjs",
     "check:public-docs-surface": "node scripts/check-public-docs-surface.mjs",
+    "check:shipped-advisories": "node scripts/check-shipped-advisories.mjs",
     "demo-doc:build": "bun scripts/demo-doc/build.ts",
     "dev": "bun run --filter './examples/vite' --filter './examples/vue' dev",
     "dev:agent": "cd examples/agent && npm run dev",

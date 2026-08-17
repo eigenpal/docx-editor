@@ -60,6 +60,13 @@ jobs:
             echo "bun.lock already in sync — nothing to commit"
           fi
 
+      # Runs first, and against the refreshed lockfile above. ci.yml skips
+      # Dependabot, so this is the only place a dependency bump is checked for
+      # advisories in what we publish. A bump that pulls a vulnerable transitive
+      # package fails here rather than at the next release.
+      - name: Shipped dependency advisories
+        run: bun run check:shipped-advisories
+
       - name: Lint
         run: bun run lint
 

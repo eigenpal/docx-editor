@@ -79,6 +79,29 @@ jobs:
       - name: CLA logic tests
         run: bash .github/cla/cla.test.sh
 
+  # Advisories in the dependency closure we publish. Deliberately NOT `bun audit`:
+  # that reads the whole workspace lock, so devDependencies and the demo apps in
+  # examples/ would fail the build for CVEs no consumer can reach. See the header
+  # of scripts/check-shipped-advisories.mjs.
+  #
+  # No `bun install` step on purpose. The script reads bun.lock and the package
+  # manifests, so a checkout is the whole setup and the job finishes in seconds.
+  # It is independent of lint/test, so `build` does not wait on it.
+  shipped-advisories:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Shipped dependency advisories
+        run: bun run check:shipped-advisories
+
   build:
     if: github.actor != 'dependabot[bot]'
     runs-on: blacksmith-4vcpu-ubuntu-2404
