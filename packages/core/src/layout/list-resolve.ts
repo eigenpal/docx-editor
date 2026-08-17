@@ -130,12 +130,35 @@ function numIdForStyle(styleCascade: StyleCascadeTable, styleId: string): string
  * Without a style table there is nothing to follow, so the index is returned unchanged —
  * and so it is when nothing delegates, which keeps layout cache identity.
  */
+/**
+ * Single-entry memo keyed on raw input identity. Beyond skipping the re-resolve, this is
+ * what keeps LEVEL OBJECTS identity-stable across edits: the per-paragraph caches below
+ * key derived indent/marker work on the level object, and a fresh linked index per call
+ * would orphan every entry on every keystroke.
+ */
+let linkedIndexMemo: {
+  readonly index: NumberingIndex;
+  readonly styleCascade: StyleCascadeTable;
+  readonly linked: NumberingIndex;
+} | null = null;
+
 export function withNumberingStyleLinks(
   index: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined
 ): NumberingIndex {
   if (!styleCascade) return index;
-  return resolveNumberingStyleLinks(index, (styleId) => numIdForStyle(styleCascade, styleId));
+  if (
+    linkedIndexMemo &&
+    linkedIndexMemo.index === index &&
+    linkedIndexMemo.styleCascade === styleCascade
+  ) {
+    return linkedIndexMemo.linked;
+  }
+  const linked = resolveNumberingStyleLinks(index, (styleId) =>
+    numIdForStyle(styleCascade, styleId)
+  );
+  linkedIndexMemo = { index, styleCascade, linked };
+  return linked;
 }
 
 /** Bound a file-derived indent both ways — negative is legal, unbounded is not. */
@@ -274,6 +297,48 @@ export function walkStoryParagraphs(
  * Non-list paragraphs are absent from the map. Hostile / missing numbering resolves inertly
  * (paragraph omitted — laid out as ordinary text).
  */
+/**
+ * Per-paragraph prelude for the story walk below, memoized on the paragraph NODE: which
+ * `numPr` a paragraph resolves to — and the cascaded property tiers feeding its indent and
+ * marker face — are pure functions of the immutable paragraph and the cascade table. An
+ * edit republishes only the touched paragraphs, yet the resolver walks the WHOLE story per
+ * keystroke; without this cache every unchanged paragraph re-ran the full style cascade
+ * just to learn (usually) that it has no numbering. Only the counter advance is genuinely
+ * sequential. `perLevel` holds level-derived indent/marker work, keyed on the level object
+ * (identity-stable via the `withNumberingStyleLinks` memo).
+ */
+interface ParagraphListPrelude {
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
+  readonly inheritedParagraphProperties: readonly OoxmlProperty[];
+  readonly directProps: readonly OoxmlProperty[];
+  readonly inheritedMarkProps: readonly OoxmlProperty[];
+  readonly perLevel: Map<object, { indent: NumberingLevelIndent; markerStyle: ResolvedRunStyle }>;
+}
+const paragraphListPreludes = new WeakMap<OoxmlElement, ParagraphListPrelude>();
+
+function paragraphListPrelude(
+  paragraph: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): ParagraphListPrelude {
+  const cached = paragraphListPreludes.get(paragraph);
+  if (cached && cached.styleCascade === styleCascade) return cached;
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
+  const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
+  const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
+  const prelude: ParagraphListPrelude = {
+    styleCascade,
+    numPr: readNumPr(nodes),
+    inheritedParagraphProperties: cascaded?.inheritedParagraphProperties ?? [],
+    directProps: propertiesOf(pPr),
+    inheritedMarkProps: cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun),
+    perLevel: new Map(),
+  };
+  paragraphListPreludes.set(paragraph, prelude);
+  return prelude;
+}
+
 export function resolveStoryListItems(
   blocks: readonly OoxmlElement[],
   index: NumberingIndex,
@@ -288,36 +353,34 @@ export function resolveStoryListItems(
   const linked = withNumberingStyleLinks(index, styleCascade);
   const counters = createListCounterState(linked);
   for (const paragraph of walkStoryParagraphs(blocks)) {
-    const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-    const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
-    const nodes: readonly OoxmlNode[] = cascaded
-      ? cascaded.paragraphPropertyNodes
-      : pPr
-        ? [pPr]
-        : [];
-    const numPr = readNumPr(nodes);
+    const prelude = paragraphListPrelude(paragraph, styleCascade);
+    const numPr = prelude.numPr;
     if (!numPr) continue;
 
     const advanced = counters.advance(numPr.numId, numPr.ilvl);
     if (!advanced) continue;
 
-    // Split, not flattened: the level's indent outranks the STYLE's and is outranked by the
-    // paragraph's OWN `w:pPr`, so the merge needs the two tiers apart.
-    const directProps = propertiesOf(pPr);
-    const indent = mergeListIndent(
-      advanced.level.indent,
-      cascaded?.inheritedParagraphProperties ?? [],
-      directProps
-    );
-    const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
-    const markOnly = propertiesOf(directMarkRun);
-    const inheritedMarkProps = cascaded ? cascaded.markRunProperties : markOnly;
-    const markerProps = cascadeRunProperties(
-      inheritedMarkProps,
-      advanced.level.runProperties,
-      styleCascade
-    );
-    const markerStyle = resolveRunStyle(markerProps, styleCascade?.themeFonts);
+    let levelDerived = prelude.perLevel.get(advanced.level);
+    if (!levelDerived) {
+      // Split, not flattened: the level's indent outranks the STYLE's and is outranked by
+      // the paragraph's OWN `w:pPr`, so the merge needs the two tiers apart.
+      const indent = mergeListIndent(
+        advanced.level.indent,
+        prelude.inheritedParagraphProperties,
+        prelude.directProps
+      );
+      const markerProps = cascadeRunProperties(
+        prelude.inheritedMarkProps,
+        advanced.level.runProperties,
+        styleCascade
+      );
+      levelDerived = {
+        indent,
+        markerStyle: resolveRunStyle(markerProps, styleCascade?.themeFonts),
+      };
+      prelude.perLevel.set(advanced.level, levelDerived);
+    }
+    const { indent, markerStyle } = levelDerived;
     // Word writes a Symbol/Wingdings bullet as font-byte + 0xF000 (`` = U+F0B7 in
     // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
     // where the marker's FAMILY is finally known — keeps measurement and paint on the same

@@ -54,9 +54,8 @@ function acceptStoryBlock(block: OoxmlElement, displayMode: RevisionDisplayMode)
  * reference; 16 slots cover one flush's parts (body + header/footer variants + notes).
  * Callers treat the result as read-only, so a shared array is safe to hand out.
  */
-const storyBlocksCache = createRecentRootCache<
-  Partial<Record<RevisionDisplayMode, OoxmlElement[]>>
->(16);
+const storyBlocksCache =
+  createRecentRootCache<Partial<Record<RevisionDisplayMode, OoxmlElement[]>>>(16);
 
 /**
  * The story's blocks — paragraphs and tables — in document order, flattening through

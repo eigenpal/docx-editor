@@ -5,7 +5,10 @@ import {
   type ImageResourceLookup,
 } from '@docx-editor.dev/core/store';
 import { zipSync, strToU8 } from 'fflate';
-import { createInlineDrawingLayoutBundle, drawingAtomIdentities } from '../inline-drawing-source.ts';
+import {
+  createInlineDrawingLayoutBundle,
+  drawingAtomIdentities,
+} from '../inline-drawing-source.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
