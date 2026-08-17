@@ -1195,6 +1195,7 @@ export function overlayFrameToSheetCssPixels(layout: SemanticLayout, frame: Over
 
 // @public
 export interface PaginatedSurface {
+    activateReview(key: string): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
     adjustIndent(direction: 'increase' | 'decrease'): boolean;

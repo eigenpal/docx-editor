@@ -731,6 +731,21 @@ export interface PaginatedSurface {
    */
   activeReviewKey(): string | null;
   /**
+   * Open THIS item, named by key, for as long as the selection activation installed is live.
+   *
+   * Called right after the `setSelection` that reveals the item. Without it the caret is the
+   * only evidence of which card is open, and a caret cannot name a card when two cards cover
+   * exactly the same characters: `w:ins` wrapping `w:del` — content one reviewer added and
+   * another struck — gives the insertion and the deletion one identical range, and every
+   * click on either card classified back to whichever the queue happened to list first. The
+   * reader clicked "Deleted" and watched "Added" light up.
+   *
+   * A key, not a position, because the position is precisely what is ambiguous. It holds only
+   * while the selection matches; a pointer or keyboard move hands the answer back to the
+   * caret, which is what lets the reader step out of a card by clicking away from it.
+   */
+  activateReview(key: string): void;
+  /**
    * Close the open item until the caret next moves.
    *
    * What a click on the canvas means. The caret does not move when someone clicks the grey

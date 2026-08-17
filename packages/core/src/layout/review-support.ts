@@ -376,40 +376,67 @@ function rangeWidth(range: ReviewRange, order: ReadonlyMap<string, number>): num
   return (end - start) * 1_000_000 + (range.end.offset - range.start.offset);
 }
 
-function rangeCovers(
+/**
+ * How firmly a range holds a position. A lower grip holds harder.
+ *
+ * Three grips rather than a boolean, because "covers" on its own cannot order two ranges that
+ * MEET at the caret. Both boundaries of a range count — a caret resting past a range's last
+ * character is visually still on that character, and requiring it to be strictly inside makes
+ * the last character feel dead. But a range that holds the caret properly inside it holds the
+ * same caret harder, and its characters are the ones the reader is looking at.
+ *
+ * Width alone got that backwards. Adjacent tracked edits meet end-to-start by construction, so
+ * a one-character insertion ending at offset 30 covered every click at 30 and WON on width
+ * against the six-character insertion that starts there. A document of neighbouring revisions
+ * therefore activated its earliest narrow card for clicks all over its later ones.
+ */
+const GRIP_INSIDE = 0;
+/** The caret sits at the far end: on the range's last character, not among them. */
+const GRIP_TOUCHING = 1;
+/** The range covers no characters, so it can never hold a caret inside it. */
+const GRIP_EMPTY = 2;
+
+function rangeGrip(
   range: ReviewRange,
   position: ReviewPosition,
   order: ReadonlyMap<string, number>
-): boolean {
+): number | null {
   const target = order.get(position.paragraphId);
   const start = order.get(range.start.paragraphId);
   const end = order.get(range.end.paragraphId);
-  if (target === undefined || start === undefined || end === undefined) return false;
-  if (target < start || target > end) return false;
-  // BOTH boundaries count. A caret resting at the end of a range is visually on that range's
-  // last character; requiring it to be strictly inside makes the last character feel dead.
-  if (target === start && position.offset < range.start.offset) return false;
-  if (target === end && position.offset > range.end.offset) return false;
-  return true;
+  if (target === undefined || start === undefined || end === undefined) return null;
+  if (target < start || target > end) return null;
+  if (target === start && position.offset < range.start.offset) return null;
+  if (target === end && position.offset > range.end.offset) return null;
+  // A format change, a paragraph mark, or a marker pair a producer wrote empty decorates no
+  // characters at all. It covers its own offset and nothing else.
+  if (start === end && range.start.offset === range.end.offset) return GRIP_EMPTY;
+  if (target === end && position.offset === range.end.offset) return GRIP_TOUCHING;
+  return GRIP_INSIDE;
 }
 
 /**
- * The narrowest range of this item that covers the position, or null.
+ * The grip and width of the range of this item that holds the position hardest, or null.
  *
  * EVERY range is asked, not just the first. Sites sharing a triple coalesce into one card, so a
  * revision that touches two paragraphs carries two ranges — checking only the first left the
- * caret in the second paragraph activating nothing.
+ * caret in the second paragraph activating nothing. A card can also both contain the caret in
+ * one range and merely touch it with another (a replacement's two halves meet at the caret),
+ * and the harder grip is the one that speaks for the card.
  */
-function coveringWidth(
+function coveringGrip(
   item: ReviewItem,
   position: ReviewPosition,
   order: ReadonlyMap<string, number>
-): number | null {
-  let best: number | null = null;
+): { readonly grip: number; readonly width: number } | null {
+  let best: { readonly grip: number; readonly width: number } | null = null;
   for (const range of reviewItemRanges(item)) {
-    if (!rangeCovers(range, position, order)) continue;
+    const grip = rangeGrip(range, position, order);
+    if (grip === null) continue;
     const width = rangeWidth(range, order);
-    if (best === null || width < best) best = width;
+    if (best === null || grip < best.grip || (grip === best.grip && width < best.width)) {
+      best = { grip, width };
+    }
   }
   return best;
 }
@@ -433,13 +460,17 @@ export function reviewItemsAt(
   position: ReviewPosition,
   order: ReadonlyMap<string, number>
 ): ReviewItem[] {
-  const covering: { item: ReviewItem; width: number }[] = [];
+  const covering: { item: ReviewItem; grip: number; width: number }[] = [];
   for (const item of items) {
-    const width = coveringWidth(item, position, order);
-    if (width !== null) covering.push({ item, width });
+    const held = coveringGrip(item, position, order);
+    if (held !== null) covering.push({ item, grip: held.grip, width: held.width });
   }
   return covering
     .sort((a, b) => {
+      // GRIP before width. A range that holds the caret inside it outranks one that merely
+      // ends there however narrow the toucher is, and a range covering no characters at all
+      // ranks last however narrow everything else is.
+      if (a.grip !== b.grip) return a.grip - b.grip;
       if (a.width !== b.width) return a.width - b.width;
       // At equal width a comment outranks everything (it is a question waiting on the
       // reader), and a custom node outranks a revision (it is the more specific thing

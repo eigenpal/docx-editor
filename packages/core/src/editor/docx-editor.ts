@@ -2296,6 +2296,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         const reveal = options?.reveal ?? 'centerIfNeeded';
         if (reveal !== false) surface.revealPosition?.(span.start, { block: reveal });
       }
+      // THIS card is now the open one, BY KEY, for as long as the selection the branches above
+      // installed stays live. The selection alone cannot say which card that is: two cards can
+      // cover exactly the same characters — `w:ins` around `w:del` is content one reviewer
+      // added and another struck — and the caret then classified back to whichever the queue
+      // listed first, so clicking either card opened the same one and the other was
+      // unreachable. After the branches, so a header, a note and the body all pin alike.
+      surface.activateReview(key);
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —
       // which is precisely this case whenever the card is reopened after being DISMISSED:
