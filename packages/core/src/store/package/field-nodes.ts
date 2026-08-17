@@ -1,9 +1,10 @@
 // Typed field vocabulary helpers (`w:fldChar`, `w:instrText`, `w:fldSimple`).
 //
 // Canonical nodes preserve schema order and authored attributes (`w:fldCharType`,
-// `w:dirty`, `w:fldLock`, `w:instr`). Legacy `CT_FldChar/w:ffData` (including
-// entryMacro/exitMacro) stays generic payload under `fldChar` — never walked for
-// evaluation, never auto-resolved, never executed.
+// `w:dirty`, `w:fldLock`, `w:instr`). Legacy `CT_FldChar/w:ffData` stays generic payload
+// under `fldChar`. Its render STATE (`w:checkBox` / `w:ddList`) is read through the bounded
+// {@link legacyFormFieldDataOf}; its macro references (entryMacro/exitMacro) are never read,
+// never auto-resolved, never executed.
 //
 // Well-formed computed fields (begin→end within one paragraph) and `fldSimple` each contribute
 // exactly one UTF-16 unit ({@link FIELD_ATOM_CHAR}) to paragraph addressing. A FORMTEXT field
@@ -165,13 +166,14 @@ export function isFieldChrome(node: OoxmlNode): boolean {
  * True when a `w:fldChar` carries `w:ffData` — a LEGACY FORM FIELD (§17.16.17).
  *
  * FORMTEXT, FORMCHECKBOX and FORMDROPDOWN are what a fillable Word form is made of, and Word
- * shades them on sight so a reader can find the blanks. That is the only reason to ask: it is a
- * presentation question, answered by the element's presence alone.
+ * shades them on sight so a reader can find the blanks. That is a presentation question,
+ * answered by the element's presence alone — this predicate never looks inside.
  *
- * Presence ONLY. `w:ffData` can carry entry and exit MACRO names, and the canonical tree keeps
- * its whole subtree generic and inert on purpose. Walking into it to read a name or a default
- * would be reading attacker-supplied script references for no gain — the shading does not
- * depend on what the form field says, only on it being one.
+ * Rendering STATE (a checkbox's checked bit, a dropdown's entries and selection) is different:
+ * {@link legacyFormFieldDataOf} reads exactly that, bounded, and nothing else. The contract
+ * stands: `w:ffData` macro references (`w:entryMacro` / `w:exitMacro`), `w:name`, help/status
+ * text and behavior flags are attacker-supplied script references and are NEVER read, returned
+ * or resolved by anything in this module.
  */
 export function hasLegacyFormFieldData(node: OoxmlNode): boolean {
   if (node.kind === 'textValue') return false;
@@ -181,6 +183,144 @@ export function hasLegacyFormFieldData(node: OoxmlNode): boolean {
     if (child.localName === 'ffData' && isWml(child, 'ffData')) return true;
   }
   return false;
+}
+
+/**
+ * Legacy form-field render state read from `w:ffData` (§17.16.17), and nothing else.
+ *
+ * `checkbox`: `sizeHalfPoints` is the explicit `w:size` in half-points, clamped to a sane
+ * render range, or null for auto-size (`w:sizeAuto`, absent, or malformed).
+ * `dropdown`: `selectedIndex` is already resolved (`w:result`, else `w:default`, else 0) and
+ * always in range when `entries` is non-empty; `entries` may be empty (layout paints nothing).
+ */
+export type LegacyFormFieldData =
+  | {
+      readonly kind: 'checkbox';
+      readonly checked: boolean;
+      readonly sizeHalfPoints: number | null;
+    }
+  | {
+      readonly kind: 'dropdown';
+      readonly entries: readonly string[];
+      readonly selectedIndex: number;
+    };
+
+/** Total direct-child visits the ffData walk will spend before failing closed. */
+const MAX_FF_DATA_NODES = 256;
+/** Dropdown entries collected — capped BEFORE collection, never sized by the file. */
+const MAX_DROPDOWN_ENTRIES = 64;
+/** Characters kept per dropdown entry. */
+const MAX_DROPDOWN_ENTRY_CHARS = 256;
+/** `w:size` clamp in half-points: 1pt .. 144pt. */
+const MIN_CHECKBOX_SIZE_HALF_POINTS = 2;
+const MAX_CHECKBOX_SIZE_HALF_POINTS = 288;
+/** Largest `w:val` index for `w:result` / `w:default` on `w:ddList` (ST_UnsignedDecimalNumber cap). */
+const MAX_DROPDOWN_INDEX = 63;
+
+type NodeBudget = { left: number };
+
+/** On/off child element (`w:checked` / `w:default`): present without `w:val` means true. */
+function onOffElementValue(element: OoxmlNode): boolean {
+  const raw = attributeValue(element, 'val');
+  if (raw === undefined) return true;
+  return !(raw === '0' || raw === 'false' || raw === 'off');
+}
+
+/** Bounded `w:val` integer parse; null when absent or malformed, clamped otherwise. */
+function clampedIntAttribute(element: OoxmlNode, min: number, max: number): number | null {
+  const raw = attributeValue(element, 'val');
+  if (raw === undefined || !/^-?\d{1,7}$/.test(raw)) return null;
+  const value = Number.parseInt(raw, 10);
+  return Math.min(max, Math.max(min, value));
+}
+
+function checkboxDataOf(checkbox: OoxmlNode, budget: NodeBudget): LegacyFormFieldData {
+  let checked: boolean | undefined;
+  let fallback: boolean | undefined;
+  let sizeHalfPoints: number | null = null;
+  let sizeAuto = false;
+  if (checkbox.kind !== 'textValue') {
+    for (const child of checkbox.children) {
+      if (budget.left-- <= 0) break;
+      if (child.kind === 'textValue') continue;
+      if (isWml(child, 'checked')) checked ??= onOffElementValue(child);
+      else if (isWml(child, 'default')) fallback ??= onOffElementValue(child);
+      else if (isWml(child, 'size')) {
+        sizeHalfPoints = clampedIntAttribute(
+          child,
+          MIN_CHECKBOX_SIZE_HALF_POINTS,
+          MAX_CHECKBOX_SIZE_HALF_POINTS
+        );
+      } else if (isWml(child, 'sizeAuto')) sizeAuto = true;
+      // Anything else under checkBox is ignored — never descended into.
+    }
+  }
+  return {
+    kind: 'checkbox',
+    checked: checked ?? fallback ?? false,
+    sizeHalfPoints: sizeAuto ? null : sizeHalfPoints,
+  };
+}
+
+function dropdownDataOf(list: OoxmlNode, budget: NodeBudget): LegacyFormFieldData {
+  let result: number | null = null;
+  let fallback: number | null = null;
+  const entries: string[] = [];
+  if (list.kind !== 'textValue') {
+    for (const child of list.children) {
+      if (budget.left-- <= 0) break;
+      if (child.kind === 'textValue') continue;
+      if (isWml(child, 'result')) result ??= clampedIntAttribute(child, 0, MAX_DROPDOWN_INDEX);
+      else if (isWml(child, 'default')) {
+        fallback ??= clampedIntAttribute(child, 0, MAX_DROPDOWN_INDEX);
+      } else if (isWml(child, 'listEntry')) {
+        if (entries.length >= MAX_DROPDOWN_ENTRIES) continue;
+        const value = attributeValue(child, 'val');
+        if (value !== undefined) entries.push(value.slice(0, MAX_DROPDOWN_ENTRY_CHARS));
+      }
+      // Anything else under ddList is ignored — never descended into.
+    }
+  }
+  const inRange = (index: number | null): index is number =>
+    index !== null && index >= 0 && index < entries.length;
+  return {
+    kind: 'dropdown',
+    entries,
+    selectedIndex: inRange(result) ? result : inRange(fallback) ? fallback : 0,
+  };
+}
+
+/**
+ * Read a legacy form field's RENDER STATE from the `w:ffData` under a `w:fldChar`, bounded.
+ *
+ * The one sanctioned walk into `w:ffData`: fldChar → ffData → checkBox/ddList → leaf
+ * attributes, direct children only, no recursion, at most {@link MAX_FF_DATA_NODES} child
+ * visits. It reads the checkbox checked/size state and the dropdown entries/selection —
+ * NEVER `w:name`, `w:entryMacro`, `w:exitMacro`, `w:helpText`, `w:statusText`, `w:enabled`
+ * or `w:calcOnExit`: those carry attacker-supplied macro references and behavior, which
+ * rendering must not observe.
+ *
+ * Returns null for anything else (no ffData, a FORMTEXT ffData, malformed content), so
+ * callers fall back to the presence-only behavior of {@link hasLegacyFormFieldData}.
+ */
+export function legacyFormFieldDataOf(node: OoxmlNode): LegacyFormFieldData | null {
+  if (node.kind === 'textValue') return null;
+  if (fldCharType(node) === null) return null;
+  const budget: NodeBudget = { left: MAX_FF_DATA_NODES };
+  for (const child of node.children) {
+    if (budget.left-- <= 0) return null;
+    if (child.kind === 'textValue' || !isWml(child, 'ffData')) continue;
+    // First ffData wins; inside it, the first state element wins.
+    for (const entry of child.children) {
+      if (budget.left-- <= 0) return null;
+      if (entry.kind === 'textValue') continue;
+      if (isWml(entry, 'checkBox')) return checkboxDataOf(entry, budget);
+      if (isWml(entry, 'ddList')) return dropdownDataOf(entry, budget);
+      // `w:textInput` (FORMTEXT), `w:name`, macros, help/status text: deliberately not read.
+    }
+    return null;
+  }
+  return null;
 }
 
 /**

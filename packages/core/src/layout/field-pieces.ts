@@ -10,7 +10,9 @@
 
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
+import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
+import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
@@ -159,6 +161,25 @@ export function positionalTabOf(node: OoxmlNode): PositionalTab | null {
 }
 
 /**
+ * How layout turns a typed `w:hyperlink` node into the sanitized record spans carry.
+ *
+ * Injected rather than computed here because resolving `r:id` needs the PACKAGE's
+ * relationships and this module only ever sees one part's tree. `null` means the caller
+ * declined to project — the runs still measure and paint, they simply carry no link, which is
+ * the right degradation: text is never lost for want of a target.
+ */
+export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
+
+/**
+ * How layout turns a parsed HYPERLINK field instruction into the sanitized record spans carry.
+ *
+ * Injected for the same reason as {@link HyperlinkProjector}: the spec's raw target must cross
+ * the surface's ONE href trust boundary, and layout owns no sanitization policy. `null` means
+ * no link — the cached result still paints as plain text, which is the right degradation.
+ */
+export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
+
+/**
  * Pending live or inert-cache projection for one atomic field unit.
  *
  * Well-formed computed fields contribute exactly one UTF-16 model unit. Cached result text
@@ -188,6 +209,20 @@ export interface PendingFieldProjection {
    * instruction, exactly as Word resolves the nesting.
    */
   linkSpec: HyperlinkFieldSpec | null;
+  /**
+   * FORMCHECKBOX / FORMDROPDOWN instruction, or null when the field is neither.
+   *
+   * Captured at the same points as {@link symbolSpec}. Consulted with {@link formData}: the
+   * checkbox state is authoritative over any stale cached glyph, the dropdown defers to a
+   * non-empty cached result.
+   */
+  formSpec: FormFieldKind | null;
+  /**
+   * Bounded `w:ffData` render state read at `begin` (`legacyFormFieldDataOf` — state only,
+   * macros never), or null when absent or malformed. {@link formField} stays presence-based:
+   * ffData present with an unreadable payload still shades as a form field.
+   */
+  formData: LegacyFormFieldData | null;
   /** True when this pending field is a well-formed atomic unit (begin will close). */
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */

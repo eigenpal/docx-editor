@@ -68,7 +68,8 @@ import {
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
-import { parseHyperlinkInstruction, type HyperlinkFieldSpec } from './field-link.ts';
+import { captureInstructionSpecs, formFieldResult } from './field-form.ts';
+import { parseHyperlinkInstruction } from './field-link.ts';
 import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
@@ -76,6 +77,8 @@ import {
   positionalTabOf,
   type FieldAtomMarker,
   type FieldAwarePiece,
+  type FieldLinkProjector,
+  type HyperlinkProjector,
   type ModelRange,
   type MutableModelRange,
   type PendingFieldProjection,
@@ -83,7 +86,7 @@ import {
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
-import { parsedFieldSpansOf } from '../store/package/field-nodes.ts';
+import { legacyFormFieldDataOf, parsedFieldSpansOf } from '../store/package/field-nodes.ts';
 import {
   emptyNamespaceScope,
   namespaceScopeForNode,
@@ -148,6 +151,8 @@ export {
   positionalTabOf,
   type FieldAtomMarker,
   type FieldAwarePiece,
+  type FieldLinkProjector,
+  type HyperlinkProjector,
   type ModelRange,
   type PositionalTab,
 };
@@ -155,25 +160,6 @@ export {
 // Shared run-child text/property vocabulary — kept re-exported so paragraph-flow and
 // numbering-index keep their import site.
 export { propertiesOfRunContainer, type RunPropertyCascader } from './field-run-text.ts';
-
-/**
- * How layout turns a typed `w:hyperlink` node into the sanitized record spans carry.
- *
- * Injected rather than computed here because resolving `r:id` needs the PACKAGE's
- * relationships and this module only ever sees one part's tree. `null` means the caller
- * declined to project — the runs still measure and paint, they simply carry no link, which is
- * the right degradation: text is never lost for want of a target.
- */
-export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
-
-/**
- * How layout turns a parsed HYPERLINK field instruction into the sanitized record spans carry.
- *
- * Injected for the same reason as {@link HyperlinkProjector}: the spec's raw target must cross
- * the surface's ONE href trust boundary, and layout owns no sanitization policy. `null` means
- * no link — the cached result still paints as plain text, which is the right degradation.
- */
-export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
 
 /**
  * Flatten a paragraph into measurable pieces, projecting allowlisted page fields when a
@@ -356,6 +342,15 @@ export function piecesOfParagraph(
         openAtomicBeginId = null;
         return;
       }
+    }
+    // A legacy form field renders from its ffData state: a checkbox always (the state is the
+    // authority, a stale cached glyph must not win), a dropdown only when the cache is empty.
+    const form = formFieldResult(pending, themeFonts);
+    if (form) {
+      push(form.text, form.props, form.style, true, start, end, carried);
+      pending = null;
+      openAtomicBeginId = null;
+      return;
     }
     if (pending.kind && pageContext) {
       const text = projectPageFieldValue(pending.kind, pageContext);
@@ -570,6 +565,11 @@ export function piecesOfParagraph(
             kind: null,
             symbolSpec: null,
             linkSpec: null,
+            formSpec: null,
+            // Bounded ffData STATE read (checkbox checked/size, dropdown entries/selection —
+            // macros never); `formField` below stays presence-based so an unreadable payload
+            // still shades.
+            formData: legacyFormFieldDataOf(grand),
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),
             atomStart: offset,
@@ -609,13 +609,10 @@ export function piecesOfParagraph(
         const kind = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
           pending.kind = kind && pageContext ? kind : null;
-          // Capture a SYMBOL or HYPERLINK spec while the machine still holds the raw
-          // instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
+          // Capture the SYMBOL / HYPERLINK / form-field spec while the machine still holds the
+          // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
           if (!pending.kind && !field.instructionOverflow) {
-            pending.symbolSpec = parseSymbolInstruction(field.instruction);
-            if (!pending.symbolSpec) {
-              pending.linkSpec = parseHyperlinkInstruction(field.instruction);
-            }
+            captureInstructionSpecs(pending, field.instruction);
           }
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
@@ -626,18 +623,15 @@ export function piecesOfParagraph(
 
       if (isFldChar(grand, 'end')) {
         const outermostEnd = field.nesting === 1;
-        // A SYMBOL with no `separate` at all (begin/instr/end) still renders in Word. The
-        // machine's buffer is reset by `onFldCharEnd`, so capture the spec BEFORE advancing.
+        // A SYMBOL or FORMCHECKBOX with no `separate` at all (begin/instr/end) still renders
+        // in Word. The machine's buffer is reset by `onFldCharEnd`, so capture BEFORE advancing.
         if (
           outermostEnd &&
           pending?.atomic &&
           field.phase === 'instruction' &&
           !field.instructionOverflow
         ) {
-          pending.symbolSpec = parseSymbolInstruction(field.instruction);
-          if (!pending.symbolSpec) {
-            pending.linkSpec = parseHyperlinkInstruction(field.instruction);
-          }
+          captureInstructionSpecs(pending, field.instruction);
         }
         onFldCharEnd(field);
         if (outermostEnd) {
