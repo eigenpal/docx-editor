@@ -121,12 +121,22 @@ export function consumeScanNode(budget: FieldScanBudget): boolean {
  */
 type FieldParsePhase = 'idle' | 'instruction' | 'result';
 
+/** Instruction capture for one NESTED field level (2..{@link MAX_FIELD_NESTING}). */
+interface NestedInstructionLevel {
+  instruction: string;
+  overflow: boolean;
+  separated: boolean;
+}
+
 export interface ComplexFieldParseState {
   nesting: number;
+  /** Level 1 (outermost) instruction buffer; levels 2+ live in {@link ComplexFieldParseState.inner}. */
   instruction: string;
   instructionOverflow: boolean;
   nestingOverflow: boolean;
   phase: FieldParsePhase;
+  /** Level N (2..{@link MAX_FIELD_NESTING}) at index N-2; deeper levels are never captured. */
+  inner: NestedInstructionLevel[];
 }
 
 export function createFieldParseState(): ComplexFieldParseState {
@@ -136,6 +146,7 @@ export function createFieldParseState(): ComplexFieldParseState {
     instructionOverflow: false,
     nestingOverflow: false,
     phase: 'idle',
+    inner: [],
   };
 }
 
@@ -145,6 +156,7 @@ export function resetFieldParseState(state: ComplexFieldParseState): void {
   state.instructionOverflow = false;
   state.nestingOverflow = false;
   state.phase = 'idle';
+  state.inner.length = 0;
 }
 
 export function onFldCharBegin(state: ComplexFieldParseState): void {
@@ -153,19 +165,55 @@ export function onFldCharBegin(state: ComplexFieldParseState): void {
     state.instructionOverflow = false;
     state.nestingOverflow = false;
     state.phase = 'instruction';
+    state.inner.length = 0;
   }
   state.nesting += 1;
-  if (state.nesting > MAX_FIELD_NESTING) state.nestingOverflow = true;
+  if (state.nesting > MAX_FIELD_NESTING) {
+    state.nestingOverflow = true;
+  } else if (state.nesting >= 2) {
+    // A sibling reopening this level replaces its capture, so one overflowed inner field
+    // never poisons the well-formed inner field after it.
+    state.inner[state.nesting - 2] = { instruction: '', overflow: false, separated: false };
+  }
 }
 
-export function onInstrText(state: ComplexFieldParseState, chunk: string): void {
-  if (state.phase !== 'instruction' || state.nesting !== 1 || state.instructionOverflow) return;
-  if (state.instruction.length + chunk.length > MAX_FIELD_INSTRUCTION_CHARS) {
+/** The capture for the innermost OPEN nested level, or null at level 1 / past the depth cap. */
+function innerLevelOf(state: ComplexFieldParseState): NestedInstructionLevel | null {
+  if (state.nesting < 2 || state.nesting > MAX_FIELD_NESTING) return null;
+  return state.inner[state.nesting - 2] ?? null;
+}
+
+/** True when the innermost open level still accepts instruction text. */
+function collectingLevelInstruction(state: ComplexFieldParseState): boolean {
+  if (state.nesting === 1) return state.phase === 'instruction' && !state.instructionOverflow;
+  const level = innerLevelOf(state);
+  return level !== null && !level.separated && !level.overflow;
+}
+
+/** Mark the innermost open level's instruction inert (char cap / budget / depth miss). */
+function overflowLevelInstruction(state: ComplexFieldParseState): void {
+  if (state.nesting === 1) {
     state.instructionOverflow = true;
     state.instruction = '';
     return;
   }
-  state.instruction += chunk;
+  const level = innerLevelOf(state);
+  if (level) {
+    level.overflow = true;
+    level.instruction = '';
+  }
+}
+
+export function onInstrText(state: ComplexFieldParseState, chunk: string): void {
+  if (!collectingLevelInstruction(state)) return;
+  const level = innerLevelOf(state);
+  const buffer = level ? level.instruction : state.instruction;
+  if (buffer.length + chunk.length > MAX_FIELD_INSTRUCTION_CHARS) {
+    overflowLevelInstruction(state);
+    return;
+  }
+  if (level) level.instruction = buffer + chunk;
+  else state.instruction = buffer + chunk;
 }
 
 /**
@@ -181,13 +229,12 @@ export function ingestInstrTextBounded(
   budget: FieldScanBudget,
   instrDepth: number
 ): void {
-  if (state.phase !== 'instruction' || state.nesting !== 1 || state.instructionOverflow) {
+  if (!collectingLevelInstruction(state)) {
     // Still charge the instrText node itself when the caller has not already.
     return;
   }
   if (instrDepth > MAX_STORY_FIELD_SCAN_DEPTH) {
-    state.instructionOverflow = true;
-    state.instruction = '';
+    overflowLevelInstruction(state);
     return;
   }
 
@@ -202,18 +249,16 @@ export function ingestInstrTextBounded(
   while (stack.length > 0) {
     const frame = stack.pop()!;
     if (!consumeScanNode(budget)) {
-      state.instructionOverflow = true;
-      state.instruction = '';
+      overflowLevelInstruction(state);
       return;
     }
     if (frame.depth > MAX_STORY_FIELD_SCAN_DEPTH) {
-      state.instructionOverflow = true;
-      state.instruction = '';
+      overflowLevelInstruction(state);
       return;
     }
     if (frame.node.kind === 'textValue') {
       onInstrText(state, frame.node.value);
-      if (state.instructionOverflow) return;
+      if (!collectingLevelInstruction(state)) return;
       continue;
     }
     const grandChildren = frame.node.children ?? [];
@@ -224,14 +269,26 @@ export function ingestInstrTextBounded(
 }
 
 /**
- * Advance past `fldChar separate`. Returns an allowlisted kind when the outermost field's
- * instruction is evaluable; otherwise null (inert / nested / overflow).
+ * Advance past `fldChar separate`. Returns an allowlisted kind when the separated field's
+ * instruction is evaluable; otherwise null (inert / overflow / nested too deep).
+ *
+ * At level 1 this also moves the machine into the result phase. At levels 2..
+ * {@link MAX_FIELD_NESTING} the outer phase is untouched: the level's own capture answers, so
+ * a PAGE nested inside another field's cached result is recognized instead of staying inert.
+ * Deeper levels and levels whose own instruction overflowed stay null (fail closed).
  */
 export function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPageField | null {
-  if (state.nesting !== 1 || state.phase !== 'instruction') return null;
-  state.phase = 'result';
-  if (state.instructionOverflow || state.nestingOverflow) return null;
-  return allowlistedPageField(state.instruction);
+  if (state.nesting === 1) {
+    if (state.phase !== 'instruction') return null;
+    state.phase = 'result';
+    if (state.instructionOverflow || state.nestingOverflow) return null;
+    return allowlistedPageField(state.instruction);
+  }
+  const level = innerLevelOf(state);
+  if (!level || level.separated) return null;
+  level.separated = true;
+  if (level.overflow) return null;
+  return allowlistedPageField(level.instruction);
 }
 
 export function onFldCharEnd(state: ComplexFieldParseState): void {
@@ -256,8 +313,9 @@ export function isInsideFieldResult(state: ComplexFieldParseState): boolean {
  * each paragraph — the same machine paragraph projection uses — and resets at paragraph
  * boundaries so malformed cross-paragraph fields never count. Allowlisted `w:fldSimple`
  * instructions count too, and a non-page simple field is still descended so a nested complex
- * PAGE inside it is not missed. Instruction text is extracted iteratively under the same
- * node/depth/character budgets.
+ * PAGE inside it is not missed. A complex PAGE nested inside another complex field counts the
+ * same way: `onFldCharSeparate` answers per level, so the separate branch below notes it.
+ * Instruction text is extracted iteratively under the same node/depth/character budgets.
  */
 export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
   let hasPage = false;

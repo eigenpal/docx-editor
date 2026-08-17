@@ -14,7 +14,8 @@
 // supplied; a non-page `w:fldSimple` still contributes one model unit and paints its
 // cached result, except that allowlisted page fields nested inside that result (complex
 // or simple) are evaluated per sheet rather than concatenated from the saved cache.
-// Other nested field instructions stay inert. Body-side evaluation beyond that is deferred.
+// A complex outer field's atomic cached result gets the same nested evaluation. Other
+// nested field instructions stay inert. Body-side evaluation beyond that is deferred.
 //
 // Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
 
@@ -43,7 +44,6 @@ import {
   MAX_FIELD_NESTING,
   MAX_STORY_FIELD_SCAN_DEPTH,
   MAX_STORY_FIELD_SCAN_NODES,
-  NO_STORY_PAGE_FIELDS,
   normalizeFieldInstruction,
   onFldCharBegin,
   onFldCharEnd,
@@ -60,7 +60,6 @@ import {
   storyNeedsPageFields,
   withPageFieldSources,
   type FieldPageContext,
-  type PageFieldSource,
 } from './field-page-furniture.ts';
 import { collectSimpleFieldDisplay } from './field-simple-result.ts';
 import {
@@ -120,14 +119,11 @@ import {
 // Re-export instruction recognition + detection so existing layout-local imports stay stable.
 export {
   MAX_FIELD_INSTRUCTION_CHARS,
-  MAX_FIELD_NESTING,
   MAX_STORY_FIELD_SCAN_DEPTH,
   MAX_STORY_FIELD_SCAN_NODES,
-  NO_STORY_PAGE_FIELDS,
   allowlistedPageField,
   detectStoryPageFields,
   normalizeFieldInstruction,
-  type AllowlistedPageField,
   type StoryPageFieldNeeds,
 };
 
@@ -142,15 +138,11 @@ export {
   storyNeedsPageFields,
   withPageFieldSources,
   type FieldPageContext,
-  type PageFieldSource,
 };
 
 // The piece vocabulary now lives beside the walk rather than inside it. Same re-export reason:
 // every layout module already imports these from here.
 export {
-  appendModelRange,
-  positionalTabOf,
-  type FieldAtomMarker,
   type FieldAwarePiece,
   type FieldLinkProjector,
   type HyperlinkProjector,
@@ -221,6 +213,11 @@ export function piecesOfParagraph(
   let pending: PendingFieldProjection | null = null;
   /** Outermost begin id when the open field is atomic. */
   let openAtomicBeginId: string | null = null;
+  // Live-evaluated allowlisted field nested inside the open atomic result: its cached digits
+  // are skipped and the matching inner end appends the projected value (fldSimple parity).
+  let nestedKind: AllowlistedPageField | null = null;
+  let nestedSeen = false;
+  let nestedVisible = false;
   /**
    * The revision wrappers enclosing the run being processed, outermost first.
    *
@@ -565,6 +562,7 @@ export function piecesOfParagraph(
         onFldCharBegin(field);
         if (field.nesting === 1) {
           abandonPending();
+          nestedKind = null;
           openAtomicBeginId = atomic ? grand.id : null;
           pending = {
             kind: null,
@@ -623,6 +621,12 @@ export function piecesOfParagraph(
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
           pending.style = style;
+        } else if (pending?.atomic && field.phase === 'result') {
+          // Inner separate inside the outer atomic result: live-evaluate an allowlisted
+          // nested field instead of concatenating its cached digits (fldSimple parity).
+          nestedKind = pageContext ? kind : null;
+          nestedSeen = false;
+          nestedVisible = false;
         }
         continue;
       }
@@ -639,6 +643,13 @@ export function piecesOfParagraph(
         ) {
           captureInstructionSpecs(pending, field.instruction);
         }
+        // The end closing a skipped inner field appends its live value; an inner result that
+        // existed but was entirely suppressed appends nothing (fldSimple parity).
+        if (field.nesting === 2 && pending?.atomic && nestedKind && pageContext) {
+          if (!nestedSeen || nestedVisible)
+            pending.cachedText += projectPageFieldValue(nestedKind, pageContext);
+        }
+        nestedKind = null;
         onFldCharEnd(field);
         if (outermostEnd) {
           if (pending?.atomic) commitAtomicField();
@@ -657,7 +668,12 @@ export function piecesOfParagraph(
         // A cached result is one plain string and cannot carry a per-glyph font switch, so
         // only a `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
         if (isSymbolRunChild(grand)) {
-          if (pending.atomic && !style.hidden && revisionsVisible(revisions, displayMode)) {
+          if (
+            pending.atomic &&
+            !nestedKind &&
+            !style.hidden &&
+            revisionsVisible(revisions, displayMode)
+          ) {
             const glyph = symbolGlyphOf(grand);
             if (glyph?.unicode) pending.cachedText += glyph.text;
           }
@@ -696,6 +712,7 @@ export function piecesOfParagraph(
         }
 
         if (fieldSuppressed) {
+          if (pending.atomic && nestedKind) nestedSeen = true;
           if (!pending.atomic) {
             offset += text.length;
             pending.bufferOffset = offset;
@@ -705,6 +722,18 @@ export function piecesOfParagraph(
 
         if (pending.atomic) {
           // Atomic unit: cache donates display text/style only — offset already reserved.
+          if (nestedKind) {
+            // Skipped inner cached digits: the live value replaces them at the inner end.
+            nestedSeen = true;
+            if (style.hidden) continue;
+            nestedVisible = true;
+            if (!pending.capturedResultStyle) {
+              pending.props = props;
+              pending.style = style;
+              pending.capturedResultStyle = true;
+            }
+            continue;
+          }
           if (style.hidden) continue;
           if (!pending.capturedResultStyle) {
             pending.props = props;
