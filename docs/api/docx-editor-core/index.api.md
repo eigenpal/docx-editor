@@ -2281,6 +2281,7 @@ export interface ReviewRevisionItem {
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';
+    readonly nesting: number;
     readonly pairedWith?: string;
     readonly ranges: readonly ReviewRange[];
     readonly readOnly: boolean;

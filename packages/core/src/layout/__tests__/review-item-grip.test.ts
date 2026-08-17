@@ -33,6 +33,10 @@ function range(
 }
 
 function revision(id: string, ...ranges: ReviewRange[]): ReviewItem {
+  return nested(id, 0, ...ranges);
+}
+
+function nested(id: string, nesting: number, ...ranges: ReviewRange[]): ReviewItem {
   return {
     kind: 'revision',
     id,
@@ -43,6 +47,7 @@ function revision(id: string, ...ranges: ReviewRange[]): ReviewItem {
     author: 'A',
     text: 'x',
     ranges,
+    nesting,
     readOnly: false,
     replyIds: [],
   };
@@ -68,17 +73,48 @@ describe('ordering items that cover one position', () => {
     expect(keysAt([wide, narrow], 30)).toEqual(['narrow', 'wide']);
   });
 
-  test('a range covering no characters ranks last however narrow it is', () => {
-    const empty = revision('empty', range(30, 30));
+  test('a range covering no characters ranks FIRST at its own offset', () => {
+    // A zero-width range is a deliberate point anchor. The store anchors a tracked paragraph
+    // mark at the paragraph end for exactly this reason, so that the card of a tracked Enter
+    // opens when the caret is at the break that made it. Ranking it behind a toucher took the
+    // only caret position that can reach that card away from it.
+    const mark = revision('mark', range(30, 30));
     const container = revision('container', range(30, 36));
-    expect(keysAt([empty, container], 30)).toEqual(['container', 'empty']);
+    const toucher = revision('toucher', range(24, 30));
+    expect(keysAt([container, mark], 30)).toEqual(['mark', 'container']);
+    expect(keysAt([toucher, mark], 30)).toEqual(['mark', 'toucher']);
+  });
+
+  test('a point comment is not shadowed by the revision around it', () => {
+    // The kind rank says a comment outranks everything at equal width, because it is a
+    // question waiting on the reader. A zero-width anchor used to win on width 0; grip has to
+    // keep it winning, or clicking the marker opens the revision it sits in.
+    const comment: ReviewItem = {
+      kind: 'comment',
+      id: 'c1',
+      comment: { id: 'c1', author: 'A', blocks: [] },
+      range: range(5, 5),
+      resolved: false,
+      replyIds: [],
+      orphaned: false,
+    };
+    const around = revision('around', range(0, 9));
+    expect(keysAt([around, comment], 5)).toEqual(['c1', 'around']);
   });
 
   test('the caret at a range start is inside it, not merely touching', () => {
     const before = revision('before', range(20, 30));
-    const at = revision('at', range(30, 31));
-    // `at` is one character wide and `before` is ten, yet `at` holds offset 30 inside it.
+    const at = revision('at', range(30, 40));
+    // `before` is ten characters wide and `at` is ten too, so width cannot separate them:
+    // only the grip says the caret is inside `at` and merely at the end of `before`.
     expect(keysAt([before, at], 30)).toEqual(['at', 'before']);
+  });
+
+  test('a caret at a boundary still activates when nothing else covers it', () => {
+    // The spec's own boundary scenario: both sides of the caret count, so a range entirely
+    // before the caret still activates. Demoting a toucher must not mean dropping it.
+    const toucher = revision('toucher', range(20, 30));
+    expect(keysAt([toucher], 30)).toEqual(['toucher']);
   });
 
   test('a card reports its HARDEST grip, not its first range', () => {
@@ -100,5 +136,25 @@ describe('ordering items that cover one position', () => {
   test('an item whose paragraph the order does not know covers nothing', () => {
     const unknown = revision('unknown', range(0, 10, 'gone'));
     expect(keysAt([unknown], 5, P1)).toEqual([]);
+  });
+
+  test('two changes on ONE identical span order innermost first', () => {
+    // `w:ins` wrapping `w:del`: identical ranges, so grip, width and kind all tie. Word reads
+    // the innermost as the operative change, and it is the one striking the text on the page.
+    const wrapper = nested('wrapper', 0, range(30, 36));
+    const inner = nested('inner', 1, range(30, 36));
+    // Both input orders, because the whole defect was that the tree walk's order decided it.
+    expect(keysAt([wrapper, inner], 33)).toEqual(['inner', 'wrapper']);
+    expect(keysAt([inner, wrapper], 33)).toEqual(['inner', 'wrapper']);
+    // The wrapper stays listed and reachable — the stack is what a surface cycles through.
+    expect(keysAt([wrapper, inner], 30)).toHaveLength(2);
+  });
+
+  test('nesting never outranks a tighter range or a comment', () => {
+    // Depth is the LAST word, not the first: a change nested three deep must not steal the
+    // caret from a shallower change whose range actually holds it more tightly.
+    const deepWide = nested('deepWide', 3, range(0, 100));
+    const shallowTight = nested('shallowTight', 0, range(28, 34));
+    expect(keysAt([deepWide, shallowTight], 30)).toEqual(['shallowTight', 'deepWide']);
   });
 });

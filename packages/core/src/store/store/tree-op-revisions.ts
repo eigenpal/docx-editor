@@ -92,6 +92,20 @@ export interface RevisionSite {
   readonly paragraphMark: boolean;
   /** True for `w:rPrChange` / `w:pPrChange`. */
   readonly propertyChange: boolean;
+  /**
+   * How many content-revision wrappers ENCLOSE this one, counted within its own paragraph.
+   *
+   * Revisions nest for real: `w:ins` wrapping `w:del` is content one reviewer added and another
+   * struck, and both stay pending because each author has to be answered separately. The two
+   * wrappers then cover exactly the same characters, so a range cannot tell them apart and
+   * "which change is this text under" has only one honest answer — the innermost one, which is
+   * the change that decides what the reader is looking at.
+   *
+   * Relative to the paragraph or table subtree, which is the unit the site walk memoizes. That
+   * is enough and it is what keeps the memo valid: a content revision cannot enclose a
+   * paragraph, and two sites can only cover one position if they are in the same paragraph.
+   */
+  readonly nesting: number;
 }
 
 interface TrackedRowRevision {
@@ -168,7 +182,8 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
   const visit = (
     node: OoxmlNode,
     parent: OoxmlElement | null,
-    grandparent: OoxmlElement | null
+    grandparent: OoxmlElement | null,
+    nesting: number
   ): void => {
     if (node.kind === 'textValue') return;
     // A PARAGRAPH's — or a TABLE's — sites depend on nothing outside it. Classification
@@ -190,7 +205,10 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
         return;
       }
       const before = sites.length;
-      for (const child of node.children) visit(child, node, parent);
+      // Depth restarts at the subtree the cache is keyed on, so a cached list is correct
+      // wherever that node sits. Nothing is lost: a content revision cannot enclose a
+      // paragraph, so a content site's depth inside its paragraph IS its depth.
+      for (const child of node.children) visit(child, node, parent, 0);
       const own = sites.slice(before);
       subtreeSitesCache.set(node, own);
       return;
@@ -235,13 +253,17 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
           refused: structural && !trackedRow,
           paragraphMark,
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
+          nesting,
         });
       }
     }
-    for (const child of node.children) visit(child, node, parent);
+    // Only a CONTENT wrapper deepens the count. A structural or property-change revision
+    // encloses no run content, so counting it would rank an unrelated site as nested.
+    const inner = isContentRevisionKind(node.kind) ? nesting + 1 : nesting;
+    for (const child of node.children) visit(child, node, parent, inner);
   };
   const root = scopeRootId === undefined ? part.root : findNode(part, scopeRootId);
-  if (root !== null) visit(root, null, null);
+  if (root !== null) visit(root, null, null, 0);
   return sites;
 }
 

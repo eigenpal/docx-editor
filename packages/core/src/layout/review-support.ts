@@ -149,6 +149,15 @@ export interface ReviewRevisionItem {
   /** Every site this decision touches, in document order. */
   readonly ranges: readonly ReviewRange[];
   /**
+   * How deeply this change is NESTED inside other changes, 0 for an unenclosed one.
+   *
+   * `w:ins` wrapping `w:del` is content one reviewer added and another struck. Both stay
+   * pending, so both are cards, over one identical range — and a range then cannot say which
+   * change a caret is in. Word treats the innermost as the operative one, so it wins the caret
+   * and the change enclosing it stays listed and reachable.
+   */
+  readonly nesting: number;
+  /**
    * How many leading `ranges` are the STRUCK half of a replacement.
    *
    * A replacement's card is one decision but its ranges are two colours — red over what is
@@ -390,11 +399,20 @@ function rangeWidth(range: ReviewRange, order: ReadonlyMap<string, number>): num
  * against the six-character insertion that starts there. A document of neighbouring revisions
  * therefore activated its earliest narrow card for clicks all over its later ones.
  */
-const GRIP_INSIDE = 0;
+/**
+ * A range that covers no characters, sitting exactly at the position: the hardest grip there is.
+ *
+ * FIRST, not last. A zero-width range is a deliberate point anchor, not a degenerate one — a
+ * tracked paragraph mark is anchored at the paragraph end precisely so its card opens when the
+ * caret is at the break that made it (`review-site-locations.ts`), and a comment can be written
+ * over no characters too. Width alone put these first, because zero is the narrowest width
+ * there is. Ranking them behind a toucher took the tracked-Enter card away from the one caret
+ * position that can reach it, and shadowed a point comment with whatever revision surrounds it.
+ */
+const GRIP_POINT = 0;
+const GRIP_INSIDE = 1;
 /** The caret sits at the far end: on the range's last character, not among them. */
-const GRIP_TOUCHING = 1;
-/** The range covers no characters, so it can never hold a caret inside it. */
-const GRIP_EMPTY = 2;
+const GRIP_TOUCHING = 2;
 
 function rangeGrip(
   range: ReviewRange,
@@ -409,8 +427,9 @@ function rangeGrip(
   if (target === start && position.offset < range.start.offset) return null;
   if (target === end && position.offset > range.end.offset) return null;
   // A format change, a paragraph mark, or a marker pair a producer wrote empty decorates no
-  // characters at all. It covers its own offset and nothing else.
-  if (start === end && range.start.offset === range.end.offset) return GRIP_EMPTY;
+  // characters at all. It covers its own offset and nothing else, which is what makes it the
+  // most specific thing a caret at that offset can be pointing at.
+  if (start === end && range.start.offset === range.end.offset) return GRIP_POINT;
   if (target === end && position.offset === range.end.offset) return GRIP_TOUCHING;
   return GRIP_INSIDE;
 }
@@ -467,9 +486,9 @@ export function reviewItemsAt(
   }
   return covering
     .sort((a, b) => {
-      // GRIP before width. A range that holds the caret inside it outranks one that merely
-      // ends there however narrow the toucher is, and a range covering no characters at all
-      // ranks last however narrow everything else is.
+      // GRIP before width. A point anchor at exactly this offset is the most specific thing
+      // there is, and a range holding the caret inside it outranks one that merely ends there
+      // however narrow the toucher is.
       if (a.grip !== b.grip) return a.grip - b.grip;
       if (a.width !== b.width) return a.width - b.width;
       // At equal width a comment outranks everything (it is a question waiting on the
@@ -478,6 +497,16 @@ export function reviewItemsAt(
       // once a third kind existed, leaving custom-vs-revision ties implementation-defined.
       if (a.item.kind !== b.item.kind) {
         return REVIEW_KIND_RANK[a.item.kind] - REVIEW_KIND_RANK[b.item.kind];
+      }
+      // NESTING is the last word, and the only one that separates two changes whose ranges are
+      // identical: `w:ins` wrapping `w:del`, content one reviewer added and another struck.
+      // Word reads the innermost as the operative change — the words are struck on the page
+      // because of the deletion, and accepting the change under them deletes them — so the
+      // deepest wins. Without it the order fell out of the tree walk and sort stability, which
+      // put the WRAPPER first: a click on struck text opened an "Added" card, and the deletion
+      // doing the striking was unreachable from the document.
+      if (a.item.kind === 'revision' && b.item.kind === 'revision') {
+        return b.item.nesting - a.item.nesting;
       }
       return 0;
     })

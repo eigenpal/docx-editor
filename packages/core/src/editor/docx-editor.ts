@@ -1438,23 +1438,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   /**
-   * The selection `setActiveReviewItem` installed, while it is still the live one.
-   *
-   * Opening a card selects the item's span so the overlay highlights it — but a range
-   * selection is also what the "comment on this" affordance keys on, and v1 shipped
-   * exactly that regression: opening a card offered to add a second comment on top of
-   * the one just opened. This remembers the review-driven selection so
-   * `selectionPlacement` can sit out for it, and clears itself the moment the user
-   * selects anything else. `commentTargetRange` stays untouched, so replying over the
-   * activated text still works.
-   */
-  let lastReviewSelection: {
-    readonly key: string;
-    readonly from: SemanticPosition;
-    readonly to: SemanticPosition;
-  } | null = null;
-
-  /**
    * The whole span a card covers. Content kinds (insert/delete/replace) span first range
    * start to last range end — their ranges are contiguous by construction, a replacement's
    * two halves included. Everything else anchors at its first range only.
@@ -1478,19 +1461,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** Where a comment on the current selection would sit. */
   function selectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null {
-    if (lastReviewSelection && surface) {
-      const live = surface.retainedSelection() ?? surface.state().selection;
-      const same = (a: SemanticPosition, b: SemanticPosition) =>
-        a.paragraphId === b.paragraphId && a.offset === b.offset;
-      const stillReviewDriven =
-        (same(live.anchor, lastReviewSelection.to) && same(live.head, lastReviewSelection.from)) ||
-        (same(live.anchor, lastReviewSelection.from) && same(live.head, lastReviewSelection.to));
-      if (!stillReviewDriven) {
-        lastReviewSelection = null;
-      } else if (activeReviewKeyNow() === lastReviewSelection.key) {
-        return null;
-      }
-    }
+    // Opening a card selects the item's span so the overlay highlights it — but a range
+    // selection is also what the "comment on this" affordance keys on, and v1 shipped exactly
+    // that regression: opening a card offered to add a second comment on top of the one just
+    // opened. Asked of the SURFACE, which owns the pin and invalidates it by value the moment
+    // the reader selects anything else. This used to be a second copy of that fact kept here,
+    // written on one of activation's three branches — so a header or note card, whose branch
+    // never wrote it, still offered to comment on itself. `commentTargetRange` stays untouched,
+    // so replying over the activated text still works.
+    if (surface && surface.activatedReviewKey() !== null) return null;
     const range = commentTargetRange();
     const layout = surface?.publishedLayout();
     if (!range || !layout) return null;
@@ -2194,8 +2173,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getReviewRevision: () => reviewRevision(),
 
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult {
-      // Dismissing is the only thing a key of `null` can mean here: the caret decides which
-      // card is open, and a card the reader closed stays closed until the caret next moves.
+      // Dismissing is the only thing a key of `null` can mean here. A card the reader closed
+      // stays closed until the caret next moves, and closing also drops the activation pin —
+      // so the answer goes back to the caret rather than to the card that was just closed.
       if (key === null) {
         surface?.dismissActiveReview();
         bump();
@@ -2280,11 +2260,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // `selectionPlacement`, which stays quiet while this review-driven selection is
         // the live one.
         const span = reviewItemSpan(item!) ?? range;
-        surface.setSelection({
+        // Through `activateReview`, not `setSelection`: the card this opens has to be named
+        // before the selection is published, or the surface reports whichever card the caret
+        // classifies to — the wrong twin, when two cards share one span — and corrects itself
+        // a frame later.
+        surface.activateReview(key, {
           anchor: { paragraphId: span.end.paragraphId, offset: span.end.offset },
           head: { paragraphId: span.start.paragraphId, offset: span.start.offset },
         });
-        lastReviewSelection = { key, from: span.start, to: span.end };
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.
         // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
@@ -2296,13 +2279,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         const reveal = options?.reveal ?? 'centerIfNeeded';
         if (reveal !== false) surface.revealPosition?.(span.start, { block: reveal });
       }
-      // THIS card is now the open one, BY KEY, for as long as the selection the branches above
-      // installed stays live. The selection alone cannot say which card that is: two cards can
-      // cover exactly the same characters — `w:ins` around `w:del` is content one reviewer
-      // added and another struck — and the caret then classified back to whichever the queue
-      // listed first, so clicking either card opened the same one and the other was
-      // unreachable. After the branches, so a header, a note and the body all pin alike.
-      surface.activateReview(key);
+      // A header, footer or note card pins here instead: those branches install the selection
+      // themselves, inside the scope they open, so there is nothing to hand down. The body
+      // branch above has already pinned with its own selection.
+      if (home !== null || note !== null) surface.activateReview(key);
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —
       // which is precisely this case whenever the card is reopened after being DISMISSED:

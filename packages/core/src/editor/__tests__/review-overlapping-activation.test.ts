@@ -94,6 +94,21 @@ function activeKey(editor: DocxEditorInstance): string | null {
   return editor.getReviewItems().find((entry) => entry.isActive)?.key ?? null;
 }
 
+type Spans = {
+  ranges: readonly {
+    start: { paragraphId: string; offset: number };
+    end: { paragraphId: string; offset: number };
+  }[];
+};
+
+function firstRange(card: { item: unknown }): Spans['ranges'][number] {
+  return (card.item as Spans).ranges[0]!;
+}
+
+function paragraphOf(editor: DocxEditorInstance): string {
+  return firstRange(editor.getReviewItems()[0]!).start.paragraphId;
+}
+
 describe('overlapping review cards', () => {
   test('the queue holds both halves of every nested change', () => {
     const editor = mount(NESTED);
@@ -168,6 +183,99 @@ describe('overlapping review cards', () => {
     ).ranges;
     expect(ranges[0]!.start.offset).toBe(30);
     expect(ranges[0]!.end.offset).toBe(36);
+    editor.destroy();
+  });
+
+  test('a click on struck text opens the DELETION, as Word reads it', () => {
+    const editor = mount(NESTED);
+    const paragraphId = paragraphOf(editor);
+    // Offsets 30..36 are "nested": author B added the word, author C struck it. The word is
+    // struck on the page BECAUSE of C's deletion, and accepting the change under the caret
+    // performs that deletion — so the deletion is the change the caret is in.
+    for (const offset of [30, 33, 36 - 1]) {
+      editor.exec({
+        type: 'setSelection',
+        range: { anchor: { paragraphId, offset }, head: { paragraphId, offset } },
+      });
+      const open = editor.getReviewItems().find((entry) => entry.isActive);
+      // Was: the wrapping `w:ins` came first out of the tree walk and won the tie by sort
+      // stability, so clicking struck text opened an "Added" card and the deletion doing the
+      // striking could not be reached from the document at all.
+      expect(open?.kind).toBe('revision');
+      expect((open as { revisionKind?: string }).revisionKind).toBe('delete');
+      expect((open as { author?: string }).author).toBe('C');
+    }
+    editor.destroy();
+  });
+
+  test('the enclosing insertion stays reachable behind the deletion', () => {
+    const editor = mount(NESTED);
+    // Innermost-first must not mean the wrapper is gone: it is still a listed card, still
+    // activatable by key, and accepting or rejecting it is a separate decision by a separate
+    // author.
+    const wrapper = editor
+      .getReviewItems()
+      .find(
+        (card) =>
+          (card as { revisionKind?: string }).revisionKind === 'insert' &&
+          (card as { author?: string }).author === 'B'
+      );
+    expect(wrapper).toBeDefined();
+    expect(wrapper!.activatable).toBe(true);
+    expect(editor.setActiveReviewItem(wrapper!.key).ok).toBe(true);
+    expect(activeKey(editor)).toBe(wrapper!.key);
+    editor.destroy();
+  });
+
+  test('closing both cards on one span closes them, instead of alternating forever', () => {
+    const editor = mount(NESTED);
+    const twins = editor
+      .getReviewItems()
+      .filter((card) => firstRange(card).start.offset === 30 && firstRange(card).end.offset === 36);
+    expect(twins).toHaveLength(2);
+
+    expect(editor.setActiveReviewItem(twins[0]!.key).ok).toBe(true);
+    expect(activeKey(editor)).toBe(twins[0]!.key);
+
+    // Closing a card reveals whatever else covers the caret, which is right — the twin, and
+    // then the replacement whose span ends at 30. What matters is that it TERMINATES and never
+    // offers the same card twice. Was: one dismissal slot, so closing the open card promoted
+    // its twin, closing the twin brought the first one back, and it alternated for as long as
+    // the reader kept pressing. The only escape was to move the caret off the change.
+    const closed: string[] = [];
+    for (let press = 0; press < 8; press += 1) {
+      const open = activeKey(editor);
+      if (open === null) break;
+      expect(closed).not.toContain(open);
+      closed.push(open);
+      editor.setActiveReviewItem(null);
+    }
+    expect(activeKey(editor)).toBe(null);
+    expect(closed).toContain(twins[0]!.key);
+    expect(closed).toContain(twins[1]!.key);
+    editor.destroy();
+  });
+
+  test('a closed card reopens when the reader clicks it again', () => {
+    const editor = mount(NESTED);
+    const card = editor.getReviewItems().find((entry) => entry.activatable)!;
+    expect(editor.setActiveReviewItem(card.key).ok).toBe(true);
+    editor.setActiveReviewItem(null);
+    expect(activeKey(editor)).not.toBe(card.key);
+    // Dismissing leaves the caret inside the range, so re-activating moves nothing. The card
+    // has to reopen anyway, or it refuses however many times it is clicked.
+    expect(editor.setActiveReviewItem(card.key).ok).toBe(true);
+    expect(activeKey(editor)).toBe(card.key);
+    editor.destroy();
+  });
+
+  test('opening a card does not offer to comment on the text it selected', () => {
+    const editor = mount(NESTED);
+    const card = editor.getReviewItems().find((entry) => entry.activatable)!;
+    expect(editor.setActiveReviewItem(card.key).ok).toBe(true);
+    // Activation selects the item's span, and a range selection is what the "comment on this"
+    // affordance keys on. Opening a card must not offer to add a comment over the card.
+    expect(editor.getSelectionPlacement()).toBe(null);
     editor.destroy();
   });
 });

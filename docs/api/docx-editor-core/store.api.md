@@ -1877,6 +1877,7 @@ export interface LinkableReviewItem {
     readonly id: string;
     // (undocumented)
     readonly kind: string;
+    readonly nesting?: number;
     // (undocumented)
     readonly orphaned?: boolean;
     // (undocumented)
@@ -3356,6 +3357,7 @@ export interface ReviewRevisionItem {
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';
+    readonly nesting: number;
     readonly pairedWith?: string;
     readonly ranges: readonly ReviewRange[];
     readonly readOnly: boolean;

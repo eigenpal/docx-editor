@@ -96,6 +96,19 @@ export interface ReviewRevisionItem {
   /** Every site this decision touches, in document order. */
   readonly ranges: readonly ReviewRange[];
   /**
+   * How deeply this change is NESTED inside other changes, 0 for an unenclosed one.
+   *
+   * Revisions nest for real, and OOXML has no other way to say what happened: `w:ins` wrapping
+   * `w:del` is content one reviewer added and another struck. Both stay pending, because each
+   * author has to be answered separately, so both are cards — over one identical range.
+   *
+   * A range therefore cannot say which change a position is "in", and this is what settles it.
+   * Word treats the innermost change as the operative one: the words are struck on the page
+   * because of the deletion, and accepting the change under them performs that deletion. So the
+   * deepest card wins the caret, and the one enclosing it stays listed and reachable.
+   */
+  readonly nesting: number;
+  /**
    * How many leading `ranges` are the STRUCK half of a replacement.
    *
    * A replacement's card is one decision but its ranges are two colours — red over what is
@@ -264,6 +277,8 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       deletedText: string;
       ranges: ReviewRange[];
       readOnly: boolean;
+      /** The DEEPEST site in the group: the reading a caret in this text gets. */
+      nesting: number;
     }
   >();
 
@@ -333,6 +348,9 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       // ANY refused site refuses the whole decision, matching `resolveRevisions`: resolving
       // only the sites the engine understands would leave a row half-tracked.
       existing.readOnly ||= site.refused || authorless;
+      // The deepest site speaks for the decision. A group's sites can sit at different
+      // depths, and the shallowest would make an enclosed change look unenclosed.
+      if (site.nesting > existing.nesting) existing.nesting = site.nesting;
       if (kind === 'delete' || kind === 'moveFrom') existing.deletedText += textUnder(site.node);
       else if (kind !== 'format' && kind !== 'paragraphMark') existing.text += textUnder(site.node);
       continue;
@@ -348,6 +366,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
           : textUnder(site.node),
       deletedText: kind === 'delete' || kind === 'moveFrom' ? textUnder(site.node) : '',
       ranges: range ? [range] : [],
+      nesting: site.nesting,
       // A format or paragraph-mark change is resolvable; the structural kinds are not, and
       // nor is one with no author to address it by.
       readOnly: site.refused || authorless,
@@ -368,6 +387,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       text: entry.revisionKind === 'replace' ? entry.text : entry.text || entry.deletedText,
       replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
       ranges: entry.ranges,
+      nesting: entry.nesting,
       readOnly: entry.readOnly,
       // Filled by `collectReviewItems`, which is the only place that sees the comments too.
       replyIds: [],
@@ -821,6 +841,8 @@ export interface LinkableReviewItem {
   readonly parentRevisionId?: string;
   readonly replyIds?: readonly string[];
   readonly orphaned?: boolean;
+  /** How deeply a revision is nested; absent on the kinds that cannot nest. */
+  readonly nesting?: number;
 }
 
 /** A range as a comparable key, so "exactly these characters" is one lookup. */
@@ -858,7 +880,7 @@ function rangeKey(range: ReviewRange): string {
  * the next full re-derivation. Every link is rebuilt from the ranges on every pass.
  */
 export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[] {
-  const revisionBySpan = new Map<string, string>();
+  const revisionBySpan = new Map<string, { readonly id: string; readonly nesting: number }>();
   for (const item of items) {
     if (item.kind !== 'revision') continue;
     for (const range of item.ranges ?? []) {
@@ -869,7 +891,15 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
         continue;
       }
       const key = rangeKey(range);
-      if (!revisionBySpan.has(key)) revisionBySpan.set(key, item.id);
+      const nesting = item.nesting ?? 0;
+      const held = revisionBySpan.get(key);
+      // DEEPEST wins, not first seen. Two changes can share one exact span — `w:ins` wrapping
+      // `w:del` — and the reply has to hang on the same card a click on those characters opens,
+      // which is the innermost one. First-seen picked the wrapper, so the card the reader was
+      // answering and the card their answer appeared under were different cards.
+      if (held === undefined || nesting > held.nesting) {
+        revisionBySpan.set(key, { id: item.id, nesting });
+      }
     }
   }
 
@@ -899,7 +929,7 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
   for (const item of items) {
     if (item.kind !== 'comment' || item.parentId !== undefined) continue;
     if (item.orphaned || !item.range) continue;
-    const revisionId = revisionBySpan.get(rangeKey(item.range));
+    const revisionId = revisionBySpan.get(rangeKey(item.range))?.id;
     if (revisionId === undefined) continue;
     const thread = [item.id, ...descendantsOf(item.id)];
     for (const id of thread) parentOf.set(id, revisionId);

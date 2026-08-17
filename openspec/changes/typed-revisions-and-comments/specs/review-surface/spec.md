@@ -56,6 +56,8 @@ The adapter SHALL present comment threads and revisions in a sidebar, each ancho
 
 Placing the caret inside a commented range or a revision SHALL make that item the active one: its card opens, showing the thread and the reply affordance, and the anchored range is highlighted in the document. Activation SHALL be derived from the selection against layout ranges, so a caret arriving by click, by keyboard, or by navigation activates identically.
 
+A host MAY instead name the item to open BY KEY. That key SHALL be the active item for as long as the selection the engine installed for it stays live, and a caret move SHALL hand the answer back to the selection. A key is required because a selection cannot always name one item: two changes can cover exactly the same characters, and no position distinguishes them.
+
 #### Scenario: Caret in a commented range opens its thread
 
 - **WHEN** the caret is placed inside a range covered by a comment
@@ -77,6 +79,29 @@ Placing the caret inside a commented range or a revision SHALL make that item th
 
 - **WHEN** the caret sits inside two overlapping comment ranges
 - **THEN** the innermost range's card is the active one, and the containing item stays listed and reachable
+
+#### Scenario: A range that only ends at the caret yields to one that contains it
+
+- **WHEN** the caret sits where one change ends and another begins
+- **THEN** the change the caret is inside is the active one, however much narrower the change ending there is
+- **AND** a change with no characters at that exact offset — a tracked paragraph mark, a point comment — outranks both
+
+#### Scenario: A deletion inside an insertion activates as the deletion
+
+- **WHEN** the caret sits in text one reviewer inserted and another deleted, so `w:ins` wraps `w:del` and both cover the same characters
+- **THEN** the deletion's card is the active one, because it is the change striking the words on the page and the one an accept under the caret performs
+- **AND** the enclosing insertion stays listed, activatable by key, and separately resolvable
+
+#### Scenario: Opening a card by key opens THAT card
+
+- **WHEN** a host activates one of two changes covering the same characters by key
+- **THEN** that change's card is the active one, not whichever change the installed selection would classify to
+- **AND** the engine reports the open card once, not the other card followed by a correction
+
+#### Scenario: Closing every card at one position leaves none open
+
+- **WHEN** the reader closes the open card at a position several cards cover
+- **THEN** the next card down opens, each card is offered at most once, and closing them all leaves no card open until the caret moves
 
 #### Scenario: Activation is a view state, not an edit
 

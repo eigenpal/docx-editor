@@ -731,20 +731,35 @@ export interface PaginatedSurface {
    */
   activeReviewKey(): string | null;
   /**
-   * Open THIS item, named by key, for as long as the selection activation installed is live.
+   * Open THIS item, named by key, for as long as `selection` stays the live one.
    *
-   * Called right after the `setSelection` that reveals the item. Without it the caret is the
-   * only evidence of which card is open, and a caret cannot name a card when two cards cover
-   * exactly the same characters: `w:ins` wrapping `w:del` — content one reviewer added and
-   * another struck — gives the insertion and the deletion one identical range, and every
-   * click on either card classified back to whichever the queue happened to list first. The
-   * reader clicked "Deleted" and watched "Added" light up.
+   * Without it the caret is the only evidence of which card is open, and a caret cannot name a
+   * card when two cards cover exactly the same characters: `w:ins` wrapping `w:del` — content
+   * one reviewer added and another struck — gives the insertion and the deletion one identical
+   * range, and every click on either card classified back to whichever the queue happened to
+   * list first. The reader clicked "Deleted" and watched "Added" light up.
    *
    * A key, not a position, because the position is precisely what is ambiguous. It holds only
-   * while the selection matches; a pointer or keyboard move hands the answer back to the
-   * caret, which is what lets the reader step out of a card by clicking away from it.
+   * while the selection matches; a pointer or keyboard move hands the answer back to the caret,
+   * which is what lets the reader step out of a card by clicking away from it.
+   *
+   * `selection` is what activation wants installed, and it is installed HERE rather than by a
+   * `setSelection` of the caller's own so that the pin is up before anything is published. The
+   * other order repainted the bands and reported state while the caret was still the only
+   * evidence, so a host saw the wrong twin active for one frame and then a correction. Omit it
+   * to pin against the live selection, which is what a header or note scope has already set.
    */
-  activateReview(key: string): void;
+  activateReview(key: string, selection?: SemanticSelection): void;
+  /**
+   * The key {@link activateReview} pinned, or null once its selection is no longer live.
+   *
+   * Exists so nothing outside the surface keeps its own copy of "the selection came from
+   * opening a card". `selectionPlacement` needs that fact to stay quiet about offering a
+   * comment on text the reader only selected by opening a card over it, and the copy it used to
+   * keep was set on one of activation's three branches, so a header card offered to comment on
+   * itself.
+   */
+  activatedReviewKey(): string | null;
   /**
    * Close the open item until the caret next moves.
    *
