@@ -599,6 +599,9 @@ export interface FieldAtomMarker {
 }
 
 // @public
+export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
+
+// @public
 export function filterRefsOnPage(page: PageRecord, allRefs: readonly PageRefHit[], refIndex?: PageRefIndex): readonly PageRefHit[];
 
 // @public
@@ -1008,6 +1011,13 @@ export function hitTestSemantic(layout: SemanticLayout, point: {
 
 // @public
 export function hitTestSheet(layout: SemanticLayout, point: HitPoint, options?: HitTestOptions): SemanticHit | null;
+
+// @public
+export interface HyperlinkFieldSpec {
+    readonly anchor: string | null;
+    readonly target: string | null;
+    readonly tooltip: string | null;
+}
 
 // @public
 export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
@@ -2520,6 +2530,7 @@ export interface SemanticLayoutOptions {
     readonly numberingIndex?: NumberingIndex;
     readonly pageBottomReserves?: ReadonlyMap<number, number>;
     readonly producer?: string;
+    readonly projectFieldLink?: FieldLinkProjector;
     readonly projectLink?: HyperlinkProjector;
     readonly sectionColumns?: SectionColumns;
     readonly sectionFurniture?: readonly (PageFurniture | undefined)[];

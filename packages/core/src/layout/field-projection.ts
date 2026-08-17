@@ -68,6 +68,7 @@ import {
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
+import { parseHyperlinkInstruction, type HyperlinkFieldSpec } from './field-link.ts';
 import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
@@ -166,6 +167,15 @@ export { propertiesOfRunContainer, type RunPropertyCascader } from './field-run-
 export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
 
 /**
+ * How layout turns a parsed HYPERLINK field instruction into the sanitized record spans carry.
+ *
+ * Injected for the same reason as {@link HyperlinkProjector}: the spec's raw target must cross
+ * the surface's ONE href trust boundary, and layout owns no sanitization policy. `null` means
+ * no link — the cached result still paints as plain text, which is the right degradation.
+ */
+export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
+
+/**
  * Flatten a paragraph into measurable pieces, projecting allowlisted page fields when a
  * page context is supplied (furniture finalize / `withPageContext`).
  *
@@ -190,7 +200,8 @@ export function piecesOfParagraph(
   displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
   deletedRanges?: MutableModelRange[],
   inlineDrawingLayout?: InlineDrawingLayoutContext,
-  themeFonts?: ThemeFonts
+  themeFonts?: ThemeFonts,
+  projectFieldLink?: FieldLinkProjector
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
@@ -322,9 +333,16 @@ export function piecesOfParagraph(
       openAtomicBeginId = null;
       return;
     }
+    // A HYPERLINK field becomes a live link only when nothing already links it: an enclosing
+    // `w:hyperlink` captured into `resultLink` wins, exactly as it does for every other field.
+    const fieldLink =
+      !pending.resultLink && pending.linkSpec
+        ? (projectFieldLink?.(pending.linkSpec) ?? null)
+        : null;
+    const carriedLink = pending.resultLink ?? fieldLink;
     const carried = {
       ...(pending.resultRevisions.length > 0 ? { revisionsOverride: pending.resultRevisions } : {}),
-      ...(pending.resultLink ? { linkOverride: pending.resultLink } : {}),
+      ...(carriedLink ? { linkOverride: carriedLink } : {}),
       fieldAtom: { formField: pending.formField },
     };
     // SYMBOL renders from its instruction — Word never trusts a cached result for it, so a
@@ -353,13 +371,21 @@ export function piecesOfParagraph(
 
   const abandonPending = (): void => {
     if (!pending) return;
+    // A demoted HYPERLINK keeps its link too, when nothing already linked its pieces — the
+    // enclosing `w:hyperlink` a buffered piece carries wins, same precedence as the flush.
+    const fieldLink =
+      !pending.resultLink && pending.linkSpec
+        ? (projectFieldLink?.(pending.linkSpec) ?? null)
+        : null;
+    const linked = (piece: FieldAwarePiece): FieldAwarePiece =>
+      fieldLink && !piece.link ? { ...piece, link: fieldLink } : piece;
     if (pending.atomic) {
       // Missing end after an atomic begin should not happen (atoms require end). If the
       // scan budget aborts mid-field, roll the atom back and flush any buffered cache.
       offset = pending.atomStart;
       for (const piece of pending.buffered) {
         pieces.push({
-          ...piece,
+          ...linked(piece),
           start: offset,
           end: offset + (piece.end - piece.start),
         });
@@ -372,12 +398,13 @@ export function piecesOfParagraph(
           pending.style,
           false,
           offset,
-          offset + pending.cachedText.length
+          offset + pending.cachedText.length,
+          fieldLink ? { linkOverride: fieldLink } : undefined
         );
         offset += pending.cachedText.length;
       }
     } else {
-      for (const piece of pending.buffered) pieces.push(piece);
+      for (const piece of pending.buffered) pieces.push(linked(piece));
       offset = pending.bufferOffset;
     }
     pending = null;
@@ -542,6 +569,7 @@ export function piecesOfParagraph(
           pending = {
             kind: null,
             symbolSpec: null,
+            linkSpec: null,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),
             atomStart: offset,
@@ -581,9 +609,13 @@ export function piecesOfParagraph(
         const kind = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
           pending.kind = kind && pageContext ? kind : null;
-          // Capture a SYMBOL spec while the machine still holds the raw instruction.
+          // Capture a SYMBOL or HYPERLINK spec while the machine still holds the raw
+          // instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
           if (!pending.kind && !field.instructionOverflow) {
             pending.symbolSpec = parseSymbolInstruction(field.instruction);
+            if (!pending.symbolSpec) {
+              pending.linkSpec = parseHyperlinkInstruction(field.instruction);
+            }
           }
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
@@ -603,6 +635,9 @@ export function piecesOfParagraph(
           !field.instructionOverflow
         ) {
           pending.symbolSpec = parseSymbolInstruction(field.instruction);
+          if (!pending.symbolSpec) {
+            pending.linkSpec = parseHyperlinkInstruction(field.instruction);
+          }
         }
         onFldCharEnd(field);
         if (outermostEnd) {
@@ -845,6 +880,11 @@ export function piecesOfParagraph(
     // to inherited properties the same way a top-level simple PAGE does.
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return;
+    // A simple HYPERLINK links its cached result — but only outside a typed `w:hyperlink`,
+    // whose record `push` already applies and which outranks the field's own instruction.
+    // An empty result never reached here, so an empty result never paints the URL.
+    const linkSpec = currentLink ? null : parseHyperlinkInstruction(fldSimpleInstr(simple) ?? '');
+    const fieldLink = linkSpec ? (projectFieldLink?.(linkSpec) ?? null) : null;
     // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field.
     push(
       display.text,
@@ -855,6 +895,7 @@ export function piecesOfParagraph(
       start + 1,
       {
         fieldAtom: { formField: false },
+        ...(fieldLink ? { linkOverride: fieldLink } : {}),
       }
     );
   };

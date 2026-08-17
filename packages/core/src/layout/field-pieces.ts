@@ -12,6 +12,7 @@ import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-edi
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
+import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -179,6 +180,14 @@ export interface PendingFieldProjection {
    * files, so the flush renders from this and it wins over any stale cached text.
    */
   symbolSpec: SymbolFieldSpec | null;
+  /**
+   * Parsed HYPERLINK instruction, or null when the field is not one.
+   *
+   * Captured at the same points as {@link symbolSpec} and for the same reason. Only consulted
+   * when {@link resultLink} stays empty: an ENCLOSING `w:hyperlink` outranks the field's own
+   * instruction, exactly as Word resolves the nesting.
+   */
+  linkSpec: HyperlinkFieldSpec | null;
   /** True when this pending field is a well-formed atomic unit (begin will close). */
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */

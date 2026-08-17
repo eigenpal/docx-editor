@@ -20,6 +20,7 @@ import {
   finalizePageFieldProjection,
   storyNeedsPageFields,
   withPageFieldSources,
+  type FieldLinkProjector,
   type HyperlinkProjector,
 } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
@@ -289,6 +290,14 @@ export interface SemanticLayoutOptions {
    * degradation a headless test or a furniture-only pass gets, and it is the safe one.
    */
   readonly projectLink?: HyperlinkProjector;
+  /**
+   * Turns a parsed HYPERLINK field instruction into the SANITIZED record its result carries.
+   *
+   * An option for the same reason as {@link projectLink}: the raw target must cross the
+   * surface's href trust boundary, which layout cannot see. Absent means the field's cached
+   * result still measures, breaks and paints — it simply is not clickable.
+   */
+  readonly projectFieldLink?: FieldLinkProjector;
   /**
    * Footnote/endnote layout input. When present, body layout projects note marks and a
    * post-pass attaches note areas (with bounded reflow for pageBottom reservation).
@@ -1336,6 +1345,7 @@ function layoutBlocksPass(
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+    ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
@@ -1459,6 +1469,7 @@ function layoutBlocksPass(
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+        ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout

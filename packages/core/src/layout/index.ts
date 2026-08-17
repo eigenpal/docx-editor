@@ -236,7 +236,12 @@ export {
   type PageFurniture,
   type SemanticLayoutOptions,
 } from './semantic-layout.ts';
-export { formatPageNumber, type HyperlinkProjector } from './field-projection.ts';
+export {
+  formatPageNumber,
+  type FieldLinkProjector,
+  type HyperlinkProjector,
+} from './field-projection.ts';
+export type { HyperlinkFieldSpec } from './field-link.ts';
 export {
   EMPTY_NUMBERING_INDEX,
   MAX_LVL_OVERRIDES,

@@ -12,6 +12,7 @@ import {
   type FieldAwarePiece,
   type FieldPageContext,
   type PositionalTab,
+  type FieldLinkProjector,
   type HyperlinkProjector,
   type ModelRange,
   type RunPropertyCascader,
@@ -107,6 +108,13 @@ export interface ParagraphFlowOptions {
    * link, which is what a table-cell or furniture pass without a resolver gets.
    */
   readonly projectLink?: HyperlinkProjector;
+  /**
+   * Turns a parsed HYPERLINK field instruction into the sanitized record its result carries.
+   *
+   * Same seam and same degradation as {@link projectLink}: absent, the field's cached result
+   * still measures and paints — it simply is not a link.
+   */
+  readonly projectFieldLink?: FieldLinkProjector;
   /**
    * Which revisions this break resolves away.
    *
@@ -656,7 +664,8 @@ export function breakParagraph(
     flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
     deletedRanges,
     flow?.inlineDrawingLayout,
-    flow?.themeFonts
+    flow?.themeFonts,
+    flow?.projectFieldLink
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
