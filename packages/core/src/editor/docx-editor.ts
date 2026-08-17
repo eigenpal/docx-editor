@@ -2377,6 +2377,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!reviewEnabled) {
         return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
       }
+      // The reply's anchor offsets are captured from the placements below and
+      // outlive this call; queued typing must land before they are taken, the
+      // same rule as commentTargetRange.
+      surface?.flushPendingInput();
       const placement = reviewPlacements().find((entry) => entry.key === key);
       const item = placement?.item as ReviewItem | undefined;
       if (!item || !surface) {

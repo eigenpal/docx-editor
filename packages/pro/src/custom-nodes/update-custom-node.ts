@@ -176,6 +176,11 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is mounted' };
   const refusal = viewingRefusal(editor);
   if (refusal) return refusal;
+  // BEFORE the span capture below, not merely before the write: the chip's
+  // paragraph and offsets are read here and honored verbatim by the session, so
+  // queued typing landing between capture and write would rewrite the chip at a
+  // stale span.
+  surface.flushPendingInput();
   // From the NODE's own id, not the open scope: a caller may address a chip in a story the
   // reader has since left, and the id says which one.
   const scope = storyScopeOfId(editor, nodeId);
@@ -236,9 +241,6 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
 
   const alias = update.alias ?? existing.alias;
   const lock = update.lock ?? existing.lock;
-  // Below the surface's typing buffer: land queued keystrokes before the
-  // replacement rewrites the paragraph's node layout.
-  surface.flushPendingInput();
   const written = surface.session.insertCustomNode(
     {
       replaceControlId: nodeId,
