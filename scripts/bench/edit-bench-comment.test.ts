@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { COMMENT_MARKER, renderComment } from './edit-bench-comment.mjs';
+import { aggregateReports, COMMENT_MARKER, renderComment } from './edit-bench-comment.mjs';
 
 function timing(medianMs: number): Record<string, number> {
   return { medianMs, p95Ms: medianMs * 1.2, minMs: medianMs * 0.8, maxMs: medianMs * 1.5 };
@@ -91,6 +91,48 @@ describe('edit-bench comment rendering', () => {
     const body = renderComment(head, base);
     expect(body).toContain('| renamed-scenario | — |');
     expect(body).toContain('| steady-middle-text | 10.00 ms | — | n/a | — |');
+  });
+});
+
+describe('interleaved-run aggregation', () => {
+  const engine = (scenario: { total: { medianMs: number } }) => scenario.total;
+
+  test('two runs aggregate to the mean of their medians', () => {
+    const head = aggregateReports([report({ medianMs: 10 }), report({ medianMs: 12 })], engine);
+    const body = renderComment(head, aggregateReports([report({ medianMs: 10 })], engine));
+    expect(body).toContain('| steady-middle-text | 10.00 ms | 11.00 ms |');
+    expect(body).toContain('Interleaved runs per side: head 2, base 1.');
+  });
+
+  test('a delta inside the same-side spread renders neutral, outside it colors', () => {
+    // Head runs 10 and 14: mean 12, spread (14-10)/12 = 33%. The +20% delta vs a
+    // base of 10 stays neutral because the head disagrees with itself by more.
+    const noisy = aggregateReports([report({ medianMs: 10 }), report({ medianMs: 14 })], engine);
+    const base = aggregateReports([report({ medianMs: 10 })], engine);
+    const noisyBody = renderComment(noisy, base);
+    expect(noisyBody).toContain('| ⚪ +20.0% |');
+    expect(noisyBody).toContain('(worst 33.3%) render neutral');
+    // Steady runs 12 and 12: zero spread, same +20% delta now colors red.
+    const steady = aggregateReports([report({ medianMs: 12 }), report({ medianMs: 12 })], engine);
+    expect(renderComment(steady, base)).toContain('| 🔴 +20.0% |');
+  });
+
+  test('all-zero medians record no spread instead of a NaN that neutralizes everything', () => {
+    const zeroHead = aggregateReports([report({ medianMs: 0 }), report({ medianMs: 0 })], engine);
+    const base = aggregateReports([report({ medianMs: 10 })], engine);
+    const body = renderComment(zeroHead, base);
+    expect(body).toContain('🟢 -100.0%');
+    expect(body).not.toContain('NaN');
+  });
+
+  test('a run with a different fixture hash is dropped from the aggregate', () => {
+    const head = aggregateReports(
+      [report({ medianMs: 10 }), report({ medianMs: 20, fixtureSha256: 'other' })],
+      engine
+    );
+    expect(head.runCount).toBe(1);
+    const body = renderComment(head, aggregateReports([report({ medianMs: 10 })], engine));
+    expect(body).toContain('| steady-middle-text | 10.00 ms | 10.00 ms |');
   });
 });
 

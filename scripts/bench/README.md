@@ -56,10 +56,14 @@ delta isolates exactly what merging the PR changes:
   typing user feels;
 - `bench:edit --runs 10` — the headless engine pipeline with deterministic work counters.
 
-`scripts/bench/edit-bench-comment.mjs` renders all reports into a single sticky PR comment —
-the typing-latency table first, the engine table below it, plus any work-counter changes.
-Comparability is guarded per report by the fixture SHA-256: if the fixture changed on the PR,
-or the baseline predates a benchmark, that section degrades to head-only numbers.
+The two sides run INTERLEAVED (head, base, base, head): a whole benchmark run inherits the
+machine's momentary state, so back-to-back one-shot runs systematically favor one side.
+`scripts/bench/edit-bench-comment.mjs` aggregates each side's runs (mean of medians), renders
+all reports into a single sticky PR comment — the typing-latency table first, the engine table
+below it, plus any work-counter changes — and refuses to color a delta smaller than the
+observed same-side spread, so the comment measures its own noise instead of reporting it as a
+result. Comparability is guarded per report by the fixture SHA-256: if the fixture changed on
+the PR, or the baseline predates a benchmark, that section degrades to head-only numbers.
 
 Timings in that comment are informational: shared runners are noisy, so the job never fails on
 a head-vs-base wall-clock delta, and the single-sample timing tails run warn-only there

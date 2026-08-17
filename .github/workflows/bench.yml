@@ -6,13 +6,20 @@ name: Performance benchmark
 #     UX number: keystroke handler and frame latency through the real editor;
 #   - the deterministic edit benchmark (scripts/bench/edit-bench.ts) — the
 #     engine layout pipeline with exact work counters.
+#
+# The two sides run INTERLEAVED (head, base, base, head): a whole benchmark
+# run inherits the machine's momentary state, so back-to-back one-shot runs
+# systematically favor one side. A/B/B/A cancels that drift to first order,
+# and the comment renders any delta smaller than the observed same-side
+# spread as neutral.
+#
 # Wall-clock numbers from a shared runner are informational only — this job
 # never fails on a head-vs-base timing delta, and single-sample timing tails
 # are warn-only here (EDIT_BROWSER_BENCH_TIMING_TAILS=warn). Deterministic
 # gates still apply: the pinned work-counter test
 # (scripts/bench/edit-bench-gates.test.ts) inside `bun run test` in ci.yml,
 # and the browser spec's structural and median-based gates, which fail the
-# HEAD browser run (this is the only CI execution of that spec). A failing
+# HEAD browser runs (this is the only CI execution of that spec). A failing
 # BASELINE run only degrades the comment.
 
 on:
@@ -56,68 +63,108 @@ jobs:
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
 
-      - name: Benchmark PR head
+      - name: Prepare baseline worktree
+        id: baseline
         run: |
           mkdir -p bench-out
-          bun scripts/bench/edit-bench.ts --runs 10 --json > bench-out/head.json
-
-      - name: Browser-benchmark PR head
-        # The UX measurement: trusted Chromium input through the real adapter,
-        # review rail, and paginated DOM. Only the latency test — clipboard and
-        # burst stay local tools. SUSTAINED_EDITS is trimmed for the spec's 180s
-        # per-test timeout on shared runners; the SAME value must be set on the
-        # baseline run below, or the two reports' medians come from different
-        # sample counts.
-        # TIMING_TAILS=warn: single-sample tail gates (p95 spikes, sustained max)
-        # log instead of failing — one scheduler stall on a shared runner trips
-        # them. Structural and median-based gates stay hard and fail this step.
-        run: |
-          EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
-            EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
-            EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/head-ux.json" \
-            bunx playwright test --config e2e/edit-browser-bench.config.ts \
-            --grep "browser editing latency"
-
-      - name: Benchmark baseline
-        run: |
           # HEAD is the PR merge ref, so this resolves to the main tip the merge
           # ref was built against — the delta isolates exactly what merging this
           # PR changes. Do not "fix" this to the branch fork point.
           BASE=$(git merge-base HEAD "origin/${{ github.base_ref }}")
           echo "baseline commit: $BASE"
           git worktree add "$RUNNER_TEMP/base" "$BASE"
-          # Run the baseline's OWN benchmark script against baseline code, so it
-          # measures what main actually did. Comparability is checked later via
-          # fixtureSha256 in the comment script; a baseline without the benchmark
-          # (or without the fixture) simply yields a head-only report.
           if [ -f "$RUNNER_TEMP/base/scripts/bench/edit-bench.ts" ] && \
              [ -f "$RUNNER_TEMP/base/e2e/fixtures/synthetic-long-edit.docx" ]; then
             cd "$RUNNER_TEMP/base"
             bun install --frozen-lockfile
-            bun scripts/bench/edit-bench.ts --runs 10 --json > "$GITHUB_WORKSPACE/bench-out/base.json"
-            # Same for the browser bench, using the baseline's own spec. Browser
-            # binaries live in the shared Playwright cache; install still runs in
-            # case the baseline pins a different Playwright build. Failure here
-            # degrades the comment to a head-only UX table rather than failing
-            # the job.
-            if [ -f "$RUNNER_TEMP/base/e2e/edit-browser-bench.config.ts" ]; then
+            # Browser binaries live in the shared Playwright cache; install still
+            # runs in case the baseline pins a different Playwright build.
+            # ux only when the baseline spec understands the RUNS env var, or its
+            # default sample count would silently differ from the head rounds'.
+            if [ -f "$RUNNER_TEMP/base/e2e/edit-browser-bench.config.ts" ] && \
+               grep -q EDIT_BROWSER_BENCH_RUNS "$RUNNER_TEMP/base/e2e/edit-browser.bench.spec.ts"; then
               bunx playwright install --with-deps chromium || true
-              EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
-                EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
-                EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/base-ux.json" \
-                bunx playwright test --config e2e/edit-browser-bench.config.ts \
-                --grep "browser editing latency" || echo "baseline browser bench failed; continuing"
+              echo "ux=true" >> "$GITHUB_OUTPUT"
             fi
+            echo "engine=true" >> "$GITHUB_OUTPUT"
           else
-            echo "merge-base has no edit benchmark; skipping baseline"
+            echo "merge-base has no edit benchmark; head-only comment"
           fi
+
+      # ---- Interleaved rounds: head, base, base, head. Sample counts are
+      # halved per round (two rounds per side aggregate back to full size) and
+      # MUST stay identical across all four, or the medians stop being
+      # comparable. Head browser rounds fail the job on the spec's structural
+      # gates; baseline rounds only degrade the comment.
+
+      - name: Round 1 — PR head
+        run: |
+          bun scripts/bench/edit-bench.ts --runs 5 --json > bench-out/head-1.json
+          EDIT_BROWSER_BENCH_RUNS=5 \
+            EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+            EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+            EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/head-ux-1.json" \
+            bunx playwright test --config e2e/edit-browser-bench.config.ts \
+            --grep "browser editing latency"
+
+      - name: Round 1 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 5 --json > "$GITHUB_WORKSPACE/bench-out/base-1.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-1.json"; echo "baseline engine round 1 failed; continuing"; }
+          if [ "${{ steps.baseline.outputs.ux }}" = "true" ]; then
+            EDIT_BROWSER_BENCH_RUNS=5 \
+              EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+              EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+              EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/base-ux-1.json" \
+              bunx playwright test --config e2e/edit-browser-bench.config.ts \
+              --grep "browser editing latency" || echo "baseline browser round 1 failed; continuing"
+          fi
+
+      - name: Round 2 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 5 --json > "$GITHUB_WORKSPACE/bench-out/base-2.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-2.json"; echo "baseline engine round 2 failed; continuing"; }
+          if [ "${{ steps.baseline.outputs.ux }}" = "true" ]; then
+            EDIT_BROWSER_BENCH_RUNS=5 \
+              EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+              EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+              EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/base-ux-2.json" \
+              bunx playwright test --config e2e/edit-browser-bench.config.ts \
+              --grep "browser editing latency" || echo "baseline browser round 2 failed; continuing"
+          fi
+
+      - name: Round 2 — PR head
+        run: |
+          # A tolerated baseline crash can orphan its dev server; head must not
+          # inherit a red job from an infrastructure leftover on the port.
+          (lsof -ti tcp:5275 | xargs -r kill -9) 2>/dev/null || true
+          bun scripts/bench/edit-bench.ts --runs 5 --json > bench-out/head-2.json
+          EDIT_BROWSER_BENCH_RUNS=5 \
+            EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+            EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+            EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/head-ux-2.json" \
+            bunx playwright test --config e2e/edit-browser-bench.config.ts \
+            --grep "browser editing latency"
 
       - name: Render comment
         run: |
-          ARGS="--head bench-out/head.json --out bench-out/comment.md"
-          [ -f bench-out/base.json ] && ARGS="$ARGS --base bench-out/base.json"
-          [ -f bench-out/head-ux.json ] && ARGS="$ARGS --head-ux bench-out/head-ux.json"
-          [ -f bench-out/base-ux.json ] && ARGS="$ARGS --base-ux bench-out/base-ux.json"
+          ARGS="--out bench-out/comment.md"
+          for f in bench-out/head-1.json bench-out/head-2.json; do
+            [ -f "$f" ] && ARGS="$ARGS --head $f"
+          done
+          for f in bench-out/base-1.json bench-out/base-2.json; do
+            [ -f "$f" ] && ARGS="$ARGS --base $f"
+          done
+          for f in bench-out/head-ux-1.json bench-out/head-ux-2.json; do
+            [ -f "$f" ] && ARGS="$ARGS --head-ux $f"
+          done
+          for f in bench-out/base-ux-1.json bench-out/base-ux-2.json; do
+            [ -f "$f" ] && ARGS="$ARGS --base-ux $f"
+          done
           node scripts/bench/edit-bench-comment.mjs $ARGS
 
       - name: Upload benchmark artifacts
