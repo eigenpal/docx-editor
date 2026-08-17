@@ -475,12 +475,6 @@ describe('refuses invalid or locked drawing operations', () => {
   });
 
   test('refuses non-picture graphic', () => {
-    const part = parse(
-      inlinePictureDrawing()
-        .replace(PIC_URI, CHART_URI)
-        .replace('<pic:pic>', '<pic:pic>')
-        .replace('pic:pic', 'pic:pic')
-    );
     const xml = inlinePictureDrawing().replace(`uri="${PIC_URI}"`, `uri="${CHART_URI}"`);
     const chartPart = parse(xml);
     const drawing = drawingOf(chartPart);

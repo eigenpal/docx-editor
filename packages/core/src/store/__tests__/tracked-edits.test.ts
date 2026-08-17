@@ -587,9 +587,8 @@ describe('the offset model is the shared one', () => {
       text: 'X',
       revision: ADA,
     });
-    const text = xml(after)
-      .match(/<w:t[^>]*>([^<]*)<\/w:t>/g)!
-      .map((node) => node.replace(/<[^>]+>/g, ''))
+    const text = [...xml(after).matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)]
+      .map(([, body]) => body!)
       .join('');
     expect(text).toBe('abcXd');
   });

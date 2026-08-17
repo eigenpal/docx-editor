@@ -24,4 +24,18 @@ describe('nested object mutation', () => {
     expect(() => deleteNestedValue(target, 'constructor.prototype.polluted')).toThrow();
     expect(Object.prototype.polluted).toBeUndefined();
   });
+
+  test('every unsafe key is refused at the head, in the middle and at the leaf', () => {
+    // `setNestedValue` spells the three names out three times: once in the shared guard, once
+    // at the descent step and once at the leaf write. A name added to only one of them would
+    // still pass the test above, so each position is checked for each name.
+    for (const key of ['__proto__', 'constructor', 'prototype']) {
+      expect(() => setNestedValue({}, key, 1)).toThrow();
+      expect(() => setNestedValue({}, `${key}.leaf`, 1)).toThrow();
+      expect(() => setNestedValue({}, `a.${key}.leaf`, 1)).toThrow();
+      expect(() => setNestedValue({}, `a.b.${key}`, 1)).toThrow();
+      expect(() => deleteNestedValue({}, `a.${key}.leaf`)).toThrow();
+    }
+    expect(Object.prototype.polluted).toBeUndefined();
+  });
 });

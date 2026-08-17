@@ -207,6 +207,23 @@ async function buildCatalog() {
   return { entries, skipped };
 }
 
+/**
+ * An upstream string as a single-quoted TypeScript string literal.
+ *
+ * The backslash goes FIRST: escaping only the quote leaves `\` able to consume the escape
+ * this adds, so an upstream family name ending in one would close the literal early and the
+ * generated file would carry whatever followed as code. The line terminators are escaped
+ * too — `familyName()` reads the name with `[^"]+`, which spans a newline, and a raw one
+ * inside a single-quoted literal is a syntax error rather than an injection.
+ */
+function singleQuoted(value) {
+  return `'${value
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')}'`;
+}
+
 function render(entries) {
   const families = new Set(entries.map((entry) => entry.family));
   return (
@@ -249,9 +266,12 @@ function render(entries) {
     entries
       .map(
         (entry) =>
-          `  { family: '${entry.family.replace(/'/g, "\\'")}', weight: ${entry.weight}, ` +
-          `style: '${entry.style}', url: '${entry.url}', byteLength: ${entry.byteLength}, ` +
-          `hash: '${entry.hash}' },`
+          // `url` is built from upstream repository paths, so it is escaped like the family
+          // name. `style` comes from the fixed FACES list, and `hash`/`byteLength`/`weight`
+          // are validated hex and numbers.
+          `  { family: ${singleQuoted(entry.family)}, weight: ${entry.weight}, ` +
+          `style: '${entry.style}', url: ${singleQuoted(entry.url)}, ` +
+          `byteLength: ${entry.byteLength}, hash: '${entry.hash}' },`
       )
       .join('\n') +
     '\n];\n'
@@ -274,7 +294,7 @@ function check() {
     process.exit(1);
   }
   const pattern =
-    /family: '((?:[^'\\]|\\')+)',\s*weight: (400|700),\s*style: '(normal|italic)',\s*url: '([^']+)',\s*byteLength: (\d+),\s*hash: '(sha256:[0-9a-f]{64})'/g;
+    /family: '((?:[^'\\]|\\.)+)',\s*weight: (400|700),\s*style: '(normal|italic)',\s*url: '([^']+)',\s*byteLength: (\d+),\s*hash: '(sha256:[0-9a-f]{64})'/g;
   const byFamily = new Map();
   let count = 0;
   for (const match of current.matchAll(pattern)) {

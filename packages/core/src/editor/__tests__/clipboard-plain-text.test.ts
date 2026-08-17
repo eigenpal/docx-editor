@@ -176,4 +176,82 @@ describe('the visible text of an HTML fragment', () => {
     const html = '<p onclick="evil()">text<img src=x onerror=alert(1)></p>';
     expect(plainTextFromHtml(html)).toBe('text');
   });
+
+  test('a bracket a browser shows as text is kept, even beside a removed element', () => {
+    // A `<` that opens no tag is text, so removing the element after it can leave that `<`
+    // next to a word — `<script>` here, where the tag-stripping reader gave `script>`. The
+    // output is only ever inserted as run text, so a bracket in it is a character, not
+    // markup; what matters is that the reader never RE-READS what it wrote.
+    expect(plainTextFromHtml('<<div>script>')).toBe('<script>');
+    expect(plainTextFromHtml('<<!---->script>')).toBe('<script>');
+    expect(plainTextFromHtml('<scr<div>ipt>alert(1)')).toBe('ipt>alert(1)');
+  });
+
+  test('a quoted attribute may hold a bracket without ending the tag', () => {
+    expect(plainTextFromHtml('<p title="a > b">text</p>')).toBe('text');
+    expect(plainTextFromHtml("<p data-x='a > b'>text</p>")).toBe('text');
+  });
+
+  test('an apostrophe in an unquoted attribute is a character, not a quote', () => {
+    // Only the quote directly after `=` opens a value. Reading this one as an opening quote
+    // sent the scan hunting for a partner to the end of the payload and pasted nothing.
+    expect(plainTextFromHtml("<p class=note title=it's>Para one</p><p>Second</p>")).toBe(
+      'Para one\nSecond'
+    );
+    expect(plainTextFromHtml("<div><img src=a.jpg alt=John's photo><p>Caption</p></div>")).toBe(
+      'Caption'
+    );
+  });
+
+  test('an unpaired bracket in prose stays prose', () => {
+    expect(plainTextFromHtml('<p>1 < 2 and 3 > 2</p>')).toBe('1 < 2 and 3 > 2');
+  });
+
+  test('a doctype is furniture, not text', () => {
+    expect(plainTextFromHtml('<!DOCTYPE html><p>alpha</p>')).toBe('alpha');
+  });
+
+  test('a comment that closes at once does not swallow the payload behind it', () => {
+    // `<!-->` and `<!--->` are complete comments. Demanding a full `-->` after them found no
+    // terminator and dropped everything that followed — the whole paste, for five characters.
+    expect(plainTextFromHtml('<!-->text')).toBe('text');
+    expect(plainTextFromHtml('<!--->text')).toBe('text');
+    expect(plainTextFromHtml('a<!--<!-- -->b')).toBe('ab');
+  });
+
+  test('raw text stays out of the document even when the elements overlap', () => {
+    expect(plainTextFromHtml('<style><script></style>alert(1)</script>')).toBe('alert(1)');
+    expect(plainTextFromHtml('<script>a<script>b</script>c</script>')).toBe('c');
+    expect(plainTextFromHtml('<SCRIPT>alert(1)</SCRIPT>keep')).toBe('keep');
+  });
+
+  test('an attribute does not stop a break or a cell from reading as one', () => {
+    expect(plainTextFromHtml('a<br class="x">b')).toBe('a\nb');
+    expect(plainTextFromHtml('<tr><td>a</td class=x><td>b</td></tr>')).toBe('a\tb');
+  });
+
+  test('truncation landing inside a tag does not paste the tag as text', () => {
+    const text = plainTextFromHtml(`${'x'.repeat(1_999_990)}<p class="y`);
+    expect(text.endsWith('x')).toBe(true);
+    expect(text).not.toContain('<p');
+  });
+
+  test('a payload built to make a reader backtrack still finishes at once', () => {
+    // Raw-text elements and bare brackets, repeated: each branch of the walk consumes what
+    // it reads, so the cost stays proportional to the length rather than squaring it.
+    const hostile = `${'<style>x</style>'.repeat(50_000)}${'< '.repeat(100_000)} text`;
+    const started = performance.now();
+    expect(plainTextFromHtml(hostile)).toContain('text');
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
+  test('a solid run of cell tabs is answered at once too', () => {
+    // `</td>` emits exactly one tab, so a payload of nothing else is a tab run a sender
+    // controls. Trimming those with `/\t+\n/g` backtracked over every position of the run:
+    // 80,000 cells cost 2.7 seconds, and the input cap allows five times that many.
+    const hostile = `${'</td>'.repeat(80_000)}z`;
+    const started = performance.now();
+    expect(plainTextFromHtml(hostile)).toContain('z');
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
 });

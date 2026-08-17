@@ -53,6 +53,23 @@ function sha512Integrity(buffer: Buffer): string {
   return `sha512-${createHash('sha512').update(buffer).digest('base64')}`;
 }
 
+/** A literal string as a regular expression: every character the engine treats as syntax
+ * is escaped, the backslash first so it cannot consume the escape added after it. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|/-]/g, '\\$&');
+}
+
+/** Whether a URL addresses the npm registry itself. The HOST has to match: a substring
+ * test would also answer for `https://registry.npmjs.org.example.invalid/`, which is a
+ * different host entirely. */
+function isRegistryUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname === 'registry.npmjs.org';
+  } catch {
+    return false;
+  }
+}
+
 /** Builds a fake `fetch` that answers the npm registry metadata request and
  * the tarball download for a single synthetic, unpinned `@types/office-js`
  * version — never touching the real network. */
@@ -63,7 +80,7 @@ function fakeNpmFetch({ version, declarationText }: { version: string; declarati
   const integrity = sha512Integrity(tarballGzip);
 
   return async (url: string) => {
-    if (url.includes('registry.npmjs.org')) {
+    if (isRegistryUrl(url)) {
       return {
         ok: true,
         status: 200,
@@ -157,7 +174,7 @@ describe('checkForDrift against a new @types/office-js version with no reviewed 
 
     // Explicitly flagged as unreviewed, not silently treated as adoptable.
     expect(result.reviewRequired).toBe(true);
-    expect(result.reviewReason).toMatch(new RegExp(UNPINNED_VERSION.replace(/[.-]/g, '\\$&')));
+    expect(result.reviewReason).toMatch(new RegExp(escapeRegExp(UNPINNED_VERSION)));
     expect(result.provenance).toBeNull();
     expect(result.provenanceJson).toBeNull();
   });
@@ -169,7 +186,7 @@ describe('checkForDrift against a new @types/office-js version with no reviewed 
     });
     const brokenFetchImpl = async (url: string, ...rest: unknown[]) => {
       const response = await fetchImpl(url, ...(rest as []));
-      if (url.includes('registry.npmjs.org')) {
+      if (isRegistryUrl(url)) {
         const body = await response.json();
         // Corrupt the integrity hash so verification must fail loudly.
         return {

@@ -58,8 +58,129 @@ function decodeEntities(text: string): string {
   });
 }
 
+/** Tags whose CONTENT is source, not visible text: the whole element is dropped. */
+const RAW_TEXT_TAGS = new Set(['script', 'style']);
+/** Close tags that end a block, so what follows starts a new line. */
+const BLOCK_TAGS = new Set([
+  'p',
+  'div',
+  'li',
+  'tr',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+  'section',
+  'article',
+  'pre',
+  'table',
+]);
+/** Close tags that end a table cell, which reads as a tab like a copied cell range. */
+const CELL_TAGS = new Set(['td', 'th']);
+
+const isNameStart = (char: string | undefined): boolean =>
+  char !== undefined && ((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z'));
+const isNameChar = (char: string | undefined): boolean =>
+  isNameStart(char) || (char !== undefined && char >= '0' && char <= '9');
+const isSpace = (char: string | undefined): boolean =>
+  char === ' ' || char === '\t' || char === '\n' || char === '\r' || char === '\f';
+
+interface ScannedTag {
+  readonly name: string;
+  readonly closing: boolean;
+  /** Index just past the `>`, or the end of input for an unterminated tag. */
+  readonly end: number;
+}
+
+/**
+ * Read the tag that starts at `start`, or null when that `<` is only literal text.
+ *
+ * Quoted attribute values may hold a `>`; a browser does not end the tag there, so neither
+ * does this. But ONLY a quote that opens a value counts — the one directly after an `=`.
+ * An apostrophe anywhere else is an ordinary character inside an unquoted value, exactly as
+ * a browser reads it, and treating `title=it's` as an opening quote sent the scan looking
+ * for a partner that never came and swallowed the rest of the paste.
+ *
+ * Each call consumes what it scans, which keeps the whole walk linear.
+ */
+function scanTag(html: string, start: number): ScannedTag | null {
+  let at = start + 1;
+  const closing = html[at] === '/';
+  if (closing) at += 1;
+  if (!isNameStart(html[at])) return null;
+  const nameStart = at;
+  while (at < html.length && isNameChar(html[at])) at += 1;
+  const name = html.slice(nameStart, at).toLowerCase();
+  let quote = '';
+  let afterEquals = false;
+  while (at < html.length) {
+    const char = html[at]!;
+    if (quote !== '') {
+      if (char === quote) quote = '';
+    } else if (char === '=') {
+      afterEquals = true;
+    } else if (afterEquals && (char === '"' || char === "'")) {
+      quote = char;
+      afterEquals = false;
+    } else if (char === '>') {
+      return { name, closing, end: at + 1 };
+    } else if (!isSpace(char)) {
+      afterEquals = false;
+    }
+    at += 1;
+  }
+  return { name, closing, end: html.length };
+}
+
+/**
+ * A line without the tabs a final cell in each row leaves behind.
+ *
+ * Written as a backward walk rather than `/\t+\n/g`, which backtracks over every position of
+ * a tab run: `</td>` emits exactly one tab, so a payload of nothing but close-cell tags is a
+ * solid run of them under a sender's control, and at the input cap that regex cost about a
+ * minute of blocked main thread.
+ */
+function withoutTrailingTabs(line: string): string {
+  let end = line.length;
+  while (end > 0 && line.charCodeAt(end - 1) === 0x09) end -= 1;
+  return end === line.length ? line : line.slice(0, end);
+}
+
+/**
+ * The index just past `</name>`, or the end of input when it never closes.
+ *
+ * An unclosed `<script>` drops everything after it rather than pasting its body.
+ */
+function rawTextEnd(html: string, name: string, from: number): number {
+  for (let at = from; at < html.length; ) {
+    const close = html.indexOf('</', at);
+    if (close === -1) return html.length;
+    let after = close + 2;
+    if (html.slice(after, after + name.length).toLowerCase() === name) {
+      after += name.length;
+      while (after < html.length && isSpace(html[after])) after += 1;
+      if (html[after] === '>') return after + 1;
+    }
+    at = close + 2;
+  }
+  return html.length;
+}
+
 /**
  * The visible text of an HTML fragment.
+ *
+ * A single forward walk, not a sequence of `replace` passes. The walk never re-reads what it
+ * has already written, so no later stage can turn emitted text back into a tag, and every
+ * branch moves the cursor forward over a range the next branch will not revisit — a hostile
+ * payload costs one pass over its own length.
+ *
+ * It does NOT promise the output holds no angle brackets. A payload may write a literal `<`
+ * that a browser also shows as text, and removing the element after it can leave that `<`
+ * beside a word. That is fine here and only here: the result is inserted as run text through
+ * the same path typed characters take, and is escaped again on save. Nothing re-parses it.
  *
  * Block boundaries become newlines and table cells become tabs, matching how this engine
  * already flattens a copied cell range — so an HTML table pasted here lands in the same
@@ -67,26 +188,64 @@ function decodeEntities(text: string): string {
  */
 export function plainTextFromHtml(html: string): string {
   const bounded = html.length > MAX_HTML_INPUT ? html.slice(0, MAX_HTML_INPUT) : html;
+  let text = '';
+  let at = 0;
+  while (at < bounded.length) {
+    const open = bounded.indexOf('<', at);
+    if (open === -1) {
+      text += bounded.slice(at);
+      break;
+    }
+    text += bounded.slice(at, open);
+    // Comments first: they can contain anything, including tag-shaped text.
+    if (bounded.startsWith('<!--', open)) {
+      // `<!-->` and `<!--->` close AT ONCE. Demanding a full `-->` after them found no
+      // terminator and swallowed the rest of the payload — five characters at the head of
+      // a paste were enough to drop all of it.
+      if (bounded[open + 4] === '>') {
+        at = open + 5;
+        continue;
+      }
+      if (bounded[open + 4] === '-' && bounded[open + 5] === '>') {
+        at = open + 6;
+        continue;
+      }
+      const close = bounded.indexOf('-->', open + 4);
+      at = close === -1 ? bounded.length : close + 3;
+      continue;
+    }
+    // Doctypes, processing instructions and bogus comments run to the next `>`.
+    if (bounded[open + 1] === '!' || bounded[open + 1] === '?') {
+      const close = bounded.indexOf('>', open + 1);
+      at = close === -1 ? bounded.length : close + 1;
+      continue;
+    }
+    const tag = scanTag(bounded, open);
+    if (tag === null) {
+      // A `<` that starts no tag is text, exactly as a browser reads it.
+      text += '<';
+      at = open + 1;
+      continue;
+    }
+    at = tag.end;
+    if (!tag.closing && RAW_TEXT_TAGS.has(tag.name)) {
+      at = rawTextEnd(bounded, tag.name, tag.end);
+    } else if (!tag.closing && tag.name === 'br') {
+      text += '\n';
+    } else if (tag.closing && CELL_TAGS.has(tag.name)) {
+      text += '\t';
+    } else if (tag.closing && BLOCK_TAGS.has(tag.name)) {
+      text += '\n';
+    }
+  }
   return (
-    decodeEntities(
-      bounded
-        // Comments first: they can contain anything, including tag-shaped text.
-        .replace(/<!--[\s\S]*?-->/g, '')
-        // Script and style CONTENT is not visible text — dropping the tags alone would
-        // paste the source of both.
-        .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
-        .replace(/<(script|style)\b[^>]*>[\s\S]*$/gi, '')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/(td|th)\s*>/gi, '\t')
-        .replace(/<\/(p|div|li|tr|h[1-6]|blockquote|section|article|pre|table)\s*>/gi, '\n')
-        // Every remaining tag, open or close. `[^>]*` is linear — no nested quantifier for
-        // a hostile payload to walk into.
-        .replace(/<[^>]*>/g, '')
-    )
+    decodeEntities(text)
       // Collapse the runs of blank lines that block-level markup leaves behind, and drop
       // the trailing tab a final cell contributes.
       .replace(/\r\n?/g, '\n')
-      .replace(/\t+\n/g, '\n')
+      .split('\n')
+      .map(withoutTrailingTabs)
+      .join('\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim()
   );

@@ -125,6 +125,33 @@ describe('content-type index', () => {
     expect(buildContentTypeIndex(records([['xml', 'bogus']])).ok).toBe(false);
   });
 
+  test('parameters are accepted, and an empty parameter is not', () => {
+    expect(isValidMime('text/plain; charset=UTF-8')).toBe(true);
+    expect(isValidMime('text/plain;charset=UTF-8;boundary=x')).toBe(true);
+    expect(isValidMime('text/plain;')).toBe(false);
+    expect(isValidMime('text/plain;;charset=UTF-8')).toBe(false);
+    expect(isValidMime('text/plain ')).toBe(false);
+    expect(isValidMime(';charset=UTF-8')).toBe(false);
+    // The boundaries the hand-written parameter walk has to reproduce exactly, because the
+    // single pattern it replaced got them for free.
+    expect(isValidMime('text/plain; ')).toBe(true); // a whitespace-only parameter counts
+    expect(isValidMime('text/plain \t;charset=UTF-8')).toBe(true); // whitespace before the `;`
+    expect(isValidMime('text/plain;charset=UTF-8;')).toBe(false); // trailing empty segment
+    expect(isValidMime('text/plain\n')).toBe(false); // `$` does not forgive a final newline
+  });
+
+  test('a content type built to make the reader backtrack is answered at once', () => {
+    // The shape a crafted `[Content_Types].xml` used. The old group was exponential in the
+    // NUMBER of `;`-plus-whitespace segments (and polynomial in each one's length), so the
+    // cost is bought with segments, not with size: these 88 characters cost it 1.2 seconds,
+    // and 406 characters of the same shape cost it 10.9. The trailing `;` is what forces the
+    // walk — it refuses every split the group can try.
+    const hostile = `a/b${`;${' '.repeat(20)}`.repeat(4)};`;
+    const started = performance.now();
+    expect(isValidMime(hostile)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
   test('record count enforces N (ok) and N+1 (fail)', () => {
     const many = (n: number): ContentTypeRecords =>
       records(

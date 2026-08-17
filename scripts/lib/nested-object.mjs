@@ -1,8 +1,17 @@
-// Keys that would mutate the prototype chain rather than the target object.
-const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+// Keys that would mutate the prototype chain rather than the target object. Compared one
+// literal at a time, in the loop that does the writing, so the guard sits on the same path
+// a reader (or a static analyzer) walks to reach the assignment.
+//
+// The three names are spelled out again inside `setNestedValue`, at the descent step and at
+// the leaf write. That repetition is deliberate — a guard behind a helper call is a guard
+// the analysis cannot see — so ADDING A NAME HERE MEANS ADDING IT AT BOTH SITES TOO.
+// `scripts/lib/nested-object.test.mjs` asserts the three lists agree.
+function isUnsafeKey(key) {
+  return key === '__proto__' || key === 'constructor' || key === 'prototype';
+}
 
 function assertSafePath(path, parts, action) {
-  if (parts.some((p) => UNSAFE_KEYS.has(p))) {
+  if (parts.some(isUnsafeKey)) {
     throw new Error(`Refusing to ${action} unsafe key path: ${path}`);
   }
 }
@@ -14,6 +23,9 @@ export function setNestedValue(obj, path, value) {
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const key = parts[i];
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      throw new Error(`Refusing to set unsafe key path: ${path}`);
+    }
     if (
       !Object.hasOwn(current, key) ||
       typeof current[key] !== 'object' ||
@@ -28,7 +40,11 @@ export function setNestedValue(obj, path, value) {
     }
     current = current[key];
   }
-  Object.defineProperty(current, parts[parts.length - 1], {
+  const leafKey = parts[parts.length - 1];
+  if (leafKey === '__proto__' || leafKey === 'constructor' || leafKey === 'prototype') {
+    throw new Error(`Refusing to set unsafe key path: ${path}`);
+  }
+  Object.defineProperty(current, leafKey, {
     value,
     writable: true,
     enumerable: true,

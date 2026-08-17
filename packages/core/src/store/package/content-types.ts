@@ -46,13 +46,25 @@ export type ContentTypeError =
   | { readonly code: 'invalid-override-name'; readonly partName: string }
   | { readonly code: 'too-many-records'; readonly limit: number };
 
-// Media type per RFC 2045-ish: type "/" subtype, optional ";" parameters.
-const MIME_RE =
-  /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*(\s*;\s*[^;]+)*$/;
+// Media type per RFC 2045-ish: type "/" subtype. Parameters are checked by hand below,
+// NOT by a trailing `(\s*;\s*[^;]+)*` group: `\s*` and `[^;]+` both match whitespace, so a
+// crafted `[Content_Types].xml` value like "a/b;" plus a long run of spaces made the engine
+// backtrack exponentially. The essence pattern alone is unambiguous and linear.
+const MIME_ESSENCE_RE = /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*$/;
+// The same essence, allowing the trailing whitespace a `;` may sit behind.
+const MIME_ESSENCE_BEFORE_PARAMS_RE =
+  /^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\s*$/;
 
 /** Whether a string is syntactically a MIME type. Syntax only — no registry lookup. */
 export function isValidMime(value: string): boolean {
-  return MIME_RE.test(value);
+  const firstSemicolon = value.indexOf(';');
+  if (firstSemicolon === -1) return MIME_ESSENCE_RE.test(value);
+  if (!MIME_ESSENCE_BEFORE_PARAMS_RE.test(value.slice(0, firstSemicolon))) return false;
+  // Every parameter segment must carry something; a bare or doubled `;` is not a parameter.
+  return value
+    .slice(firstSemicolon + 1)
+    .split(';')
+    .every((parameter) => parameter.length > 0);
 }
 
 /** ASCII-case-insensitive extension key (leading dot removed; ASCII-only fold). */
