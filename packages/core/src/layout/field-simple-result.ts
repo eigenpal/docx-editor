@@ -60,9 +60,12 @@ export interface SimpleFieldDisplay {
   readonly resultProps: readonly OoxmlProperty[] | undefined;
   readonly resultStyle: ResolvedRunStyle | undefined;
   /**
-   * True once ANY cached-result content was seen — hidden, suppressed or visible. An empty
-   * `text` alone cannot tell "no cached result" from "a cached result the file hides", and
-   * synthesis (MACROBUTTON / GOTOBUTTON display) may only fill the first.
+   * True once cached-result content the current display mode KEEPS was seen — visible or
+   * vanish-hidden. Only content with model text sets it (result text, tab / break, `w:sym`);
+   * drawings, `w:ptab` and note references never do. An empty `text` alone cannot tell "no
+   * cached result" from "a cached result the file hides", and synthesis (MACROBUTTON /
+   * GOTOBUTTON display) may only fill the first. Revision-suppressed content does not
+   * count: the mode resolved it away, and synthesis must be free to fill that view.
    */
   readonly sawResultContent: boolean;
 }
@@ -162,7 +165,10 @@ export function collectSimpleFieldDisplay(args: {
           // A collected display string cannot carry a per-glyph font switch, so only a
           // `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
           if (isSymbolRunChild(grand)) {
-            sawResultContent = true;
+            // Only content this display mode keeps counts (vanish-hidden still does) —
+            // synthesis must fill the view a `w:del`-wrapped result is resolved out of,
+            // matching the complex-field walk.
+            if (revisionsVisible(local, displayMode)) sawResultContent = true;
             if (tracker.active) {
               tracker.noteResult(!style.hidden && revisionsVisible(local, displayMode));
               continue;
@@ -177,12 +183,13 @@ export function collectSimpleFieldDisplay(args: {
 
           const value = modelTextOfRunChild(grand);
           if (value.length === 0) continue;
-          sawResultContent = true;
           const deleted = revisionsAreDeletion(local);
-          const suppressed =
-            style.hidden ||
-            !revisionsVisible(local, displayMode) ||
-            (grand.kind === 'deletedText' && !deleted);
+          const revisionSuppressed =
+            !revisionsVisible(local, displayMode) || (grand.kind === 'deletedText' && !deleted);
+          // Revision-suppressed content does not count as a cached result: the mode resolved
+          // it away, and synthesis must be free to fill that view. Vanish-hidden still counts.
+          if (!revisionSuppressed) sawResultContent = true;
+          const suppressed = style.hidden || revisionSuppressed;
           if (tracker.active) {
             tracker.noteResult(!suppressed);
             if (!suppressed) captureStyle(props, style);

@@ -29,6 +29,7 @@ import {
   type OoxmlPart,
 } from '../index.ts';
 import { piecesOfParagraph } from '../../layout/field-projection.ts';
+import { parsedFieldSpansOf } from '../package/field-nodes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -608,5 +609,59 @@ describe('w:delInstrText addressing', () => {
     expect(spans[0]!.removeNodeIds).toContain(delInstr!.id);
     // The instruction reader accepts the deleted form.
     expect(instrTextValue(delInstr!)).toBe(' PAGE ');
+  });
+
+  test('live and deleted instruction chunks never merge — the live one decides addressing', () => {
+    // A tracked field-code edit leaves `w:delInstrText` NEXT TO `w:instrText` in one field.
+    // Concatenating them read " PAGE  FORMTEXT ", which is not FORMTEXT, so the field lost
+    // its editable result. The effective instruction is the live buffer alone.
+    const fieldWith = (instructionRuns: string): OoxmlPart =>
+      parse(
+        '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+          instructionRuns +
+          '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+          '<w:r><w:t>typed</w:t></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+      );
+    const spansOf = (part: OoxmlPart) => parsedFieldSpansOf(paragraphOf(part));
+
+    // Deleted PAGE beside live FORMTEXT: accepting the deletion leaves FORMTEXT.
+    const mixed = spansOf(
+      fieldWith(
+        '<w:r><w:delInstrText> PAGE </w:delInstrText></w:r>' +
+          '<w:r><w:instrText> FORMTEXT </w:instrText></w:r>'
+      )
+    );
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0]!.addressing).toBe('editable-result');
+
+    // The reverse: live PAGE beside a deleted FORMTEXT stays atomic.
+    const reverse = spansOf(
+      fieldWith(
+        '<w:r><w:delInstrText> FORMTEXT </w:delInstrText></w:r>' +
+          '<w:r><w:instrText> PAGE </w:instrText></w:r>'
+      )
+    );
+    expect(reverse).toHaveLength(1);
+    expect(reverse[0]!.addressing).toBe('atomic');
+
+    // Overflow accounts per buffer: a huge deleted chunk must not overflow the small live
+    // FORMTEXT instruction sitting beside it.
+    const hugeDeleted = spansOf(
+      fieldWith(
+        `<w:r><w:delInstrText>${'X'.repeat(300)}</w:delInstrText></w:r>` +
+          '<w:r><w:instrText> FORMTEXT </w:instrText></w:r>'
+      )
+    );
+    expect(hugeDeleted).toHaveLength(1);
+    expect(hugeDeleted[0]!.addressing).toBe('editable-result');
+
+    // A fully-deleted FORMTEXT keeps its meaning: the deleted buffer answers when no live
+    // element exists at all.
+    const fullyDeleted = spansOf(
+      fieldWith('<w:r><w:delInstrText> FORMTEXT </w:delInstrText></w:r>')
+    );
+    expect(fullyDeleted).toHaveLength(1);
+    expect(fullyDeleted[0]!.addressing).toBe('editable-result');
   });
 });

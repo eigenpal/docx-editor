@@ -107,6 +107,20 @@ export function isInstrText(node: OoxmlNode): boolean {
   );
 }
 
+/**
+ * Whether an instruction node is the DELETED form `w:delInstrText` (always generic — no
+ * typed kind).
+ *
+ * Consumers that ingest instruction text must keep deleted chunks in their own buffer:
+ * a tracked field-code edit puts `w:delInstrText` next to `w:instrText` in one field, and
+ * concatenating them produces an instruction nobody authored. The effective instruction is
+ * the live text when any live element exists, else the deleted text (a fully-deleted field
+ * keeps its meaning, with delete attribution).
+ */
+export function isDeletedInstrText(node: OoxmlNode): boolean {
+  return node.kind === 'generic' && isWml(node, 'delInstrText');
+}
+
 /** Typed or generic `w:fldSimple`. */
 export function isFldSimple(node: OoxmlNode): boolean {
   return node.kind === 'fldSimple' || (node.kind === 'generic' && isWml(node, 'fldSimple'));
@@ -203,8 +217,9 @@ export function hasLegacyFormFieldData(node: OoxmlNode): boolean {
  * render range, or null for auto-size (`w:sizeAuto`, absent, malformed, or negative —
  * ST_HpsMeasure is unsigned, so a negative value is invalid, not small).
  * `dropdown`: `selectedIndex` is already resolved (in-range `w:result`, else in-range
- * `w:default`, else 0 — an out-of-range index counts as absent) and always in range when
- * `entries` is non-empty; `entries` may be empty (layout paints nothing).
+ * `w:default`, else 0 — an out-of-range index counts as absent, and the FIRST `w:result` /
+ * `w:default` element wins even when malformed) and always in range when `entries` is
+ * non-empty; `entries` may be empty (layout paints nothing).
  */
 export type LegacyFormFieldData =
   | {
@@ -300,14 +315,26 @@ function checkboxDataOf(checkbox: OoxmlNode, budget: NodeBudget): LegacyFormFiel
 function dropdownDataOf(list: OoxmlNode, budget: NodeBudget): LegacyFormFieldData {
   let result: number | null = null;
   let fallback: number | null = null;
+  // First-wins via their own flags, exactly like checkbox `w:size`: `??=` cannot express
+  // "first ELEMENT wins" because a malformed / out-of-range first value also resolves null,
+  // which let a later valid sibling shadow it.
+  let resultSeen = false;
+  let fallbackSeen = false;
   const entries: string[] = [];
   if (list.kind !== 'textValue') {
     for (const child of list.children) {
       if (budget.left-- <= 0) break;
       if (child.kind === 'textValue') continue;
-      if (isWml(child, 'result')) result ??= dropdownIndexAttribute(child);
-      else if (isWml(child, 'default')) {
-        fallback ??= dropdownIndexAttribute(child);
+      if (isWml(child, 'result')) {
+        if (!resultSeen) {
+          resultSeen = true;
+          result = dropdownIndexAttribute(child);
+        }
+      } else if (isWml(child, 'default')) {
+        if (!fallbackSeen) {
+          fallbackSeen = true;
+          fallback = dropdownIndexAttribute(child);
+        }
       } else if (isWml(child, 'listEntry')) {
         if (entries.length >= MAX_DROPDOWN_ENTRIES) continue;
         const value = attributeValue(child, 'val');
@@ -497,11 +524,20 @@ export function parsedFieldSpansOf(
     }
 
     // Scan forward for a matching outermost end; track nesting and instruction size.
+    // LIVE (`w:instrText`) and DELETED (`w:delInstrText`) chunks buffer separately, with
+    // per-buffer overflow: a tracked field-code edit puts both in one field, and the
+    // EFFECTIVE instruction is the live text when any live element exists, else the deleted
+    // text — the same rule layout's field machine applies, so addressing agrees with what
+    // is painted.
     let nesting = 0;
     let nestingOverflow = false;
     let instructionChars = 0;
     let instruction = '';
     let instructionOverflow = false;
+    let deletedChars = 0;
+    let deletedInstruction = '';
+    let deletedOverflow = false;
+    let sawLiveInstruction = false;
     let phase: 'instruction' | 'result' | 'done' = 'instruction';
     const removeIds: string[] = [];
     const resultFormatRunIds: string[] = [];
@@ -525,12 +561,25 @@ export function parsedFieldSpansOf(
       if (isInstrText(node)) {
         if (nesting === 1 && phase === 'instruction') {
           const chunk = instrTextValue(node);
-          instructionChars += chunk.length;
-          if (instructionChars > maxInstructionChars) {
-            instructionOverflow = true;
-            instruction = '';
-          } else if (!instructionOverflow) {
-            instruction += chunk;
+          if (isDeletedInstrText(node)) {
+            deletedChars += chunk.length;
+            if (deletedChars > maxInstructionChars) {
+              deletedOverflow = true;
+              deletedInstruction = '';
+            } else if (!deletedOverflow) {
+              deletedInstruction += chunk;
+            }
+          } else {
+            // A live element counts even when empty: accepting the tracked deletion
+            // leaves exactly that instruction.
+            sawLiveInstruction = true;
+            instructionChars += chunk.length;
+            if (instructionChars > maxInstructionChars) {
+              instructionOverflow = true;
+              instruction = '';
+            } else if (!instructionOverflow) {
+              instruction += chunk;
+            }
           }
         }
         if (nesting >= 1) removeIds.push(node.id);
@@ -596,9 +645,9 @@ export function parsedFieldSpansOf(
     }
 
     // Instruction overflow still yields an atomic unit (content stays one selectable
-    // object); evaluation elsewhere fails closed. `instructionOverflow` is retained for
-    // callers that want the signal via a separate scan.
-    void instructionOverflow;
+    // object); evaluation elsewhere fails closed — an overflowed buffer already cleared
+    // itself to '', so the effective instruction resolves inert without another check.
+    const effectiveInstruction = sawLiveInstruction ? instruction : deletedInstruction;
 
     // Empty result: format the separate run when present, else the begin run (matches
     // projection's style fallback when no result run donates `rPr`).
@@ -617,7 +666,7 @@ export function parsedFieldSpansOf(
       runId: current.runId,
       removeNodeIds: [...new Set(removeIds)],
       formatRunIds,
-      addressing: isEditableFormTextInstruction(instruction, maxInstructionChars)
+      addressing: isEditableFormTextInstruction(effectiveInstruction, maxInstructionChars)
         ? 'editable-result'
         : 'atomic',
     });

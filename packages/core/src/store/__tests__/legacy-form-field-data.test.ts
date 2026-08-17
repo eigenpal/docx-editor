@@ -137,6 +137,24 @@ describe('dropdown state', () => {
     });
   });
 
+  test('the first w:result / w:default ELEMENT wins, even when malformed', () => {
+    // Same rule as checkbox w:size: a malformed or out-of-range first element must not
+    // let a later valid sibling shadow it — `??=` could not express that.
+    expect(dropdownDataOf(`<w:result w:val="9"/><w:result w:val="1"/>${entries}`)).toMatchObject({
+      selectedIndex: 0,
+    });
+    expect(
+      dropdownDataOf(`<w:result w:val="9"/><w:result w:val="1"/><w:default w:val="2"/>${entries}`)
+    ).toMatchObject({ selectedIndex: 2 });
+    expect(
+      dropdownDataOf(`<w:result w:val="9"/><w:default w:val="-1"/><w:default w:val="1"/>${entries}`)
+    ).toMatchObject({ selectedIndex: 0 });
+    // A valid first element keeps winning, unchanged.
+    expect(dropdownDataOf(`<w:result w:val="1"/><w:result w:val="2"/>${entries}`)).toMatchObject({
+      selectedIndex: 1,
+    });
+  });
+
   test('the node budget failing closed mid-ddList still returns a sane shape', () => {
     // Flood ffData with siblings so the shared budget is exhausted while entries collect.
     // The walk must stop, never throw, and anything returned stays within collected bounds.

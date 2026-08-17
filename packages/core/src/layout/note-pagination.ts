@@ -141,6 +141,13 @@ export interface NotesLayoutInput {
   readonly styleCascade?: StyleCascadeTable;
   readonly defaultTabStopPt?: number;
   /**
+   * Link projector seams, same as the body walk's. Normally injected by `semantic-layout`
+   * from its own options, so a note's `w:hyperlink` / HYPERLINK field carries the same
+   * sanitized record a body one does instead of painting dead text.
+   */
+  readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
+  readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /**
    * Inline drawing support per notes part. Absent means note paragraphs flow without
    * drawing records, which is what a headless caller with no image port wants.
    */
@@ -342,6 +349,8 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     cache: input.cache,
     styleCascade: input.styleCascade,
     defaultTabStopPt: input.defaultTabStopPt,
+    projectLink: input.projectLink,
+    projectFieldLink: input.projectFieldLink,
     noteMarks,
     drawingsForPart: input.drawingsForPart,
   };

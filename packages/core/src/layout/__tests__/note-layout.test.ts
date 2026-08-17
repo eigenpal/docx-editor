@@ -968,3 +968,6 @@ describe('note layout + pagination', () => {
     expect(reservedW).toBeGreaterThan(decimalW);
   });
 });
+
+// Note-story link projection lives in `note-link-projection.test.ts` — this file is at
+// the max-lines cap.

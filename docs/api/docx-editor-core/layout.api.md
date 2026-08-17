@@ -1498,6 +1498,9 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly producer: string;
     // (undocumented)
+    readonly projectFieldLink?: FieldLinkProjector;
+    readonly projectLink?: HyperlinkProjector;
+    // (undocumented)
     readonly styleCascade?: StyleCascadeTable;
 }
 

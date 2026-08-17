@@ -244,13 +244,18 @@ export interface PendingFieldProjection {
   /** Cached result text (for inert display or demotion flush). */
   cachedText: string;
   /**
-   * True once ANY result-phase content was seen — hidden, suppressed or visible.
+   * True once result-phase content the current display mode KEEPS was seen — visible or
+   * vanish-hidden. Only content with model text sets it (result text, tab / break, `w:sym`);
+   * drawings, `w:ptab` and note references never do.
    *
    * `cachedText` alone cannot tell "the file cached no result" from "the file cached one and
    * hid it": both leave it empty. Synthesis (MACROBUTTON / GOTOBUTTON display text, the
    * FORMDROPDOWN selected entry) fills only the first — painting over a vanished result would
-   * resurrect what the document hides. FORMCHECKBOX ignores this on purpose: its ffData state
-   * is the authority, and a hidden FIELD is already covered by the flush's style guard.
+   * resurrect what the document hides. A result the display mode resolves AWAY (a
+   * `w:del`-wrapped cache in the proposed view) does not set it: that view has no cached
+   * result left, and Word synthesizes there after the deletion is accepted. FORMCHECKBOX
+   * ignores this on purpose: its ffData state is the authority, and a hidden FIELD is
+   * already covered by the flush's style guard.
    */
   sawResultContent: boolean;
   /** Demotion-only: ordinary pieces when the field fails to close. */

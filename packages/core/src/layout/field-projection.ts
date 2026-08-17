@@ -32,6 +32,7 @@ import {
   createFieldParseState,
   createScanBudget,
   detectStoryPageFields,
+  effectiveFieldInstruction,
   ingestInstrTextBounded,
   isCollectingInstruction,
   isFldChar,
@@ -630,8 +631,9 @@ export function piecesOfParagraph(
           // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
           // Nesting overflow refuses exactly as PAGE projection does: a >4-deep hostile field
           // must not synthesize output from whatever outer fragments the buffer kept.
-          if (!pending.kind && !field.instructionOverflow && !field.nestingOverflow) {
-            captureInstructionSpecs(pending, field.instruction);
+          const effective = effectiveFieldInstruction(field);
+          if (!pending.kind && !effective.overflow && !field.nestingOverflow) {
+            captureInstructionSpecs(pending, effective.instruction);
           }
           // Prefer separate-run style until a measurable result run donates one.
           pending.props = props;
@@ -652,14 +654,11 @@ export function piecesOfParagraph(
         const outermostEnd = field.nesting === 1;
         // A SYMBOL or FORMCHECKBOX with no `separate` at all (begin/instr/end) still renders
         // in Word. The machine's buffer is reset by `onFldCharEnd`, so capture BEFORE advancing.
-        if (
-          outermostEnd &&
-          pending?.atomic &&
-          field.phase === 'instruction' &&
-          !field.instructionOverflow &&
-          !field.nestingOverflow
-        ) {
-          captureInstructionSpecs(pending, field.instruction);
+        if (outermostEnd && pending?.atomic && field.phase === 'instruction') {
+          const effective = effectiveFieldInstruction(field);
+          if (!effective.overflow && !field.nestingOverflow) {
+            captureInstructionSpecs(pending, effective.instruction);
+          }
         }
         // The end closing the TRACKED inner field appends its live value; an inner result that
         // existed but was entirely suppressed appends nothing (fldSimple parity). Deeper ends
@@ -694,7 +693,12 @@ export function piecesOfParagraph(
         // only a `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
         if (isSymbolRunChild(grand)) {
           if (pending.atomic) {
-            pending.sawResultContent = true;
+            // The flag records only what THIS display mode keeps: a `w:del`-wrapped result
+            // hidden by the proposed view is gone from that view, and suppressing synthesis
+            // over it would paint nothing where Word (after accepting) shows the display
+            // text. Vanish-hidden content still sets it — that is the case the flag exists
+            // for.
+            if (revisionsVisible(revisions, displayMode)) pending.sawResultContent = true;
             if (nestedPage.active) {
               // A symbol inside the skipped inner cache is result content too: a visible one
               // keeps the live replacement alive, a suppressed-only cache appends nothing.
@@ -731,9 +735,6 @@ export function piecesOfParagraph(
         }
         const text = modelTextOfRunChild(grand);
         if (text.length === 0) continue;
-        // The result EXISTS, whatever suppresses it below — the flush needs the distinction
-        // to keep synthesis from painting over a result the file hid on purpose.
-        if (pending.atomic) pending.sawResultContent = true;
 
         // A field can be tracked as a whole — Word writes a deleted hyperlink as `w:del`
         // around the begin/instr/separate/result/end run — and its result text is BUFFERED
@@ -744,6 +745,12 @@ export function piecesOfParagraph(
         const fieldSuppressed =
           !revisionsVisible(revisions, displayMode) ||
           (grand.kind === 'deletedText' && !fieldDeleted);
+
+        // The result EXISTS in this display mode, whatever hides it below (vanish included) —
+        // the flush needs the distinction to keep synthesis from painting over a result the
+        // file hid on purpose. Revision-suppressed content does NOT count: the mode resolved
+        // it away, and Word (after accepting the deletion) synthesizes over the gap.
+        if (pending.atomic && !fieldSuppressed) pending.sawResultContent = true;
 
         // Deleted characters are recorded whether or not they were laid out, exactly as they
         // are for ordinary runs: they occupy model offsets in every display mode, and the caret

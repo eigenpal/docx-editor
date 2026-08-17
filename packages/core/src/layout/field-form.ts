@@ -90,7 +90,7 @@ export function formFieldResult(
     readonly formSpec: FormFieldKind | null;
     readonly formData: LegacyFormFieldData | null;
     readonly cachedText: string;
-    /** Any result-phase content existed, hidden or not — see `PendingFieldProjection`. */
+    /** Result content this display mode keeps existed — see `PendingFieldProjection`. */
     readonly sawResultContent: boolean;
     readonly props: readonly OoxmlProperty[];
     readonly style: ResolvedRunStyle;

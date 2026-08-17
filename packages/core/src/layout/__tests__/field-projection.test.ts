@@ -920,4 +920,18 @@ describe('w:delInstrText — a tracked-deleted field instruction', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['cached']);
     expect(pieces[0]!.fieldAtom).toEqual({ formField: false });
   });
+
+  test('a fully-deleted PAGE still evaluates live, with delete attribution', () => {
+    // No live instrText at all: the deleted buffer answers, so the field keeps its meaning
+    // and the value paints struck in all-markup instead of going inert.
+    const pieces = piecesOfParagraph(paragraphOf(parsePart(deletedField)), [], {
+      pageNumber: 4,
+      pageCount: 9,
+    });
+    expect(pieces.map((piece) => piece.text)).toEqual(['A', '4', 'B']);
+    expect(pieces[1]!.revisions?.map((revision) => revision.kind)).toEqual(['delete']);
+  });
 });
+
+// A LIVE `w:instrText` beside `w:delInstrText` (a tracked field-code edit) is covered in
+// `field-instruction-revisions.test.ts` — this file is at the max-lines cap.

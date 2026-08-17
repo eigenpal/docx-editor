@@ -262,4 +262,20 @@ describe('a FORMDROPDOWN field', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['B']);
     expect(pieces[0]).toMatchObject({ start: 1, end: 2 });
   });
+
+  test('a w:del-wrapped cached result synthesizes in the proposed view only', () => {
+    // The proposed view resolves the deletion away — after accepting, Word shows the
+    // selected entry there. The views that keep the deletion keep the cached pick.
+    const field = dropdownField(
+      `<w:result w:val="1"/>${ENTRIES}`,
+      '<w:del w:id="1" w:author="A"><w:r><w:delText>OldPick</w:delText></w:r></w:del>'
+    );
+    expect(project(`<w:p>${field}</w:p>`, 'proposed').map((piece) => piece.text)).toEqual([
+      'Green',
+    ]);
+    expect(project(`<w:p>${field}</w:p>`).map((piece) => piece.text)).toEqual(['OldPick']);
+    expect(project(`<w:p>${field}</w:p>`, 'original').map((piece) => piece.text)).toEqual([
+      'OldPick',
+    ]);
+  });
 });

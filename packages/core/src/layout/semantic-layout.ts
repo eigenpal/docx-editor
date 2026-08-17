@@ -531,8 +531,20 @@ export function layoutSemanticDocument(
     return finish(runBody(optionsWithLists));
   }
 
+  // Note stories run the same paragraph walk as the body, so they inherit the body's link
+  // projector seams unless the notes input pinned its own: without this a `w:hyperlink` or
+  // HYPERLINK field in a footnote painted as dead text while the body's twin was clickable.
+  const notesInput: import('./note-pagination.ts').NotesLayoutInput = {
+    ...options.notes,
+    ...((options.notes.projectLink ?? options.projectLink)
+      ? { projectLink: options.notes.projectLink ?? options.projectLink }
+      : {}),
+    ...((options.notes.projectFieldLink ?? options.projectFieldLink)
+      ? { projectFieldLink: options.notes.projectFieldLink ?? options.projectFieldLink }
+      : {}),
+  };
   return finish(
-    layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, options.notes, runBody)
+    layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, notesInput, runBody)
   );
 }
 

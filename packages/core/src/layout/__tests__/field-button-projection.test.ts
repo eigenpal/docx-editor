@@ -190,3 +190,46 @@ describe('a simple MACROBUTTON / GOTOBUTTON field', () => {
     expect(pieces[0]).toMatchObject({ start: 1, end: 2 });
   });
 });
+
+describe('a button whose only cached result is wrapped in w:del', () => {
+  // The result exists on paper but the PROPOSED view resolves it away — after accepting,
+  // Word shows the display text there. Suppressing synthesis painted nothing at all.
+  const DEL = '<w:del w:id="1" w:author="A"><w:r><w:delText>Old</w:delText></w:r></w:del>';
+
+  test('complex: the proposed view synthesizes the display text', () => {
+    const pieces = project(`<w:p>${complexField(' MACROBUTTON M Click ', DEL)}</w:p>`, 'proposed');
+    expect(pieces.map((piece) => piece.text)).toEqual(['Click']);
+    expect(pieces[0]).toMatchObject({ start: 0, end: 1, projected: true });
+  });
+
+  test('complex: all-markup keeps the cached content, struck', () => {
+    const pieces = project(`<w:p>${complexField(' MACROBUTTON M Click ', DEL)}</w:p>`);
+    expect(pieces.map((piece) => piece.text)).toEqual(['Old']);
+    expect(pieces[0]!.revisions?.map((revision) => revision.kind)).toEqual(['delete']);
+  });
+
+  test('complex: the original view keeps the cached content', () => {
+    const pieces = project(`<w:p>${complexField(' MACROBUTTON M Click ', DEL)}</w:p>`, 'original');
+    expect(pieces.map((piece) => piece.text)).toEqual(['Old']);
+  });
+
+  test('simple: the proposed view synthesizes, other views keep the cache', () => {
+    const simple = `<w:p><w:fldSimple w:instr=" MACROBUTTON M Click ">${DEL}</w:fldSimple></w:p>`;
+    expect(project(simple, 'proposed').map((piece) => piece.text)).toEqual(['Click']);
+    expect(project(simple).map((piece) => piece.text)).toEqual(['Old']);
+    expect(project(simple, 'original').map((piece) => piece.text)).toEqual(['Old']);
+  });
+
+  test('a vanish-hidden result still suppresses synthesis in every mode', () => {
+    // Vanish is the case the flag exists for: the file hid the result on purpose, in
+    // every view, and painting the display text over it would resurrect it.
+    const hidden = '<w:r><w:rPr><w:vanish/></w:rPr><w:t>Hidden</w:t></w:r>';
+    for (const mode of ['all-markup', 'proposed', 'original'] as const) {
+      const pieces = project(
+        `<w:p>${complexField(' MACROBUTTON M Click ', hidden)}<w:r><w:t>B</w:t></w:r></w:p>`,
+        mode
+      );
+      expect(pieces.map((piece) => piece.text)).toEqual(['B']);
+    }
+  });
+});
