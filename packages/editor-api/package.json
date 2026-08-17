@@ -47,7 +47,8 @@
     "pack:smoke": "node scripts/pack-smoke.mjs",
     "compat:generate": "node scripts/generate-conformance.mjs",
     "compat:fetch-reference": "node scripts/fetch-office-reference.mjs",
-    "compat:check-drift": "node scripts/fetch-office-reference.mjs --check"
+    "compat:check-drift": "node scripts/fetch-office-reference.mjs --check",
+    "compat:adopt": "node scripts/fetch-office-reference.mjs --adopt"
   },
   "keywords": [
     "docx",

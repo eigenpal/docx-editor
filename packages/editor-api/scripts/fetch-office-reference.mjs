@@ -21,7 +21,7 @@
  * pulls out of it, plus provenance for exactly what was fetched.
  *
  * Usage:
- *   node scripts/fetch-office-reference.mjs [--version <semver>] [--check]
+ *   node scripts/fetch-office-reference.mjs [--version <semver>] [--check|--adopt]
  *
  *   --version <semver>  Pin a specific @types/office-js version instead of
  *                        the current "latest" dist-tag.
@@ -33,21 +33,39 @@
  *                        symbols and members, including overload-level
  *                        changes) via `reference-diff.mjs`, which the
  *                        scheduled workflow embeds in the drift issue body.
+ *   --json <path>       With `--check`, also write that result as JSON, so
+ *                        the workflow can branch on it instead of parsing
+ *                        prose out of stdout.
+ *   --adopt             Adopt a *shape-identical* upstream release: only the
+ *                        version string and provenance move, so there is
+ *                        nothing about the API for a human to review. Writes
+ *                        the fixture, the provenance record, and the newly
+ *                        resolved source-commit pin. Refuses (exit 1) the
+ *                        moment any symbol or member differs.
  *
- * ## Unreviewed upstream versions ("review-required drift")
+ * ## Which drift a machine may adopt
  *
- * `PINNED_DEFINITELY_TYPED_COMMITS` only has an entry for @types/office-js
- * versions a maintainer has actually reviewed and pinned an exact source
- * commit for. A version bump is how real upstream drift arrives, so `--check`
- * must be able to fetch, extract, and diff a brand-new, not-yet-reviewed
- * version — it never skips or aborts before computing the delta just
- * because no one has reviewed it yet (see `checkForDrift`). The write path
- * (`regenerate`, used by plain `node fetch-office-reference.mjs` /
- * `compat:fetch-reference`) is the opposite: it still hard-fails for an
- * unpinned version, because *that* path is what would overwrite the
- * checked-in, trusted `compat/reference/word.reference.json` and
- * `compat/provenance.json` — unreviewed upstream data must never be adopted
- * as trusted committed input, only inspected.
+ * `compat/definitely-typed-commits.json` records the reviewed DefinitelyTyped
+ * source commit for each adopted @types/office-js version. A version bump is
+ * how real upstream drift arrives, so `--check` must be able to fetch,
+ * extract, and diff a brand-new, not-yet-adopted version — it never skips or
+ * aborts before computing the delta just because no one has reviewed it yet
+ * (see `checkForDrift`).
+ *
+ * The write paths are stricter, and split by what actually changed:
+ *
+ * - `regenerate` (plain `node fetch-office-reference.mjs` /
+ *   `compat:fetch-reference`) hard-fails for a version with no pin. It
+ *   overwrites the checked-in, trusted `compat/reference/word.reference.json`
+ *   and `compat/provenance.json`, so it may never turn an unreviewed release
+ *   into trusted committed input.
+ * - `adoptShapeIdenticalDrift` (`--adopt`) is the one path that may resolve a
+ *   pin on its own, and only for a release whose manifest-selected shape is
+ *   byte-identical to what is already checked in. The pin it writes is proved,
+ *   not assumed: `definitely-typed-commit.mjs` accepts a commit only when that
+ *   commit's `index.d.ts` matches the integrity-verified tarball's bytes. When
+ *   any symbol or member moved, the delta is a fact about the API and this
+ *   path refuses, leaving the scheduled workflow to open a review issue.
  */
 
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -65,18 +83,17 @@ import {
   fetchDocsReferenceCommitMetadata,
 } from './lib/docs-reference.mjs';
 import { diffReferenceFixtures, formatReferenceDiff } from './lib/reference-diff.mjs';
+import { resolveDefinitelyTypedCommitFromSource } from './lib/definitely-typed-commit.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = join(__dirname, '..');
 const MANIFEST_PATH = join(PACKAGE_ROOT, 'compat', 'manifest.json');
 const REFERENCE_PATH = join(PACKAGE_ROOT, 'compat', 'reference', 'word.reference.json');
 const PROVENANCE_PATH = join(PACKAGE_ROOT, 'compat', 'provenance.json');
+const PINNED_COMMITS_PATH = join(PACKAGE_ROOT, 'compat', 'definitely-typed-commits.json');
 
 const REGISTRY_URL = 'https://registry.npmjs.org/@types/office-js';
 const PACKAGE_NAME = '@types/office-js';
-const PINNED_DEFINITELY_TYPED_COMMITS = {
-  '1.0.604': '929735ef7d8bafb29c17e39b26042ada8529e670',
-};
 
 async function fetchRegistryMetadata(version, fetchImpl) {
   const url = version ? `${REGISTRY_URL}/${version}` : `${REGISTRY_URL}/latest`;
@@ -105,13 +122,13 @@ async function loadManifest() {
 }
 
 /**
- * Thrown by `resolveDefinitelyTypedCommit`/`buildProvenanceForFixture` when
- * the fetched version has no reviewed source-commit pin yet. A distinct
- * class (rather than a plain `Error`) so `checkForDrift` can distinguish
- * "this version just hasn't been reviewed yet" (report as review-required
- * drift, still show the delta) from every other failure mode — a corrupt
- * tarball, a validation bug, a real integrity mismatch — which must keep
- * failing loudly, not be silently reclassified as "review required".
+ * Thrown by `buildProvenanceForFixture` when the fetched version has no
+ * reviewed source-commit pin yet. A distinct class (rather than a plain
+ * `Error`) so `checkForDrift` can distinguish "this version just hasn't been
+ * reviewed yet" (report as review-required drift, still show the delta) from
+ * every other failure mode — a corrupt tarball, a validation bug, a real
+ * integrity mismatch — which must keep failing loudly, not be silently
+ * reclassified as "review required".
  */
 export class MissingDefinitelyTypedCommitError extends Error {
   constructor(version) {
@@ -124,13 +141,30 @@ export class MissingDefinitelyTypedCommitError extends Error {
   }
 }
 
-function resolveDefinitelyTypedCommit(version) {
-  return PINNED_DEFINITELY_TYPED_COMMITS[version] ?? null;
+/**
+ * The reviewed pins live in `compat/definitely-typed-commits.json` rather
+ * than in this file: `--adopt` writes an entry, and data a script edits
+ * belongs in data, not in the script's own source.
+ */
+async function loadPinnedCommits() {
+  const raw = await readFile(PINNED_COMMITS_PATH, 'utf8');
+  return JSON.parse(raw).commits ?? {};
+}
+
+async function writePinnedCommit(version, commit) {
+  const pins = JSON.parse(await readFile(PINNED_COMMITS_PATH, 'utf8'));
+  pins.commits = { ...pins.commits, [version]: commit };
+  await writeFile(PINNED_COMMITS_PATH, `${JSON.stringify(pins, null, 2)}\n`);
+}
+
+async function resolvePinnedCommit(version) {
+  const pins = await loadPinnedCommits();
+  return pins[version] ?? null;
 }
 
 /**
  * Fetch -> verify -> extract -> normalize, stopping short of anything that
- * requires a reviewed `PINNED_DEFINITELY_TYPED_COMMITS` entry. This is the
+ * requires a reviewed source-commit pin. This is the
  * part of the pipeline that must succeed for *any* published version,
  * reviewed or not — it's what lets `checkForDrift` compute a real delta for
  * a brand-new version before a maintainer has pinned its source commit.
@@ -174,19 +208,31 @@ async function fetchAndBuildFixture({ version, fetchImpl }) {
     throw new Error(`generated reference fixture failed validation:\n${fixtureErrors.join('\n')}`);
   }
 
-  return { upstreamPackageBase, fixture };
+  return { upstreamPackageBase, fixture, declarationBuffer };
 }
 
 /**
  * Completes the pipeline into a validated, adoptable `provenance` record.
  * Throws `MissingDefinitelyTypedCommitError` (not a generic `Error`) when
- * `upstreamPackageBase.version` has no reviewed source-commit pin — the one
- * failure mode `checkForDrift` treats as "review required" rather than a
- * hard abort; every other failure here (docs-reference commit unreachable,
- * provenance shape invalid) still propagates as a normal thrown `Error`.
+ * `upstreamPackageBase.version` has no reviewed source-commit pin and the
+ * caller supplied none — the one failure mode `checkForDrift` treats as
+ * "review required" rather than a hard abort; every other failure here
+ * (docs-reference commit unreachable, provenance shape invalid) still
+ * propagates as a normal thrown `Error`.
+ *
+ * `commit` is the escape hatch for `adoptShapeIdenticalDrift`, which has
+ * just proved a commit against the published bytes and is about to write it
+ * to the pin file — it may pass that commit here rather than round-trip
+ * through the file it is in the middle of updating.
  */
-async function buildProvenanceForFixture({ upstreamPackageBase, fixture, fetchedAt, fetchImpl }) {
-  const definitelyTypedCommit = resolveDefinitelyTypedCommit(upstreamPackageBase.version);
+async function buildProvenanceForFixture({
+  upstreamPackageBase,
+  fixture,
+  fetchedAt,
+  fetchImpl,
+  commit = null,
+}) {
+  const definitelyTypedCommit = commit ?? (await resolvePinnedCommit(upstreamPackageBase.version));
   if (!definitelyTypedCommit) {
     throw new MissingDefinitelyTypedCommitError(upstreamPackageBase.version);
   }
@@ -246,10 +292,19 @@ export async function regenerate({
   return { fixture, provenance };
 }
 
+/** True when any symbol or member moved — the delta a human has to read. */
+function hasShapeChanges(diff) {
+  return (
+    diff.addedSymbols.length > 0 ||
+    diff.removedSymbols.length > 0 ||
+    diff.changedSymbols.length > 0
+  );
+}
+
 /**
  * The **check path**, used by `--check`/`compat:check-drift`. Unlike
  * `regenerate`, this never overwrites the checked-in fixture and never
- * needs a reviewed `PINNED_DEFINITELY_TYPED_COMMITS` entry to do its job:
+ * needs a reviewed source-commit pin to do its job:
  * it always fetches and normalizes whatever version is currently published
  * (reviewed or not) and always computes the full symbol/member-level delta
  * against the checked-in fixture, because a version bump — not just a
@@ -278,7 +333,11 @@ export async function checkForDrift({
     existingProvenance.upstreamPackage?.version !== upstreamPackageBase.version;
 
   if (!fixtureChanged && !provenanceVersionChanged) {
-    return { driftDetected: false, upstreamVersion: upstreamPackageBase.version };
+    return {
+      driftDetected: false,
+      shapeChanged: false,
+      upstreamVersion: upstreamPackageBase.version,
+    };
   }
 
   const previousFixture =
@@ -306,6 +365,7 @@ export async function checkForDrift({
 
   return {
     driftDetected: true,
+    shapeChanged: hasShapeChanges(diff),
     upstreamVersion: upstreamPackageBase.version,
     fixture,
     fixtureJson,
@@ -318,21 +378,155 @@ export async function checkForDrift({
   };
 }
 
+/**
+ * The **adopt path**, used by `--adopt`/`compat:adopt` and by the scheduled
+ * workflow when the drift carries no shape change. It is the write path for
+ * exactly one situation: upstream published a new version whose
+ * manifest-selected shape is identical to the checked-in fixture, so the only
+ * thing that moved is provenance — the version string, the tarball hash, the
+ * source commit.
+ *
+ * Two guards keep this honest. It refuses the moment `diffReferenceFixtures`
+ * reports any added, removed, or changed symbol or member, because that delta
+ * is a fact about the API that a person has to read. And the pin it resolves
+ * is proved against the published bytes (see `definitely-typed-commit.mjs`),
+ * never inferred from a branch ref or a publish date.
+ *
+ * Writes nothing itself; returns what `main` (or a test) should write.
+ */
+export async function adoptShapeIdenticalDrift({
+  version,
+  fetchedAt = new Date().toISOString(),
+  fetchImpl = fetch,
+  githubToken = null,
+  existingFixtureJson,
+} = {}) {
+  const { upstreamPackageBase, fixture, declarationBuffer } = await fetchAndBuildFixture({
+    version,
+    fetchImpl,
+  });
+  const upstreamVersion = upstreamPackageBase.version;
+  const fixtureJson = `${JSON.stringify(fixture, null, 2)}\n`;
+
+  const previousFixture =
+    existingFixtureJson != null ? JSON.parse(existingFixtureJson) : { symbols: {} };
+  const diff = diffReferenceFixtures(previousFixture, fixture);
+  const diffSummary = formatReferenceDiff(diff);
+
+  if (hasShapeChanges(diff)) {
+    return { adopted: false, reason: 'shape-changed', upstreamVersion, diff, diffSummary };
+  }
+
+  const pinnedCommit = await resolvePinnedCommit(upstreamVersion);
+  const resolved = pinnedCommit
+    ? { commit: pinnedCommit, blobSha: null }
+    : await resolveDefinitelyTypedCommitFromSource({
+        version: upstreamVersion,
+        declaration: declarationBuffer,
+        fetchImpl,
+        githubToken,
+      });
+
+  const provenance = await buildProvenanceForFixture({
+    upstreamPackageBase,
+    fixture,
+    fetchedAt,
+    fetchImpl,
+    commit: resolved.commit,
+  });
+
+  return {
+    adopted: true,
+    upstreamVersion,
+    definitelyTypedCommit: resolved.commit,
+    commitWasPinned: Boolean(pinnedCommit),
+    declarationBlobSha: resolved.blobSha,
+    diff,
+    diffSummary,
+    fixtureJson,
+    provenanceJson: `${JSON.stringify(provenance, null, 2)}\n`,
+  };
+}
+
+async function readCheckedInFixture() {
+  return readFile(REFERENCE_PATH, 'utf8').catch(() => null);
+}
+
+/**
+ * Machine-readable twin of what `--check` prints. The scheduled workflow
+ * branches on `shapeChanged` (auto-adopt vs open a review issue), and
+ * reading that decision out of a JSON file beats grepping prose out of a
+ * stdout stream whose wording is meant for people.
+ */
+async function writeCheckResultJson(path, result) {
+  const summary = {
+    driftDetected: Boolean(result.driftDetected),
+    shapeChanged: Boolean(result.shapeChanged),
+    upstreamVersion: result.upstreamVersion,
+    reviewRequired: Boolean(result.reviewRequired),
+  };
+  await writeFile(path, `${JSON.stringify(summary, null, 2)}\n`);
+}
+
+async function adopt({ version }) {
+  const result = await adoptShapeIdenticalDrift({
+    version,
+    githubToken: process.env.GITHUB_TOKEN ?? null,
+    existingFixtureJson: await readCheckedInFixture(),
+  });
+
+  if (!result.adopted) {
+    console.error(
+      `Refusing to adopt ${PACKAGE_NAME}@${result.upstreamVersion} automatically: the ` +
+        'manifest-selected shape changed, which needs a maintainer to review it.'
+    );
+    console.error('');
+    console.error(result.diffSummary);
+    process.exitCode = 1;
+    return;
+  }
+
+  await writeFile(REFERENCE_PATH, result.fixtureJson);
+  await writeFile(PROVENANCE_PATH, result.provenanceJson);
+  if (!result.commitWasPinned) {
+    await writePinnedCommit(result.upstreamVersion, result.definitelyTypedCommit);
+  }
+
+  console.log(`Adopted ${PACKAGE_NAME}@${result.upstreamVersion} (no symbol/member changes).`);
+  console.log(
+    `DefinitelyTyped commit: ${result.definitelyTypedCommit}` +
+      (result.commitWasPinned
+        ? ' (already pinned)'
+        : ` (verified: index.d.ts git blob ${result.declarationBlobSha})`)
+  );
+  console.log(`Wrote ${REFERENCE_PATH}`);
+  console.log(`Wrote ${PROVENANCE_PATH}`);
+  if (!result.commitWasPinned) console.log(`Wrote ${PINNED_COMMITS_PATH}`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const versionIndex = args.indexOf('--version');
   const version = versionIndex >= 0 ? args[versionIndex + 1] : undefined;
+  const jsonIndex = args.indexOf('--json');
+  const jsonPath = jsonIndex >= 0 ? args[jsonIndex + 1] : null;
   const checkOnly = args.includes('--check');
+
+  if (args.includes('--adopt')) {
+    await adopt({ version });
+    return;
+  }
 
   if (checkOnly) {
     const [existingFixtureJson, existingProvenanceRaw] = await Promise.all([
-      readFile(REFERENCE_PATH, 'utf8').catch(() => null),
+      readCheckedInFixture(),
       readFile(PROVENANCE_PATH, 'utf8').catch(() => null),
     ]);
     const existingProvenance =
       existingProvenanceRaw != null ? JSON.parse(existingProvenanceRaw) : null;
 
     const result = await checkForDrift({ version, existingFixtureJson, existingProvenance });
+    if (jsonPath) await writeCheckResultJson(jsonPath, result);
 
     if (!result.driftDetected) {
       console.log('No drift detected: checked-in reference fixture is up to date.');
@@ -359,8 +553,17 @@ async function main() {
       console.log(`REVIEW REQUIRED: ${result.reviewReason}`);
       console.log(
         'The symbol/member delta below is complete and safe to review, but this version must ' +
-          'not be adopted into compat/provenance.json until a maintainer pins its exact ' +
-          'DefinitelyTyped source commit (PINNED_DEFINITELY_TYPED_COMMITS) and reruns regeneration.'
+          'not be adopted into compat/provenance.json until its exact DefinitelyTyped source ' +
+          'commit is recorded in compat/definitely-typed-commits.json — by `--adopt`, which ' +
+          'proves the commit against the published bytes and only runs when nothing about the ' +
+          'shape changed, or by a maintainer.'
+      );
+    }
+    if (!result.shapeChanged) {
+      console.log('');
+      console.log(
+        'This drift is provenance-only: no symbol or member moved, so `--adopt` can take it ' +
+          'without a maintainer reading a delta.'
       );
     }
     console.log('');

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedFrom": {
     "package": "@types/office-js",
-    "version": "1.0.604"
+    "version": "1.0.605"
   },
   "symbols": {
     "Body": {

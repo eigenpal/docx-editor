@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "package": "@types/office-js",
+  "note": "Reviewed DefinitelyTyped source commit per adopted @types/office-js version, recorded as upstreamPackage.sourceRepository.commit in provenance.json. An entry means the commit was verified to carry the exact index.d.ts bytes of that published release: by a maintainer by hand, or by scripts/lib/definitely-typed-commit.mjs comparing git blob hashes. A version with no entry here cannot be written into provenance.json.",
+  "commits": {
+    "1.0.604": "929735ef7d8bafb29c17e39b26042ada8529e670",
+    "1.0.605": "e8ab93aca9dcb062ad042380341762b019c4a488"
+  }
+}

@@ -15,7 +15,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, test, expect } from 'bun:test';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
-import { checkForDrift, regenerate } from '../../../scripts/fetch-office-reference.mjs';
+import {
+  adoptShapeIdenticalDrift,
+  checkForDrift,
+  regenerate,
+} from '../../../scripts/fetch-office-reference.mjs';
+import { gitBlobSha } from '../../../scripts/lib/definitely-typed-commit.mjs';
+import { PINNED_DOCS_REFERENCE_COMMIT } from '../../../scripts/lib/docs-reference.mjs';
 
 /** Mirrors `tar.test.ts`'s helper: a minimal single-entry USTAR archive. */
 function buildTar(entries: { name: string; content: string }[]): Buffer {
@@ -175,6 +181,131 @@ describe('checkForDrift against a new @types/office-js version with no reviewed 
         existingProvenance: { upstreamPackage: { version: '1.0.604' } },
       })
     ).rejects.toThrow(/integrity mismatch/);
+  });
+});
+
+/**
+ * Extends `fakeNpmFetch` with the two GitHub endpoints the adopt path needs:
+ * the DefinitelyTyped commit walk that proves the source commit, and the
+ * pinned docs-reference commit every provenance record records.
+ * `declarationBlobSha` is what GitHub reports for `types/office-js/index.d.ts`
+ * at the newest commit — set it to something else to model a release whose
+ * bytes no commit explains.
+ */
+function fakeAdoptFetch({
+  version,
+  declarationText,
+  sourceCommit,
+  declarationBlobSha = gitBlobSha(Buffer.from(declarationText)),
+}: {
+  version: string;
+  declarationText: string;
+  sourceCommit: string;
+  declarationBlobSha?: string;
+}) {
+  const npmFetch = fakeNpmFetch({ version, declarationText });
+  const respond = (body: unknown) => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    json: async () => body,
+  });
+
+  return async (url: string, ...rest: unknown[]) => {
+    if (url.includes('DefinitelyTyped/commits?')) {
+      return respond([
+        {
+          sha: sourceCommit,
+          html_url: `https://github.com/DefinitelyTyped/DefinitelyTyped/commit/${sourceCommit}`,
+          commit: { committer: { date: '2026-08-13T05:10:31Z' } },
+        },
+      ]);
+    }
+    if (url.includes('/contents/types/office-js?ref=')) {
+      return respond([{ name: 'index.d.ts', sha: declarationBlobSha }]);
+    }
+    if (url.includes('office-js-docs-reference/commits/')) {
+      return respond({
+        sha: PINNED_DOCS_REFERENCE_COMMIT,
+        html_url: `https://github.com/OfficeDev/office-js-docs-reference/commit/${PINNED_DOCS_REFERENCE_COMMIT}`,
+        commit: { author: { date: '2026-08-04T15:36:00Z' }, message: 'Automatically generated' },
+      });
+    }
+    return npmFetch(url, ...(rest as []));
+  };
+}
+
+/** Same shape as `PREVIOUS_FIXTURE`, so the delta is provenance-only. */
+const SHAPE_IDENTICAL_DECLARATION = `declare namespace Word {
+  class Body {
+    readonly text: string;
+  }
+}`;
+
+describe('adoptShapeIdenticalDrift() (the write path used by compat:adopt)', () => {
+  test('adopts a provenance-only bump and proves the source commit against the published bytes', async () => {
+    const sourceCommit = 'e8ab93aca9dcb062ad042380341762b019c4a488';
+    const result = await adoptShapeIdenticalDrift({
+      version: UNPINNED_VERSION,
+      fetchImpl: fakeAdoptFetch({
+        version: UNPINNED_VERSION,
+        declarationText: SHAPE_IDENTICAL_DECLARATION,
+        sourceCommit,
+      }),
+      existingFixtureJson: `${JSON.stringify(PREVIOUS_FIXTURE, null, 2)}\n`,
+    });
+
+    expect(result.adopted).toBe(true);
+    expect(result.definitelyTypedCommit).toBe(sourceCommit);
+    expect(result.commitWasPinned).toBe(false);
+    expect(result.declarationBlobSha).toBe(gitBlobSha(Buffer.from(SHAPE_IDENTICAL_DECLARATION)));
+
+    // Provenance records the version and the commit that was just proved —
+    // this is the whole content of an auto-adopted bump.
+    const provenance = JSON.parse(result.provenanceJson);
+    expect(provenance.upstreamPackage.version).toBe(UNPINNED_VERSION);
+    expect(provenance.upstreamPackage.sourceRepository.commit).toBe(sourceCommit);
+    expect(provenance.upstreamPackage.sourceRepository.sourceUrl).toContain(sourceCommit);
+  });
+
+  test('refuses a release whose shape moved, leaving it for a maintainer to review', async () => {
+    const result = await adoptShapeIdenticalDrift({
+      version: UNPINNED_VERSION,
+      fetchImpl: fakeAdoptFetch({
+        version: UNPINNED_VERSION,
+        // One member more than the checked-in fixture: a fact about the API.
+        declarationText: `declare namespace Word {
+          class Body {
+            readonly text: string;
+            clear(): void;
+          }
+        }`,
+        sourceCommit: 'e8ab93aca9dcb062ad042380341762b019c4a488',
+      }),
+      existingFixtureJson: `${JSON.stringify(PREVIOUS_FIXTURE, null, 2)}\n`,
+    });
+
+    expect(result.adopted).toBe(false);
+    expect(result.reason).toBe('shape-changed');
+    expect(result.diffSummary).toContain('Word.Body#clear');
+    // Nothing adoptable is produced, so nothing can be written by mistake.
+    expect(result.provenanceJson).toBeUndefined();
+    expect(result.fixtureJson).toBeUndefined();
+  });
+
+  test('fails loudly when no DefinitelyTyped commit explains the published bytes', async () => {
+    await expect(
+      adoptShapeIdenticalDrift({
+        version: UNPINNED_VERSION,
+        fetchImpl: fakeAdoptFetch({
+          version: UNPINNED_VERSION,
+          declarationText: SHAPE_IDENTICAL_DECLARATION,
+          sourceCommit: 'e8ab93aca9dcb062ad042380341762b019c4a488',
+          declarationBlobSha: 'a blob sha that does not match the tarball',
+        }),
+        existingFixtureJson: `${JSON.stringify(PREVIOUS_FIXTURE, null, 2)}\n`,
+      })
+    ).rejects.toThrow(/has an index\.d\.ts matching the published/);
   });
 });
 
