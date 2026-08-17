@@ -61,7 +61,7 @@ describe('gitBlobSha', () => {
 describe('resolveDefinitelyTypedCommitFromSource', () => {
   test('returns the newest commit whose index.d.ts is byte-identical to the published tarball', async () => {
     const declaration = Buffer.from('declare namespace Word { class Body {} }');
-    const { fetchImpl } = fakeGitHub([
+    const { fetchImpl, seenUrls } = fakeGitHub([
       { sha: 'a'.repeat(40), declarationBlobSha: 'differentblobsha' },
       { sha: 'b'.repeat(40), declarationBlobSha: gitBlobSha(declaration) },
       { sha: 'c'.repeat(40), declarationBlobSha: gitBlobSha(declaration) },
@@ -75,6 +75,15 @@ describe('resolveDefinitelyTypedCommitFromSource', () => {
 
     expect(resolved.commit).toBe('b'.repeat(40));
     expect(resolved.blobSha).toBe(gitBlobSha(declaration));
+
+    // Scoped to the package directory, and bounded. Without the path filter
+    // the walk covers all of DefinitelyTyped, where nearly no commit touches
+    // types/office-js, so nothing would ever resolve.
+    expect(seenUrls[0]).toContain('/repos/DefinitelyTyped/DefinitelyTyped/commits');
+    expect(seenUrls[0]).toContain('path=types%2Foffice-js');
+    expect(seenUrls[0]).toMatch(/per_page=\d+/);
+    // Stops at the first match rather than walking the rest.
+    expect(seenUrls.some((url) => url.includes('ref=' + 'c'.repeat(40)))).toBe(false);
   });
 
   test('sends the token when one is supplied, so the workflow is not on the shared anonymous rate limit', async () => {
@@ -105,8 +114,28 @@ describe('resolveDefinitelyTypedCommitFromSource', () => {
       { sha: 'f'.repeat(40), declarationBlobSha: 'anotherblob' },
     ]);
 
+    const error = await resolveDefinitelyTypedCommitFromSource({
+      version: '1.0.605',
+      declaration,
+      fetchImpl,
+    }).catch((thrown) => thrown);
+
+    expect(error).toBeInstanceOf(UnresolvedDefinitelyTypedCommitError);
+    // Both fields a maintainer needs to finish the job by hand: which release
+    // could not be explained, and the blob hash to search for.
+    expect(error.version).toBe('1.0.605');
+    expect(error.blobSha).toBe(gitBlobSha(declaration));
+    expect(error.message).toContain('definitely-typed-commits.json');
+  });
+
+  test('aborts rather than guessing when the commit list comes back empty', async () => {
+    const { fetchImpl } = fakeGitHub([]);
     await expect(
-      resolveDefinitelyTypedCommitFromSource({ version: '1.0.605', declaration, fetchImpl })
-    ).rejects.toBeInstanceOf(UnresolvedDefinitelyTypedCommitError);
+      resolveDefinitelyTypedCommitFromSource({
+        version: '1.0.605',
+        declaration: Buffer.from('declare namespace Word {}'),
+        fetchImpl,
+      })
+    ).rejects.toThrow(/no commits touching/);
   });
 });

@@ -10,6 +10,17 @@ import { isWellFormedCommitSha, validateDocsReferenceMetadata } from './docs-ref
 
 const SCHEMA_VERSION = 1;
 
+/**
+ * The only repository and directory this reference may claim to come from.
+ * `sourceRepository.url`/`directory` arrive from npm registry metadata, which
+ * the publisher controls, while `commit`/`sourceUrl` are generated here
+ * against DefinitelyTyped. Without this check a hostile or simply renamed
+ * publish could commit a provenance record whose two halves disagree about
+ * which repository was read.
+ */
+const EXPECTED_SOURCE_REPOSITORY_URL = 'https://github.com/DefinitelyTyped/DefinitelyTyped.git';
+const EXPECTED_SOURCE_DIRECTORY = 'types/office-js';
+
 function collectRequirementSets(fixture) {
   const set = new Set();
   for (const symbol of Object.values(fixture.symbols ?? {})) {
@@ -56,6 +67,16 @@ export function validateProvenance(provenance) {
   if (!up.sourceRepository || !up.sourceRepository.url) {
     errors.push('upstreamPackage.sourceRepository: required (with a url)');
   } else {
+    if (up.sourceRepository.url !== EXPECTED_SOURCE_REPOSITORY_URL) {
+      errors.push(
+        `upstreamPackage.sourceRepository.url: expected ${JSON.stringify(EXPECTED_SOURCE_REPOSITORY_URL)}, got ${JSON.stringify(up.sourceRepository.url)}`
+      );
+    }
+    if (up.sourceRepository.directory !== EXPECTED_SOURCE_DIRECTORY) {
+      errors.push(
+        `upstreamPackage.sourceRepository.directory: expected ${JSON.stringify(EXPECTED_SOURCE_DIRECTORY)}, got ${JSON.stringify(up.sourceRepository.directory)}`
+      );
+    }
     if (!isWellFormedCommitSha(up.sourceRepository.commit)) {
       errors.push(
         `upstreamPackage.sourceRepository.commit: expected a 40-character hex commit sha, got ${JSON.stringify(up.sourceRepository.commit)}`

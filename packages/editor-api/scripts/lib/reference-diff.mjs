@@ -36,29 +36,40 @@ function diffOverloads(previousOverloads, nextOverloads) {
  * two fixtures. Returns `null` when there is no observable difference —
  * callers filter nulls out rather than pushing empty change records.
  */
+/** `{ from, to }` when the two differ, `undefined` when they don't. */
+function changedField(previous, next) {
+  return (previous ?? null) !== (next ?? null) ? { from: previous ?? null, to: next ?? null } : undefined;
+}
+
 function diffMemberLike(previous, next) {
   const { added: addedOverloads, removed: removedOverloads } = diffOverloads(
     previous.overloads ?? [],
     next.overloads ?? []
   );
-  const readonlyChanged =
-    Boolean(previous.readonly) !== Boolean(next.readonly)
-      ? { from: Boolean(previous.readonly), to: Boolean(next.readonly) }
-      : undefined;
-  const requirementSetChanged =
-    (previous.requirementSet ?? null) !== (next.requirementSet ?? null)
-      ? { from: previous.requirementSet ?? null, to: next.requirementSet ?? null }
-      : undefined;
+  const readonlyChanged = changedField(Boolean(previous.readonly), Boolean(next.readonly));
+  const requirementSetChanged = changedField(previous.requirementSet, next.requirementSet);
+  // A property turning into a method (or the reverse) keeps the same name and
+  // can keep the same call shape — `style: string` and `style(): string` both
+  // normalize to one zero-parameter overload returning `string`. Without this,
+  // that reads as no difference at all.
+  const kindChanged = changedField(previous.kind, next.kind);
 
   if (
     addedOverloads.length === 0 &&
     removedOverloads.length === 0 &&
     readonlyChanged === undefined &&
-    requirementSetChanged === undefined
+    requirementSetChanged === undefined &&
+    kindChanged === undefined
   ) {
     return null;
   }
-  return { addedOverloads, removedOverloads, readonlyChanged, requirementSetChanged };
+  return {
+    addedOverloads,
+    removedOverloads,
+    readonlyChanged,
+    requirementSetChanged,
+    kindChanged,
+  };
 }
 
 function diffClassOrInterfaceSymbol(previous, next) {
@@ -80,10 +91,30 @@ function diffClassOrInterfaceSymbol(previous, next) {
     if (memberDiff) changedMembers.push({ uid: nextMember.uid, ...memberDiff });
   }
 
-  if (addedMembers.length === 0 && removedMembers.length === 0 && changedMembers.length === 0) {
+  // The symbol's own facts, not just its members'. `requirementSet` is diffed
+  // per member already; a class whose whole requirement set moves (Word API
+  // 1.1 -> 1.9) is the same kind of fact and feeds
+  // `provenance.targetRequirementSets`.
+  const requirementSetChanged = changedField(previous.requirementSet, next.requirementSet);
+  const kindChanged = changedField(previous.kind, next.kind);
+
+  if (
+    addedMembers.length === 0 &&
+    removedMembers.length === 0 &&
+    changedMembers.length === 0 &&
+    requirementSetChanged === undefined &&
+    kindChanged === undefined
+  ) {
     return null;
   }
-  return { uid: next.uid, addedMembers, removedMembers, changedMembers };
+  return {
+    uid: next.uid,
+    addedMembers,
+    removedMembers,
+    changedMembers,
+    requirementSetChanged,
+    kindChanged,
+  };
 }
 
 /**
@@ -186,6 +217,11 @@ export function formatReferenceDiff(diff) {
             `        requirementSet: ${memberChange.requirementSetChanged.from} -> ${memberChange.requirementSetChanged.to}`
           );
         }
+        if (memberChange.kindChanged) {
+          lines.push(
+            `        kind: ${memberChange.kindChanged.from} -> ${memberChange.kindChanged.to}`
+          );
+        }
       }
       // Function-kind symbols (e.g. Word.run) carry addedOverloads/removedOverloads directly.
       formatOverloadChanges(change.uid, change.addedOverloads, change.removedOverloads, lines);
@@ -198,6 +234,9 @@ export function formatReferenceDiff(diff) {
         lines.push(
           `      requirementSet: ${change.requirementSetChanged.from} -> ${change.requirementSetChanged.to}`
         );
+      }
+      if (change.kindChanged) {
+        lines.push(`      kind: ${change.kindChanged.from} -> ${change.kindChanged.to}`);
       }
     }
   }

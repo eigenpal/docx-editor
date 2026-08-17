@@ -6,19 +6,26 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /**
  * Orchestration tests for `fetch-office-reference.mjs`'s network-fetch ->
  * verify -> extract -> diff pipeline, with `fetch` injected so no real
- * network call happens. This is deliberately narrow: it covers the one
- * behavior that matters for CI/drift-check correctness (does `--check`
- * still produce a symbol/member delta when the fetched version has no
- * reviewed `PINNED_DEFINITELY_TYPED_COMMITS` entry?), not full coverage of
- * every branch in the script (see `task-1-report.md`'s Concern 3).
+ * network call happens. Three behaviors carry weight here:
+ *
+ * - `--check` still produces a full symbol/member delta for a version with no
+ *   reviewed source-commit pin, because a version bump is how drift arrives;
+ * - `--adopt` writes only when the reference differs in nothing but the
+ *   version string, and refuses every other difference, including the ones the
+ *   symbol/member delta has no vocabulary for;
+ * - `shapeChanged` and the `--json` summary keys, which are the contract the
+ *   scheduled workflow branches on.
  */
 import { describe, test, expect } from 'bun:test';
 import { gzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import {
   adoptShapeIdenticalDrift,
+  buildCheckResultSummary,
   checkForDrift,
+  isProvenanceOnlyFixtureChange,
   regenerate,
+  withPinnedCommit,
 } from '../../../scripts/fetch-office-reference.mjs';
 import { gitBlobSha } from '../../../scripts/lib/definitely-typed-commit.mjs';
 import { PINNED_DOCS_REFERENCE_COMMIT } from '../../../scripts/lib/docs-reference.mjs';
@@ -134,6 +141,9 @@ describe('checkForDrift against a new @types/office-js version with no reviewed 
 
     expect(result.driftDetected).toBe(true);
     expect(result.upstreamVersion).toBe(UNPINNED_VERSION);
+    // The field the scheduled workflow branches on: an added member routes to
+    // a maintainer, never to the auto-adopt step.
+    expect(result.shapeChanged).toBe(true);
 
     // The complete delta must be present, not skipped — this is the whole
     // point: a version bump is how real drift arrives, so the scheduled
@@ -242,6 +252,98 @@ const SHAPE_IDENTICAL_DECLARATION = `declare namespace Word {
   }
 }`;
 
+const SOURCE_COMMIT = 'e8ab93aca9dcb062ad042380341762b019c4a488';
+
+/**
+ * The fixture a given declaration produces, taken from the pipeline itself
+ * rather than hand-written. Lets a gate test say "upstream used to declare
+ * THIS and now declares THAT" and compare what the real extractor makes of
+ * each, instead of asserting against a fixture literal that could drift from
+ * what `reference-normalize.mjs` actually emits.
+ */
+async function fixtureJsonFor(declarationText: string): Promise<string> {
+  const result = await checkForDrift({
+    version: UNPINNED_VERSION,
+    fetchImpl: fakeNpmFetch({ version: UNPINNED_VERSION, declarationText }),
+    existingFixtureJson: null,
+    existingProvenance: null,
+  });
+  return result.fixtureJson;
+}
+
+async function adoptAfterUpstreamChange(previousDeclaration: string, nextDeclaration: string) {
+  return adoptShapeIdenticalDrift({
+    version: UNPINNED_VERSION,
+    fetchImpl: fakeAdoptFetch({
+      version: UNPINNED_VERSION,
+      declarationText: nextDeclaration,
+      sourceCommit: SOURCE_COMMIT,
+    }),
+    existingFixtureJson: await fixtureJsonFor(previousDeclaration),
+  });
+}
+
+/**
+ * Each pair changes one fact about the API and nothing else. Every one of them
+ * must refuse. The last three are the reason the gate compares canonical
+ * fixture bytes instead of asking `diffReferenceFixtures`: that diff has no
+ * vocabulary for them, so a gate built on it would call them "no differences"
+ * and adopt a Word API change with no maintainer in the loop.
+ */
+const REFUSABLE_UPSTREAM_CHANGES: {
+  what: string;
+  previous: string;
+  next: string;
+}[] = [
+  {
+    what: 'a member added',
+    previous: 'declare namespace Word { class Body { readonly text: string; } }',
+    next: 'declare namespace Word { class Body { readonly text: string; clear(): void; } }',
+  },
+  {
+    what: 'a member removed',
+    previous: 'declare namespace Word { class Body { readonly text: string; clear(): void; } }',
+    next: 'declare namespace Word { class Body { readonly text: string; } }',
+  },
+  {
+    what: 'a whole symbol added',
+    previous: 'declare namespace Word { class Body { readonly text: string; } }',
+    next: `declare namespace Word {
+      class Body { readonly text: string; }
+      class Paragraph { readonly text: string; }
+    }`,
+  },
+  {
+    what: 'a whole symbol removed',
+    previous: `declare namespace Word {
+      class Body { readonly text: string; }
+      class Paragraph { readonly text: string; }
+    }`,
+    next: 'declare namespace Word { class Body { readonly text: string; } }',
+  },
+  {
+    what: "a symbol's own requirement set moved",
+    previous: `declare namespace Word {
+      /** [Api set: WordApi 1.1] */
+      class Body { readonly text: string; }
+    }`,
+    next: `declare namespace Word {
+      /** [Api set: WordApi 1.9] */
+      class Body { readonly text: string; }
+    }`,
+  },
+  {
+    what: 'a property became a method of the same call shape',
+    previous: 'declare namespace Word { class Body { style: string; } }',
+    next: 'declare namespace Word { class Body { style(): string; } }',
+  },
+  {
+    what: 'a parameter was renamed',
+    previous: 'declare namespace Word { class Body { insertText(text: string): void; } }',
+    next: 'declare namespace Word { class Body { insertText(value: string): void; } }',
+  },
+];
+
 describe('adoptShapeIdenticalDrift() (the write path used by compat:adopt)', () => {
   test('adopts a provenance-only bump and proves the source commit against the published bytes', async () => {
     const sourceCommit = 'e8ab93aca9dcb062ad042380341762b019c4a488';
@@ -266,31 +368,83 @@ describe('adoptShapeIdenticalDrift() (the write path used by compat:adopt)', () 
     expect(provenance.upstreamPackage.version).toBe(UNPINNED_VERSION);
     expect(provenance.upstreamPackage.sourceRepository.commit).toBe(sourceCommit);
     expect(provenance.upstreamPackage.sourceRepository.sourceUrl).toContain(sourceCommit);
+
+    // The fixture it hands back is the regenerated one, carrying the new
+    // version — returning the old bytes would ship a PR whose two files
+    // disagree about which release is checked in.
+    const fixture = JSON.parse(result.fixtureJson);
+    expect(fixture.generatedFrom.version).toBe(UNPINNED_VERSION);
+    expect(Object.keys(fixture.symbols)).toEqual(['Body']);
   });
 
-  test('refuses a release whose shape moved, leaving it for a maintainer to review', async () => {
+  test('keeps a maintainer-reviewed pin instead of re-resolving it', async () => {
+    const reviewedCommit = '929735ef7d8bafb29c17e39b26042ada8529e670';
     const result = await adoptShapeIdenticalDrift({
       version: UNPINNED_VERSION,
       fetchImpl: fakeAdoptFetch({
         version: UNPINNED_VERSION,
-        // One member more than the checked-in fixture: a fact about the API.
-        declarationText: `declare namespace Word {
-          class Body {
-            readonly text: string;
-            clear(): void;
-          }
-        }`,
-        sourceCommit: 'e8ab93aca9dcb062ad042380341762b019c4a488',
+        declarationText: SHAPE_IDENTICAL_DECLARATION,
+        // A different commit is on offer from the resolver; it must not win.
+        sourceCommit: SOURCE_COMMIT,
       }),
       existingFixtureJson: `${JSON.stringify(PREVIOUS_FIXTURE, null, 2)}\n`,
+      existingPins: { [UNPINNED_VERSION]: reviewedCommit },
     });
 
-    expect(result.adopted).toBe(false);
-    expect(result.reason).toBe('shape-changed');
+    expect(result.adopted).toBe(true);
+    expect(result.commitWasPinned).toBe(true);
+    expect(result.definitelyTypedCommit).toBe(reviewedCommit);
+    expect(JSON.parse(result.provenanceJson).upstreamPackage.sourceRepository.commit).toBe(
+      reviewedCommit
+    );
+  });
+
+  for (const { what, previous, next } of REFUSABLE_UPSTREAM_CHANGES) {
+    test(`refuses to adopt when ${what}`, async () => {
+      const result = await adoptAfterUpstreamChange(previous, next);
+
+      expect(result.adopted).toBe(false);
+      expect(result.reason).toBe('shape-changed');
+      // Nothing adoptable is produced, so nothing can be written by mistake.
+      expect(result.provenanceJson).toBeUndefined();
+      expect(result.fixtureJson).toBeUndefined();
+    });
+  }
+
+  test('names the change in the report when the symbol/member delta can express it', async () => {
+    const result = await adoptAfterUpstreamChange(
+      'declare namespace Word { class Body { readonly text: string; } }',
+      'declare namespace Word { class Body { readonly text: string; clear(): void; } }'
+    );
     expect(result.diffSummary).toContain('Word.Body#clear');
-    // Nothing adoptable is produced, so nothing can be written by mistake.
-    expect(result.provenanceJson).toBeUndefined();
-    expect(result.fixtureJson).toBeUndefined();
+    expect(result.diffSummary).toMatch(/added/i);
+    // The delta explained it, so the "differs beyond" footnote must stay off.
+    expect(result.diffSummary).not.toContain('differs beyond the upstream version string');
+  });
+
+  test('names a whole symbol appearing or disappearing, without the cannot-express footnote', async () => {
+    const twoSymbols = `declare namespace Word {
+      class Body { readonly text: string; }
+      class Paragraph { readonly text: string; }
+    }`;
+    const oneSymbol = 'declare namespace Word { class Body { readonly text: string; } }';
+
+    const added = await adoptAfterUpstreamChange(oneSymbol, twoSymbols);
+    expect(added.diffSummary).toContain('Word.Paragraph');
+    expect(added.diffSummary).not.toContain('differs beyond the upstream version string');
+
+    const removed = await adoptAfterUpstreamChange(twoSymbols, oneSymbol);
+    expect(removed.diffSummary).toContain('Word.Paragraph');
+    expect(removed.diffSummary).not.toContain('differs beyond the upstream version string');
+  });
+
+  test('says so plainly when the delta cannot express the change, instead of printing "no differences"', async () => {
+    const result = await adoptAfterUpstreamChange(
+      'declare namespace Word { class Body { insertText(text: string): void; } }',
+      'declare namespace Word { class Body { insertText(value: string): void; } }'
+    );
+    expect(result.adopted).toBe(false);
+    expect(result.diffSummary).toContain('differs beyond the upstream version string');
   });
 
   test('fails loudly when no DefinitelyTyped commit explains the published bytes', async () => {
@@ -306,6 +460,158 @@ describe('adoptShapeIdenticalDrift() (the write path used by compat:adopt)', () 
         existingFixtureJson: `${JSON.stringify(PREVIOUS_FIXTURE, null, 2)}\n`,
       })
     ).rejects.toThrow(/has an index\.d\.ts matching the published/);
+  });
+});
+
+describe('the version string npm hands back', () => {
+  // It reaches a $GITHUB_OUTPUT line, a branch name, a commit message and a
+  // PR title. A newline in it would inject a second key=value pair into the
+  // workflow's own decision output — including the one that unlocks writing.
+  test('is refused when it could not be a version', async () => {
+    const hostileVersion = '1.0.605\nshape_changed=false';
+    await expect(
+      checkForDrift({
+        version: hostileVersion,
+        fetchImpl: fakeNpmFetch({
+          version: hostileVersion,
+          declarationText: SHAPE_IDENTICAL_DECLARATION,
+        }),
+        existingFixtureJson: null,
+        existingProvenance: null,
+      })
+    ).rejects.toThrow(/unusable @types\/office-js version string/);
+  });
+
+  test('accepts an ordinary release, prerelease and build-metadata version', async () => {
+    // Deliberately versions with no reviewed pin, so this exercises the
+    // version check without also reaching for the docs-reference commit.
+    for (const version of ['9.9.9', '9.9.9-beta.1', '9.9.9+build.7']) {
+      const result = await checkForDrift({
+        version,
+        fetchImpl: fakeNpmFetch({ version, declarationText: SHAPE_IDENTICAL_DECLARATION }),
+        existingFixtureJson: null,
+        existingProvenance: null,
+      });
+      expect(result.upstreamVersion).toBe(version);
+    }
+  });
+});
+
+describe('the adoption gate itself', () => {
+  const fixture = {
+    schemaVersion: 1,
+    generatedFrom: { package: '@types/office-js', version: '1.0.604' },
+    symbols: {
+      Body: {
+        uid: 'Word.Body',
+        kind: 'class',
+        requirementSet: 'WordApi 1.1',
+        members: {
+          insertText: {
+            uid: 'Word.Body#insertText',
+            kind: 'method',
+            requirementSet: 'WordApi 1.1',
+            overloads: [
+              { params: [{ name: 'text', type: 'string' }], returns: 'void' },
+              { params: [], returns: 'void' },
+            ],
+          },
+        },
+      },
+    },
+  };
+  const clone = () => JSON.parse(JSON.stringify(fixture));
+
+  test('a moved version string alone is provenance-only', () => {
+    const next = clone();
+    next.generatedFrom.version = '1.0.605';
+    expect(isProvenanceOnlyFixtureChange(fixture, next)).toBe(true);
+  });
+
+  test('key order is not a difference', () => {
+    const next = {
+      symbols: clone().symbols,
+      generatedFrom: { version: '1.0.605', package: '@types/office-js' },
+      schemaVersion: 1,
+    };
+    expect(isProvenanceOnlyFixtureChange(fixture, next)).toBe(true);
+  });
+
+  test('reordered overloads are a difference, even though the set is the same', () => {
+    const next = clone();
+    next.symbols.Body.members.insertText.overloads.reverse();
+    expect(isProvenanceOnlyFixtureChange(fixture, next)).toBe(false);
+  });
+
+  test('a changed uid is a difference', () => {
+    const next = clone();
+    next.symbols.Body.uid = 'Word.Body2';
+    expect(isProvenanceOnlyFixtureChange(fixture, next)).toBe(false);
+  });
+
+  test('a missing previous fixture is a difference, so nothing adopts into the unknown', () => {
+    expect(isProvenanceOnlyFixtureChange(null, fixture)).toBe(false);
+    expect(isProvenanceOnlyFixtureChange({ symbols: {} }, fixture)).toBe(false);
+  });
+});
+
+describe('buildCheckResultSummary() (the JSON contract the workflow branches on)', () => {
+  test('emits exactly the four keys the workflow reads', () => {
+    const summary = buildCheckResultSummary({
+      driftDetected: true,
+      shapeChanged: false,
+      upstreamVersion: '1.0.605',
+      reviewRequired: true,
+    });
+    expect(Object.keys(summary).sort()).toEqual([
+      'driftDetected',
+      'reviewRequired',
+      'shapeChanged',
+      'upstreamVersion',
+    ]);
+    expect(summary).toEqual({
+      driftDetected: true,
+      shapeChanged: false,
+      upstreamVersion: '1.0.605',
+      reviewRequired: true,
+    });
+  });
+
+  test('fails closed: only an explicit false unlocks automatic adoption', () => {
+    // A future return path that forgets the field must route to a maintainer,
+    // never to the step that writes.
+    expect(buildCheckResultSummary({ driftDetected: true }).shapeChanged).toBe(true);
+    expect(buildCheckResultSummary({ driftDetected: true, shapeChanged: null }).shapeChanged).toBe(
+      true
+    );
+    expect(buildCheckResultSummary({ driftDetected: true, shapeChanged: false }).shapeChanged).toBe(
+      false
+    );
+  });
+});
+
+describe('withPinnedCommit()', () => {
+  test('adds the entry and keeps every field that documents what a pin means', () => {
+    const before = {
+      schemaVersion: 1,
+      package: '@types/office-js',
+      note: 'what an entry here means',
+      commits: { '1.0.604': '929735ef7d8bafb29c17e39b26042ada8529e670' },
+    };
+
+    const after = withPinnedCommit(before, '1.0.605', 'e8ab93aca9dcb062ad042380341762b019c4a488');
+
+    expect(after).toEqual({
+      schemaVersion: 1,
+      package: '@types/office-js',
+      note: 'what an entry here means',
+      commits: {
+        '1.0.604': '929735ef7d8bafb29c17e39b26042ada8529e670',
+        '1.0.605': 'e8ab93aca9dcb062ad042380341762b019c4a488',
+      },
+    });
+    // Pure: the caller's object is untouched.
+    expect(Object.keys(before.commits)).toEqual(['1.0.604']);
   });
 });
 

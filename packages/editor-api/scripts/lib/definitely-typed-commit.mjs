@@ -87,11 +87,20 @@ async function githubJson(url, { fetchImpl, githubToken }) {
  * Walks the commits that touched `types/office-js`, newest first, and
  * returns the first one whose `index.d.ts` blob matches `declaration`.
  *
- * Newest-first is deliberate. Two commits can share an identical
- * `index.d.ts` (a commit that only edits tests or `package.json` still
- * triggers a republish), so "the newest commit carrying these exact bytes"
- * is the one the release was cut from — this resolver only ever runs for
- * the release currently on the `latest` dist-tag.
+ * What this proves, exactly: at the returned commit, the declaration file is
+ * byte-identical to the one in the verified tarball. That is the fact
+ * `provenance.json` records, and it is strictly less than "this release was
+ * cut from this commit" — the two can differ. A commit that edits only
+ * `package.json` or the tests leaves `index.d.ts` untouched, so consecutive
+ * commits can carry identical declaration bytes, and a blob comparison cannot
+ * tell them apart. Newest-first resolves that to the most recent commit
+ * carrying the published declarations, which is the closest answer the
+ * evidence supports; distinguishing further would need a publish timestamp
+ * npm does not expose per version for `@types` packages.
+ *
+ * The guarantee that matters is the negative one: a commit whose declarations
+ * differ from the published release — a renamed, rewritten, hostile or simply
+ * wrong commit — cannot pass this comparison at all.
  *
  * @param {Buffer} params.declaration `index.d.ts` bytes from the verified tarball.
  * @returns `{ commit, blobSha, commitDate, htmlUrl }`

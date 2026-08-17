@@ -91,6 +91,44 @@ describe('validateProvenance', () => {
     expect(validateProvenance(provenance)).toEqual([]);
   });
 
+  // `sourceRepository.url`/`directory` come from npm registry metadata, which
+  // the publisher controls, while `commit`/`sourceUrl` are generated against
+  // DefinitelyTyped. A record whose two halves name different repositories is
+  // not provenance, and `compat:adopt` can commit one unattended.
+  test('flags a source repository that is not DefinitelyTyped', () => {
+    const provenance = buildProvenance({
+      upstreamPackage: {
+        ...validUpstreamPackage,
+        sourceRepository: {
+          ...validUpstreamPackage.sourceRepository,
+          url: 'https://github.com/attacker/DefinitelyTyped.git',
+        },
+      },
+      fixture: { symbols: {} },
+      fetchedAt: '2026-08-01T00:00:00.000Z',
+      docsReference: validDocsReference,
+    });
+    const errors = validateProvenance(provenance);
+    expect(errors.some((e) => /sourceRepository\.url/.test(e))).toBe(true);
+  });
+
+  test('flags a source directory other than types/office-js', () => {
+    const provenance = buildProvenance({
+      upstreamPackage: {
+        ...validUpstreamPackage,
+        sourceRepository: {
+          ...validUpstreamPackage.sourceRepository,
+          directory: 'types/office-js-preview',
+        },
+      },
+      fixture: { symbols: {} },
+      fetchedAt: '2026-08-01T00:00:00.000Z',
+      docsReference: validDocsReference,
+    });
+    const errors = validateProvenance(provenance);
+    expect(errors.some((e) => /sourceRepository\.directory/.test(e))).toBe(true);
+  });
+
   test('flags a missing integrity hash', () => {
     const provenance = buildProvenance({
       upstreamPackage: { ...validUpstreamPackage, integrity: '' },

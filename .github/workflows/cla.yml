@@ -69,7 +69,9 @@ jobs:
           # Always-allowlisted: bots, plus named maintainer handles as a
           # safety net (in case the org-membership lookup fails for any
           # reason — private membership, transient API error, etc.).
-          ALLOWLIST: 'dependabot[bot] github-actions[bot] renovate[bot] jedrazb'
+          # eigenpal-release-pal[bot] is this workflow's own App: it authors the
+          # PRs office-compat-drift.yml opens, and a bot cannot sign a CLA.
+          ALLOWLIST: 'dependabot[bot] github-actions[bot] renovate[bot] eigenpal-release-pal[bot] jedrazb'
           # Auto-allowlist members of this org. Public members are recognized
           # via the workflow's GITHUB_TOKEN; private members will be prompted
           # to sign once (then they're recorded like anyone else). To turn the
