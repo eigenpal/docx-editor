@@ -21,8 +21,8 @@ import type { SurfaceHyperlink } from './surface-hyperlinks.ts';
 
 /**
  * Distinct field links remembered per surface. Documents hold links in proportion to their
- * own size, so this only bites a hostile file; past it, later NEW targets still paint and
- * carry their record — their clicks just resolve to nothing, which fails safe.
+ * own size, so this only bites a hostile file; past it, a NEW target projects no link at
+ * all — its text paints plain, which fails closed. Known targets keep resolving.
  */
 const MAX_REGISTERED_FIELD_LINKS = 4096;
 
@@ -101,28 +101,30 @@ export function createFieldLinkRegistry(): FieldLinkRegistry {
       const key = `${spec.target ?? ''}\u0000${spec.anchor ?? ''}\u0000${spec.tooltip ?? ''}`;
       let id = idByKey.get(key);
       if (id === undefined) {
+        // Full and unknown: NO link, never an id minted without its record. An unregistered
+        // id would paint an anchor whose clicks resolve to nothing — and a FRESH id per call
+        // would churn the fragment signature of an unchanged line on every re-break.
+        if (idByKey.size >= MAX_REGISTERED_FIELD_LINKS) return null;
         minted += 1;
         id = `field-hyperlink:${minted}`;
-        if (idByKey.size < MAX_REGISTERED_FIELD_LINKS) {
-          idByKey.set(key, id);
-          // A field link names no `w:hyperlink` node, so it has no addressable range: the
-          // position fields stay empty and the editing lane (retarget/unlink) never sees it.
-          byId.set(
+        idByKey.set(key, id);
+        // A field link names no `w:hyperlink` node, so it has no addressable range: the
+        // position fields stay empty and the editing lane (retarget/unlink) never sees it.
+        byId.set(
+          id,
+          Object.freeze({
             id,
-            Object.freeze({
-              id,
-              paragraphId: '',
-              start: 0,
-              end: 0,
-              text: '',
-              kind: resolved.kind,
-              href: resolved.href,
-              authored: resolved.authored,
-              ...(resolved.anchor !== undefined ? { anchor: resolved.anchor } : {}),
-              ...(resolved.tooltip !== undefined ? { tooltip: resolved.tooltip } : {}),
-            })
-          );
-        }
+            paragraphId: '',
+            start: 0,
+            end: 0,
+            text: '',
+            kind: resolved.kind,
+            href: resolved.href,
+            authored: resolved.authored,
+            ...(resolved.anchor !== undefined ? { anchor: resolved.anchor } : {}),
+            ...(resolved.tooltip !== undefined ? { tooltip: resolved.tooltip } : {}),
+          })
+        );
       }
       return {
         id,

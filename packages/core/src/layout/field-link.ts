@@ -12,9 +12,9 @@
 // grammar is recognized and the raw pieces are handed over verbatim, case and
 // percent-encoding preserved.
 
-/** Longest raw instruction even considered (matches the relationship-target bound). */
-export const MAX_HYPERLINK_INSTRUCTION_CHARS = 2048;
-/** Longest target captured — same bound the package puts on a relationship target. */
+/** Longest raw instruction even considered — room for a full-length target plus switches. */
+export const MAX_HYPERLINK_INSTRUCTION_CHARS = 4096;
+/** Longest target captured — the bound the package puts on a relationship target. */
 export const MAX_HYPERLINK_TARGET_CHARS = 2048;
 /** Longest `\l` anchor or `\o` tooltip captured. */
 export const MAX_HYPERLINK_SWITCH_ARG_CHARS = 256;
@@ -78,8 +78,10 @@ const ARGUMENT_SWITCHES = new Set(['\\l', '\\o', '\\t', '\\m', '\\n', '\\*', '\\
  * Recognition is the first token equalling `HYPERLINK` case-insensitively. The target is the
  * first quoted or bare token that is neither a switch nor a switch's argument; switches may
  * appear on either side of it. Duplicates: FIRST wins, for target and switches alike, which
- * is what Word does with a malformed double instruction. No target and no `\l` anchor is not
- * a link at all. Values are passed through verbatim — embedded whitespace inside a quoted
+ * is what Word does with a malformed double instruction — so an INVALID first target (empty
+ * quotes, or past the cap) forfeits the target rather than promoting a later token to it; an
+ * `\l` anchor may still make an internal link. No target and no `\l` anchor is not a link at
+ * all. Values are passed through verbatim — embedded whitespace inside a quoted
  * target survives; stripping smuggled control characters is the sanitizer's job, not the
  * parser's.
  */
@@ -91,6 +93,7 @@ export function parseHyperlinkInstruction(raw: string): HyperlinkFieldSpec | nul
   if (first.quoted || first.value.toUpperCase() !== 'HYPERLINK') return null;
 
   let target: string | null = null;
+  let targetTaken = false;
   let anchor: string | null = null;
   let tooltip: string | null = null;
   for (let i = 1; i < tokens.length; i += 1) {
@@ -109,12 +112,13 @@ export function parseHyperlinkInstruction(raw: string): HyperlinkFieldSpec | nul
       // `\t` / `\m` / `\n` / `\*` / `\#` / `\@`: argument consumed and ignored.
       continue;
     }
-    if (
-      target === null &&
-      token.value.length > 0 &&
-      token.value.length <= MAX_HYPERLINK_TARGET_CHARS
-    ) {
-      target = token.value;
+    if (!targetTaken) {
+      // The first target-position token CONSUMES target-hood even when it is invalid, so a
+      // hostile decoy (`""` or an over-cap blob) cannot promote a later token Word ignores.
+      targetTaken = true;
+      if (token.value.length > 0 && token.value.length <= MAX_HYPERLINK_TARGET_CHARS) {
+        target = token.value;
+      }
     }
     // A second bare/quoted token is a duplicate target: first wins.
   }

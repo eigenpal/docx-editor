@@ -6,7 +6,11 @@
 // Every hostile shape resolves to null or a capped value, never a hang or a throw.
 
 import { describe, expect, test } from 'bun:test';
-import { MAX_HYPERLINK_INSTRUCTION_CHARS, parseHyperlinkInstruction } from '../field-link.ts';
+import {
+  MAX_HYPERLINK_INSTRUCTION_CHARS,
+  MAX_HYPERLINK_TARGET_CHARS,
+  parseHyperlinkInstruction,
+} from '../field-link.ts';
 
 describe('grammar', () => {
   test('a quoted target parses verbatim, case and percent-encoding preserved', () => {
@@ -129,6 +133,25 @@ describe('hostile input', () => {
   test('backslash-heavy garbage yields no link and no hang', () => {
     expect(parseHyperlinkInstruction(` HYPERLINK ${'\\'.repeat(512)} `)).toBeNull();
     expect(parseHyperlinkInstruction(' HYPERLINK \\l \\o \\t ')).toBeNull();
+  });
+
+  test('an empty-quoted first target forfeits the target; a later token never takes it', () => {
+    // Word takes the FIRST target-position token; a decoy `""` must not promote the second.
+    expect(parseHyperlinkInstruction(' HYPERLINK "" https://second.example ')).toBeNull();
+    // The `\l` anchor is its own lane: the forfeited target still leaves an internal link.
+    expect(parseHyperlinkInstruction(' HYPERLINK "" https://second.example \\l top ')).toEqual({
+      target: null,
+      anchor: 'top',
+      tooltip: null,
+    });
+  });
+
+  test('an over-cap first target forfeits the target; a later token never takes it', () => {
+    const blob = 'a'.repeat(MAX_HYPERLINK_TARGET_CHARS + 1);
+    expect(parseHyperlinkInstruction(` HYPERLINK "${blob}" https://second.example `)).toBeNull();
+    expect(
+      parseHyperlinkInstruction(` HYPERLINK "${blob}" https://second.example \\l top `)
+    ).toEqual({ target: null, anchor: 'top', tooltip: null });
   });
 
   test('an over-cap anchor is ignored rather than truncated', () => {

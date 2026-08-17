@@ -52,6 +52,13 @@ const LINKED = docx(
   EXTERNAL_REL
 );
 const PLAIN = docx('<w:p><w:r><w:t>Visit example today</w:t></w:r></w:p>');
+// A HYPERLINK field, not a typed `w:hyperlink`: its link record comes from the field-link
+// registry, is an atom with no caret-addressable range, and no relationship backs it.
+const FIELD_LINKED = docx(
+  `<w:p><w:r><w:t>See </w:t></w:r>` +
+    `<w:fldSimple w:instr=" HYPERLINK &quot;https://field.example&quot; ">` +
+    `<w:r><w:t>FieldLink</w:t></w:r></w:fldSimple></w:p>`
+);
 const PID = '/word/document.xml#0.0.0';
 
 interface Mounted {
@@ -259,6 +266,51 @@ describe('DocxEditor.HyperLink', () => {
     expect(readout.tagName).toBe('SPAN');
     // Copy needs a safe target; there is none.
     expect(mounted.view.queryByTestId('hyperlink-popup-copy')).toBeNull();
+  });
+});
+
+describe('a HYPERLINK field link', () => {
+  test('the popover survives the snapshot ticks after the click', () => {
+    const mounted = mount(FIELD_LINKED);
+    caret(mounted, 2);
+    clickLink(mounted, 'FieldLink');
+    // The caret can never sit inside a field link (`linkAtCaret` walks the typed lane), so
+    // the caret-based dismissal must not run: the panel is still standing after the click's
+    // own ticks, and stays standing across a further selection tick.
+    const panel = mounted.view.getByTestId('hyperlink-popup');
+    expect(panel.dataset.mode).toBe('reading');
+    expect(mounted.view.getByTestId('hyperlink-popup-url').textContent).toContain(
+      'https://field.example'
+    );
+    caret(mounted, 1);
+    expect(mounted.view.queryByTestId('hyperlink-popup')).not.toBeNull();
+  });
+
+  test('offers open and copy, but not edit or unlink', () => {
+    const mounted = mount(FIELD_LINKED);
+    caret(mounted, 2);
+    clickLink(mounted, 'FieldLink');
+    expect(mounted.view.getByTestId('hyperlink-popup-copy')).toBeTruthy();
+    expect(mounted.view.getByTestId('hyperlink-popup-url')).toBeTruthy();
+    // The typed editing lane can never resolve a field-link id: unlink would silently do
+    // nothing and edit would insert a typed link BESIDE the field. Absent, not disabled.
+    expect(mounted.view.queryByTestId('hyperlink-popup-edit')).toBeNull();
+    expect(mounted.view.queryByTestId('hyperlink-popup-unlink')).toBeNull();
+  });
+
+  test('escape and an outside mousedown still dismiss it', () => {
+    const mounted = mount(FIELD_LINKED);
+    caret(mounted, 2);
+    clickLink(mounted, 'FieldLink');
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+    expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
+    clickLink(mounted, 'FieldLink');
+    act(() => {
+      fireEvent.mouseDown(document.body);
+    });
+    expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
   });
 });
 

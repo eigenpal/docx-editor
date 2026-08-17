@@ -32,7 +32,11 @@ import {
 import type { CSSProperties, ReactNode } from 'react';
 import { useTranslation } from '../i18n';
 import { absolutePointInScroller } from './scroller-geometry.ts';
-import { HyperlinkPopupContext, type UseHyperlinkPopupResult } from './useHyperlinkPopup';
+import {
+  HyperlinkPopupContext,
+  isFieldLink,
+  type UseHyperlinkPopupResult,
+} from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
@@ -210,15 +214,17 @@ function HyperLinkPreset({ children }: { children?: ReactNode }) {
       </>
     );
   }
+  // Editing actions are absent, not disabled, when they could never do anything: a control
+  // that can never work is chrome pretending to be a capability. A read-only document trims
+  // both; so does a FIELD link, whose id the typed lane (edit / unlink) can never resolve.
+  const editable = state.canEdit && !(state.link && isFieldLink(state.link));
   return (
     <>
       {take('Url', <HyperLinkUrl />)}
       <div className="docx-hyperlink-popup__actions">
         {take('Copy', <HyperLinkCopy />)}
-        {/* Editing actions are absent, not disabled, in a read-only document: a control
-            that can never do anything is chrome pretending to be a capability. */}
-        {state.canEdit ? take('Edit', <HyperLinkEdit />) : null}
-        {state.canEdit ? take('Unlink', <HyperLinkUnlink />) : null}
+        {editable ? take('Edit', <HyperLinkEdit />) : null}
+        {editable ? take('Unlink', <HyperLinkUnlink />) : null}
       </div>
       {overrides.__extra}
     </>

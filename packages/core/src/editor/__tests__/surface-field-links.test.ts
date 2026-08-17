@@ -85,6 +85,15 @@ describe('identity and resolution', () => {
     expect(other.id).not.toBe(first.id);
   });
 
+  test('repeated projection of one spec never churns the id', () => {
+    const registry = createFieldLinkRegistry();
+    const spec = { target: 'https://example.com', anchor: null, tooltip: null };
+    const first = registry.project(spec)!;
+    for (let i = 0; i < 8; i += 1) {
+      expect(registry.project({ ...spec })!.id).toBe(first.id);
+    }
+  });
+
   test('a minted id resolves back to a record a click can act on', () => {
     const registry = createFieldLinkRegistry();
     const record = registry.project({
@@ -103,5 +112,45 @@ describe('identity and resolution', () => {
     // No `w:hyperlink` node backs it, so it addresses no range the editing lane could touch.
     expect(resolved!.paragraphId).toBe('');
     expect(registry.linkById('field-hyperlink:999')).toBeNull();
+  });
+});
+
+describe('the registration cap', () => {
+  test('past 4096 distinct links, a NEW target projects nothing — never an unresolvable id', () => {
+    const registry = createFieldLinkRegistry();
+    for (let i = 1; i <= 4096; i += 1) {
+      const record = registry.project({
+        target: `https://example.com/${i}`,
+        anchor: null,
+        tooltip: null,
+      });
+      expect(record).not.toBeNull();
+      expect(registry.linkById(record!.id)).not.toBeNull();
+    }
+    // The 4097th distinct target is refused, and CONSISTENTLY so: its text paints plain
+    // rather than as an anchor whose clicks resolve to nothing, and no per-call fresh id
+    // exists to churn an unchanged line's fragment signature on re-break.
+    const overflow = { target: 'https://overflow.example', anchor: null, tooltip: null };
+    expect(registry.project(overflow)).toBeNull();
+    expect(registry.project({ ...overflow })).toBeNull();
+  });
+
+  test('at the cap, a KNOWN key keeps returning its registered id and record', () => {
+    const registry = createFieldLinkRegistry();
+    const first = registry.project({
+      target: 'https://example.com/1',
+      anchor: null,
+      tooltip: null,
+    })!;
+    for (let i = 2; i <= 4096; i += 1) {
+      registry.project({ target: `https://example.com/${i}`, anchor: null, tooltip: null });
+    }
+    const again = registry.project({
+      target: 'https://example.com/1',
+      anchor: null,
+      tooltip: null,
+    })!;
+    expect(again.id).toBe(first.id);
+    expect(registry.linkById(first.id)).toMatchObject({ href: 'https://example.com/1' });
   });
 });

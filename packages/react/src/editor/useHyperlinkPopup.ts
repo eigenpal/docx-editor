@@ -90,6 +90,17 @@ export interface UseHyperlinkPopupResult {
   openTarget: () => boolean;
 }
 
+/**
+ * A field-derived link (a `HYPERLINK` field's instruction) rather than a typed
+ * `w:hyperlink`. Structurally signalled: the field registry mints every record with no
+ * addressable range (`paragraphId` stays empty), because no `w:hyperlink` node backs it.
+ * The caret can never sit inside one, and the typed editing lane (edit / unlink) can never
+ * resolve its id — chrome must neither caret-dismiss on it nor offer those actions.
+ */
+export function isFieldLink(link: SurfaceHyperlink): boolean {
+  return link.paragraphId === '';
+}
+
 const CLOSED: HyperlinkPopupState = Object.freeze({
   mode: 'closed' as const,
   link: null,
@@ -285,6 +296,11 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   useEffect(() => {
     const current = stateRef.current;
     if (current.mode !== 'reading' || !current.link) return;
+    // A FIELD link is an atom with no range the caret could sit in, so "did the caret leave
+    // it" has no honest answer — `linkAtCaret` walks the typed lane and never returns one,
+    // and asking anyway closed the panel on the very tick that followed the opening click.
+    // Escape and an outside mousedown still dismiss it; those paths never ask the caret.
+    if (isFieldLink(current.link)) return;
     const atCaret = editor?.surface?.hyperlinks.linkAtCaret() ?? null;
     if (atCaret && atCaret.id === current.link.id) return;
     setState(CLOSED);
