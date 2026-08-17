@@ -76,15 +76,15 @@ function shortLabel(name) {
 
 /**
  * Grouped comparison as a mermaid chart (GitHub renders these natively in comments).
- * Head medians are bars; the baseline is a LINE, not a second bar series — mermaid
- * overlays bar series at full width, so a second bar would occlude the first. The gray
- * (#6e7781) is a deliberate neutral for the reference series — identity is carried by
- * mark shape and the caption, and both colors clear 3:1 contrast on GitHub's light and
- * dark comment surfaces.
+ * Mermaid overlays multiple bar series at full width — it has no native grouped bars —
+ * so the pairing is built from categories instead: each scenario contributes two
+ * adjacent x slots, baseline then PR, and each series holds zeros in the other's slots
+ * (a zero-height bar draws nothing). The result is a literal gray-next-to-blue pair per
+ * scenario. The gray (#6e7781) is a deliberate neutral for the reference series, and
+ * both colors clear 3:1 contrast on GitHub's light and dark comment surfaces.
  */
 function medianChart(head, base) {
-  const names = head.scenarios.map((scenario) => shortLabel(scenario.name));
-  if (names.length === 0) return null;
+  if (head.scenarios.length === 0) return null;
   const headValues = head.scenarios.map((scenario) => scenario.total.medianMs);
   const baseByName = base
     ? new Map(base.scenarios.map((scenario) => [scenario.name, scenario]))
@@ -92,23 +92,39 @@ function medianChart(head, base) {
   const baseValues = baseByName
     ? head.scenarios.map((scenario) => baseByName.get(scenario.name)?.total.medianMs ?? 0)
     : null;
-  const values = [...headValues, ...(baseValues ?? [])].filter((value) => Number.isFinite(value));
+  const values = [...headValues, ...(baseValues ?? [])];
   if (values.length === 0 || values.some((value) => !Number.isFinite(value))) return null;
   const top = Math.max(1, Math.ceil(Math.max(...values) * 1.15));
   const series = (list) => `[${list.map((value) => value.toFixed(2)).join(', ')}]`;
+
+  let categories;
+  let seriesLines;
+  let palette;
+  if (baseValues) {
+    categories = head.scenarios.flatMap((scenario) => [
+      `${shortLabel(scenario.name)} (main)`,
+      `${shortLabel(scenario.name)} (PR)`,
+    ]);
+    const baseSlots = baseValues.flatMap((value) => [value, 0]);
+    const headSlots = headValues.flatMap((value) => [0, value]);
+    palette = '#6e7781, #0969da';
+    seriesLines = [`  bar ${series(baseSlots)}`, `  bar ${series(headSlots)}`];
+  } else {
+    categories = head.scenarios.map((scenario) => shortLabel(scenario.name));
+    palette = '#0969da';
+    seriesLines = [`  bar ${series(headValues)}`];
+  }
+
   const lines = [
     '```mermaid',
-    `%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "#0969da${baseValues ? ', #6e7781' : ''}"}}}}%%`,
+    `%%{init: {"themeVariables": {"xyChart": {"plotColorPalette": "${palette}"}}}}%%`,
     'xychart-beta',
     `  title "Median edit latency (ms)"`,
-    `  x-axis [${names.map((name) => `"${name}"`).join(', ')}]`,
+    `  x-axis [${categories.map((name) => `"${name}"`).join(', ')}]`,
     `  y-axis "ms" 0 --> ${top}`,
-    `  bar ${series(headValues)}`,
-    ...(baseValues ? [`  line ${series(baseValues)}`] : []),
+    ...seriesLines,
     '```',
-    baseValues
-      ? '🟦 bars: this PR · ⬛ line: `main` baseline'
-      : '🟦 bars: this PR (no comparable baseline)',
+    baseValues ? '⬛ `main` baseline · 🟦 this PR' : '🟦 this PR (no comparable baseline)',
   ];
   return lines.join('\n');
 }
