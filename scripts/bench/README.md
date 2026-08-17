@@ -62,11 +62,12 @@ Comparability is guarded per report by the fixture SHA-256: if the fixture chang
 or the baseline predates a benchmark, that section degrades to head-only numbers.
 
 Timings in that comment are informational: shared runners are noisy, so the job never fails on
-a head-vs-base wall-clock delta. Deterministic gates still apply — `edit-bench-gates.test.ts`
-pins the engine work counters inside `bun run test`, and the browser spec's own gates (pinned
-work counters plus the self-calibrated tails described under "CI gates and threshold
-rationale") fail the job when the HEAD browser run trips them; a failing BASELINE browser run
-only degrades the comment to head-only numbers. Fork PRs cannot receive comments (read-only
+a head-vs-base wall-clock delta, and the single-sample timing tails run warn-only there
+(`EDIT_BROWSER_BENCH_TIMING_TAILS=warn` — one scheduler stall on a shared runner trips a
+max-sample gate). Deterministic gates still apply — `edit-bench-gates.test.ts` pins the engine
+work counters inside `bun run test`, and the browser spec's structural and median-based gates
+fail the job when the HEAD browser run trips them; a failing BASELINE browser run only
+degrades the comment to head-only numbers. Fork PRs cannot receive comments (read-only
 token); their reports are in the `edit-bench-report` workflow artifact.
 
 ### Browser editing benchmark

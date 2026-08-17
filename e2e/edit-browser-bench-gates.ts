@@ -15,6 +15,25 @@ const EXPECTED_LAYOUT_WORK = {
 const TIMING_P95_FACTOR = 3;
 const TIMING_P95_FLOOR_MS = 50;
 
+/**
+ * `EDIT_BROWSER_BENCH_TIMING_TAILS=warn` downgrades the single-sample tail gates —
+ * p95-vs-median and the sustained max-sample ceilings — to console warnings. On a
+ * shared CI runner one scheduler stall is enough to trip them, and the CI benchmark
+ * job treats wall clock as advisory. Everything median-based or structural (work
+ * counters, growth percentages, heap, DOM size) stays a hard assertion in every mode.
+ */
+const TIMING_TAILS_WARN = process.env.EDIT_BROWSER_BENCH_TIMING_TAILS === 'warn';
+
+function expectTailCeiling(actual: number, ceiling: number, label: string): void {
+  if (TIMING_TAILS_WARN) {
+    if (actual > ceiling) {
+      console.warn(`[timing-tail warn-only] ${label}: ${actual} ms exceeds ${ceiling} ms`);
+    }
+    return;
+  }
+  expect(actual, label).toBeLessThanOrEqual(ceiling);
+}
+
 /** Engine layout/paint/selection combined should stay within 5× input-task median (generous for React/review rail). */
 const ENGINE_TO_INPUT_FACTOR = 5;
 const ENGINE_TO_INPUT_FLOOR_MS = 500;
@@ -36,11 +55,10 @@ const BURST_HANDLER_P95_FACTOR = 4;
 const BURST_HANDLER_P95_FLOOR_MS = 40;
 
 function assertTimingTail(summary: TimingSummary, label: string): void {
-  expect(
+  expectTailCeiling(
     summary.p95Ms,
+    Math.max(summary.medianMs * TIMING_P95_FACTOR, summary.medianMs + TIMING_P95_FLOOR_MS),
     `${label} p95 (${summary.p95Ms} ms) vs median (${summary.medianMs} ms)`
-  ).toBeLessThanOrEqual(
-    Math.max(summary.medianMs * TIMING_P95_FACTOR, summary.medianMs + TIMING_P95_FLOOR_MS)
   );
 }
 
@@ -87,14 +105,18 @@ export function assertSustainedLatencyGates(sustained: SustainedReport): void {
     sustained.frameMedianChangePct,
     `${sustained.mode} sustained frame median change`
   ).toBeLessThan(SUSTAINED_MEDIAN_GROWTH_PCT);
-  expect(sustained.maxInputTaskMs).toBeLessThanOrEqual(
+  expectTailCeiling(
+    sustained.maxInputTaskMs,
     Math.max(
       sustained.lastInputTask.p95Ms * TIMING_P95_FACTOR,
       sustained.lastInputTask.medianMs + 200
-    )
+    ),
+    `${sustained.mode} sustained max input task`
   );
-  expect(sustained.maxFrameMs).toBeLessThanOrEqual(
-    Math.max(sustained.lastFrame.p95Ms * TIMING_P95_FACTOR, sustained.lastFrame.medianMs + 400)
+  expectTailCeiling(
+    sustained.maxFrameMs,
+    Math.max(sustained.lastFrame.p95Ms * TIMING_P95_FACTOR, sustained.lastFrame.medianMs + 400),
+    `${sustained.mode} sustained max frame`
   );
   if (sustained.heapChangeBytes !== null) {
     expect(sustained.heapChangeBytes).toBeLessThan(SUSTAINED_HEAP_CEILING_BYTES);

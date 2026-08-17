@@ -7,11 +7,13 @@ name: Performance benchmark
 #   - the deterministic edit benchmark (scripts/bench/edit-bench.ts) — the
 #     engine layout pipeline with exact work counters.
 # Wall-clock numbers from a shared runner are informational only — this job
-# never fails on a head-vs-base timing delta. Deterministic gates still apply:
-# the pinned work-counter test (scripts/bench/edit-bench-gates.test.ts) inside
-# `bun run test` in ci.yml, and the browser spec's own structural and
-# self-calibrated gates, which fail the HEAD browser run (this is the only CI
-# execution of that spec). A failing BASELINE run only degrades the comment.
+# never fails on a head-vs-base timing delta, and single-sample timing tails
+# are warn-only here (EDIT_BROWSER_BENCH_TIMING_TAILS=warn). Deterministic
+# gates still apply: the pinned work-counter test
+# (scripts/bench/edit-bench-gates.test.ts) inside `bun run test` in ci.yml,
+# and the browser spec's structural and median-based gates, which fail the
+# HEAD browser run (this is the only CI execution of that spec). A failing
+# BASELINE run only degrades the comment.
 
 on:
   pull_request:
@@ -66,8 +68,12 @@ jobs:
         # per-test timeout on shared runners; the SAME value must be set on the
         # baseline run below, or the two reports' medians come from different
         # sample counts.
+        # TIMING_TAILS=warn: single-sample tail gates (p95 spikes, sustained max)
+        # log instead of failing — one scheduler stall on a shared runner trips
+        # them. Structural and median-based gates stay hard and fail this step.
         run: |
           EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+            EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
             EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/head-ux.json" \
             bunx playwright test --config e2e/edit-browser-bench.config.ts \
             --grep "browser editing latency"
@@ -97,6 +103,7 @@ jobs:
             if [ -f "$RUNNER_TEMP/base/e2e/edit-browser-bench.config.ts" ]; then
               bunx playwright install --with-deps chromium || true
               EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+                EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
                 EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/base-ux.json" \
                 bunx playwright test --config e2e/edit-browser-bench.config.ts \
                 --grep "browser editing latency" || echo "baseline browser bench failed; continuing"
