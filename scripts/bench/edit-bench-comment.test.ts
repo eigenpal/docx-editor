@@ -60,22 +60,9 @@ describe('edit-bench comment rendering', () => {
     expect(body).toContain('⚪ +3.0%');
   });
 
-  test('comparable mode charts paired baseline and PR bars per scenario', () => {
+  test('the comment is the table alone — no chart block', () => {
     const body = renderComment(report({ medianMs: 8 }), report({ medianMs: 10 }));
-    expect(body).toContain('```mermaid');
-    expect(body).toContain('xychart-beta');
-    expect(body).toContain('"steady (main)", "steady (PR)"');
-    // Zero-height slots keep each series invisible in the other's column.
-    expect(body).toContain('bar [10.00, 0.00]');
-    expect(body).toContain('bar [0.00, 8.00]');
-    expect(body).toContain('⬛ `main` baseline · 🟦 this PR');
-  });
-
-  test('head-only mode charts a single bar series', () => {
-    const body = renderComment(report({}), undefined);
-    expect(body).toContain('xychart-beta');
-    expect(body).toContain('bar [10.00]');
-    expect(body).not.toContain('(main)');
+    expect(body).not.toContain('```mermaid');
   });
 
   test('changed work counters are listed as deterministic deltas', () => {
