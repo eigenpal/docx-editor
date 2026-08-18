@@ -512,3 +512,110 @@ describe('a table clear of a float does not inherit its wrap band', () => {
     expect(floated.box.height).toBeCloseTo(plain.box.height, 3);
   });
 });
+
+// A `relativeFrom="page"` anchor is measured from the physical sheet, which is the whole
+// point of the frame: it exists so a full-bleed background is independent of margins,
+// headers and content flow. Two places have to agree on where the page's top edge is
+// relative to the body content box, and once did not (#274, fixed in #318): the content box
+// starts at the EFFECTIVE top inset, which a header taller than `w:top` pushes down, while
+// the anchor frame measured from the authored `w:pgMar`. The drawing painted the difference
+// below the sheet — the full header height when `w:top` is 0.
+//
+// #318 pins the frame CONTEXT with hand-built inputs. This pins the same rule end to end:
+// a real header story, through `layoutSemanticDocument`, asserting the position paint will
+// actually use. The two fail for different reasons, which is why both are here.
+describe('page-frame anchors against a header taller than the top margin (#274)', () => {
+  /** A body whose first paragraph carries a page-anchored, page-sized background image. */
+  const pageAnchoredBackground = (): string =>
+    `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+    '<w:body><w:p><w:r><w:drawing>' +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="1" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="7772400" cy="10058400"/><wp:wrapNone/><wp:docPr id="1" name="bg"/>' +
+    `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="7772400" cy="10058400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
+    '</wp:anchor></w:drawing></w:r></w:p>' +
+    '<w:p><w:r><w:t>body</w:t></w:r></w:p></w:body></w:document>';
+
+  /** A header of `lines` paragraphs, tall enough to push the content box down. */
+  const tallHeader = (lines: number): OoxmlPart =>
+    load(
+      `<w:hdr xmlns:w="${WML_NAMESPACE_URI}">` +
+        '<w:p><w:r><w:t>letterhead</w:t></w:r></w:p>'.repeat(lines) +
+        '</w:hdr>',
+      '/word/header1.xml'
+    );
+
+  const geometryWithTop = (marginTop: number): PageGeometry => ({
+    width: 612,
+    height: 792,
+    margin: { top: marginTop, right: 72, bottom: 72, left: 72 },
+    headerDistance: 0,
+    footerDistance: 36,
+  });
+
+  function headerStory(lines: number) {
+    const headerPart = tallHeader(lines);
+    return layoutHeaderFooterStory(
+      headerPart,
+      CONTENT_WIDTH_PT,
+      measurer,
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      128,
+      undefined,
+      undefined,
+      layoutContext(headerPart, '/word/header1.xml')
+    );
+  }
+
+  function layoutWithHeader(headerLines: number, marginTop: number) {
+    const body = load(pageAnchoredBackground());
+    return layoutSemanticDocument(body, 1, {
+      measurer,
+      geometry: geometryWithTop(marginTop),
+      inlineDrawingLayout: layoutContext(body),
+      furniture: {
+        titlePage: false,
+        evenAndOddHeaders: false,
+        headers: new Map([['default', headerStory(headerLines)]]),
+        footers: new Map(),
+      },
+    });
+  }
+
+  /**
+   * Where the drawing paints relative to the page's own top edge.
+   *
+   * Body anchored records are page-CONTENT relative and paint adds the content inset, so
+   * this is the arithmetic `semantic-paint` does. Zero means flush with the sheet.
+   */
+  function topEdgeOffset(headerLines: number, marginTop: number): number {
+    const page = layoutWithHeader(headerLines, marginTop).pages[0]!;
+    const drawing = page.anchoredDrawings?.[0];
+    expect(drawing).toBeDefined();
+    return drawing!.paintBounds.y + (page.contentBox.y - page.box.y);
+  }
+
+  test('the guard is not vacuous: this header really does move the content box', () => {
+    const story = headerStory(4);
+    const page = layoutWithHeader(4, 0).pages[0]!;
+    expect(story.flowHeight).toBeGreaterThan(0);
+    expect(page.contentBox.y - page.box.y).toBeCloseTo(story.flowHeight, 3);
+  });
+
+  test('a header changes nothing about where a page-frame anchor lands', () => {
+    // The offset used to track the header's height: the whole flow height when `w:top` was
+    // 0, the excess over it otherwise. Both are zero now, and a taller header must not
+    // move it either.
+    for (const marginTop of [0, 72]) {
+      for (const headerLines of [1, 4, 8]) {
+        expect(topEdgeOffset(headerLines, marginTop)).toBeCloseTo(0, 3);
+      }
+    }
+  });
+});

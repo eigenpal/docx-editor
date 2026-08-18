@@ -30,16 +30,39 @@ const tsconfig = JSON.parse(readFileSync(join(CORE, 'tsconfig.json'), 'utf8')) a
   compilerOptions: { paths: Record<string, string[]> };
 };
 
-const config = tsupConfig as unknown as {
+type BuildConfig = {
   entry: Record<string, string>;
   esbuildOptions: (options: { alias?: Record<string, string> }) => void;
 };
 
-/** The alias table, read by running the hook the way tsup does. */
-function esbuildAlias(): Record<string, string> {
+/**
+ * The two format builds — ESM and CJS. They exist separately only because the ESM one
+ * inlines harfbuzzjs and the CJS one cannot; every table below has to be identical across
+ * them, which the last test in this file asserts outright.
+ */
+const configs = tsupConfig as unknown as readonly BuildConfig[];
+const config = configs[0]!;
+
+/** The alias table of one build, read by running the hook the way tsup does. */
+function esbuildAliasOf(build: BuildConfig): Record<string, string> {
   const options: { alias?: Record<string, string> } = {};
-  config.esbuildOptions(options);
+  build.esbuildOptions(options);
   return options.alias ?? {};
+}
+
+/**
+ * The SELF-reference aliases: the `@docx-editor.dev/core/*` rows the four tables are about.
+ *
+ * The table also carries `module`, which is not a subpath of this package at all — it is
+ * what the inlined HarfBuzz runtime's `await import("module")` resolves to, so that no
+ * consumer's browser bundler has to answer for it (#282). It has no export map entry, no
+ * build entry and no tsconfig path, and it must not be compared against any of them.
+ */
+function esbuildAlias(): Record<string, string> {
+  const alias = esbuildAliasOf(config);
+  return Object.fromEntries(
+    Object.entries(alias).filter(([specifier]) => specifier.startsWith('@docx-editor.dev/core'))
+  );
 }
 
 /** `./contracts/editor` → `contracts/editor`; `.` → `index`. Package-relative, no extension. */
@@ -112,5 +135,17 @@ describe('the published subpath tables agree', () => {
       }
     }
     expect({ disagreements }).toEqual({ disagreements: [] });
+  });
+
+  test('the format builds publish the same subpaths from the same sources', () => {
+    // The ESM and CJS builds differ in ONE thing — whether harfbuzzjs is inlined — and the
+    // split makes it possible to change one and forget the other. A subpath added to only
+    // one of them ships an export map entry that resolves under `import` and 404s under
+    // `require`, or the reverse.
+    expect(configs).toHaveLength(2);
+    for (const build of configs.slice(1)) {
+      expect(build.entry).toEqual(config.entry);
+      expect(esbuildAliasOf(build)).toEqual(esbuildAliasOf(config));
+    }
   });
 });

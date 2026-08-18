@@ -1,0 +1,178 @@
+/* The chrome stylesheet.
+   In standalone usage: @import '@docx-editor.dev/core/styles/editor.css';
+   This app runs the packages from SOURCE, so it imports the same file from there. */
+@import '../../../packages/core/src/styles/editor.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   HOST chrome only: the document mark, the save state, and the three actions.
+   The frame, toolbar, menus, rulers and review rail are the library's, styled by
+   the sheet imported above — nothing here patches them.
+
+   Every colour is a `--doc-*` token, so this strip follows the editor into dark
+   mode with no second palette to maintain. The tokens are defined on
+   `.docx-editor`, and these parts render inside the packaged title bar, so they
+   resolve without any scope work here.
+   --------------------------------------------------------------------------- */
+
+.happy-app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+}
+
+/* THE SIGNATURE: a sheet of paper whose folded corner fills in the moment the
+   document has edits you have not saved. It sits immediately left of the name,
+   so the document's identity and its state read as one object.
+
+   The mark is the whole state indicator. The words beside it say the same thing
+   for anyone who does not read the glyph, and are the first thing dropped when
+   the strip runs out of room. */
+.happy-mark {
+  display: block;
+  width: 17px;
+  height: 22px;
+  flex: none;
+  overflow: visible;
+}
+
+.happy-mark__sheet {
+  fill: var(--doc-surface);
+  stroke: var(--doc-text-subtle);
+  stroke-width: 1;
+}
+
+.happy-mark__fold {
+  fill: none;
+  stroke: var(--doc-text-subtle);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  transition:
+    fill 240ms ease,
+    stroke 240ms ease;
+}
+
+.happy-mark[data-state='dirty'] .happy-mark__fold {
+  fill: var(--doc-primary);
+  stroke: var(--doc-primary);
+}
+
+/* Three ruled lines standing in for text. They fade up as the sheet fills, so a
+   document with unsaved work looks written on rather than blank. */
+.happy-mark__rule {
+  stroke: var(--doc-text-subtle);
+  stroke-width: 1;
+  stroke-linecap: round;
+  opacity: 0.45;
+  transition: opacity 240ms ease;
+}
+
+.happy-mark[data-state='dirty'] .happy-mark__rule {
+  opacity: 0.85;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .happy-mark__fold,
+  .happy-mark__rule {
+    transition: none;
+  }
+}
+
+.happy-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.happy-status {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--doc-text-muted);
+  white-space: nowrap;
+}
+
+.happy-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.happy-button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--doc-text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.happy-button:hover {
+  background: var(--doc-surface-hover);
+  color: var(--doc-text);
+}
+
+.happy-button:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 2px;
+}
+
+/* The only filled control on the strip. It is filled because it is the only one
+   that commits anything, and it goes quiet the moment there is nothing to
+   commit — so the strip always shows whether your work is safe. */
+.happy-button--commit {
+  background: var(--doc-primary);
+  border-color: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+
+.happy-button--commit:hover {
+  background: var(--doc-primary-hover);
+  border-color: var(--doc-primary-hover);
+  color: var(--doc-on-primary);
+}
+
+.happy-button--commit:disabled {
+  background: transparent;
+  border-color: var(--doc-border);
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
+.happy-button--commit:disabled:hover {
+  background: transparent;
+  color: var(--doc-text-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .happy-button {
+    transition: none;
+  }
+}
+
+/* Narrow: the mark keeps saying what the words said, so the words go first and
+   all three actions stay reachable. */
+@media (max-width: 640px) {
+  .happy-status {
+    display: none;
+  }
+
+  .happy-button {
+    padding: 7px 9px;
+  }
+}
