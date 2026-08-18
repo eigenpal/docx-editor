@@ -21,6 +21,7 @@ import {
   hardBreakKind,
   hasLegacyFormFieldData,
   isFldSimple,
+  type DocumentProperties,
   type OoxmlNode,
   type OoxmlParagraphNode,
   type OoxmlProperty,
@@ -65,8 +66,8 @@ import {
   runPropertiesOf,
   type RunPropertyCascader,
 } from './field-run-text.ts';
-import { captureInstructionSpecs, formFieldResult } from './field-form.ts';
-import { symbolFieldGlyph } from './field-symbol.ts';
+import { captureInstructionSpecs } from './field-form.ts';
+import { synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
@@ -168,7 +169,8 @@ export function piecesOfParagraph(
   deletedRanges?: MutableModelRange[],
   inlineDrawingLayout?: InlineDrawingLayoutContext,
   themeFonts?: ThemeFonts,
-  projectFieldLink?: FieldLinkProjector
+  projectFieldLink?: FieldLinkProjector,
+  documentProperties?: DocumentProperties
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
@@ -319,39 +321,17 @@ export function piecesOfParagraph(
       };
       return carriedMemo;
     };
-    // SYMBOL renders from its instruction — Word never trusts a cached result for it, so a
-    // synthesized glyph wins over stale cached text. An unresolvable spec falls through to
-    // the existing branches (cached text or nothing).
-    if (pending.symbolSpec) {
-      const glyph = symbolFieldGlyph(pending.symbolSpec, pending.props, themeFonts);
-      if (glyph) {
-        push(glyph.text, glyph.props, glyph.style, true, start, end, carried());
-        pending = null;
-        openAtomicBeginId = null;
-        return;
-      }
-    }
-    // A legacy form field renders from its ffData state: a checkbox always (the state is the
-    // authority, a stale cached glyph must not win), a dropdown only when the cache is empty.
-    const form = formFieldResult(pending, themeFonts);
-    if (form) {
-      push(form.text, form.props, form.style, true, start, end, carried());
-      pending = null;
-      openAtomicBeginId = null;
-      return;
-    }
-    if (pending.kind && pageContext) {
-      const text = projectPageFieldValue(pending.kind, pageContext);
-      push(text, pending.props, pending.style, true, start, end, carried());
-    } else if (pending.cachedText.length > 0) {
-      // Inert non-page field: paint cached result as layout-owned substitution for the
-      // single model unit (same as live PAGE) so hit-test/span ranges stay one atom.
-      push(pending.cachedText, pending.props, pending.style, true, start, end, carried());
-    } else if (pending.buttonSpec && !pending.sawResultContent) {
-      // MACROBUTTON / GOTOBUTTON display their text; the macro / target never runs. A cached
-      // result (what Word last painted) wins above — this fills in only when the file cached
-      // NONE. A result that existed but was hidden stays hidden (`sawResultContent`).
-      push(pending.buttonSpec.display, pending.props, pending.style, true, start, end, carried());
+    // The whole synthesis dispatch — SYMBOL / form field / live PAGE / cached result / a
+    // document-property value / MACROBUTTON display — lives in `field-synthesis.ts`; it reads
+    // the pending state and the document-global context and returns the one glyph run to paint,
+    // or null for nothing (the reserved model unit stays either way).
+    const synthesis = synthesizeAtomicField(pending, {
+      pageContext,
+      themeFonts,
+      documentProperties,
+    });
+    if (synthesis) {
+      push(synthesis.text, synthesis.props, synthesis.style, true, start, end, carried());
     }
     pending = null;
     openAtomicBeginId = null;
@@ -587,6 +567,7 @@ export function piecesOfParagraph(
             linkSpec: null,
             formSpec: null,
             buttonSpec: null,
+            docPropertySpec: null,
             // Bounded ffData STATE read (checkbox checked/size, dropdown entries/selection —
             // macros never); `formField` below stays presence-based so an unreadable payload
             // still shades.
@@ -912,6 +893,7 @@ export function piecesOfParagraph(
       themeFonts,
       currentLink,
       projectFieldLink,
+      documentProperties,
     });
     if (!projected) return;
     // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field.

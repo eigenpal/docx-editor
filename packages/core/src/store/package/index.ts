@@ -440,6 +440,12 @@ export {
   type DocumentViewSettings,
 } from './view-settings.ts';
 export {
+  EMPTY_DOCUMENT_PROPERTIES,
+  MAX_DOCUMENT_PROPERTY_CHARS,
+  readDocumentProperties,
+  type DocumentProperties,
+} from './document-properties.ts';
+export {
   CONTENT_CONTROL_ID_MAX,
   CONTENT_CONTROL_PROPERTY_ORDER,
   MAX_CONTENT_CONTROLS_PER_PART,

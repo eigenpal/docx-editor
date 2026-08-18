@@ -173,7 +173,8 @@ export function createFurnitureSource(env: {
             marginTop: sectionGeometry.margin.top,
             marginBottom: sectionGeometry.margin.bottom,
           }
-        : undefined
+        : undefined,
+      session.documentProperties()
     );
     const rId = rIdOfPart(part.name);
     const story = rId ? stampStoryRId(baseline, rId) : baseline;

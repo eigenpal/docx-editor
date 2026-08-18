@@ -142,6 +142,8 @@ export interface LayoutNoteStoryOptions {
    */
   readonly projectLink?: HyperlinkProjector;
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Document properties for a document-property field inside a note story. */
+  readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /** Derived display marks for noteRef projection inside the note body. */
   readonly noteMarks?: NoteMarkContext;
   /**
@@ -232,6 +234,7 @@ export function layoutNoteStory(
     noteMarks,
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+    ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),

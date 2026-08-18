@@ -169,7 +169,8 @@ export function layoutHeaderFooterStory(
   inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext,
   drawingTokenForParagraph?: (paragraph: import('@docx-editor.dev/core/store').OoxmlNode) => string,
   drawingLayoutToken?: string,
-  hfPageContext?: HeaderFooterPageContext
+  hfPageContext?: HeaderFooterPageContext,
+  documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties
 ): HeaderFooterStoryLayout {
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
@@ -243,6 +244,7 @@ export function layoutHeaderFooterStory(
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           ...(displayMode ? { displayMode } : {}),
+          ...(documentProperties ? { documentProperties } : {}),
           inlineDrawingLayout,
           anchorFrameBase,
           pageContentClip: () => pageClipRegion(anchorFrameBase()),
@@ -258,6 +260,7 @@ export function layoutHeaderFooterStory(
               ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
               ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
               ...(displayMode ? { displayMode } : {}),
+              ...(documentProperties ? { documentProperties } : {}),
               inlineDrawingLayout,
               ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
             }),
@@ -311,6 +314,7 @@ export function layoutHeaderFooterStory(
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
         ...(displayMode ? { displayMode } : {}),
+        ...(documentProperties ? { documentProperties } : {}),
       });
     }
 

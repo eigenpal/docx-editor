@@ -82,6 +82,8 @@ export interface TextboxStoryLayoutOptions {
   /** Host story's page-field context; PAGE-family fields inside the story project against it. */
   readonly pageContext?: FieldPageContext;
   readonly displayMode?: RevisionDisplayMode;
+  /** Document properties, for a document-property field inside the text-box story. */
+  readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /** Story nesting depth; a textbox laid out from inside another textbox passes depth + 1. */
   readonly depth?: number;
   /**
@@ -157,6 +159,7 @@ export function layoutTextboxStory(
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
     ...(options.pageContext ? { pageContext: options.pageContext } : {}),
+    ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),

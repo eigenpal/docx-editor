@@ -10,6 +10,7 @@
 // two boxes for pagination.
 
 import type {
+  DocumentProperties,
   OoxmlElement,
   OoxmlNode,
   OoxmlPart,
@@ -136,7 +137,7 @@ import {
   type SectionColumns,
 } from './section-properties.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
-import { layoutSemanticDocumentWithNotes } from './note-pagination.ts';
+import { inheritNotesLayoutInput, layoutSemanticDocumentWithNotes } from './note-pagination.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   effectiveContentControlLock,
@@ -298,6 +299,11 @@ export interface SemanticLayoutOptions {
    * result still measures, breaks and paints — it simply is not clickable.
    */
   readonly projectFieldLink?: FieldLinkProjector;
+  /**
+   * The document's parsed metadata, for document-property fields (TITLE, AUTHOR, …). Read once
+   * by the surface and shared across body, table, note and header/footer flows.
+   */
+  readonly documentProperties?: DocumentProperties;
   /**
    * Footnote/endnote layout input. When present, body layout projects note marks and a
    * post-pass attaches note areas (with bounded reflow for pageBottom reservation).
@@ -531,18 +537,9 @@ export function layoutSemanticDocument(
     return finish(runBody(optionsWithLists));
   }
 
-  // Note stories run the same paragraph walk as the body, so they inherit the body's link
-  // projector seams unless the notes input pinned its own: without this a `w:hyperlink` or
-  // HYPERLINK field in a footnote painted as dead text while the body's twin was clickable.
-  const notesInput: import('./note-pagination.ts').NotesLayoutInput = {
-    ...options.notes,
-    ...((options.notes.projectLink ?? options.projectLink)
-      ? { projectLink: options.notes.projectLink ?? options.projectLink }
-      : {}),
-    ...((options.notes.projectFieldLink ?? options.projectFieldLink)
-      ? { projectFieldLink: options.notes.projectFieldLink ?? options.projectFieldLink }
-      : {}),
-  };
+  // Notes inherit the body's projector seams and document properties (link, field link, doc
+  // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`.
+  const notesInput = inheritNotesLayoutInput(options.notes, options);
   return finish(
     layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, notesInput, runBody)
   );
@@ -1358,6 +1355,7 @@ function layoutBlocksPass(
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+    ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
@@ -1482,6 +1480,7 @@ function layoutBlocksPass(
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
         ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+        ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout

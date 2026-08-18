@@ -761,6 +761,7 @@ export function mountPaginatedSurface(
       furniture: furnitureSource.furniture(),
       projectLink,
       projectFieldLink: (spec) => fieldLinks.project(spec),
+      documentProperties: session.documentProperties(),
       inlineDrawingLayout: drawingBundle.bodyContext,
       drawingTokenForParagraph: (paragraph) =>
         drawingBundle.drawingTokenForParagraph(paragraph, session.part().name),

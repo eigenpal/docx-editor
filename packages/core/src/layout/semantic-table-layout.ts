@@ -210,6 +210,8 @@ export interface TableFlowDeps {
   readonly projectLink?: HyperlinkProjector;
   /** Same seam for HYPERLINK fields: a field in a table cell is an ordinary field. */
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Document properties for document-property fields; the same object every flow shares. */
+  readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
   readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
@@ -643,6 +645,7 @@ function placeCellParagraph(
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
+      ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
       displayMode: deps.displayMode,
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
       ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),

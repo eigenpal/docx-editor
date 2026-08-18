@@ -13,6 +13,7 @@ import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import type { ButtonFieldSpec } from './field-button.ts';
+import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
@@ -227,6 +228,15 @@ export interface PendingFieldProjection {
    * only when the cache is empty.
    */
   buttonSpec: ButtonFieldSpec | null;
+  /**
+   * Recognized document-property field (TITLE / AUTHOR / … / `DOCPROPERTY "Name"`), or null.
+   *
+   * Captured at the same points as {@link symbolSpec}. Resolved against the document's parsed
+   * properties at flush time (not here — the properties are document-global, not on the field).
+   * A cached result WINS when present, exactly like {@link buttonSpec}; synthesis fills only an
+   * empty cache.
+   */
+  docPropertySpec: DocPropertyField | null;
   /**
    * Bounded `w:ffData` render state read at `begin` (`legacyFormFieldDataOf` — state only,
    * macros never), or null when absent or malformed. {@link formField} stays presence-based:

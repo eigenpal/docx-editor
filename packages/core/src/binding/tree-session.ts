@@ -115,6 +115,11 @@ import {
   readTrackingSettings,
   type DocumentTrackingSettings,
 } from '../store/package/tracking-settings.ts';
+import {
+  EMPTY_DOCUMENT_PROPERTIES,
+  readDocumentProperties,
+  type DocumentProperties,
+} from '../store/package/document-properties.ts';
 
 /**
  * What applying ops produced: whether it committed, and why not when it did not.
@@ -274,6 +279,12 @@ export interface TreeDocxSession {
    * Settings editing is a later slice, so this is immutable for the session.
    */
   settingsRoot(): OoxmlElement | null;
+  /**
+   * The document's own metadata from `docProps/core.xml` and `docProps/app.xml`, for
+   * document-property fields (TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS). Read
+   * once per package revision; an empty object when the parts are absent.
+   */
+  documentProperties(): DocumentProperties;
   /**
    * What `settings.xml` says about tracking — `w:trackRevisions`, the tracked-changes
    * protection, and the two do-not-track switches.
@@ -730,6 +741,36 @@ export function openTreeSession(
     return settingsRoot;
   };
 
+  // The document-property parts, related off the PACKAGE root (`/`), not the main document part.
+  // Both are conventional docProps names, with a relationship lookup first so a renamed part
+  // still resolves. Read once per package revision — document properties editing is a later slice.
+  const CORE_PROPERTIES_REL_TYPE =
+    'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties';
+  const EXTENDED_PROPERTIES_REL_TYPE =
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties';
+  const resolvePropertiesPart = (relType: string, fallbackName: string): OoxmlPart | undefined => {
+    const live = currentPackage();
+    const record = (live.relationships.get('/') ?? []).find((rel) => rel.type === relType);
+    let part: OoxmlPart | undefined;
+    if (record) {
+      const resolved = resolveRelationship(record);
+      if (resolved.mode === 'Internal' && resolved.target.ok) {
+        part = live.parts.get(resolved.target.partName);
+      }
+    }
+    return part ?? live.parts.get(fallbackName);
+  };
+  let documentPropertiesRevision = -1;
+  let documentPropertiesValue: DocumentProperties = EMPTY_DOCUMENT_PROPERTIES;
+  const resolveDocumentProperties = (): DocumentProperties => {
+    if (documentPropertiesRevision === packageStore.packageRevision) return documentPropertiesValue;
+    documentPropertiesRevision = packageStore.packageRevision;
+    const core = resolvePropertiesPart(CORE_PROPERTIES_REL_TYPE, '/docProps/core.xml');
+    const app = resolvePropertiesPart(EXTENDED_PROPERTIES_REL_TYPE, '/docProps/app.xml');
+    documentPropertiesValue = readDocumentProperties(core?.root ?? null, app?.root ?? null);
+    return documentPropertiesValue;
+  };
+
   // The theme part, resolved like the styles part: through the main part's `theme`
   // relationship, with the conventional name as a fallback. Immutable in-session.
   const THEME_REL_TYPE =
@@ -1016,6 +1057,7 @@ export function openTreeSession(
       numberingRoot: () => resolveNumberingRoot(),
 
       settingsRoot: () => resolveSettingsRoot(),
+      documentProperties: () => resolveDocumentProperties(),
       trackingSettings: () => readTrackingSettings(resolveSettingsRoot()),
 
       documentThemeColors() {

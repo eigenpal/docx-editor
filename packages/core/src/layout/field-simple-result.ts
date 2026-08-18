@@ -11,10 +11,12 @@ import {
   fldSimpleInstr,
   isFieldChrome,
   isFldSimple,
+  type DocumentProperties,
   type OoxmlNode,
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 import { parseButtonInstruction } from './field-button.ts';
+import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
 import {
@@ -278,6 +280,8 @@ export function projectSimpleFieldResult(args: {
   /** The enclosing typed `w:hyperlink` record, which outranks the field's instruction. */
   readonly currentLink?: SpanLinkRecord;
   readonly projectFieldLink?: FieldLinkProjector;
+  /** Parsed document properties, for a TITLE / AUTHOR / … / DOCPROPERTY simple field. */
+  readonly documentProperties?: DocumentProperties;
 }): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
@@ -301,9 +305,21 @@ export function projectSimpleFieldResult(args: {
   }
 
   // Synthesis fills only a result the file never cached: a cached result that exists but is
-  // hidden stays hidden (`sawResultContent`), matching the complex-field flush.
-  const buttonSpec =
-    display.text.length === 0 && !display.sawResultContent ? parseButtonInstruction(instr) : null;
+  // hidden stays hidden (`sawResultContent`), matching the complex-field flush. A
+  // document-property field (TITLE / AUTHOR / … / DOCPROPERTY) paints its property value here.
+  const emptyCache = display.text.length === 0 && !display.sawResultContent;
+  if (emptyCache) {
+    const docField = parseDocPropertyInstruction(instr);
+    if (docField) {
+      const value = docPropertyValue(docField, args.documentProperties);
+      if (value !== null) {
+        const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+        if (style.hidden) return null;
+        return { text: value, props, style };
+      }
+    }
+  }
+  const buttonSpec = emptyCache ? parseButtonInstruction(instr) : null;
   if (buttonSpec) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
