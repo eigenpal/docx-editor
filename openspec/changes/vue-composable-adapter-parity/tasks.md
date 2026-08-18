@@ -59,8 +59,8 @@ Lands before any new surface: everything after it must be written against ONE en
 - [x] 2.5 A build assertion that `dist/index.js` imports the engine by bare specifier and inlines
       no copy of it
 - [x] 2.6 Add the package to `build:packages`; keep `build:packages:vue` working or fold it in
-- [ ] 2.7 `bun run check:package-artifacts`, `SKIP_CONSUMER_INSTALL_BUILD=1 bun run
-    check:consumer-install`, `bun run notices:generate` all pass with Vue in the set
+- [x] 2.7 `bun run check:package-artifacts`, `SKIP_CONSUMER_INSTALL_BUILD=1 bun run
+  check:consumer-install`, `bun run notices:generate` all pass with Vue in the set
 - [x] 2.8 Mirror React's dependency list rather than inventing one: `harfbuzzjs` and
       `emf-converter` stay declared (pinned, external), `fflate` stays a devDependency — it is
       what the tests build DOCX fixtures with, and moving it would externalize it and change the
@@ -126,7 +126,7 @@ Rebuilt from nothing, one file per React file, at the React file's path.
       against an `onMounted` attach); instance lands; document identity rebuilds and re-attaches;
       zoom does not rebuild; a locale change DOES rebuild, matching React; KeepAlive round trip
       preserves edits and undo; unmount detaches before destroy; server render creates nothing
-- [ ] 3.9 Test: the injected instance and a selected slice are the engine's own objects, not
+- [x] 3.9 Test: the injected instance and a selected slice are the engine's own objects, not
       proxies of them
 
 ## 4. The reactive read model
@@ -191,7 +191,7 @@ Each is a read of the engine plus a call back into it. Group them, but give each
       phase 1 and rebuilt here. Vue's takes a GETTER (`() => Editor | null`) where React takes the
       value; that is the established shape and the one normalization the parity gate allows for a
       parameter
-- [x] 6.14 `bun run check:composable-parity` is green: every composable matches React member for
+- [ ] 6.14 `bun run check:composable-parity` is green: every composable matches React member for
       member, type for type, parameter for parameter, overload for overload
 
 ## 7. i18n
