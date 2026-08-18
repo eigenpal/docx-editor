@@ -63,6 +63,14 @@ export function createFurnitureSource(env: {
    * page-number tab in a metric-locale footer lands where Word puts it.
    */
   readonly defaultTabStopPt?: number;
+  /**
+   * The document's revision display mode, so furniture answers it too.
+   *
+   * A header is a story like any other. Without this it was laid out in the layout default
+   * whatever the document was being shown in: a resolved view kept a break the body had
+   * merged away, and All Markup drew no attribution on a header's own tracked mark.
+   */
+  readonly displayMode?: import('../layout/revision-projection.ts').RevisionDisplayMode;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => import('../layout/drawing-layout.ts').InlineDrawingLayoutContext | undefined;
@@ -80,6 +88,7 @@ export function createFurnitureSource(env: {
     cache,
     styleCascade,
     defaultTabStopPt,
+    displayMode,
     inlineDrawingLayoutForPart,
     drawingLayoutTokenForPart,
     drawingTokenForParagraphForPart,
@@ -104,6 +113,7 @@ export function createFurnitureSource(env: {
       marginLeft: number;
       marginRight: number;
       producer: string;
+      displayMode?: import('../layout/revision-projection.ts').RevisionDisplayMode;
       drawingLayoutToken: string;
       story: ReturnType<typeof layoutHeaderFooterStory>;
     }
@@ -142,6 +152,7 @@ export function createFurnitureSource(env: {
       memo.marginLeft === marginLeft &&
       memo.marginRight === marginRight &&
       memo.producer === producer &&
+      memo.displayMode === displayMode &&
       memo.drawingLayoutToken === partDrawingToken
     ) {
       return memo.story;
@@ -157,7 +168,7 @@ export function createFurnitureSource(env: {
       undefined,
       undefined,
       defaultTabStopPt,
-      undefined,
+      displayMode,
       inlineDrawingLayout,
       drawingTokenForParagraphForPart
         ? (paragraph) => drawingTokenForParagraphForPart(part.name, paragraph)
@@ -186,6 +197,7 @@ export function createFurnitureSource(env: {
       marginLeft,
       marginRight,
       producer,
+      ...(displayMode ? { displayMode } : {}),
       drawingLayoutToken: partDrawingToken,
       story,
     });

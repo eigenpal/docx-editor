@@ -43,6 +43,7 @@ import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './p
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { paragraphMergeGroupOf } from './story-roots.ts';
 import {
+  DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
   paragraphMarkFormatRevisionOf,
   paragraphMarkRevisionsOf,
@@ -917,7 +918,11 @@ function placeCellParagraph(
   //
   // Read only when this fragment will carry it. Placement runs for trial rows and for every
   // continuation, and the projection walks `w:pPr/w:rPr` each time it is asked.
-  const showsMarkup = complete && deps.displayMode === 'all-markup';
+  // An UNSET mode is the default mode, which is `all-markup`. Reading `undefined` as "not
+  // all-markup" left a header's own tracked mark with no pilcrow and no change bar, because
+  // furniture is laid out through deps that do not always carry one.
+  const showsMarkup =
+    complete && (deps.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE) === 'all-markup';
   const markRevisions = showsMarkup ? paragraphMarkRevisionsOf(paragraph) : [];
   const markFormatRevision = showsMarkup ? paragraphMarkFormatRevisionOf(paragraph) : null;
   const marker =

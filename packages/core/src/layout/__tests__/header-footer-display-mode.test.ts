@@ -82,3 +82,36 @@ describe('a header answers the display mode with its blocks as well as its runs'
     expect(new Set(spans.map((span) => span.range.paragraphId)).size).toBe(2);
   });
 });
+
+describe('a header draws its own tracked mark', () => {
+  test('All Markup publishes the mark, so the page can draw a pilcrow and a change bar', () => {
+    // Furniture is laid out through deps that do not always carry a display mode. Reading an
+    // unset mode as "not All Markup" left a header's own tracked break with no attribution at
+    // all: no pilcrow, no rule in the margin, while the review pane listed a card for it.
+    const story = layoutHeaderFooterStory(header(MARK_DELETED), 468, measurer, 'test');
+    const marks = story.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' ? (fragment.markRevisions ?? []) : []
+    );
+    expect(marks.map((mark) => mark.kind)).toEqual(['delete']);
+  });
+
+  test('a resolved view draws none of it, and merges instead', () => {
+    const story = layoutHeaderFooterStory(
+      header(MARK_DELETED),
+      468,
+      measurer,
+      'test',
+      undefined,
+      undefined,
+      undefined,
+      128,
+      undefined,
+      'proposed'
+    );
+    const marks = story.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' ? (fragment.markRevisions ?? []) : []
+    );
+    expect(marks).toEqual([]);
+    expect(textPerLine(header(MARK_DELETED), 'proposed')).toEqual(['Head Tail']);
+  });
+});

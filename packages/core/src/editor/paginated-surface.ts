@@ -571,6 +571,8 @@ export function mountPaginatedSurface(
     cache: layoutCache,
     styleCascade,
     defaultTabStopPt,
+    // Furniture answers the document's display mode, like the body does.
+    ...(options.revisionDisplayMode ? { displayMode: options.revisionDisplayMode } : {}),
     inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
     drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
     drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -3183,6 +3185,7 @@ export function mountPaginatedSurface(
           cache: layoutCache,
           styleCascade,
           defaultTabStopPt,
+          ...(options.revisionDisplayMode ? { displayMode: options.revisionDisplayMode } : {}),
         });
         // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
         // flush that publishes nothing (a revision already superseded) would otherwise leave
