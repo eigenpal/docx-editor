@@ -1,4 +1,6 @@
-import { cloneVNode, defineComponent, mergeProps, type VNode, type VNodeRef } from 'vue';
+import { cloneVNode, defineComponent, mergeProps, type VNode } from 'vue';
+import type { CSSProperties } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { cn } from '../../lib/utils';
 
 type AnyProps = Record<string, unknown>;
@@ -35,9 +37,9 @@ function mergeSlotProps(slotProps: AnyProps, childProps: AnyProps): AnyProps {
 /** @public */
 export interface SlotProps {
   class?: string;
-  style?: Record<string, string | number>;
-  children?: VNode;
-  ref?: VNodeRef;
+  style?: CSSProperties;
+  children?: DocxEditorChildren;
+  ref?: unknown;
 }
 
 /** Renders its single child vnode with the slot props merged in. @public */

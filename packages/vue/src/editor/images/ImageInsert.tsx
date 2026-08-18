@@ -62,7 +62,7 @@ export const ImageInsertProvider = defineComponent({
       if (!editor || busyRef.value) return;
       const normalized = normalizeImageBytes(bytes);
       if (!normalized.ok) {
-        window.alert(t.value(normalized.reasonKey as TranslationKey));
+        window.alert(t(normalized.reasonKey as TranslationKey));
         return;
       }
       const command = {
@@ -74,14 +74,14 @@ export const ImageInsertProvider = defineComponent({
       };
       const gate = editor.canExecuteImageCommand?.(command);
       if (gate && !gate.ok) {
-        window.alert(gate.reason ?? t.value('imageInsert.errors.refused'));
+        window.alert(gate.reason ?? t('imageInsert.errors.refused'));
         return;
       }
       busyRef.value = true;
       try {
         const result = await executeImageCommand(editor, command);
         if (!result.ok) {
-          window.alert(result.reason ?? t.value('imageInsert.errors.refused'));
+          window.alert(result.reason ?? t('imageInsert.errors.refused'));
         } else {
           editor.focus();
         }

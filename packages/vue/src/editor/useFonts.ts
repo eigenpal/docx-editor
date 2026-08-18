@@ -17,12 +17,14 @@ export type FontsInput =
 
 /** @public */
 export function useFonts(
-  source: MaybeRefOrGetter<FontsInput>,
-  ...fragments: MaybeRefOrGetter<FontConfigurationFragment | undefined>[]
+  source: FontsInput,
+  ...fragments: readonly (FontConfigurationFragment | undefined)[]
 ): FontResolver {
+  const reactiveSource = source as MaybeRefOrGetter<FontsInput>;
+  const reactiveFragments = fragments as MaybeRefOrGetter<FontConfigurationFragment | undefined>[];
   const readInputs = () => ({
-    source: toValue(source),
-    fragments: fragments.map((fragment) => toValue(fragment)),
+    source: toValue(reactiveSource),
+    fragments: reactiveFragments.map((fragment) => toValue(fragment)),
   });
 
   const resolver: FontResolver = async (request: FontResolutionRequest) => {

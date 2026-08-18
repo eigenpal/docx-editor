@@ -1,4 +1,5 @@
 import { computed, defineComponent, h, isVNode, ref, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { docxSlotOf, mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import {
@@ -41,7 +42,7 @@ export function menuRowSlot(id: string): { 'data-slot': string } {
 /** Props for `DocxEditor.Menu.Row`: one presentational menu row. @public */
 export interface MenuRowProps {
   /** Material Symbols paths, rendered as inline SVG in the row's icon column. */
-  icon?: VNode;
+  icon?: DocxEditorChildren;
   /** Right-aligned shortcut text (already resolved). */
   shortcut?: string;
   disabled?: boolean;
@@ -69,7 +70,7 @@ export interface MenuRowProps {
   slot?: string;
   onSelect?: () => void;
   className?: string;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -155,7 +156,7 @@ export interface MenuGroupProps {
   labelKey?: string;
   className?: string;
   hidden?: boolean;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -235,7 +236,7 @@ export const MenuItem = defineComponent({
   },
   setup(props) {
     const slotId = computed(() => props.slot as ChromeSlotId);
-    const slotCmd = useEditorCommand(slotId);
+    const slotCmd = useEditorCommand(slotId as unknown as ChromeSlotId);
     const { setOpenMenu } = useMenuContext();
     const label = useMenuLabel();
     return () => {
@@ -569,7 +570,7 @@ export interface MenuProps {
    *
    * Decorative: the label is the accessible name, so the icon is hidden from assistive tech.
    */
-  icon?: VNode;
+  icon?: DocxEditorChildren;
   className?: string;
   /** Render nothing — inside the default bar this removes the menu. */
   hidden?: boolean;
@@ -581,7 +582,7 @@ export interface MenuProps {
    */
   preset?: boolean;
   /** Panel content. */
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /**

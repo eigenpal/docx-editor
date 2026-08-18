@@ -1,7 +1,8 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
 // Alt-text authoring: description and title, never `@name` fallback.
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { useTranslation } from '../../i18n';
 import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
@@ -13,7 +14,7 @@ export interface ImageAltTextProps {
   className?: string;
   hidden?: boolean;
   asChild?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

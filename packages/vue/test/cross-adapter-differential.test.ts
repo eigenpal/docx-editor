@@ -1,9 +1,11 @@
 /* eslint-disable react-hooks/rules-of-hooks -- Vue composables in defineComponent setup */
+/**
+ * Cross-adapter composable differential — Vue harness over the shared table.
+ */
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createApp, defineComponent, h, nextTick } from 'vue';
-import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
@@ -13,11 +15,10 @@ import { useEditorCommand } from '../src/editor/useEditorCommand';
 import { SEARCH_MATCH_LIMIT as VUE_SEARCH_LIMIT } from '../src/editor/navigation/useDocumentSearch';
 import { stepZoomLevel as vueStepZoomLevel } from '../src/editor/zoom-levels';
 import {
-  DIFFERENTIAL_SLOTS,
+  COMPOSABLE_PARITY_CASES,
   DIFFERENTIAL_SOURCE,
-  OFF_LADDER_ZOOM,
   offLadderZoomIn,
-} from '../../react/test/cross-adapter-shared';
+} from '../../react/test/cross-adapter-composable-cases';
 
 const { SEARCH_MATCH_LIMIT: REACT_SEARCH_LIMIT } =
   await import('../../react/src/editor/navigation/useDocumentSearch.ts');
@@ -55,86 +56,75 @@ afterEach(() => {
 });
 
 describe('cross-adapter differential (Vue harness)', () => {
-  for (const slot of DIFFERENTIAL_SLOTS) {
-    test(`toolbar slot ${slot} matches engine command state`, async () => {
+  for (const parityCase of COMPOSABLE_PARITY_CASES) {
+    test(parityCase.id, async () => {
+      if (parityCase.composable === 'useEditorCommand') {
+        let editor: DocxEditorInstance | null = null;
+        const { app } = await mountVue((instance) => {
+          editor = instance as DocxEditorInstance;
+        });
+        try {
+          let binding: ReturnType<typeof useEditorCommand> | null = null;
+          const Probe = defineComponent({
+            setup() {
+              binding = useEditorCommand(parityCase.slot);
+              return () => null;
+            },
+          });
+          const probeApp = createApp({
+            render: () =>
+              h(
+                DocxEditorRoot,
+                { document: DIFFERENTIAL_SOURCE },
+                {
+                  default: () =>
+                    h(DocxEditorViewport, null, {
+                      default: () => [h(DocxEditorContent), h(Probe)],
+                    }),
+                }
+              ),
+          });
+          const probeContainer = document.createElement('div');
+          document.body.appendChild(probeContainer);
+          probeApp.mount(probeContainer);
+          await flush();
+          expect(() =>
+            parityCase.assert(
+              {
+                isEnabled: (binding as unknown as { isEnabled: { value: boolean } }).isEnabled
+                  .value,
+                isActive: (binding as unknown as { isActive: { value: boolean } }).isActive.value,
+                disabledReason: (binding as unknown as { disabledReason: { value: string | null } })
+                  .disabledReason.value,
+              },
+              editor!
+            )
+          ).not.toThrow();
+          probeApp.unmount();
+          probeContainer.remove();
+        } finally {
+          app.unmount();
+        }
+        return;
+      }
+
       let editor: DocxEditorInstance | null = null;
       const { app } = await mountVue((instance) => {
         editor = instance as DocxEditorInstance;
       });
       try {
-        const engine = toolbarCommandState(editor!, slot);
-        let binding: ReturnType<typeof useEditorCommand> | null = null;
-        const Probe = defineComponent({
-          setup() {
-            binding = useEditorCommand(slot);
-            return () => null;
-          },
-        });
-        const probeApp = createApp({
-          render: () =>
-            h(
-              DocxEditorRoot,
-              { document: DIFFERENTIAL_SOURCE },
-              {
-                default: () =>
-                  h(DocxEditorViewport, null, {
-                    default: () => [h(DocxEditorContent), h(Probe)],
-                  }),
-              }
-            ),
-        });
-        const probeContainer = document.createElement('div');
-        document.body.appendChild(probeContainer);
-        probeApp.mount(probeContainer);
-        await flush();
-        expect(binding!.isEnabled.value).toBe(engine.enabled);
-        expect(binding!.isActive.value).toBe(engine.active);
-        expect(binding!.disabledReason.value ?? null).toBe(engine.disabledReason ?? null);
-        probeApp.unmount();
-        probeContainer.remove();
+        if (parityCase.composable === 'useZoom') {
+          expect(stepZoomLevel(0.73, 'in')).toBe(vueStepZoomLevel(0.73, 'in'));
+          expect(() => parityCase.assert(editor!, offLadderZoomIn())).not.toThrow();
+        } else if (parityCase.composable === 'useDocumentSearch') {
+          expect(REACT_SEARCH_LIMIT).toBe(VUE_SEARCH_LIMIT);
+          expect(() => parityCase.assert(VUE_SEARCH_LIMIT)).not.toThrow();
+        } else if (parityCase.composable === 'usePageSetup') {
+          expect(() => parityCase.assert(editor!)).not.toThrow();
+        }
       } finally {
         app.unmount();
       }
     });
   }
-
-  test('off-ladder zoom step matches React ladder', () => {
-    expect(stepZoomLevel(OFF_LADDER_ZOOM, 'in')).toBe(vueStepZoomLevel(OFF_LADDER_ZOOM, 'in'));
-    expect(stepZoomLevel(OFF_LADDER_ZOOM, 'out')).toBe(vueStepZoomLevel(OFF_LADDER_ZOOM, 'out'));
-  });
-
-  test('search cap constant matches React export', () => {
-    expect(REACT_SEARCH_LIMIT).toBe(VUE_SEARCH_LIMIT);
-    expect(VUE_SEARCH_LIMIT).toBeGreaterThan(0);
-  });
-
-  test('page-setup write is one undo step', async () => {
-    let editor: DocxEditorInstance | null = null;
-    const { app } = await mountVue((instance) => {
-      editor = instance as DocxEditorInstance;
-    });
-    try {
-      const beforeWidth = editor!.getPageSetup()!.pageWidthTwips;
-      editor!.exec({ type: 'setPageSetup', pageWidth: beforeWidth + 144 });
-      expect(editor!.getPageSetup()!.pageWidthTwips).toBe(beforeWidth + 144);
-      editor!.exec({ type: 'undo' });
-      expect(editor!.getPageSetup()!.pageWidthTwips).toBe(beforeWidth);
-    } finally {
-      app.unmount();
-    }
-  });
-
-  test('off-ladder zoomIn lands on shared rung', async () => {
-    let editor: DocxEditorInstance | null = null;
-    const { app } = await mountVue((instance) => {
-      editor = instance as DocxEditorInstance;
-    });
-    try {
-      editor!.setZoom(OFF_LADDER_ZOOM);
-      editor!.setZoom(offLadderZoomIn() ?? OFF_LADDER_ZOOM);
-      expect(editor!.snapshot().zoom).toBe(offLadderZoomIn()!);
-    } finally {
-      app.unmount();
-    }
-  });
 });

@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { ReactNode } from 'react';
 // The loading surface: what the host shows while there is no document to paint yet.
 //
 // Derives its answer from the SAME snapshot every other consumer reads, through
@@ -27,7 +29,7 @@
 // token scope and paint an unresolved, contrast-free ring. This emits `docx-editor` itself,
 // exactly as `DocxEditorViewport` does, so it looks right wherever it is composed.
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { useEditorState } from './useEditorState';
@@ -69,7 +71,7 @@ export interface DocxEditorLoadingProps {
    * used, so the batteries-included path has something to show. Compose your own around
    * `DocxEditor.Loading.Spinner` to keep the packaged indicator beside your own copy.
    */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for `DocxEditor.Loading.Spinner`. @public */

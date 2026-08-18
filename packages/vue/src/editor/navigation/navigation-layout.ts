@@ -1,4 +1,5 @@
-import { inject, onScopeDispose, shallowRef, watch, type InjectionKey, type ShallowRef } from 'vue';
+import { inject, shallowRef, watch, type InjectionKey, type ShallowRef } from 'vue';
+import { scopeDispose } from '../scope-dispose';
 
 /** @internal */
 export interface NavigationLayoutStore {
@@ -74,7 +75,7 @@ export function useNavigationShift(): ShallowRef<number> {
     { immediate: true, flush: 'post' }
   );
 
-  onScopeDispose(stop);
+  scopeDispose(stop);
   return out;
 }
 
@@ -100,6 +101,6 @@ export function useNavigationViewportElement(): ShallowRef<HTMLElement | null> {
     { immediate: true, flush: 'post' }
   );
 
-  onScopeDispose(stop);
+  scopeDispose(stop);
   return out;
 }

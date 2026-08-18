@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { DocxEditorChildren } from './docx-editor-children';
 import type {
   DocumentChange,
   DocumentHandle,
@@ -60,8 +60,8 @@ export interface DocxEditorProps {
    * toggle, Open/New/Save controls — and passes them in; the editor renders them
    * verbatim on either side of the document title.
    */
-  readonly renderTitleBarLeft?: () => ReactNode;
-  readonly renderTitleBarRight?: () => ReactNode;
+  readonly renderTitleBarLeft?: () => DocxEditorChildren;
+  readonly renderTitleBarRight?: () => DocxEditorChildren;
   /**
    * Chrome colour mode. `'system'` follows the OS and re-resolves when it changes.
    * Only the editor CHROME is themed — the document canvas stays Word-faithful.
@@ -218,7 +218,7 @@ export interface DocxEditorProps {
    * `DocxEditorReview` from `@docx-editor.dev/pro/react`). For more control,
    * compose `DocxEditor.Root`/`Viewport`/`Content` directly.
    */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
   className?: string;
   /** Fired after the underlying `Editor` is created. */
   onReady?: (editor: Editor) => void;

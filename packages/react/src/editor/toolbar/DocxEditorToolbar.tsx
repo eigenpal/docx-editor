@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The compound toolbar root: the FULL chrome registry as the default, with in-place
 // overrides.
 //
@@ -30,7 +32,7 @@
 
 import { ToolbarEditingMode } from './EditingMode';
 import { Children, Fragment, isValidElement, useMemo } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { unwrapFragment } from '../merge-arrangement';
 import {
   chromeSlotId,
@@ -141,7 +143,7 @@ interface DefaultGroup {
   readonly entries: readonly DefaultEntry[];
 }
 
-type PartLike = (props: { hidden?: boolean }) => ReactNode;
+type PartLike = (props: { hidden?: boolean }) => DocxEditorChildren;
 
 /**
  * The parts whose slot needs more than an icon button: compounds, steppers, colour
@@ -258,7 +260,7 @@ export interface DocxEditorToolbarProps {
    * menu when it runs out of width. Default `true`.
    */
   overflow?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Whether a node tree contains any contextual table chrome part (recursive child walk). */
@@ -268,7 +270,7 @@ function walkForTableChromeParts(node: ReactNode): boolean {
   const slot = slotOfChild(node);
   if (slot != null && (TABLE_CHROME_SLOTS as readonly string[]).includes(slot)) return true;
   if (isValidElement(node)) {
-    return Children.toArray((node.props as { children?: ReactNode }).children).some(
+    return Children.toArray((node.props as { children?: DocxEditorChildren }).children).some(
       walkForTableChromeParts
     );
   }
@@ -428,7 +430,7 @@ function overflowRow(
   overrides: Map<ArrangementKey, ReactElement>,
   label: (key: string) => string,
   groupLabelKey: string,
-  render: (entry: DefaultEntry) => ReactNode
+  render: (entry: DefaultEntry) => DocxEditorChildren
 ): ReactNode {
   const override = overrides.get(entry.slot);
   if (isHiddenOverride(override)) return null;

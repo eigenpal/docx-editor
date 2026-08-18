@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The generic toolbar control: one chrome slot as a live button.
 //
 // State comes from `useEditorCommand` (the shared can-before-exec table — enabled,
@@ -7,7 +9,7 @@
 // registry's Material Symbols paths rendered as inline SVG — the same rendering the Vue
 // registry toolbar uses, so the two adapters draw the same glyphs.
 
-import type { MouseEvent, ReactNode } from 'react';
+import type { MouseEvent } from 'react';
 import {
   CHROME_GROUPS,
   chromeSlotId,
@@ -56,13 +58,13 @@ export interface ToolbarButtonProps {
   /** The chrome slot this button drives (`'text.bold'`, `'history.undo'`, ...). */
   slot: ChromeSlotId;
   /** Icon override; falls back to `children`, then to the registry's icon paths. */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
   /** Merge the button's behavior into the single child element instead of a <button>. */
   asChild?: boolean;
   className?: string;
   /** Vue parity — use `className` in React. */
   class?: string;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
   /** Render nothing — inside the default arrangement this removes the slot. */
   hidden?: boolean;
 }

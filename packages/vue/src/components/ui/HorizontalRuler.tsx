@@ -253,7 +253,7 @@ export const HorizontalRuler = defineComponent({
 
       const handleProps = (
         handle: RulerIndentHandle,
-        labelKey: Parameters<typeof t.value>[0],
+        labelKey: Parameters<typeof t>[0],
         value: number
       ) => ({
         positionPx: marker(handle),
@@ -288,7 +288,7 @@ export const HorizontalRuler = defineComponent({
           event.preventDefault();
           nudge(handle, event.key === 'ArrowLeft' ? -1 : 1, event.shiftKey);
         },
-        label: t.value(labelKey),
+        label: t(labelKey),
         valueNow: value,
         valueText: formatValueForTooltip(value, unit),
         pageWidthTwips,
@@ -312,7 +312,7 @@ export const HorizontalRuler = defineComponent({
           // A GROUP, not a slider: it contains sliders. It carried `aria-valuemin`/`max` with
           // no `aria-valuenow`, which describes nothing.
           role="group"
-          aria-label={t.value('ruler.horizontal')}
+          aria-label={t('ruler.horizontal')}
         >
           {/* Grey margin zones — drag anywhere in the grey to move the margin. */}
           <div

@@ -21,7 +21,7 @@ export function useToolbarContext(): ToolbarContextValue {
 /** @public */
 export function useToolbarLabelFor(t: ToolbarTranslate | undefined) {
   const { t: catalogT } = useTranslation();
-  return (key: string) => t?.(key) ?? catalogT.value(key as TranslationKey);
+  return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
 }
 
 /** @public */

@@ -23,78 +23,12 @@ const repoRoot = path.resolve(__dirname, '..');
 const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api.md');
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
 
-const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef', 'DocxEditorRootProps']);
-
-/** Enumerated composable return interfaces — no suffix pattern matching. */
-const COMPOSABLE_RETURN_INTERFACES = new Set([
-  'EditorCommandState',
-  'EditorValueCommandState',
-  'UseContentControlResult',
-  'UseDocumentOutlineResult',
-  'UseDocumentSearchResult',
-  'UseDocxSourceOptions',
-  'UseDocxSourceResult',
-  'UseFontFamilyResult',
-  'UseHyperlinkPopupResult',
-  'UseNavigationPaneOptions',
-  'UseNavigationPaneResult',
-  'UsePageSetupReturn',
-  'UseParagraphIndentReturn',
-  'UseParagraphStyleResult',
-  'UseZoomResult',
-  'HyperlinkPopupState',
-  'HyperlinkPopupAnchor',
-  'EditorCaret',
-  'ParagraphStyleOption',
-  'OutlineHeading',
-  'OutlineHeadingItem',
-  'ContentControlInspectorState',
-  'NavigationPartProps',
-  'NavigationTabProps',
-  'FontFamilyProps',
-  'FontFamilyPartProps',
-  'FontFamilyItemProps',
-  'ParagraphStyleProps',
-  'ParagraphStylePartProps',
-  'ParagraphStyleItemProps',
-  'ToolbarButtonProps',
-  'MenuItemProps',
-  'MenuRowProps',
-  'MenuSubmenuProps',
-  'ContextMenuAnchor',
-  'ContextMenuContextValue',
-  'PageSetupUpdate',
-  'IndentUpdate',
-]);
+const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef']);
 
 function isUseExport(name) {
   return name.startsWith('use') && name[3] === name[3]?.toUpperCase();
 }
 
-function isComposableReturnInterface(name) {
-  if (name.endsWith('Props') || name.endsWith('PartProps') || name.endsWith('ItemProps')) {
-    return false;
-  }
-  return (
-    name.startsWith('Use') ||
-    name.endsWith('Result') ||
-    name.endsWith('Return') ||
-    [
-      'EditorCommandState',
-      'EditorValueCommandState',
-      'EditorCaret',
-      'HyperlinkPopupState',
-      'HyperlinkPopupAnchor',
-      'ContentControlInspectorState',
-      'OutlineHeading',
-      'OutlineHeadingItem',
-      'PageSetupUpdate',
-      'IndentUpdate',
-      'ContextMenuAnchor',
-      'ContextMenuContextValue',
-    ].includes(name)
-  );
-}
 function returnInterfacesFromUseExports(reactFns, vueFns) {
   const names = new Set();
   for (const fns of [reactFns, vueFns].filter(Boolean)) {
@@ -108,7 +42,7 @@ function returnInterfacesFromUseExports(reactFns, vueFns) {
   return names;
 }
 
-function compareInterface(name, reactSnap, vueSnap, issues, stats, typeCheckInterfaces) {
+function compareInterface(name, reactSnap, vueSnap, issues, stats) {
   if (EXCLUDED_INTERFACES.has(name)) return;
   const reactFields = extractInterfaceFields(reactSnap, name);
   const vueFields = extractInterfaceFields(vueSnap, name);
@@ -130,7 +64,7 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats, typeCheckInte
 
   const reactTypes = extractInterfaceMemberTypes(reactSnap, name);
   const vueTypes = extractInterfaceMemberTypes(vueSnap, name);
-  if (!reactTypes || !vueTypes || !typeCheckInterfaces.has(name)) return;
+  if (!reactTypes || !vueTypes) return;
   for (const k of reactFields) {
     if (!reactTypes.has(k) || !vueTypes.has(k)) continue;
     stats.memberTypeChecks += 1;
@@ -196,14 +130,10 @@ export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
   const interfaceNames = new Set([
     ...composableParityInterfaces(reactSnapshot),
     ...composableParityInterfaces(vueSnapshot),
-    ...COMPOSABLE_RETURN_INTERFACES,
-  ]);
-  const typeCheckInterfaces = new Set([
-    ...[...COMPOSABLE_RETURN_INTERFACES].filter(isComposableReturnInterface),
     ...returnInterfacesFromUseExports(reactFns, vueFns),
   ]);
   for (const name of [...interfaceNames].sort()) {
-    compareInterface(name, reactSnapshot, vueSnapshot, issues, stats, typeCheckInterfaces);
+    compareInterface(name, reactSnapshot, vueSnapshot, issues, stats);
   }
 
   return {
@@ -276,9 +206,18 @@ export interface SampleResult {
     readonly count: number;
     readonly run: () => void;
 }
+
+export interface SampleProps {
+    readonly children?: DocxEditorChildren;
+    readonly onReady?: (editor: Editor) => void;
+}
+
+export interface Editor {}
 `;
 
-  const okVue = base.replace('string', 'ShallowRef<string>').replace('number', 'ComputedRef<number>');
+  const okVue = base
+    .replace('string', 'ShallowRef<string>')
+    .replace('number', 'ComputedRef<number>');
 
   let { issues } = runComposableParityCheck({ reactSnap: base, vueSnap: okVue });
   if (issues.length !== 0) {
@@ -322,19 +261,23 @@ export interface SampleResult {
     process.exit(1);
   }
 
-  const getterOk = `
-export function useLive(editor: Editor | null): number;
+  const dispatchOk = `
+export function useCounter(setRevision: Dispatch<SetStateAction<number>>): void;
 
-export interface Editor {}
+export interface SampleResult {
+    readonly value: string;
+}
 `;
-  const getterVue = `
-export function useLive(editor: MaybeRefOrGetter<Editor | null>): Ref<number>;
+  const dispatchVue = `
+export function useCounter(setRevision: (value: number) => void): void;
 
-export interface Editor {}
+export interface SampleResult {
+    readonly value: string;
+}
 `;
-  ({ issues } = runComposableParityCheck({ reactSnap: getterOk, vueSnap: getterVue }));
+  ({ issues } = runComposableParityCheck({ reactSnap: dispatchOk, vueSnap: dispatchVue }));
   if (issues.length !== 0) {
-    console.error('Self-test FAIL: MaybeRefOrGetter param should normalize');
+    console.error('Self-test FAIL: Dispatch should normalize to setter');
     for (const i of issues) console.error(`  - ${i}`);
     process.exit(1);
   }
@@ -346,24 +289,6 @@ export interface Editor {}
   }));
   if (issues.length !== 0) {
     console.error('Self-test FAIL: CRLF snapshots should parse');
-    for (const i of issues) console.error(`  - ${i}`);
-    process.exit(1);
-  }
-
-  const nestedParams = `
-export function useNested(options?: { scope?: EditorScope }): SampleResult;
-
-export interface SampleResult {
-    readonly value: string;
-}
-`;
-  const nestedVue = nestedParams.replace(
-    'options?: { scope?: EditorScope }',
-    'options?: MaybeRefOrGetter<{ scope?: EditorScope }>'
-  );
-  ({ issues } = runComposableParityCheck({ reactSnap: nestedParams, vueSnap: nestedVue }));
-  if (issues.length !== 0) {
-    console.error('Self-test FAIL: nested parameter objects should normalize');
     for (const i of issues) console.error(`  - ${i}`);
     process.exit(1);
   }

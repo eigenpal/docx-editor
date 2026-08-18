@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { RulerPageSetup, RulerTabStop } from '../ui/HorizontalRuler';
 import { LocaleProvider } from '../../i18n';
@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import { ErrorBoundary, ErrorProvider } from '../ErrorBoundary';
 import { HorizontalRuler } from '../ui/HorizontalRuler';
 import { VerticalRuler, RULER_WIDTH } from '../ui/VerticalRuler';
+import type { ReactNode } from 'react';
 import {
   DocumentOutline,
   OUTLINE_LEFT_OFFSET,

@@ -1,3 +1,4 @@
+import { type ShallowRef } from 'vue';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
@@ -23,7 +24,7 @@ function headerFooterEqual(a: HeaderFooterState | null, b: HeaderFooterState | n
 }
 
 /** @public */
-export function useHeaderFooterState() {
+export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null> {
   const editorRef = useDocxEditor();
   const select = (_snapshot: EditorSnapshot): HeaderFooterState | null =>
     editorRef.value?.getHeaderFooterState() ?? null;

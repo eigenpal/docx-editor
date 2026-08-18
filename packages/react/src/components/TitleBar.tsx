@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /**
  * TitleBar and sub-components for the Google Docs-style 2-level toolbar.
  *
@@ -9,7 +10,6 @@
  */
 
 import React, { useCallback, Children, isValidElement } from 'react';
-import type { ReactNode } from 'react';
 import { MenuDropdown } from './ui/MenuDropdown';
 import type { MenuEntry } from './ui/MenuDropdown';
 import { TableGridInline } from './ui/TableGridInline';

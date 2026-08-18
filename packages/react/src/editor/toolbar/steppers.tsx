@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 // The stepper parts: font size and zoom as minus / value / plus clusters.
 //
 // Both are WIRED, not lookalikes, and both step through the chrome spec's preset
@@ -12,7 +13,6 @@
 // preset-level menu — flanked by − / + that walk the same levels.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';

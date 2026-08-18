@@ -1,4 +1,6 @@
-import { defineComponent, h, type CSSProperties, type Ref, type VNode } from 'vue';
+import { defineComponent, h, type CSSProperties, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { RefObject } from '../docx-editor-ref-object';
 import type { ColorValue, Theme } from '@docx-editor.dev/core/contracts/editor';
 import type { DocumentStyleSummary } from '../lib/stylePreview';
 import type { FontOption } from '../lib/fontOptions';
@@ -97,8 +99,8 @@ export interface ToolbarProps {
   className?: string;
   style?: CSSProperties;
   enableShortcuts?: boolean;
-  editorRef?: Ref<HTMLElement | null>;
-  children?: VNode;
+  editorRef?: RefObject<HTMLElement>;
+  children?: DocxEditorChildren;
   inline?: boolean;
   showFontPicker?: boolean;
   fontFamilies?: ReadonlyArray<string | FontOption>;

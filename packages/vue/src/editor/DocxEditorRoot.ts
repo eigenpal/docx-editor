@@ -1,75 +1,22 @@
-import {
-  computed,
-  defineComponent,
-  h,
-  onMounted,
-  onUnmounted,
-  provide,
-  shallowRef,
-  watch,
-  type PropType,
-  type VNode,
-} from 'vue';
+import { defineComponent, h, provide, reactive, type PropType } from 'vue';
 import type {
   DocumentChange,
   DocumentSource,
   Editor,
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
-import {
-  createDocxEditor,
-  defaultTableLabel,
-  resolveZoomMode,
-  sameZoomMode,
-  type DocxEditorInstance,
-  type EditorModule,
-  type FontConfigurationFragment,
-  type FontResolver,
-  type ImageDecodePort,
-} from '@docx-editor.dev/core/editor';
-import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
-import { useTranslation, type TranslationKey } from '../i18n';
-import {
-  docxEditorKey,
-  editorStateTickKey,
-  ReviewRailContext,
-  type ReviewRailRegistry,
-} from './context';
-import { deferredTick } from './deferred-notifier';
+import type { EditorModule, ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
-import { createNavigationLayoutStore, navigationLayoutKey } from './navigation/navigation-layout';
 import { ImageInsertProvider } from './images/ImageInsert';
+import {
+  useDocxEditorRootOwned,
+  useDocxEditorRootOwner,
+  type DocxEditorRootProps,
+} from './useDocxEditorRoot';
+import { useDocxEditor } from './context';
 
-/** @public */
-export interface DocxEditorRootProps {
-  document?: DocumentSource;
-  fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
-  author?: string;
-  locale?: string;
-  translate?: (key: string, params?: Record<string, string | number>) => string;
-  modules?: readonly EditorModule[];
-  mode?: 'edit' | 'view' | 'suggesting';
-  zoom?: number;
-  zoomMode?: ZoomMode | 'auto';
-  tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
-  imageDecodePort?: ImageDecodePort;
-  children?: VNode;
-}
-
-function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
-  if (a === b) return true;
-  const left = resolveZoomMode(a);
-  const right = resolveZoomMode(b);
-  return left !== null && right !== null && sameZoomMode(left, right);
-}
-
-let facadeListenerCount = 0;
-
-/** @internal */
-export function docxEditorFacadeListenerCount(): number {
-  return facadeListenerCount;
-}
+export { docxEditorFacadeListenerCount, type DocxEditorRootProps } from './useDocxEditorRoot';
 
 /** @internal */
 const HyperlinkPopupProvider = defineComponent({
@@ -95,15 +42,28 @@ const ContentControlProvider = defineComponent({
 export interface ProvideDocxEditorResult {
   readonly DocxEditorRoot: typeof DocxEditorRoot;
   readonly rootProps: DocxEditorRootProps;
+  readonly editorRef: ReturnType<typeof useDocxEditor>;
 }
 
 /**
- * Setup helper for hosts that mount {@link DocxEditorRoot} outside the packaged sugar host.
+ * Setup composable for hosts that own the editor above the packaged root.
+ * Creates the instance, publishes `docxEditorKey`, and returns props for
+ * {@link DocxEditorRoot}.
  *
  * @public
  */
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult {
-  return { DocxEditorRoot, rootProps: options };
+  const rootProps = reactive({ ...options });
+  const { editorRef } = useDocxEditorRootOwner(rootProps, {
+    ready: () => {},
+    change: () => {},
+    fontError: () => {},
+  });
+  return {
+    DocxEditorRoot,
+    rootProps,
+    editorRef,
+  };
 }
 
 /** @public */
@@ -134,166 +94,14 @@ export const DocxEditorRoot = defineComponent({
     fontError: (_error: unknown) => true,
   },
   setup(props, { emit, slots }) {
-    const editorRef = shallowRef<DocxEditorInstance | null>(null);
-    const tick = shallowRef(0);
-    provide(docxEditorKey, editorRef);
-    provide(editorStateTickKey, tick);
-    provide(navigationLayoutKey, createNavigationLayoutStore());
-
-    const { t: catalogT } = useTranslation();
-    const defaultTranslate = computed(
-      () => (key: string, params?: Record<string, string | number>) =>
-        catalogT.value(key as TranslationKey, params)
-    );
-    const translateResolver = computed(() => props.translate ?? defaultTranslate.value);
-
-    const railCount = shallowRef(0);
-    const railRegistry = shallowRef<ReviewRailRegistry>({
-      mounted: 0,
-      register: () => () => {},
-    });
-    watch(
-      railCount,
-      (mounted) => {
-        railRegistry.value = {
-          mounted,
-          register: () => {
-            railCount.value++;
-            return () => {
-              railCount.value = Math.max(0, railCount.value - 1);
-            };
-          },
-        };
-      },
-      { immediate: true }
-    );
-    provide(ReviewRailContext, railRegistry);
-
-    const cleanups: Array<() => void> = [];
-    let readyFired = false;
-
-    const destroyEditor = () => {
-      if (cleanups.length >= 3) facadeListenerCount = Math.max(0, facadeListenerCount - 3);
-      for (const off of cleanups.splice(0)) off();
-      const instance = editorRef.value;
-      if (instance) {
-        instance.destroy();
-        editorRef.value = null;
-      }
-      readyFired = false;
-    };
-
-    const createEditor = () => {
-      if (typeof window === 'undefined') return;
-      destroyEditor();
-      const instance = createDocxEditor({
-        ...(props.document !== undefined ? { document: props.document } : {}),
-        ...(props.fonts ? { fonts: props.fonts } : {}),
-        ...(props.author !== undefined ? { author: props.author } : {}),
-        ...(props.locale !== undefined ? { locale: props.locale } : {}),
-        translate: translateResolver.value,
-        ...(props.mode !== undefined ? { mode: props.mode } : {}),
-        ...(props.modules !== undefined ? { modules: props.modules } : {}),
-        ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
-        ...(props.zoomMode !== undefined ? { zoomMode: props.zoomMode } : {}),
-        ...(props.tableInteractionLabel
-          ? { tableInteractionLabel: props.tableInteractionLabel }
-          : {}),
-        ...(props.imageDecodePort ? { imageDecodePort: props.imageDecodePort } : {}),
-        onFontError: (error) => emit('fontError', error),
+    const ownedAbove = useDocxEditorRootOwned();
+    if (!ownedAbove) {
+      useDocxEditorRootOwner(props, {
+        ready: (editor) => emit('ready', editor),
+        change: (change) => emit('change', change),
+        fontError: (error) => emit('fontError', error),
       });
-      const notify = deferredTick(() => {
-        tick.value++;
-      });
-      facadeListenerCount += 3;
-      cleanups.push(
-        instance.on('change', (change) => {
-          emit('change', change);
-          notify();
-        })
-      );
-      cleanups.push(instance.on('selectionChange', notify));
-      cleanups.push(instance.on('error', notify));
-      editorRef.value = instance;
-    };
-
-    const emitReady = (instance: DocxEditorInstance) => {
-      if (readyFired) return;
-      readyFired = true;
-      emit('ready', instance);
-    };
-
-    onMounted(() => {
-      watch(
-        editorRef,
-        (instance) => {
-          if (!instance) return;
-          if (!instance.snapshot().isOpening) {
-            emitReady(instance);
-            return;
-          }
-          const off = instance.on('change', () => {
-            off();
-            emitReady(instance);
-          });
-          cleanups.push(off);
-        },
-        { flush: 'post', immediate: true }
-      );
-
-      watch(
-        () =>
-          [
-            props.document,
-            props.fonts,
-            translateResolver.value,
-            props.imageDecodePort,
-            props.locale,
-          ] as const,
-        createEditor,
-        { immediate: true, flush: 'post' }
-      );
-    });
-
-    onUnmounted(destroyEditor);
-
-    const applied = {
-      zoom: undefined as number | undefined,
-      mode: undefined as ZoomMode | 'auto' | undefined,
-    };
-    watch(
-      () => [editorRef.value, props.zoom, props.zoomMode] as const,
-      ([, zoom, zoomMode]) => {
-        if (!editorRef.value) return;
-        const editor = editorRef.value;
-        if (zoom !== undefined && zoom !== applied.zoom) {
-          applied.zoom = zoom;
-          editor.setZoom(zoom);
-        }
-        const modeMoved =
-          zoomMode !== undefined &&
-          (applied.mode === undefined || !sameZoomProp(applied.mode, zoomMode));
-        const resolved = zoomMode === undefined ? null : resolveZoomMode(zoomMode);
-        const reassertDeclaredFit =
-          zoom !== undefined &&
-          zoomMode !== undefined &&
-          resolved !== null &&
-          resolved.type === 'fit';
-        if (modeMoved || reassertDeclaredFit) {
-          applied.mode = zoomMode!;
-          editor.setZoomMode(zoomMode!);
-        }
-      },
-      { flush: 'post' }
-    );
-
-    watch(
-      () => [editorRef.value, props.tableInteractionLabel] as const,
-      ([editor, label]) => {
-        if (editor) editor.setTableInteractionLabel(label ?? defaultTableLabel);
-      },
-      { flush: 'post' }
-    );
+    }
 
     return () =>
       h(HyperlinkPopupProvider, null, {

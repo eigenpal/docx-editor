@@ -81,7 +81,7 @@ const NoteStoryOptions = defineComponent({
             open.value = !open.value;
           }}
         >
-          {t.value('headerFooter.options')}
+          {t('headerFooter.options')}
         </button>
         {open.value ? (
           <div class="docx-hf-chrome__options-menu" role="menu" onMousedown={guardToolbarMousedown}>
@@ -95,7 +95,7 @@ const NoteStoryOptions = defineComponent({
                 open.value = false;
               }}
             >
-              {t.value('dialogs.footnoteProperties.title')}
+              {t('dialogs.footnoteProperties.title')}
             </button>
             <div class="docx-hf-chrome__menu-separator" role="separator" />
             <button
@@ -108,7 +108,7 @@ const NoteStoryOptions = defineComponent({
                 open.value = false;
               }}
             >
-              {t.value('common.close')}
+              {t('common.close')}
             </button>
           </div>
         ) : null}
@@ -156,7 +156,7 @@ const NotePropertiesDialog = defineComponent({
           class="docx-note-properties"
           role="dialog"
           aria-modal="true"
-          aria-label={t.value('dialogs.footnoteProperties.title')}
+          aria-label={t('dialogs.footnoteProperties.title')}
           data-testid="docx-notes-properties-dialog"
           style={{ zIndex: Z_INDEX.modal }}
           onClick={props.onClose}
@@ -169,12 +169,10 @@ const NotePropertiesDialog = defineComponent({
             onClick={(event) => event.stopPropagation()}
             onMousedown={(event) => event.stopPropagation()}
           >
-            <h2 class="docx-note-properties__title">
-              {t.value('dialogs.footnoteProperties.title')}
-            </h2>
+            <h2 class="docx-note-properties__title">{t('dialogs.footnoteProperties.title')}</h2>
             <div class="docx-note-properties__body">
               <label class="docx-note-properties__scope">
-                <span>{t.value('notes.scope')}</span>
+                <span>{t('notes.scope')}</span>
                 <select
                   class="docx-note-properties__select"
                   value={scope.value}
@@ -184,22 +182,20 @@ const NotePropertiesDialog = defineComponent({
                       | 'section';
                   }}
                 >
-                  <option value="document">{t.value('notes.scopeDocument')}</option>
-                  <option value="section">{t.value('notes.scopeSection')}</option>
+                  <option value="document">{t('notes.scopeDocument')}</option>
+                  <option value="section">{t('notes.scopeSection')}</option>
                 </select>
               </label>
               <fieldset class="docx-note-properties__section">
                 <legend class="docx-note-properties__legend">
-                  <span>{t.value('dialogs.footnoteProperties.footnotes')}</span>
+                  <span>{t('dialogs.footnoteProperties.footnotes')}</span>
                   {footnoteInherited ? (
-                    <span class="docx-note-properties__badge">
-                      {t.value('notes.inheritedValue')}
-                    </span>
+                    <span class="docx-note-properties__badge">{t('notes.inheritedValue')}</span>
                   ) : null}
                 </legend>
                 <div class="docx-note-properties__fields">
                   <label class="docx-note-properties__field">
-                    <span>{t.value('dialogs.footnoteProperties.numberFormat')}</span>
+                    <span>{t('dialogs.footnoteProperties.numberFormat')}</span>
                     <select
                       class="docx-note-properties__select"
                       value={footnoteFmt.value}
@@ -208,18 +204,18 @@ const NotePropertiesDialog = defineComponent({
                       }}
                     >
                       <option value="decimal">
-                        {t.value('dialogs.footnoteProperties.formats.decimal')}
+                        {t('dialogs.footnoteProperties.formats.decimal')}
                       </option>
                       <option value="lowerRoman">
-                        {t.value('dialogs.footnoteProperties.formats.lowerRoman')}
+                        {t('dialogs.footnoteProperties.formats.lowerRoman')}
                       </option>
                       <option value="upperRoman">
-                        {t.value('dialogs.footnoteProperties.formats.upperRoman')}
+                        {t('dialogs.footnoteProperties.formats.upperRoman')}
                       </option>
                     </select>
                   </label>
                   <label class="docx-note-properties__field">
-                    <span>{t.value('dialogs.footnoteProperties.numbering')}</span>
+                    <span>{t('dialogs.footnoteProperties.numbering')}</span>
                     <select
                       class="docx-note-properties__select"
                       value={footnoteRestart.value}
@@ -228,18 +224,18 @@ const NotePropertiesDialog = defineComponent({
                       }}
                     >
                       <option value="continuous">
-                        {t.value('dialogs.footnoteProperties.numberingOptions.continuous')}
+                        {t('dialogs.footnoteProperties.numberingOptions.continuous')}
                       </option>
                       <option value="eachSect">
-                        {t.value('dialogs.footnoteProperties.numberingOptions.restartSection')}
+                        {t('dialogs.footnoteProperties.numberingOptions.restartSection')}
                       </option>
                       <option value="eachPage">
-                        {t.value('dialogs.footnoteProperties.numberingOptions.restartPage')}
+                        {t('dialogs.footnoteProperties.numberingOptions.restartPage')}
                       </option>
                     </select>
                   </label>
                   <label class="docx-note-properties__field">
-                    <span>{t.value('dialogs.footnoteProperties.position')}</span>
+                    <span>{t('dialogs.footnoteProperties.position')}</span>
                     <select
                       class="docx-note-properties__select"
                       value={footnotePosition.value}
@@ -248,10 +244,10 @@ const NotePropertiesDialog = defineComponent({
                       }}
                     >
                       <option value="pageBottom">
-                        {t.value('dialogs.footnoteProperties.footnotePositions.bottomOfPage')}
+                        {t('dialogs.footnoteProperties.footnotePositions.bottomOfPage')}
                       </option>
                       <option value="beneathText">
-                        {t.value('dialogs.footnoteProperties.footnotePositions.belowText')}
+                        {t('dialogs.footnoteProperties.footnotePositions.belowText')}
                       </option>
                     </select>
                   </label>
@@ -259,16 +255,14 @@ const NotePropertiesDialog = defineComponent({
               </fieldset>
               <fieldset class="docx-note-properties__section">
                 <legend class="docx-note-properties__legend">
-                  <span>{t.value('dialogs.footnoteProperties.endnotes')}</span>
+                  <span>{t('dialogs.footnoteProperties.endnotes')}</span>
                   {endnoteInherited ? (
-                    <span class="docx-note-properties__badge">
-                      {t.value('notes.inheritedValue')}
-                    </span>
+                    <span class="docx-note-properties__badge">{t('notes.inheritedValue')}</span>
                   ) : null}
                 </legend>
                 <div class="docx-note-properties__fields">
                   <label class="docx-note-properties__field">
-                    <span>{t.value('dialogs.footnoteProperties.numberFormat')}</span>
+                    <span>{t('dialogs.footnoteProperties.numberFormat')}</span>
                     <select
                       class="docx-note-properties__select"
                       value={endnoteFmt.value}
@@ -277,18 +271,18 @@ const NotePropertiesDialog = defineComponent({
                       }}
                     >
                       <option value="decimal">
-                        {t.value('dialogs.footnoteProperties.formats.decimal')}
+                        {t('dialogs.footnoteProperties.formats.decimal')}
                       </option>
                       <option value="lowerRoman">
-                        {t.value('dialogs.footnoteProperties.formats.lowerRoman')}
+                        {t('dialogs.footnoteProperties.formats.lowerRoman')}
                       </option>
                       <option value="upperRoman">
-                        {t.value('dialogs.footnoteProperties.formats.upperRoman')}
+                        {t('dialogs.footnoteProperties.formats.upperRoman')}
                       </option>
                     </select>
                   </label>
                   <label class="docx-note-properties__field">
-                    <span>{t.value('dialogs.footnoteProperties.numbering')}</span>
+                    <span>{t('dialogs.footnoteProperties.numbering')}</span>
                     <select
                       class="docx-note-properties__select"
                       value={endnoteRestart.value}
@@ -297,18 +291,18 @@ const NotePropertiesDialog = defineComponent({
                       }}
                     >
                       <option value="continuous">
-                        {t.value('dialogs.footnoteProperties.numberingOptions.continuous')}
+                        {t('dialogs.footnoteProperties.numberingOptions.continuous')}
                       </option>
                       <option value="eachSect">
-                        {t.value('dialogs.footnoteProperties.numberingOptions.restartSection')}
+                        {t('dialogs.footnoteProperties.numberingOptions.restartSection')}
                       </option>
                       <option value="eachPage">
-                        {t.value('dialogs.footnoteProperties.numberingOptions.restartPage')}
+                        {t('dialogs.footnoteProperties.numberingOptions.restartPage')}
                       </option>
                     </select>
                   </label>
                   <label class="docx-note-properties__field">
-                    <span>{t.value('dialogs.footnoteProperties.position')}</span>
+                    <span>{t('dialogs.footnoteProperties.position')}</span>
                     <select
                       class="docx-note-properties__select"
                       value={endnotePosition.value}
@@ -318,10 +312,10 @@ const NotePropertiesDialog = defineComponent({
                       }}
                     >
                       <option value="docEnd">
-                        {t.value('dialogs.footnoteProperties.endnotePositions.endOfDocument')}
+                        {t('dialogs.footnoteProperties.endnotePositions.endOfDocument')}
                       </option>
                       <option value="sectEnd">
-                        {t.value('dialogs.footnoteProperties.endnotePositions.endOfSection')}
+                        {t('dialogs.footnoteProperties.endnotePositions.endOfSection')}
                       </option>
                     </select>
                   </label>
@@ -330,7 +324,7 @@ const NotePropertiesDialog = defineComponent({
             </div>
             <div class="docx-note-properties__footer">
               <button class="docx-note-properties__button" type="button" onClick={props.onClose}>
-                {t.value('common.cancel')}
+                {t('common.cancel')}
               </button>
               <button
                 class="docx-note-properties__button docx-note-properties__button--primary"
@@ -359,7 +353,7 @@ const NotePropertiesDialog = defineComponent({
                   props.onApply(command);
                 }}
               >
-                {t.value('common.apply')}
+                {t('common.apply')}
               </button>
             </div>
           </div>
@@ -455,9 +449,7 @@ export const DocxEditorNotesChrome = defineComponent({
           const scopeId = refEl.dataset.docxNoteScope;
           const engineText = editor.getNotePreviewText(scopeId);
           const text =
-            engineText ??
-            refEl.getAttribute('aria-description') ??
-            t.value('notes.previewFallback');
+            engineText ?? refEl.getAttribute('aria-description') ?? t('notes.previewFallback');
           const rect = refEl.getBoundingClientRect();
           if (hideTimer.value) clearTimeout(hideTimer.value);
           hideTimer.value = setTimeout(() => {
@@ -544,11 +536,11 @@ export const DocxEditorNotesChrome = defineComponent({
 
       const parsedActive = noteScope.value ? parseNoteScopeId(noteScope.value.id) : null;
       const regionLabel = parsedActive
-        ? t.value('notes.editingRegion', {
+        ? t('notes.editingRegion', {
             kind:
               parsedActive.noteKind === 'footnote'
-                ? t.value('notes.footnoteKind')
-                : t.value('notes.endnoteKind'),
+                ? t('notes.footnoteKind')
+                : t('notes.endnoteKind'),
             number: parsedActive.noteId,
           })
         : null;
@@ -565,7 +557,7 @@ export const DocxEditorNotesChrome = defineComponent({
               ref={anchor.ref as never}
               class="docx-context-bar docx-notes-chrome__banner"
               role="region"
-              aria-label={t.value('notes.chromeAriaLabel')}
+              aria-label={t('notes.chromeAriaLabel')}
               data-testid="docx-notes-banner"
               data-note-scope={noteScope.value.id}
               style={{ ...anchor.style.value, zIndex: Z_INDEX.chrome }}
@@ -613,7 +605,7 @@ export const DocxEditorNotesChrome = defineComponent({
                 title={deleteGate.value.reason ?? undefined}
                 onClick={() => deleteCmd.value && runNoteCommand(deleteCmd.value)}
               >
-                {t.value('notes.delete')}
+                {t('notes.delete')}
               </button>
               <button
                 type="button"
@@ -624,8 +616,8 @@ export const DocxEditorNotesChrome = defineComponent({
                 onClick={() => convertCmd.value && runNoteCommand(convertCmd.value)}
               >
                 {menuParsed.value.noteKind === 'footnote'
-                  ? t.value('notes.convertToEndnote')
-                  : t.value('notes.convertToFootnote')}
+                  ? t('notes.convertToEndnote')
+                  : t('notes.convertToFootnote')}
               </button>
               <button
                 type="button"
@@ -636,11 +628,11 @@ export const DocxEditorNotesChrome = defineComponent({
                 onClick={() => convertAllCmd.value && runNoteCommand(convertAllCmd.value)}
               >
                 {menuParsed.value.noteKind === 'footnote'
-                  ? t.value('notes.convertAllFootnotes')
-                  : t.value('notes.convertAllEndnotes')}
+                  ? t('notes.convertAllFootnotes')
+                  : t('notes.convertAllEndnotes')}
               </button>
               <button type="button" role="menuitem" onClick={() => (propsOpen.value = true)}>
-                {t.value('dialogs.footnoteProperties.title')}
+                {t('dialogs.footnoteProperties.title')}
               </button>
             </div>
           ) : null}

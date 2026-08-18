@@ -1,6 +1,8 @@
 // Image properties dialog — one atomic `setImageProperties` on Apply.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { RefObject } from '../../docx-editor-ref-object';
 import type { EditorSnapshot, SelectedImageState } from '@docx-editor.dev/core/contracts/editor';
 import type { DrawingPositionInput, ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import {
@@ -38,7 +40,7 @@ export interface DocxEditorImagePropertiesDialogProps {
   open: boolean;
   onClose: () => void;
   className?: string;
-  triggerRef?: React.RefObject<HTMLElement | null>;
+  triggerRef?: RefObject<HTMLElement | null>;
 }
 
 interface DraftState {
@@ -820,7 +822,7 @@ export interface ImagePropertiesTriggerProps {
   className?: string;
   hidden?: boolean;
   asChild?: boolean;
-  children?: import('react').ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

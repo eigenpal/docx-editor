@@ -1,4 +1,5 @@
 import { computed, defineComponent, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { tableChromeIconPaths } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -20,7 +21,7 @@ import { chromeIcon } from '../toolbar/ToolbarButton';
 
 /** Props for a packaged context-menu row. @public */
 export interface ContextMenuCommandProps {
-  icon?: VNode;
+  icon?: DocxEditorChildren;
   labelKey?: string;
   shortcutKey?: string;
   className?: string;
@@ -45,7 +46,7 @@ function defineCommandRow(
       const editorRef = useDocxEditor();
       const { close } = useContextMenuContext();
       const label = useMenuLabel();
-      const cmd = useEditorCommand(command);
+      const cmd = useEditorCommand(command as unknown as EditorCommand);
       return () => {
         if (props.hidden) return null;
         return (
@@ -116,8 +117,7 @@ export const ContextMenuPaste = defineComponent({
     const editorRef = useDocxEditor();
     const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
     const label = useMenuLabel();
-    const probe = computed((): EditorCommand => ({ type: 'paste', text: ' ' }));
-    const cmd = useEditorCommand(probe);
+    const cmd = useEditorCommand({ type: 'paste', text: ' ' });
     return () => {
       if (props.hidden) return null;
       const blocked = clipboardRefusal !== null;
@@ -178,7 +178,7 @@ function defineTableCommandRow(
       const { close } = useContextMenuContext();
       const label = useMenuLabel();
       const tableVisible = useTableContextMenuVisible();
-      const cmd = useEditorCommand(command);
+      const cmd = useEditorCommand(command as unknown as EditorCommand);
       return () => {
         if (props.hidden || !tableVisible.value) return null;
         const destructive = props.destructive ?? defaults.destructive;
@@ -354,7 +354,7 @@ function defineTocCommandRow(
       const command = computed(
         (): EditorCommand => ({ type: 'refreshToc', mode, ...(tocId ? { tocId } : {}) })
       );
-      const cmd = useEditorCommand(command);
+      const cmd = useEditorCommand(command as unknown as EditorCommand);
       return () => {
         if (props.hidden || tocId === null) return null;
         return (
@@ -417,7 +417,7 @@ export const TABLE_CONTEXT_ROWS = [
 /** @public */
 export interface ContextMenuItemProps {
   label: string;
-  icon?: VNode;
+  icon?: DocxEditorChildren;
   shortcut?: string;
   disabled?: boolean;
   disabledReason?: string;

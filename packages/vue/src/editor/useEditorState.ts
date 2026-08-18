@@ -1,12 +1,12 @@
 import {
   getCurrentScope,
-  onScopeDispose,
   shallowRef,
   toValue,
   watch,
   type MaybeRefOrGetter,
   type ShallowRef,
 } from 'vue';
+import { scopeDispose } from './scope-dispose';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 import { useDocxEditor, useEditorStateTick } from './context';
@@ -74,7 +74,7 @@ export function useEditorState<T>(
       },
       { flush: 'post' }
     );
-    onScopeDispose(() => {
+    scopeDispose(() => {
       activeEditorStateSubscriptions--;
       options?.onUnsubscribe?.();
     });

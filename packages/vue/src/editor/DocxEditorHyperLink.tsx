@@ -8,6 +8,7 @@ import {
   type VNode,
   isVNode,
 } from 'vue';
+import type { DocxEditorChildren } from '../docx-editor-children';
 import { flattenChildren } from '../lib/flattenChildren';
 import { useTranslation } from '../i18n';
 import { absolutePointInScroller } from './scroller-geometry.ts';
@@ -26,12 +27,12 @@ export interface HyperLinkPartProps {
   className?: string;
   asChild?: boolean;
   hidden?: boolean;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for the action parts, which also take an icon. @public */
 export interface HyperLinkActionProps extends HyperLinkPartProps {
-  icon?: VNode;
+  icon?: DocxEditorChildren;
 }
 
 /** Props for `DocxEditor.HyperLink`. @public */
@@ -91,10 +92,10 @@ const HyperLinkUrl = defineComponent({
       const internal = state.link.kind === 'internal';
       const text = internal ? `#${state.link.anchor ?? ''}` : state.link.authored;
       const hint = inert
-        ? t.value('hyperlinkPopup.inertTarget')
+        ? t('hyperlinkPopup.inertTarget')
         : internal
-          ? t.value('hyperlinkPopup.bookmarkTarget')
-          : t.value('hyperlinkPopup.openLink');
+          ? t('hyperlinkPopup.bookmarkTarget')
+          : t('hyperlinkPopup.openLink');
       const shared = {
         class: `docx-hyperlink-popup__url${props.className ? ` ${props.className}` : ''}`,
         'data-testid': 'hyperlink-popup-url',
@@ -138,9 +139,7 @@ const HyperLinkCopy = defineComponent({
     return () => {
       const state = popup.state.value;
       if (props.hidden || !state.link?.href) return null;
-      const label = state.copied
-        ? t.value('editor.linkCopied')
-        : t.value('hyperlinkPopup.copyLink');
+      const label = state.copied ? t('editor.linkCopied') : t('hyperlinkPopup.copyLink');
       const shared = {
         type: 'button' as const,
         class: `docx-hyperlink-popup__action${props.className ? ` ${props.className}` : ''}`,
@@ -172,7 +171,7 @@ const HyperLinkEdit = defineComponent({
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
-      const label = t.value('hyperlinkPopup.editLink');
+      const label = t('hyperlinkPopup.editLink');
       const shared = {
         type: 'button' as const,
         class: `docx-hyperlink-popup__action${props.className ? ` ${props.className}` : ''}`,
@@ -203,7 +202,7 @@ const HyperLinkUnlink = defineComponent({
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
-      const label = t.value('hyperlinkPopup.removeLink');
+      const label = t('hyperlinkPopup.removeLink');
       const shared = {
         type: 'button' as const,
         class: `docx-hyperlink-popup__action${props.className ? ` ${props.className}` : ''}`,
@@ -262,19 +261,19 @@ const HyperLinkFields = defineComponent({
       return (
         <div class={`docx-hyperlink-popup__fields${props.className ? ` ${props.className}` : ''}`}>
           <label class="docx-editor-sr-only" for={textId}>
-            {t.value('hyperlinkPopup.displayTextPlaceholder')}
+            {t('hyperlinkPopup.displayTextPlaceholder')}
           </label>
           <input
             id={textId}
             data-testid="hyperlink-popup-text"
             class="docx-hyperlink-popup__input"
             value={state.text}
-            placeholder={t.value('hyperlinkPopup.displayTextPlaceholder')}
+            placeholder={t('hyperlinkPopup.displayTextPlaceholder')}
             onInput={(event) => popup.setText((event.target as HTMLInputElement).value)}
             onKeydown={onKeyDown}
           />
           <label class="docx-editor-sr-only" for={urlId}>
-            {t.value('hyperlinkPopup.urlPlaceholder')}
+            {t('hyperlinkPopup.urlPlaceholder')}
           </label>
           <input
             id={urlId}
@@ -282,7 +281,7 @@ const HyperLinkFields = defineComponent({
             data-testid="hyperlink-popup-url-input"
             class="docx-hyperlink-popup__input"
             value={state.url}
-            placeholder={t.value('hyperlinkPopup.urlPlaceholder')}
+            placeholder={t('hyperlinkPopup.urlPlaceholder')}
             onInput={(event) => popup.setUrl((event.target as HTMLInputElement).value)}
             onKeydown={onKeyDown}
           />
@@ -306,7 +305,7 @@ const HyperLinkApply = defineComponent({
     return () => {
       if (props.hidden) return null;
       const state = popup.state.value;
-      const label = t.value('hyperlinkPopup.apply');
+      const label = t('hyperlinkPopup.apply');
       const shared = {
         type: 'button' as const,
         class: `docx-hyperlink-popup__apply${props.className ? ` ${props.className}` : ''}`,
@@ -340,7 +339,7 @@ const HyperLinkError = defineComponent({
           data-testid="hyperlink-popup-error"
           role="alert"
         >
-          {t.value('hyperlinkPopup.refused')}
+          {t('hyperlinkPopup.refused')}
         </div>
       );
     };
@@ -360,7 +359,7 @@ const HyperLinkCancel = defineComponent({
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
-      const label = t.value('hyperlinkPopup.cancel');
+      const label = t('hyperlinkPopup.cancel');
       const shared = {
         type: 'button' as const,
         class: `docx-hyperlink-popup__cancel${props.className ? ` ${props.className}` : ''}`,
@@ -476,8 +475,8 @@ const HyperLinkRoot = defineComponent({
       const state = popup.state.value;
       const title =
         state.mode === 'editing'
-          ? t.value(state.link ? 'hyperlinkPopup.editTitle' : 'hyperlinkPopup.insertTitle')
-          : t.value('hyperlinkPopup.editLink');
+          ? t(state.link ? 'hyperlinkPopup.editTitle' : 'hyperlinkPopup.insertTitle')
+          : t('hyperlinkPopup.editLink');
 
       if (props.hidden) {
         return state.mode === 'closed' ? null : <>{slots.default?.()}</>;

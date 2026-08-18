@@ -1,8 +1,10 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // Shared insert-image wiring: hidden file input, preflight, and async dispatch.
 //
 // Toolbar and menu both trigger the same picker; Content attaches paste/drop to the same path.
 
-import { createContext, useCallback, useContext, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
@@ -182,7 +184,7 @@ export interface ImageInsertTriggerProps {
   className?: string;
   hidden?: boolean;
   asChild?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Toolbar insert-image control — opens the shared file picker. @public */

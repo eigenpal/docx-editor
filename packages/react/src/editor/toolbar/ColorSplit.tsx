@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The split colour controls: font colour and text highlight.
 //
 // Both are WIRED value slots. The MAIN half applies the last-used value (seeded from
@@ -15,7 +17,7 @@
 // (`setMarkAttr`'s hex / ST_HighlightColor gates); a malformed value would be refused,
 // not applied.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { commandForSlotValue, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -44,7 +46,7 @@ export interface ToolbarColorSplitProps extends ToolbarSlotPartProps {
    * The BAR is not replaceable and still paints the live value, so a host swapping the glyph
    * keeps the thing that makes this control readable at a glance.
    */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
 }
 
 /** A split colour control pinned to one slot. @public */
@@ -190,7 +192,7 @@ interface ColorSplitConfig {
   /** The clearing value and its label: Automatic (`auto`) or No Color (`none`). */
   readonly clear: { readonly value: string; readonly labelKey: string };
   /** Renders the popup body below the clear button. */
-  readonly body: (props: PopupBodyProps) => ReactNode;
+  readonly body: (props: PopupBodyProps) => DocxEditorChildren;
 }
 
 interface PopupBodyProps {

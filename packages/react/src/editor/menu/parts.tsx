@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The menu bar's rows.
 //
 // A row is PRESENTATION over a chrome slot: the icon, the label and the enabled state all
@@ -14,7 +16,6 @@
 
 import { isValidElement, useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
-import type { ReactNode } from 'react';
 import {
   CHROME_MENUS,
   chromeProbeForSlot,
@@ -43,7 +44,7 @@ const TABLE_GRID_ROWS = 6;
 /** Props for `DocxEditor.Menu.Row`: one presentational menu row. @public */
 export interface MenuRowProps {
   /** Material Symbols paths, rendered as inline SVG in the row's icon column. */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
   /** Right-aligned shortcut text (already resolved). */
   shortcut?: string;
   disabled?: boolean;
@@ -69,7 +70,7 @@ export interface MenuRowProps {
   slot?: string;
   onSelect?: () => void;
   className?: string;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -141,7 +142,7 @@ export interface MenuGroupProps {
   labelKey?: string;
   className?: string;
   hidden?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -382,7 +383,7 @@ export interface MenuSubmenuProps {
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -826,7 +827,7 @@ export interface MenuProps {
    *
    * Decorative: the label is the accessible name, so the icon is hidden from assistive tech.
    */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
   className?: string;
   /** Render nothing — inside the default bar this removes the menu. */
   hidden?: boolean;
@@ -838,7 +839,7 @@ export interface MenuProps {
    */
   preset?: boolean;
   /** Panel content. */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

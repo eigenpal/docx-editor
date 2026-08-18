@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
 // The paginated surface wired to the real editor chrome (task 11.1).
 //
 // The surface on its own is a document with no way to act on it but the keyboard. This
@@ -9,14 +10,7 @@
 // engine cannot yet express is refused rather than approximated, because a toolbar button
 // that silently does nothing is worse than one that is visibly unavailable.
 
-import {
-  useCallback,
-  useImperativeHandle,
-  useRef,
-  useState,
-  type ReactNode,
-  type Ref,
-} from 'react';
+import { useCallback, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import type {
   PaginatedSurfaceState,
   SectionProperties,
@@ -45,8 +39,8 @@ export interface PaginatedDocxEditorShellProps {
    * They belong to whoever embeds the editor — a demo's switchers are not editor chrome, and
    * baking them in would ship them to every consumer.
    */
-  readonly renderTitleBarLeft?: () => ReactNode;
-  readonly renderTitleBarRight?: () => ReactNode;
+  readonly renderTitleBarLeft?: () => DocxEditorChildren;
+  readonly renderTitleBarRight?: () => DocxEditorChildren;
   /** Commands, forwarded from the editor the shell hosts. */
   readonly ref?: Ref<PaginatedDocxEditorHandle>;
   /** Applies the editor's own dark palette; the document canvas stays Word-faithful. */

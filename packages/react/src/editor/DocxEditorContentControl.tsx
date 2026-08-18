@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { ReactNode } from 'react';
 // `DocxEditor.ContentControl` — the control inspector and remove-keeping-content action.
 //
 // Reports alias, tag, type, lock, placeholder, and bound state for the control at the
@@ -15,7 +17,7 @@
 // Every string is an i18n key. Test ids are stable and unlocalized.
 
 import { useEffect, useId, useRef } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from '../i18n';
 import { useContentControl, type ContentControlInspectorState } from './useContentControl';
 import { Slot } from './toolbar/Slot';
@@ -32,12 +34,12 @@ export interface ContentControlPartProps {
   className?: string;
   asChild?: boolean;
   hidden?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for action parts that also take an icon. @public */
 export interface ContentControlActionProps extends ContentControlPartProps {
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
 }
 
 /** Props for `DocxEditor.ContentControl`. @public */

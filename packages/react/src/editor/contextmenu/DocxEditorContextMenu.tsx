@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The compound context menu: the right-click surface, as a panel of menu rows.
 //
 // DEFAULT-SET + IN-PLACE OVERRIDE, the same contract the toolbar and the menu bar have.
@@ -25,7 +27,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, ReactElement, ReactNode } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { useDocxEditor } from '../context';
 import { useTranslation } from '../../i18n';
@@ -77,7 +79,7 @@ export interface DocxEditorContextMenuProps {
   disabled?: boolean;
   /** Notified whenever the panel opens or closes. */
   onOpenChange?: (open: boolean) => void;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** The packaged set, in order. Separators are positional, so they are part of the list. */

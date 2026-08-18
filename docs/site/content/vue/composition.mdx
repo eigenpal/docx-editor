@@ -35,13 +35,13 @@ Everything else (toolbar, menu, rulers, navigation pane, link popover, context m
 
 ## provideDocxEditor()
 
-When the root lives in a parent layout and the painted surface lives deeper in the tree, `provideDocxEditor()` returns the root component plus the props object to spread:
+When the root lives in a parent layout and the painted surface lives deeper in the tree, call `provideDocxEditor()` from host `setup`. It creates the editor instance, publishes it on context, and returns the root component, reactive props, and a ref to the live instance:
 
 ```vue
 <script setup lang="ts">
 import { provideDocxEditor } from '@docx-editor.dev/vue';
 
-const { DocxEditorRoot, rootProps } = provideDocxEditor({ document: bytes });
+const { DocxEditorRoot, rootProps, editorRef } = provideDocxEditor({ document: bytes });
 </script>
 
 <template>
@@ -51,7 +51,7 @@ const { DocxEditorRoot, rootProps } = provideDocxEditor({ document: bytes });
 </template>
 ```
 
-The helper does not create a second editor. It only packages the same root props the sugar host passes internally.
+`editorRef` tracks the same instance that `useDocxEditor()` reads in descendants. The helper does not create a second editor when you also render `DocxEditorRoot` with the returned props.
 
 ## Customization ladder
 

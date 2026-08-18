@@ -9,6 +9,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { CHROME_MENUS, type ChromeMenuId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { editorScopeFor } from '../editor-scope';
@@ -60,7 +61,7 @@ export interface DocxEditorMenuProps {
   onReportIssue?: () => void;
   reportIssue?: boolean;
   preset?: boolean;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 const MENU_IDS = new Set<string>(CHROME_MENUS.map((menu) => menu.id));
@@ -165,7 +166,7 @@ const DocxEditorMenuRoot = defineComponent({
     );
 
     watch(
-      [resolvedOpen, resolvedSave],
+      () => [resolvedOpen.value, resolvedSave.value] as const,
       ([openFn, saveFn], _, onCleanup) => {
         const onKeyDown = (event: KeyboardEvent) => {
           if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
@@ -173,7 +174,10 @@ const DocxEditorMenuRoot = defineComponent({
           if (key !== 's' && key !== 'o') return;
           const target = event.target as Node | null;
           const scope = editorScopeFor(rootRef.value) ?? rootRef.value;
-          if (!target || !scope?.contains(target)) return;
+          const root = rootRef.value;
+          if (!target) return;
+          const inScope = (scope?.contains(target) ?? false) || (root?.contains(target) ?? false);
+          if (!inScope) return;
           if (key === 's' && saveFn) {
             event.preventDefault();
             saveFn();
@@ -256,7 +260,7 @@ const DocxEditorMenuRoot = defineComponent({
             role="menubar"
             aria-label={
               props.t?.('titleBar.menuBarAriaLabel') ??
-              catalogT.value('titleBar.menuBarAriaLabel' as TranslationKey)
+              catalogT('titleBar.menuBarAriaLabel' as TranslationKey)
             }
             data-testid="docx-menubar"
             class={`${scopeClassName}docx-menubar${props.className ? ` ${props.className}` : ''}`}

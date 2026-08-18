@@ -29,7 +29,7 @@ export interface PaginatedDocxEditorProps {
   readonly onError?: (reason: string, detail?: string) => void;
   readonly className?: string;
   readonly documentFontFamily?: string;
-  readonly ref?: Ref<PaginatedDocxEditorHandle | null>;
+  readonly ref?: Ref<PaginatedDocxEditorHandle>;
 }
 
 /** @public */

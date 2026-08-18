@@ -1,11 +1,12 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import type { CSSProperties, RefCallback } from 'react';
+import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 
 type AnchorPlacement = 'before' | 'after' | 'story-label';
 
 export interface ScopedChromeAnchor {
-  readonly ref: RefCallback<HTMLDivElement>;
+  readonly ref: DocxEditorRefCallback<HTMLDivElement>;
   readonly style: CSSProperties;
 }
 

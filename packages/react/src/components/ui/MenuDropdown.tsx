@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 /**
  * MenuDropdown — a reusable dropdown menu with text label trigger
  *
@@ -6,7 +8,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
 
 export interface MenuItem {
@@ -18,7 +20,7 @@ export interface MenuItem {
   /** Custom content to render instead of a simple menu item */
   customContent?: ReactNode;
   /** Submenu content that appears to the right on hover */
-  submenuContent?: (closeMenu: () => void) => ReactNode;
+  submenuContent?: (closeMenu: () => void) => DocxEditorChildren;
 }
 
 export interface MenuSeparator {

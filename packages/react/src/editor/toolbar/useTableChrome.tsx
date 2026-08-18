@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 // Shared React-owned table chrome draft state and command dispatch.
 //
 // Core owns command building and can-before-exec; this provider owns the draft that persists
@@ -5,15 +6,7 @@
 // `runTableChromeCommand`. One editor subscription serves visibility; command states derive
 // only when table admission or editing mode changes.
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {

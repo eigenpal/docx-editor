@@ -22,7 +22,6 @@ import { ContentControlSummary } from '@docx-editor.dev/core';
 import { ContentControlType } from '@docx-editor.dev/core';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'vue';
-import { defineComponent } from 'vue';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
@@ -88,8 +87,8 @@ import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
+import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { VNode } from 'vue';
-import { VNodeRef } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
@@ -133,7 +132,7 @@ export const CONTENT_CONTROL_SLOTS: {
 // @public
 export interface ContentControlActionProps extends ContentControlPartProps {
     // (undocumented)
-    icon?: VNode;
+    icon?: DocxEditorChildren;
 }
 
 // @public (undocumented)
@@ -166,7 +165,7 @@ export interface ContentControlPartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -211,7 +210,7 @@ export interface ContextMenuCommandProps {
     // (undocumented)
     hidden?: boolean;
     // (undocumented)
-    icon?: VNode;
+    icon?: DocxEditorChildren;
     // (undocumented)
     labelKey?: string;
     // (undocumented)
@@ -1364,7 +1363,7 @@ export interface ContextMenuItemProps {
     // (undocumented)
     disabledReason?: string;
     // (undocumented)
-    icon?: VNode;
+    icon?: DocxEditorChildren;
     // (undocumented)
     label: string;
     // (undocumented)
@@ -1786,7 +1785,7 @@ export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
-}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     class: {
@@ -1815,7 +1814,7 @@ export interface DocxEditorContentControlNamespace {
 // @public (undocumented)
 export interface DocxEditorContentProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     class?: string;
     // (undocumented)
@@ -1924,7 +1923,7 @@ export interface DocxEditorContextMenuNamespace {
 // @public (undocumented)
 export interface DocxEditorContextMenuProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -2121,7 +2120,7 @@ export const DocxEditorImagePropertiesDialog: vue.DefineComponent<vue.ExtractPro
         default: undefined;
     };
     triggerRef: {
-        type: PropType<Ref<HTMLElement | null>>;
+        type: PropType<RefObject<HTMLElement | null>>;
         default: undefined;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
@@ -2138,12 +2137,12 @@ export const DocxEditorImagePropertiesDialog: vue.DefineComponent<vue.ExtractPro
         default: undefined;
     };
     triggerRef: {
-        type: PropType<Ref<HTMLElement | null>>;
+        type: PropType<RefObject<HTMLElement | null>>;
         default: undefined;
     };
 }>> & Readonly<{}>, {
     className: string;
-    triggerRef: Ref<HTMLElement | null, HTMLElement | null>;
+    triggerRef: RefObject<HTMLElement | null>;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -2155,7 +2154,7 @@ export interface DocxEditorImagePropertiesDialogProps {
     // (undocumented)
     open: boolean;
     // (undocumented)
-    triggerRef?: Ref<HTMLElement | null>;
+    triggerRef?: RefObject<HTMLElement | null>;
 }
 
 // @public (undocumented)
@@ -2172,7 +2171,7 @@ export interface DocxEditorLoadingComponent {
 // @public
 export interface DocxEditorLoadingProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -2250,7 +2249,7 @@ export interface DocxEditorMenuNamespace {
 // @public (undocumented)
 export interface DocxEditorMenuProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -2282,7 +2281,7 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly ContentControl: typeof DocxEditorContentControl;
     // (undocumented)
-    readonly ContextMenu: typeof DocxEditorContextMenu;
+    readonly ContextMenu: typeof ContextMenu;
     // (undocumented)
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
     // (undocumented)
@@ -2298,7 +2297,7 @@ export interface DocxEditorNamespace {
     // (undocumented)
     readonly Menu: typeof DocxEditorMenu;
     // (undocumented)
-    readonly Navigation: typeof DocxEditorNavigation;
+    readonly Navigation: typeof Navigation;
     // (undocumented)
     readonly NotesChrome: typeof DocxEditorNotesChrome;
     // (undocumented)
@@ -2343,7 +2342,7 @@ export interface DocxEditorNavigationNamespace {
 // @public
 export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -2560,7 +2559,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<ImageDecodePort>;
         default: undefined;
     };
-}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
     ready: (_editor: Editor) => true;
@@ -2618,7 +2617,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
 }>, {
     locale: string;
     zoom: number;
-    fonts: FontConfiguration | FontConfigurationFragment | FontResolver | undefined;
+    fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     document: DocumentSource;
     author: string;
     mode: "suggesting" | "edit" | "view";
@@ -2634,7 +2633,7 @@ export interface DocxEditorRootProps {
     // (undocumented)
     author?: string;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     document?: DocumentSource;
     // (undocumented)
@@ -2647,6 +2646,12 @@ export interface DocxEditorRootProps {
     mode?: 'edit' | 'view' | 'suggesting';
     // (undocumented)
     modules?: readonly EditorModule[];
+    // (undocumented)
+    onChange?: (change: DocumentChange) => void;
+    // (undocumented)
+    onFontError?: (error: EditorFontError) => void;
+    // (undocumented)
+    onReady?: (editor: Editor) => void;
     // (undocumented)
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     // (undocumented)
@@ -2715,13 +2720,13 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Highlight: ToolbarColorSplitComponent;
     // (undocumented)
-    readonly ImageAltText: typeof ToolbarImageAltText;
+    readonly ImageAltText: ImageAltTextPartComponent;
     // (undocumented)
     readonly ImageInsert: ToolbarPartComponent;
     // (undocumented)
-    readonly ImageProperties: typeof ToolbarImageProperties;
+    readonly ImageProperties: ToolbarPartComponent;
     // (undocumented)
-    readonly ImageWrap: typeof ToolbarImageWrap;
+    readonly ImageWrap: ImageWrapPartComponent;
     // (undocumented)
     readonly Indent: ToolbarPartComponent;
     // (undocumented)
@@ -2771,7 +2776,7 @@ export interface DocxEditorToolbarNamespace {
 // @public (undocumented)
 export interface DocxEditorToolbarProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -2827,7 +2832,7 @@ export const DocxEditorViewport: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<CSSProperties>;
         default: undefined;
     };
-}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     class: {
@@ -2846,7 +2851,7 @@ export const DocxEditorViewport: vue.DefineComponent<vue.ExtractPropTypes<{
 // @public (undocumented)
 export interface DocxEditorViewportProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     class?: string;
     // (undocumented)
@@ -2951,7 +2956,7 @@ export interface FontFamilyPartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
 }
@@ -3166,7 +3171,7 @@ export interface HorizontalRulerProps {
 // @public
 export interface HyperLinkActionProps extends HyperLinkPartProps {
     // (undocumented)
-    icon?: VNode;
+    icon?: DocxEditorChildren;
 }
 
 // @public
@@ -3174,7 +3179,7 @@ export interface HyperLinkPartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -3327,7 +3332,7 @@ export interface ImagePropertiesTriggerProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -3410,7 +3415,7 @@ export const LocaleProvider: vue.DefineComponent<vue.ExtractPropTypes<{
 // @public (undocumented)
 export interface LocaleProviderProps {
     // (undocumented)
-    children?: vue.VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     i18n?: Translations;
 }
@@ -3428,7 +3433,7 @@ export interface MenuActionProps {
 // @public
 export interface MenuGroupProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -3460,11 +3465,11 @@ export interface MenuPartComponent {
 
 // @public
 export interface MenuProps {
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     hidden?: boolean;
-    icon?: VNode;
+    icon?: DocxEditorChildren;
     id: MenuId;
     label?: string;
     labelKey?: string;
@@ -3484,12 +3489,12 @@ export interface MenuRowProps {
     'data-slot'?: string;
     active?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
     disabled?: boolean;
-    icon?: VNode;
+    icon?: DocxEditorChildren;
     // (undocumented)
     onSelect?: () => void;
     selected?: true;
@@ -3507,7 +3512,7 @@ export interface MenuSeparatorProps {
 // @public (undocumented)
 export interface MenuSubmenuProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     labelKey: string;
@@ -3632,7 +3637,7 @@ export function navigationPaneReservation(paneWidth?: number): number;
 // @public
 export interface NavigationPartProps {
     // (undocumented)
-    children?: vue.VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -3983,7 +3988,7 @@ export interface PaginatedDocxEditorProps {
     // (undocumented)
     readonly onStateChange?: (state: PaginatedSurfaceState) => void;
     // (undocumented)
-    readonly ref?: Ref<PaginatedDocxEditorHandle | null>;
+    readonly ref?: Ref<PaginatedDocxEditorHandle>;
     // (undocumented)
     readonly scale?: number;
     // (undocumented)
@@ -4036,7 +4041,7 @@ export const PaginatedDocxEditorShell: vue.DefineComponent<vue.ExtractPropTypes<
         type: StringConstructor;
         default: undefined;
     };
-}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     source: {
@@ -4117,11 +4122,11 @@ export interface PaginatedDocxEditorShellProps {
     // (undocumented)
     readonly onZoomChange?: (zoom: number) => void;
     // (undocumented)
-    readonly ref?: Ref<PaginatedDocxEditorHandle | null>;
+    readonly ref?: Ref<PaginatedDocxEditorHandle>;
     // (undocumented)
-    readonly renderTitleBarLeft?: () => VNode;
+    readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)
-    readonly renderTitleBarRight?: () => VNode;
+    readonly renderTitleBarRight?: () => DocxEditorChildren;
     // (undocumented)
     readonly scale?: number;
     // (undocumented)
@@ -4169,7 +4174,7 @@ export interface ParagraphStylePartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
 }
@@ -4212,7 +4217,7 @@ export { runToolbarCommand }
 // @public (undocumented)
 export interface ScopedChromeAnchor {
     // (undocumented)
-    readonly ref: (node: HTMLDivElement | null) => void;
+    readonly ref: DocxEditorRefCallback<HTMLDivElement>;
     // (undocumented)
     readonly style: ShallowRef<CSSProperties>;
 }
@@ -4231,77 +4236,77 @@ export const Slot: vue.DefineComponent<{}, () => VNode<vue.RendererNode, vue.Ren
 // @public (undocumented)
 export interface SlotProps {
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     class?: string;
     // (undocumented)
-    ref?: VNodeRef;
+    ref?: unknown;
     // (undocumented)
-    style?: Record<string, string | number>;
+    style?: CSSProperties;
 }
 
 // @public (undocumented)
 export interface TableBorderColorNamespace extends TableChromePartComponent {
     // (undocumented)
-    readonly Content: (props: TableChromePartProps) => VNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
     readonly docxSlot: 'table.borderColor';
     // (undocumented)
-    readonly Item: (props: TableChromeItemProps) => VNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Main: ReturnType<typeof defineComponent>;
+    readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Trigger: (props: TableChromePartProps) => VNode;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public (undocumented)
 export interface TableBorderStyleNamespace extends TableChromePartComponent {
     // (undocumented)
-    readonly Content: (props: TableChromePartProps) => VNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
     readonly docxSlot: 'table.borderStyle';
     // (undocumented)
-    readonly Item: (props: TableChromeItemProps) => VNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Trigger: (props: TableChromePartProps) => VNode;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public (undocumented)
 export interface TableBorderTargetNamespace extends TableChromePartComponent {
     // (undocumented)
-    readonly Content: (props: TableChromePartProps) => VNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
     readonly docxSlot: 'table.borderTarget';
     // (undocumented)
-    readonly Item: (props: TableChromeItemProps) => VNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Trigger: (props: TableChromePartProps) => VNode;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public (undocumented)
 export interface TableBorderWidthNamespace extends TableChromePartComponent {
     // (undocumented)
-    readonly Content: (props: TableChromePartProps) => VNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
     readonly docxSlot: 'table.borderWidth';
     // (undocumented)
-    readonly Item: (props: TableChromeItemProps) => VNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Trigger: (props: TableChromePartProps) => VNode;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public (undocumented)
 export interface TableCellFillNamespace extends TableChromePartComponent {
     // (undocumented)
-    readonly Content: (props: TableChromePartProps) => VNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
     readonly docxSlot: 'table.cellFill';
     // (undocumented)
-    readonly Item: (props: TableChromeItemProps) => VNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Main: ReturnType<typeof defineComponent>;
+    readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Trigger: (props: TableChromePartProps) => VNode;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public (undocumented)
@@ -4313,13 +4318,13 @@ export interface TableChromeItemProps extends TableChromePartProps {
 // @public (undocumented)
 export interface TableChromePartComponent extends ToolbarSlotPartComponent {
     // (undocumented)
-    readonly Content: ReturnType<typeof defineComponent>;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     // (undocumented)
     readonly docxSlot: TableChromeSlotId;
     // (undocumented)
-    readonly Item: ReturnType<typeof defineComponent>;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     // (undocumented)
-    readonly Trigger: ReturnType<typeof defineComponent>;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public (undocumented)
@@ -4327,7 +4332,7 @@ export interface TableChromePartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -4358,7 +4363,7 @@ export interface ToolbarActionProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     class?: string;
     // (undocumented)
@@ -4368,7 +4373,7 @@ export interface ToolbarActionProps {
     // (undocumented)
     disabledReason?: string;
     // (undocumented)
-    icon?: VNode;
+    icon?: DocxEditorChildren;
     // (undocumented)
     label: string;
     // (undocumented)
@@ -4441,7 +4446,7 @@ export interface ToolbarButtonProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     class?: string;
     // (undocumented)
@@ -4449,7 +4454,7 @@ export interface ToolbarButtonProps {
     // (undocumented)
     hidden?: boolean;
     // (undocumented)
-    icon?: VNode;
+    icon?: DocxEditorChildren;
     // (undocumented)
     slot: ChromeSlotId;
 }
@@ -4558,7 +4563,7 @@ export interface ToolbarProps {
     // (undocumented)
     canUndo?: boolean;
     // (undocumented)
-    children?: VNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -4570,7 +4575,7 @@ export interface ToolbarProps {
     // (undocumented)
     documentStyles?: readonly DocumentStyleSummary[];
     // (undocumented)
-    editorRef?: Ref<HTMLElement | null>;
+    editorRef?: RefObject<HTMLElement>;
     // (undocumented)
     enableShortcuts?: boolean;
     // (undocumented)
@@ -4810,7 +4815,7 @@ export interface UseDocumentSearchResult {
 export function useDocxEditor(): ShallowRef<DocxEditorInstance | null>;
 
 // @public (undocumented)
-export function useDocxSource(source: MaybeRefOrGetter<DocxSource | null | undefined>, options?: MaybeRefOrGetter<UseDocxSourceOptions>): UseDocxSourceResult;
+export function useDocxSource(source: DocxSource | null | undefined, options?: UseDocxSourceOptions): UseDocxSourceResult;
 
 // @public (undocumented)
 export interface UseDocxSourceOptions {
@@ -4836,13 +4841,13 @@ export interface UseDocxSourceResult {
 export function useEditorCaret(): ShallowRef<EditorCaret | null>;
 
 // @public (undocumented)
-export function useEditorCommand(target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>): EditorCommandState;
+export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
 
 // @public (undocumented)
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
 
 // @public (undocumented)
-export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<number>;
+export function useEditorSnapshot(editor: Editor | null): Ref<number>;
 
 // @public (undocumented)
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): Readonly<ShallowRef<T>>;
@@ -4869,10 +4874,10 @@ export interface UseFontFamilyResult {
 }
 
 // @public (undocumented)
-export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: MaybeRefOrGetter<FontConfigurationFragment | undefined>[]): FontResolver;
+export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
 
 // @public (undocumented)
-export function useHeaderFooterState(): Readonly<vue.ShallowRef<_docx_editor_dev_core.HeaderFooterState | null>>;
+export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
 
 // @public (undocumented)
 export function useHyperlinkPopup(): UseHyperlinkPopupResult;
@@ -4949,13 +4954,12 @@ export interface UseNavigationPaneResult {
 export function useNavigationShift(): ShallowRef<number>;
 
 // @public (undocumented)
-export function useNotePropertiesState(): Readonly<vue.ShallowRef<_docx_editor_dev_core.NotePropertiesState | null>>;
+export function useNotePropertiesState(): ShallowRef<NotePropertiesState | null>;
 
 // @public (undocumented)
-export function useNoteScopeState(): Readonly<vue.ShallowRef<{
-    kind: "note";
-    id: string;
-} | null>>;
+export function useNoteScopeState(): ShallowRef<Extract<ViewScope, {
+    kind: 'note';
+}> | null>;
 
 // @public (undocumented)
 export function usePageSetup(): UsePageSetupReturn;
@@ -5018,7 +5022,7 @@ export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: strin
 
 // @public (undocumented)
 export function useTranslation(): {
-    t: ShallowRef<TFunction>;
+    t: TFunction;
 };
 
 // @public (undocumented)

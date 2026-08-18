@@ -162,7 +162,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
         set: (twips: number) => void
       ) => (
         <div style={rowStyle}>
-          <label style={labelStyle}>{t.value(`dialogs.pageSetup.${labelKey}`)}</label>
+          <label style={labelStyle}>{t(`dialogs.pageSetup.${labelKey}`)}</label>
           <input
             type="number"
             style={inputStyle}
@@ -173,7 +173,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
             onInput={(event) =>
               set(Math.max(0, inchesToTwips(Number((event.target as HTMLInputElement).value) || 0)))
             }
-            aria-label={t.value(`dialogs.pageSetup.${labelKey}`)}
+            aria-label={t(`dialogs.pageSetup.${labelKey}`)}
           />
           <span style={{ fontSize: 11, color: 'var(--doc-text-muted)', width: 16 }}>in</span>
         </div>
@@ -197,7 +197,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
             onMousedown={(event) => event.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label={t.value('dialogs.pageSetup.title')}
+            aria-label={t('dialogs.pageSetup.title')}
           >
             <div
               style={{
@@ -208,7 +208,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
                 color: 'var(--doc-text)',
               }}
             >
-              {t.value('dialogs.pageSetup.title')}
+              {t('dialogs.pageSetup.title')}
             </div>
             <div
               style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}
@@ -222,30 +222,28 @@ export const DocxEditorPageSetupDialog = defineComponent({
                   letterSpacing: '0.5px',
                 }}
               >
-                {t.value('dialogs.pageSetup.pageSize')}
+                {t('dialogs.pageSetup.pageSize')}
               </div>
               <div style={rowStyle}>
-                <label style={labelStyle}>{t.value('dialogs.pageSetup.sizeLabel')}</label>
+                <label style={labelStyle}>{t('dialogs.pageSetup.sizeLabel')}</label>
                 <select
                   style={inputStyle}
                   value={sizeIndex}
                   onChange={(event) =>
                     handlePageSizeChange(Number((event.target as HTMLSelectElement).value))
                   }
-                  aria-label={t.value('dialogs.pageSetup.sizeLabel')}
+                  aria-label={t('dialogs.pageSetup.sizeLabel')}
                 >
                   {PAGE_SIZES.map((size, index) => (
                     <option key={size.labelKey} value={index}>
-                      {t.value(size.labelKey)}
+                      {t(size.labelKey)}
                     </option>
                   ))}
-                  {sizeIndex < 0 && (
-                    <option value={-1}>{t.value('dialogs.pageSetup.custom')}</option>
-                  )}
+                  {sizeIndex < 0 && <option value={-1}>{t('dialogs.pageSetup.custom')}</option>}
                 </select>
               </div>
               <div style={rowStyle}>
-                <label style={labelStyle}>{t.value('dialogs.pageSetup.orientation')}</label>
+                <label style={labelStyle}>{t('dialogs.pageSetup.orientation')}</label>
                 <select
                   style={inputStyle}
                   value={orientation.value}
@@ -254,10 +252,10 @@ export const DocxEditorPageSetupDialog = defineComponent({
                       (event.target as HTMLSelectElement).value as 'portrait' | 'landscape'
                     )
                   }
-                  aria-label={t.value('dialogs.pageSetup.orientation')}
+                  aria-label={t('dialogs.pageSetup.orientation')}
                 >
-                  <option value="portrait">{t.value('dialogs.pageSetup.portrait')}</option>
-                  <option value="landscape">{t.value('dialogs.pageSetup.landscape')}</option>
+                  <option value="portrait">{t('dialogs.pageSetup.portrait')}</option>
+                  <option value="landscape">{t('dialogs.pageSetup.landscape')}</option>
                 </select>
               </div>
               <div
@@ -270,7 +268,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
                   marginTop: 4,
                 }}
               >
-                {t.value('dialogs.pageSetup.margins')}
+                {t('dialogs.pageSetup.margins')}
               </div>
               {marginRow('top', marginTop.value, (v) => {
                 marginTop.value = v;
@@ -285,7 +283,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
                 marginRight.value = v;
               })}
               <div style={rowStyle}>
-                <label style={labelStyle}>{t.value('dialogs.pageSetup.applyTo')}</label>
+                <label style={labelStyle}>{t('dialogs.pageSetup.applyTo')}</label>
                 <select
                   style={inputStyle}
                   value={scope.value}
@@ -294,10 +292,10 @@ export const DocxEditorPageSetupDialog = defineComponent({
                       | 'document'
                       | 'section';
                   }}
-                  aria-label={t.value('dialogs.pageSetup.applyTo')}
+                  aria-label={t('dialogs.pageSetup.applyTo')}
                 >
-                  <option value="document">{t.value('dialogs.pageSetup.applyToDocument')}</option>
-                  <option value="section">{t.value('dialogs.pageSetup.applyToSection')}</option>
+                  <option value="document">{t('dialogs.pageSetup.applyToDocument')}</option>
+                  <option value="section">{t('dialogs.pageSetup.applyToSection')}</option>
                 </select>
               </div>
             </div>
@@ -323,7 +321,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
                 }}
                 onClick={props.onClose}
               >
-                {t.value('common.cancel')}
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -340,7 +338,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
                 disabled={!setup.isEnabled.value}
                 onClick={handleApply}
               >
-                {t.value('common.apply')}
+                {t('common.apply')}
               </button>
             </div>
           </div>

@@ -12,6 +12,6 @@ export function useChromeTranslate(
   const { t } = useTranslation();
   return computed(
     () => (key: string, params?: Record<string, string | number>) =>
-      overrides?.get(key) ?? t.value(key as TranslationKey, params)
+      overrides?.get(key) ?? t(key as TranslationKey, params)
   );
 }

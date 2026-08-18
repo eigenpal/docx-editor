@@ -125,7 +125,7 @@ const OptionsMenu = defineComponent({
           }}
           onMousedown={props.onChromeMousedown}
         >
-          {t.value('headerFooter.options')}
+          {t('headerFooter.options')}
         </button>
         {open.value ? (
           <div
@@ -150,7 +150,7 @@ const OptionsMenu = defineComponent({
                   }}
                   onMousedown={props.onChromeMousedown}
                 >
-                  {t.value(item.labelKey)}
+                  {t(item.labelKey)}
                 </button>
               );
             })}
@@ -163,7 +163,7 @@ const OptionsMenu = defineComponent({
                 title={titlePageGate.value.reason ?? undefined}
                 onChange={() => editorRef.value?.exec(titlePageCmd.value)}
               />
-              <span>{t.value('headerFooter.differentFirstPage')}</span>
+              <span>{t('headerFooter.differentFirstPage')}</span>
             </label>
             <label class="docx-hf-chrome__menu-row">
               <input
@@ -174,9 +174,9 @@ const OptionsMenu = defineComponent({
                 onChange={() => editorRef.value?.exec(evenOddCmd.value)}
               />
               <span>
-                {t.value('headerFooter.differentOddEven')}
+                {t('headerFooter.differentOddEven')}
                 <span class="docx-hf-chrome__menu-hint">
-                  {t.value('headerFooter.differentOddEvenHint')}
+                  {t('headerFooter.differentOddEvenHint')}
                 </span>
               </span>
             </label>
@@ -191,7 +191,7 @@ const OptionsMenu = defineComponent({
                 onClick={() => editorRef.value?.exec(unlinkCmd.value)}
                 onMousedown={props.onChromeMousedown}
               >
-                {t.value('headerFooter.unlinkFromPrevious')}
+                {t('headerFooter.unlinkFromPrevious')}
               </button>
             ) : (
               <button
@@ -203,17 +203,17 @@ const OptionsMenu = defineComponent({
                 onClick={() => editorRef.value?.exec(linkCmd.value)}
                 onMousedown={props.onChromeMousedown}
               >
-                {t.value('headerFooter.linkToPrevious')}
+                {t('headerFooter.linkToPrevious')}
               </button>
             )}
             <div class="docx-hf-chrome__menu-separator" role="separator" />
             <label class="docx-hf-chrome__menu-row docx-hf-chrome__menu-row--distance">
-              <span>{t.value('headerFooter.headerDistance')}</span>
+              <span>{t('headerFooter.headerDistance')}</span>
               <input
                 type="number"
                 min={0}
                 step={0.01}
-                aria-label={t.value('headerFooter.headerDistance')}
+                aria-label={t('headerFooter.headerDistance')}
                 value={headerInches.value}
                 onInput={(event) => {
                   headerInches.value = (event.target as HTMLInputElement).value;
@@ -223,12 +223,12 @@ const OptionsMenu = defineComponent({
               <span class="docx-hf-chrome__unit">in</span>
             </label>
             <label class="docx-hf-chrome__menu-row docx-hf-chrome__menu-row--distance">
-              <span>{t.value('headerFooter.footerDistance')}</span>
+              <span>{t('headerFooter.footerDistance')}</span>
               <input
                 type="number"
                 min={0}
                 step={0.01}
-                aria-label={t.value('headerFooter.footerDistance')}
+                aria-label={t('headerFooter.footerDistance')}
                 value={footerInches.value}
                 onInput={(event) => {
                   footerInches.value = (event.target as HTMLInputElement).value;
@@ -248,8 +248,8 @@ const OptionsMenu = defineComponent({
               onMousedown={props.onChromeMousedown}
             >
               {props.state.editing === 'header'
-                ? t.value('headerFooter.removeHeader')
-                : t.value('headerFooter.removeFooter')}
+                ? t('headerFooter.removeHeader')
+                : t('headerFooter.removeFooter')}
             </button>
             <div class="docx-hf-chrome__menu-separator" role="separator" />
             <button
@@ -263,7 +263,7 @@ const OptionsMenu = defineComponent({
               }}
               onMousedown={props.onChromeMousedown}
             >
-              {t.value('common.close')}
+              {t('common.close')}
             </button>
           </div>
         ) : null}
@@ -298,20 +298,20 @@ export const DocxEditorHeaderFooterChrome = defineComponent({
           ref={anchor.ref as never}
           class={`docx-context-bar docx-hf-chrome${props.className ? ` ${props.className}` : ''}`}
           role="region"
-          aria-label={t.value('headerFooter.chromeAriaLabel')}
+          aria-label={t('headerFooter.chromeAriaLabel')}
           data-testid="docx-hf-chrome"
           onMousedown={onChromeMouseDown}
           style={{ ...anchor.style.value, zIndex: Z_INDEX.hfInlineEditor } as CSSProperties}
         >
           <div class="docx-context-bar__label">
-            <span class="docx-context-bar__title">{t.value(regionKey)}</span>
+            <span class="docx-context-bar__title">{t(regionKey)}</span>
             {state.value.inherited ? (
               <span
                 class="docx-context-bar__status"
                 data-testid="docx-hf-inherited"
-                title={t.value('headerFooter.sameAsPreviousHint')}
+                title={t('headerFooter.sameAsPreviousHint')}
               >
-                {t.value('headerFooter.sameAsPrevious')}
+                {t('headerFooter.sameAsPrevious')}
               </span>
             ) : null}
           </div>

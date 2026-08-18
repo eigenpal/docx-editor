@@ -10,6 +10,7 @@ import {
   type InjectionKey,
   type VNode,
 } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import { Slot } from './Slot';
@@ -46,7 +47,7 @@ function useParagraphStyleContext(): ParagraphStyleContextValue | null {
 export interface ParagraphStylePartProps {
   asChild?: boolean;
   className?: string;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */

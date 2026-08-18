@@ -6,6 +6,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { useScopeClassName } from '../scope-context';
 import { NavigationContext, type NavigationContextValue } from './navigation-context';
@@ -35,7 +36,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
   toggle?: boolean | NavigationPartProps;
   className?: string;
   style?: CSSProperties;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */
@@ -80,7 +81,7 @@ const DocxEditorNavigationImpl = defineComponent({
       t:
         props.t ??
         ((key: string, params?: Record<string, string | number>) =>
-          catalogT.value(key as TranslationKey, params)),
+          catalogT(key as TranslationKey, params)),
     }));
     provide(NavigationContext, value as unknown as NavigationContextValue);
     const width = props.paneWidth ?? NAVIGATION_PANE_WIDTH;

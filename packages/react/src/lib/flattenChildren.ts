@@ -1,4 +1,6 @@
-import { Children, Fragment, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { Children, Fragment, isValidElement, type ReactElement } from 'react';
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { ReactNode } from 'react';
 
 /** Flatten slot/default children like React Children.toArray, including Fragment nesting. */
 export function flattenChildren(children: ReactNode): ReactNode[] {
@@ -7,7 +9,9 @@ export function flattenChildren(children: ReactNode): ReactNode[] {
     if (child == null || child === false) return;
     if (isValidElement(child) && child.type === Fragment) {
       out.push(
-        ...flattenChildren((child as ReactElement<{ children?: ReactNode }>).props.children)
+        ...flattenChildren(
+          (child as ReactElement<{ children?: DocxEditorChildren }>).props.children
+        )
       );
       return;
     }

@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
 // The navigation pane: `DocxEditor.Navigation`.
 //
 // `<DocxEditor.Navigation />` on its own is the whole thing — a collapsed disc button that
@@ -17,7 +18,7 @@
 // survive a close and reopen.
 
 import { useMemo } from 'react';
-import type { CSSProperties, ReactElement, ReactNode } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { NavigationContext } from './navigation-context';
@@ -61,7 +62,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
   className?: string;
   style?: CSSProperties;
   /** Replaces the default composition (header, tabs, both panels). */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

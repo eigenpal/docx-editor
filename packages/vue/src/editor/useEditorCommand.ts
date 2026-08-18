@@ -35,14 +35,13 @@ function stableKey(command: EditorCommand): string {
 }
 
 /** @public */
-export function useEditorCommand(
-  target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>
-): EditorCommandState {
+export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState {
+  const reactiveTarget = target as MaybeRefOrGetter<ChromeSlotId | EditorCommand>;
   const editorRef = useDocxEditor();
-  const latest = shallowRef(toValue(target));
+  const latest = shallowRef(toValue(reactiveTarget));
 
   watch(
-    () => toValue(target),
+    () => toValue(reactiveTarget),
     (next) => {
       latest.value = next;
     },

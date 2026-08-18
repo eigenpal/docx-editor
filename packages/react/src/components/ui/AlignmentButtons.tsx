@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /**
  * Alignment Dropdown Component (Google Docs style)
  *
@@ -8,7 +9,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';

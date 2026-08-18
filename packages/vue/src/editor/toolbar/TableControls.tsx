@@ -61,7 +61,7 @@ export interface TableChromePartProps {
   className?: string;
   hidden?: boolean;
   asChild?: boolean;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */
@@ -69,54 +69,56 @@ export interface TableChromeItemProps extends TableChromePartProps {
   value: string;
 }
 
+import type { DocxEditorChildren } from '../../docx-editor-children';
+
 /** @public */
 export interface TableChromePartComponent extends ToolbarSlotPartComponent {
   readonly docxSlot: TableChromeSlotId;
-  readonly Trigger: ReturnType<typeof defineComponent>;
-  readonly Content: ReturnType<typeof defineComponent>;
-  readonly Item: ReturnType<typeof defineComponent>;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /** @public */
 export interface TableBorderTargetNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderTarget';
-  readonly Trigger: (props: TableChromePartProps) => VNode;
-  readonly Content: (props: TableChromePartProps) => VNode;
-  readonly Item: (props: TableChromeItemProps) => VNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /** @public */
 export interface TableBorderColorNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderColor';
-  readonly Main: ReturnType<typeof defineComponent>;
-  readonly Trigger: (props: TableChromePartProps) => VNode;
-  readonly Content: (props: TableChromePartProps) => VNode;
-  readonly Item: (props: TableChromeItemProps) => VNode;
+  readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /** @public */
 export interface TableCellFillNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.cellFill';
-  readonly Main: ReturnType<typeof defineComponent>;
-  readonly Trigger: (props: TableChromePartProps) => VNode;
-  readonly Content: (props: TableChromePartProps) => VNode;
-  readonly Item: (props: TableChromeItemProps) => VNode;
+  readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /** @public */
 export interface TableBorderStyleNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderStyle';
-  readonly Trigger: (props: TableChromePartProps) => VNode;
-  readonly Content: (props: TableChromePartProps) => VNode;
-  readonly Item: (props: TableChromeItemProps) => VNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /** @public */
 export interface TableBorderWidthNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderWidth';
-  readonly Trigger: (props: TableChromePartProps) => VNode;
-  readonly Content: (props: TableChromePartProps) => VNode;
-  readonly Item: (props: TableChromeItemProps) => VNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 interface TableSlotContextValue {

@@ -1,4 +1,5 @@
-import { defineComponent, h, type PropType, type Ref, type VNode } from 'vue';
+import { defineComponent, h, type PropType, type Ref } from 'vue';
+import type { DocxEditorChildren } from '../docx-editor-children';
 import type { PaginatedSurfaceState, TextMeasurer } from '@docx-editor.dev/core/editor';
 import type { PaginatedDocxEditorHandle } from './PaginatedDocxEditor';
 
@@ -11,13 +12,13 @@ export interface PaginatedDocxEditorShellProps {
   readonly onStateChange?: (state: PaginatedSurfaceState) => void;
   readonly onError?: (reason: string, detail?: string) => void;
   readonly onSave?: (bytes: Uint8Array) => void;
-  readonly renderTitleBarLeft?: () => VNode;
-  readonly renderTitleBarRight?: () => VNode;
+  readonly renderTitleBarLeft?: () => DocxEditorChildren;
+  readonly renderTitleBarRight?: () => DocxEditorChildren;
   readonly colorMode?: 'light' | 'dark';
   readonly onZoomChange?: (zoom: number) => void;
   readonly documentFontFamily?: string;
   readonly className?: string;
-  readonly ref?: Ref<PaginatedDocxEditorHandle | null>;
+  readonly ref?: Ref<PaginatedDocxEditorHandle>;
 }
 
 /**

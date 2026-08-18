@@ -48,7 +48,7 @@ export const DocumentOutline = defineComponent({
         {
           class: 'docx-outline-nav',
           role: 'navigation',
-          'aria-label': t.value('documentOutline.ariaLabel'),
+          'aria-label': t('documentOutline.ariaLabel'),
           style: {
             position: 'absolute',
             top: `${props.topOffset}px`,
@@ -84,8 +84,8 @@ export const DocumentOutline = defineComponent({
                 'button',
                 {
                   onClick: props.onClose,
-                  'aria-label': t.value('documentOutline.closeAriaLabel'),
-                  title: t.value('documentOutline.closeTitle'),
+                  'aria-label': t('documentOutline.closeAriaLabel'),
+                  title: t('documentOutline.closeTitle'),
                   style: {
                     background: 'none',
                     border: 'none',
@@ -109,7 +109,7 @@ export const DocumentOutline = defineComponent({
                     letterSpacing: '0.01em',
                   },
                 },
-                t.value('documentOutline.title')
+                t('documentOutline.title')
               ),
             ]
           ),
@@ -127,7 +127,7 @@ export const DocumentOutline = defineComponent({
                       lineHeight: '20px',
                     },
                   },
-                  t.value('documentOutline.noHeadings')
+                  t('documentOutline.noHeadings')
                 )
               : props.headings.map((heading, index) =>
                   h(

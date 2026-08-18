@@ -198,32 +198,21 @@ function unwrapRefWrappers(type) {
   return t;
 }
 
-/** Normalize Vue ref wrappers and MaybeRefOrGetter for parity comparison. */
+/**
+ * Normalize types for cross-adapter parity.
+ * Allowed rules only:
+ * 1. Vue ref wrappers unwrap to the contained value.
+ * 2. React Dispatch<SetStateAction<T>> equals Vue (value: T) => void.
+ */
 export function normalizeType(type, { parameterPosition = false } = {}) {
   let t = type.trim().replace(/\s+/g, ' ');
-  t = t.replace(/\bvue\./g, '');
-  t = t.replace(/\b_docx_editor_dev_core\./g, '');
-  t = t.replace(/\b_docx_editor_dev_react\./g, '');
-  if (parameterPosition) {
-    t = t.replace(/MaybeRefOrGetter<([^>]+)>\[\]/g, '($1)[]');
-    while (/MaybeRefOrGetter\s*</.test(t)) {
-      t = t.replace(/MaybeRefOrGetter<([^>]+)>/g, '$1');
-    }
-    t = t.replace(/\breadonly\s+/g, '');
-  }
   t = unwrapRefWrappers(t);
-  t = t.replace(/\{ t: ShallowRef<(.+)>; \}/, '{ t: $1; }');
-  t = t.replace(/^RefCallback<(.+)>$/, '(node: $1 | null) => void');
-  t = t.replace(
-    /^Extract<ViewScope,\s*\{\s*kind:\s*['"]note['"];\s*\}>\s*\|\s*null$/,
-    '{ kind: "note"; id: string; } | null'
-  );
+  t = t.replace(/Dispatch<SetStateAction<([^>]+)>>/g, '(value: $1) => void');
+  t = t.replace(/DocxEditorRefCallback<([^>]+)>/g, '(node: $1 | null) => void');
+  t = t.replace(/RefCallback<([^>]+)>/g, '(node: $1 | null) => void');
+  t = t.replace(/react__default\.RefObject<([^>]+)>/g, 'RefObject<$1>');
+  t = t.replace(/React\.RefObject<([^>]+)>/g, 'RefObject<$1>');
   return t;
-}
-
-/** Split a parameter list on commas not nested inside brackets. */
-function splitTopLevelParams(params) {
-  return splitTopLevelCommas(params);
 }
 
 /** Normalize a function parameter list for cross-adapter comparison. */
@@ -231,9 +220,7 @@ export function normalizeParamSignature(params) {
   if (!params.trim()) return '';
   return parseParamList(params)
     .map(({ name, type }) => {
-      let normalized = normalizeType(type, { parameterPosition: true });
-      const getter = /^\(\)\s*=>\s*(.+)$/.exec(normalized);
-      if (getter) normalized = getter[1].trim();
+      const normalized = normalizeType(type, { parameterPosition: true });
       return type ? `${name}: ${normalized}` : name;
     })
     .join(', ');
@@ -326,7 +313,7 @@ export function extractInterfaceNames(snapshotText) {
 
 /**
  * Return interfaces whose names should participate in composable parity.
- * Excludes DocxEditorProps/Ref and internal-looking names.
+ * Excludes DocxEditorProps/Ref (owned by check-parity-contract.mjs).
  */
 export function composableParityInterfaces(snapshotText) {
   const skip = new Set(['DocxEditorProps', 'DocxEditorRef']);

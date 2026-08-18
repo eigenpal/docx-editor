@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The font-family picker: a compound toolbar part plus the hook it is built from.
 //
 // `useFontFamily` is the whole behavior — current value, document-derived options,
@@ -21,7 +23,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { ReactNode } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -102,7 +103,7 @@ function useFontFamilyContext(): FontFamilyContextValue | null {
 export interface FontFamilyPartProps {
   asChild?: boolean;
   className?: string;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for the compound root. @public */

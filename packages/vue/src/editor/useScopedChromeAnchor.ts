@@ -1,11 +1,13 @@
-import { onScopeDispose, ref, watch, type CSSProperties, type ShallowRef } from 'vue';
+import { ref, watch, type CSSProperties, type ShallowRef } from 'vue';
+import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
+import { scopeDispose } from './scope-dispose';
 import { absolutePointInScroller } from './scroller-geometry';
 
 type AnchorPlacement = 'before' | 'after' | 'story-label';
 
 /** @public */
 export interface ScopedChromeAnchor {
-  readonly ref: (node: HTMLDivElement | null) => void;
+  readonly ref: DocxEditorRefCallback<HTMLDivElement>;
   readonly style: ShallowRef<CSSProperties>;
 }
 
@@ -117,7 +119,7 @@ export function useScopedChromeAnchor(
     { flush: 'post' }
   );
 
-  onScopeDispose(() => {
+  scopeDispose(() => {
     style.value = { visibility: 'hidden' };
   });
 

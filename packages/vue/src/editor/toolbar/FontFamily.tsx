@@ -9,6 +9,7 @@ import {
   type InjectionKey,
   type VNode,
 } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import { Slot } from './Slot';
@@ -51,7 +52,7 @@ function useFontFamilyContext(): FontFamilyContextValue | null {
 export interface FontFamilyPartProps {
   asChild?: boolean;
   className?: string;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */

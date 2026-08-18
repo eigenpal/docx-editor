@@ -12,13 +12,15 @@ import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
 
+import type { DocxEditorChildren } from '../docx-editor-children';
+
 /** Props for `DocxEditor.Content`. @public */
 export interface DocxEditorContentProps {
   /** Appended after the load-bearing `docx-paginated-surface` class. */
   className?: string;
   /** Vue parity — use `className` in React. */
   class?: string;
-  children?: import('react').ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

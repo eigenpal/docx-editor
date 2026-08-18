@@ -1,4 +1,5 @@
 // Default-set + in-place-override merge for Vue vnodes.
+import type { DocxEditorChildren } from '../docx-editor-children';
 // Same contract as packages/react/src/editor/merge-arrangement.tsx.
 
 import { Fragment, type VNode, type VNodeArrayChildren, isVNode } from 'vue';
@@ -15,7 +16,7 @@ function vnodeChildren(child: VNode): VNode[] {
   const raw = child.children;
   if (Array.isArray(raw)) return raw.filter(isVNode);
   if (typeof raw === 'object' && raw !== null && 'default' in raw) {
-    const slot = (raw as { default?: () => VNode[] }).default;
+    const slot = (raw as { default?: () => DocxEditorChildren[] }).default;
     return slot?.().filter(isVNode) ?? [];
   }
   return [];
@@ -49,7 +50,7 @@ export interface MergeArrangementInput<Entry> {
   readonly preset: boolean;
   readonly keyOfEntry: (entry: Entry, index: number) => string;
   readonly keyOfChild: KeyOfChild;
-  readonly renderEntry: (entry: Entry, index: number) => VNode;
+  readonly renderEntry: (entry: Entry, index: number) => DocxEditorChildren;
 }
 
 /**

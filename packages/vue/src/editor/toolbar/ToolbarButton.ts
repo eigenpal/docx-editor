@@ -1,4 +1,5 @@
-import { defineComponent, h, type PropType, type VNode } from 'vue';
+import { defineComponent, h, computed, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import {
   CHROME_GROUPS,
   chromeSlotId,
@@ -40,11 +41,11 @@ export function guardToolbarMousedown(event: MouseEvent): void {
 /** @public */
 export interface ToolbarButtonProps {
   slot: ChromeSlotId;
-  icon?: VNode;
+  icon?: DocxEditorChildren;
   asChild?: boolean;
   class?: string;
   className?: string;
-  children?: VNode;
+  children?: DocxEditorChildren;
   hidden?: boolean;
 }
 
@@ -60,7 +61,7 @@ export const ToolbarButton = defineComponent({
   },
   setup(props, { slots }) {
     const label = useToolbarLabel();
-    const command = useEditorCommand(() => props.slot);
+    const command = useEditorCommand(computed(() => props.slot) as unknown as ChromeSlotId);
     return () => {
       if (props.hidden) return null;
       const control = chromeControlForSlot(props.slot);

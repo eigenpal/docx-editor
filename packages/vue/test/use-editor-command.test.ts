@@ -2,7 +2,8 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createApp, defineComponent, h, nextTick, ref } from 'vue';
+import { createApp, computed, defineComponent, h, nextTick, ref } from 'vue';
+import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { zipSync, strToU8 } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
@@ -81,10 +82,12 @@ describe('useEditorCommand raw target', () => {
     const MarkProbe = defineComponent({
       setup() {
         const mark = ref('bold');
-        const { isActive } = useEditorCommand(() => ({
-          type: 'toggleMark' as const,
-          mark: mark.value,
-        }));
+        const { isActive } = useEditorCommand(
+          computed(() => ({
+            type: 'toggleMark' as const,
+            mark: mark.value,
+          })) as unknown as EditorCommand
+        );
         return () => {
           seen.push({ mark: mark.value, active: isActive.value });
           return h('button', {

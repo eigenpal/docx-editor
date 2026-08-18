@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /**
  * The shared shell every bundled Material Symbol renders through.
  *
@@ -6,7 +7,7 @@
  * already use is unchanged.
  */
 
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 
 export interface IconProps {
   size?: number;

@@ -81,8 +81,8 @@ export const ImageWrap = defineComponent({
 
     return () => {
       if (props.hidden) return null;
-      const triggerLabel = t.value('imageWrap.tooltipPrefix', {
-        label: t.value(current.value.labelKey),
+      const triggerLabel = t('imageWrap.tooltipPrefix', {
+        label: t(current.value.labelKey),
       });
       const shared = {
         type: 'button' as const,
@@ -114,7 +114,7 @@ export const ImageWrap = defineComponent({
               id={menuId}
               role="menu"
               class="docx-toolbar__image-wrap-menu"
-              aria-label={t.value('imageWrap.menu.ariaLabel')}
+              aria-label={t('imageWrap.menu.ariaLabel')}
               onMousedown={(event: MouseEvent) => event.stopPropagation()}
             >
               {WRAP_OPTIONS.map((option) => (
@@ -128,7 +128,7 @@ export const ImageWrap = defineComponent({
                   onMousedown={guardToolbarMousedown}
                   onClick={() => choose(option.value)}
                 >
-                  {t.value(option.labelKey)}
+                  {t(option.labelKey)}
                 </button>
               ))}
             </div>

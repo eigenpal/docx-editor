@@ -76,7 +76,7 @@ export const DocxEditorPageNumber = defineComponent({
         ? translate('viewer.pageIndicator')
             .replace(/\{current\}/g, String(current.value))
             .replace(/\{total\}/g, String(total.value))
-        : t.value('viewer.pageIndicator', { current: current.value, total: total.value });
+        : t('viewer.pageIndicator', { current: current.value, total: total.value });
       return h(
         'div',
         {

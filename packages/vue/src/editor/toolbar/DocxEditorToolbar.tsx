@@ -8,6 +8,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   chromeSlotId,
@@ -28,7 +29,13 @@ import {
 } from './ToolbarOverflow';
 import { collapseOrder, TOOLBAR_PINNED_GROUPS } from './toolbar-overflow';
 import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
-import { ToolbarImageInsert, ToolbarImageWrap, ToolbarImageAltText } from '../images';
+import {
+  ToolbarImageInsert,
+  ToolbarImageWrap,
+  ToolbarImageAltText,
+  type ImageAltTextPartComponent,
+  type ImageWrapPartComponent,
+} from '../images';
 import { ToolbarImageProperties } from '../images/ImageProperties';
 import {
   ToolbarAlignCenter,
@@ -210,7 +217,7 @@ export interface DocxEditorToolbarProps {
   onSave?: () => void;
   preset?: boolean;
   overflow?: boolean;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */
@@ -240,9 +247,9 @@ export interface DocxEditorToolbarNamespace {
   readonly Outdent: ToolbarPartComponent;
   readonly Indent: ToolbarPartComponent;
   readonly ImageInsert: ToolbarPartComponent;
-  readonly ImageWrap: typeof ToolbarImageWrap;
-  readonly ImageAltText: typeof ToolbarImageAltText;
-  readonly ImageProperties: typeof ToolbarImageProperties;
+  readonly ImageWrap: ImageWrapPartComponent;
+  readonly ImageAltText: ImageAltTextPartComponent;
+  readonly ImageProperties: ToolbarPartComponent;
   readonly TableInsert: ToolbarPartComponent;
   readonly TableBorderTarget: TableBorderTargetNamespace;
   readonly TableBorderColor: TableBorderColorNamespace;

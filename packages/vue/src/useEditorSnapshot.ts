@@ -1,12 +1,14 @@
-import { onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
+import { ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
+import { scopeDispose } from './editor/scope-dispose';
 
 /** @public */
-export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<number> {
+export function useEditorSnapshot(editor: Editor | null): Ref<number> {
+  const reactiveEditor = editor as MaybeRefOrGetter<Editor | null>;
   const revision = ref(0);
 
   const stop = watch(
-    () => toValue(editor),
+    () => toValue(reactiveEditor),
     (instance, _prev, onCleanup) => {
       if (!instance) return;
       const bump = (): void => {
@@ -23,6 +25,6 @@ export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<
     { immediate: true, flush: 'post' }
   );
 
-  onScopeDispose(stop);
+  scopeDispose(stop);
   return revision;
 }

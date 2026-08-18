@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { ReactNode } from 'react';
 // The default-set + in-place-override merge, once.
 //
 // The toolbar, the menu bar and the context menu all offer the same contract: with no
@@ -13,7 +15,7 @@
 // context-menu row id) and how to render a default; only the merge is common.
 
 import { Children, Fragment, isValidElement } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 
 /**
  * The key a child element overrides, or null when it is the host's own content.
@@ -34,7 +36,7 @@ export type KeyOfChild = (child: ReactNode) => string | null;
  */
 export function unwrapFragment(child: ReactNode, keyOf: KeyOfChild): string | null {
   if (!isValidElement(child) || child.type !== Fragment) return null;
-  const inner = Children.toArray((child.props as { children?: ReactNode }).children);
+  const inner = Children.toArray((child.props as { children?: DocxEditorChildren }).children);
   const keys = inner.map(keyOf).filter((key): key is string => key !== null);
   return keys.length === 1 ? keys[0]! : null;
 }
@@ -49,7 +51,7 @@ export interface MergeArrangementInput<Entry> {
   readonly keyOfEntry: (entry: Entry, index: number) => string;
   readonly keyOfChild: KeyOfChild;
   /** Render one packaged entry, for the positions no child overrode. */
-  readonly renderEntry: (entry: Entry, index: number) => ReactNode;
+  readonly renderEntry: (entry: Entry, index: number) => DocxEditorChildren;
 }
 
 /**

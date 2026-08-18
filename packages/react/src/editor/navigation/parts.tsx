@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
 // The navigation pane's parts: `DocxEditor.Navigation.Header` / `.Close` / `.Title` /
 // `.Tabs` / `.Tab` / `.Headings` / `.Find` / `.Toggle`.
 //
@@ -12,7 +13,7 @@
 // components put them in `textContent` only — never in a style string, never in markup.
 
 import { useCallback, useMemo, useState } from 'react';
-import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactElement } from 'react';
 import type { TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
@@ -26,7 +27,7 @@ import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 export interface NavigationPartProps {
   className?: string;
   style?: CSSProperties;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** The tabs the pane supports, in strip order. Module-level so the keyboard handler

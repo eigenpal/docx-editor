@@ -1,11 +1,12 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { Slot } from './Slot';
 import { guardToolbarMousedown } from './ToolbarButton';
 
 /** @public */
 export interface ToolbarActionProps {
   label: string;
-  icon?: VNode;
+  icon?: DocxEditorChildren;
   active?: boolean;
   disabled?: boolean;
   disabledReason?: string;
@@ -13,7 +14,7 @@ export interface ToolbarActionProps {
   asChild?: boolean;
   class?: string;
   className?: string;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */

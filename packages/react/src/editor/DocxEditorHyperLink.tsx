@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { ReactNode } from 'react';
 // `DocxEditor.HyperLink` — the link popover, on the toolbar's customization ladder.
 //
 // The arrangement is Google Docs': click a link and a small panel appears under it with the
@@ -29,7 +31,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from '../i18n';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 import {
@@ -53,13 +55,13 @@ export interface HyperLinkPartProps {
   asChild?: boolean;
   /** Render nothing — inside the default arrangement this removes the part. */
   hidden?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for the action parts, which also take an icon. @public */
 export interface HyperLinkActionProps extends HyperLinkPartProps {
   /** Icon override; falls back to `children`, then to the part's default glyph. */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
 }
 
 /** Props for `DocxEditor.HyperLink`. @public */
@@ -195,7 +197,7 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
  * it — the toolbar's rule, so `<HyperLink.Unlink hidden />` removes the unlink action from
  * the default panel instead of adding a second hidden one beside it.
  */
-function HyperLinkPreset({ children }: { children?: ReactNode }) {
+function HyperLinkPreset({ children }: { children?: DocxEditorChildren }) {
   const { state } = useHyperlinkPopup();
   const overrides = useMemo(() => partOverrides(children), [children]);
   const take = (key: string, fallback: ReactNode): ReactNode =>
@@ -249,7 +251,7 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
     // put both INSIDE the panel while the preset still rendered its own copies of each —
     // two copy buttons, and a `hidden` that removed nothing.
     if (node.type === Fragment) {
-      visit((node.props as { children?: ReactNode }).children);
+      visit((node.props as { children?: DocxEditorChildren }).children);
       return;
     }
     const marker = (node.type as { docxHyperLinkPart?: string }).docxHyperLinkPart;

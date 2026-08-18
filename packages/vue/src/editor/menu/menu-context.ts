@@ -40,5 +40,5 @@ export function useMenuContext(): MenuContextValue {
 export function useMenuLabel() {
   const { t } = useMenuContext();
   const { t: catalogT } = useTranslation();
-  return (key: string) => t?.(key) ?? catalogT.value(key as TranslationKey);
+  return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
 }

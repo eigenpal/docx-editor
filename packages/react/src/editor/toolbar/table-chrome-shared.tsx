@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react';
 // Shared a11y and keyboard helpers for contextual table toolbar compounds.
 
-import { useEffect, useId, type ReactNode, type RefObject } from 'react';
+import { useEffect, useId, type RefObject } from 'react';
 import { editorScopeFor } from '../editor-scope';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
 import { guardToolbarMousedown } from './ToolbarButton';

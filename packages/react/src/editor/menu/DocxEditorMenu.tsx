@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The compound menu bar: File · Format · Insert · Help, derived FROM the chrome registry.
 //
 // DEFAULT-SET + IN-PLACE OVERRIDE, the same contract the toolbar has. With no children
@@ -27,7 +29,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { CHROME_MENUS, type ChromeMenuId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { editorScopeFor } from '../editor-scope';
@@ -108,7 +110,7 @@ export interface DocxEditorMenuProps {
    * children override their menu in place, others append.
    */
   preset?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 const MENU_IDS = new Set<string>(CHROME_MENUS.map((menu) => menu.id));
@@ -132,7 +134,7 @@ function menuOfChild(child: ReactNode): ChromeMenuId | null {
   if (child.type === Fragment) {
     // One menu per fragment: a fragment holding two overrides is ambiguous about which
     // slot it replaces, so it appends rather than guessing.
-    const inner = Children.toArray((child.props as { children?: ReactNode }).children);
+    const inner = Children.toArray((child.props as { children?: DocxEditorChildren }).children);
     const ids = inner.map(menuOfChild).filter((id): id is ChromeMenuId => id !== null);
     return ids.length === 1 ? ids[0]! : null;
   }

@@ -23,14 +23,14 @@ import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
-import { DocxEditorNavigation } from '../editor/navigation';
+import { DocxEditorNavigation, Navigation } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
-import { DocxEditorContextMenu } from '../editor/contextmenu';
+import { DocxEditorContextMenu, ContextMenu } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import { ScopedByAncestorContext } from '../editor/scope-context';
 import { useDocxEditor } from '../editor/context';
@@ -148,14 +148,14 @@ export interface DocxEditorNamespace {
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
   readonly VerticalRuler: typeof DocxEditorVerticalRuler;
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
-  readonly Navigation: typeof DocxEditorNavigation;
+  readonly Navigation: typeof Navigation;
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
   readonly HyperLink: typeof DocxEditorHyperLink;
-  readonly ContextMenu: typeof DocxEditorContextMenu;
+  readonly ContextMenu: typeof ContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
 }
 
@@ -184,11 +184,17 @@ const docxEditorFrameProps = {
   locale: { type: String, default: undefined },
   author: { type: String, default: undefined },
   modules: { type: Array as PropType<readonly EditorModule[]>, default: undefined },
+  onSave: { type: Function as PropType<() => void>, default: undefined },
+  onOpen: { type: Function as PropType<() => void>, default: undefined },
+  onTitleChange: { type: Function as PropType<(title: string) => void>, default: undefined },
 } as const;
 
 const docxEditorSugarProps = {
   ...docxEditorFrameProps,
   i18n: { type: Object as PropType<DocxEditorProps['i18n']>, default: undefined },
+  onSave: { type: Function as PropType<() => void>, default: undefined },
+  onOpen: { type: Function as PropType<() => void>, default: undefined },
+  onTitleChange: { type: Function as PropType<(title: string) => void>, default: undefined },
 } as const;
 
 const DocxEditorFrame = defineComponent({
@@ -197,6 +203,11 @@ const DocxEditorFrame = defineComponent({
   props: docxEditorFrameProps,
   emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
   setup(props, { attrs, emit, slots, expose }) {
+    const hostSave = computed(() => props.onSave ?? (attrs.onSave as (() => void) | undefined));
+    const hostOpen = computed(() => props.onOpen ?? (attrs.onOpen as (() => void) | undefined));
+    const hostTitleChange = computed(
+      () => props.onTitleChange ?? (attrs.onTitleChange as ((title: string) => void) | undefined)
+    );
     const chrome = computed(() => props.chrome ?? true);
     const menu = computed(() => props.menu ?? true);
     const navigation = computed(() => props.navigation ?? true);
@@ -232,7 +243,7 @@ const DocxEditorFrame = defineComponent({
     const isDark = computed(() => resolveIsDark(props.colorMode, systemDark.value));
     const { t: catalogT } = useTranslation();
     const translate = (key: string, params?: Record<string, string | number>) =>
-      props.t ? props.t(key, params) : catalogT.value(key as TranslationKey, params);
+      props.t ? props.t(key, params) : catalogT(key as TranslationKey, params);
 
     const tableInteractionLabel = (key: 'table.insertRowBelow' | 'table.insertColumnRight') =>
       translate(key);
@@ -312,7 +323,7 @@ const DocxEditorFrame = defineComponent({
                 h('div', { style: TITLE_BAR_STYLE }, [
                   slots.titleBarLeft?.(),
                   h('div', { style: TITLE_BLOCK_STYLE }, [
-                    attrs.onTitleChange
+                    hostTitleChange.value !== undefined
                       ? h('input', {
                           'aria-label': translate('titleBar.documentNameAriaLabel'),
                           value: props.title ?? '',
@@ -330,8 +341,8 @@ const DocxEditorFrame = defineComponent({
                       ? h(DocxEditorMenu, {
                           t: translate,
                           ...(props.title !== undefined ? { fileName: props.title } : {}),
-                          ...(attrs.onOpen ? { onOpen: () => emit('open') } : {}),
-                          ...(attrs.onSave ? { onSave: () => emit('save') } : {}),
+                          ...(hostOpen.value !== undefined ? { onOpen: () => emit('open') } : {}),
+                          ...(hostSave.value !== undefined ? { onSave: () => emit('save') } : {}),
                           ...menuProps,
                         })
                       : null,
@@ -370,7 +381,6 @@ const DocxEditorFrame = defineComponent({
           onReady: (editor: unknown) => emit('ready', editor),
           onChange: (change: unknown) => emit('change', change),
           onFontError: (error: unknown) => emit('fontError', error),
-          ...attrs,
         },
         {
           default: () => [
@@ -388,7 +398,7 @@ const DocxEditorImpl = defineComponent({
   inheritAttrs: false,
   props: docxEditorSugarProps,
   emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
-  setup(props, { attrs, emit, slots, expose }) {
+  setup(props, { emit, slots, expose }) {
     const api = shallowRef<DocxEditorRef | null>(null);
     expose({
       load: (document) => api.value?.load(document),
@@ -414,7 +424,6 @@ const DocxEditorImpl = defineComponent({
             DocxEditorFrame,
             {
               ...frameProps,
-              ...attrs,
               ref: (ref: unknown) => {
                 api.value =
                   ref && typeof ref === 'object' && 'load' in ref
@@ -424,6 +433,12 @@ const DocxEditorImpl = defineComponent({
               onReady: (editor: unknown) => emit('ready', editor),
               onChange: (change: unknown) => emit('change', change),
               onFontError: (error: unknown) => emit('fontError', error),
+              onSave: props.onSave !== undefined ? () => emit('save') : undefined,
+              onOpen: props.onOpen !== undefined ? () => emit('open') : undefined,
+              onTitleChange:
+                props.onTitleChange !== undefined
+                  ? (title: string) => emit('titleChange', title)
+                  : undefined,
             } as Record<string, unknown>,
             {
               default: slots.default,

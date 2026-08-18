@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /**
  * List Buttons Component
  *
@@ -9,7 +10,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 

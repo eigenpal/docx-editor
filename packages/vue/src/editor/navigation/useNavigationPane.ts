@@ -1,4 +1,5 @@
-import { computed, onScopeDispose, ref, shallowRef, watch, type ComputedRef } from 'vue';
+import { computed, ref, shallowRef, watch, type ComputedRef } from 'vue';
+import { scopeDispose } from '../scope-dispose';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
@@ -98,7 +99,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   const viewportWidth = ref(0);
   const inlineEndReservation = ref(0);
 
-  onScopeDispose(
+  scopeDispose(
     watch(
       [viewport, openVal, () => geometry.value.reviewPaneOpen, () => rail.value.mounted],
       () => {
@@ -145,7 +146,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     });
   });
 
-  onScopeDispose(
+  scopeDispose(
     watch(
       [() => store, shift],
       () => {
@@ -155,7 +156,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
       { immediate: true, flush: 'post' }
     )
   );
-  onScopeDispose(() => store?.setShift(0));
+  scopeDispose(() => store?.setShift(0));
 
   return {
     open: openVal,

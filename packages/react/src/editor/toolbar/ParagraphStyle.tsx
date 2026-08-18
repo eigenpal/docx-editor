@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // The paragraph-style picker: a compound toolbar part plus the hook it is built from.
 //
 // `useParagraphStyle` is the whole behavior — the selection's agreed style, the
@@ -19,7 +21,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { ReactNode } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -142,7 +143,7 @@ function useParagraphStyleContext(): ParagraphStyleContextValue | null {
 export interface ParagraphStylePartProps {
   asChild?: boolean;
   className?: string;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for the compound root. @public */

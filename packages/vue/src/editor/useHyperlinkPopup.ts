@@ -1,12 +1,5 @@
-import {
-  computed,
-  inject,
-  onScopeDispose,
-  ref,
-  watch,
-  type ComputedRef,
-  type InjectionKey,
-} from 'vue';
+import { computed, inject, ref, watch, type ComputedRef, type InjectionKey } from 'vue';
+import { scopeDispose } from './scope-dispose';
 import type { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
@@ -168,7 +161,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     };
   };
 
-  onScopeDispose(
+  scopeDispose(
     watch(
       () => [editorRef.value, active] as const,
       ([editor, isActive], _prev, onCleanup) => {

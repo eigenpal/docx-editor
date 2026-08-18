@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 // The "⋯" control: everything the row could not hold, one press away.
 //
 // COMMAND ROWS REUSE ENGINE STATE. Each command row goes through `useEditorCommand` and
@@ -19,7 +20,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { commandForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';

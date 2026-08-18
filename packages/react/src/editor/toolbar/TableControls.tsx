@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 // Contextual table toolbar parts: border target/color/style/width and cell fill.
 //
 // Visible only when `snapshot.table` is present. One React-owned draft persists across
@@ -12,7 +14,6 @@ import {
   useState,
   Fragment,
   type KeyboardEvent,
-  type ReactNode,
 } from 'react';
 import type { TableBorderStyle } from '@docx-editor.dev/core/contracts/editor';
 import {
@@ -62,7 +63,7 @@ export interface TableChromePartProps {
   /** Merge props onto the single child element instead of rendering a default host node. */
   asChild?: boolean;
   /** Custom panel body or trigger label; defaults to the packaged control chrome. */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for a value-driven row or swatch inside a table compound menu. @public */
@@ -81,11 +82,11 @@ export interface TableChromePartComponent extends ToolbarSlotPartComponent {
   /** The chrome slot this compound drives. */
   readonly docxSlot: TableChromeSlotId;
   /** Opens the picker menu or dialog. */
-  readonly Trigger: (props: TableChromePartProps) => ReactNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
   /** The open menu or dialog panel; omit to use the default item list. */
-  readonly Content: (props: TableChromePartProps) => ReactNode;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
   /** One selectable value row or swatch inside {@link Content}. */
-  readonly Item: (props: TableChromeItemProps) => ReactNode;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /**
@@ -97,11 +98,11 @@ export interface TableBorderTargetNamespace extends TableChromePartComponent {
   /** Chrome slot id: `table.borderTarget`. */
   readonly docxSlot: 'table.borderTarget';
   /** Button that opens the border-edge target menu. */
-  readonly Trigger: (props: TableChromePartProps) => ReactNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
   /** Open menu listing edge scopes and clear. */
-  readonly Content: (props: TableChromePartProps) => ReactNode;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
   /** One edge scope or clear row inside the target menu. */
-  readonly Item: (props: TableChromeItemProps) => ReactNode;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /**
@@ -114,13 +115,13 @@ export interface TableBorderColorNamespace extends TableChromePartComponent {
   /** Chrome slot id: `table.borderColor`. */
   readonly docxSlot: 'table.borderColor';
   /** Applies the last swatch without opening the dialog. */
-  readonly Main: (props: TableChromePartProps) => ReactNode;
+  readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
   /** Button that opens the border-colour swatch dialog. */
-  readonly Trigger: (props: TableChromePartProps) => ReactNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
   /** Open swatch dialog for the active border target. */
-  readonly Content: (props: TableChromePartProps) => ReactNode;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
   /** One colour swatch inside the border-colour dialog. */
-  readonly Item: (props: TableChromeItemProps) => ReactNode;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /**
@@ -132,13 +133,13 @@ export interface TableCellFillNamespace extends TableChromePartComponent {
   /** Chrome slot id: `table.cellFill`. */
   readonly docxSlot: 'table.cellFill';
   /** Applies the last swatch without opening the dialog. */
-  readonly Main: (props: TableChromePartProps) => ReactNode;
+  readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
   /** Button that opens the cell-fill swatch dialog. */
-  readonly Trigger: (props: TableChromePartProps) => ReactNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
   /** Open swatch dialog for the selected cell(s). */
-  readonly Content: (props: TableChromePartProps) => ReactNode;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
   /** One fill swatch inside the cell-fill dialog. */
-  readonly Item: (props: TableChromeItemProps) => ReactNode;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /**
@@ -150,11 +151,11 @@ export interface TableBorderStyleNamespace extends TableChromePartComponent {
   /** Chrome slot id: `table.borderStyle`. */
   readonly docxSlot: 'table.borderStyle';
   /** Button that opens the border line-style menu. */
-  readonly Trigger: (props: TableChromePartProps) => ReactNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
   /** Open menu listing line styles for the active target. */
-  readonly Content: (props: TableChromePartProps) => ReactNode;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
   /** One line-style row inside the style menu. */
-  readonly Item: (props: TableChromeItemProps) => ReactNode;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 /**
@@ -166,11 +167,11 @@ export interface TableBorderWidthNamespace extends TableChromePartComponent {
   /** Chrome slot id: `table.borderWidth`. */
   readonly docxSlot: 'table.borderWidth';
   /** Button that opens the border width menu. */
-  readonly Trigger: (props: TableChromePartProps) => ReactNode;
+  readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
   /** Open menu listing width presets for the active target. */
-  readonly Content: (props: TableChromePartProps) => ReactNode;
+  readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
   /** One width preset row inside the width menu. */
-  readonly Item: (props: TableChromeItemProps) => ReactNode;
+  readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
 }
 
 function tableIcon(name: Parameters<typeof tableChromeIconPaths>[0]): ReactNode {

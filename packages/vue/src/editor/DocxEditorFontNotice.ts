@@ -33,7 +33,7 @@ export const DocxEditorFontNotice = defineComponent({
       if (subs.length === 0) return null;
       const key = subs.join('\0');
       if (dismissedKey.value === key) return null;
-      const t = props.t ?? ambient.value;
+      const t = props.t ?? ambient;
       const fonts = subs.join(', ');
       return h(
         'div',

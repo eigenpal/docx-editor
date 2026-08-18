@@ -1,4 +1,5 @@
-import { onScopeDispose, shallowRef, watch, type ShallowRef } from 'vue';
+import { shallowRef, watch, type ShallowRef } from 'vue';
+import { scopeDispose } from './scope-dispose';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 
@@ -58,6 +59,6 @@ export function useEditorCaret(): ShallowRef<EditorCaret | null> {
     { immediate: true, flush: 'post' }
   );
 
-  onScopeDispose(stop);
+  scopeDispose(stop);
   return out;
 }

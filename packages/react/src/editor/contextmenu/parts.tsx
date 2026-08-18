@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
 // The context menu's rows.
 //
 // THE ROWS ARE THE MENU BAR'S ROWS. `MenuRow` (presentation), `MenuItem` (a chrome slot as
@@ -14,7 +15,6 @@
 // `Editor.can`/`isActive` directly, and both end at the same authority.
 
 import { useMemo, useCallback } from 'react';
-import type { ReactNode } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { tableChromeIconPaths } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -41,7 +41,7 @@ import { chromeIcon } from '../toolbar/ToolbarButton';
 /** Props for a packaged context-menu row. @public */
 export interface ContextMenuCommandProps {
   /** Icon override. Defaults to the row's own Material Symbol. */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
   /** i18n key for the label, overriding the packaged one. */
   labelKey?: string;
   /** i18n key for the shortcut column, overriding the packaged one. */
@@ -462,7 +462,7 @@ export interface ContextMenuItemProps {
    * action, so the host's own catalogue resolves it. The packaged rows go the other way.
    */
   label: string;
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
   /** Right-aligned shortcut text, already resolved. */
   shortcut?: string;
   disabled?: boolean;

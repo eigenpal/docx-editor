@@ -1,7 +1,8 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
 // The nine Word wrap choices — value-typed chrome over `setImageWrapType`.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import type { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
@@ -31,7 +32,7 @@ export interface ImageWrapProps {
   className?: string;
   hidden?: boolean;
   asChild?: boolean;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

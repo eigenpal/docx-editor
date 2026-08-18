@@ -1,4 +1,5 @@
 import {
+  computed,
   defineComponent,
   h,
   inject,
@@ -63,7 +64,7 @@ export const ToolbarOverflowItem = defineComponent({
   setup(props) {
     const label = useToolbarLabel();
     const panel = inject(OverflowPanelContext, { close: () => {} });
-    const command = useEditorCommand(() => props.slot);
+    const command = useEditorCommand(computed(() => props.slot) as unknown as ChromeSlotId);
     return () => {
       const control = chromeControlForSlot(props.slot);
       const slotCommand = commandForSlot(props.slot);

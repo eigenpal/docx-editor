@@ -1,3 +1,4 @@
+import { type ShallowRef } from 'vue';
 import type { Editor, EditorSnapshot, ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
@@ -12,14 +13,13 @@ function noteScopeEqual(a: ViewScope | null, b: ViewScope | null): boolean {
 }
 
 /** @public */
-export function useNoteScopeState() {
+export function useNoteScopeState(): ShallowRef<Extract<ViewScope, { kind: 'note' }> | null> {
   const editorRef = useDocxEditor();
   const select = (_snapshot: EditorSnapshot): Extract<ViewScope, { kind: 'note' }> | null => {
     const scope = editorRef.value?.getActiveScope();
     return scope?.kind === 'note' ? scope : null;
   };
-  const scope = useEditorState(select, noteScopeEqual);
-  return scope;
+  return useEditorState(select, noteScopeEqual);
 }
 
 /** @public */
@@ -69,7 +69,7 @@ function notePropertiesEqual(
 }
 
 /** @public */
-export function useNotePropertiesState() {
+export function useNotePropertiesState(): ShallowRef<NotePropertiesState | null> {
   const editorRef = useDocxEditor();
   const select = (_snapshot: EditorSnapshot): NotePropertiesState | null =>
     editorRef.value?.getNotePropertiesState() ?? null;

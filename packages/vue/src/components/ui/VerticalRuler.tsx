@@ -126,7 +126,7 @@ export const VerticalRuler = defineComponent({
           class={`docx-vertical-ruler ${props.className ?? ''}`}
           style={rulerStyle}
           role="slider"
-          aria-label={t.value('ruler.vertical')}
+          aria-label={t('ruler.vertical')}
           aria-orientation="vertical"
         >
           <div
@@ -254,9 +254,7 @@ function VerticalMarginMarker(props: {
       onMouseleave={props.onMouseleave}
       onMousedown={props.onMousedown}
       role="slider"
-      aria-label={
-        props.type === 'topMargin' ? t.value('ruler.topMargin') : t.value('ruler.bottomMargin')
-      }
+      aria-label={props.type === 'topMargin' ? t('ruler.topMargin') : t('ruler.bottomMargin')}
       aria-orientation="vertical"
       tabindex={props.editable ? 0 : -1}
     >

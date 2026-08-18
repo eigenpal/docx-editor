@@ -1,14 +1,14 @@
 import { createContext, useContext, useMemo } from 'react';
-import type { ReactNode } from 'react';
 import { createT, deepMerge, en } from '@docx-editor.dev/i18n';
 import type { LocaleStrings, TFunction, Translations } from '@docx-editor.dev/i18n';
+import type { DocxEditorChildren } from '../docx-editor-children';
 
 const LocaleContext = createContext<LocaleStrings>(en);
 const LangContext = createContext<string>('en');
 
 export interface LocaleProviderProps {
   i18n?: Translations;
-  children: ReactNode;
+  children: DocxEditorChildren;
 }
 
 export function LocaleProvider({ i18n, children }: LocaleProviderProps) {

@@ -44,7 +44,7 @@ export const PageIndicator = defineComponent({
           'aria-live': 'polite',
           role: 'status',
         },
-        t.value('viewer.pageIndicator', { current: props.currentPage, total: props.totalPages })
+        t('viewer.pageIndicator', { current: props.currentPage, total: props.totalPages })
       );
   },
 });

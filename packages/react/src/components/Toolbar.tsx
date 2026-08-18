@@ -1,3 +1,6 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { RefObject } from '../docx-editor-ref-object';
+import type { ReactNode } from 'react';
 /**
  * Toolbar Component
  *
@@ -12,7 +15,7 @@
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../i18n';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import type { ColorValue, Theme } from '@docx-editor.dev/core/contracts/editor';
 import { resolveColorToHex } from '../lib/colorResolver';
 import type { DocumentStyleSummary } from '../lib/stylePreview';
@@ -138,9 +141,9 @@ export interface ToolbarProps {
   /** Whether to enable keyboard shortcuts (default: true) */
   enableShortcuts?: boolean;
   /** Ref to the editor container for keyboard events */
-  editorRef?: React.RefObject<HTMLElement>;
+  editorRef?: RefObject<HTMLElement>;
   /** Custom toolbar items to render at the end */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
   /** When true, renders with display:contents so children flow in the parent flex container */
   inline?: boolean;
   /** Whether to show font family picker (default: true) */

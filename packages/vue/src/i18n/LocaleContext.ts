@@ -14,10 +14,12 @@ import { defineComponent, type PropType } from 'vue';
 const localeKey: InjectionKey<ShallowRef<LocaleStrings>> = Symbol('locale');
 const langKey: InjectionKey<ShallowRef<string>> = Symbol('lang');
 
+import type { DocxEditorChildren } from '../docx-editor-children';
+
 /** @public */
 export interface LocaleProviderProps {
   i18n?: Translations;
-  children?: import('vue').VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */
@@ -51,14 +53,18 @@ export const LocaleProvider = defineComponent({
 });
 
 /** @public */
-export function useTranslation(): { t: ShallowRef<TFunction> } {
+export function useTranslation(): { t: TFunction } {
   const strings = inject(localeKey, shallowRef(en));
   const lang = inject(langKey, shallowRef('en'));
   const t = shallowRef(createT(strings.value, lang.value));
   watch([strings, lang], () => {
     t.value = createT(strings.value, lang.value);
   });
-  return { t };
+  return {
+    get t() {
+      return t.value;
+    },
+  };
 }
 
 export type { TranslationKey };

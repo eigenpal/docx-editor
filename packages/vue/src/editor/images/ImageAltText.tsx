@@ -93,12 +93,12 @@ export const ImageAltText = defineComponent({
             <div
               id={panelId}
               role="dialog"
-              aria-label={t.value('imageAltText.panelTitle')}
+              aria-label={t('imageAltText.panelTitle')}
               class="docx-toolbar__alt-text-panel"
               onMousedown={(event: MouseEvent) => event.stopPropagation()}
             >
               <label class="docx-dialog__label" for={`${panelId}-description`}>
-                {t.value('imageAltText.description')}
+                {t('imageAltText.description')}
               </label>
               <textarea
                 id={`${panelId}-description`}
@@ -107,7 +107,7 @@ export const ImageAltText = defineComponent({
                 onInput={(event: Event) => {
                   draft.value = (event.target as HTMLTextAreaElement).value;
                 }}
-                placeholder={t.value('dialogs.imageProperties.altTextPlaceholder')}
+                placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
               />
               <div class="docx-dialog__footer">
                 <button
@@ -115,14 +115,14 @@ export const ImageAltText = defineComponent({
                   class="docx-dialog__button"
                   onClick={() => (open.value = false)}
                 >
-                  {t.value('common.cancel')}
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   class="docx-dialog__button docx-dialog__button--primary"
                   onClick={apply}
                 >
-                  {t.value('common.apply')}
+                  {t('common.apply')}
                 </button>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { computed, defineComponent, ref, watch, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { type ChromeMenuItemEntry, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
@@ -19,7 +20,7 @@ export interface MenuSubmenuProps {
   /** Material Symbols paths for the parent row's icon. */
   paths?: readonly string[] | null;
   className?: string;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -196,7 +197,9 @@ export const MenuTableGrid = defineComponent({
   setup(props) {
     const editorRef = useDocxEditor();
     const gridCmd = useEditorCommand(
-      computed(() => (props.slot as ChromeSlotId | undefined) ?? 'table.insert')
+      computed(
+        () => (props.slot as ChromeSlotId | undefined) ?? 'table.insert'
+      ) as unknown as ChromeSlotId
     );
     const { setOpenMenu } = useMenuContext();
     const hover = ref<{ rows: number; cols: number } | null>(null);

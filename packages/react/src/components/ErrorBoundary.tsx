@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { ReactNode } from 'react';
 /**
  * Error Boundary Component
  *
@@ -14,7 +16,7 @@ import React, {
   useMemo,
   useSyncExternalStore,
 } from 'react';
-import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
+import type { ErrorInfo, CSSProperties } from 'react';
 // `ErrorManager` is UI-facing error plumbing, not engine state — the greenfield core
 // has none, so the implementation lives in the adapter beside the component
 // that uses it (see `../managers/ErrorManager`), unchanged.
@@ -50,7 +52,7 @@ export interface ErrorBoundaryProps {
   /** Child components to render */
   children: ReactNode;
   /** Custom fallback UI */
-  fallback?: ReactNode | ((error: Error, reset: () => void) => ReactNode);
+  fallback?: ReactNode | ((error: Error, reset: () => void) => DocxEditorChildren);
   /** Callback when error occurs */
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   /** Whether to show error details */

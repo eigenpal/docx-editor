@@ -1,4 +1,5 @@
 import { defineComponent, ref, watch, type CSSProperties, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
 import { useContentControl, type ContentControlInspectorState } from './useContentControl';
 import { Slot } from './toolbar/Slot';
@@ -15,12 +16,12 @@ export interface ContentControlPartProps {
   className?: string;
   asChild?: boolean;
   hidden?: boolean;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for action parts that also take an icon. @public */
 export interface ContentControlActionProps extends ContentControlPartProps {
-  icon?: VNode;
+  icon?: DocxEditorChildren;
 }
 
 /** Props for `DocxEditor.ContentControl`. @public */
@@ -174,12 +175,12 @@ const ContentControlHeader = defineComponent({
       };
       const content = (
         <>
-          <span>{slots.default?.() ?? t.value('contentControl.inspectorPanel.title')}</span>
+          <span>{slots.default?.() ?? t('contentControl.inspectorPanel.title')}</span>
           <button
             type="button"
             data-testid="content-control-inspector-close"
-            aria-label={t.value('common.close')}
-            title={t.value('common.close')}
+            aria-label={t('common.close')}
+            title={t('common.close')}
             style={{
               ...buttonStyle,
               padding: 4,
@@ -212,37 +213,37 @@ const ContentControlFields = defineComponent({
     return () => {
       const current = control.value;
       if (props.hidden || !current) return null;
-      const empty = t.value('contentControl.inspectorPanel.empty');
-      const yes = t.value('contentControl.inspectorPanel.yes');
-      const no = t.value('contentControl.inspectorPanel.no');
+      const empty = t('contentControl.inspectorPanel.empty');
+      const yes = t('contentControl.inspectorPanel.yes');
+      const no = t('contentControl.inspectorPanel.no');
       const fields = slots.default?.() ?? [
         <Field
-          label={t.value('contentControl.inspectorPanel.alias')}
+          label={t('contentControl.inspectorPanel.alias')}
           value={current.alias ?? empty}
           testId="content-control-inspector-alias"
         />,
         <Field
-          label={t.value('contentControl.inspectorPanel.tag')}
+          label={t('contentControl.inspectorPanel.tag')}
           value={current.tag ?? empty}
           testId="content-control-inspector-tag"
         />,
         <Field
-          label={t.value('contentControl.inspectorPanel.type')}
-          value={t.value(typeLabelKey(current.controlType) as 'contentControl.types.richText')}
+          label={t('contentControl.inspectorPanel.type')}
+          value={t(typeLabelKey(current.controlType) as 'contentControl.types.richText')}
           testId="content-control-inspector-type"
         />,
         <Field
-          label={t.value('contentControl.inspectorPanel.lock')}
-          value={t.value(lockLabelKey(current) as 'contentControl.lock.unlocked')}
+          label={t('contentControl.inspectorPanel.lock')}
+          value={t(lockLabelKey(current) as 'contentControl.lock.unlocked')}
           testId="content-control-inspector-lock"
         />,
         <Field
-          label={t.value('contentControl.inspectorPanel.placeholder')}
+          label={t('contentControl.inspectorPanel.placeholder')}
           value={current.placeholder ? yes : no}
           testId="content-control-inspector-placeholder"
         />,
         <Field
-          label={t.value('contentControl.inspectorPanel.bound')}
+          label={t('contentControl.inspectorPanel.bound')}
           value={current.bound ? yes : no}
           testId="content-control-inspector-bound"
         />,
@@ -251,7 +252,7 @@ const ContentControlFields = defineComponent({
             data-testid="content-control-inspector-bound-note"
             style={{ margin: 0, color: 'var(--doc-text-muted)', fontSize: 12 }}
           >
-            {t.value('contentControl.inspectorPanel.boundNote')}
+            {t('contentControl.inspectorPanel.boundNote')}
           </p>
         ) : null,
         current.locked ? (
@@ -260,7 +261,7 @@ const ContentControlFields = defineComponent({
             style={{ margin: 0, color: 'var(--doc-text-muted)', fontSize: 12 }}
             aria-live="polite"
           >
-            {t.value('contentControl.inspectorPanel.lockedNote')}
+            {t('contentControl.inspectorPanel.lockedNote')}
           </p>
         ) : null,
       ];
@@ -288,7 +289,7 @@ const ContentControlRemove = defineComponent({
     const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
-      const label = t.value('contentControl.remove');
+      const label = t('contentControl.remove');
       const shared = {
         type: 'button' as const,
         class: `docx-content-control-inspector__remove${props.className ? ` ${props.className}` : ''}`,
@@ -397,7 +398,7 @@ const ContentControlRoot = defineComponent({
       const titled = (
         <>
           <span id={titleId} class="docx-editor-sr-only">
-            {t.value('contentControl.inspectorPanel.title')}
+            {t('contentControl.inspectorPanel.title')}
           </span>
           {body}
         </>

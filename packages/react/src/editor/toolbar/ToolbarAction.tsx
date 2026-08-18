@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
 // A toolbar control for an action the CHROME REGISTRY does not describe.
 //
 // `ToolbarButton` is deliberately slot-bound: it takes a `ChromeSlotId` and derives its
@@ -18,7 +19,7 @@
 // has no opinion about an action it does not model. A control the ENGINE owns still belongs
 // on a slot.
 
-import type { MouseEvent, ReactNode } from 'react';
+import type { MouseEvent } from 'react';
 import { Slot } from './Slot';
 import { guardToolbarMousedown } from './ToolbarButton';
 
@@ -31,7 +32,7 @@ export interface ToolbarActionProps {
    */
   label: string;
   /** Icon content. Inline SVG sized ~18px matches the packaged controls. */
-  icon?: ReactNode;
+  icon?: DocxEditorChildren;
   /** Pressed state, for an action that toggles. Sets `aria-pressed` and `data-active`. */
   active?: boolean;
   disabled?: boolean;
@@ -43,7 +44,7 @@ export interface ToolbarActionProps {
   className?: string;
   /** Vue parity — use `className` in React. */
   class?: string;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

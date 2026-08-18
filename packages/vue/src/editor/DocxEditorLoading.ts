@@ -1,4 +1,5 @@
 import { defineComponent, h, type CSSProperties, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { useEditorState } from './useEditorState';
@@ -12,7 +13,7 @@ export interface DocxEditorLoadingProps {
   overlay?: boolean;
   className?: string;
   style?: CSSProperties;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /** Props for `DocxEditor.Loading.Spinner`. @public */
@@ -57,7 +58,7 @@ const DocxEditorLoadingImpl = defineComponent({
         { class: classes, style: props.style, role: 'status', ariaLive: 'polite' },
         slots.default?.() ?? [
           h(DocxEditorLoadingSpinner),
-          h('span', { class: 'docx-editor-sr-only' }, t.value('loading.label')),
+          h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),
         ]
       );
     };

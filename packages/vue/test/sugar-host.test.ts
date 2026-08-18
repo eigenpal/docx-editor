@@ -13,11 +13,11 @@ import { LocaleProvider } from '../src/i18n';
 import { flush, mountComponent, mountEditorTree, mountSugarAsync, SOURCE } from './helpers/mount';
 import { docx } from './helpers/fixtures';
 
+const label = createT(en);
+
 afterEach(() => {
   document.body.innerHTML = '';
 });
-
-const label = createT(en);
 
 describe('DocxEditor sugar host', () => {
   test('document-only mount renders full packaged chrome', async () => {
@@ -64,6 +64,7 @@ describe('DocxEditor sugar host', () => {
     });
     app.mount(container);
     await flush();
+    await flush();
     expect(ready.length).toBe(1);
     for (const member of [
       'load',
@@ -91,6 +92,73 @@ describe('DocxEditor sugar host', () => {
     await secondView.flush();
     expect(secondView.editor()).not.toBe(first);
     secondView.unmount();
+  });
+});
+
+describe('DocxEditor sugar emits', () => {
+  test('forwards save emit to the host listener', async () => {
+    const saves: number[] = [];
+    const view = await mountSugarAsync({ onSave: () => saves.push(1) });
+    await view.flush();
+    const host = view.app._instance?.subTree?.component?.proxy as {
+      $emit?: (event: string) => void;
+    };
+    host?.$emit?.('save');
+    expect(saves).toEqual([1]);
+    view.unmount();
+  });
+
+  test('forwards open emit to the host listener', async () => {
+    const opens: number[] = [];
+    const view = await mountSugarAsync({ onOpen: () => opens.push(1) });
+    await view.flush();
+    const host = view.app._instance?.subTree?.component?.proxy as {
+      $emit?: (event: string) => void;
+    };
+    host?.$emit?.('open');
+    expect(opens).toEqual([1]);
+    view.unmount();
+  });
+
+  test('forwards titleChange when the title input edits', async () => {
+    const titles: string[] = [];
+    const view = await mountSugarAsync({
+      title: 'Draft',
+      onTitleChange: (title: string) => titles.push(title),
+    });
+    await view.flush();
+    const input = view.container.querySelector('input[aria-label]') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    input.value = 'Renamed';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(titles).toContain('Renamed');
+    view.unmount();
+  });
+
+  test('forwards change when the document mutates', async () => {
+    const changes: unknown[] = [];
+    const view = await mountSugarAsync({ onChange: (change: unknown) => changes.push(change) });
+    await view.flush();
+    view.editor().exec({ type: 'insertText', text: '!' });
+    await view.flush();
+    expect(changes.length).toBeGreaterThan(0);
+    view.unmount();
+  });
+
+  test('forwards fontError when the font resolver throws', async () => {
+    const errors: unknown[] = [];
+    const view = await mountSugarAsync({
+      fonts: () => {
+        throw new Error('resolver exploded');
+      },
+      onFontError: (error: unknown) => errors.push(error),
+    });
+    await view.flush();
+    expect(errors.length).toBe(1);
+    expect(String((errors[0] as { message?: string }).message ?? errors[0])).toContain(
+      'resolver exploded'
+    );
+    view.unmount();
   });
 });
 
@@ -202,6 +270,7 @@ describe('DocxEditor i18n prop', () => {
         h(LocaleProvider, { i18n: de }, { default: () => h(DocxEditor, { document: SOURCE }) }),
     });
     app.mount(container);
+    await flush();
     await flush();
     expect(container.textContent).toContain('Datei');
     app.unmount();

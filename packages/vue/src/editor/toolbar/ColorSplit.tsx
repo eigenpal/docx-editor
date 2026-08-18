@@ -1,4 +1,5 @@
 import { computed, defineComponent, ref, watch, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -11,7 +12,7 @@ import type { ToolbarSlotPartProps } from './parts';
 /** @public */
 export interface ToolbarColorSplitProps extends ToolbarSlotPartProps {
   className?: string;
-  icon?: VNode;
+  icon?: DocxEditorChildren;
 }
 
 /** @public */
@@ -130,7 +131,7 @@ interface ColorSplitConfig {
   readonly defaultValue: string;
   readonly cssOf: (value: string) => string;
   readonly clear: { readonly value: string; readonly labelKey: string };
-  readonly body: (props: PopupBodyProps) => VNode | VNode[];
+  readonly body: (props: PopupBodyProps) => DocxEditorChildren | VNode[];
 }
 
 interface PopupBodyProps {

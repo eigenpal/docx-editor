@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
 // Provider-first host for the docx editor facade.
 //
 // `DocxEditorRoot` renders no DOM of its own: it creates the facade WITHOUT a container
@@ -13,7 +14,6 @@
 // instance flows through `useState`, so consumers re-render when it lands.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
 import type {
   DocumentChange,
   DocumentSource,
@@ -122,7 +122,7 @@ export interface DocxEditorRootProps {
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   /** Optional decode port for embedded image insertion and paint in tests or custom hosts. */
   imageDecodePort?: ImageDecodePort;
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -157,6 +157,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     fonts,
     zoom,
     zoomMode,
+    modules,
     tableInteractionLabel,
     imageDecodePort,
     children,
@@ -218,7 +219,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry]);
+  }, [doc, fonts, defaultTranslate, imageDecodePort, modules, revisionStyleRegistry]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
@@ -342,13 +343,13 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
  * Publishes the popover state. A child of the editor context rather than part of `Root`
  * itself, because it consumes that context and a component cannot read its own provider.
  */
-function HyperlinkPopupProvider({ children }: { children?: ReactNode }) {
+function HyperlinkPopupProvider({ children }: { children?: DocxEditorChildren }) {
   const popup = useHyperlinkPopupInstance(true);
   return <HyperlinkPopupContext.Provider value={popup}>{children}</HyperlinkPopupContext.Provider>;
 }
 
 /** One content-control chrome state per editor — inspector open + mode toggles. */
-function ContentControlProvider({ children }: { children?: ReactNode }) {
+function ContentControlProvider({ children }: { children?: DocxEditorChildren }) {
   const chrome = useContentControlInstance();
   return <ContentControlContext.Provider value={chrome}>{children}</ContentControlContext.Provider>;
 }

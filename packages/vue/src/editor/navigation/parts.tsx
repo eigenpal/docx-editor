@@ -6,11 +6,13 @@ import { useEditorState } from '../useEditorState';
 import { useNavigationContext } from './navigation-context';
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 
+import type { DocxEditorChildren } from '../../docx-editor-children';
+
 /** Shared props for the pane's structural parts. @public */
 export interface NavigationPartProps {
   className?: string;
   style?: CSSProperties;
-  children?: import('vue').VNode;
+  children?: DocxEditorChildren;
 }
 
 /** @public */

@@ -1,12 +1,5 @@
-import {
-  computed,
-  onScopeDispose,
-  ref,
-  toValue,
-  watch,
-  type ComputedRef,
-  type MaybeRefOrGetter,
-} from 'vue';
+import { computed, ref, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue';
+import { scopeDispose } from './scope-dispose';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
@@ -49,19 +42,21 @@ async function resolveFonts(source: DocxFontsSource): Promise<DocxFontsInput> {
 
 /** @public */
 export function useDocxSource(
-  source: MaybeRefOrGetter<DocxSource | null | undefined>,
-  options: MaybeRefOrGetter<UseDocxSourceOptions> = {}
+  source: DocxSource | null | undefined,
+  options: UseDocxSourceOptions = {}
 ): UseDocxSourceResult {
+  const reactiveSource = source as MaybeRefOrGetter<DocxSource | null | undefined>;
+  const reactiveOptions = options as MaybeRefOrGetter<UseDocxSourceOptions>;
   const bytes = ref<Uint8Array | undefined>(undefined);
   const fonts = ref<FontConfiguration | undefined>(undefined);
   const error = ref<Error | null>(null);
-  const documentLoading = ref(toValue(source) != null);
+  const documentLoading = ref(toValue(reactiveSource) != null);
   const fontsSettled = ref(toValue(options).fonts === undefined);
   let fetchGeneration = 0;
 
-  onScopeDispose(
+  scopeDispose(
     watch(
-      () => toValue(options).fonts,
+      () => toValue(reactiveOptions).fonts,
       (fontsSource) => {
         if (fontsSource === undefined) {
           fontsSettled.value = true;
@@ -87,9 +82,9 @@ export function useDocxSource(
     )
   );
 
-  onScopeDispose(
+  scopeDispose(
     watch(
-      () => toValue(source),
+      () => toValue(reactiveSource),
       (nextSource) => {
         fetchGeneration += 1;
         const generation = fetchGeneration;
@@ -114,7 +109,7 @@ export function useDocxSource(
         void (async () => {
           try {
             const response = await fetch(String(nextSource), {
-              ...toValue(options).fetchOptions,
+              ...toValue(reactiveOptions).fetchOptions,
               signal: controller.signal,
             });
             if (!response.ok) {

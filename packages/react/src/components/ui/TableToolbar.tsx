@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 /**
  * TableToolbar Component
  *
@@ -12,7 +14,7 @@
  */
 
 import React from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -147,7 +149,7 @@ export interface TableToolbarProps {
   /** Position of the toolbar */
   position?: 'top' | 'floating';
   /** Custom render for additional buttons */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor, editorStateTickKey } from '../context';
@@ -52,11 +53,11 @@ export interface DocxEditorContextMenuProps {
   preset?: boolean;
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 type DefaultEntry =
-  | { readonly kind: 'row'; readonly id: string; readonly render: () => VNode }
+  | { readonly kind: 'row'; readonly id: string; readonly render: () => DocxEditorChildren }
   | { readonly kind: 'separator'; readonly id: string };
 
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
@@ -397,7 +398,7 @@ export const DocxEditorContextMenu = defineComponent({
               role="menu"
               aria-label={
                 props.t?.('contextMenu.ariaLabel') ??
-                catalogT.value('contextMenu.ariaLabel' as TranslationKey)
+                catalogT('contextMenu.ariaLabel' as TranslationKey)
               }
               tabindex={-1}
               class={`${scopeClassName}docx-toolbar__menu docx-contextmenu${props.className ? ` ${props.className}` : ''}`}

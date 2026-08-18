@@ -2,16 +2,28 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test, mock } from 'bun:test';
-import { createApp, h, nextTick, ref } from 'vue';
+import { createApp, defineComponent, h, nextTick, ref, watch } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { DocxEditorRoot, provideDocxEditor } from '../src/editor/DocxEditorRoot';
+import {
+  DocxEditorRoot,
+  provideDocxEditor,
+  docxEditorFacadeListenerCount,
+} from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
+import { useDocxEditor } from '../src/editor/context';
 import { useDocxSource } from '../src/editor/useDocxSource';
+import type { DocxSource } from '../src/editor/useDocxSource';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { useFonts } from '../src/editor/useFonts';
+
+function bindRootProps(
+  rootProps: ReturnType<typeof provideDocxEditor>['rootProps']
+): ReturnType<typeof provideDocxEditor>['rootProps'] {
+  return rootProps;
+}
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -80,9 +92,9 @@ describe('DocxEditorRoot lifecycle regressions', () => {
     }
   });
 
-  test('locale change rebuilds the editor instance', async () => {
+  test('effective translation catalogue change rebuilds exactly once', async () => {
     const instances: DocxEditorInstance[] = [];
-    const locale = ref('en');
+    const translate = ref<(key: string) => string>((key) => `en:${key}`);
     const container = document.createElement('div');
     document.body.appendChild(container);
     const app = createApp({
@@ -92,7 +104,7 @@ describe('DocxEditorRoot lifecycle regressions', () => {
             DocxEditorRoot,
             {
               document: SOURCE,
-              locale: locale.value,
+              translate: translate.value,
               onReady: (editor: Editor) => {
                 instances.push(editor as DocxEditorInstance);
               },
@@ -109,7 +121,7 @@ describe('DocxEditorRoot lifecycle regressions', () => {
     try {
       app.mount(container);
       await flush();
-      locale.value = 'de';
+      translate.value = (key: string) => `de:${key}`;
       await flush();
       expect(instances.length).toBe(2);
       expect(instances[0]).not.toBe(instances[1]);
@@ -158,11 +170,108 @@ describe('DocxEditorRoot lifecycle regressions', () => {
 });
 
 describe('provideDocxEditor', () => {
-  test('returns Root and rootProps for host composition', () => {
-    const setup = provideDocxEditor({ document: SOURCE, zoom: 1.25 });
-    expect(setup.DocxEditorRoot).toBe(DocxEditorRoot);
-    expect(setup.rootProps.document).toBe(SOURCE);
-    expect(setup.rootProps.zoom).toBe(1.25);
+  test('returns Root, reactive rootProps, and editorRef for host composition', async () => {
+    let setup: ReturnType<typeof provideDocxEditor> | null = null;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      setup() {
+        setup = provideDocxEditor({ document: SOURCE, zoom: 1.25 });
+        return () =>
+          h(setup!.DocxEditorRoot, bindRootProps(setup!.rootProps) as Parameters<typeof h>[1], {
+            default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+          });
+      },
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(setup!.DocxEditorRoot).toBe(DocxEditorRoot);
+      expect(setup!.rootProps.document).toBe(SOURCE);
+      expect(setup!.rootProps.zoom).toBe(1.25);
+      expect(setup!.editorRef.value).not.toBeNull();
+    } finally {
+      app.unmount();
+      container.remove();
+    }
+  });
+
+  test('creates the editor and injects the same instance to descendants', async () => {
+    let injected: DocxEditorInstance | null = null;
+    let ownerRef: ReturnType<typeof useDocxEditor> | null = null;
+    const Probe = defineComponent({
+      setup() {
+        const editorRef = useDocxEditor();
+        watch(
+          editorRef,
+          (instance) => {
+            injected = instance;
+          },
+          { immediate: true }
+        );
+        return () => null;
+      },
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      setup() {
+        const setupResult = provideDocxEditor({ document: SOURCE });
+        ownerRef = setupResult.editorRef;
+        return () =>
+          h(
+            setupResult.DocxEditorRoot,
+            bindRootProps(setupResult.rootProps) as Parameters<typeof h>[1],
+            {
+              default: () => [
+                h(Probe),
+                h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+              ],
+            }
+          );
+      },
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(injected).not.toBeNull();
+      expect(ownerRef!.value).toBe(injected);
+      expect(container.querySelectorAll('.docx-page').length).toBeGreaterThan(0);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test('destroys the editor when the host scope ends', async () => {
+    let ownerRef: ReturnType<typeof useDocxEditor> | null = null;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      setup() {
+        const setupResult = provideDocxEditor({ document: SOURCE });
+        ownerRef = setupResult.editorRef;
+        return () =>
+          h(
+            setupResult.DocxEditorRoot,
+            bindRootProps(setupResult.rootProps) as Parameters<typeof h>[1],
+            {
+              default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+            }
+          );
+      },
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(ownerRef!.value).not.toBeNull();
+      const listenersBeforeUnmount = docxEditorFacadeListenerCount();
+      expect(listenersBeforeUnmount).toBeGreaterThan(0);
+      app.unmount();
+      expect(ownerRef!.value).toBeNull();
+      expect(docxEditorFacadeListenerCount()).toBeLessThan(listenersBeforeUnmount);
+    } finally {
+      container.remove();
+    }
   });
 });
 
@@ -178,7 +287,7 @@ describe('useDocxSource reactivity', () => {
     let result: ReturnType<typeof useDocxSource> | null = null;
     const app = createApp({
       setup() {
-        result = useDocxSource(source);
+        result = useDocxSource(source as unknown as DocxSource);
         return () => null;
       },
     });
@@ -209,7 +318,7 @@ describe('useDocxSource reactivity', () => {
     let result: ReturnType<typeof useDocxSource> | null = null;
     const app = createApp({
       setup() {
-        result = useDocxSource(source);
+        result = useDocxSource(source as unknown as DocxSource);
         return () => null;
       },
     });
@@ -234,7 +343,7 @@ describe('useFonts reactivity', () => {
     let resolver: ReturnType<typeof useFonts> | null = null;
     const app = createApp({
       setup() {
-        resolver = useFonts(undefined, fragment);
+        resolver = useFonts(undefined, fragment as unknown as FontConfigurationFragment);
         return () => null;
       },
     });

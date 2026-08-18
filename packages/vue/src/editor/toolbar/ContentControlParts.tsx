@@ -1,4 +1,5 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { useContentControl, CONTENT_CONTROL_SLOTS } from '../useContentControl';
@@ -149,7 +150,7 @@ export const ToolbarContentControlRemove = defineComponent({
 );
 
 export const CONTENT_CONTROL_SHAPED_PARTS: Partial<
-  Record<ChromeSlotId, (props: { hidden?: boolean }) => VNode | null>
+  Record<ChromeSlotId, (props: { hidden?: boolean }) => DocxEditorChildren | null>
 > = {
   [asSlot(CONTENT_CONTROL_SLOTS.showAll)]: ToolbarContentControlShowAll,
   [asSlot(CONTENT_CONTROL_SLOTS.formFill)]: ToolbarContentControlFormFill,

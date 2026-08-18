@@ -1,4 +1,6 @@
-import { computed, defineComponent, ref, watch, type PropType, type Ref, type VNode } from 'vue';
+import { computed, defineComponent, ref, watch, type PropType } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import { refAsRefObject, type RefObject } from '../../docx-editor-ref-object';
 // Image properties dialog — one atomic `setImageProperties` on Apply.
 
 import type { EditorSnapshot, SelectedImageState } from '@docx-editor.dev/core/contracts/editor';
@@ -38,7 +40,7 @@ export interface DocxEditorImagePropertiesDialogProps {
   open: boolean;
   onClose: () => void;
   className?: string;
-  triggerRef?: Ref<HTMLElement | null>;
+  triggerRef?: RefObject<HTMLElement | null>;
 }
 
 interface DraftState {
@@ -204,7 +206,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
     open: { type: Boolean, required: true },
     onClose: { type: Function as PropType<() => void>, required: true },
     className: { type: String, default: undefined },
-    triggerRef: { type: Object as PropType<Ref<HTMLElement | null>>, default: undefined },
+    triggerRef: { type: Object as PropType<RefObject<HTMLElement | null>>, default: undefined },
   },
   setup(props) {
     const editorRef = useDocxEditor();
@@ -263,7 +265,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
     );
 
     const restoreFocus = () => {
-      props.triggerRef?.value?.focus();
+      props.triggerRef?.current?.focus();
       editorRef.value?.focus();
     };
 
@@ -523,21 +525,21 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
             onMousedown={(event) => event.stopPropagation()}
           >
             <div id={titleId} class="docx-dialog__header">
-              {t.value('dialogs.imageProperties.title')}
+              {t('dialogs.imageProperties.title')}
             </div>
             <div class="docx-dialog__body">
               {errorKey.value ? (
                 <p class="docx-dialog__error">
-                  {t.value(errorKey.value as 'imageProperties.errors.invalidDimensions')}
+                  {t(errorKey.value as 'imageProperties.errors.invalidDimensions')}
                 </p>
               ) : null}
               <section class="docx-dialog__section">
                 <div class="docx-dialog__section-label">
-                  {t.value('dialogs.imageProperties.dimensions')}
+                  {t('dialogs.imageProperties.dimensions')}
                 </div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-prop-width">
-                    {t.value('dialogs.imageProperties.widthLabel')}
+                    {t('dialogs.imageProperties.widthLabel')}
                   </label>
                   <input
                     id="image-prop-width"
@@ -546,11 +548,11 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                     disabled={resizeDisabled}
                     onChange={(event) => setWidth((event.target as HTMLInputElement).value)}
                   />
-                  <span class="docx-dialog__unit">{t.value('imageProperties.units.points')}</span>
+                  <span class="docx-dialog__unit">{t('imageProperties.units.points')}</span>
                 </div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-prop-height">
-                    {t.value('dialogs.imageProperties.heightLabel')}
+                    {t('dialogs.imageProperties.heightLabel')}
                   </label>
                   <input
                     id="image-prop-height"
@@ -559,7 +561,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                     disabled={resizeDisabled}
                     onChange={(event) => setHeight((event.target as HTMLInputElement).value)}
                   />
-                  <span class="docx-dialog__unit">{t.value('imageProperties.units.points')}</span>
+                  <span class="docx-dialog__unit">{t('imageProperties.units.points')}</span>
                 </div>
                 <label class="docx-dialog__checkbox-row">
                   <input
@@ -572,7 +574,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                         : draft.value)
                     }
                   />
-                  {t.value('dialogs.imageProperties.lockAspectRatio')}
+                  {t('dialogs.imageProperties.lockAspectRatio')}
                 </label>
                 <button
                   type="button"
@@ -580,16 +582,16 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                   disabled={pictureOnlyDisabled || !target?.intrinsic}
                   onClick={resetNatural}
                 >
-                  {t.value('imageProperties.resetNaturalSize')}
+                  {t('imageProperties.resetNaturalSize')}
                 </button>
               </section>
               <section class="docx-dialog__section">
-                <div class="docx-dialog__section-label">{t.value('imageProperties.position')}</div>
+                <div class="docx-dialog__section-label">{t('imageProperties.position')}</div>
                 {positionUnavailable ? (
-                  <p class="docx-dialog__hint">{t.value('imageProperties.positionUnavailable')}</p>
+                  <p class="docx-dialog__hint">{t('imageProperties.positionUnavailable')}</p>
                 ) : null}
                 {positionLocked ? (
-                  <p class="docx-dialog__hint">{t.value('imageProperties.positionLocked')}</p>
+                  <p class="docx-dialog__hint">{t('imageProperties.positionLocked')}</p>
                 ) : null}
                 {positionEditable ? (
                   <>
@@ -597,7 +599,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                       <>
                         <div class="docx-dialog__row">
                           <label class="docx-dialog__field-label" for="image-pos-rel-h">
-                            {t.value('imageProperties.relativeToHorizontal')}
+                            {t('imageProperties.relativeToHorizontal')}
                           </label>
                           <select
                             id="image-pos-rel-h"
@@ -615,7 +617,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                           >
                             {DRAWING_REL_FROM_H.map((frame) => (
                               <option key={frame} value={frame}>
-                                {t.value(
+                                {t(
                                   `dialogs.imagePosition.relativeOptions.${frame}` as 'dialogs.imagePosition.relativeOptions.page'
                                 )}
                               </option>
@@ -624,7 +626,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                         </div>
                         <div class="docx-dialog__row">
                           <label class="docx-dialog__field-label" for="image-pos-rel-v">
-                            {t.value('imageProperties.relativeToVertical')}
+                            {t('imageProperties.relativeToVertical')}
                           </label>
                           <select
                             id="image-pos-rel-v"
@@ -642,7 +644,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                           >
                             {DRAWING_REL_FROM_V.map((frame) => (
                               <option key={frame} value={frame}>
-                                {t.value(
+                                {t(
                                   `dialogs.imagePosition.relativeOptions.${frame}` as 'dialogs.imagePosition.relativeOptions.page'
                                 )}
                               </option>
@@ -653,7 +655,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                     ) : null}
                     <div class="docx-dialog__row">
                       <label class="docx-dialog__field-label" for="image-pos-h">
-                        {t.value('imageProperties.horizontalOffset')}
+                        {t('imageProperties.horizontalOffset')}
                       </label>
                       <input
                         id="image-pos-h"
@@ -665,13 +667,11 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                           })
                         }
                       />
-                      <span class="docx-dialog__unit">
-                        {t.value('imageProperties.units.points')}
-                      </span>
+                      <span class="docx-dialog__unit">{t('imageProperties.units.points')}</span>
                     </div>
                     <div class="docx-dialog__row">
                       <label class="docx-dialog__field-label" for="image-pos-v">
-                        {t.value('imageProperties.verticalOffset')}
+                        {t('imageProperties.verticalOffset')}
                       </label>
                       <input
                         id="image-pos-v"
@@ -681,20 +681,16 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                           updateDraft({ verticalPoints: (event.target as HTMLInputElement).value })
                         }
                       />
-                      <span class="docx-dialog__unit">
-                        {t.value('imageProperties.units.points')}
-                      </span>
+                      <span class="docx-dialog__unit">{t('imageProperties.units.points')}</span>
                     </div>
                   </>
                 ) : null}
               </section>
               <section class="docx-dialog__section">
-                <div class="docx-dialog__section-label">
-                  {t.value('dialogs.imageProperties.altText')}
-                </div>
+                <div class="docx-dialog__section-label">{t('dialogs.imageProperties.altText')}</div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-prop-title">
-                    {t.value('imageAltText.title')}
+                    {t('imageAltText.title')}
                   </label>
                   <input
                     id="image-prop-title"
@@ -707,7 +703,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                 </div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-prop-description">
-                    {t.value('imageAltText.description')}
+                    {t('imageAltText.description')}
                   </label>
                   <textarea
                     id="image-prop-description"
@@ -716,14 +712,14 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                     onChange={(event) =>
                       updateDraft({ description: (event.target as HTMLInputElement).value })
                     }
-                    placeholder={t.value('dialogs.imageProperties.altTextPlaceholder')}
+                    placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
                   />
                 </div>
               </section>
               <section class="docx-dialog__section">
-                <div class="docx-dialog__section-label">{t.value('imageProperties.hyperlink')}</div>
+                <div class="docx-dialog__section-label">{t('imageProperties.hyperlink')}</div>
                 <label class="docx-dialog__field-label" for={hyperlinkInputId}>
-                  {t.value('hyperlinkPopup.urlLabel')}
+                  {t('hyperlinkPopup.urlLabel')}
                 </label>
                 <input
                   id={hyperlinkInputId}
@@ -732,15 +728,15 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                   onChange={(event) =>
                     updateDraft({ hyperlink: (event.target as HTMLInputElement).value })
                   }
-                  placeholder={t.value('hyperlinkPopup.urlPlaceholder')}
+                  placeholder={t('hyperlinkPopup.urlPlaceholder')}
                 />
               </section>
               <section class="docx-dialog__section">
                 <div class="docx-dialog__section-label">
-                  {t.value('dialogs.imageProperties.textWrapping')}
+                  {t('dialogs.imageProperties.textWrapping')}
                 </div>
                 <label class="docx-dialog__field-label" for={wrapSelectId}>
-                  {t.value('formattingBar.imageWrap')}
+                  {t('formattingBar.imageWrap')}
                 </label>
                 <select
                   id={wrapSelectId}
@@ -755,16 +751,16 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                 >
                   {IMAGE_WRAP_TARGETS.map((target) => (
                     <option key={target} value={target}>
-                      {t.value(`imageWrap.targets.${target}` as 'imageWrap.inline')}
+                      {t(`imageWrap.targets.${target}` as 'imageWrap.inline')}
                     </option>
                   ))}
                 </select>
               </section>
               <section class="docx-dialog__section">
-                <div class="docx-dialog__section-label">{t.value('imageProperties.crop')}</div>
+                <div class="docx-dialog__section-label">{t('imageProperties.crop')}</div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-crop-left">
-                    {t.value('imageProperties.cropLeft')}
+                    {t('imageProperties.cropLeft')}
                   </label>
                   <input
                     id="image-crop-left"
@@ -778,7 +774,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                 </div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-crop-top">
-                    {t.value('imageProperties.cropTop')}
+                    {t('imageProperties.cropTop')}
                   </label>
                   <input
                     id="image-crop-top"
@@ -792,7 +788,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                 </div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-crop-right">
-                    {t.value('imageProperties.cropRight')}
+                    {t('imageProperties.cropRight')}
                   </label>
                   <input
                     id="image-crop-right"
@@ -806,7 +802,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                 </div>
                 <div class="docx-dialog__row">
                   <label class="docx-dialog__field-label" for="image-crop-bottom">
-                    {t.value('imageProperties.cropBottom')}
+                    {t('imageProperties.cropBottom')}
                   </label>
                   <input
                     id="image-crop-bottom"
@@ -819,20 +815,20 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
                   />
                 </div>
                 {pictureOnlyDisabled ? (
-                  <p class="docx-dialog__hint">{t.value('imageProperties.nonPictureHint')}</p>
+                  <p class="docx-dialog__hint">{t('imageProperties.nonPictureHint')}</p>
                 ) : null}
               </section>
             </div>
             <div class="docx-dialog__footer">
               <button type="button" class="docx-dialog__button" onClick={dismiss}>
-                {t.value('common.cancel')}
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 class="docx-dialog__button docx-dialog__button--primary"
                 onClick={apply}
               >
-                {t.value('common.apply')}
+                {t('common.apply')}
               </button>
             </div>
           </div>
@@ -847,7 +843,7 @@ export interface ImagePropertiesTriggerProps {
   className?: string;
   hidden?: boolean;
   asChild?: boolean;
-  children?: VNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -883,8 +879,8 @@ export const ImagePropertiesTrigger = defineComponent({
         'data-slot': 'image.properties',
         disabled: !isEnabled,
         ...(!isEnabled ? { 'data-disabled': '' } : {}),
-        'aria-label': t.value('formattingBar.imagePropertiesShortcut'),
-        title: disabledReason ?? t.value('formattingBar.imagePropertiesShortcut'),
+        'aria-label': t('formattingBar.imagePropertiesShortcut'),
+        title: disabledReason ?? t('formattingBar.imagePropertiesShortcut'),
         onMousedown: guardToolbarMousedown,
         onClick: () => {
           open.value = true;
@@ -903,7 +899,7 @@ export const ImagePropertiesTrigger = defineComponent({
             onClose={() => {
               open.value = false;
             }}
-            triggerRef={triggerRef}
+            triggerRef={refAsRefObject(triggerRef)}
           />
         </>
       );

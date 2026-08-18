@@ -1,4 +1,5 @@
-import { defineComponent, h, type CSSProperties, type PropType, type VNode } from 'vue';
+import { defineComponent, h, type CSSProperties, type PropType } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 
 /** @public */
 export interface IconProps {
@@ -36,4 +37,4 @@ export const SvgIcon = defineComponent({
   },
 });
 
-export type IconComponent = (props: IconProps) => VNode;
+export type IconComponent = (props: IconProps) => DocxEditorChildren;

@@ -1,4 +1,5 @@
-import { computed, onScopeDispose, ref, watch, type ComputedRef } from 'vue';
+import { computed, ref, watch, type ComputedRef } from 'vue';
+import { scopeDispose } from '../scope-dispose';
 import type { EditorSnapshot, TextMatch } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -42,7 +43,7 @@ export function useDocumentSearch(): UseDocumentSearchResult {
   const matches = ref<readonly TextMatch[]>(EMPTY_MATCHES);
   const activeIndex = ref(-1);
 
-  onScopeDispose(
+  scopeDispose(
     watch([query, runQuery], ([q, rq]) => {
       if (q === rq) return;
       const timer = setTimeout(() => {
@@ -54,7 +55,7 @@ export function useDocumentSearch(): UseDocumentSearchResult {
 
   const options = computed(() => ({ matchCase: matchCase.value, wholeWord: wholeWord.value }));
 
-  onScopeDispose(
+  scopeDispose(
     watch(
       [editorRef, runQuery, options, snapshot],
       () => {
@@ -72,7 +73,7 @@ export function useDocumentSearch(): UseDocumentSearchResult {
     )
   );
 
-  onScopeDispose(
+  scopeDispose(
     watch(matches, (next, prev) => {
       if (prev !== next) {
         activeIndex.value =
