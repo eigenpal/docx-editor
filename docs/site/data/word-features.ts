@@ -803,7 +803,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Insert, edit, and remove a link with Ctrl+K, Cmd+K, or the toolbar. Targets are allowlisted: http, https, mailto, tel, and ftp. Any other target renders inert and still round-trips. Opening a document never requests a link target, because activation needs an explicit gesture.',
+      'Insert, edit, and remove a link with Ctrl+K, Cmd+K, or the toolbar. Targets are allowlisted: http, https, mailto, tel, and ftp. Any other target renders inert and still round-trips. A HYPERLINK field, complex or w:fldSimple, is a live link too: its target passes the same allowlist, and the link panel shows it read-only. Links in footnote and endnote text work the same way. Opening a document never requests a link target, because activation needs an explicit gesture.',
   },
   {
     id: 'fields.bookmarks',
@@ -825,7 +825,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'PAGE, NUMPAGES, and SECTIONPAGES project in headers and footers at layout time, as a complex field or w:fldSimple. PAGE respects the section pgNumType start and format. Fields inside an anchored header or footer text box also project, as does a page field nested inside another simple field such as STYLEREF. React header and footer chrome can insert them, including Page X of Y. Other field instructions stay inert, and body field evaluation is deferred.',
+      'PAGE, NUMPAGES, and SECTIONPAGES project in headers and footers at layout time, as a complex field or w:fldSimple. PAGE respects the section pgNumType start and format. Fields inside an anchored header or footer text box also project, as does a page field nested inside another field — simple or complex, such as STYLEREF — up to four levels deep, evaluated per page. React header and footer chrome can insert them, including Page X of Y. Body field evaluation is deferred.',
   },
   {
     id: 'fields.toc',
@@ -847,7 +847,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The last computed result displays for a complex field and for w:fldSimple, and the field codes round-trip untouched. Painted results carry Word-like grey field shading. A legacy form field always shades unless w:doNotShadeFormData is set; other fields follow the fieldShading option (never, when-selected, always). The editor never executes a field instruction.',
+      'The last computed result displays for a complex field and for w:fldSimple, and the field codes round-trip untouched. SYMBOL renders its character from the instruction, with the \\f font and \\s size honored. MACROBUTTON and GOTOBUTTON render their display text; the macro never runs and the jump never fires. A field code under a tracked edit still renders: w:delInstrText is read when no live instruction remains. Painted results carry Word-like grey field shading. A legacy form field always shades unless w:doNotShadeFormData is set; other fields follow the fieldShading option (never, when-selected, always). The editor never executes a field instruction. DATE, REF, SEQ, and similar codes display only their cached result; AUTONUM, LISTNUM, and EQ are not evaluated.',
   },
   {
     id: 'fields.citations',
@@ -865,11 +865,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Legacy form fields (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN)',
     category: 'fields',
     editing: 'partial',
-    rendering: 'partial',
+    rendering: 'full',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'FORMTEXT result text is editable inline, with an accurate caret and selection. Field markers, instructions, and w:ffData round-trip, and tracked edits survive. Form-field shading applies unless w:doNotShadeFormData is set. FORMCHECKBOX and FORMDROPDOWN render a static result. Checkbox and dropdown interaction, Tab navigation, ffData constraints, and forms-protection fill mode are not built.',
+      'FORMTEXT result text is editable inline, with an accurate caret and selection. FORMCHECKBOX renders its checked or default state from w:ffData, and an explicit w:size sets the glyph size. FORMDROPDOWN renders the cached result, or the selected list entry when the file caches none. Field markers, instructions, and w:ffData round-trip, and tracked edits survive. Form-field shading applies unless w:doNotShadeFormData is set. Checkbox and dropdown interaction, Tab navigation, ffData constraints, and forms-protection fill mode are not built.',
   },
 
   // --- Document structure & content controls ---------------------------------
