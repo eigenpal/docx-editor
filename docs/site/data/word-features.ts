@@ -825,7 +825,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'PAGE, NUMPAGES, and SECTIONPAGES project in headers and footers at layout time, as a complex field or w:fldSimple. PAGE respects the section pgNumType start and format. Fields inside an anchored header or footer text box also project, as does a page field nested inside another field — simple or complex, such as STYLEREF — up to four levels deep, evaluated per page. React header and footer chrome can insert them, including Page X of Y. Body field evaluation is deferred.',
+      'PAGE, NUMPAGES, and SECTIONPAGES project as a complex field or w:fldSimple. They evaluate in headers and footers and in the body flow, body tables included. PAGE respects the section pgNumType start and format. Fields inside an anchored header or footer text box also project, as does a page field nested inside another field — simple or complex, such as STYLEREF — up to four levels deep, evaluated per page. React header and footer chrome can insert them, including Page X of Y. A body field paints a placeholder that document layout substitutes per page. A multi-digit body value keeps the one-digit measured width, so mid-line following text does not reflow.',
   },
   {
     id: 'fields.toc',
@@ -847,7 +847,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The last computed result displays for a complex field and for w:fldSimple, and the field codes round-trip untouched. SYMBOL renders its character from the instruction, with the \\f font and \\s size honored. MACROBUTTON and GOTOBUTTON render their display text; the macro never runs and the jump never fires. A field code under a tracked edit still renders: w:delInstrText is read when no live instruction remains. Painted results carry Word-like grey field shading. A legacy form field always shades unless w:doNotShadeFormData is set; other fields follow the fieldShading option (never, when-selected, always). The editor never executes a field instruction. DATE, REF, SEQ, and similar codes display only their cached result; AUTONUM, LISTNUM, and EQ are not evaluated.',
+      'The last computed result displays for a complex field and for w:fldSimple, and the field codes round-trip untouched. SYMBOL renders its character from the instruction, with the \\f font and \\s size honored. MACROBUTTON and GOTOBUTTON render their display text; the macro never runs and the jump never fires. A field code under a tracked edit still renders: w:delInstrText is read when no live instruction remains. Painted results carry Word-like grey field shading. A legacy form field always shades unless w:doNotShadeFormData is set; other fields follow the fieldShading option (never, when-selected, always). The editor never executes a field instruction. TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and DOCPROPERTY for those names render from the document metadata in docProps, capped and sanitized. DATE-valued properties stay inert. DATE, TIME, and FILENAME are not evaluated. REF and SEQ display only their cached result; AUTONUM, LISTNUM, and EQ are not evaluated.',
   },
   {
     id: 'fields.citations',

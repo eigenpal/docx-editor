@@ -28,12 +28,17 @@ Each of these is display the file fully specifies. Painting nothing where Word p
 
 **Deleted instructions are recognized.** Live (`w:instrText`) and deleted (`w:delInstrText`) chunks buffer separately at every nesting level; the live buffer answers whenever any live element exists, and the deleted buffer answers only when none does. Synthesis is revision-aware — a result the display mode resolved away is free to be filled, a result the file hides stays hidden — demoted fields still shade, and nested field state survives drawing descents.
 
+**Document-property fields render from the file's metadata.** `TITLE`, `AUTHOR`, `SUBJECT`, `KEYWORDS`, `LASTSAVEDBY`, `COMMENTS`, and `DOCPROPERTY "Name"` over that same fixed set paint the matching value from `docProps/core.xml` and `docProps/app.xml` when the field caches no result. The reader matches only the known properties by exact (namespace, localName), trims and length-caps each value at the trust boundary, and the paint sink writes text, never markup. A DATE-valued property (`CREATEDATE`, `SAVEDATE`, `PRINTDATE`) is deliberately not evaluated. Every story resolves them: body, tables, notes, headers, footers, and text boxes.
+
+**Body `PAGE` / `NUMPAGES` / `SECTIONPAGES` evaluate in the flow.** The value is unknown while a paragraph is measured, so the paragraph walk reserves one model unit and paints a kind-marked placeholder digit; document finalize substitutes the per-page value once pagination converges. The field stays one model unit whatever the digit count, so offsets never move. It is measured at the one-digit placeholder width — a multi-digit value mid-line keeps that width rather than reflowing following text. `DATE`, `TIME`, and `FILENAME` stay out of scope.
+
 **One ratified scenario is amended.** `field-result-rendering` said an empty result paints nothing while holding its one model unit. That stays true for every cached-result field — but the synthesizing kinds above exist precisely because their files cache nothing, so for them an empty result is the trigger, not the answer.
 
 ## Impact
 
-- `core/layout`: new `symbol-run.ts`, `field-symbol.ts`, `field-button.ts`, `field-form.ts`, `field-link.ts`, `field-nested-page.ts`, `field-run-text.ts`; `field-instruction.ts` (dual live/deleted buffers, per-level state), `field-projection.ts`, `field-simple-result.ts`, `field-pieces.ts`, `paragraph-flow.ts`, `semantic-layout.ts`, `semantic-table-layout.ts`, `note-layout.ts`, `note-pagination.ts`.
-- `core/store`: `field-nodes.ts` (`legacyFormFieldDataOf` — bounded, state only).
+- `core/layout`: new `symbol-run.ts`, `field-symbol.ts`, `field-button.ts`, `field-form.ts`, `field-link.ts`, `field-nested-page.ts`, `field-run-text.ts`, `field-doc-property.ts`, `field-page-furniture.ts`, `field-synthesis.ts`; `field-instruction.ts` (dual live/deleted buffers, per-level state), `field-projection.ts`, `field-simple-result.ts`, `field-pieces.ts`, `paragraph-flow.ts`, `semantic-layout.ts`, `semantic-table-layout.ts`, `note-layout.ts`, `note-pagination.ts`, `textbox-story-layout.ts`, `hf-layout.ts`.
+- `core/store`: `field-nodes.ts` (`legacyFormFieldDataOf` — bounded, state only), new `package/document-properties.ts` (bounded metadata reader, fixed known properties only).
+- `core/binding`: `tree-session.ts` reads document properties for field resolution.
 - `core/editor`: new `surface-field-links.ts` (the one href trust boundary for field links), `paginated-surface.ts`.
 - `react`: the hyperlink popover stays open for field links, read-only.
 - No field instruction is ever executed, fetched, or resolved against a host origin. Every parser fails closed on hostile input.

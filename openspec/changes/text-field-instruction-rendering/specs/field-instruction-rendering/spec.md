@@ -85,6 +85,43 @@ The tracker SHALL be level-aware: it records the nesting level whose `separate` 
 - **WHEN** a tracked inner field's cached result itself contains a begin/end pair
 - **THEN** the deeper pair is ignored and the tracked field's own end still appends the live value
 
+### Requirement: A document-property field renders from the document metadata
+
+A `TITLE`, `AUTHOR`, `SUBJECT`, `KEYWORDS`, `LASTSAVEDBY`, or `COMMENTS` field, and a `DOCPROPERTY "Name"` field naming one of those same properties, SHALL render the matching value from `docProps/core.xml` and `docProps/app.xml`, complex and `w:fldSimple` alike, when the field carries no cached result — because Word derives their display from the stored metadata. Every story SHALL resolve them: body, tables, notes, headers, footers, and anchored text boxes. A property that is absent or empty SHALL paint nothing, exactly as an empty cached result would.
+
+The metadata is attacker-controlled. Each value SHALL be trimmed and length-capped at the read boundary, and the paint sink SHALL write it as text, never as markup. The reader SHALL match only the fixed, known properties by their exact namespace and local name, so a file-supplied element name is never turned into an object key. The instruction SHALL be recognized in one bounded, length-capped pass and SHALL NEVER be executed; an unrecognized `DOCPROPERTY` name resolves to null and stays inert. A DATE-valued document property (`CREATEDATE`, `SAVEDATE`, `PRINTDATE`) SHALL NOT be evaluated, because date formatting is out of scope, and SHALL stay inert rather than paint a nondeterministic value.
+
+#### Scenario: A TITLE field paints the stored title
+
+- **WHEN** a field carries the instruction `TITLE` and `docProps/core.xml` records a `dc:title`
+- **THEN** the stored title paints over the field's single model unit
+
+#### Scenario: DOCPROPERTY resolves a named property
+
+- **WHEN** a field carries `DOCPROPERTY "Author"` and `docProps/core.xml` records a `dc:creator`
+- **THEN** the stored author paints, and a `DOCPROPERTY` naming an unknown property paints nothing
+
+#### Scenario: A date-valued property stays inert
+
+- **WHEN** a field carries `SAVEDATE` or `CREATEDATE`
+- **THEN** nothing is synthesized and the field paints what it painted before
+
+### Requirement: A body page field evaluates after pagination
+
+A `PAGE`, `NUMPAGES`, or `SECTIONPAGES` field in the document body — body tables included — SHALL evaluate the page number, document page count, or section page count when the field carries no cached result, matching the header and footer lanes. The value cannot be known while a paragraph is measured, so the paragraph walk SHALL reserve one model unit and paint a placeholder digit marked with the field kind, and document layout SHALL substitute the per-page value once pagination is complete.
+
+The substituted field SHALL keep the reserved one model unit however many digits the value has, so `paragraphTextOf`, selection, and the caret keep agreeing the field is one thing. The field is measured at the one-digit placeholder width: a multi-digit value mid-line SHALL keep that width rather than re-measure and reflow the following text. `DATE`, `TIME`, and `FILENAME` fields in the body SHALL remain out of scope.
+
+#### Scenario: A body PAGE field counts per sheet
+
+- **WHEN** a body paragraph holds a `PAGE` field with no cached result across a multi-page document
+- **THEN** each sheet paints its own page number in place of the placeholder
+
+#### Scenario: A multi-digit value keeps its reserved width
+
+- **WHEN** a body `PAGE` field lands on a two-digit page with text after it on the same line
+- **THEN** the field paints the two-digit value and the following text keeps the offsets it had at the one-digit width
+
 ### Requirement: A deleted field instruction is recognized
 
 Live `w:instrText` and deleted `w:delInstrText` chunks SHALL buffer separately at every nesting level. The effective instruction SHALL be the live buffer whenever any live instruction element was seen — even an empty one — and the deleted buffer only when none was. The two SHALL never be merged into one string, because a merged instruction is neither field's code.

@@ -49,10 +49,25 @@
 - [x] 7.4 Dropdown and checkbox `w:ffData` size semantics corrections from review
 - [x] 7.5 Tests: deleted-only codes, live-beside-deleted codes, mode-resolved vs file-hidden results
 
-## 8. Gates
+## 8. Document-property fields
 
-- [x] 8.1 `bun run typecheck`, `bun run lint`
-- [x] 8.2 `bun run test`
-- [x] 8.3 `bun run check:parity`, `bun run api:check`, `bun run i18n:validate`
-- [x] 8.4 Feature matrix rows in `docs/site/data/word-features.ts` updated to match
-- [x] 8.5 `bun run format`
+- [x] 8.1 `store/package/document-properties.ts`: bounded reader over `docProps/core.xml` and `docProps/app.xml`, fixed known properties by exact (namespace, localName), per-value trim and length cap, no file-supplied element name as an object key
+- [x] 8.2 `field-doc-property.ts`: recognize `TITLE`, `AUTHOR`, `SUBJECT`, `KEYWORDS`, `LASTSAVEDBY`, `COMMENTS`, and `DOCPROPERTY "Name"` over the same fixed set; one bounded normalize pass; unknown names and DATE-valued properties resolve to null
+- [x] 8.3 Synthesize the property value over the field's single model unit when no cached result exists, on both lanes; resolve in body, tables, notes, headers/footers, and text boxes; paint through a text sink, never markup
+- [x] 8.4 Tests: each named field, DOCPROPERTY name matching, missing/empty property, date-valued fields inert, hostile element names
+
+## 9. Body page fields
+
+- [x] 9.1 `field-page-furniture.ts`: reserve one model unit and paint a kind-marked placeholder digit during the paragraph walk; substitute the per-page value at document finalize
+- [x] 9.2 Substitute PAGE, NUMPAGES, and SECTIONPAGES in body flow and body tables from the same per-page source the furniture lanes use
+- [x] 9.3 Keep the reserved one-unit width whatever the substituted length is; measure at the one-digit width and accept the mid-line multi-digit non-reflow caveat; keep DATE/TIME/FILENAME out of scope
+- [x] 9.4 Skip the substitution walk on a page with no body page field
+- [x] 9.5 Tests: per-sheet PAGE, NUMPAGES/SECTIONPAGES counts, body tables, multi-digit width neutrality
+
+## 10. Gates
+
+- [x] 10.1 `bun run typecheck`, `bun run lint`
+- [x] 10.2 `bun run test`
+- [x] 10.3 `bun run check:parity`, `bun run api:check`, `bun run i18n:validate`
+- [x] 10.4 Feature matrix rows in `docs/site/data/word-features.ts` updated to match
+- [x] 10.5 `bun run format`
