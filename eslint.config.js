@@ -170,56 +170,10 @@ export default [
   {
     files: [
       'packages/react/src/components/DocxEditor.tsx',
-      'packages/vue/src/components/DocxEditor.vue',
+      'packages/vue/src/components/DocxEditor.tsx',
     ],
     rules: {
       'max-lines': ['error', { max: 2000, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // DocxEditor.vue is the host component — same role as React's
-  // DocxEditor.tsx (which has a 2000-line cap). The React-parity callback
-  // props (#720) add per-prop wiring that must live inline in the SFC (the
-  // handlers are passed into useDocxEditor and can't be hoisted); the reusable
-  // pieces were extracted to useHostCallbacks. The Insert > Break submenu adds
-  // its own inline handler wiring (page + section breaks), as does the
-  // File > Open override (onOpen + showFileOpen). The controlled
-  // commentsSidebarOpen / onCommentsSidebarOpenChange pair adds its own emit +
-  // composable wiring inline (reusable part is useControllableBoolean), plus an
-  // explicit `undefined` withDefaults entry so Vue doesn't cast the absent
-  // Boolean prop to `false`. Bumped to 1210 for headroom (it kept landing 1-3
-  // lines over on each small prop addition) while a real split is planned.
-  {
-    files: ['packages/vue/src/components/DocxEditor.vue'],
-    rules: {
-      'max-lines': ['error', { max: 1210, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // useDocxEditor.ts is the Vue composable counterpart to React's PagedEditor —
-  // a single orchestrator wiring the dual-rendering pipeline (hidden PM views,
-  // painter, selection, layout triggers, HF + footnote surfaces). Editable
-  // footnotes (React parity, same change that bumped DocxEditor.vue to 1250)
-  // added the footnote PM/overlay wiring here too, pushing it just over the
-  // default 1000. Modest headroom while a real split (lift shared orchestration
-  // into core, per MEMORY.md) is planned; the cap still enforces a ceiling.
-  {
-    files: ['packages/vue/src/composables/useDocxEditor.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1060, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // Toolbar.vue is the formatting-bar SFC — a single template/script/style
-  // block covering every toolbar control. Localizing the tooltips and adding
-  // aria-labels pushed it just over the default 1000, since each labelled
-  // button wraps to multiple lines under printWidth. The "Document fonts"
-  // picker group added another modest chunk. Headroom while a real split is
-  // planned; the cap still enforces a ceiling.
-  {
-    files: ['packages/vue/src/components/Toolbar.vue'],
-    rules: {
-      'max-lines': ['error', { max: 1200, skipBlankLines: false, skipComments: false }],
     },
   },
 

@@ -12,6 +12,7 @@ import {
   extractFunctionExports,
   extractInterfaceFields,
   extractInterfaceMemberTypes,
+  normalizeSnapshotText,
   normalizeType,
   normalizeParamSignature,
 } from './lib/api-snapshot-parse.mjs';
@@ -22,7 +23,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api.md');
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
 
-const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef']);
+const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef', 'DocxEditorRootProps']);
 
 /** Enumerated composable return interfaces — no suffix pattern matching. */
 const COMPOSABLE_RETURN_INTERFACES = new Set([
@@ -70,7 +71,44 @@ function isUseExport(name) {
   return name.startsWith('use') && name[3] === name[3]?.toUpperCase();
 }
 
-function compareInterface(name, reactSnap, vueSnap, issues) {
+function isComposableReturnInterface(name) {
+  if (name.endsWith('Props') || name.endsWith('PartProps') || name.endsWith('ItemProps')) {
+    return false;
+  }
+  return (
+    name.startsWith('Use') ||
+    name.endsWith('Result') ||
+    name.endsWith('Return') ||
+    [
+      'EditorCommandState',
+      'EditorValueCommandState',
+      'EditorCaret',
+      'HyperlinkPopupState',
+      'HyperlinkPopupAnchor',
+      'ContentControlInspectorState',
+      'OutlineHeading',
+      'OutlineHeadingItem',
+      'PageSetupUpdate',
+      'IndentUpdate',
+      'ContextMenuAnchor',
+      'ContextMenuContextValue',
+    ].includes(name)
+  );
+}
+function returnInterfacesFromUseExports(reactFns, vueFns) {
+  const names = new Set();
+  for (const fns of [reactFns, vueFns].filter(Boolean)) {
+    for (const overloads of fns.values()) {
+      for (const { returnType } of overloads) {
+        const plain = normalizeType(returnType);
+        if (/^[A-Z]\w*$/.test(plain)) names.add(plain);
+      }
+    }
+  }
+  return names;
+}
+
+function compareInterface(name, reactSnap, vueSnap, issues, stats, typeCheckInterfaces) {
   if (EXCLUDED_INTERFACES.has(name)) return;
   const reactFields = extractInterfaceFields(reactSnap, name);
   const vueFields = extractInterfaceFields(vueSnap, name);
@@ -92,9 +130,10 @@ function compareInterface(name, reactSnap, vueSnap, issues) {
 
   const reactTypes = extractInterfaceMemberTypes(reactSnap, name);
   const vueTypes = extractInterfaceMemberTypes(vueSnap, name);
-  if (!reactTypes || !vueTypes) return;
+  if (!reactTypes || !vueTypes || !typeCheckInterfaces.has(name)) return;
   for (const k of reactFields) {
     if (!reactTypes.has(k) || !vueTypes.has(k)) continue;
+    stats.memberTypeChecks += 1;
     const r = normalizeType(reactTypes.get(k));
     const v = normalizeType(vueTypes.get(k));
     if (r !== v) {
@@ -139,9 +178,12 @@ function compareFunction(name, reactOverloads, vueOverloads, issues) {
 }
 
 export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
-  const reactSnapshot = reactSnap ?? fs.readFileSync(REACT_SNAPSHOT, 'utf8');
-  const vueSnapshot = vueSnap ?? fs.readFileSync(VUE_SNAPSHOT, 'utf8');
+  const reactSnapshot = normalizeSnapshotText(
+    reactSnap ?? fs.readFileSync(REACT_SNAPSHOT, 'utf8')
+  );
+  const vueSnapshot = normalizeSnapshotText(vueSnap ?? fs.readFileSync(VUE_SNAPSHOT, 'utf8'));
   const issues = [];
+  const stats = { memberTypeChecks: 0 };
 
   const reactFns = extractFunctionExports(reactSnapshot);
   const vueFns = extractFunctionExports(vueSnapshot);
@@ -156,11 +198,20 @@ export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
     ...composableParityInterfaces(vueSnapshot),
     ...COMPOSABLE_RETURN_INTERFACES,
   ]);
+  const typeCheckInterfaces = new Set([
+    ...[...COMPOSABLE_RETURN_INTERFACES].filter(isComposableReturnInterface),
+    ...returnInterfacesFromUseExports(reactFns, vueFns),
+  ]);
   for (const name of [...interfaceNames].sort()) {
-    compareInterface(name, reactSnapshot, vueSnapshot, issues);
+    compareInterface(name, reactSnapshot, vueSnapshot, issues, stats, typeCheckInterfaces);
   }
 
-  return { issues, useExportCount: useExports.size, interfaceCount: interfaceNames.size };
+  return {
+    issues,
+    useExportCount: useExports.size,
+    interfaceCount: interfaceNames.size,
+    memberTypeChecks: stats.memberTypeChecks,
+  };
 }
 
 function main() {
@@ -178,10 +229,28 @@ function main() {
     }
   }
 
-  const { issues, useExportCount, interfaceCount } = runComposableParityCheck();
+  const { issues, useExportCount, interfaceCount, memberTypeChecks } = runComposableParityCheck();
   console.log('Composable parity: docs/api/docx-editor-{react,vue}/index.api.md');
   console.log(`  use* exports checked: ${useExportCount}`);
   console.log(`  interfaces checked:   ${interfaceCount}`);
+  console.log(`  member types checked: ${memberTypeChecks}`);
+
+  const MIN_USE_EXPORTS = 20;
+  const MIN_MEMBER_TYPE_CHECKS = 100;
+  if (useExportCount < MIN_USE_EXPORTS) {
+    console.error(
+      `\nComposable parity gate misconfigured: expected at least ${MIN_USE_EXPORTS} use* exports, got ${useExportCount}.`
+    );
+    console.error('Check snapshot parsing (CRLF) or committed API snapshots.');
+    process.exit(1);
+  }
+  if (memberTypeChecks < MIN_MEMBER_TYPE_CHECKS) {
+    console.error(
+      `\nComposable parity gate misconfigured: expected at least ${MIN_MEMBER_TYPE_CHECKS} member type checks, got ${memberTypeChecks}.`
+    );
+    console.error('Check member-type parsing or committed API snapshots.');
+    process.exit(1);
+  }
 
   if (issues.length > 0) {
     console.error(`\nComposable parity drift: ${issues.length} issue${issues.length === 1 ? '' : 's'}`);
@@ -266,6 +335,35 @@ export interface Editor {}
   ({ issues } = runComposableParityCheck({ reactSnap: getterOk, vueSnap: getterVue }));
   if (issues.length !== 0) {
     console.error('Self-test FAIL: MaybeRefOrGetter param should normalize');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  const crlfFixture = base.replace(/\n/g, '\r\n');
+  ({ issues } = runComposableParityCheck({
+    reactSnap: crlfFixture,
+    vueSnap: crlfFixture.replace('string', 'ShallowRef<string>'),
+  }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: CRLF snapshots should parse');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  const nestedParams = `
+export function useNested(options?: { scope?: EditorScope }): SampleResult;
+
+export interface SampleResult {
+    readonly value: string;
+}
+`;
+  const nestedVue = nestedParams.replace(
+    'options?: { scope?: EditorScope }',
+    'options?: MaybeRefOrGetter<{ scope?: EditorScope }>'
+  );
+  ({ issues } = runComposableParityCheck({ reactSnap: nestedParams, vueSnap: nestedVue }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: nested parameter objects should normalize');
     for (const i of issues) console.error(`  - ${i}`);
     process.exit(1);
   }

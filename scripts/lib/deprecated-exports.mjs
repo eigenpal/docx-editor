@@ -3,10 +3,11 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { normalizeSnapshotText } from './api-snapshot-parse.mjs';
 
 export function collectDeprecatedExports(snapshotPath) {
   const deprecated = new Set();
-  const lines = readFileSync(snapshotPath, 'utf8').split('\n');
+  const lines = normalizeSnapshotText(readFileSync(snapshotPath, 'utf8')).split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!line.includes('@deprecated')) continue;

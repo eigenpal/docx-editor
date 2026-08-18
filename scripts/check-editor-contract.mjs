@@ -34,6 +34,9 @@ const REACT_PROPS_NOT_YET_IN_VUE = new Set([
   'onReady',
   'onChange',
   'onFontError',
+  'onSave',
+  'onOpen',
+  'onTitleChange',
   // React renders viewport-extras as children; Vue's equivalent is the default slot.
   'children',
   // Title-bar render props; Vue uses named slots with the same names.

@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normalizeSnapshotText } from './lib/api-snapshot-parse.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -142,6 +143,9 @@ const SECTION_SCHEMA = {
   props: {
     paired: 'array',
     deferredInVue: 'object',
+    reactCallbacksAsVueEmits: 'object',
+    reactRenderPropsAsVueSlots: 'object',
+    reactClassNameAsVueClass: 'object',
     vueExclusive: 'object',
   },
   ref: {
@@ -198,8 +202,8 @@ function main() {
     }
   }
 
-  const reactSnapshot = fs.readFileSync(REACT_SNAPSHOT, 'utf8');
-  const vueSnapshot = fs.readFileSync(VUE_SNAPSHOT, 'utf8');
+  const reactSnapshot = normalizeSnapshotText(fs.readFileSync(REACT_SNAPSHOT, 'utf8'));
+  const vueSnapshot = normalizeSnapshotText(fs.readFileSync(VUE_SNAPSHOT, 'utf8'));
   const contract = readJson(CONTRACT_PATH);
 
   const shapeErrors = validateContractShape(contract);
@@ -236,32 +240,51 @@ function main() {
   // ── Props ────────────────────────────────────────────────────────────────
   const paired = contract.props.paired;
   const deferred = Object.keys(contract.props.deferredInVue);
+  const callbackEmits = Object.keys(contract.props.reactCallbacksAsVueEmits ?? {});
+  const renderSlots = Object.keys(contract.props.reactRenderPropsAsVueSlots ?? {});
+  const classFallthrough = Object.keys(contract.props.reactClassNameAsVueClass ?? {});
   const vueOnly = Object.keys(contract.props.vueExclusive);
+  const reactFormProps = [...callbackEmits, ...renderSlots, ...classFallthrough];
 
-  // Paired must exist on both sides.
   for (const k of paired) {
     if (!reactProps.has(k)) issues.push(`PROP paired '${k}' missing from React`);
     if (!vueProps.has(k)) issues.push(`PROP paired '${k}' missing from Vue`);
   }
-  // Deferred must exist on React, must NOT exist on Vue (else contract is stale).
   for (const k of deferred) {
     if (!reactProps.has(k)) issues.push(`PROP deferred '${k}' missing from React (contract stale)`);
     if (vueProps.has(k))
       issues.push(`PROP '${k}' has shipped in Vue — move from deferredInVue to paired`);
   }
-  // Vue-exclusive must exist on Vue, must NOT exist on React.
+  for (const k of callbackEmits) {
+    if (!reactProps.has(k)) issues.push(`PROP reactCallbacksAsVueEmits '${k}' missing from React`);
+    if (vueProps.has(k))
+      issues.push(`PROP '${k}' must be a Vue emit, not a DocxEditorProps field`);
+  }
+  for (const k of renderSlots) {
+    if (!reactProps.has(k)) issues.push(`PROP reactRenderPropsAsVueSlots '${k}' missing from React`);
+    if (vueProps.has(k))
+      issues.push(`PROP '${k}' must be a Vue slot, not a DocxEditorProps field`);
+  }
+  for (const k of classFallthrough) {
+    if (!reactProps.has(k)) issues.push(`PROP reactClassNameAsVueClass '${k}' missing from React`);
+    if (vueProps.has(k))
+      issues.push(`PROP '${k}' must fall through as Vue \`class\`, not appear under the React name`);
+  }
   for (const k of vueOnly) {
     if (!vueProps.has(k)) issues.push(`PROP vueExclusive '${k}' missing from Vue (contract stale)`);
     if (reactProps.has(k))
       issues.push(`PROP '${k}' has shipped in React — move from vueExclusive to paired`);
   }
-  // Any React prop not in contract = drift.
   for (const k of reactProps) {
-    if (!paired.includes(k) && !deferred.includes(k) && !vueOnly.includes(k)) {
+    if (
+      !paired.includes(k) &&
+      !deferred.includes(k) &&
+      !reactFormProps.includes(k) &&
+      !vueOnly.includes(k)
+    ) {
       issues.push(`PROP '${k}' in React is not declared in the parity contract`);
     }
   }
-  // Any Vue prop not in contract = drift.
   for (const k of vueProps) {
     if (!paired.includes(k) && !deferred.includes(k) && !vueOnly.includes(k)) {
       issues.push(`PROP '${k}' in Vue is not declared in the parity contract`);
@@ -321,6 +344,9 @@ function main() {
   console.log(`  Vue   DocxEditorRef:   ${vueRefCount} members`);
   console.log(`  Paired props:          ${paired.length}`);
   console.log(`  Deferred in Vue props: ${deferred.length}`);
+  console.log(`  React callbacks as Vue emits: ${callbackEmits.length}`);
+  console.log(`  React render props as Vue slots: ${renderSlots.length}`);
+  console.log(`  React className fallthrough: ${classFallthrough.length}`);
   console.log(`  Vue-exclusive props:   ${vueOnly.length}`);
   console.log(`  Paired ref members:    ${refPaired.length}`);
   console.log(`  Inherited via EditorRefLike: ${refInherited.length}`);

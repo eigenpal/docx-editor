@@ -2,11 +2,20 @@
  * Shared parsers for API Extractor markdown snapshots under docs/api.
  */
 
+/** Normalize CRLF/CR to LF before any line-based parsing. */
+export function normalizeSnapshotText(text) {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function linesOf(snapshotText) {
+  return normalizeSnapshotText(snapshotText).split('\n');
+}
+
 /**
  * Pull field names out of an interface block in the snapshot.
  */
 export function extractInterfaceFields(snapshotText, interfaceName) {
-  const lines = snapshotText.split('\n');
+  const lines = linesOf(snapshotText);
   const startMarker = `export interface ${interfaceName} `;
   const startIdx = lines.findIndex(
     (l) =>
@@ -42,11 +51,52 @@ export function extractInterfaceFields(snapshotText, interfaceName) {
   return fields;
 }
 
+/** Split on commas not nested inside brackets. */
+function splitTopLevelCommas(text) {
+  const out = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '<' || c === '(' || c === '{' || c === '[') depth++;
+    else if (c === '>' || c === ')' || c === '}' || c === ']') depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(text.slice(start));
+  return out.map((part) => part.trim()).filter(Boolean);
+}
+
+/** Parse `name: Type` segments from a parameter list, respecting nesting. */
+function parseParamList(params) {
+  if (!params.trim()) return [];
+  return splitTopLevelCommas(params).map((part) => {
+    let depth = 0;
+    let colon = -1;
+    for (let i = 0; i < part.length; i++) {
+      const c = part[i];
+      if (c === '<' || c === '(' || c === '{' || c === '[') depth++;
+      else if (c === '>' || c === ')' || c === '}' || c === ']') depth--;
+      else if (c === ':' && depth === 0) {
+        colon = i;
+        break;
+      }
+    }
+    if (colon < 0) return { name: part.trim(), type: '' };
+    return {
+      name: part.slice(0, colon).trim(),
+      type: part.slice(colon + 1).trim(),
+    };
+  });
+}
+
 /**
  * Extract member name → type string for top-level interface fields.
  */
 export function extractInterfaceMemberTypes(snapshotText, interfaceName) {
-  const lines = snapshotText.split('\n');
+  const lines = linesOf(snapshotText);
   const startMarker = `export interface ${interfaceName} `;
   const startIdx = lines.findIndex(
     (l) =>
@@ -60,6 +110,13 @@ export function extractInterfaceMemberTypes(snapshotText, interfaceName) {
   const members = new Map();
   let depth = 0;
   let inBlockComment = false;
+  let pendingField = null;
+
+  const flushField = (name, typeParts) => {
+    const type = typeParts.join(' ').replace(/;$/, '').trim();
+    if (name && type) members.set(name, type);
+  };
+
   for (let i = startIdx; i < lines.length; i++) {
     const line = lines[i];
     if (inBlockComment) {
@@ -76,69 +133,153 @@ export function extractInterfaceMemberTypes(snapshotText, interfaceName) {
     }
     if (depth === 0 && i > startIdx) break;
 
-    const fieldMatch = /^ {4}readonly (\w+)\??: (.+);$/.exec(line);
-    if (fieldMatch) {
-      members.set(fieldMatch[1], fieldMatch[2].trim());
+    if (pendingField) {
+      pendingField.parts.push(line.trim());
+      if (line.trim().endsWith(';')) {
+        flushField(pendingField.name, pendingField.parts);
+        pendingField = null;
+      }
       continue;
     }
-    const methodMatch = /^ {4}(\w+)\(([^)]*)\): (.+);$/.exec(line);
+
+    const fieldMatch = /^ {4}readonly (\w+)\??: (.+)$/.exec(line);
+    if (fieldMatch) {
+      const [, name, rest] = fieldMatch;
+      if (rest.trim().endsWith(';')) {
+        flushField(name, [rest]);
+      } else {
+        pendingField = { name, parts: [rest] };
+      }
+      continue;
+    }
+    const plainField = /^ {4}(\w+)\??: (.+)$/.exec(line);
+    if (plainField && !line.includes('(')) {
+      const [, name, rest] = plainField;
+      if (rest.trim().endsWith(';')) {
+        flushField(name, [rest]);
+      } else {
+        pendingField = { name, parts: [rest] };
+      }
+      continue;
+    }
+    const methodMatch = /^ {4}(\w+)\((.*)$/.exec(line);
     if (methodMatch) {
-      members.set(methodMatch[1], `(${methodMatch[2]}) => ${methodMatch[3].trim()}`);
+      const [, name, rest] = methodMatch;
+      const combined = `(${rest}`;
+      if (combined.includes('):') && combined.trim().endsWith(';')) {
+        const close = combined.lastIndexOf('):');
+        const params = combined.slice(1, close);
+        const ret = combined.slice(close + 2).replace(/;$/, '').trim();
+        members.set(name, `(${params}) => ${ret}`);
+      } else {
+        pendingField = { name, parts: [combined], method: true };
+      }
     }
   }
   return members;
 }
 
+function unwrapRefWrappers(type) {
+  let t = type.trim();
+  for (let guard = 0; guard < 16; guard++) {
+    const before = t;
+    if (t.startsWith('Readonly<') && t.endsWith('>')) {
+      t = t.slice('Readonly<'.length, -1).trim();
+    }
+    for (const wrapper of ['ShallowRef', 'ComputedRef', 'Ref']) {
+      const prefix = `${wrapper}<`;
+      if (t.startsWith(prefix) && t.endsWith('>')) {
+        t = t.slice(prefix.length, -1).trim();
+        break;
+      }
+    }
+    if (t === before) break;
+  }
+  return t;
+}
+
 /** Normalize Vue ref wrappers and MaybeRefOrGetter for parity comparison. */
 export function normalizeType(type, { parameterPosition = false } = {}) {
-  let t = type.trim();
+  let t = type.trim().replace(/\s+/g, ' ');
+  t = t.replace(/\bvue\./g, '');
+  t = t.replace(/\b_docx_editor_dev_core\./g, '');
+  t = t.replace(/\b_docx_editor_dev_react\./g, '');
   if (parameterPosition) {
-    const maybe = /^MaybeRefOrGetter<(.+)>$/.exec(t);
-    if (maybe) t = maybe[1].trim();
+    t = t.replace(/MaybeRefOrGetter<([^>]+)>\[\]/g, '($1)[]');
+    while (/MaybeRefOrGetter\s*</.test(t)) {
+      t = t.replace(/MaybeRefOrGetter<([^>]+)>/g, '$1');
+    }
+    t = t.replace(/\breadonly\s+/g, '');
   }
-  for (;;) {
-    const m =
-      /^(?:Readonly<)?(?:Ref|ShallowRef|ComputedRef)<(.+)>$/.exec(t) ??
-      /^Readonly<(.+)>$/.exec(t);
-    if (!m) break;
-    t = m[1].trim();
-  }
+  t = unwrapRefWrappers(t);
+  t = t.replace(/\{ t: ShallowRef<(.+)>; \}/, '{ t: $1; }');
+  t = t.replace(/^RefCallback<(.+)>$/, '(node: $1 | null) => void');
+  t = t.replace(
+    /^Extract<ViewScope,\s*\{\s*kind:\s*['"]note['"];\s*\}>\s*\|\s*null$/,
+    '{ kind: "note"; id: string; } | null'
+  );
   return t;
 }
 
 /** Split a parameter list on commas not nested inside brackets. */
 function splitTopLevelParams(params) {
-  const out = [];
-  let depth = 0;
-  let start = 0;
-  for (let i = 0; i < params.length; i++) {
-    const c = params[i];
-    if (c === '<' || c === '(' || c === '{') depth++;
-    else if (c === '>' || c === ')' || c === '}') depth--;
-    else if (c === ',' && depth === 0) {
-      out.push(params.slice(start, i));
-      start = i + 1;
-    }
-  }
-  out.push(params.slice(start));
-  return out.map((part) => part.trim()).filter(Boolean);
+  return splitTopLevelCommas(params);
 }
 
 /** Normalize a function parameter list for cross-adapter comparison. */
 export function normalizeParamSignature(params) {
   if (!params.trim()) return '';
-  return splitTopLevelParams(params)
-    .map((part) => {
-      const idx = part.indexOf(':');
-      if (idx < 0) return part;
-      const name = part.slice(0, idx).trim();
-      let type = part.slice(idx + 1).trim();
-      type = normalizeType(type, { parameterPosition: true });
-      const getter = /^\(\)\s*=>\s*(.+)$/.exec(type);
-      if (getter) type = getter[1].trim();
-      return `${name}: ${type}`;
+  return parseParamList(params)
+    .map(({ name, type }) => {
+      let normalized = normalizeType(type, { parameterPosition: true });
+      const getter = /^\(\)\s*=>\s*(.+)$/.exec(normalized);
+      if (getter) normalized = getter[1].trim();
+      return type ? `${name}: ${normalized}` : name;
     })
     .join(', ');
+}
+
+function parseReturnType(rest) {
+  if (!rest.startsWith(':')) return null;
+  let body = rest.slice(1).trim();
+  if (!body.endsWith(';')) return null;
+  body = body.slice(0, -1);
+  let angles = 0;
+  let braces = 0;
+  let parens = 0;
+  for (const c of body) {
+    if (c === '<') angles++;
+    else if (c === '>') angles--;
+    else if (c === '{') braces++;
+    else if (c === '}') braces--;
+    else if (c === '(') parens++;
+    else if (c === ')') parens--;
+  }
+  if (angles !== 0 || braces !== 0 || parens !== 0) return null;
+  return body.trim();
+}
+
+function parseExportFunctionBlock(block) {
+  const nameMatch = /^export function (\w+)/.exec(block);
+  if (!nameMatch) return null;
+  const name = nameMatch[1];
+  const open = block.indexOf('(', nameMatch[0].length - 1);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let i = open; i < block.length; i++) {
+    const c = block[i];
+    if (c === '(') depth++;
+    else if (c === ')') {
+      depth--;
+      if (depth === 0) {
+        const params = block.slice(open + 1, i).trim();
+        const returnType = parseReturnType(block.slice(i + 1).trim());
+        if (!returnType) return null;
+        return { name, params, returnType };
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -147,15 +288,24 @@ export function normalizeParamSignature(params) {
  */
 export function extractFunctionExports(snapshotText) {
   const exports = new Map();
-  const re = /^export function (\w+)\(([^)]*)\): (.+);$/;
-  for (const line of snapshotText.split('\n')) {
-    const match = re.exec(line);
-    if (!match) continue;
-    const [, name, params, returnType] = match;
-    const entry = { params: params.trim(), returnType: returnType.trim() };
-    const list = exports.get(name) ?? [];
+  const lines = linesOf(snapshotText);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.startsWith('export function ')) continue;
+    let block = line;
+    let parsed = parseExportFunctionBlock(block);
+    while (!parsed && i + 1 < lines.length) {
+      const next = lines[i + 1];
+      if (/^export (function|interface|type|declare|const|class|enum)\b/.test(next)) break;
+      i++;
+      block += ` ${next.trim()}`;
+      parsed = parseExportFunctionBlock(block);
+    }
+    if (!parsed) continue;
+    const entry = { params: parsed.params, returnType: parsed.returnType };
+    const list = exports.get(parsed.name) ?? [];
     list.push(entry);
-    exports.set(name, list);
+    exports.set(parsed.name, list);
   }
   return exports;
 }
@@ -165,7 +315,7 @@ export function extractFunctionExports(snapshotText) {
  */
 export function extractInterfaceNames(snapshotText) {
   const names = new Set();
-  for (const line of snapshotText.split('\n')) {
+  for (const line of linesOf(snapshotText)) {
     const iface = /^(?:export )?interface (\w+)/.exec(line);
     if (iface) names.add(iface[1]);
     const alias = /^export type (\w+) =/.exec(line);
