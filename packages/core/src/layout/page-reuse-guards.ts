@@ -55,7 +55,10 @@ export const PAGE_REUSE_GUARDS = {
   // unchanged-document exit gates on `comparable` and returns the previous pages by identity.
   columnSeparators: 'context',
   // Produced by the blocks on the page: the per-block key carries the drawing token, and the
-  // open page's pending and deferred lists are compared where a pass may stop early.
+  // open page's pending and deferred lists are compared where a pass may stop early. Their
+  // POSITION also depends on the furniture, because a page-frame anchor resolves against the
+  // content-box inset a tall header or footer moves (#274) — `furnitureContext` carries each
+  // variant's flow height, so that half is `context`.
   anchoredDrawings: 'flow',
   // `furnitureContext` folds each variant's flow height, content key and drawing-resource
   // token, which is what a header or footer edit moves.

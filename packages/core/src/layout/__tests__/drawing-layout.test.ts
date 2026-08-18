@@ -516,10 +516,12 @@ function anchorFrameContext(
     pageHeight: 792,
     marginLeft: 72,
     marginRight: 72,
-    marginTop: 72,
     marginBottom: 72,
+    contentInsetTop: 72,
+    contentInsetBottom: 72,
     contentWidth,
     contentHeight: 648,
+    contentBandHeight: 648,
     paragraphBox: Object.freeze({ x: 0, y: 40, width: contentWidth, height: 20 }),
     anchorLineBox: Object.freeze({ x: 0, y: 40, width: contentWidth, height: 14 }),
     anchorCharacterX: 6,
@@ -802,10 +804,11 @@ describe('page clip for page-relative anchors', () => {
     const clip = pageClipRegion({
       pageWidth: 595.5,
       marginLeft: 49,
-      marginTop: 61,
       marginBottom: 14,
+      contentInsetTop: 61,
+      contentInsetBottom: 14,
       contentHeight: 767,
-      physicalContentHeight: 767,
+      contentBandHeight: 767,
     });
     expect(clip).toEqual({
       x: -49,

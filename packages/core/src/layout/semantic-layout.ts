@@ -770,7 +770,6 @@ function layoutBlocksPass(
     Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
   );
   const baseContentHeight = geometry.height - effectiveTop - effectiveBottom;
-  const physicalContentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
   const pageBottomReserves = options.pageBottomReserves;
   const session = options.session;
   const lineCounterStart = options.lineCounterStart ?? 0;
@@ -1187,11 +1186,17 @@ function layoutBlocksPass(
       pageHeight: geometry.height,
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
-      marginTop: geometry.margin.top,
       marginBottom: geometry.margin.bottom,
+      // THE INSETS, NOT `w:pgMar`. The page content box starts at `effectiveTop`, which a
+      // header taller than the top margin pushes past it, and paint places every anchored
+      // drawing relative to that box. Handing the authored margin here made a
+      // `relativeFrom="page"` anchor land `effectiveTop − margin.top` too low — the whole
+      // header height for a `w:posOffset` of 0 (#274).
+      contentInsetTop: effectiveTop,
+      contentInsetBottom: effectiveBottom,
       contentWidth,
       contentHeight: contentHeight(),
-      physicalContentHeight,
+      contentBandHeight: baseContentHeight,
       ownerPartName: options.inlineDrawingLayout?.ownerPartName ?? WML_MAIN_DOCUMENT_PART,
       storyKind: 'body',
     });

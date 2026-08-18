@@ -223,11 +223,15 @@ export function layoutHeaderFooterStory(
         pageHeight,
         marginLeft,
         marginRight,
-        marginTop,
         marginBottom,
+        // ON PURPOSE, unlike the body story: a header/footer frame keeps the AUTHORED margin
+        // here. Its origin is the story box, and `hfAnchorOnPageSheet` re-bases page-frame
+        // axes by subtracting `verticalFrameOrigin`, so this value cancels exactly.
+        contentInsetTop: marginTop,
+        contentInsetBottom: marginBottom,
         contentWidth,
         contentHeight: hfContentHeight,
-        physicalContentHeight: hfContentHeight,
+        contentBandHeight: hfContentHeight,
         ownerPartName: part.name,
         storyKind: part.name.includes('ftr') ? 'footer' : 'header',
       });

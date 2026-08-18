@@ -456,13 +456,33 @@ export interface DrawingAnchorFrameContext {
   readonly pageHeight: number;
   readonly marginLeft: number;
   readonly marginRight: number;
-  readonly marginTop: number;
+  /**
+   * Authored `w:pgMar` bottom. The ONLY reader is the `bottomMargin` frame, whose origin is
+   * the top edge of the bottom margin band — a page-setup landmark, so a footer taller than
+   * that margin must not move it. The `topMargin` band needs no twin: its top edge is the
+   * sheet edge, which {@link DrawingAnchorFrameContext.contentInsetTop} already gives.
+   */
   readonly marginBottom: number;
+  /**
+   * Distance from the frame origin (the body content box top) up to the sheet top, and from
+   * the content box bottom down to the sheet bottom. NOT the authored `w:pgMar` values: a
+   * header taller than the top margin pushes the body content box down, and a page-relative
+   * anchor resolved against the authored margin then lands that difference too low (#274).
+   *
+   * Header and footer stories keep passing their authored margin here — their own origin is
+   * the story box, and `hfAnchorOnPageSheet` cancels whatever this is for page-frame axes.
+   *
+   * The horizontal pair stays `marginLeft` / `marginRight` because nothing pushes the content
+   * box sideways: `contentBox.x - box.x` is always the authored left margin. A future gutter
+   * or binding offset would need its own inset field rather than a change of meaning here.
+   */
+  readonly contentInsetTop: number;
+  readonly contentInsetBottom: number;
   readonly contentWidth: number;
   /** Body flow height on the current page (may shrink for notes/HF reserves). */
   readonly contentHeight: number;
-  /** Authored page content band: pageHeight − marginTop − marginBottom. */
-  readonly physicalContentHeight: number;
+  /** Content band between the insets: pageHeight − contentInsetTop − contentInsetBottom. */
+  readonly contentBandHeight: number;
   readonly paragraphBox: LayoutBox;
   readonly anchorLineBox: LayoutBox;
   readonly anchorCharacterX: number;
@@ -636,12 +656,18 @@ function verticalEdges(
     }
   }
 
-  const pageTop = -ctx.marginTop;
-  const physicalContentHeight = ctx.physicalContentHeight ?? ctx.contentHeight;
-  /** Inner edge of the bottom margin band — authored content height. */
-  const pageBottomInner = physicalContentHeight;
+  const pageTop = -ctx.contentInsetTop;
+  const contentBandHeight = ctx.contentBandHeight ?? ctx.contentHeight;
+  /**
+   * Top edge of the bottom margin band, off the AUTHORED margin.
+   *
+   * Deriving it from the content band instead would let an oversized footer drag it up with
+   * the shrinking text area, which is the same class of bug as #274 read backwards: the
+   * margin frames exist so an anchor does NOT follow the furniture.
+   */
+  const pageBottomInner = pageTop + ctx.pageHeight - ctx.marginBottom;
   /** Physical sheet bottom above the outer page edge. */
-  const pageBottomSheet = physicalContentHeight + ctx.marginBottom;
+  const pageBottomSheet = contentBandHeight + ctx.contentInsetBottom;
   const contentTop = 0;
   const contentBottom = ctx.contentHeight;
 
@@ -712,7 +738,7 @@ function resolveInsideOutsideVerticalAlign(
   ctx: DrawingAnchorFrameContext
 ): number | null {
   const odd = isOddPage(ctx.pageNumber);
-  const bandHeight = ctx.physicalContentHeight ?? ctx.contentHeight;
+  const bandHeight = ctx.contentBandHeight ?? ctx.contentHeight;
   if (
     ctx.layoutInCell &&
     ctx.cellBox &&
@@ -784,18 +810,18 @@ export function pageClipRegion(
     DrawingAnchorFrameContext,
     | 'pageWidth'
     | 'marginLeft'
-    | 'marginTop'
-    | 'marginBottom'
+    | 'contentInsetTop'
+    | 'contentInsetBottom'
     | 'contentHeight'
-    | 'physicalContentHeight'
+    | 'contentBandHeight'
   >
 ): LayoutBox {
-  const bandHeight = frameBase.physicalContentHeight ?? frameBase.contentHeight;
+  const bandHeight = frameBase.contentBandHeight ?? frameBase.contentHeight;
   return Object.freeze({
     x: -frameBase.marginLeft,
-    y: -frameBase.marginTop,
+    y: -frameBase.contentInsetTop,
     width: frameBase.pageWidth,
-    height: bandHeight + frameBase.marginTop + frameBase.marginBottom,
+    height: bandHeight + frameBase.contentInsetTop + frameBase.contentInsetBottom,
   });
 }
 
@@ -838,7 +864,7 @@ export function resolveAnchoredDrawingPosition(
     }
     return Object.freeze({
       x: xPoints - ctx.marginLeft,
-      y: yPoints - ctx.marginTop,
+      y: yPoints - ctx.contentInsetTop,
       horizontalFrame: position.horizontal.relativeFrom,
       verticalFrame: position.vertical.relativeFrom,
       horizontalFrameOrigin: 0,
