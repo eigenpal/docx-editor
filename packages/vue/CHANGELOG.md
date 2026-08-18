@@ -1,5 +1,26 @@
 # @docx-editor.dev/vue
 
+## 2.5.0
+
+### Patch Changes
+
+- Updated dependencies [f3e5d58]
+- Updated dependencies [d905af3]
+- Updated dependencies [192c644]
+- Updated dependencies [5c65a88]
+- Updated dependencies [d905af3]
+- Updated dependencies [d905af3]
+- Updated dependencies [f811b44]
+- Updated dependencies [346cc78]
+- Updated dependencies [4a57eed]
+- Updated dependencies [289a7a1]
+- Updated dependencies [5a2f3ed]
+- Updated dependencies [5a2f3ed]
+- Updated dependencies [266a086]
+- Updated dependencies [d905af3]
+  - @docx-editor.dev/core@2.5.0
+  - @docx-editor.dev/i18n@2.5.0
+
 ## 2.4.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @docx-editor.dev/pro
 
+## 2.5.0
+
+### Patch Changes
+
+- f993cf9: Markers in the collapsed review rail now stack below each other when their anchors are closer than a marker is tall, instead of overlapping.
+
 ## 2.4.1
 
 ## 2.4.0

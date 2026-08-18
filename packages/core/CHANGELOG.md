@@ -1,5 +1,28 @@
 # @docx-editor.dev/core
 
+## 2.5.0
+
+### Minor Changes
+
+- d905af3: PAGE, NUMPAGES, and SECTIONPAGES fields in the document body (and body tables) now render the page number, document page count, or section page count when the field has no cached result, instead of showing blank.
+- 5c65a88: Opening a large document now shows a loading screen instead of freezing the page: the engine mounts it behind one painted frame, `snapshot().isOpening` reports that window, and `DocxEditor.Loading` gains an `overlay` variant that the packaged React frame mounts by default.
+- d905af3: Document-property fields (TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and DOCPROPERTY for those names) now render their value from the document properties when the field has no cached result, instead of showing blank.
+- d905af3: HYPERLINK field links now work with the link popover the same way typed links do: the popover opens read-only over one, Ctrl/Cmd+K reaches it, and it dismisses when the caret leaves the field. Two adjacent HYPERLINK fields that point at the same target now render as two separate links.
+- 346cc78: Tracked changes on a paragraph mark now reach the page and the review pane: every decision on a mark is read rather than the first, a paragraph moved whole raises a card and resolves, a format change on the mark is published, a mark inside a table cell is drawn, the margin gets its change bar, and a resolved view draws no attribution. Renumbering a list or a footnote, and every field a fragment publishes, now take part in incremental layout reuse, so a reused page no longer shows a value the document has moved past.
+- 289a7a1: Clicking a tracked-change card now opens that card, and text one reviewer inserted and another struck opens the deletion, as Word reads it.
+- 5a2f3ed: A review card for a paragraph break now says which change it is. A deleted break read as "Inserted paragraph break", which is the reverse of what accepting that card does, and both halves of a moved paragraph read the same way.
+- 5a2f3ed: The resolved display modes now merge the paragraphs their decisions merge, in the body, in table cells, and in headers and footers: a paragraph whose mark a tracked change deleted runs into the next one in the final view, as it does in Word and as accepting the change already did. Accepting a run of deleted paragraph marks also collapses them into one paragraph rather than into pairs, and no longer carries content past a table or a content control.
+- 266a086: The `mode` option accepts `'suggesting'` and now decides the mode a document opens in; the React and Vue `<DocxEditor>` components default it to `'edit'`, so a document carrying `w:trackRevisions` opens ready to type there. Omit `mode` on `createDocxEditor` or `DocxEditor.Root` to keep following the document's request.
+- d905af3: SYMBOL, MACROBUTTON, and GOTOBUTTON fields and w:sym symbol runs now render, legacy FORMCHECKBOX and FORMDROPDOWN fields paint their w:ffData state, and PAGE-family fields nested inside other fields evaluate per page. HYPERLINK fields are clickable links with the same target sanitization as typed hyperlinks.
+
+### Patch Changes
+
+- f3e5d58: Keystrokes arriving in a burst now land as one transaction and one layout flush instead of one per character, so fast typing in long documents stays responsive; a burst is also one undo step and one tracked change.
+- 192c644: Pasting from an application that offers only an HTML flavour now recovers its text more faithfully: an attribute value holding a `>` no longer truncates the paste, unterminated markup is no longer pasted as literal text, and a very large table no longer blocks the page. Reading a document's content types no longer uses a pattern a crafted file could make backtrack.
+- f811b44: Memoize package snapshots, section enumeration, and list resolution so a keystroke in a long document no longer rescans the whole tree; typing in large documents is significantly faster.
+- 4a57eed: Update harfbuzzjs to 1.6.0 (HarfBuzz 14.3.0). Shaping output does not change.
+  - @docx-editor.dev/i18n@2.5.0
+
 ## 2.4.1
 
 ### Patch Changes

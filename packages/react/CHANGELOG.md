@@ -1,5 +1,11 @@
 # @eigenpal/docx-js-editor
 
+## 2.5.0
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.5.0
+
 ## 2.4.1
 
 ### Patch Changes
