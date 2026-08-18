@@ -20,7 +20,7 @@ const selectZoomFitting = (snapshot: EditorSnapshot): boolean => snapshot.zoomMo
 
 /** @public */
 export interface DocxEditorViewportProps {
-  className?: string;
+  class?: string;
   style?: CSSProperties;
 }
 
@@ -28,7 +28,7 @@ export interface DocxEditorViewportProps {
 export const DocxEditorViewport = defineComponent({
   name: 'DocxEditorViewport',
   props: {
-    className: { type: String, default: undefined },
+    class: { type: String, default: undefined },
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
@@ -80,7 +80,7 @@ export const DocxEditorViewport = defineComponent({
         onKeydownCapture: onKeyDownCapture,
         class: [
           `${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container`,
-          props.className,
+          props.class,
         ]
           .filter(Boolean)
           .join(' '),

@@ -42,7 +42,7 @@ export interface ToolbarButtonProps {
   slot: ChromeSlotId;
   icon?: VNode;
   asChild?: boolean;
-  className?: string;
+  class?: string;
   hidden?: boolean;
 }
 
@@ -53,7 +53,7 @@ export const ToolbarButton = defineComponent({
     slot: { type: String as PropType<ChromeSlotId>, required: true },
     icon: { type: Object as PropType<VNode>, default: undefined },
     asChild: { type: Boolean, default: undefined },
-    className: { type: String, default: undefined },
+    class: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
   },
   setup(props, { slots }) {
@@ -70,7 +70,7 @@ export const ToolbarButton = defineComponent({
         onMousedown: guardToolbarMousedown,
         disabled: !command.isEnabled.value,
         'data-slot': props.slot,
-        class: `docx-toolbar__button${props.className ? ` ${props.className}` : ''}`,
+        class: `docx-toolbar__button${props.class ? ` ${props.class}` : ''}`,
         ...(command.isActive.value ? { 'data-active': '' } : {}),
         ...(!command.isEnabled.value ? { 'data-disabled': '' } : {}),
         ...(isToggle ? { 'aria-pressed': command.isActive.value } : {}),

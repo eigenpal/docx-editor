@@ -22,7 +22,7 @@ export interface ToolbarPartComponent {
 
 /** @public */
 export interface ToolbarSlotPartProps {
-  className?: string;
+  class?: string;
   hidden?: boolean;
 }
 
@@ -35,7 +35,7 @@ function definePart(slot: ChromeSlotId) {
   const Part = defineComponent({
     name: `ToolbarPart_${slot.replace(/\./g, '_')}`,
     props: {
-      className: { type: String, default: undefined },
+      class: { type: String, default: undefined },
       hidden: { type: Boolean, default: undefined },
       asChild: { type: Boolean, default: undefined },
       icon: { type: Object as PropType<VNode>, default: undefined },
@@ -72,7 +72,7 @@ export const ToolbarComments = definePart('review.comments');
 export const ToolbarLink = defineComponent({
   name: 'ToolbarLink',
   props: {
-    className: { type: String, default: undefined },
+    class: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
     asChild: { type: Boolean, default: undefined },
     icon: { type: Object as PropType<VNode>, default: undefined },
@@ -91,7 +91,7 @@ export const ToolbarLink = defineComponent({
       const control = chromeControlForSlot('text.link');
       const text = label(control?.labelKey ?? 'text.link');
       const shared = {
-        class: `docx-toolbar__button${props.className ? ` ${props.className}` : ''}`,
+        class: `docx-toolbar__button${props.class ? ` ${props.class}` : ''}`,
         'data-slot': 'text.link',
         disabled: !isEnabled,
         ...(!isEnabled ? { 'data-disabled': '' } : {}),
@@ -112,7 +112,7 @@ export const ToolbarLink = defineComponent({
 export const ToolbarSave = defineComponent({
   name: 'ToolbarSave',
   props: {
-    className: { type: String, default: undefined },
+    class: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
@@ -128,7 +128,7 @@ export const ToolbarSave = defineComponent({
         'button',
         {
           type: 'button',
-          class: `docx-toolbar__button${props.className ? ` ${props.className}` : ''}`,
+          class: `docx-toolbar__button${props.class ? ` ${props.class}` : ''}`,
           'data-slot': 'file.save',
           disabled,
           ...(disabled ? { 'data-disabled': '' } : {}),
@@ -146,19 +146,19 @@ export const ToolbarSave = defineComponent({
 
 /** @public */
 export interface ToolbarSeparatorProps {
-  className?: string;
+  class?: string;
 }
 
 /** @public */
 export const ToolbarSeparator = defineComponent({
   name: 'ToolbarSeparator',
-  props: { className: { type: String, default: undefined } },
+  props: { class: { type: String, default: undefined } },
   setup(props) {
     return () =>
       h('div', {
         role: 'separator',
         'aria-orientation': 'vertical',
-        class: `docx-toolbar__separator${props.className ? ` ${props.className}` : ''}`,
+        class: `docx-toolbar__separator${props.class ? ` ${props.class}` : ''}`,
       });
   },
 });
