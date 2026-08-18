@@ -1,11 +1,25 @@
 import './styles.css';
-import { createApp } from 'vue';
+import { createApp, h } from 'vue';
+import PreviewBanner from '../../shared/PreviewBanner.vue';
 
-// The legacy one-surface harness (`?realAdapter=1`), the diagnostic split pane (`?edit=1`)
-// and the read-only engine preview (`?preview=engine`) were deleted with the legacy editor
-// lane. The Vue example now mounts the museum App only; the production Vue adapter is
-// exercised by the paired host tests and the parity example.
+const params = new URLSearchParams(location.search);
+const base = import.meta.env.BASE_URL;
+const DEFAULT_DOCUMENT = 'sample.docx';
+const fixtureParam = params.get('fixture') ?? '';
+const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAULT_DOCUMENT;
+
 void (async () => {
-  const App = (await import('./App.vue')).default;
-  createApp(App).mount('#app');
+  const ComposedEditorDemo = (await import('./ComposedEditorDemo.vue')).default;
+  createApp({
+    components: { PreviewBanner, ComposedEditorDemo },
+    template: `
+      <div style="display: flex; flex-direction: column; height: 100vh">
+        <PreviewBanner />
+        <ComposedEditorDemo :fixture-url="fixtureUrl" />
+      </div>
+    `,
+    setup() {
+      return { fixtureUrl: `${base}${documentName}` };
+    },
+  }).mount('#app');
 })();

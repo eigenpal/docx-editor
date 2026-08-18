@@ -32,6 +32,7 @@ import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
 // import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
+import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
@@ -71,6 +72,8 @@ const PRO_MODULES = [
     },
   }),
 ];
+
+declare const __ENABLE_FRAMEWORK_SWITCHER__: boolean;
 
 /** Hand DOCX bytes to the browser as a download. */
 function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
@@ -367,12 +370,14 @@ function EditorChrome({
   colorMode,
   onColorModeChange,
   onInsertCitation,
+  showAdapterSwitcher,
 }: {
   title: string;
   onTitleChange: (next: string) => void;
   colorMode: 'light' | 'dark';
   onColorModeChange: (next: 'light' | 'dark') => void;
   onInsertCitation: (at: EditorCaret | null) => void;
+  showAdapterSwitcher: boolean;
 }) {
   const editor = useDocxEditor();
   // Where the caret is, as a paragraph and an offset — the shape the write APIs take as
@@ -433,7 +438,7 @@ function EditorChrome({
       <header className="demo-header">
         <div className="demo-header__left">
           <BrandLogo />
-          {/* Temporarily hidden: <AdapterSwitcher current="react" /> */}
+          {showAdapterSwitcher ? <AdapterSwitcher current="react" /> : null}
           <ExampleSwitcher current="Vite" />
         </div>
 
@@ -620,6 +625,13 @@ function RulerRow() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
+  const showAdapterSwitcher = (() => {
+    try {
+      return __ENABLE_FRAMEWORK_SWITCHER__;
+    } catch {
+      return false;
+    }
+  })();
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   // Named after the document it opens with, and after whichever file is opened later.
   const [title, setTitle] = useState(
@@ -679,6 +691,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             colorMode={colorMode}
             onColorModeChange={setColorMode}
             onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}
+            showAdapterSwitcher={showAdapterSwitcher}
           />
           <RulerRow />
           {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute

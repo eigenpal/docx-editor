@@ -24,6 +24,7 @@ export default {
   // Absolute paths so example builds (cd examples/vite && vite build) still scan the right files.
   content: [
     path.join(__configDir, 'packages/react/src/**/*.{ts,tsx}'),
-    path.join(__configDir, 'examples/**/*.{ts,tsx}'),
+    path.join(__configDir, 'packages/vue/src/**/*.{ts,tsx}'),
+    path.join(__configDir, 'examples/**/*.{ts,tsx,vue}'),
   ],
 };

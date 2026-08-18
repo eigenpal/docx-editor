@@ -1,6 +1,388 @@
 /* Import editor styles.
-   In standalone usage: @import '@docx-editor.dev/vue/styles.css';
-   The demo imports the canonical core chrome stylesheet from source, matching
-   the React example. Without it the Vue surface has no --doc-* tokens at all,
-   so the caret, selection highlight, and page background paint transparent. */
+   In standalone usage: @import '@docx-editor.dev/core/styles/editor.css';
+   The demo imports the canonical core chrome stylesheet from source. */
 @import '../../../packages/core/src/styles/editor.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Composed demo (default route): demo-local chrome around the composition API.
+   Library toolbar parts are styled through their public hooks' data attributes
+   (`data-active`, `data-disabled`) and class names — no library CSS is patched.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.demo-app {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+}
+
+/* Layout only for the loading surface — `DocxEditor.Loading` brings the centering, gap,
+   and muted text. The error branch is a bare div, so it still needs them. */
+.demo-loading {
+  flex: 1;
+}
+
+.demo-loading[role='alert'] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--doc-text-muted);
+}
+
+/* The chrome surface is header + toolbar only: the seam (hairline + soft
+   shadow) closes the `--doc-surface` band DIRECTLY under the toolbar pill. The
+   ruler row lives outside, on the gray `--doc-bg` workspace below the seam.
+   `z-index` lifts the seam shadow over the workspace; the demo menus open
+   inside this stacking context, above everything below. */
+.demo-chrome {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--doc-surface);
+  border-bottom: 1px solid var(--doc-border);
+  box-shadow: 0 1px 3px var(--doc-shadow-subtle);
+  position: relative;
+  z-index: 30;
+}
+
+/* Header bar: brand + menus | editable title | live status + switchers.
+   Transparent — the chrome surface behind it owns the background. */
+.demo-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px 0;
+}
+
+.demo-header__left,
+.demo-header__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.demo-header__right {
+  justify-content: flex-end;
+}
+
+/* Title column: the editable name with the File / Format / Help row beneath. */
+.demo-header__title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding-left: 6px;
+}
+
+.demo-header__menus {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.demo-title {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--doc-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 8px;
+  min-width: 220px;
+  text-align: left;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.demo-title:hover {
+  border-color: var(--doc-border);
+}
+
+.demo-title:focus {
+  outline: none;
+  border-color: var(--doc-border-dark, var(--doc-border));
+  background: var(--doc-bg-subtle);
+}
+
+/* Demo dropdown menus (File / Format) */
+.demo-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.demo-menu__trigger {
+  border: none;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 13px;
+  font-weight: 400;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.demo-menu__trigger:hover,
+.demo-menu__trigger--open {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.demo-menu__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px var(--doc-shadow, rgba(0, 0, 0, 0.12));
+  padding: 4px;
+  z-index: 1000;
+}
+
+.demo-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--doc-text);
+  font-size: 13px;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.demo-menu__item:hover:not(:disabled) {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.demo-menu__item:disabled {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
+.demo-menu__check {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--doc-text);
+}
+
+.demo-menu__label {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.demo-menu__separator {
+  height: 1px;
+  background: var(--doc-border);
+  margin: 4px 0;
+}
+
+/* The LIBRARY toolbar is styled by the CORE stylesheet (`docx-toolbar` family).
+   The demo only insets the pill inside the white chrome band; the seam sits
+   right under it. */
+.demo-toolbar {
+  margin: 8px 12px;
+}
+
+/* The in-place customized FontFamily slot */
+.demo-font-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--doc-border);
+  border-radius: 6px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s;
+}
+
+.demo-font-trigger:hover:not(:disabled) {
+  background: var(--doc-bg-hover, var(--doc-bg-subtle));
+}
+
+.demo-font-trigger[data-disabled] {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+
+/* The popup card and its rows come from the core recipe (white surface card,
+   8px radius, soft shadow, 4px viewport; roomy single-line rows with the
+   right-edge ✓ on the selected one — never a background slab). The demo only
+   widens the card so long family names breathe. */
+.demo-font-menu {
+  margin-top: 4px;
+  min-width: 220px;
+}
+
+/* Family name in its own typeface; clipped with an ellipsis, never wrapped. */
+.demo-font-item__name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.demo-font-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--doc-text-subtle);
+  white-space: nowrap;
+}
+
+/* The context-fed horizontal ruler row: the first WORKSPACE row, sitting on the
+   gray `--doc-bg` below the chrome seam, centered over the page column. The
+   ruler component sizes itself to the page width, and follows an open navigation
+   pane on its own — the part reads the pane's published shift — so this row needs
+   no pane-aware padding of its own. */
+.demo-ruler-row {
+  display: flex;
+  /* Match the page stack: centre while it fits, then pin to the inline start when the
+     navigation + review reservations force horizontal overflow. */
+  justify-content: safe center;
+  padding: 6px 0 2px;
+  /* The ruler renders nothing until a document is open; the row holds its height so the
+     page stack does not jump down when the ticks appear. */
+  min-height: 36px;
+  overflow: hidden;
+  flex: none;
+}
+
+/* Editor area: the full-width scrolled page column with the navigation pane
+   floating over its left gutter. The viewport never changes width — the pane
+   overlays it and publishes its own shift, which `DocxEditor.Viewport` and
+   `DocxEditor.HorizontalRuler` consume — so the vertical ruler stays pinned at
+   the far left and the page holds still whenever the gutter already had room. */
+.demo-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  position: relative;
+}
+
+/* Full-width scroll container. Any displacement an open pane needs arrives as
+   the library's own padding; the demo adds none. */
+.demo-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Vertical ruler: an absolutely positioned child of the scroll container, so it
+   scrolls WITH the document (absolute children live in the scrolled coordinate
+   space). The 24px top offset matches the page stack's top margin, so tick zero
+   sits on the first page's top edge, reference-style. */
+.demo-vruler {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Mobile responsive overrides */
+@media (max-width: 768px) {
+  /* The toolbar collapses its groups into More instead of wrapping. It must not become a
+     scroll container: that would clip the More panel below it. */
+  .docx-editor [role='toolbar'] {
+    padding: 4px 4px;
+    gap: 0;
+    flex-wrap: nowrap !important;
+    min-height: 36px;
+  }
+
+  .demo-header__title-block {
+    display: none;
+  }
+
+  /* Rulers are desktop chrome; the vertical one would overlap the page on
+     small screens. */
+  .demo-vruler {
+    display: none;
+  }
+}
+
+/* PRO custom-node chip styling now comes from `CustomNodeChrome`
+   (@docx-editor.dev/pro/react) — definition-driven, injected at runtime. */
+
+/* The review CARD, through the rail's `card` prop — the box, not the column around it.
+   A custom node's card also carries `data-node-name`, so a definition's own cards can be
+   picked out without the host inspecting their children to work out which is which. */
+.demo-review-card[data-node-name='citation'] {
+  border-left: 3px solid #7c3aed;
+}
+
+/* ---------------------------------------------------------------------------
+   The citation card, anchored to its chip.
+
+   `useChipPopover` names the chip with `anchor-name`; everything below is the
+   browser's answer to "where does this go". No script measures anything, so the
+   card tracks its chip through scroll, resize, zoom and reflow, and
+   `position-try-fallbacks` flips it above the line when there is no room below.
+   `popover` puts it in the top layer: no z-index, and the page cannot clip it.
+   --------------------------------------------------------------------------- */
+.citation-card {
+  position: absolute;
+  position-anchor: --docx-chip;
+  position-area: bottom span-right;
+  position-try-fallbacks:
+    flip-block,
+    flip-inline,
+    flip-block flip-inline;
+  margin: 8px 0 0;
+  /* The popover UA sheet centres with `inset: 0; margin: auto`; `position-area` owns
+     placement here, so hand both back. */
+  inset: auto;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 18%);
+  font:
+    13px/1.5 system-ui,
+    sans-serif;
+  color: #0f172a;
+  overflow: visible;
+}
+
+/* Flipped above the line, the 8px gap belongs on the other side. */
+.citation-card:is(:popover-open) {
+  margin-block: 8px;
+}
+
+/* Nothing to show yet: the element stays mounted so `showPopover` has a target. */
+.citation-card:not(:popover-open) {
+  display: none;
+}
