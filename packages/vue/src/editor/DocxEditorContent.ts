@@ -6,12 +6,15 @@ import {
   onUnmounted,
   shallowRef,
   watch,
+  type VNode,
 } from 'vue';
 import { useDocxEditor } from './context';
 
 /** @public */
 export interface DocxEditorContentProps {
   class?: string;
+  className?: string;
+  children?: VNode;
 }
 
 /** @public */

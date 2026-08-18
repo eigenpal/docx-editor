@@ -60,6 +60,8 @@ export interface ToolbarButtonProps {
   /** Merge the button's behavior into the single child element instead of a <button>. */
   asChild?: boolean;
   className?: string;
+  /** Vue parity — use `className` in React. */
+  class?: string;
   children?: ReactNode;
   /** Render nothing — inside the default arrangement this removes the slot. */
   hidden?: boolean;

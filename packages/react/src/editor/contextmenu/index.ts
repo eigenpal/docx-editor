@@ -19,8 +19,14 @@ export {
   ContextMenuItem,
   ContextMenuPaste,
   ContextMenuSelectAll,
+  ContextMenuRefreshToc,
+  ContextMenuRefreshTocPageNumbers,
   type ContextMenuCommandProps,
   type ContextMenuItemProps,
   type ContextMenuTableRowProps,
 } from './parts';
-export { useContextMenuTarget, type ContextMenuAnchor } from './contextmenu-context';
+export {
+  useContextMenuTarget,
+  type ContextMenuAnchor,
+  type ContextMenuContextValue,
+} from './contextmenu-context';

@@ -29,6 +29,7 @@ import {
 import { collapseOrder, TOOLBAR_PINNED_GROUPS } from './toolbar-overflow';
 import { FIXED_ATTRIBUTE, GROUP_ATTRIBUTE, useToolbarOverflow } from './useToolbarOverflow';
 import { ToolbarImageInsert, ToolbarImageWrap, ToolbarImageAltText } from '../images';
+import { ToolbarImageProperties } from '../images/ImageProperties';
 import {
   ToolbarAlignCenter,
   ToolbarAlignJustify,
@@ -209,6 +210,7 @@ export interface DocxEditorToolbarProps {
   onSave?: () => void;
   preset?: boolean;
   overflow?: boolean;
+  children?: VNode;
 }
 
 /** @public */
@@ -240,6 +242,7 @@ export interface DocxEditorToolbarNamespace {
   readonly ImageInsert: ToolbarPartComponent;
   readonly ImageWrap: typeof ToolbarImageWrap;
   readonly ImageAltText: typeof ToolbarImageAltText;
+  readonly ImageProperties: typeof ToolbarImageProperties;
   readonly TableInsert: ToolbarPartComponent;
   readonly TableBorderTarget: TableBorderTargetNamespace;
   readonly TableBorderColor: TableBorderColorNamespace;
@@ -424,6 +427,7 @@ export const DocxEditorToolbar = Object.assign(DocxEditorToolbarRoot, {
   ImageInsert: ToolbarImageInsert,
   ImageWrap: ToolbarImageWrap,
   ImageAltText: ToolbarImageAltText,
+  ImageProperties: ToolbarImageProperties,
   TableInsert: ToolbarTableInsert,
   TableBorderTarget: ToolbarTableBorderTarget,
   TableBorderColor: ToolbarTableBorderColor,

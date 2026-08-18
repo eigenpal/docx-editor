@@ -9,7 +9,7 @@
 // value taking precedence.
 
 import { Children, cloneElement, isValidElement } from 'react';
-import type { HTMLAttributes, ReactElement, ReactNode, Ref } from 'react';
+import type { CSSProperties, HTMLAttributes, ReactElement, ReactNode, Ref } from 'react';
 
 type AnyProps = Record<string, unknown>;
 
@@ -43,6 +43,9 @@ export interface SlotProps extends HTMLAttributes<HTMLElement> {
   children?: ReactNode;
   /** Fanned out alongside the child's own ref. */
   ref?: Ref<unknown>;
+  /** Vue parity — use `className` in React. */
+  class?: string;
+  style?: CSSProperties;
 }
 
 /** Renders its single child element with the slot's props merged in. */

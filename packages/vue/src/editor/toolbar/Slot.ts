@@ -1,4 +1,4 @@
-import { cloneVNode, defineComponent, mergeProps, type VNode } from 'vue';
+import { cloneVNode, defineComponent, mergeProps, type VNode, type VNodeRef } from 'vue';
 import { cn } from '../../lib/utils';
 
 type AnyProps = Record<string, unknown>;
@@ -36,6 +36,8 @@ function mergeSlotProps(slotProps: AnyProps, childProps: AnyProps): AnyProps {
 export interface SlotProps {
   class?: string;
   style?: Record<string, string | number>;
+  children?: VNode;
+  ref?: VNodeRef;
 }
 
 /** Renders its single child vnode with the slot props merged in. @public */

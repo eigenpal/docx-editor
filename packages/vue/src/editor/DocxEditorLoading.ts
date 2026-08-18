@@ -12,6 +12,7 @@ export interface DocxEditorLoadingProps {
   overlay?: boolean;
   className?: string;
   style?: CSSProperties;
+  children?: VNode;
 }
 
 /** Props for `DocxEditor.Loading.Spinner`. @public */

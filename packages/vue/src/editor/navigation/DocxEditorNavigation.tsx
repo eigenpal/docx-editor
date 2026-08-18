@@ -35,6 +35,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
   toggle?: boolean | NavigationPartProps;
   className?: string;
   style?: CSSProperties;
+  children?: VNode;
 }
 
 /** @public */

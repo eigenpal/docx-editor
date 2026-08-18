@@ -51,6 +51,7 @@ function useFontFamilyContext(): FontFamilyContextValue | null {
 export interface FontFamilyPartProps {
   asChild?: boolean;
   className?: string;
+  children?: VNode;
 }
 
 /** @public */

@@ -12,6 +12,8 @@ export interface ToolbarActionProps {
   onSelect?: () => void;
   asChild?: boolean;
   class?: string;
+  className?: string;
+  children?: VNode;
 }
 
 /** @public */

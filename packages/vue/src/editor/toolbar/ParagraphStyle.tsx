@@ -46,6 +46,7 @@ function useParagraphStyleContext(): ParagraphStyleContextValue | null {
 export interface ParagraphStylePartProps {
   asChild?: boolean;
   className?: string;
+  children?: VNode;
 }
 
 /** @public */

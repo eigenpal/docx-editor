@@ -16,7 +16,11 @@ export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
 // Provider-first composition layer: the primitives behind `DocxEditor` (also reachable
 // as `DocxEditor.Root` / `.Viewport` / `.Content`) and the hooks a custom chrome is
 // built from.
-export { DocxEditorRoot, type DocxEditorRootProps } from './editor/DocxEditorRoot';
+export {
+  DocxEditorRoot,
+  type DocxEditorRootProps,
+  provideDocxEditor,
+} from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
 export {
@@ -26,7 +30,10 @@ export {
   type DocxEditorLoadingProps,
   type DocxEditorLoadingSpinnerProps,
 } from './editor/DocxEditorLoading';
-export { useDocxEditor } from './editor/context';
+export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
+export { useEditorState, editorStateActiveSubscriptionCount } from './editor/useEditorState';
+export { useScopeClassName } from './editor/scope-context';
+export { LOADING_SNAPSHOT } from './editor/loading-snapshot';
 // Context-fed chrome parts (also reachable as `DocxEditor.HorizontalRuler` /
 // `.VerticalRuler` / `.DocumentOutline`): thin reactive wrappers over the props-driven
 // ruler and outline components, fed from the provided editor.
@@ -63,7 +70,12 @@ export {
   type ReviewGutterInput,
 } from './editor/review-gutter';
 export { Slot, type SlotProps } from './editor/toolbar/Slot';
-export { LocaleProvider, useTranslation } from './i18n';
+export {
+  LocaleProvider,
+  useTranslation,
+  type LocaleProviderProps,
+  type TranslationKey,
+} from './i18n';
 export { useChromeTranslate, type ChromeTranslate } from './i18n';
 // The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
 // left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
@@ -142,9 +154,12 @@ export {
   ContextMenuInsertColumnRight,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
+  ContextMenuRefreshToc,
+  ContextMenuRefreshTocPageNumbers,
   useContextMenuTarget,
   type ContextMenuAnchor,
   type ContextMenuCommandProps,
+  type ContextMenuContextValue,
   type ContextMenuItemProps,
   type ContextMenuTableRowProps,
   type DocxEditorContextMenuNamespace,
@@ -153,6 +168,7 @@ export {
 export {
   useHyperlinkPopup,
   useHyperlinkPopupInstance,
+  isFieldLink,
   type HyperlinkPopupAnchor,
   type HyperlinkPopupMode,
   type HyperlinkPopupState,
@@ -208,10 +224,25 @@ export {
   ImageWrap,
   ImageAltText,
   ImagePropertiesTrigger,
+  ToolbarImageProperties,
   normalizeImageBytes,
   type DocxEditorImagePropertiesDialogProps,
+  type ImagePropertiesTriggerProps,
   type NormalizedImagePayload,
 } from './editor/images';
+export {
+  DocxEditorPageNumber,
+  type DocxEditorPageNumberProps,
+  PageNumberTranslationContext,
+} from './editor/DocxEditorPageNumber';
+export { useScopedChromeAnchor, type ScopedChromeAnchor } from './editor/useScopedChromeAnchor';
+export {
+  ToolbarContext,
+  useToolbarContext,
+  useToolbarLabel,
+  useToolbarLabelFor,
+  type ToolbarContextValue,
+} from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {
@@ -354,10 +385,18 @@ export type {
   PageSetup,
 } from '@docx-editor.dev/core/contracts/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
-export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
+
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
-export { PageIndicator } from './components/DocxEditor/PageIndicator';
+export { PageIndicator, type PageIndicatorProps } from './components/DocxEditor/PageIndicator';
+export {
+  DocumentOutline,
+  OUTLINE_BUTTON_LEFT_OFFSET,
+  OUTLINE_BUTTON_RESERVED_SPACE,
+  OUTLINE_LEFT_OFFSET,
+  OUTLINE_RESERVED_SPACE,
+} from './components/DocumentOutline';
 export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
 export {

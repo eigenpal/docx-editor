@@ -1,17 +1,18 @@
 import {
   defineComponent,
   h,
-  onBeforeMount,
   onUnmounted,
   provide,
   shallowRef,
   watch,
   type PropType,
+  type VNode,
 } from 'vue';
 import type {
   DocumentChange,
   DocumentSource,
   Editor,
+  EditorFontError,
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import {
@@ -50,8 +51,12 @@ export interface DocxEditorRootProps {
   mode?: 'edit' | 'view' | 'suggesting';
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
+  onReady?: (editor: Editor) => void;
+  onChange?: (change: DocumentChange) => void;
+  onFontError?: (error: EditorFontError) => void;
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
+  children?: VNode;
 }
 
 function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
@@ -109,6 +114,12 @@ export const DocxEditorRoot = defineComponent({
       default: undefined,
     },
     imageDecodePort: { type: Object as PropType<ImageDecodePort>, default: undefined },
+    onReady: { type: Function as PropType<DocxEditorRootProps['onReady']>, default: undefined },
+    onChange: { type: Function as PropType<DocxEditorRootProps['onChange']>, default: undefined },
+    onFontError: {
+      type: Function as PropType<DocxEditorRootProps['onFontError']>,
+      default: undefined,
+    },
   },
   emits: {
     ready: (_editor: Editor) => true,
@@ -162,7 +173,9 @@ export const DocxEditorRoot = defineComponent({
     };
 
     const createEditor = () => {
+      if (typeof window === 'undefined') return;
       destroyEditor();
+      let readyFired = false;
       const translate = props.translate ?? defaultTranslate;
       const instance = createDocxEditor({
         ...(props.document !== undefined ? { document: props.document } : {}),
@@ -178,7 +191,9 @@ export const DocxEditorRoot = defineComponent({
           ? { tableInteractionLabel: props.tableInteractionLabel }
           : {}),
         ...(props.imageDecodePort ? { imageDecodePort: props.imageDecodePort } : {}),
-        onFontError: (error) => emit('fontError', error),
+        onFontError: (error) => {
+          emit('fontError', error);
+        },
       });
       const notify = deferredTick(() => {
         tick.value++;
@@ -193,20 +208,25 @@ export const DocxEditorRoot = defineComponent({
       cleanups.push(instance.on('selectionChange', notify));
       cleanups.push(instance.on('error', notify));
       editorRef.value = instance;
-      if (!instance.snapshot().isOpening) emit('ready', instance);
+      const fireReady = () => {
+        if (readyFired) return;
+        readyFired = true;
+        emit('ready', instance);
+      };
+      if (!instance.snapshot().isOpening) fireReady();
       else {
         const off = instance.on('change', () => {
           off();
-          emit('ready', instance);
+          fireReady();
         });
         cleanups.push(off);
       }
     };
 
-    onBeforeMount(createEditor);
     watch(
       () => [props.document, props.fonts, props.translate, props.imageDecodePort] as const,
-      createEditor
+      createEditor,
+      { immediate: true }
     );
     onUnmounted(destroyEditor);
 

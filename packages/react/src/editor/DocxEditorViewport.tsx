@@ -26,6 +26,8 @@ const selectZoomFitting = (snapshot: EditorSnapshot): boolean => snapshot.zoomMo
 export interface DocxEditorViewportProps {
   /** Appended after the load-bearing viewport classes (e.g. `dark` for chrome theming). */
   className?: string;
+  /** Vue parity — use `className` in React. */
+  class?: string;
   style?: CSSProperties;
   children?: ReactNode;
 }

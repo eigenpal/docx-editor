@@ -43,6 +43,8 @@ export interface ToolbarButtonProps {
   icon?: VNode;
   asChild?: boolean;
   class?: string;
+  className?: string;
+  children?: VNode;
   hidden?: boolean;
 }
 

@@ -1,20 +1,19 @@
 import { useTranslation } from '../../i18n';
 
+/** @public */
+export interface PageIndicatorProps {
+  currentPage: number;
+  totalPages: number;
+  visible: boolean;
+}
+
 /**
  * Floating page indicator shown next to the scrollbar while the user
  * scrolls a multi-page document. Wrapped so the `{current} of {total}`
  * template runs through `t()`; `useTranslation()` only works inside
  * `<LocaleProvider>`, which `DocxEditor`'s own body is not.
  */
-export function PageIndicator({
-  currentPage,
-  totalPages,
-  visible,
-}: {
-  currentPage: number;
-  totalPages: number;
-  visible: boolean;
-}) {
+export function PageIndicator({ currentPage, totalPages, visible }: PageIndicatorProps) {
   const { t } = useTranslation();
   return (
     <div

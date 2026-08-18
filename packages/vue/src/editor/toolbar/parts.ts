@@ -23,6 +23,7 @@ export interface ToolbarPartComponent {
 /** @public */
 export interface ToolbarSlotPartProps {
   class?: string;
+  className?: string;
   hidden?: boolean;
 }
 
@@ -146,6 +147,7 @@ export const ToolbarSave = defineComponent({
 /** @public */
 export interface ToolbarSeparatorProps {
   class?: string;
+  className?: string;
 }
 
 /** @public */

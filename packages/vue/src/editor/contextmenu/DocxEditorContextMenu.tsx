@@ -2,18 +2,20 @@ import {
   computed,
   defineComponent,
   Fragment,
+  inject,
   nextTick,
   provide,
   ref,
   shallowRef,
   watch,
+  watchEffect,
   type CSSProperties,
   type PropType,
   type VNode,
 } from 'vue';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
-import { useDocxEditor } from '../context';
+import { useDocxEditor, editorStateTickKey } from '../context';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { MenuContext, type MenuContextValue } from '../menu/menu-context';
@@ -50,6 +52,7 @@ export interface DocxEditorContextMenuProps {
   preset?: boolean;
   disabled?: boolean;
   onOpenChange?: (open: boolean) => void;
+  children?: VNode;
 }
 
 type DefaultEntry =
@@ -201,6 +204,7 @@ export const DocxEditorContextMenu = defineComponent({
   setup(props, { slots }) {
     const scopeClassName = useScopeClassName();
     const editorRef = useDocxEditor();
+    const tick = inject(editorStateTickKey, shallowRef(0));
     const { t: catalogT } = useTranslation();
     const tableContextVisible = useTableContextMenuVisible();
     const hostRef = ref<HTMLDivElement | null>(null);
@@ -239,11 +243,14 @@ export const DocxEditorContextMenu = defineComponent({
       }
     );
 
-    watch(
-      [() => props.disabled, hostRef],
-      ([disabled], _, onCleanup) => {
-        if (disabled) return;
-        const scroller = scrollerFor(hostRef.value);
+    watchEffect(
+      (onCleanup) => {
+        if (props.disabled) return;
+        void tick.value;
+        if (!editorRef.value?.surface) return;
+        const scroller =
+          scrollerFor(hostRef.value) ??
+          document.querySelector<HTMLElement>('.docx-editor__scroll-container');
         if (!scroller) return;
         const onContextMenu = (event: MouseEvent) => {
           event.preventDefault();

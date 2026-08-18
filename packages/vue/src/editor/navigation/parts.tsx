@@ -10,6 +10,7 @@ import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 export interface NavigationPartProps {
   className?: string;
   style?: CSSProperties;
+  children?: import('vue').VNode;
 }
 
 /** @public */

@@ -6,7 +6,7 @@
 
 export const VERSION = '0.0.2';
 
-export { DocxEditor } from './components/DocxEditor';
+export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
 export type { DocxEditorProps, DocxEditorRef, EditorMode } from './types';
 
 export {
@@ -228,6 +228,7 @@ export {
 
 export {
   DocxEditorLoading,
+  DocxEditorLoadingSpinner,
   type DocxEditorLoadingComponent,
   type DocxEditorLoadingProps,
   type DocxEditorLoadingSpinnerProps,
@@ -257,16 +258,46 @@ export {
 
 export {
   DocxEditorImagePropertiesDialog,
+  ImageInsertProvider,
+  ImageInsertTrigger,
+  ImageWrap,
+  ImageAltText,
   ImagePropertiesTrigger,
   ToolbarImageProperties,
+  normalizeImageBytes,
   type DocxEditorImagePropertiesDialogProps,
   type ImagePropertiesTriggerProps,
-} from './editor/images/ImageProperties';
+  type NormalizedImagePayload,
+} from './editor/images';
 
 export { useScopedChromeAnchor, type ScopedChromeAnchor } from './editor/useScopedChromeAnchor';
 
 export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
+
+export {
+  DocxEditorPageSetupDialog,
+  type DocxEditorPageSetupDialogProps,
+} from './editor/DocxEditorPageSetup';
+
+export {
+  PaginatedDocxEditor,
+  type PaginatedDocxEditorHandle,
+  type PaginatedDocxEditorExpose,
+  type PaginatedDocxEditorProps,
+} from './components/PaginatedDocxEditor';
+export {
+  PaginatedDocxEditorShell,
+  type PaginatedDocxEditorShellProps,
+} from './components/PaginatedDocxEditorShell';
+export { PageIndicator, type PageIndicatorProps } from './components/DocxEditor/PageIndicator';
+export {
+  DocumentOutline,
+  OUTLINE_BUTTON_LEFT_OFFSET,
+  OUTLINE_BUTTON_RESERVED_SPACE,
+  OUTLINE_LEFT_OFFSET,
+  OUTLINE_RESERVED_SPACE,
+} from './components/DocumentOutline';
 
 export {
   LocaleProvider,
@@ -283,9 +314,51 @@ export {
   commandForSlot,
   runToolbarCommand,
   toolbarCommandState,
+  type ChromeMenu,
+  type ChromeMenuEntry,
+  type ChromeMenuId,
+  type ChromeMenuItemEntry,
+  type ChromeMenuSeparatorEntry,
+  type ChromeMenuSubmenuEntry,
   type ChromeSlotId,
   type ToolbarCommandState,
 } from '@docx-editor.dev/core/editor';
+
+export { EditorFontError } from './types';
+export type {
+  EditorFontErrorCode,
+  FontConfiguration,
+  FontFaceRequest,
+  FontSource,
+  FontSourceSubstitution,
+} from './types';
+export {
+  MAX_RESOLVER_FAMILIES,
+  WORD_DEFAULT_FONT,
+  composeFontConfiguration,
+  createFontSource,
+  loadFonts,
+  type FontConfigurationBase,
+  type FontConfigurationFragment,
+  type FontLoadFailure,
+  type FontLoadFailureReason,
+  type FontResolutionRequest,
+  type FontResolver,
+  type FontUrlSource,
+  type LoadFontsRequest,
+  type LoadFontsResult,
+} from '@docx-editor.dev/core/editor';
+
+export {
+  generateRulerTicks,
+  rulerPageBox,
+  PX_PER_INCH,
+  PX_PER_CM,
+  type RulerTick,
+  type RulerUnit,
+} from './rulerTicks';
+
+export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
 
 export type {
   Editor,

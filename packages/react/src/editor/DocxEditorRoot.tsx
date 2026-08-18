@@ -139,6 +139,11 @@ function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
   return left !== null && right !== null && sameZoomMode(left, right);
 }
 
+/** @public Vue-only — in React compose `<DocxEditorRoot>` instead. */
+export function provideDocxEditor(): never {
+  throw new Error('provideDocxEditor is supported only in @docx-editor.dev/vue');
+}
+
 /**
  * Creates and owns a `DocxEditorInstance` and provides it to the subtree. Renders no
  * DOM — compose it with `DocxEditor.Viewport` + `DocxEditor.Content` for the painted

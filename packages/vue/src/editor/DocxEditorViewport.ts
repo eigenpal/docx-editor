@@ -7,6 +7,7 @@ import {
   watch,
   type CSSProperties,
   type PropType,
+  type VNode,
 } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor, useReviewRailRegistry } from './context';
@@ -21,7 +22,9 @@ const selectZoomFitting = (snapshot: EditorSnapshot): boolean => snapshot.zoomMo
 /** @public */
 export interface DocxEditorViewportProps {
   class?: string;
+  className?: string;
   style?: CSSProperties;
+  children?: VNode;
 }
 
 /** @public */

@@ -37,6 +37,11 @@ import {
 } from './table-chrome-shared';
 import { useTableBorderTargetLabel } from './useTableBorderTargetLabel';
 
+function cssHexColor(raw: string, fallback: string): string {
+  const hex = raw.replace(/^#/, '').trim();
+  return /^[0-9a-fA-F]{6}$/.test(hex) ? `#${hex.toLowerCase()}` : `#${fallback.toLowerCase()}`;
+}
+
 function triggerKeyboardToggle(
   enabled: boolean,
   open: boolean,
@@ -56,6 +61,7 @@ export interface TableChromePartProps {
   className?: string;
   hidden?: boolean;
   asChild?: boolean;
+  children?: VNode;
 }
 
 /** @public */
@@ -74,28 +80,43 @@ export interface TableChromePartComponent extends ToolbarSlotPartComponent {
 /** @public */
 export interface TableBorderTargetNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderTarget';
+  readonly Trigger: (props: TableChromePartProps) => VNode;
+  readonly Content: (props: TableChromePartProps) => VNode;
+  readonly Item: (props: TableChromeItemProps) => VNode;
 }
 
 /** @public */
 export interface TableBorderColorNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderColor';
   readonly Main: ReturnType<typeof defineComponent>;
+  readonly Trigger: (props: TableChromePartProps) => VNode;
+  readonly Content: (props: TableChromePartProps) => VNode;
+  readonly Item: (props: TableChromeItemProps) => VNode;
 }
 
 /** @public */
 export interface TableCellFillNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.cellFill';
   readonly Main: ReturnType<typeof defineComponent>;
+  readonly Trigger: (props: TableChromePartProps) => VNode;
+  readonly Content: (props: TableChromePartProps) => VNode;
+  readonly Item: (props: TableChromeItemProps) => VNode;
 }
 
 /** @public */
 export interface TableBorderStyleNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderStyle';
+  readonly Trigger: (props: TableChromePartProps) => VNode;
+  readonly Content: (props: TableChromePartProps) => VNode;
+  readonly Item: (props: TableChromeItemProps) => VNode;
 }
 
 /** @public */
 export interface TableBorderWidthNamespace extends TableChromePartComponent {
   readonly docxSlot: 'table.borderWidth';
+  readonly Trigger: (props: TableChromePartProps) => VNode;
+  readonly Content: (props: TableChromePartProps) => VNode;
+  readonly Item: (props: TableChromeItemProps) => VNode;
 }
 
 interface TableSlotContextValue {
@@ -591,7 +612,7 @@ function buildColorSplitCompound(
           chromeIcon(control?.paths),
           <span
             class="docx-toolbar__colorsplit-bar"
-            style={{ backgroundColor: `#${barHex.toLowerCase()}` }}
+            style={{ backgroundColor: cssHexColor(barHex, defaultHex) }}
             aria-hidden="true"
           />,
         ];

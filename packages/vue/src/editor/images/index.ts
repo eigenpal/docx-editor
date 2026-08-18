@@ -20,4 +20,16 @@ export {
   type ImageAltTextProps,
   type ImageAltTextPartComponent,
 } from './ImageAltText';
-export { normalizeImageBytes, emuToPoints, pointsToEmu } from './normalizeImageFile';
+export {
+  DocxEditorImagePropertiesDialog,
+  ImagePropertiesTrigger,
+  ToolbarImageProperties,
+  type DocxEditorImagePropertiesDialogProps,
+  type ImagePropertiesTriggerProps,
+} from './ImageProperties';
+export {
+  normalizeImageBytes,
+  emuToPoints,
+  pointsToEmu,
+  type NormalizedImagePayload,
+} from './normalizeImageFile';

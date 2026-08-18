@@ -65,6 +65,8 @@ export interface MenuRowProps {
   selected?: true;
   /** Stable marker for hosts, tests and e2e — pass via {@link menuRowSlot}. */
   'data-slot'?: string;
+  /** React parity — maps to `data-slot` at runtime. */
+  slot?: string;
   onSelect?: () => void;
   className?: string;
   children?: VNode;

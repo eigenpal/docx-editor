@@ -60,6 +60,7 @@ export interface DocxEditorMenuProps {
   onReportIssue?: () => void;
   reportIssue?: boolean;
   preset?: boolean;
+  children?: VNode;
 }
 
 const MENU_IDS = new Set<string>(CHROME_MENUS.map((menu) => menu.id));

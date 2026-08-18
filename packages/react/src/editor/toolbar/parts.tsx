@@ -44,6 +44,8 @@ export interface ToolbarPartComponent {
  */
 export interface ToolbarSlotPartProps {
   className?: string;
+  /** Vue parity — use `className` in React. */
+  class?: string;
   /** Render nothing — inside the default arrangement this removes the slot. */
   hidden?: boolean;
 }
@@ -162,6 +164,8 @@ export const ToolbarSave: ToolbarSlotPartComponent = Object.assign(ToolbarSaveIm
 /** Props for `DocxEditorToolbar.Separator`. @public */
 export interface ToolbarSeparatorProps {
   className?: string;
+  /** Vue parity — use `className` in React. */
+  class?: string;
 }
 
 /** A vertical rule between toolbar groups. @public */

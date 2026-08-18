@@ -17,6 +17,7 @@ const langKey: InjectionKey<ShallowRef<string>> = Symbol('lang');
 /** @public */
 export interface LocaleProviderProps {
   i18n?: Translations;
+  children?: import('vue').VNode;
 }
 
 /** @public */
