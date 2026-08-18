@@ -1,4 +1,4 @@
-import { inject, type InjectionKey } from 'vue';
+import { inject, unref, type InjectionKey, type MaybeRef } from 'vue';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ChromeMenuId } from '@docx-editor.dev/core/editor';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -18,7 +18,7 @@ export interface MenuContextValue {
   readonly reportIssue: boolean | undefined;
 }
 
-export const MenuContext: InjectionKey<MenuContextValue> = Symbol('MenuContext');
+export const MenuContext: InjectionKey<MaybeRef<MenuContextValue>> = Symbol('MenuContext');
 
 const defaultMenuContext: MenuContextValue = {
   t: undefined,
@@ -33,7 +33,8 @@ const defaultMenuContext: MenuContextValue = {
 };
 
 export function useMenuContext(): MenuContextValue {
-  return inject(MenuContext, defaultMenuContext);
+  const value = inject(MenuContext, defaultMenuContext);
+  return unref(value) as MenuContextValue;
 }
 
 export function useMenuLabel() {
