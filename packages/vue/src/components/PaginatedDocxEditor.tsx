@@ -1,13 +1,14 @@
 import {
   defineComponent,
+  computed,
   h,
-  onMounted,
   onUnmounted,
   ref,
   shallowRef,
   watch,
   type PropType,
   type Ref,
+  type VNode,
 } from 'vue';
 import {
   mountPaginatedSurface,
@@ -90,7 +91,7 @@ export const PaginatedDocxEditor = defineComponent({
 
     const mountSurface = () => {
       const container = containerRef.value;
-      if (!container) return;
+      if (!container) return undefined;
       const result = mountPaginatedSurface(container, props.source, {
         ...(props.scale === undefined ? {} : { scale: props.scale }),
         ...(props.measurer ? { measurer: props.measurer } : {}),
@@ -101,7 +102,7 @@ export const PaginatedDocxEditor = defineComponent({
       });
       if (!result.ok) {
         onErrorRef.value?.(result.reason, result.detail);
-        return;
+        return undefined;
       }
       surfaceRef.value = result.surface;
       const initial = result.surface.state();
@@ -113,15 +114,19 @@ export const PaginatedDocxEditor = defineComponent({
       };
     };
 
+    const pageCount = computed(() => state.value?.pageCount ?? 0);
+    const revision = computed(() => state.value?.revision ?? 0);
+
     let cleanup: (() => void) | undefined;
-    onMounted(() => {
+    const remount = () => {
+      cleanup?.();
       cleanup = mountSurface();
-    });
+    };
+
     watch(
       () => [props.source, props.measurer] as const,
       () => {
-        cleanup?.();
-        cleanup = mountSurface();
+        if (containerRef.value) remount();
       }
     );
     onUnmounted(() => {
@@ -152,9 +157,16 @@ export const PaginatedDocxEditor = defineComponent({
       },
     } satisfies PaginatedDocxEditorHandle);
 
-    return () =>
+    return (): VNode =>
       h('div', {
-        ref: containerRef,
+        onVnodeMounted: (vnode) => {
+          containerRef.value = vnode.el as HTMLDivElement;
+          remount();
+        },
+        onVnodeBeforeUnmount: () => {
+          cleanup?.();
+          cleanup = undefined;
+        },
         class: props.className
           ? `docx-paginated-surface ${props.className}`
           : 'docx-paginated-surface',
@@ -162,8 +174,8 @@ export const PaginatedDocxEditor = defineComponent({
           margin: '24px auto',
           ...(props.documentFontFamily ? { fontFamily: props.documentFontFamily } : {}),
         },
-        'data-revision': state.value?.revision ?? 0,
-        'data-page-count': state.value?.pageCount ?? 0,
+        'data-revision': revision.value,
+        'data-page-count': pageCount.value,
       });
   },
 });

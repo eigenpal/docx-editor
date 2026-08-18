@@ -1,5 +1,5 @@
 import './styles.css';
-import { createApp, h } from 'vue';
+import { createApp } from 'vue';
 import PreviewBanner from '../../shared/PreviewBanner.vue';
 
 const params = new URLSearchParams(location.search);
