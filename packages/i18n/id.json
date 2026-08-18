@@ -264,7 +264,8 @@
     "paragraphMarkInserted": "Menyisipkan tanda paragraf",
     "runPropertiesChanged": "Format teks diubah",
     "paragraphMarkDeleted": null,
-    "paragraphMarkMoved": null
+    "paragraphMarkMovedFrom": null,
+    "paragraphMarkMovedTo": null
   },
   "contextMenu": {
     "ariaLabel": "Menu tindakan AI",

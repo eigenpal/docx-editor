@@ -53,14 +53,17 @@ describe('a paragraph mark card names its own decision', () => {
     );
   });
 
-  test('both halves of a move read as a move', () => {
-    for (const mark of ['moveFrom', 'moveTo'] as const) {
-      const item = markItem(`<w:${mark} w:id="1" w:author="A"/>`);
-      expect(item.markDirection).toBe(mark);
-      expect(revisionLabelKey(item.revisionKind, item.markDirection)).toBe(
-        'revisions.paragraphMarkMoved'
-      );
-    }
+  test('the two halves of a move are opposite decisions, and read that way', () => {
+    // Accepting a `moveFrom` takes this copy of the break away; accepting a `moveTo` keeps
+    // it. One sentence for both told a reviewer nothing about which they were answering.
+    const from = markItem('<w:moveFrom w:id="1" w:author="A"/>');
+    const to = markItem('<w:moveTo w:id="1" w:author="A"/>');
+    expect(revisionLabelKey(from.revisionKind, from.markDirection)).toBe(
+      'revisions.paragraphMarkMovedFrom'
+    );
+    expect(revisionLabelKey(to.revisionKind, to.markDirection)).toBe(
+      'revisions.paragraphMarkMovedTo'
+    );
   });
 
   test('a mark carrying two decisions raises one card each', () => {

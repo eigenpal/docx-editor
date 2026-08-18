@@ -484,7 +484,8 @@
     "paragraphMarkInserted": "סימן פסקה נוסף",
     "runPropertiesChanged": "עיצוב הטקסט שונה",
     "paragraphMarkDeleted": null,
-    "paragraphMarkMoved": null
+    "paragraphMarkMovedFrom": null,
+    "paragraphMarkMovedTo": null
   },
   "toc": {
     "refresh": "עדכון הטבלה כולה",

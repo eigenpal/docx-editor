@@ -111,6 +111,29 @@ mounted surface, caret and selection, the review rail, Accept All, and the save 
 - [ ] 6d.4 The join still carries two caret slots at one painted position, so one arrow press
       does not move. Recorded at 7.7
 
+## 6e. What a fourth, adversarial pass found
+
+- [x] 6e.1 `deleteForward` had no rule for the invisible join, so Delete at the end of an
+      absorbed member joined the paragraphs — and, with 6d.1 unfixed, swallowed the one after
+- [x] 6e.2 The mark gate's `?? DEFAULT` was wrong for NOTE stories, which pass no mode and
+      mean the resolved one: it lit up markup inside footnotes in the view that shows none.
+      The gate requires an explicit mode again, and the story entry points name their own
+- [x] 6e.3 `paragraphSectionIndexOf` indexed an All Markup block list with section bounds
+      counted in the document's mode, so a tracked Enter renumbered a footnote in another
+      section
+- [x] 6e.4 `sectionFurniture` enumerated sections in All Markup while layout indexed them in
+      the document's mode, pairing one section's pages with another section's header
+- [x] 6e.5 The furniture memo's `displayMode` key compared a closure constant with itself. It
+      is gone, and the field says a mode switch must rebuild the source
+- [x] 6e.6 `moveFrom` and `moveTo` shared one card sentence, though accepting them does
+      opposite things
+- [x] 6e.7 The two declarations of `ReviewRevisionItem` had no drift gate. An optional field
+      added to one and not the other passed every check; a compile-time identity assertion
+      now fails instead
+- [x] 6e.8 The measurement guard ran per candidate per flush — 19ms on a 380-mark document,
+      every keystroke. Memoized on the paragraph node, which is immutable: 30ms cold, 2.9ms
+      for the new part a keystroke publishes
+
 ## 7. Not done yet
 
 - [ ] 7.1 Backspace and undo through a join (4.2, 4.3)
@@ -136,5 +159,13 @@ mounted surface, caret and selection, the review rail, Accept All, and the save 
       `original` direction of a merge, nor cells, nor a block `w:sdt`, nor headers, footers or
       notes are in the fixture. Run the line-for-line assertion for `original` too, and add a
       fixture carrying `w:ins` marks, a mark in a cell and a mark inside a `w:sdt`
+- [ ] 7.11a A review item's id omits the part name, so a `w:id="1"` mark in the body and one
+      in a header share a key — the React key, the active card, the dismissed set. Pre-existing,
+      and reachable for the first time now that header marks are drawn
+- [ ] 7.11b Consumers a sweep flagged and nobody has run end to end: `surface-structure.ts`
+      `markerOf`, `semantic-cell-selection.ts` `collectParagraphs`, `note-pagination.ts`
+      `filterRefsOnPage`, the card line-pick in `review-support.ts` and `docx-editor.ts`, the
+      hand-rolled header/footer twin of `reviewAnchorIndex`, `semantic-paint.ts` line drawings,
+      and `docx-editor-images.ts` drawing match. Each reads a fragment or a line whole
 - [ ] 7.11 Enter inside the FIRST member copies the whole `w:pPr` onto both halves, so both
       carry the same `w:id`; accepting then collapses three paragraphs where Word gives two

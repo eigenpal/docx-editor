@@ -43,7 +43,6 @@ import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './p
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { paragraphMergeGroupOf } from './story-roots.ts';
 import {
-  DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
   paragraphMarkFormatRevisionOf,
   paragraphMarkRevisionsOf,
@@ -918,11 +917,11 @@ function placeCellParagraph(
   //
   // Read only when this fragment will carry it. Placement runs for trial rows and for every
   // continuation, and the projection walks `w:pPr/w:rPr` each time it is asked.
-  // An UNSET mode is the default mode, which is `all-markup`. Reading `undefined` as "not
-  // all-markup" left a header's own tracked mark with no pilcrow and no change bar, because
-  // furniture is laid out through deps that do not always carry one.
-  const showsMarkup =
-    complete && (deps.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE) === 'all-markup';
+  // EXPLICIT, not defaulted. A lane that does not say which view it is drawing does not get
+  // attribution: note stories pass no mode and mean the resolved one, so defaulting to
+  // `all-markup` here lit up markup inside footnotes in the very view that must show none.
+  // The lanes that do mean All Markup say so — the body always has, and furniture does now.
+  const showsMarkup = complete && deps.displayMode === 'all-markup';
   const markRevisions = showsMarkup ? paragraphMarkRevisionsOf(paragraph) : [];
   const markFormatRevision = showsMarkup ? paragraphMarkFormatRevisionOf(paragraph) : null;
   const marker =

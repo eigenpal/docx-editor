@@ -61,6 +61,7 @@ import type { PendingLine } from './paragraph-flow.ts';
 import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { finalizePageFieldProjection } from './field-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
 
 /** Bound on reflow attempts per document layout pass. */
 export const MAX_NOTE_REFLOW_ATTEMPTS = 8;
@@ -1929,10 +1930,16 @@ function collectBodyNoteReferences(part: OoxmlPart): readonly {
 /** Map paragraph id → section index for note numbering / position resolution. */
 function paragraphSectionIndexOf(
   part: OoxmlPart,
-  sections: readonly DocumentSection[]
+  sections: readonly DocumentSection[],
+  displayMode: RevisionDisplayMode
 ): ReadonlyMap<string, number> {
   const map = new Map<string, number>();
-  const blocks = storyBlocks(part);
+  // IN THE SAME MODE the section bounds were counted in. `blockStart`/`blockEndExclusive`
+  // index a mode-filtered block list, and a resolved view has fewer blocks — a paragraph a
+  // tracked mark merged away is gone from it. Indexing an All Markup list with those bounds
+  // put paragraphs in the wrong section, which renumbers a footnote in a section nobody
+  // edited.
+  const blocks = storyBlocks(part, displayMode);
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
     for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
@@ -2033,7 +2040,12 @@ export function layoutSemanticDocumentWithNotes<
   runBody: (opts: Opts) => SemanticLayout
 ): SemanticLayout {
   const packageRefs = collectBodyNoteReferences(part);
-  const paragraphSectionIndex = paragraphSectionIndexOf(part, sections);
+  const paragraphSectionIndex = paragraphSectionIndexOf(
+    part,
+    sections,
+    (optionsWithLists as { displayMode?: RevisionDisplayMode }).displayMode ??
+      DEFAULT_REVISION_DISPLAY_MODE
+  );
   const allHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
   const noteMarks = provisionalNoteMarks(allHits, notesInput);
   const seeded = optionsWithLists.session?.notePageBottomReserves;

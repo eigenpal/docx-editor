@@ -484,7 +484,8 @@
     "paragraphMarkInserted": "已插入段落标记",
     "runPropertiesChanged": "已更改文本格式",
     "paragraphMarkDeleted": null,
-    "paragraphMarkMoved": null
+    "paragraphMarkMovedFrom": null,
+    "paragraphMarkMovedTo": null
   },
   "toc": {
     "refresh": "更新整个目录",

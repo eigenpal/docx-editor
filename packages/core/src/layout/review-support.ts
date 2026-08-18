@@ -272,6 +272,23 @@ export interface ReviewCustomItem {
  * One pending decision in the review queue: a tracked change, a comment thread, or a pro
  * custom-node card. Discriminate on `kind`.
  */
+/**
+ * The two declarations of this type must stay identical.
+ *
+ * `store/review-reads.ts` declares it for the reader and this file declares it again for the
+ * layout lane, which may not import the store's. Nothing else catches a field added to one
+ * and not the other: an OPTIONAL field drifts past typecheck, lint, the tests and the parity
+ * contract, and shows up only as an asymmetric `.api.md` diff that a human has to notice.
+ * These two assignments fail to compile the moment either side gains or loses a member.
+ */
+type StoreReviewRevisionItem = import('../store/store/review-reads.ts').ReviewRevisionItem;
+type Assert<T extends true> = T;
+type Identical<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+export type ReviewRevisionItemDeclarationsAgree = Assert<
+  Identical<ReviewRevisionItem, StoreReviewRevisionItem>
+>;
+
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
 
 /** What the review queue derivation reads: one story part plus its comment parts. */

@@ -60,6 +60,7 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
   paintSelectionOverlay,
@@ -571,8 +572,10 @@ export function mountPaginatedSurface(
     cache: layoutCache,
     styleCascade,
     defaultTabStopPt,
-    // Furniture answers the document's display mode, like the body does.
-    ...(options.revisionDisplayMode ? { displayMode: options.revisionDisplayMode } : {}),
+    // Furniture answers the document's display mode, like the body does — and it is named
+    // even when it is the default, because a lane that says nothing is treated as saying
+    // "not All Markup", which is what keeps markup out of the resolved views.
+    displayMode: options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
     inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
     drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
     drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -3185,7 +3188,7 @@ export function mountPaginatedSurface(
           cache: layoutCache,
           styleCascade,
           defaultTabStopPt,
-          ...(options.revisionDisplayMode ? { displayMode: options.revisionDisplayMode } : {}),
+          displayMode: options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
         });
         // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
         // flush that publishes nothing (a revision already superseded) would otherwise leave
@@ -3568,6 +3571,21 @@ export function mountPaginatedSurface(
       const order = paragraphOrder();
       const next = order[order.indexOf(position.paragraphId) + 1];
       if (!next) return;
+      // Unless the break is one a resolved view already merged away. The reader sees one
+      // paragraph, so Delete takes the next CHARACTER, exactly as Backspace does at the other
+      // side of the same invisible break — joining here would resolve a tracked decision the
+      // keypress never named, and take the paragraph after it as well.
+      if (mergedPredecessorsOf(currentLayout, next).includes(position.paragraphId)) {
+        const following = textOf(next);
+        if (following.length === 0) return;
+        commit(
+          () =>
+            applyOps([{ op: 'deleteText', paragraphId: next, start: 0, end: 1 }], selectionMark()),
+          () => collapsedAt(position),
+          { rearmPending: armed }
+        );
+        return;
+      }
       commit(
         () =>
           applyOps(

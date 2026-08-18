@@ -484,7 +484,8 @@
     "paragraphMarkInserted": "Wstawiono znak akapitu",
     "runPropertiesChanged": "Zmieniono formatowanie tekstu",
     "paragraphMarkDeleted": null,
-    "paragraphMarkMoved": null
+    "paragraphMarkMovedFrom": null,
+    "paragraphMarkMovedTo": null
   },
   "toc": {
     "refresh": "Aktualizuj cały spis",

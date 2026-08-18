@@ -267,7 +267,8 @@
   "revisions": {
     "paragraphMarkInserted": "Inserted paragraph break",
     "paragraphMarkDeleted": "Deleted paragraph break",
-    "paragraphMarkMoved": "Moved paragraph break",
+    "paragraphMarkMovedFrom": "Moved paragraph break away",
+    "paragraphMarkMovedTo": "Moved paragraph break here",
     "runPropertiesChanged": "Changed text formatting"
   },
   "contextMenu": {

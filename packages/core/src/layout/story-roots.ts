@@ -232,7 +232,25 @@ function flowBlocksWithParent(children: readonly OoxmlNode[]): readonly Parented
  * so the pages before it stay at their own paper size, where accepting the change would put
  * them on the next section's.
  */
+/**
+ * Memoized on the node, per mode. A paragraph is immutable — a transaction rebuilds the path
+ * to what it edited and leaves every other paragraph object-identical — so the answer holds
+ * until that paragraph itself changes. Without this the walk ran for every candidate on every
+ * flush, and a document with hundreds of tracked marks paid it on each keystroke.
+ */
+const addressableByNode = new WeakMap<OoxmlElement, Map<RevisionDisplayMode, boolean>>();
+
 function memberIsAddressable(member: OoxmlElement, displayMode: RevisionDisplayMode): boolean {
+  const perMode = addressableByNode.get(member);
+  const cached = perMode?.get(displayMode);
+  if (cached !== undefined) return cached;
+  const answer = measureMember(member, displayMode);
+  if (perMode) perMode.set(displayMode, answer);
+  else addressableByNode.set(member, new Map([[displayMode, answer]]));
+  return answer;
+}
+
+function measureMember(member: OoxmlElement, displayMode: RevisionDisplayMode): boolean {
   if (!fieldCharsBalanced(member)) return false;
   const pieces = piecesOfParagraph(
     member,

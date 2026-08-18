@@ -164,4 +164,24 @@ describe('editing across a merged paragraph break', () => {
       dispose();
     }
   });
+
+  test('Delete at the end of the first half takes a character, not the paragraph', () => {
+    // The mirror of Backspace at the join. Joining here resolved a tracked decision the
+    // keypress never named — and because the survivor then still carried the mark, the
+    // paragraph AFTER it merged in as well.
+    const { surface, dispose } = mountMerged();
+    try {
+      const [first, second] = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: first!, offset: 6 },
+        head: { paragraphId: first!, offset: 6 },
+      });
+      surface.deleteForward();
+      expect(paragraphTextOf(surface.session.part(), first!)).toBe('Hello ');
+      expect(paragraphTextOf(surface.session.part(), second!)).toBe('orld');
+      expect(surface.session.paragraphIds()).toHaveLength(2);
+    } finally {
+      dispose();
+    }
+  });
 });

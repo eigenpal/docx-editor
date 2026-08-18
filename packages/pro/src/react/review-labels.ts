@@ -24,9 +24,10 @@ export function revisionLabelKey(
 ): TranslationKey {
   if (kind === 'paragraphMark') {
     if (markDirection === 'delete') return 'revisions.paragraphMarkDeleted';
-    if (markDirection === 'moveFrom' || markDirection === 'moveTo') {
-      return 'revisions.paragraphMarkMoved';
-    }
+    // The two halves of a move are opposite decisions, as they are for content: accepting a
+    // `moveFrom` takes this copy of the break away, accepting a `moveTo` keeps it.
+    if (markDirection === 'moveFrom') return 'revisions.paragraphMarkMovedFrom';
+    if (markDirection === 'moveTo') return 'revisions.paragraphMarkMovedTo';
     return 'revisions.paragraphMarkInserted';
   }
   switch (kind) {

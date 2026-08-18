@@ -29,6 +29,7 @@ import {
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import { pageClipRegion, type DrawingAnchorFrameContext } from './drawing-layout.ts';
@@ -166,7 +167,7 @@ export function layoutHeaderFooterStory(
   pageContext?: FieldPageContext,
   maxPageContextEntries: number = DEFAULT_MAX_HF_PAGE_CONTEXT_ENTRIES,
   defaultTabStopPt?: number,
-  displayMode?: RevisionDisplayMode,
+  displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
   inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext,
   drawingTokenForParagraph?: (paragraph: import('@docx-editor.dev/core/store').OoxmlNode) => string,
   drawingLayoutToken?: string,
@@ -243,12 +244,15 @@ export function layoutHeaderFooterStory(
         flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
           measurer,
           cache,
-          producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
+          producer:
+            producer +
+            token +
+            (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-          ...(displayMode ? { displayMode } : {}),
+          displayMode,
           ...(documentProperties ? { documentProperties } : {}),
           inlineDrawingLayout,
           anchorFrameBase,
@@ -259,12 +263,15 @@ export function layoutHeaderFooterStory(
           layoutTextboxStoryFor: (projection) =>
             layoutTextboxStory(projection, {
               measurer,
-              producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
+              producer:
+                producer +
+                token +
+                (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
               cache,
               styleCascade,
               ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
               ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-              ...(displayMode ? { displayMode } : {}),
+              displayMode,
               ...(documentProperties ? { documentProperties } : {}),
               inlineDrawingLayout,
               ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
@@ -313,12 +320,15 @@ export function layoutHeaderFooterStory(
       flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
         measurer,
         cache,
-        producer: producer + token + (displayMode ? `|rev:${displayMode}` : ''),
+        producer:
+          producer +
+          token +
+          (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
         nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
         styleCascade,
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-        ...(displayMode ? { displayMode } : {}),
+        displayMode,
         ...(documentProperties ? { documentProperties } : {}),
       });
     }
