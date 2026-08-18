@@ -7,9 +7,7 @@ import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
-// Bundled menu chrome shares one Vue runtime with the test harness (Bun TSX otherwise
-// loads a second copy and JSX components stringify as "[object Object]").
-import { DocxEditorMenu } from '../dist/index.js';
+import { DocxEditorMenu } from '../src/editor/menu';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';

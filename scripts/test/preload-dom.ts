@@ -9,14 +9,16 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-// Bun's TSX transform can load ESM `vue/jsx-runtime` while tests import CJS `vue`. Route
-// both JSX entry points through the CJS runtime so components mount in composition tests.
+// Pin one CJS Vue runtime for every `vue` import. TSX under packages/vue is re-transpiled
+// to classic `h`/`Fragment` by packages/vue/test/bun-plugin-jsx.ts (see bunfig.toml).
 import { mock } from 'bun:test';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const jsxRuntime = require('vue/jsx-runtime');
-const jsxDevRuntime = require('vue/jsx-dev-runtime');
+const Vue = require('vue');
 
-mock.module('vue/jsx-runtime', () => jsxRuntime);
-mock.module('vue/jsx-dev-runtime', () => jsxDevRuntime);
+mock.module('vue', () => Vue);
+
+(globalThis as typeof globalThis & { h: typeof Vue.h; Fragment: typeof Vue.Fragment }).h = Vue.h;
+(globalThis as typeof globalThis & { h: typeof Vue.h; Fragment: typeof Vue.Fragment }).Fragment =
+  Vue.Fragment;
