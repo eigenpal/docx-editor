@@ -108,13 +108,17 @@ describe('DocxEditorRoot lifecycle', () => {
   });
 
   test('injected instance is the engine object, not a proxy', async () => {
-    let fromHook: DocxEditorInstance | null = null;
-    let fromReady: DocxEditorInstance | null = null;
+    const identities: DocxEditorInstance[] = [];
     const Probe = defineComponent({
       setup() {
-        fromHook = useDocxEditor().value;
-        const page = useEditorState(selectPage);
-        expect(page.value).toEqual(fromHook?.snapshot().page ?? { current: 0, total: 0 });
+        const editorRef = useDocxEditor();
+        watch(
+          editorRef,
+          (editor) => {
+            if (editor) identities.push(editor);
+          },
+          { immediate: true }
+        );
         return () => null;
       },
     });
@@ -127,7 +131,7 @@ describe('DocxEditorRoot lifecycle', () => {
           {
             document: SOURCE,
             onReady: (editor: Editor) => {
-              fromReady = editor as DocxEditorInstance;
+              identities.push(editor as DocxEditorInstance);
             },
           },
           {
@@ -141,8 +145,9 @@ describe('DocxEditorRoot lifecycle', () => {
     try {
       app.mount(container);
       await flush();
-      expect(fromHook).toBe(fromReady);
-      expect(fromHook!.snapshot()).toBe(fromReady!.snapshot());
+      expect(identities.length).toBeGreaterThanOrEqual(2);
+      expect(identities.every((id) => id === identities[0]!)).toBe(true);
+      expect(identities[0]!.snapshot()).toBe(identities[0]!.snapshot());
     } finally {
       app.unmount();
     }

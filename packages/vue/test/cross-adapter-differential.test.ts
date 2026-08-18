@@ -1,48 +1,46 @@
-/**
- * Cross-adapter composable differential — same document, same assertions.
- * Shape differences called out in OpenSpec 11.8 are allowed; enabled/active/reason must match.
- */
 /* eslint-disable react-hooks/rules-of-hooks -- Vue composables in defineComponent setup */
 import './dom-setup.ts';
 
-import { describe, expect, test } from 'bun:test';
-import { createApp, defineComponent, h, nextTick, ref } from 'vue';
-import { zipSync, strToU8 } from 'fflate';
+import { afterEach, describe, expect, test } from 'bun:test';
+import { createApp, defineComponent, h, nextTick } from 'vue';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
-import { useDocxEditor } from '../src/editor/context';
 import { useEditorCommand } from '../src/editor/useEditorCommand';
-import { useZoom } from '../src/editor/useZoom';
-import { SEARCH_MATCH_LIMIT } from '../src/editor/navigation';
+import { SEARCH_MATCH_LIMIT as VUE_SEARCH_LIMIT } from '../src/editor/navigation/useDocumentSearch';
+import { stepZoomLevel as vueStepZoomLevel } from '../src/editor/zoom-levels';
+import {
+  DIFFERENTIAL_SLOTS,
+  DIFFERENTIAL_SOURCE,
+  OFF_LADDER_ZOOM,
+  offLadderZoomIn,
+} from '../../react/test/cross-adapter-shared';
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const SOURCE = zipSync({
-  'word/document.xml': strToU8(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>parity</w:t></w:r></w:p></w:body></w:document>`
-  ),
-});
+const { SEARCH_MATCH_LIMIT: REACT_SEARCH_LIMIT } =
+  await import('../../react/src/editor/navigation/useDocumentSearch.ts');
+const { stepZoomLevel } = await import('../../react/src/editor/zoom-levels.ts');
 
-async function flush() {
+async function flush(): Promise<void> {
   await nextTick();
-  await new Promise((r) => setTimeout(r, 120));
+  for (let i = 0; i < 10; i++) await new Promise((r) => queueMicrotask(r));
+  await new Promise((r) => setTimeout(r, 150));
 }
 
-async function mountVueEditor(onReady: (editor: Editor) => void) {
+async function mountVue(onReady: (editor: Editor) => void) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const app = createApp({
     render: () =>
       h(
         DocxEditorRoot,
-        { document: SOURCE, onReady },
+        { document: DIFFERENTIAL_SOURCE, onReady },
         {
           default: () =>
             h(DocxEditorViewport, null, {
-              default: () => [h(DocxEditorContent)],
+              default: () => h(DocxEditorContent),
             }),
         }
       ),
@@ -52,88 +50,89 @@ async function mountVueEditor(onReady: (editor: Editor) => void) {
   return { app, container };
 }
 
-describe('cross-adapter differential', () => {
-  test('chrome slot state matches toolbarCommandState', async () => {
-    const sawEditor = ref(false);
-    const Probe = defineComponent({
-      setup() {
-        const editorRef = useDocxEditor();
-        const bold = useEditorCommand('text.bold');
-        return () => {
-          const editor = editorRef.value;
-          if (!editor) return null;
-          sawEditor.value = true;
-          const engine = toolbarCommandState(editor, 'text.bold');
-          expect(bold.isEnabled.value).toBe(engine.enabled);
-          expect(bold.isActive.value).toBe(engine.active);
-          expect(bold.disabledReason.value ?? null).toBe(engine.disabledReason ?? null);
-          return null;
-        };
-      },
+afterEach(() => {
+  document.body.innerHTML = '';
+});
+
+describe('cross-adapter differential (Vue harness)', () => {
+  for (const slot of DIFFERENTIAL_SLOTS) {
+    test(`toolbar slot ${slot} matches engine command state`, async () => {
+      let editor: DocxEditorInstance | null = null;
+      const { app } = await mountVue((instance) => {
+        editor = instance as DocxEditorInstance;
+      });
+      try {
+        const engine = toolbarCommandState(editor!, slot);
+        let binding: ReturnType<typeof useEditorCommand> | null = null;
+        const Probe = defineComponent({
+          setup() {
+            binding = useEditorCommand(slot);
+            return () => null;
+          },
+        });
+        const probeApp = createApp({
+          render: () =>
+            h(
+              DocxEditorRoot,
+              { document: DIFFERENTIAL_SOURCE },
+              {
+                default: () =>
+                  h(DocxEditorViewport, null, {
+                    default: () => [h(DocxEditorContent), h(Probe)],
+                  }),
+              }
+            ),
+        });
+        const probeContainer = document.createElement('div');
+        document.body.appendChild(probeContainer);
+        probeApp.mount(probeContainer);
+        await flush();
+        expect(binding!.isEnabled.value).toBe(engine.enabled);
+        expect(binding!.isActive.value).toBe(engine.active);
+        expect(binding!.disabledReason.value ?? null).toBe(engine.disabledReason ?? null);
+        probeApp.unmount();
+        probeContainer.remove();
+      } finally {
+        app.unmount();
+      }
     });
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const app = createApp({
-      render: () =>
-        h(
-          DocxEditorRoot,
-          { document: SOURCE },
-          {
-            default: () =>
-              h(DocxEditorViewport, null, {
-                default: () => [h(Probe), h(DocxEditorContent)],
-              }),
-          }
-        ),
+  }
+
+  test('off-ladder zoom step matches React ladder', () => {
+    expect(stepZoomLevel(OFF_LADDER_ZOOM, 'in')).toBe(vueStepZoomLevel(OFF_LADDER_ZOOM, 'in'));
+    expect(stepZoomLevel(OFF_LADDER_ZOOM, 'out')).toBe(vueStepZoomLevel(OFF_LADDER_ZOOM, 'out'));
+  });
+
+  test('search cap constant matches React export', () => {
+    expect(REACT_SEARCH_LIMIT).toBe(VUE_SEARCH_LIMIT);
+    expect(VUE_SEARCH_LIMIT).toBeGreaterThan(0);
+  });
+
+  test('page-setup write is one undo step', async () => {
+    let editor: DocxEditorInstance | null = null;
+    const { app } = await mountVue((instance) => {
+      editor = instance as DocxEditorInstance;
     });
     try {
-      app.mount(container);
-      await flush();
-      expect(sawEditor.value).toBe(true);
+      const beforeWidth = editor!.getPageSetup()!.pageWidthTwips;
+      editor!.exec({ type: 'setPageSetup', pageWidth: beforeWidth + 144 });
+      expect(editor!.getPageSetup()!.pageWidthTwips).toBe(beforeWidth + 144);
+      editor!.exec({ type: 'undo' });
+      expect(editor!.getPageSetup()!.pageWidthTwips).toBe(beforeWidth);
     } finally {
       app.unmount();
     }
   });
 
-  test('search cap constant matches React export', () => {
-    expect(SEARCH_MATCH_LIMIT).toBeGreaterThan(0);
-  });
-
-  test('zoom off-ladder step is defined', async () => {
+  test('off-ladder zoomIn lands on shared rung', async () => {
     let editor: DocxEditorInstance | null = null;
-    const { app } = await mountVueEditor((e) => {
-      editor = e as DocxEditorInstance;
+    const { app } = await mountVue((instance) => {
+      editor = instance as DocxEditorInstance;
     });
     try {
-      const Probe = defineComponent({
-        setup() {
-          const zoom = useZoom();
-          return () => {
-            expect(typeof zoom.zoomIn).toBe('function');
-            expect(typeof zoom.canZoomOut.value).toBe('boolean');
-            return null;
-          };
-        },
-      });
-      const probe = createApp({
-        render: () =>
-          h(
-            DocxEditorRoot,
-            { document: SOURCE },
-            {
-              default: () =>
-                h(DocxEditorViewport, null, {
-                  default: () => [h(Probe), h(DocxEditorContent)],
-                }),
-            }
-          ),
-      });
-      const el = document.createElement('div');
-      document.body.appendChild(el);
-      probe.mount(el);
-      await flush();
-      probe.unmount();
-      expect(editor).not.toBeNull();
+      editor!.setZoom(OFF_LADDER_ZOOM);
+      editor!.setZoom(offLadderZoomIn() ?? OFF_LADDER_ZOOM);
+      expect(editor!.snapshot().zoom).toBe(offLadderZoomIn()!);
     } finally {
       app.unmount();
     }
