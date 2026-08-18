@@ -11,7 +11,7 @@ import {
   DocxEditorRoot,
   provideDocxEditor,
   docxEditorFacadeListenerCount,
-  type DocxEditorRootProps,
+  type ProvideDocxEditorResult,
 } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
@@ -22,10 +22,8 @@ import type { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { useFonts } from '../src/editor/useFonts';
 import { LocaleProvider } from '../src/i18n';
 
-function bindRootProps(
-  rootProps: ReturnType<typeof provideDocxEditor>['rootProps']
-): DocxEditorRootProps {
-  return rootProps.value;
+function bindRootProps(setup: ProvideDocxEditorResult): Record<string, unknown> {
+  return { ...setup.rootProps.value, ...setup.rootListeners };
 }
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -194,13 +192,9 @@ describe('provideDocxEditor', () => {
       setup() {
         setup = provideDocxEditor({ document: SOURCE, zoom: 1.25 });
         return () =>
-          h(
-            setup!.DocxEditorRoot,
-            { ...bindRootProps(setup!.rootProps) } as Record<string, unknown>,
-            {
-              default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
-            }
-          );
+          h(setup!.DocxEditorRoot, bindRootProps(setup!), {
+            default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+          });
       },
     });
     try {
@@ -239,16 +233,12 @@ describe('provideDocxEditor', () => {
         const setupResult = provideDocxEditor({ document: SOURCE });
         ownerRef = setupResult.editorRef;
         return () =>
-          h(
-            setupResult.DocxEditorRoot,
-            { ...bindRootProps(setupResult.rootProps) } as Record<string, unknown>,
-            {
-              default: () => [
-                h(Probe),
-                h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
-              ],
-            }
-          );
+          h(setupResult.DocxEditorRoot, bindRootProps(setupResult), {
+            default: () => [
+              h(Probe),
+              h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+            ],
+          });
       },
     });
     try {
@@ -262,7 +252,7 @@ describe('provideDocxEditor', () => {
     }
   });
 
-  test('forwards ready, change, and fontError through rendered Root', async () => {
+  test('forwards ready, change, and fontError through rendered Root exactly once', async () => {
     const ready: Editor[] = [];
     const changes: unknown[] = [];
     const fontErrors: unknown[] = [];
@@ -270,30 +260,29 @@ describe('provideDocxEditor', () => {
     document.body.appendChild(container);
     const app = createApp({
       setup() {
-        const setupResult = provideDocxEditor({ document: SOURCE });
+        const setupResult = provideDocxEditor({
+          document: SOURCE,
+          onReady: (editor) => ready.push(editor),
+          onChange: (change) => changes.push(change),
+        });
         return () =>
-          h(
-            setupResult.DocxEditorRoot,
-            {
-              ...bindRootProps(setupResult.rootProps),
-              onReady: (editor: Editor) => ready.push(editor),
-              onChange: (change: unknown) => changes.push(change),
-              onFontError: (error: unknown) => fontErrors.push(error),
-            },
-            {
-              default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
-            }
-          );
+          h(setupResult.DocxEditorRoot, bindRootProps(setupResult), {
+            default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+          });
       },
     });
     try {
       app.mount(container);
       await flush();
       expect(ready.length).toBe(1);
+      const changeCountBefore = changes.length;
       ready[0]!.exec({ type: 'insertText', text: '!' });
       await flush();
-      expect(changes.length).toBeGreaterThan(0);
+      expect(changes.length).toBe(changeCountBefore + 1);
       app.unmount();
+      const errorContainer = document.createElement('div');
+      document.body.appendChild(errorContainer);
+      const fontErrorsBefore = fontErrors.length;
       const errorApp = createApp({
         setup() {
           const setupResult = provideDocxEditor({
@@ -301,24 +290,19 @@ describe('provideDocxEditor', () => {
             fonts: () => {
               throw new Error('font exploded');
             },
+            onFontError: (error) => fontErrors.push(error),
           });
           return () =>
-            h(
-              setupResult.DocxEditorRoot,
-              {
-                ...bindRootProps(setupResult.rootProps),
-                onFontError: (error: unknown) => fontErrors.push(error),
-              },
-              {
-                default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
-              }
-            );
+            h(setupResult.DocxEditorRoot, bindRootProps(setupResult), {
+              default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+            });
         },
       });
-      errorApp.mount(document.createElement('div'));
+      errorApp.mount(errorContainer);
       await flush();
-      expect(fontErrors.length).toBeGreaterThan(0);
+      expect(fontErrors.length).toBe(fontErrorsBefore + 1);
       errorApp.unmount();
+      errorContainer.remove();
     } finally {
       container.remove();
     }
@@ -351,13 +335,9 @@ describe('provideDocxEditor', () => {
         const setupResult = provideDocxEditor({ document: SOURCE });
         ownerRef = setupResult.editorRef;
         return () =>
-          h(
-            setupResult.DocxEditorRoot,
-            { ...bindRootProps(setupResult.rootProps) } as Record<string, unknown>,
-            {
-              default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
-            }
-          );
+          h(setupResult.DocxEditorRoot, bindRootProps(setupResult), {
+            default: () => h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+          });
       },
     });
     try {

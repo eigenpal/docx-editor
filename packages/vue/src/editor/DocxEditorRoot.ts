@@ -12,6 +12,7 @@ import type {
   DocumentChange,
   DocumentSource,
   Editor,
+  EditorFontError,
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule, ImageDecodePort } from '@docx-editor.dev/core/editor';
@@ -49,10 +50,18 @@ const ContentControlProvider = defineComponent({
   },
 });
 
+/** @public Lifecycle listeners for {@link provideDocxEditor}; bind on {@link DocxEditorRoot}. */
+export interface DocxEditorRootListeners {
+  onReady?: (editor: Editor) => void;
+  onChange?: (change: DocumentChange) => void;
+  onFontError?: (error: EditorFontError) => void;
+}
+
 /** @public */
 export interface ProvideDocxEditorResult {
   readonly DocxEditorRoot: typeof DocxEditorRoot;
-  readonly rootProps: ShallowRef<DocxEditorRootProps>;
+  readonly rootProps: ShallowRef<Omit<DocxEditorRootProps, keyof DocxEditorRootListeners>>;
+  readonly rootListeners: DocxEditorRootListeners;
   readonly editorRef: ReturnType<typeof useDocxEditor>;
 }
 
@@ -70,26 +79,20 @@ const noopEmit: DocxEditorRootEmit = {
  * @public
  */
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult {
-  const rootProps = shallowRef({ ...options });
+  const { onReady, onChange, onFontError, ...engineProps } = options;
+  const rootProps = shallowRef({ ...engineProps });
+  const rootListeners: DocxEditorRootListeners = { onReady, onChange, onFontError };
   const hostEmit = shallowRef({ ...noopEmit });
   provide(docxEditorRootHostEmitKey, hostEmit);
   const { editorRef } = useDocxEditorRootOwner(rootProps, {
-    ready: (editor) => {
-      rootProps.value.onReady?.(editor);
-      hostEmit.value.ready(editor);
-    },
-    change: (change) => {
-      rootProps.value.onChange?.(change);
-      hostEmit.value.change(change);
-    },
-    fontError: (error) => {
-      rootProps.value.onFontError?.(error);
-      hostEmit.value.fontError(error);
-    },
+    ready: (editor) => hostEmit.value.ready(editor),
+    change: (change) => hostEmit.value.change(change),
+    fontError: (error) => hostEmit.value.fontError(error),
   });
   return {
     DocxEditorRoot,
     rootProps,
+    rootListeners,
     editorRef,
   };
 }

@@ -12,6 +12,7 @@
 export const VERSION = '0.0.2';
 
 export type { MaybeRefOrGetter } from './maybe-ref-or-getter';
+export type { DocxEditorChildren } from './docx-editor-children';
 
 export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
 
@@ -21,6 +22,8 @@ export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
 export {
   DocxEditorRoot,
   type DocxEditorRootProps,
+  type DocxEditorRootListeners,
+  type ProvideDocxEditorResult,
   provideDocxEditor,
 } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';

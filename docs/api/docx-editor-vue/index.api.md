@@ -1779,6 +1779,9 @@ export { DocxDocument }
 // @public (undocumented)
 export const DocxEditor: DocxEditorNamespace;
 
+// @public
+export type DocxEditorChildren = any;
+
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
     class: {
@@ -2627,6 +2630,16 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
     zoomMode: "auto" | ZoomMode;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorRootListeners {
+    // (undocumented)
+    onChange?: (change: DocumentChange) => void;
+    // (undocumented)
+    onFontError?: (error: EditorFontError) => void;
+    // (undocumented)
+    onReady?: (editor: Editor) => void;
+}
 
 // @public (undocumented)
 export interface DocxEditorRootProps {
@@ -4193,6 +4206,18 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 
 // @public
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
+
+// @public (undocumented)
+export interface ProvideDocxEditorResult {
+    // (undocumented)
+    readonly DocxEditorRoot: typeof DocxEditorRoot;
+    // (undocumented)
+    readonly editorRef: ReturnType<typeof useDocxEditor>;
+    // (undocumented)
+    readonly rootListeners: DocxEditorRootListeners;
+    // (undocumented)
+    readonly rootProps: ShallowRef<Omit<DocxEditorRootProps, keyof DocxEditorRootListeners>>;
+}
 
 export { PX_PER_CM }
 

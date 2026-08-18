@@ -23,16 +23,8 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api.md');
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
-const PARITY_CONTRACT = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 
 const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef']);
-
-function loadFrameworkLocalTypeAliases() {
-  if (!fs.existsSync(PARITY_CONTRACT)) return new Set();
-  const contract = JSON.parse(fs.readFileSync(PARITY_CONTRACT, 'utf8'));
-  const entries = contract.composableParity?.frameworkLocalTypeAliases ?? {};
-  return new Set(Object.keys(entries));
-}
 
 function isUseExport(name) {
   return name.startsWith('use') && name[3] === name[3]?.toUpperCase();
@@ -120,12 +112,11 @@ function compareFunction(name, reactOverloads, vueOverloads, issues) {
   }
 }
 
-function compareTypeAliases(reactSnap, vueSnap, issues, stats, frameworkLocal) {
+function compareTypeAliases(reactSnap, vueSnap, issues, stats) {
   const reactAliases = extractTypeAliasBodies(reactSnap);
   const vueAliases = extractTypeAliasBodies(vueSnap);
   const names = new Set([...reactAliases.keys(), ...vueAliases.keys()]);
   for (const name of [...names].sort()) {
-    if (frameworkLocal.has(name)) continue;
     const r = reactAliases.get(name);
     const v = vueAliases.get(name);
     if (!r) {
@@ -145,14 +136,13 @@ function compareTypeAliases(reactSnap, vueSnap, issues, stats, frameworkLocal) {
   }
 }
 
-export function runComposableParityCheck({ reactSnap, vueSnap, frameworkLocal } = {}) {
+export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
   const reactSnapshot = normalizeSnapshotText(
     reactSnap ?? fs.readFileSync(REACT_SNAPSHOT, 'utf8')
   );
   const vueSnapshot = normalizeSnapshotText(vueSnap ?? fs.readFileSync(VUE_SNAPSHOT, 'utf8'));
   const issues = [];
   const stats = { memberTypeChecks: 0, aliasChecks: 0 };
-  const frameworkLocalAliases = frameworkLocal ?? loadFrameworkLocalTypeAliases();
 
   const reactFns = extractFunctionExports(reactSnapshot);
   const vueFns = extractFunctionExports(vueSnapshot);
@@ -171,13 +161,7 @@ export function runComposableParityCheck({ reactSnap, vueSnap, frameworkLocal } 
     compareInterface(name, reactSnapshot, vueSnapshot, issues, stats);
   }
 
-  compareTypeAliases(
-    reactSnapshot,
-    vueSnapshot,
-    issues,
-    stats,
-    frameworkLocalAliases
-  );
+  compareTypeAliases(reactSnapshot, vueSnapshot, issues, stats);
 
   return {
     issues,

@@ -44,11 +44,6 @@
       "revisionStyles": "Per-author revision styling. React expresses it DECLARATIVELY — `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is one implementation either way."
     }
   },
-  "composableParity": {
-    "frameworkLocalTypeAliases": {
-      "DocxEditorChildren": "React uses ReactNode; Vue uses VNode for slot and icon content."
-    }
-  },
   "ref": {
     "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters.",
     "paired": ["exec", "focus", "getDocumentHandle", "getEditor", "load", "save", "snapshot"],

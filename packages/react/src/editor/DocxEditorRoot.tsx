@@ -37,6 +37,7 @@ import type {
 } from '@docx-editor.dev/core/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
+import type { useDocxEditor } from './context';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
 import { ImageInsertProvider } from './images/ImageInsert';
@@ -137,6 +138,21 @@ function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
   const left = resolveZoomMode(a);
   const right = resolveZoomMode(b);
   return left !== null && right !== null && sameZoomMode(left, right);
+}
+
+/** @public Vue-only lifecycle listeners; exported for cross-adapter API parity. */
+export interface DocxEditorRootListeners {
+  onReady?: (editor: Editor) => void;
+  onChange?: (change: DocumentChange) => void;
+  onFontError?: (error: EditorFontError) => void;
+}
+
+/** @public Vue-only setup result; exported for cross-adapter API parity. */
+export interface ProvideDocxEditorResult {
+  readonly DocxEditorRoot: typeof DocxEditorRoot;
+  readonly rootProps: Omit<DocxEditorRootProps, keyof DocxEditorRootListeners>;
+  readonly rootListeners: DocxEditorRootListeners;
+  readonly editorRef: ReturnType<typeof useDocxEditor>;
 }
 
 /** @public Vue-only — in React compose `<DocxEditorRoot>` instead. */

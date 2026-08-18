@@ -152,18 +152,14 @@ export function useDocxEditorRootOwner(
   const fireReady = (instance: DocxEditorInstance) => {
     if (readyFired) return;
     readyFired = true;
-    const p = toValue(props);
-    p.onReady?.(instance);
     emit.ready(instance);
   };
 
   const fireChange = (change: DocumentChange) => {
-    toValue(props).onChange?.(change);
     emit.change(change);
   };
 
   const fireFontError = (error: EditorFontError) => {
-    toValue(props).onFontError?.(error);
     emit.fontError(error);
   };
 
