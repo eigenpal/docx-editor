@@ -48,20 +48,20 @@
 
 Lands before any new surface: everything after it must be written against ONE engine.
 
-- [ ] 2.1 `@docx-editor.dev/core` from `dependencies` to `peerDependencies` (required, not
+- [x] 2.1 `@docx-editor.dev/core` from `dependencies` to `peerDependencies` (required, not
       optional) plus a `workspace:*` `devDependency`
-- [ ] 2.2 `@docx-editor.dev/i18n` gets a real semver range; drop `private: true`
-- [ ] 2.3 Replace `vite.config.ts` with `tsup.config.ts`: `platform: 'browser'`,
+- [x] 2.2 `@docx-editor.dev/i18n` gets a real semver range; drop `private: true`
+- [x] 2.3 Replace `vite.config.ts` with `tsup.config.ts`: `platform: 'browser'`,
       `format: ['cjs','esm']`, `dts: true`, `metafile: true`,
       `external: ['vue','@docx-editor.dev/core','@docx-editor.dev/i18n','harfbuzzjs','emf-converter']`
-- [ ] 2.4 `packages/vue/test/package-dependencies.test.ts`, the twin of React's, asserting all
+- [x] 2.4 `packages/vue/test/package-dependencies.test.ts`, the twin of React's, asserting all
       three facts (peer present, no regular dependency, dev dependency pins the workspace)
-- [ ] 2.5 A build assertion that `dist/index.js` imports the engine by bare specifier and inlines
+- [x] 2.5 A build assertion that `dist/index.js` imports the engine by bare specifier and inlines
       no copy of it
-- [ ] 2.6 Add the package to `build:packages`; keep `build:packages:vue` working or fold it in
+- [x] 2.6 Add the package to `build:packages`; keep `build:packages:vue` working or fold it in
 - [ ] 2.7 `bun run check:package-artifacts`, `SKIP_CONSUMER_INSTALL_BUILD=1 bun run
-      check:consumer-install`, `bun run notices:generate` all pass with Vue in the set
-- [ ] 2.8 Mirror React's dependency list rather than inventing one: `harfbuzzjs` and
+    check:consumer-install`, `bun run notices:generate` all pass with Vue in the set
+- [x] 2.8 Mirror React's dependency list rather than inventing one: `harfbuzzjs` and
       `emf-converter` stay declared (pinned, external), `fflate` stays a devDependency — it is
       what the tests build DOCX fixtures with, and moving it would externalize it and change the
       published output. Add NO component library: `Slot` is in-tree, and React's one Radix import
@@ -73,54 +73,54 @@ Written against an empty Vue package, where it reports twenty-eight missing comp
 one turns it greener. Written afterwards it would audit decisions already made, and every
 mismatch would be a rewrite rather than a spec.
 
-- [ ] 2b.1 `scripts/check-composable-parity.mjs`, over the two committed API Extractor
+- [x] 2b.1 `scripts/check-composable-parity.mjs`, over the two committed API Extractor
       snapshots. Generalize `extractInterfaceFields` from `check-parity-contract.mjs`, which
       already parses that file
-- [ ] 2b.2 Assert MEMBERS: for every `use*` export, every interface one returns, and every other
+- [x] 2b.2 Assert MEMBERS: for every `use*` export, every interface one returns, and every other
       interface both snapshots export (`ToolbarButtonProps`, `FontFamilyProps`,
       `NavigationPartProps`, `MenuItemProps`, …), the member name sets match in BOTH directions.
       Exclude `DocxEditorProps` and `DocxEditorRef` — `check:parity-contract` owns those, so
       there is one gate per interface and no overlap
-- [ ] 2b.3 Assert MEMBER TYPES: exact match after normalization
-- [ ] 2b.4 Assert SIGNATURES: parameter names, count, optionality, OVERLOAD COUNT
+- [x] 2b.3 Assert MEMBER TYPES: exact match after normalization
+- [x] 2b.4 Assert SIGNATURES: parameter names, count, optionality, OVERLOAD COUNT
       (`useEditorValueCommand` has two), and the return type name
-- [ ] 2b.5 Exactly two normalizations: `Ref`/`ShallowRef`/`ComputedRef`/`Readonly` unwrap to the
+- [x] 2b.5 Exactly two normalizations: `Ref`/`ShallowRef`/`ComputedRef`/`Readonly` unwrap to the
       inner type; `MaybeRefOrGetter<T>` in a PARAMETER position reduces to `T`. No third, no
       allowlist, no opt-out file — that is what the divergence file became
-- [ ] 2b.6 Enumerate the return interfaces rather than pattern-matching a suffix: React mixes
+- [x] 2b.6 Enumerate the return interfaces rather than pattern-matching a suffix: React mixes
       `Result` (nine) and `Return` (two), and `useTranslation` / `useNoteScopeState` return
       anonymous shapes
 - [ ] 2b.7 Wire into `check:parity` and into `ci.yml` AFTER `api:check` — the gate reads
       committed snapshots, so a stale snapshot would make it measure nothing
-- [ ] 2b.8 Self-test: a fixture pair proves it fails on a missing member, a renamed member, a
+- [x] 2b.8 Self-test: a fixture pair proves it fails on a missing member, a renamed member, a
       wrong member type, a dropped parameter and a dropped overload
 
 ## 3. The composition layer
 
 Rebuilt from nothing, one file per React file, at the React file's path.
 
-- [ ] 3.1 `editor/context.ts`: `InjectionKey<ShallowRef<DocxEditorInstance | null>>`, the review
+- [x] 3.1 `editor/context.ts`: `InjectionKey<ShallowRef<DocxEditorInstance | null>>`, the review
       rail key under the name `ReviewRailContext`, and `useDocxEditor()` returning the ref
-- [ ] 3.2 `DocxEditorRoot` + `provideDocxEditor()`: `provide` a `shallowRef` in `setup`, create
+- [x] 3.2 `DocxEditorRoot` + `provideDocxEditor()`: `provide` a `shallowRef` in `setup`, create
       the container-less instance in `onMounted` (NEVER in `setup` — it runs on the server),
       one instance per `document`/`fonts`/`translate`/`imageDecodePort` identity — React's four
       creation-effect dependencies, no more and no fewer — destroy in `onUnmounted`
-- [ ] 3.2b No engine value is deep-reactive: `shallowRef` everywhere, no `reactive()`, no
+- [x] 3.2b No engine value is deep-reactive: `shallowRef` everywhere, no `reactive()`, no
       `readonly()` on anything compared by identity. Add a lint or test that fails on any of the
       three applied to an editor, a snapshot or a slice
-- [ ] 3.3 `ready` after the instance is published AND after any Content in the same commit has
+- [x] 3.3 `ready` after the instance is published AND after any Content in the same commit has
       attached; a large document is behind the engine's open yield, so wait for the mount's own
       `change` before emitting
-- [ ] 3.4 Zoom in ONE watcher, level then mode, with the by-value `zoomMode` comparison; a fit
+- [x] 3.4 Zoom in ONE watcher, level then mode, with the by-value `zoomMode` comparison; a fit
       declared alongside a level is re-asserted after `setZoom` leaves fit
-- [ ] 3.5 `DocxEditorViewport`: the three load-bearing classes, the scope class, the review
+- [x] 3.5 `DocxEditorViewport`: the three load-bearing classes, the scope class, the review
       gutter keyed on a REGISTERED rail, `--docx-nav-shift` as a custom property, and the
       capture-phase zoom chord with the input/dialog guard
-- [ ] 3.6 `DocxEditorContent`: render `docx-paginated-surface`, then attach from a WATCHER on the
+- [x] 3.6 `DocxEditorContent`: render `docx-paginated-surface`, then attach from a WATCHER on the
       instance ref (`immediate`, `flush: 'post'`) — not from `onMounted`, which runs before the
       Root's and sees `null`. `detach` on `onUnmounted` AND `onDeactivated`, re-attach on
       `onActivated`, and `detach` after `destroy` must be a no-op
-- [ ] 3.7 `scope-context.ts` twin: `useScopeClassName()` over an injected boolean, so parts inside
+- [x] 3.7 `scope-context.ts` twin: `useScopeClassName()` over an injected boolean, so parts inside
       the packaged wrapper do not repeat `.docx-editor`
 - [ ] 3.8 Tests: the pages actually PAINT on first mount (the ordering trap — this test fails
       against an `onMounted` attach); instance lands; document identity rebuilds and re-attaches;
@@ -131,18 +131,18 @@ Rebuilt from nothing, one file per React file, at the React file's path.
 
 ## 4. The reactive read model
 
-- [ ] 4.1 One tick source per Root: `shallowRef` bumped by `change`, `selectionChange`, `error`
-- [ ] 4.2 The deferred notifier, ported with its reasoning: microtask by default, task when
+- [x] 4.1 One tick source per Root: `shallowRef` bumped by `change`, `selectionChange`, `error`
+- [x] 4.2 The deferred notifier, ported with its reasoning: microtask by default, task when
       `navigator.scheduling.isInputPending({ includeContinuous: true })` is true, coalesced
-- [ ] 4.3 `useEditorState(selector, isEqual?)`: eager `shallowRef` + `watch(tick)` with the
+- [x] 4.3 `useEditorState(selector, isEqual?)`: eager `shallowRef` + `watch(tick)` with the
       memoized `(snapshot, slice)` pair and the equality bail-out. NOT `computed` — it cannot
       take a custom equality and is lazy
-- [ ] 4.4 Lift `LOADING_SNAPSHOT` into `@docx-editor.dev/core/editor` and re-export it from both
+- [x] 4.4 Lift `LOADING_SNAPSHOT` into `@docx-editor.dev/core/editor` and re-export it from both
       adapters. Vue cannot import a React file, and copying is what let React's copy gain
       `canUndo`/`canRedo` while Vue's `PRE_MOUNT_SNAPSHOT` never did. One constant, one home
-- [ ] 4.5 Scope disposal through `getCurrentScope()` + `onScopeDispose`, so the `…Instance` forms
+- [x] 4.5 Scope disposal through `getCurrentScope()` + `onScopeDispose`, so the `…Instance` forms
       called outside a component clean up too
-- [ ] 4.6 `@internal` counters: consumers mounted, and facade listeners per Root
+- [x] 4.6 `@internal` counters: consumers mounted, and facade listeners per Root
 - [ ] 4.7 Tests: unrelated change does not move the slice; custom equality honoured; forty
       consumers still three listeners; consumer counter returns to zero; a burst collapses to one
       evaluation; formatting read after a commit is the committed formatting (the defer's
@@ -150,11 +150,11 @@ Rebuilt from nothing, one file per React file, at the React file's path.
 
 ## 5. The command composables
 
-- [ ] 5.1 `useEditorCommand`: slot or raw command, `toolbarCommandState` for one and
+- [x] 5.1 `useEditorCommand`: slot or raw command, `toolbarCommandState` for one and
       `can`/`isActive` for the other, keyed on the command BY VALUE with sorted keys
-- [ ] 5.2 `useEditorValueCommand` for the value-typed slots, over `commandForSlotValue`
-- [ ] 5.3 `useEditorEvent`: latest-handler forwarding, resubscribe only on instance or event name
-- [ ] 5.4 `useEditorCaret`: `{ paragraphId, offset }` by value, on both `change` and
+- [x] 5.2 `useEditorValueCommand` for the value-typed slots, over `commandForSlotValue`
+- [x] 5.3 `useEditorEvent`: latest-handler forwarding, resubscribe only on instance or event name
+- [x] 5.4 `useEditorCaret`: `{ paragraphId, offset }` by value, on both `change` and
       `selectionChange`, `null` on the server
 - [ ] 5.5 Tests: payload switch flips the answer; inline object literal adds no watcher; disabled
       reason is the engine's; `execute` before mount returns false; one listener for ten renders;
@@ -164,44 +164,44 @@ Rebuilt from nothing, one file per React file, at the React file's path.
 
 Each is a read of the engine plus a call back into it. Group them, but give each its own test.
 
-- [ ] 6.1 `useZoom` — both halves of the state, the ladder from `zoom-levels.ts`, the off-rung
+- [x] 6.1 `useZoom` — both halves of the state, the ladder from `zoom-levels.ts`, the off-rung
       step, `canZoomIn`/`canZoomOut` agreeing with what the step does
-- [ ] 6.2 `usePageSetup`, `useParagraphIndent` — read from the snapshot, write through the
+- [x] 6.2 `usePageSetup`, `useParagraphIndent` — read from the snapshot, write through the
       command, indent geometry from `ruler-indent.ts`
-- [ ] 6.3 `useFonts` — one resolver for the scope's life, arguments read at resolve time, no
+- [x] 6.3 `useFonts` — one resolver for the scope's life, arguments read at resolve time, no
       epoch stamped here
-- [ ] 6.4 `useDocxSource` — fetch or bytes, fonts composed through `composeFontConfiguration`,
+- [x] 6.4 `useDocxSource` — fetch or bytes, fonts composed through `composeFontConfiguration`,
       document held until fonts SETTLE, abort plus a liveness flag on scope disposal, font
       failure never lands on `error`
-- [ ] 6.5 `useFontFamily`, `useParagraphStyle` — value / options / setValue / isEnabled over
+- [x] 6.5 `useFontFamily`, `useParagraphStyle` — value / options / setValue / isEnabled over
       `getDocumentFonts` and `getDocumentStyles`
-- [ ] 6.6 `useDocumentOutline`, `useDocumentSearch` — `getOutline`, `findMatches`, `selectMatch`,
+- [x] 6.6 `useDocumentOutline`, `useDocumentSearch` — `getOutline`, `findMatches`, `selectMatch`,
       `SEARCH_DEBOUNCE_MS`, `SEARCH_MATCH_LIMIT`, and an honest "cap reached" report
-- [ ] 6.7 `useNavigationPane`, `useNavigationShift` — the layout store as a store, the shift from
+- [x] 6.7 `useNavigationPane`, `useNavigationShift` — the layout store as a store, the shift from
       `navigationShift`, no reactive style at resize frequency
-- [ ] 6.8 `useHyperlinkPopup` / `useHyperlinkPopupInstance` — ONE state per editor, published by
+- [x] 6.8 `useHyperlinkPopup` / `useHyperlinkPopupInstance` — ONE state per editor, published by
       the Root, so a toolbar button and the panel share it and only one registers with the
       engine's gestures
-- [ ] 6.9 `useContentControl` / `useContentControlInstance`, `CONTENT_CONTROL_SLOTS`
-- [ ] 6.10 `useHeaderFooterState`, `useNoteScopeState`, `useNotePropertiesState`
-- [ ] 6.11 `useContextMenuTarget`, `useTableBorderTargetLabel`
-- [ ] 6.12 Each composable declares a named `Use<Name>Result`/`Return` interface and ANNOTATES
+- [x] 6.9 `useContentControl` / `useContentControlInstance`, `CONTENT_CONTROL_SLOTS`
+- [x] 6.10 `useHeaderFooterState`, `useNoteScopeState`, `useNotePropertiesState`
+- [x] 6.11 `useContextMenuTarget`, `useTableBorderTargetLabel`
+- [x] 6.12 Each composable declares a named `Use<Name>Result`/`Return` interface and ANNOTATES
       its return type, or core internals leak into the API snapshot
-- [ ] 6.13 `useEditorSnapshot` — the event counter both adapters export, deleted with the rest in
+- [x] 6.13 `useEditorSnapshot` — the event counter both adapters export, deleted with the rest in
       phase 1 and rebuilt here. Vue's takes a GETTER (`() => Editor | null`) where React takes the
       value; that is the established shape and the one normalization the parity gate allows for a
       parameter
-- [ ] 6.14 `bun run check:composable-parity` is green: every composable matches React member for
+- [x] 6.14 `bun run check:composable-parity` is green: every composable matches React member for
       member, type for type, parameter for parameter, overload for overload
 
 ## 7. i18n
 
-- [ ] 7.1 `LocaleProvider` + `useTranslation` through provide/inject, merged onto the INHERITED
+- [x] 7.1 `LocaleProvider` + `useTranslation` through provide/inject, merged onto the INHERITED
       catalogue, reactive so every mounted chrome LABEL re-resolves. The editor INSTANCE still
       rebuilds, because `createDocxEditor` samples `translate` and it paints drawing refusal
       labels — see 3.2 and design trap 5. Do not "improve" on that; it is the React behaviour
-- [ ] 7.2 `useChromeTranslate` with the host override map taking precedence
-- [ ] 7.3 Remove the catalogue construction currently inlined in `DocxEditor.ts`
+- [x] 7.2 `useChromeTranslate` with the host override map taking precedence
+- [x] 7.3 Remove the catalogue construction currently inlined in `DocxEditor.ts`
 - [ ] 7.4 `bun run i18n:validate` and `bun run i18n:unused` — a Vue chrome that resolves the same
       keys should shrink the unused list, not grow the catalogue
 
