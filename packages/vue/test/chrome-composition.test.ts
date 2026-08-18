@@ -57,7 +57,9 @@ function byLabel(key: string): string {
 }
 
 function openContextMenu(container: HTMLElement): MouseEvent {
-  const scroller = container.querySelector('.docx-editor__scroll-container')!;
+  const target =
+    container.querySelector('.docx-paginated-surface') ??
+    container.querySelector('.docx-editor__scroll-container')!;
   const event = new MouseEvent('contextmenu', {
     bubbles: true,
     cancelable: true,
@@ -65,7 +67,7 @@ function openContextMenu(container: HTMLElement): MouseEvent {
     clientY: 100,
     button: 2,
   });
-  scroller.dispatchEvent(event);
+  target.dispatchEvent(event);
   return event;
 }
 

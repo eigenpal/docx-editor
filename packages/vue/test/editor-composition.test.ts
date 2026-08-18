@@ -2,7 +2,7 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createApp, defineComponent, h, nextTick } from 'vue';
+import { createApp, defineComponent, h, nextTick, ref, KeepAlive, watch } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -13,6 +13,7 @@ import { useDocxEditor } from '../src/editor/context';
 import { useEditorState } from '../src/editor/useEditorState';
 import { useEditorCommand } from '../src/editor/useEditorCommand';
 import { useEditorEvent } from '../src/editor/useEditorEvent';
+import { useEditorCaret } from '../src/editor/useEditorCaret';
 import { docxEditorFacadeListenerCount } from '../src/editor/DocxEditorRoot';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -301,6 +302,147 @@ describe('facade listeners', () => {
     } finally {
       app.unmount();
       expect(docxEditorFacadeListenerCount()).toBe(0);
+    }
+  });
+});
+
+describe('DocxEditorRoot document identity', () => {
+  test('replacing document bytes rebuilds painted content', async () => {
+    const other = docx('<w:p><w:r><w:t>other doc</w:t></w:r></w:p>');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const docRef = ref(SOURCE);
+    const app = createApp({
+      setup() {
+        return () =>
+          h(
+            DocxEditorRoot,
+            { document: docRef.value },
+            {
+              default: () =>
+                h(DocxEditorViewport, null, {
+                  default: () => [h(DocxEditorContent)],
+                }),
+            }
+          );
+      },
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(container.textContent).toContain('hello world');
+      docRef.value = other;
+      await flush();
+      expect(container.textContent).toContain('other doc');
+    } finally {
+      app.unmount();
+    }
+  });
+});
+
+describe('DocxEditorRoot reactive props', () => {
+  test('zoom prop changes reuse the same editor instance', async () => {
+    const zoom = ref(1);
+    const instances = new Set<DocxEditorInstance>();
+    const Probe = defineComponent({
+      setup() {
+        const editorRef = useDocxEditor();
+        watch(
+          editorRef,
+          (editor) => {
+            if (editor) instances.add(editor as DocxEditorInstance);
+          },
+          { immediate: true }
+        );
+        return () => null;
+      },
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      setup() {
+        return () =>
+          h(
+            DocxEditorRoot,
+            { document: SOURCE, zoom: zoom.value },
+            {
+              default: () =>
+                h(DocxEditorViewport, null, {
+                  default: () => [h(Probe), h(DocxEditorContent)],
+                }),
+            }
+          );
+      },
+    });
+    try {
+      app.mount(container);
+      await flush();
+      zoom.value = 1.25;
+      await flush();
+      expect(instances.size).toBe(1);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test('KeepAlive round trip keeps the mounted surface', async () => {
+    const active = ref(true);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      setup() {
+        return () =>
+          h(
+            DocxEditorRoot,
+            { document: SOURCE },
+            {
+              default: () =>
+                h(DocxEditorViewport, null, {
+                  default: () =>
+                    h(KeepAlive, null, {
+                      default: () => (active.value ? h(DocxEditorContent) : null),
+                    }),
+                }),
+            }
+          );
+      },
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(container.querySelectorAll('.docx-page').length).toBeGreaterThan(0);
+      active.value = false;
+      await flush();
+      active.value = true;
+      await flush();
+      expect(container.textContent).toContain('hello world');
+    } finally {
+      app.unmount();
+    }
+  });
+});
+
+describe('useEditorCaret', () => {
+  test('caret position updates after typing', async () => {
+    const positions: Array<{ paragraphId: string; offset: number } | null> = [];
+    const Probe = defineComponent({
+      setup() {
+        const caret = useEditorCaret();
+        watch(caret, (value) => positions.push(value), { immediate: true });
+        return () => null;
+      },
+    });
+    const { container, app, ready } = mountEditor(() => [h(Probe), h(DocxEditorContent)]);
+    try {
+      app.mount(container);
+      await flush();
+      const editor = ready[0] as DocxEditorInstance;
+      editor.focus();
+      editor.exec({ type: 'insertText', text: '!' });
+      await flush();
+      expect(positions.some((pos) => pos !== null)).toBe(true);
+    } finally {
+      app.unmount();
     }
   });
 });

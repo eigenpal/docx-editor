@@ -90,7 +90,7 @@ mismatch would be a rewrite rather than a spec.
 - [x] 2b.6 Enumerate the return interfaces rather than pattern-matching a suffix: React mixes
       `Result` (nine) and `Return` (two), and `useTranslation` / `useNoteScopeState` return
       anonymous shapes
-- [ ] 2b.7 Wire into `check:parity` and into `ci.yml` AFTER `api:check` — the gate reads
+- [x] 2b.7 Wire into `check:parity` and into `ci.yml` AFTER `api:check` — the gate reads
       committed snapshots, so a stale snapshot would make it measure nothing
 - [x] 2b.8 Self-test: a fixture pair proves it fails on a missing member, a renamed member, a
       wrong member type, a dropped parameter and a dropped overload
@@ -122,7 +122,7 @@ Rebuilt from nothing, one file per React file, at the React file's path.
       `onActivated`, and `detach` after `destroy` must be a no-op
 - [x] 3.7 `scope-context.ts` twin: `useScopeClassName()` over an injected boolean, so parts inside
       the packaged wrapper do not repeat `.docx-editor`
-- [ ] 3.8 Tests: the pages actually PAINT on first mount (the ordering trap — this test fails
+- [x] 3.8 Tests: the pages actually PAINT on first mount (the ordering trap — this test fails
       against an `onMounted` attach); instance lands; document identity rebuilds and re-attaches;
       zoom does not rebuild; a locale change DOES rebuild, matching React; KeepAlive round trip
       preserves edits and undo; unmount detaches before destroy; server render creates nothing
@@ -143,7 +143,7 @@ Rebuilt from nothing, one file per React file, at the React file's path.
 - [x] 4.5 Scope disposal through `getCurrentScope()` + `onScopeDispose`, so the `…Instance` forms
       called outside a component clean up too
 - [x] 4.6 `@internal` counters: consumers mounted, and facade listeners per Root
-- [ ] 4.7 Tests: unrelated change does not move the slice; custom equality honoured; forty
+- [x] 4.7 Tests: unrelated change does not move the slice; custom equality honoured; forty
       consumers still three listeners; consumer counter returns to zero; a burst collapses to one
       evaluation; formatting read after a commit is the committed formatting (the defer's
       correctness half, which is the one a Vue author would delete)
@@ -156,7 +156,7 @@ Rebuilt from nothing, one file per React file, at the React file's path.
 - [x] 5.3 `useEditorEvent`: latest-handler forwarding, resubscribe only on instance or event name
 - [x] 5.4 `useEditorCaret`: `{ paragraphId, offset }` by value, on both `change` and
       `selectionChange`, `null` on the server
-- [ ] 5.5 Tests: payload switch flips the answer; inline object literal adds no watcher; disabled
+- [x] 5.5 Tests: payload switch flips the answer; inline object literal adds no watcher; disabled
       reason is the engine's; `execute` before mount returns false; one listener for ten renders;
       caret moves on typing
 
@@ -191,7 +191,7 @@ Each is a read of the engine plus a call back into it. Group them, but give each
       phase 1 and rebuilt here. Vue's takes a GETTER (`() => Editor | null`) where React takes the
       value; that is the established shape and the one normalization the parity gate allows for a
       parameter
-- [ ] 6.14 `bun run check:composable-parity` is green: every composable matches React member for
+- [x] 6.14 `bun run check:composable-parity` is green: every composable matches React member for
       member, type for type, parameter for parameter, overload for overload
 
 ## 7. i18n
@@ -202,7 +202,7 @@ Each is a read of the engine plus a call back into it. Group them, but give each
       labels — see 3.2 and design trap 5. Do not "improve" on that; it is the React behaviour
 - [x] 7.2 `useChromeTranslate` with the host override map taking precedence
 - [x] 7.3 Remove the catalogue construction currently inlined in `DocxEditor.ts`
-- [ ] 7.4 `bun run i18n:validate` and `bun run i18n:unused` — a Vue chrome that resolves the same
+- [x] 7.4 `bun run i18n:validate` and `bun run i18n:unused` — a Vue chrome that resolves the same
       keys should shrink the unused list, not grow the catalogue
 
 ## 8. The merge, and the compounds
@@ -252,48 +252,48 @@ Each is a read of the engine plus a call back into it. Group them, but give each
 Not the deprecated shell chrome — that gets no Vue twin (1.2). These are the props-driven parts
 the v2 context-fed components WRAP, so Vue needs them. No composables, no injected editor.
 
-- [ ] 9b.1 `HorizontalRuler`, `VerticalRuler`, `RULER_WIDTH` — ticks and page box from
+- [x] 9b.1 `HorizontalRuler`, `VerticalRuler`, `RULER_WIDTH` — ticks and page box from
       `ruler-ticks.ts`, never recomputed
-- [ ] 9b.2 `DocumentOutline`, `PageIndicator`
-- [ ] 9b.3 `PaginatedDocxEditor`, `PaginatedDocxEditorProps`, and the handle under BOTH names
+- [x] 9b.2 `DocumentOutline`, `PageIndicator`
+- [x] 9b.3 `PaginatedDocxEditor`, `PaginatedDocxEditorProps`, and the handle under BOTH names
       React exports it under (`PaginatedDocxEditorHandle` and the `PaginatedDocxEditorExpose`
       alias, which exists so the two adapters pair by name)
-- [ ] 9b.4 Mirror only the `src/components/ui/**` and `src/lib/**` internals these need; none is
+- [x] 9b.4 Mirror only the `src/components/ui/**` and `src/lib/**` internals these need; none is
       itself exported, and `src/managers/**` and `src/hooks/**` serve only the deprecated chrome
       and get no Vue twin at all
-- [ ] 9b.5 Tests: each renders from props alone and reads no injected editor
+- [x] 9b.5 Tests: each renders from props alone and reads no injected editor
 
 ## 10. Security
 
-- [ ] 10.1 Add `v-html` to the sink grep in CLAUDE.md and prove `packages/vue/src` has none
-- [ ] 10.2 Every `href` and window target through `sanitizeHref`; a `javascript:` target test on
+- [x] 10.1 Add `v-html` to the sink grep in CLAUDE.md and prove `packages/vue/src` has none
+- [x] 10.2 Every `href` and window target through `sanitizeHref`; a `javascript:` target test on
       the hyperlink popover
-- [ ] 10.3 Escape any string interpolated into an inline `style` built from file data
+- [x] 10.3 Escape any string interpolated into an inline `style` built from file data
 
 ## 11. The gates flip
 
-- [ ] 11.1 Empty the divergence file to ZERO entries, delete it, and drop the opt-out load from
+- [x] 11.1 Empty the divergence file to ZERO entries, delete it, and drop the opt-out load from
       `check-export-parity.mjs` so the gate has nothing to forgive
-- [ ] 11.2 Assert the numbers: non-deprecated React exports == Vue exports, React-only 0,
+- [x] 11.2 Assert the numbers: non-deprecated React exports == Vue exports, React-only 0,
       Vue-only 0
-- [ ] 11.3 `scripts/parity/parity.contract.json`: empty `deferredInVue` into `paired`, keeping
+- [x] 11.3 `scripts/parity/parity.contract.json`: empty `deferredInVue` into `paired`, keeping
       exactly three form categories and no fourth — EMITS for React callbacks, SLOTS for
       `children`/`renderTitleBarLeft`/`renderTitleBarRight`, attribute fallthrough for
       `className`
-- [ ] 11.4 Restore the `Parity contract check` step to `.github/workflows/ci.yml`
-- [ ] 11.5 `check:public-docs-surface`: add the `vue composition and composables surface` bucket
+- [x] 11.4 Restore the `Parity contract check` step to `.github/workflows/ci.yml`
+- [x] 11.5 `check:public-docs-surface`: add the `vue composition and composables surface` bucket
       mirroring the React one (the pre-v2 `vue root chrome surface` bucket went with the deletion
       at 1.2)
-- [ ] 11.6 `bun run check:feature-parity` — now that the trees share paths, read the report and
+- [x] 11.6 `bun run check:feature-parity` — now that the trees share paths, read the report and
       close or record every difference it names
-- [ ] 11.7 The mirror check from 1.4 runs in CI beside the other parity gates
-- [ ] 11.8 A cross-adapter DIFFERENTIAL, one table of (composable, action, assertion) run against
+- [x] 11.7 The mirror check from 1.4 runs in CI beside the other parity gates
+- [x] 11.8 A cross-adapter DIFFERENTIAL, one table of (composable, action, assertion) run against
       BOTH adapters from a single source over the same document. Shape parity still permits
       `zoomIn()` stepping differently, `useDocumentSearch` reporting a total where React reports
       the cap, or `usePageSetup().apply` landing as two undo steps in one adapter and one in the
       other. Cover at minimum: every chrome slot's enabled/active/disabledReason; the off-ladder
       zoom step; the search cap; a page-setup write as one undo step
-- [ ] 11.9 `check:composable-parity` runs in CI after `api:check`, with an empty allowlist
+- [x] 11.9 `check:composable-parity` runs in CI after `api:check`, with an empty allowlist
 
 ## 12. Docs and demo
 

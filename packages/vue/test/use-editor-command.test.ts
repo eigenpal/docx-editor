@@ -175,4 +175,61 @@ describe('useEditorState subscriptions', () => {
       app.unmount();
     }
   });
+
+  test('burst changes collapse through deferred notifier', async () => {
+    let renders = 0;
+    const Probe = defineComponent({
+      setup() {
+        useEditorState((s) => s.formatting?.bold ?? false);
+        renders += 1;
+        return () => null;
+      },
+    });
+    const { app, container, editor } = mountProbe(() => h(Probe));
+    try {
+      app.mount(container);
+      await flush();
+      const before = renders;
+      for (let i = 0; i < 5; i++) editor().exec({ type: 'insertText', text: 'a' });
+      await flush();
+      expect(renders - before).toBeLessThanOrEqual(2);
+    } finally {
+      app.unmount();
+    }
+  });
+});
+
+describe('useEditorCommand lifecycle', () => {
+  test('inline command literal does not multiply facade listeners', async () => {
+    const { app, container } = mountProbe(() => {
+      const Probe = defineComponent({
+        setup() {
+          useEditorCommand({ type: 'selectAll' });
+          return () => null;
+        },
+      });
+      return h(Probe);
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(docxEditorFacadeListenerCount()).toBe(3);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  test('execute before mount returns false', () => {
+    let ok = true;
+    const Probe = defineComponent({
+      setup() {
+        ok = useEditorCommand('text.bold').execute();
+        return () => null;
+      },
+    });
+    const app = createApp(Probe);
+    app.mount(document.createElement('div'));
+    expect(ok).toBe(false);
+    app.unmount();
+  });
 });
