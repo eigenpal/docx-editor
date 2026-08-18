@@ -17,7 +17,7 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/s
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
-import { revisionRemovesParagraph } from './revision-visibility.ts';
+import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
 
@@ -43,6 +43,84 @@ function acceptStoryBlock(block: OoxmlElement, displayMode: RevisionDisplayMode)
   // claims a full line box.
   if (block.kind === 'paragraph' && revisionRemovesParagraph(block, displayMode)) return false;
   return true;
+}
+
+/**
+ * The paragraphs a merge group is built from, in order, with the survivor last.
+ *
+ * Published beside the synthetic paragraph rather than derived from it, because the identity
+ * rewrite has to name the member a piece of content came from and a synthetic node has lost
+ * that by construction.
+ */
+export interface ParagraphMergeGroup {
+  /** The node layout lays out: the survivor's properties, every member's content. */
+  readonly merged: OoxmlElement;
+  /** Members in document order. The last one is the survivor whose mark stays. */
+  readonly members: readonly OoxmlElement[];
+}
+
+/** Groups keyed by the synthetic node, so a caller holding one can ask what it came from. */
+const mergeGroups = new WeakMap<OoxmlElement, ParagraphMergeGroup>();
+
+/** The members a laid-out paragraph stands for, or null when it stands for itself. */
+export function paragraphMergeGroupOf(paragraph: OoxmlElement): ParagraphMergeGroup | null {
+  return mergeGroups.get(paragraph) ?? null;
+}
+
+function isParagraphProperties(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' && (node.kind === 'paragraphProperties' || node.localName === 'pPr')
+  );
+}
+
+/**
+ * Fold each run of mark-removed paragraphs into the paragraph that follows it.
+ *
+ * The shape matches `resolveRevisions` exactly: the SURVIVOR's `w:pPr` governs, and every
+ * member's content arrives before it in document order. A trailing member with nothing to
+ * merge into keeps itself, for the same reason the store refuses that case — its runs have no
+ * paragraph to live in.
+ */
+function withMergedParagraphs(
+  blocks: readonly OoxmlElement[],
+  displayMode: RevisionDisplayMode
+): OoxmlElement[] {
+  if (displayMode === 'all-markup') return [...blocks];
+  const out: OoxmlElement[] = [];
+  let pendingMembers: OoxmlElement[] = [];
+  for (const block of blocks) {
+    if (block.kind !== 'paragraph') {
+      // A table between two mark-removed paragraphs is a container boundary: the store cannot
+      // merge across it either, so the run of members ends here and keeps its own boxes.
+      out.push(...pendingMembers, block);
+      pendingMembers = [];
+      continue;
+    }
+    if (markRemovedInMode(block, displayMode)) {
+      pendingMembers.push(block);
+      continue;
+    }
+    if (pendingMembers.length === 0) {
+      out.push(block);
+      continue;
+    }
+    const members = [...pendingMembers, block];
+    pendingMembers = [];
+    const survivorProperties = block.children.filter((child) => isParagraphProperties(child));
+    const content = members.flatMap((member) =>
+      member.children.filter((child) => !isParagraphProperties(child))
+    );
+    const merged: OoxmlElement = {
+      ...block,
+      children: [...survivorProperties, ...content],
+    } as OoxmlElement;
+    mergeGroups.set(merged, { merged, members });
+    out.push(merged);
+  }
+  // Members with no survivor after them: the last paragraph of the story carries its own mark
+  // away, which is what Word does when there is nothing to run into.
+  out.push(...pendingMembers);
+  return out;
 }
 
 /**
@@ -72,9 +150,16 @@ export function storyBlocks(
   const cached = perMode?.[displayMode];
   if (cached) return cached;
   const root = storyRootOf(part);
-  const blocks = root
-    ? collectFlowBlocks(root.children, 0, (block) => acceptStoryBlock(block, displayMode))
-    : [];
+  // MERGE FIRST, then drop. A mark-removed paragraph merges into the paragraph that follows it
+  // IN THE TREE, which is the rule `resolveRevisions` follows; dropping the empty ones first
+  // would hand a member the wrong survivor, and the survivor's properties govern the result.
+  // After the merge the drop has little left to do: an absorbed member is already gone, and
+  // what remains is a mark-removed paragraph with nothing after it to merge into.
+  const merged = withMergedParagraphs(
+    root ? collectFlowBlocks(root.children, 0, () => true) : [],
+    displayMode
+  );
+  const blocks = merged.filter((block) => acceptStoryBlock(block, displayMode));
   if (perMode) perMode[displayMode] = blocks;
   else storyBlocksCache.set(part, { [displayMode]: blocks });
   return blocks;

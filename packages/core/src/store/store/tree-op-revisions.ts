@@ -612,30 +612,30 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
     if (child.kind === 'paragraph') {
       const paragraph = rebuilt[0];
       if (paragraph !== undefined && paragraph.kind !== 'textValue') {
-        if (carried.length > 0) {
-          // This paragraph absorbs the content of the ones before it. Its own `w:pPr` stays:
-          // the surviving mark is this paragraph's, so its properties govern the result.
-          const properties = paragraph.children.filter((entry) => isWmlNamed(entry, 'pPr'));
-          const content = paragraph.children.filter((entry) => !isWmlNamed(entry, 'pPr'));
-          out.push({
-            ...paragraph,
-            children: [...properties, ...carried, ...content],
-          } as OoxmlElement);
-          carried = [];
+        // Everything this paragraph would hold: what earlier paragraphs handed it, then its
+        // own. Its `w:pPr` is kept apart, because the properties that govern a merge are the
+        // surviving mark's — this paragraph's, if the mark survives here.
+        const properties = paragraph.children.filter((entry) => isWmlNamed(entry, 'pPr'));
+        const content = [...carried, ...paragraph.children.filter((e) => !isWmlNamed(e, 'pPr'))];
+        carried = [];
+        // Only when there IS a following paragraph in this container. Otherwise the paragraph
+        // keeps its content and simply loses the mark revision — spilling its runs into
+        // `w:body` or `w:tc` produced a tree the invariants reject, so the whole transaction
+        // was refused and Accept All failed for the entire document with an opaque reason.
+        // Deleting a trailing paragraph with tracking on is exactly what Word writes, so this
+        // was not an exotic file.
+        const followed = children.slice(index + 1).some((entry) => entry.kind === 'paragraph');
+        if (plan.mergeForward.has(child.id) && followed) {
+          // Tested AFTER absorbing, so a RUN of removed marks collapses into the one survivor
+          // at its end rather than pairwise. Word merges all of them; stopping at the first
+          // absorption left every second paragraph behind, so accepting sixteen deleted marks
+          // in a row produced eight paragraphs and eight blank lines that no decision asked for.
+          carried = content;
           continue;
         }
-        if (plan.mergeForward.has(child.id)) {
-          // Only when there IS a following paragraph in this container. Otherwise the
-          // paragraph keeps its content and simply loses the mark revision — spilling its
-          // runs into `w:body` or `w:tc` produced a tree the invariants reject, so the whole
-          // transaction was refused and Accept All failed for the entire document with an
-          // opaque reason. Deleting a trailing paragraph with tracking on is exactly what
-          // Word writes, so this was not an exotic file.
-          const followed = children.slice(index + 1).some((entry) => entry.kind === 'paragraph');
-          if (followed) {
-            carried = paragraph.children.filter((entry) => !isWmlNamed(entry, 'pPr'));
-            continue;
-          }
+        if (content.length > paragraph.children.length - properties.length) {
+          out.push({ ...paragraph, children: [...properties, ...content] } as OoxmlElement);
+          continue;
         }
       }
     }

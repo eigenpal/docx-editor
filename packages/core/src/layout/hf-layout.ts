@@ -28,6 +28,7 @@ import {
 } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
+import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import { pageClipRegion, type DrawingAnchorFrameContext } from './drawing-layout.ts';
@@ -408,4 +409,39 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
     ...(footnotes ? { footnotes } : {}),
     ...(endnotes ? { endnotes } : {}),
   };
+}
+
+/**
+ * Resource identity of every image a header/footer story paints.
+ *
+ * Part of the session context, because the rest of what identifies a story — `contentKey`
+ * and `flowHeight` — describes the AUTHORED part, and neither moves when an image finishes
+ * decoding: the extent is authored, so the story is exactly as tall with a pending picture
+ * as with a ready one. Without this the unchanged-pass early exit finds every key equal and
+ * returns the previous pages BY IDENTITY, furniture included, so a header or footer image
+ * stays a "loading" placeholder for the rest of the session — nothing will invalidate it
+ * again. Body drawings have no such gap; they ride the per-paragraph flow keys.
+ */
+export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): string {
+  const tokens: string[] = [];
+  const visitBlock = (block: BlockFragmentRecord): void => {
+    if (block.kind === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) for (const inner of cell.blocks) visitBlock(inner);
+      }
+      return;
+    }
+    for (const line of block.lines) {
+      for (const drawing of line.drawings ?? []) {
+        tokens.push(drawingResourceLayoutToken(drawing.resource));
+      }
+    }
+  };
+  for (const drawing of story.anchoredDrawings ?? []) {
+    tokens.push(drawingResourceLayoutToken(drawing.resource));
+  }
+  for (const fragment of story.fragments) visitBlock(fragment);
+  // Empty for the overwhelmingly common story with no pictures, so the context string for a
+  // plain header is byte-for-byte what it was.
+  return tokens.length === 0 ? '' : `!${tokens.join('!')}`;
 }

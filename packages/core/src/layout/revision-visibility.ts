@@ -117,6 +117,33 @@ function rendersNoText(node: OoxmlNode, depth: number): boolean {
 }
 
 /**
+ * Does this display mode REMOVE the paragraph's mark, and with it the break it draws?
+ *
+ * A mark records a break that a decision would take away. `proposed` answers what the document
+ * becomes when every decision is accepted, so a deleted or moved-from mark is gone there;
+ * `original` answers what it was before any of them, so an inserted or moved-to mark is gone
+ * there. `all-markup` takes no decision and removes nothing.
+ *
+ * The paragraph then runs into the one after it, which is exactly what `resolveRevisions` does
+ * with the same four elements.
+ */
+export function markRemovedInMode(
+  paragraph: OoxmlNode,
+  displayMode: 'all-markup' | 'proposed' | 'original'
+): boolean {
+  if (displayMode === 'all-markup') return false;
+  if (paragraph.kind === 'textValue') return false;
+  const properties = childNamed(paragraph, 'paragraphProperties') ?? childNamed(paragraph, 'pPr');
+  if (!properties) return false;
+  const markRunProperties =
+    childNamed(properties, 'runProperties') ?? childNamed(properties, 'rPr');
+  if (markRunProperties === undefined) return false;
+  const removedNames =
+    displayMode === 'proposed' ? (['del', 'moveFrom'] as const) : (['ins', 'moveTo'] as const);
+  return removedNames.some((name) => childNamed(markRunProperties, name) !== undefined);
+}
+
+/**
  * True when a tracked revision has removed this paragraph from the rendered document, so
  * layout should emit no box for it at all.
  */
