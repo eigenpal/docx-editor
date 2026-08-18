@@ -60,7 +60,7 @@ Lands before any new surface: everything after it must be written against ONE en
       no copy of it
 - [x] 2.6 Add the package to `build:packages`; keep `build:packages:vue` working or fold it in
 - [x] 2.7 `bun run check:package-artifacts`, `SKIP_CONSUMER_INSTALL_BUILD=1 bun run
-  check:consumer-install`, `bun run notices:generate` all pass with Vue in the set
+check:consumer-install`, `bun run notices:generate` all pass with Vue in the set
 - [x] 2.8 Mirror React's dependency list rather than inventing one: `harfbuzzjs` and
       `emf-converter` stay declared (pinned, external), `fflate` stays a devDependency — it is
       what the tests build DOCX fixtures with, and moving it would externalize it and change the
@@ -207,10 +207,10 @@ Each is a read of the engine plus a call back into it. Group them, but give each
 
 ## 8. The merge, and the compounds
 
-- [ ] 8.1 Port `mergeArrangement` to vnodes: `docxSlot` static on the component TYPE, Fragment
+- [x] 8.1 Port `mergeArrangement` to vnodes: `docxSlot` static on the component TYPE, Fragment
       flattening, last-override-wins, unmatched-appends, `preset` opt-out
-- [ ] 8.2 A shared table-driven test asserting the six merge bullets on BOTH adapters
-- [ ] 8.3 `Slot`: `cloneVNode` + `mergeProps` over one child, null for zero or several
+- [x] 8.2 A shared table-driven test asserting the six merge bullets on BOTH adapters
+- [x] 8.3 `Slot`: `cloneVNode` + `mergeProps` over one child, null for zero or several
 - [ ] 8.4 `DocxEditorToolbar` derived from `CHROME_GROUPS`, with the parts as statics, the
       overflow policy from `toolbar-overflow.ts`, and the mousedown guard
 - [ ] 8.5 `DocxEditorMenu` derived from `CHROME_MENUS`, with `chromeMenuSlots` exported
