@@ -144,9 +144,117 @@ export {
 
 export {
   useContextMenuTarget,
+  DocxEditorContextMenu,
+  ContextMenuCopy,
+  ContextMenuCut,
+  ContextMenuCellVerticalAlignment,
+  ContextMenuDelete,
+  ContextMenuItem,
+  ContextMenuPaste,
+  ContextMenuSelectAll,
+  ContextMenuDeleteTable,
+  ContextMenuDeleteTableColumn,
+  ContextMenuDeleteTableRow,
+  ContextMenuInsertColumnLeft,
+  ContextMenuInsertColumnRight,
+  ContextMenuInsertRowAbove,
+  ContextMenuInsertRowBelow,
+  ContextMenuRefreshToc,
+  ContextMenuRefreshTocPageNumbers,
   type ContextMenuAnchor,
+  type ContextMenuCommandProps,
   type ContextMenuContextValue,
-} from './editor/contextmenu/contextmenu-context';
+  type ContextMenuItemProps,
+  type ContextMenuTableRowProps,
+  type DocxEditorContextMenuNamespace,
+  type DocxEditorContextMenuProps,
+} from './editor/contextmenu';
+
+export {
+  DocxEditorMenu,
+  type DocxEditorMenuNamespace,
+  type DocxEditorMenuProps,
+  type MenuActionProps,
+  type MenuGroupProps,
+  type MenuId,
+  type MenuItemProps,
+  type MenuPartComponent,
+  type MenuProps,
+  type MenuReportIssueProps,
+  type MenuRowProps,
+  type MenuSeparatorProps,
+  type MenuSubmenuProps,
+  type MenuTableGridProps,
+} from './editor/menu';
+
+export {
+  DocxEditorNavigation,
+  NavigationClose,
+  NavigationFind,
+  NavigationHeader,
+  NavigationHeadings,
+  NavigationTab,
+  NavigationTabs,
+  NavigationTitle,
+  NavigationToggle,
+  type DocxEditorNavigationNamespace,
+  type DocxEditorNavigationProps,
+  type NavigationPartProps,
+  type NavigationTabProps,
+} from './editor/navigation';
+
+export {
+  DocxEditorHeaderFooterChrome,
+  type DocxEditorHeaderFooterChromeProps,
+} from './editor/DocxEditorHeaderFooter';
+export { DocxEditorNotesChrome, type DocxEditorNotesChromeProps } from './editor/DocxEditorNotes';
+
+export {
+  DocxEditorHyperLink,
+  type DocxEditorHyperLinkNamespace,
+  type HyperLinkActionProps,
+  type HyperLinkPartProps,
+  type HyperLinkProps,
+} from './editor/DocxEditorHyperLink';
+
+export {
+  DocxEditorContentControl,
+  type DocxEditorContentControlNamespace,
+  type ContentControlActionProps,
+  type ContentControlPartProps,
+  type ContentControlProps,
+} from './editor/DocxEditorContentControl';
+
+export {
+  DocxEditorLoading,
+  type DocxEditorLoadingComponent,
+  type DocxEditorLoadingProps,
+  type DocxEditorLoadingSpinnerProps,
+} from './editor/DocxEditorLoading';
+
+export {
+  DocxEditorHorizontalRuler,
+  DocxEditorVerticalRuler,
+  type DocxEditorRulerProps,
+} from './editor/DocxEditorRulers';
+
+export {
+  DocxEditorPageNumber,
+  type DocxEditorPageNumberProps,
+} from './editor/DocxEditorPageNumber';
+
+export {
+  DocxEditorImagePropertiesDialog,
+  ImagePropertiesTrigger,
+  ToolbarImageProperties,
+  type DocxEditorImagePropertiesDialogProps,
+  type ImagePropertiesTriggerProps,
+} from './editor/images/ImageProperties';
+
+export { useScopedChromeAnchor, type ScopedChromeAnchor } from './editor/useScopedChromeAnchor';
+
+export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
+export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
 
 export {
   LocaleProvider,
