@@ -1,4 +1,3 @@
- 
 import './dom-setup.ts';
 
 import { describe, expect, test } from 'bun:test';
