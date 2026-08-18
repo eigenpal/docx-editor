@@ -48,7 +48,7 @@
     "check:package-artifacts": "node scripts/check-package-artifacts.mjs && node scripts/check-core-css-compiled.mjs",
     "check:package-size": "node scripts/check-package-size.mjs",
     "check:shipped-shaper": "node scripts/check-shipped-shaper.mjs",
-    "check:parity": "bun run check:export-parity && bun run check:editor-contract && bun run check:public-docs-surface && bun run check:parity-contract && bun run check:adapter-css-thin",
+    "check:parity": "bun run check:export-parity && bun run check:editor-contract && bun run check:public-docs-surface && bun run check:parity-contract && bun run check:composable-parity && bun run check:adapter-css-thin",
     "check:license-headers": "bun run check:pro-license-headers && bun run check:editor-api-license-headers",
     "check:parity-contract": "node scripts/check-parity-contract.mjs",
     "check:public-docs-surface": "node scripts/check-public-docs-surface.mjs",
