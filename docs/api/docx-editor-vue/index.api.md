@@ -9,29 +9,44 @@ import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { ComputedRef } from 'vue';
+import { ContentControlSummary } from '@docx-editor.dev/core';
+import { ContentControlType } from '@docx-editor.dev/core';
 import { CSSProperties } from 'vue';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
+import * as _docx_editor_dev_core from '@docx-editor.dev/core';
+import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
 import { EditorModule } from '@docx-editor.dev/core/editor';
 import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
 import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
 import { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { ExecResult } from '@docx-editor.dev/core/contracts/editor';
 import { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { FontResolver } from '@docx-editor.dev/core/editor';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
+import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
+import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { InjectionKey } from 'vue';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PropType } from 'vue';
+import { Ref } from 'vue';
 import { runToolbarCommand } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
+import { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
+import { TextMatch } from '@docx-editor.dev/core/contracts/editor';
+import { TFunction } from '@docx-editor.dev/i18n';
 import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { TranslationKey } from '@docx-editor.dev/i18n';
+import { Translations } from '@docx-editor.dev/i18n';
 import * as vue from 'vue';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
@@ -43,9 +58,77 @@ export { chromeMenuSlots }
 
 export { ChromeSlotId }
 
+// @public (undocumented)
+export type ChromeTranslate = (key: string, params?: Record<string, string | number>) => string;
+
 export { commandForSlot }
 
+// @public (undocumented)
+export const CONTENT_CONTROL_SLOTS: {
+    readonly showAll: "contentControl.showAll";
+    readonly formFill: "contentControl.formFill";
+    readonly inspector: "contentControl.inspector";
+    readonly remove: "contentControl.remove";
+};
+
+// @public (undocumented)
+export interface ContentControlInspectorState {
+    // (undocumented)
+    readonly alias: string | null;
+    // (undocumented)
+    readonly bound: boolean;
+    // (undocumented)
+    readonly controlType: ContentControlType;
+    // (undocumented)
+    readonly effectiveLock: ContentControlLock | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly locked: boolean;
+    // (undocumented)
+    readonly placeholder: boolean;
+    // (undocumented)
+    readonly removalLocked: boolean;
+    // (undocumented)
+    readonly tag: string | null;
+}
+
+// @public (undocumented)
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
+
+// @public (undocumented)
+export type ContentControlSlotId = (typeof CONTENT_CONTROL_SLOTS)[keyof typeof CONTENT_CONTROL_SLOTS];
+
+// @public (undocumented)
+export interface ContextMenuAnchor {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public (undocumented)
+export interface ContextMenuContextValue {
+    // (undocumented)
+    readonly anchor: ContextMenuAnchor | null;
+    // (undocumented)
+    readonly clipboardRefusal: string | null;
+    // (undocumented)
+    readonly close: (restoreFocus?: boolean) => void;
+    // (undocumented)
+    readonly reportClipboardRefusal: (reason: string) => void;
+    // (undocumented)
+    readonly target: HTMLElement | null;
+    // (undocumented)
+    readonly tocId: string | null;
+}
+
 export { DocxDocument }
+
+// @public
+export const DocxEditor: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -118,7 +201,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
-}>[] | undefined, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
     ready: (_editor: Editor) => true;
     change: (_change: DocumentChange) => true;
     fontError: (_error: unknown) => true;
@@ -245,9 +328,38 @@ export interface DocxEditorViewportProps {
     style?: CSSProperties;
 }
 
+// @public (undocumented)
+export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
+
+// @public (undocumented)
+export type DocxFontsSource = DocxFontsInput | Promise<DocxFontsInput> | (() => DocxFontsInput | Promise<DocxFontsInput>);
+
+// @public (undocumented)
+export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
+
 export { Editor }
 
+// @public (undocumented)
+export interface EditorCaret {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
 export { EditorCommand }
+
+// @public (undocumented)
+export interface EditorCommandState {
+    // (undocumented)
+    readonly disabledReason: ComputedRef<string | null>;
+    // (undocumented)
+    readonly execute: () => boolean;
+    // (undocumented)
+    readonly isActive: ComputedRef<boolean>;
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
+}
 
 export { EditorQuery }
 
@@ -258,9 +370,293 @@ export { EditorSnapshot }
 // @internal (undocumented)
 export function editorStateActiveSubscriptionCount(): number;
 
+// @public (undocumented)
+export interface EditorValueCommandState<T extends string | number> {
+    // (undocumented)
+    readonly disabledReason: ComputedRef<string | null>;
+    // (undocumented)
+    readonly execute: (value: T) => void;
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
+    // (undocumented)
+    readonly options: ComputedRef<readonly T[]>;
+    // (undocumented)
+    readonly value: ComputedRef<T | null>;
+}
+
+// @public (undocumented)
+export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+
+// @public (undocumented)
+export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
+
+// @public (undocumented)
+export interface HyperlinkPopupAnchor {
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly top: number;
+}
+
+// @public (undocumented)
+export type HyperlinkPopupMode = 'closed' | 'reading' | 'editing';
+
+// @public (undocumented)
+export interface HyperlinkPopupState {
+    // (undocumented)
+    readonly anchor: HyperlinkPopupAnchor | null;
+    // (undocumented)
+    readonly canEdit: boolean;
+    // (undocumented)
+    readonly copied: boolean;
+    // (undocumented)
+    readonly error: boolean;
+    // (undocumented)
+    readonly link: SurfaceHyperlink | null;
+    // (undocumented)
+    readonly mode: HyperlinkPopupMode;
+    // (undocumented)
+    readonly text: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+export { ImageWrapTarget }
+
+// @public (undocumented)
+export interface IndentUpdate {
+    // (undocumented)
+    readonly firstLine?: number | null;
+    // (undocumented)
+    readonly left?: number | null;
+    // (undocumented)
+    readonly right?: number | null;
+}
+
+// @public (undocumented)
+export function isFieldLink(link: SurfaceHyperlink): boolean;
+
 export { LOADING_SNAPSHOT }
 
+// @public (undocumented)
+export const LocaleProvider: vue.DefineComponent<vue.ExtractPropTypes<{
+    i18n: {
+        type: PropType<Translations>;
+        default: undefined;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>[] | undefined, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    i18n: {
+        type: PropType<Translations>;
+        default: undefined;
+    };
+}>> & Readonly<{}>, {
+    i18n: _docx_editor_dev_i18n.PartialLocaleStrings;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public (undocumented)
+export interface LocaleProviderProps {
+    // (undocumented)
+    i18n?: Translations;
+}
+
+// @public
+export const NAVIGATION_PANE_GAP = 16;
+
+// @public
+export const NAVIGATION_PANE_INSET = 32;
+
+// @public
+export const NAVIGATION_PANE_WIDTH = 280;
+
+// @public
+export function navigationPaneReservation(paneWidth?: number): number;
+
+// @public
+export function navigationShift(input: NavigationShiftInput): number;
+
+// @public (undocumented)
+export interface NavigationShiftInput {
+    readonly docked?: boolean;
+    readonly inlineEndReservation?: number;
+    readonly pageWidthPx: number;
+    readonly reservation: number;
+    readonly viewportWidth: number;
+}
+
+// @public (undocumented)
+export type NavigationTabValue = 'headings' | 'find';
+
+// @public (undocumented)
+export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
+
+// @public (undocumented)
+export type OutlineHeading = ReturnType<Editor['getOutline']>[number];
+
+// @public (undocumented)
+export interface OutlineHeadingItem {
+    // (undocumented)
+    readonly depth: number;
+    // (undocumented)
+    readonly heading: OutlineHeading;
+}
+
 export { PageSetup }
+
+// @public (undocumented)
+export interface PageSetupUpdate {
+    // (undocumented)
+    readonly marginBottomTwips?: number;
+    // (undocumented)
+    readonly marginLeftTwips?: number;
+    // (undocumented)
+    readonly marginRightTwips?: number;
+    // (undocumented)
+    readonly marginTopTwips?: number;
+    // (undocumented)
+    readonly orientation?: 'portrait' | 'landscape';
+    // (undocumented)
+    readonly pageHeightTwips?: number;
+    // (undocumented)
+    readonly pageWidthTwips?: number;
+    // (undocumented)
+    readonly scope?: 'document' | 'section';
+}
+
+// @public (undocumented)
+export interface ParagraphStyleOption {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly preview: {
+        readonly fontFamily: string | null;
+        readonly fontSizePt: number | null;
+        readonly bold: boolean;
+        readonly italic: boolean;
+        readonly color: string | null;
+    };
+    // (undocumented)
+    readonly styleId: string;
+}
+
+// @public (undocumented)
+export function provideDocxEditor(options: DocxEditorRootProps): {
+    DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
+        document: {
+            type: PropType<DocumentSource>;
+            default: undefined;
+        };
+        fonts: {
+            type: PropType<DocxEditorRootProps["fonts"]>;
+            default: undefined;
+        };
+        author: {
+            type: StringConstructor;
+            default: undefined;
+        };
+        locale: {
+            type: StringConstructor;
+            default: undefined;
+        };
+        translate: {
+            type: PropType<DocxEditorRootProps["translate"]>;
+            default: undefined;
+        };
+        modules: {
+            type: PropType<readonly EditorModule[]>;
+            default: undefined;
+        };
+        mode: {
+            type: PropType<"edit" | "view" | "suggesting">;
+            default: undefined;
+        };
+        zoom: {
+            type: NumberConstructor;
+            default: undefined;
+        };
+        zoomMode: {
+            type: PropType<ZoomMode | "auto">;
+            default: undefined;
+        };
+        tableInteractionLabel: {
+            type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
+            default: undefined;
+        };
+        imageDecodePort: {
+            type: PropType<ImageDecodePort>;
+            default: undefined;
+        };
+    }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
+        ready: (_editor: Editor) => true;
+        change: (_change: DocumentChange) => true;
+        fontError: (_error: unknown) => true;
+    }, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        document: {
+            type: PropType<DocumentSource>;
+            default: undefined;
+        };
+        fonts: {
+            type: PropType<DocxEditorRootProps["fonts"]>;
+            default: undefined;
+        };
+        author: {
+            type: StringConstructor;
+            default: undefined;
+        };
+        locale: {
+            type: StringConstructor;
+            default: undefined;
+        };
+        translate: {
+            type: PropType<DocxEditorRootProps["translate"]>;
+            default: undefined;
+        };
+        modules: {
+            type: PropType<readonly EditorModule[]>;
+            default: undefined;
+        };
+        mode: {
+            type: PropType<"edit" | "view" | "suggesting">;
+            default: undefined;
+        };
+        zoom: {
+            type: NumberConstructor;
+            default: undefined;
+        };
+        zoomMode: {
+            type: PropType<ZoomMode | "auto">;
+            default: undefined;
+        };
+        tableInteractionLabel: {
+            type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
+            default: undefined;
+        };
+        imageDecodePort: {
+            type: PropType<ImageDecodePort>;
+            default: undefined;
+        };
+    }>> & Readonly<{
+        onReady?: ((_editor: Editor) => any) | undefined;
+        onChange?: ((_change: DocumentChange) => any) | undefined;
+        onFontError?: ((_error: unknown) => any) | undefined;
+    }>, {
+        fonts: FontConfiguration | FontConfigurationFragment | FontResolver | undefined;
+        document: DocumentSource;
+        author: string;
+        mode: "edit" | "suggesting" | "view";
+        zoom: number;
+        imageDecodePort: ImageDecodePort;
+        locale: string;
+        translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
+        modules: readonly EditorModule[];
+        tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
+        zoomMode: "auto" | ZoomMode;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    props: DocxEditorRootProps;
+};
 
 // @public (undocumented)
 export const ReviewRailContext: InjectionKey<ShallowRef<ReviewRailRegistry>>;
@@ -275,18 +671,380 @@ export interface ReviewRailRegistry {
 
 export { runToolbarCommand }
 
+// @public (undocumented)
+export const SEARCH_DEBOUNCE_MS = 150;
+
+// @public (undocumented)
+export const SEARCH_MATCH_LIMIT = 2000;
+
 export { ToolbarCommandState }
 
 export { toolbarCommandState }
 
 // @public (undocumented)
+export const ToolbarContext: InjectionKey<ToolbarContextValue>;
+
+// @public (undocumented)
+export interface ToolbarContextValue {
+    // (undocumented)
+    readonly onSave: (() => void) | undefined;
+    // (undocumented)
+    readonly t: ToolbarTranslate | undefined;
+}
+
+// @public (undocumented)
+export type ToolbarTranslate = (key: string) => string;
+
+export { TranslationKey }
+
+// @public (undocumented)
+export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ComputedRef<ChromeTranslate>;
+
+// @public (undocumented)
+export function useContentControl(): UseContentControlResult;
+
+// @public (undocumented)
+export function useContentControlInstance(): UseContentControlResult;
+
+// @public (undocumented)
+export interface UseContentControlResult {
+    // (undocumented)
+    readonly canRemove: ComputedRef<boolean>;
+    // (undocumented)
+    readonly canSetValue: ComputedRef<boolean>;
+    // (undocumented)
+    readonly closeInspector: () => void;
+    // (undocumented)
+    readonly control: ComputedRef<ContentControlInspectorState | null>;
+    // (undocumented)
+    readonly controls: ComputedRef<readonly ContentControlSummary[]>;
+    // (undocumented)
+    readonly formFill: ComputedRef<boolean>;
+    // (undocumented)
+    readonly inspectorOpen: ComputedRef<boolean>;
+    // (undocumented)
+    readonly openInspector: () => void;
+    // (undocumented)
+    readonly remove: () => ExecResult;
+    // (undocumented)
+    readonly removeDisabledReason: ComputedRef<string | null>;
+    // (undocumented)
+    readonly setFormFill: (on: boolean) => void;
+    // (undocumented)
+    readonly setShowAll: (show: boolean) => void;
+    // (undocumented)
+    readonly setValue: (value: string) => ExecResult;
+    // (undocumented)
+    readonly setValueDisabledReason: ComputedRef<string | null>;
+    // (undocumented)
+    readonly showAll: ComputedRef<boolean>;
+    // (undocumented)
+    readonly toggleFormFill: () => void;
+    // (undocumented)
+    readonly toggleInspector: () => void;
+    // (undocumented)
+    readonly toggleShowAll: () => void;
+}
+
+// @public (undocumented)
+export function useContextMenuTarget(): ContextMenuContextValue['target'];
+
+// @public (undocumented)
+export function useDocumentOutline(): UseDocumentOutlineResult;
+
+// @public (undocumented)
+export interface UseDocumentOutlineResult {
+    // (undocumented)
+    readonly goTo: (blockId: string) => void;
+    // (undocumented)
+    readonly headings: ComputedRef<readonly OutlineHeading[]>;
+    // (undocumented)
+    readonly isEmpty: ComputedRef<boolean>;
+    // (undocumented)
+    readonly items: ComputedRef<readonly OutlineHeadingItem[]>;
+    // (undocumented)
+    readonly selectedBlockId: ComputedRef<string | null>;
+}
+
+// @public (undocumented)
+export function useDocumentSearch(): UseDocumentSearchResult;
+
+// @public (undocumented)
+export interface UseDocumentSearchResult {
+    // (undocumented)
+    readonly activeIndex: ComputedRef<number>;
+    // (undocumented)
+    readonly clear: () => void;
+    // (undocumented)
+    readonly goTo: (index: number) => void;
+    // (undocumented)
+    readonly isPending: ComputedRef<boolean>;
+    // (undocumented)
+    readonly matchCase: ComputedRef<boolean>;
+    // (undocumented)
+    readonly matches: ComputedRef<readonly TextMatch[]>;
+    // (undocumented)
+    readonly next: () => void;
+    // (undocumented)
+    readonly previous: () => void;
+    // (undocumented)
+    readonly query: ComputedRef<string>;
+    // (undocumented)
+    readonly setMatchCase: (value: boolean) => void;
+    // (undocumented)
+    readonly setQuery: (query: string) => void;
+    // (undocumented)
+    readonly setWholeWord: (value: boolean) => void;
+    // (undocumented)
+    readonly truncated: ComputedRef<boolean>;
+    // (undocumented)
+    readonly wholeWord: ComputedRef<boolean>;
+}
+
+// @public (undocumented)
 export function useDocxEditor(): ShallowRef<DocxEditorInstance | null>;
+
+// @public (undocumented)
+export function useDocxSource(source: DocxSource | null | undefined, options?: UseDocxSourceOptions): UseDocxSourceResult;
+
+// @public (undocumented)
+export interface UseDocxSourceOptions {
+    // (undocumented)
+    fetchOptions?: RequestInit;
+    // (undocumented)
+    fonts?: DocxFontsSource;
+}
+
+// @public (undocumented)
+export interface UseDocxSourceResult {
+    // (undocumented)
+    readonly document: ComputedRef<Uint8Array | undefined>;
+    // (undocumented)
+    readonly error: ComputedRef<Error | null>;
+    // (undocumented)
+    readonly fonts: ComputedRef<FontConfiguration | undefined>;
+    // (undocumented)
+    readonly isLoading: ComputedRef<boolean>;
+}
+
+// @public (undocumented)
+export function useEditorCaret(): ShallowRef<EditorCaret | null>;
+
+// @public (undocumented)
+export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
+
+// @public (undocumented)
+export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
+
+// @public (undocumented)
+export function useEditorSnapshot(editor: Editor | null): Ref<number>;
 
 // @public (undocumented)
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): Readonly<ShallowRef<T>>;
 
 // @public (undocumented)
+export function useEditorValueCommand(slotId: 'image.wrap'): EditorValueCommandState<ImageWrapTarget>;
+
+// @public (undocumented)
+export function useEditorValueCommand(slotId: 'image.altText'): EditorValueCommandState<string>;
+
+// @public (undocumented)
+export function useFontFamily(): UseFontFamilyResult;
+
+// @public (undocumented)
+export interface UseFontFamilyResult {
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
+    // (undocumented)
+    readonly options: ComputedRef<readonly string[]>;
+    // (undocumented)
+    readonly setValue: (family: string) => void;
+    // (undocumented)
+    readonly value: ComputedRef<string | null>;
+}
+
+// @public (undocumented)
+export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
+
+// @public (undocumented)
+export function useHeaderFooterState(): Readonly<vue.ShallowRef<_docx_editor_dev_core.HeaderFooterState | null>>;
+
+// @public (undocumented)
+export function useHyperlinkPopup(): UseHyperlinkPopupResult;
+
+// @public (undocumented)
+export function useHyperlinkPopupInstance(active?: boolean): UseHyperlinkPopupResult;
+
+// @public (undocumented)
+export interface UseHyperlinkPopupResult {
+    // (undocumented)
+    beginEdit: () => void;
+    // (undocumented)
+    close: () => void;
+    // (undocumented)
+    commitEdit: () => boolean;
+    // (undocumented)
+    copy: () => Promise<boolean>;
+    // (undocumented)
+    open: (link?: SurfaceHyperlink | null, anchor?: HyperlinkPopupAnchor | null) => void;
+    // (undocumented)
+    openAtCaret: () => void;
+    // (undocumented)
+    openTarget: () => boolean;
+    // (undocumented)
+    setText: (text: string) => void;
+    // (undocumented)
+    setUrl: (url: string) => void;
+    // (undocumented)
+    readonly state: ComputedRef<HyperlinkPopupState>;
+    // (undocumented)
+    unlink: () => boolean;
+}
+
+// @public (undocumented)
+export function useNavigationPane(options?: UseNavigationPaneOptions): UseNavigationPaneResult;
+
+// @public (undocumented)
+export interface UseNavigationPaneOptions {
+    // (undocumented)
+    defaultOpen?: boolean;
+    // (undocumented)
+    defaultTab?: NavigationTabValue;
+    // (undocumented)
+    onOpenChange?: (open: boolean) => void;
+    // (undocumented)
+    onTabChange?: (tab: NavigationTabValue) => void;
+    // (undocumented)
+    open?: boolean;
+    // (undocumented)
+    paneWidth?: number;
+    // (undocumented)
+    tab?: NavigationTabValue;
+}
+
+// @public (undocumented)
+export interface UseNavigationPaneResult {
+    // (undocumented)
+    readonly open: ComputedRef<boolean>;
+    // (undocumented)
+    readonly paneWidth: number;
+    // (undocumented)
+    readonly setOpen: (open: boolean) => void;
+    // (undocumented)
+    readonly setTab: (tab: NavigationTabValue) => void;
+    // (undocumented)
+    readonly shift: ComputedRef<number>;
+    // (undocumented)
+    readonly tab: ComputedRef<NavigationTabValue>;
+    // (undocumented)
+    readonly toggle: () => void;
+}
+
+// @public (undocumented)
+export function useNavigationShift(): ShallowRef<number>;
+
+// @public (undocumented)
+export function useNotePropertiesState(): Readonly<vue.ShallowRef<_docx_editor_dev_core.NotePropertiesState | null>>;
+
+// @public (undocumented)
+export function useNoteScopeState(): Readonly<vue.ShallowRef<{
+    kind: "note";
+    id: string;
+} | null>>;
+
+// @public (undocumented)
+export function usePageSetup(): UsePageSetupReturn;
+
+// @public (undocumented)
+export interface UsePageSetupReturn {
+    // (undocumented)
+    readonly apply: (update: PageSetupUpdate) => boolean;
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
+    // (undocumented)
+    readonly pageSetup: ComputedRef<PageSetup | null>;
+}
+
+// @public (undocumented)
+export function useParagraphIndent(): UseParagraphIndentReturn;
+
+// @public (undocumented)
+export interface UseParagraphIndentReturn {
+    // (undocumented)
+    readonly apply: (update: IndentUpdate) => boolean;
+    // (undocumented)
+    readonly indent: ComputedRef<IndentFormatting | null>;
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
+}
+
+// @public (undocumented)
+export function useParagraphStyle(): UseParagraphStyleResult;
+
+// @public (undocumented)
+export interface UseParagraphStyleResult {
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
+    // (undocumented)
+    readonly options: ComputedRef<readonly ParagraphStyleOption[]>;
+    // (undocumented)
+    readonly setValue: (styleId: string) => void;
+    // (undocumented)
+    readonly value: ComputedRef<string | null>;
+}
+
+// @public (undocumented)
 export function useScopeClassName(): '' | 'docx-editor ';
+
+// @public (undocumented)
+export function useTableBorderTargetLabel(): ComputedRef<string>;
+
+// @public (undocumented)
+export function useToolbarContext(): ToolbarContextValue;
+
+// @public (undocumented)
+export function useToolbarLabel(): (key: string) => string;
+
+// @public (undocumented)
+export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: string) => string;
+
+// @public (undocumented)
+export function useTranslation(): {
+    t: ShallowRef<TFunction>;
+};
+
+// @public (undocumented)
+export function useZoom(): UseZoomResult;
+
+// @public (undocumented)
+export interface UseZoomResult {
+    // (undocumented)
+    readonly auto: () => void;
+    // (undocumented)
+    readonly canZoomIn: ComputedRef<boolean>;
+    // (undocumented)
+    readonly canZoomOut: ComputedRef<boolean>;
+    // (undocumented)
+    readonly fitToWidth: () => void;
+    // (undocumented)
+    readonly isFit: ComputedRef<boolean>;
+    // (undocumented)
+    readonly levels: readonly number[];
+    // (undocumented)
+    readonly mode: ComputedRef<ZoomMode>;
+    // (undocumented)
+    readonly reset: () => void;
+    // (undocumented)
+    readonly setMode: (mode: ZoomMode | 'auto') => void;
+    // (undocumented)
+    readonly setZoom: (zoom: number) => void;
+    // (undocumented)
+    readonly zoom: ComputedRef<number>;
+    // (undocumented)
+    readonly zoomIn: () => void;
+    // (undocumented)
+    readonly zoomOut: () => void;
+}
 
 // @public
 export const VERSION = "0.0.2";
