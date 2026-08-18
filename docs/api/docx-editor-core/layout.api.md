@@ -1659,6 +1659,7 @@ export interface PageRecord {
     readonly footnotes?: NoteAreaRecord;
     // (undocumented)
     readonly fragments: readonly BlockFragmentRecord[];
+    readonly hasBodyPageFields?: boolean;
     readonly header?: HeaderFooterStoryRecord;
     // (undocumented)
     readonly id: string;

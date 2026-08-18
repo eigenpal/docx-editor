@@ -59,6 +59,7 @@ import {
   formatPageNumber,
   projectPageFieldValue,
   storyNeedsPageFields,
+  summarizeFlushedPage,
   withPageFieldSources,
   type FieldPageContext,
 } from './field-page-furniture.ts';
@@ -134,6 +135,7 @@ export {
   formatPageNumber,
   projectPageFieldValue,
   storyNeedsPageFields,
+  summarizeFlushedPage,
   withPageFieldSources,
   type FieldPageContext,
 };

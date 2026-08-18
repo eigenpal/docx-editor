@@ -719,6 +719,14 @@ export interface PageRecord {
     readonly format?: string;
   };
   /**
+   * `true` when this page's body flow (or a body table) carries a PAGE/NUMPAGES/SECTIONPAGES
+   * placeholder that document finalize must substitute. Set when the page is assembled, so it
+   * rides the record through incremental reuse. `false` lets `finalizePageFieldProjection` skip
+   * the substitution walk; `undefined` (a page built by a path that does not stamp it) still
+   * walks, which is safe.
+   */
+  readonly hasBodyPageFields?: boolean;
+  /**
    * Content-control boundaries whose geometry intersects this page.
    *
    * Carried on the page so a consumer that only holds a page record still sees current

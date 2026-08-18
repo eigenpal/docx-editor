@@ -28,9 +28,11 @@ import type {
  *
  * Body content flows once, before the page count is known, so the real value cannot be measured
  * in place. The paragraph walk reserves one model unit and paints this single digit; document
- * finalize substitutes the value the atom lands on ({@link substituteBodyPageFields}). A digit is
- * chosen so a one-digit page number lays out exactly and a multi-digit one shifts only its own
- * trailing content on the line — the same non-reflow Word shows.
+ * finalize substitutes the value the atom lands on ({@link substituteBodyPageFields}). The field
+ * is measured at this one-digit width. A one-digit value lays out exactly. A multi-digit value
+ * that is NOT last on its line paints its extra digits over the following same-line content,
+ * because that content was placed at the one-digit x; Word instead re-measures and reflows.
+ * Last-on-line and label usage (the common cases) are unaffected.
  */
 export const PAGE_FIELD_PLACEHOLDER = '0';
 
@@ -159,6 +161,63 @@ export function withPageFieldSources(
   return changed ? next : (pages as PageRecord[]);
 }
 
+/** True when any span on this line carries a body page-field marker. */
+function lineHasBodyPageField(line: LineRecord): boolean {
+  for (const span of line.spans) {
+    if (span.fieldAtom?.pageField) return true;
+  }
+  return false;
+}
+
+/**
+ * True when a paragraph or a nested-table cell in this block carries a body page field.
+ *
+ * Recurses table rows and cells, matching {@link substituteBodyPageFields}'s reach, so a page's
+ * `hasBodyPageFields` flag agrees exactly with whether the substitution walk would change
+ * anything. The marker is a property of the paragraph content, not of the page, so the answer is
+ * the same across every sheet.
+ */
+function blockHasBodyPageField(block: BlockFragmentRecord): boolean {
+  if (block.kind === 'paragraph') {
+    for (const line of block.lines) {
+      if (lineHasBodyPageField(line)) return true;
+    }
+    return false;
+  }
+  for (const row of block.rows) {
+    for (const cell of row.cells) {
+      for (const inner of cell.blocks) {
+        if (blockHasBodyPageField(inner)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Fold a flushed body page's fragments into the two facts pagination needs from them: the deepest
+ * used bottom (column-separator sizing) and whether ANY body page field is present. Both fall out
+ * of the one pass the page assembly already had to make, so the flag costs no extra traversal.
+ *
+ * The `hasBodyPageFields` result is stamped on the {@link PageRecord} and rides it through
+ * incremental reuse. So a page rebuilt this pass is walked once here; a page reused by identity
+ * keeps its fresh, content-derived answer without a second scan. When the flag is `false`,
+ * {@link finalizePageFieldProjection} skips the substitution walk for that page entirely — the
+ * common case, since page numbers usually live in footers, not the body flow.
+ */
+export function summarizeFlushedPage(
+  fragments: readonly BlockFragmentRecord[],
+  regionTop: number
+): { readonly usedBottom: number; readonly hasBodyPageFields: boolean } {
+  let usedBottom = regionTop;
+  let hasBodyPageFields = false;
+  for (const fragment of fragments) {
+    usedBottom = Math.max(usedBottom, fragment.box.y + fragment.box.height);
+    if (!hasBodyPageFields && blockHasBodyPageField(fragment)) hasBodyPageFields = true;
+  }
+  return { usedBottom, hasBodyPageFields };
+}
+
 /**
  * Substitute a body page-field placeholder line, or return it by identity.
  *
@@ -268,7 +327,13 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     };
     const header = project(page.header);
     const footer = project(page.footer);
-    const fragments = substituteBodyPageFields(page.fragments, context);
+    // Fast-out: a page assembled with no body page field carries `hasBodyPageFields: false`, so
+    // its whole fragment/table walk is skipped. An `undefined` flag (a page built by a path that
+    // does not stamp it) still walks, which is safe — over-walking never drops a substitution.
+    const fragments =
+      page.hasBodyPageFields === false
+        ? page.fragments
+        : substituteBodyPageFields(page.fragments, context);
     if (header === page.header && footer === page.footer && fragments === page.fragments) {
       return page;
     }

@@ -20,6 +20,7 @@ import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
 import {
   finalizePageFieldProjection,
   storyNeedsPageFields,
+  summarizeFlushedPage,
   withPageFieldSources,
   type FieldLinkProjector,
   type HyperlinkProjector,
@@ -1239,10 +1240,7 @@ function layoutBlocksPass(
     const box = pageBox(index);
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
-    const usedBottom = pageFragments.reduce(
-      (bottom, fragment) => Math.max(bottom, fragment.box.y + fragment.box.height),
-      columnRegionTop
-    );
+    const { usedBottom, hasBodyPageFields } = summarizeFlushedPage(pageFragments, columnRegionTop);
     pages.push({
       id: `page-${index}`,
       index,
@@ -1254,6 +1252,7 @@ function layoutBlocksPass(
         height: baseContentHeight,
       },
       fragments: pageFragments,
+      hasBodyPageFields,
       ...(columns.separator
         ? {
             columnSeparators: columns.gaps.map((gap, separatorIndex) => ({
