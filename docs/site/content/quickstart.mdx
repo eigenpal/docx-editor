@@ -76,7 +76,7 @@ export default function App() {
 Four things to know about this code:
 
 - `document` takes a `Uint8Array`, an `ArrayBuffer`, or a `DocumentHandle`. Omit it to mount an empty editor.
-- `mode` is `'edit'` or `'view'`, and is read at mount. Remount to change it.
+- `mode` is `'edit'` (default), `'view'`, or `'suggesting'`, and is read at mount. Remount to change it.
 - `save()` on the ref returns `Promise<ArrayBuffer | null>`: a complete `.docx`, or `null` when there is no document. Parsing and serialization both happen in the browser; the document never touches a server.
 - `<DocxEditor>` fills its parent, so give it a box with a real height. The stylesheet import is required once per app.
 
