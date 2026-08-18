@@ -159,6 +159,8 @@ const COLLAPSED_CARD_HEIGHT = 64;
  * further, a full card reads as annotating whatever happens to be beside it.
  */
 const COLLAPSE_DISPLACEMENT_PX = 480;
+/** A rail marker is a 28 CSS px box; the step keeps 2px of air between stacked markers. */
+const MARKER_STEP = 30;
 
 /** Stable query for the balloon's unplaced queue read — never allocate per render. */
 const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({ placement: false }) satisfies ReviewItemQuery;
@@ -958,7 +960,8 @@ export interface ReviewMarkersProps {
 }
 
 /**
- * The collapsed rail: one marker per item, at its anchor.
+ * The collapsed rail: one marker per item, at its anchor — or just below the previous
+ * marker, when the anchors are closer than a marker is tall.
  *
  * @public
  */
@@ -972,14 +975,30 @@ function ReviewMarkers({
 }: ReviewMarkersProps) {
   const { review } = useRail();
   const t = useReviewLabel();
+  // Markers stack the way the cards do: each sits at its own anchor, or just below the
+  // previous marker when the anchors are closer than a marker is tall. Raw anchors put
+  // every change on a dense line at the same `top`, and the rail drew them on top of each
+  // other. The cursor runs in CSS px, after scaling, because the marker's box does not
+  // zoom with the page.
+  const { roots, stackedTops } = useMemo(() => {
+    const present = idsOf(review.items);
+    const entries = review.items.filter((entry) => !isThreadedReply(entry, present));
+    const tops = new Map<string, number>();
+    let cursor = Number.NEGATIVE_INFINITY;
+    for (const entry of entries) {
+      if (entry.anchorY === null) continue;
+      const top = Math.max(offset + entry.anchorY * scale, cursor);
+      tops.set(entry.key, top);
+      cursor = top + MARKER_STEP;
+    }
+    return { roots: entries, stackedTops: tops };
+  }, [review.items, offset, scale]);
   if (hidden) return null;
-  const present = idsOf(review.items);
-  const roots = review.items.filter((entry) => !isThreadedReply(entry, present));
   return (
     <div className={`docx-review__markers${className ? ` ${className}` : ''}`}>
       {roots.map((entry) => {
-        if (entry.anchorY === null) return null;
-        const top = offset + entry.anchorY * scale;
+        const top = stackedTops.get(entry.key);
+        if (top === undefined) return null;
         if (visible && (top < visible.top || top > visible.bottom)) return null;
         return (
           <button

@@ -758,6 +758,17 @@ const THREE_KINDS = docx(
     '<w:r><w:delText>struck</w:delText></w:r></w:del></w:p>'
 );
 
+/**
+ * An insertion and a deletion inside ONE paragraph: two markers whose anchors are the same
+ * line, which the closed rail must stack rather than draw on top of each other.
+ */
+const SAME_LINE = docx(
+  '<w:p><w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+    '<w:r><w:t xml:space="preserve">added </w:t></w:r></w:ins>' +
+    '<w:del w:id="2" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+    '<w:r><w:delText>struck</w:delText></w:r></w:del></w:p>'
+);
+
 /** The glyph each marker drew, keyed by the kind it is for. */
 function markerGlyphs(view: ReturnType<typeof render>): Map<string, string> {
   const glyphs = new Map<string, string>();
@@ -797,6 +808,37 @@ describe('the collapsed rail says what each marker IS', () => {
     expect(glyphs.get('delete')).toBeTruthy();
     // The regression: every one of these used to be byte-identical.
     expect(glyphs.get('insert')).not.toBe(glyphs.get('delete'));
+  });
+
+  test('two markers anchored on one line stack instead of overlapping', () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SAME_LINE}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    act(() => undefined);
+    act(() => {
+      instance!.exec({ type: 'toggleReviewPane' });
+    });
+
+    const tops = view
+      .queryAllByTestId('review-marker')
+      .map((marker) => Number.parseFloat((marker as HTMLElement).style.top));
+    expect(tops.length).toBe(2);
+    // Both anchors are the same line; drawn raw, the second marker sat exactly on the
+    // first. Stacked, they are at least a marker's height (28px) apart.
+    const sorted = [...tops].sort((a, b) => a - b);
+    expect(sorted[1]! - sorted[0]!).toBeGreaterThanOrEqual(28);
   });
 
   test('the Markers part takes a per-item icon and keeps the wiring it was handed', () => {
