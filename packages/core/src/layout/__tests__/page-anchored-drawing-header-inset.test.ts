@@ -65,7 +65,7 @@ const READY: ImageResourceState = Object.freeze({
 
 interface Anchor {
   /** `wp:positionV/@relativeFrom`. */
-  readonly frame: 'page' | 'topMargin' | 'bottomMargin';
+  readonly frame: 'page' | 'topMargin' | 'bottomMargin' | 'margin';
   /** `wp:posOffset` in EMU; omitted when `align` is set. */
   readonly offsetEmu?: number;
   /** `wp:align`, which wins over an offset in ECMA-376 §20.4.2.10. */
@@ -138,13 +138,21 @@ function story(kind: 'header' | 'footer', lines: number) {
   return layoutHeaderFooterStory(result.part, CONTENT_WIDTH, measurer, 'test');
 }
 
-/** Two furniture lines beat the 20pt margins of {@link GEOMETRY} and nothing in {@link ROOMY}. */
-function furniture(opts: { readonly header?: boolean; readonly footer?: boolean }): PageFurniture {
+/**
+ * Two furniture lines beat the 20pt margins of {@link GEOMETRY} and nothing in {@link ROOMY}.
+ * A line count instead of `true` asks for a taller band — 20 lines runs past the 40% cap.
+ */
+function furniture(opts: {
+  readonly header?: boolean | number;
+  readonly footer?: boolean | number;
+}): PageFurniture {
+  const lines = (value: boolean | number | undefined): number =>
+    typeof value === 'number' ? value : 2;
   return {
     titlePage: false,
     evenAndOddHeaders: false,
-    headers: opts.header ? new Map([['default', story('header', 2)]]) : new Map(),
-    footers: opts.footer ? new Map([['default', story('footer', 2)]]) : new Map(),
+    headers: opts.header ? new Map([['default', story('header', lines(opts.header))]]) : new Map(),
+    footers: opts.footer ? new Map([['default', story('footer', lines(opts.footer))]]) : new Map(),
   };
 }
 
@@ -282,6 +290,42 @@ describe('the margin frames are page-setup landmarks, not furniture-relative', (
   test('bottomMargin is the same line with no furniture at all', () => {
     expect(sheetTop(lay({ frame: 'bottomMargin' }))).toBeCloseTo(
       GEOMETRY.height - GEOMETRY.margin.bottom,
+      3
+    );
+  });
+
+  test('bottomMargin holds with both bands tall', () => {
+    const layout = lay(
+      { frame: 'bottomMargin' },
+      { furniture: furniture({ header: true, footer: true }) }
+    );
+    expect(sheetTop(layout)).toBeCloseTo(GEOMETRY.height - GEOMETRY.margin.bottom, 3);
+  });
+
+  // The cap is where `effectiveTop` STOPS tracking the header, so it is the case most likely
+  // to rot: a landmark that reads the inset must still land on the authored line there.
+  test('the landmarks hold once the 40% furniture cap clamps the inset', () => {
+    const capped = { furniture: furniture({ header: 20 }) };
+    expect(contentInset(lay({ frame: 'page' }, capped))).toBeCloseTo(GEOMETRY.height * 0.4, 3);
+    expect(sheetTop(lay({ frame: 'page' }, capped))).toBeCloseTo(0, 3);
+    expect(sheetTop(lay({ frame: 'topMargin' }, capped))).toBeCloseTo(0, 3);
+    expect(sheetTop(lay({ frame: 'bottomMargin' }, capped))).toBeCloseTo(
+      GEOMETRY.height - GEOMETRY.margin.bottom,
+      3
+    );
+  });
+
+  // The inverse control. `margin` is the TEXT AREA, so it is the one vertical frame that must
+  // move with the furniture — without it these tests only prove that nothing ever moves.
+  test('the margin frame does follow the furniture, unlike the landmarks', () => {
+    const withHeader = sheetTop(
+      lay({ frame: 'margin' }, { furniture: furniture({ header: true }) })
+    );
+    const bare = sheetTop(lay({ frame: 'margin' }));
+    expect(bare).toBeCloseTo(GEOMETRY.margin.top, 3);
+    expect(withHeader).toBeGreaterThan(bare + 10);
+    expect(withHeader).toBeCloseTo(
+      contentInset(lay({ frame: 'margin' }, { furniture: furniture({ header: true }) })),
       3
     );
   });

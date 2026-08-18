@@ -657,7 +657,7 @@ function verticalEdges(
   }
 
   const pageTop = -ctx.contentInsetTop;
-  const contentBandHeight = ctx.contentBandHeight ?? ctx.contentHeight;
+  const contentBandHeight = ctx.contentBandHeight;
   /**
    * Top edge of the bottom margin band, off the AUTHORED margin.
    *
@@ -738,7 +738,12 @@ function resolveInsideOutsideVerticalAlign(
   ctx: DrawingAnchorFrameContext
 ): number | null {
   const odd = isOddPage(ctx.pageNumber);
-  const bandHeight = ctx.contentBandHeight ?? ctx.contentHeight;
+  // THE TEXT AREA, deliberately — the opposite choice from `pageBottomInner` two functions up.
+  // `inside`/`outside` align WITHIN a band rather than measuring from a page landmark, so on an
+  // odd page `inside` is the content box top and `outside` puts the object on the content box
+  // bottom. Reading the flow height here instead would differ only on a page carrying a note
+  // reserve, and would shrink the band the notes took away from the text.
+  const bandHeight = ctx.contentBandHeight;
   if (
     ctx.layoutInCell &&
     ctx.cellBox &&
@@ -808,15 +813,10 @@ function positionFromVertical(
 export function pageClipRegion(
   frameBase: Pick<
     DrawingAnchorFrameContext,
-    | 'pageWidth'
-    | 'marginLeft'
-    | 'contentInsetTop'
-    | 'contentInsetBottom'
-    | 'contentHeight'
-    | 'contentBandHeight'
+    'pageWidth' | 'marginLeft' | 'contentInsetTop' | 'contentInsetBottom' | 'contentBandHeight'
   >
 ): LayoutBox {
-  const bandHeight = frameBase.contentBandHeight ?? frameBase.contentHeight;
+  const bandHeight = frameBase.contentBandHeight;
   return Object.freeze({
     x: -frameBase.marginLeft,
     y: -frameBase.contentInsetTop,
