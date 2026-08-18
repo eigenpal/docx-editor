@@ -15,7 +15,12 @@
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core/layout';
 import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { revisionPresentationOf } from './revision-presentation.ts';
-import { formatRevisionOf, type RevisionAttribution } from '@docx-editor.dev/core/layout';
+import {
+  formatRevisionOf,
+  markRevisionRemovesMark,
+  shownMarkRevision,
+  type RevisionAttribution,
+} from '@docx-editor.dev/core/layout';
 import type {
   ContentControlBoundaryRecord,
   ContentControlMappedType,
@@ -848,23 +853,35 @@ function applyRevisionPresentation(element: HTMLElement, span: StyleSpanRecord):
  */
 function paintParagraphMark(
   document: Document,
-  revision: RevisionAttribution,
+  revisions: readonly RevisionAttribution[],
   scale: number
 ): HTMLElement {
+  // ONE glyph however many decisions stand on it: there is one pilcrow, and drawing a second
+  // beside it would read as a second paragraph break. A REMOVAL wins the face when a mark
+  // carries both — a break proposed and then unproposed ends up removed, and the same rule
+  // already decides the colour of a change bar over mixed lines. `moveFrom` counts as a
+  // removal, which is what keeps this glyph agreeing with the rule in the margin beside it.
+  // Both attributions are published on the element, so review chrome can offer both.
+  const shown = shownMarkRevision(revisions)!;
   const glyph = document.createElement('span');
-  glyph.className = `docx-revision-pmark docx-revision-pmark-${revision.kind}`;
+  glyph.className = `docx-revision-pmark docx-revision-pmark-${shown.kind}`;
   glyph.setAttribute('aria-hidden', 'true');
   glyph.contentEditable = 'false';
-  glyph.dataset.revisionKind = revision.kind;
-  glyph.dataset.revisionId = revision.id;
-  glyph.dataset.revisionAuthor = revision.author;
+  glyph.dataset.revisionKind = shown.kind;
+  glyph.dataset.revisionId = shown.id;
+  glyph.dataset.revisionAuthor = shown.author;
+  // Always, not only for a pair: a consumer reading `data-revision-ids` should not have to
+  // fall back to `data-revision-id` for the ordinary case. Kinds ride alongside, because the
+  // ids alone cannot say which decision each one is.
+  glyph.dataset.revisionIds = revisions.map((revision) => revision.id).join(' ');
+  glyph.dataset.revisionKinds = revisions.map((revision) => revision.kind).join(' ');
   glyph.textContent = '\u00b6';
   glyph.style.position = 'absolute';
   glyph.style.pointerEvents = 'none';
   glyph.style.marginLeft = `${2 * scale}px`;
-  glyph.style.color =
-    revision.kind === 'delete' ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)';
-  if (revision.kind === 'delete') glyph.style.textDecorationLine = 'line-through';
+  const removes = markRevisionRemovesMark(shown);
+  glyph.style.color = removes ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)';
+  if (removes) glyph.style.textDecorationLine = 'line-through';
   return glyph;
 }
 
@@ -893,8 +910,16 @@ function paintChangeBars(
     deleted: boolean;
   }
   const runs: BarRun[] = [];
+  // The mark belongs to the LAST line, and it is a revision like any other. Reading only the
+  // spans left a paragraph whose sole change was its own pilcrow — a split or a merge, the
+  // most ordinary tracked edit there is — with a coloured ¶ and no rule in the margin, so a
+  // reader scanning the margin never saw that the paragraph had been changed at all.
+  const markLine = fragment.lines[fragment.lines.length - 1];
   for (const line of fragment.lines) {
-    const revisions = line.spans.flatMap((span) => span.revisions ?? []);
+    const revisions = [
+      ...line.spans.flatMap((span) => span.revisions ?? []),
+      ...(line === markLine ? (fragment.markRevisions ?? []) : []),
+    ];
     if (revisions.length === 0) continue;
     const deleted = revisions.some(
       (revision) => revision.kind === 'delete' || revision.kind === 'moveFrom'
@@ -1397,8 +1422,8 @@ function paintFragment(
   // is the only signal that a change exists at all once the reader is in a resolved view.
   const bars = paintChangeBars(document, fragment, scale);
   if (bars) element.append(bars);
-  if (fragment.markRevision) {
-    const glyph = paintParagraphMark(document, fragment.markRevision, scale);
+  if (fragment.markRevisions && fragment.markRevisions.length > 0) {
+    const glyph = paintParagraphMark(document, fragment.markRevisions, scale);
     const last = fragment.lines[fragment.lines.length - 1];
     if (last) {
       // At the end of the last line's text, which is where the mark itself sits.

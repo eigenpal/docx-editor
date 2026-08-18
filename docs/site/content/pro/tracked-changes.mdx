@@ -52,11 +52,19 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 The revision model covers more than inline text:
 
 - **Text** insertions and deletions, including replacements: one card, the way Word presents it.
-- **Paragraph structure**: inserted and deleted paragraph marks, paragraph property changes.
+- **Paragraph structure**: inserted and deleted paragraph marks, paragraph property changes. A
+  changed mark shows as a coloured pilcrow with a change bar in the margin, wherever the
+  paragraph is, table cells included. One mark can hold two decisions at once — one author
+  inserted the break, the next proposed removing it — and both are offered.
 - **Tables**: row and cell insert and delete, plus row, cell, and table property changes.
 - **Formatting**: run and paragraph property changes, as their own cards.
 
 All of these round-trip as real OOXML revisions, not editor-private state.
+
+Attribution is drawn in **All Markup** only, as Word draws it. The resolved views answer what
+the document would be once every decision is taken, so they show no colours, no pilcrows and no
+change bars — but they still show the paragraph break itself, rather than merging the two
+paragraphs the way accepting the change would.
 
 ## The review sidebar
 

@@ -368,15 +368,47 @@ export interface ParagraphFragmentRecord {
    */
   readonly shadingBox?: LayoutBox;
   /**
-   * The revision on this paragraph's own MARK (`w:pPr/w:rPr/w:ins|w:del`), absent when there
-   * is none.
+   * The revisions on this paragraph's own MARK (`w:pPr/w:rPr/w:ins|w:del`), absent when there
+   * are none.
    *
-   * Carried on the fragment rather than on a span because it decorates no characters: the
+   * Carried on the fragment rather than on a span because they decorate no characters: the
    * pilcrow was inserted or deleted, which is how a split or a merge is recorded. Only the
-   * FINAL fragment carries it — the mark lives at the end of the paragraph, so a paragraph
+   * FINAL fragment carries them — the mark lives at the end of the paragraph, so a paragraph
    * split across pages must not draw two of them.
+   *
+   * A LIST because one mark can hold two decisions at once — an insertion by one author and
+   * a deletion of that insertion by the next. Published only in `all-markup`: the other two
+   * display modes answer what the document WOULD be, and a resolved view draws no
+   * attribution.
+   *
+   * Those two modes are ATTRIBUTION-resolved, not STRUCTURE-resolved. Taking a deleted mark
+   * in `proposed` merges the paragraph into the next one, and taking an inserted mark in
+   * `original` un-splits it, but `revision-visibility.ts` does that only for a paragraph that
+   * renders no text. So a resolved view still shows the break — it just no longer draws a
+   * coloured pilcrow beside it. The merge is the fix for that; suppressing the glyph is not,
+   * and must not be read as it.
+   */
+  readonly markRevisions?: readonly RevisionAttribution[];
+  /**
+   * The one decision a single-field reader sees, absent when there are none.
+   *
+   * Derived from {@link markRevisions} at publish time, never authored beside it, so the two
+   * cannot disagree: a deletion when the mark carries one, because that is where the pair
+   * lands once every decision is taken, and it is the face paint draws for the same reason.
+   *
+   * @deprecated Shows one of the decisions a mark can carry. Read {@link markRevisions}.
    */
   readonly markRevision?: RevisionAttribution;
+  /**
+   * The tracked FORMAT change on this paragraph's mark (`w:pPr/w:rPr/w:rPrChange`), absent
+   * when there is none. Final fragment only, and `all-markup` only, like the decisions above.
+   *
+   * Published without a glyph of its own on purpose. Word draws no pilcrow for a mark whose
+   * only change is its own formatting — the decision belongs to the review pane, which lists
+   * it either way. What was missing was GEOMETRY: with nothing on the fragment, a card had
+   * no place on the page to point at.
+   */
+  readonly markFormatRevision?: RevisionAttribution;
   /**
    * List marker painted in the hanging-indent slot of the FIRST fragment only.
    *

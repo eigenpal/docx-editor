@@ -29,7 +29,13 @@ import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
  * — fail-open with an empty display (model atom preserved).
  */
 export interface NoteMarkContext {
-  /** scopeId → formatted mark (or null when suppressed). */
+  /**
+   * scopeId → formatted mark (or null when suppressed).
+   *
+   * IMMUTABLE once the context is built. `noteMarksCacheToken` memoizes on the context object
+   * and that token reaches every paragraph's cache key, so a later `marks.set` would pin the
+   * whole document to a token for marks it no longer has.
+   */
   readonly marks: ReadonlyMap<string, string | null>;
   /**
    * When set, every automatic mark measures at least this string's width (eachPage
@@ -163,23 +169,52 @@ export function noteAtomModelText(): typeof NOTE_ATOM_CHAR {
   return NOTE_ATOM_CHAR;
 }
 
-/** Compact cache token for note-mark identity (bounded; not a full serialization). */
+/** FNV-1a over 32 bits, in `Math.imul` arithmetic: no BigInt on a per-pass path. */
+function fnv1a32(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * Cache token for note-mark identity — EVERY mark, not a sample of them.
+ *
+ * The session context this feeds decides whether an incremental pass may resume. A note's
+ * displayed mark is DERIVED (`w:footnotePr/w:numFmt`, `w:numStart`, `w:numRestart`, and the
+ * section overrides of each), so it moves without any paragraph subtree moving with it: no
+ * block key changes, and the pass resumes onto pages measured for the old marks. Body
+ * reprojection then rewrites the display text and deliberately keeps the reserved width, so
+ * the digits update and the geometry stays where the old digits put it — `1` becoming `ii`
+ * kept a one-glyph slot, and every span after it on that line kept its old x.
+ *
+ * Bounding this by count was the same mistake one level down: two documents whose marks
+ * agree for the first N notes and differ after are not the same document. It is memoized on
+ * the context object, so a multi-section pass pays for the walk once rather than per section.
+ */
+const markTokens = new WeakMap<object, string>();
+
 export function noteMarksCacheToken(context: NoteMarkContext | undefined): string {
-  if (!context || context.marks.size === 0) {
-    return context?.reservedMarkText ? `r:${context.reservedMarkText}` : '';
-  }
-  const parts: string[] = [];
-  let n = 0;
-  for (const [key, mark] of context.marks) {
-    if (n >= 64) {
-      parts.push('…');
-      break;
-    }
-    parts.push(`${key}=${mark ?? ''}`);
-    n += 1;
-  }
-  if (context.reservedMarkText) parts.push(`r:${context.reservedMarkText}`);
-  return parts.join(',');
+  if (!context) return '';
+  const cached = markTokens.get(context);
+  if (cached !== undefined) return cached;
+  // Serialized rather than joined with separators: a custom mark (`w:footnoteRef` text) is
+  // author-supplied and may hold any character, and `null` — `customMarkFollows` — is not the
+  // empty mark. Two contexts that differ must not be able to spell the same serialization.
+  const serialized = JSON.stringify([
+    [...context.marks],
+    context.reservedMarkText ?? null,
+    context.activeNoteKey ?? null,
+  ]);
+  // HASHED to a constant width, because this reaches the key of every paragraph in the
+  // document, not just the section context. A thousand-note document would otherwise carry
+  // tens of kilobytes into every one of those keys and compare it there. The count rides
+  // along, so two documents would have to collide on both to be mistaken for each other.
+  const token = `${context.marks.size}:${fnv1a32(serialized)}`;
+  markTokens.set(context, token);
+  return token;
 }
 
 /** Re-export for callers that already have a note node. */

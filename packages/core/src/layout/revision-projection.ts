@@ -155,17 +155,74 @@ export function revisionsVisible(
 }
 
 /**
- * The revision on a paragraph's own MARK, from `w:pPr/w:rPr/w:ins|w:del`.
+ * Every revision on a paragraph's own MARK, from `w:pPr/w:rPr/w:ins|w:del|w:moveFrom|w:moveTo`.
+ *
+ * All four members of `EG_ParaRPrTrackChanges`. A moved paragraph carries `w:moveFrom` on the
+ * mark of the copy it left and `w:moveTo` on the mark of the copy it arrived at, so a move
+ * that spans whole paragraphs is recorded here and nowhere else.
  *
  * `EG_ParaRPrTrackChanges` records that the pilcrow itself was inserted or deleted, which is how
  * Word writes a paragraph split or merge. It is not content — there is no text to decorate — so
  * a surface shows it as a mark of its own beside the paragraph, the way Word draws a struck-
  * through ¶.
  *
+ * A LIST, because the group is `ins? del? moveFrom? moveTo?` and the first two can both be
+ * there: that pair is what Word writes when a second author proposes removing a mark the first
+ * proposed adding, and it is what this engine's own writer emits (`tree-op-tracked.ts`).
+ * Answering with the first one hid the second author's decision from the PAGE. The review pane
+ * walks the tree itself and always listed both, which is the worse shape of the two: a card
+ * offering a decision the reader could see no sign of.
+ *
+ * Ordered as the file orders them, which is the order the group declares.
+ *
  * Property-position `w:ins`/`w:del` stay `generic` in the tree deliberately, so this reads them
  * by name rather than by kind.
  */
-export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null {
+export function paragraphMarkRevisionsOf(paragraph: OoxmlNode): readonly RevisionAttribution[] {
+  if (paragraph.kind === 'textValue') return EMPTY_MARK_REVISIONS;
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  if (!pPr || pPr.kind === 'textValue') return EMPTY_MARK_REVISIONS;
+  const rPr = pPr.children.find((child) => child.kind === 'runProperties');
+  if (!rPr || rPr.kind === 'textValue') return EMPTY_MARK_REVISIONS;
+  const revisions: RevisionAttribution[] = [];
+  for (const child of rPr.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    const kind = MARK_REVISION_KINDS[child.localName];
+    if (kind === undefined) continue;
+    const date = attributeValue(child, 'date');
+    revisions.push({
+      kind,
+      id: attributeValue(child, 'id') ?? '',
+      author: attributeValue(child, 'author') ?? '',
+      ...(date === undefined ? {} : { date }),
+      nodeId: child.id,
+    });
+  }
+  return revisions.length > 0 ? revisions : EMPTY_MARK_REVISIONS;
+}
+
+/** `EG_ParaRPrTrackChanges` in full: `ins? del? moveFrom? moveTo?` (§17.13.5.20-25). */
+const MARK_REVISION_KINDS: Readonly<Record<string, RevisionKind | undefined>> = {
+  ins: 'insert',
+  del: 'delete',
+  moveFrom: 'moveFrom',
+  moveTo: 'moveTo',
+};
+
+/**
+ * The tracked FORMAT change on a paragraph's own mark, from `w:pPr/w:rPr/w:rPrChange`.
+ *
+ * `CT_ParaRPr` ends with it (§17.13.5.32), and Word writes it when a user changes the mark's
+ * own run properties with tracking on. It reaches the fragment rather than a span because it
+ * decorates no characters, and it is not in `props`: a fragment's `props` carry the mark's
+ * `w:rPr` by NAME only, with none of its children.
+ *
+ * Note that `w:rPrChange/w:rPr` is `CT_ParaRPrOriginal`, which may carry its own revision
+ * marks. Those describe the mark as it WAS and must not be read as live ones, which is why
+ * this reads the change element's own attributes and never descends into it.
+ */
+export function paragraphMarkFormatRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null {
   if (paragraph.kind === 'textValue') return null;
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   if (!pPr || pPr.kind === 'textValue') return null;
@@ -173,12 +230,10 @@ export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttributi
   if (!rPr || rPr.kind === 'textValue') return null;
   for (const child of rPr.children) {
     if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    const kind = child.localName === 'ins' ? 'insert' : child.localName === 'del' ? 'delete' : null;
-    if (kind === null) continue;
+    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'rPrChange') continue;
     const date = attributeValue(child, 'date');
     return {
-      kind,
+      kind: 'format',
       id: attributeValue(child, 'id') ?? '',
       author: attributeValue(child, 'author') ?? '',
       ...(date === undefined ? {} : { date }),
@@ -186,6 +241,66 @@ export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttributi
     };
   }
   return null;
+}
+
+/** One shared empty, so an unmarked paragraph publishes no array of its own. */
+const EMPTY_MARK_REVISIONS: readonly RevisionAttribution[] = Object.freeze([]);
+
+/**
+ * The single decision a one-field reader sees.
+ *
+ * A DELETION wins when a mark carries both, for the reason paint draws it that way: a break
+ * proposed and then unproposed ends up removed, so that is the decision a reader who can only
+ * see one must see. One function decides it, so the deprecated field, the deprecated function
+ * and the painted glyph cannot answer differently.
+ */
+export function shownMarkRevision(
+  revisions: readonly RevisionAttribution[]
+): RevisionAttribution | undefined {
+  return revisions.find((revision) => markRevisionRemovesMark(revision)) ?? revisions[0];
+}
+
+/**
+ * Does this decision, taken, remove the paragraph mark?
+ *
+ * A deletion does, and so does a `moveFrom`: the copy the paragraph moved OUT of goes away
+ * when the move is accepted. `insert` and `moveTo` are the other half of each pair, and they
+ * keep the break. Paint, the change bar and the resolved views all ask this one question, so
+ * a `moveFrom` cannot end up struck through in the margin and blue on the glyph.
+ */
+export function markRevisionRemovesMark(revision: RevisionAttribution): boolean {
+  return revision.kind === 'delete' || revision.kind === 'moveFrom';
+}
+
+/**
+ * What a fragment publishes for one mark: the list, and the single decision derived from it.
+ *
+ * Both lanes that build a paragraph fragment call this, so the body and the cell cannot come
+ * to publish different shapes for the same markup.
+ */
+export function markRevisionFields(
+  revisions: readonly RevisionAttribution[],
+  formatRevision?: RevisionAttribution | null
+): {
+  markRevisions?: readonly RevisionAttribution[];
+  markRevision?: RevisionAttribution;
+  markFormatRevision?: RevisionAttribution;
+} {
+  const shown = shownMarkRevision(revisions);
+  return {
+    ...(shown ? { markRevisions: revisions, markRevision: shown } : {}),
+    ...(formatRevision ? { markFormatRevision: formatRevision } : {}),
+  };
+}
+
+/**
+ * The one decision on a paragraph's mark that a single-field reader sees.
+ *
+ * @deprecated Reads one of the revisions a mark can carry. Use {@link paragraphMarkRevisionsOf},
+ * which answers with all of them.
+ */
+export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null {
+  return shownMarkRevision(paragraphMarkRevisionsOf(paragraph)) ?? null;
 }
 
 /**

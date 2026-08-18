@@ -269,6 +269,45 @@ time. Feature-support claims live in `docs/site/data/word-features.ts` (typed
 matrix), never hand-written in prose. A PR that changes user-visible behavior
 updates both.
 
+**Docs prose follows the
+[Google developer documentation style guide](https://developers.google.com/style)**
+([highlights](https://developers.google.com/style/highlights) is the summary):
+
+- [Voice and tone](https://developers.google.com/style/tone) — conversational
+  and friendly, not frivolous. No buzzwords, idioms, exclamation marks, or
+  pop-culture references. In procedures, never "simply", "easy", "just",
+  "quickly", or "please".
+- Grammar — [second person](https://developers.google.com/style/person)
+  ("you", not "we"), [active voice](https://developers.google.com/style/voice),
+  [present tense](https://developers.google.com/style/tense), American
+  spelling. State the condition before the instruction ("If X, click Y").
+- [Timeless](https://developers.google.com/style/timeless-documentation) — no
+  "currently", "new", "soon", "as of this writing". Document what the product
+  does; never pre-announce features.
+- [Headings](https://developers.google.com/style/headings) — sentence case in
+  all titles, headings, and navigation.
+- [Lists](https://developers.google.com/style/lists) — numbered for sequences,
+  bulleted otherwise; parallel structure; serial (Oxford) commas.
+- [Text formatting](https://developers.google.com/style/text-formatting) —
+  code font for filenames, identifiers, console output, and placeholders; bold
+  for UI elements only; italics only for term definitions and work titles.
+- [Link text](https://developers.google.com/style/link-text) — a descriptive
+  phrase that matches the target's title. Never "click here", "this article",
+  or a bare URL. Introduce with "For more information, see …".
+- [Code samples](https://developers.google.com/style/code-samples) — introduce
+  each sample with text; wrap lines at 80 characters; mark omissions with a
+  comment, not an ellipsis.
+- [Accessibility](https://developers.google.com/style/accessibility) — proper
+  heading hierarchy, alt text on every image, no images of text or terminal
+  output, no directional language ("above", "below"), meaning never carried by
+  color alone.
+- [Global audience](https://developers.google.com/style/translation) — short
+  sentences (26 words or fewer), one idea per sentence, acronyms defined on
+  first use, no culturally specific references.
+- The [word list](https://developers.google.com/style/word-list) settles
+  spelling and usage; use unambiguous
+  [dates and times](https://developers.google.com/style/dates-times).
+
 **Two `meta.json` must agree.** The `"root": true`
 `docs/site/content/meta.json` drives the sidebar with full paths; each subfolder
 has its own. Register a new page in BOTH, or it is URL-reachable but missing from

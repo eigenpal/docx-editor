@@ -36,7 +36,9 @@ import {
 } from './paragraph-flow.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
-  paragraphMarkRevisionOf,
+  markRevisionFields,
+  paragraphMarkFormatRevisionOf,
+  paragraphMarkRevisionsOf,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import {
@@ -54,6 +56,7 @@ import { resolveParagraphBorders } from './paragraph-border-resolve.ts';
 import {
   adjustedBreakIndex,
   keepNextFlowKeys,
+  listMarkerFlowKeys,
   keepNextGroupHeight,
   paragraphKeeps,
   MAX_KEEP_NEXT_CHAIN,
@@ -139,6 +142,7 @@ import {
 } from './section-properties.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
 import { inheritNotesLayoutInput, layoutSemanticDocumentWithNotes } from './note-pagination.ts';
+import { noteMarksCacheToken } from './note-projection.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   effectiveContentControlLock,
@@ -168,7 +172,13 @@ import {
 import type { NumberingIndex } from './numbering-index.ts';
 import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
-import { sameFragments, sameAnchoredDrawings } from './semantic-fragment-signature.ts';
+import {
+  NO_DEFERRED_DRAWINGS,
+  NO_DEFER_COUNTS,
+  sameAnchoredDrawings,
+  sameDeferCounts,
+  sameFragments,
+} from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
 import { layoutTextboxStory } from './textbox-story-layout.ts';
@@ -745,12 +755,17 @@ function layoutBlocksPass(
   // it into `producer` is what makes a mode switch invalidate the break cache AND the session
   // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const showsMarkup = displayMode === 'all-markup';
   const tocChromeParagraphIds = options.tocFieldChromeParagraphIds;
   const emptyTocPlaceholderIds = options.emptyTocPlaceholderParagraphIds;
   const emptyTocSuppressedResultIds = options.emptyTocSuppressedResultParagraphIds;
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
+    // In `producer`, not beside it in the section context: a note mark is measured INTO the
+    // broken lines, so the break cache holds the citation's width under a key built from
+    // this. Keying only the section left a warm cache serving `1`-wide slots to roman marks.
+    (options.noteMarks ? `|nm:${noteMarksCacheToken(options.noteMarks)}` : '') +
     (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '') +
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
@@ -812,14 +827,11 @@ function layoutBlocksPass(
   const notesReserveKey = pageBottomReserves
     ? `|nr:${[...pageBottomReserves].map(([i, h]) => `${i}=${h}`).join(',')}`
     : '';
-  const noteMarksKey = options.noteMarks
-    ? `|nm:${options.noteMarks.reservedMarkText ?? ''}:${options.noteMarks.marks.size}`
-    : '';
   const columnRegionBottom = options.columnRegionBottom;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   // Body line ids are paragraph-local, so a changed line count in an earlier section does
   // not invalidate this section. Geometry, flow start, and document page index still do.
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}${columnsContext}`;
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${columnsContext}`;
 
   const pages: PageRecord[] = [];
   /**
@@ -961,9 +973,15 @@ function layoutBlocksPass(
     displayMode
   );
   const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
+  const markerTexts = prepared.map((entry) =>
+    entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
+  );
   // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
   // stored under; only `w:keepNext` makes the two differ (§17.3.1.15).
-  const flowKeys = keepNextFlowKeys(keys, (index) => keepsNext[index]!);
+  const flowKeys = listMarkerFlowKeys(
+    keepNextFlowKeys(keys, (index) => keepsNext[index]!),
+    (index) => markerTexts[index]
+  );
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow.
@@ -1059,6 +1077,21 @@ function layoutBlocksPass(
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
+  /** The flow as it stands: what a later pass resumes from and converges against. The
+   * deferred anchor state is copied only when there is some — this runs once per block. */
+  const checkpointNow = (): FlowCheckpoint => ({
+    pageCount: pages.length,
+    pageFragments: [...pageFragments],
+    pendingAnchoredDrawings: [...pendingAnchoredDrawings],
+    deferredAnchoredDrawings:
+      deferredAnchoredDrawings.length > 0 ? [...deferredAnchoredDrawings] : NO_DEFERRED_DRAWINGS,
+    anchorPageDeferCounts:
+      anchorPageDeferCounts.size > 0 ? new Map(anchorPageDeferCounts) : NO_DEFER_COUNTS,
+    cursorY,
+    lineCounter,
+    previousSpaceAfter,
+    flowColumnIndex,
+  });
   let startIndex = 0;
   let placed = 0;
   let reusedPages = 0;
@@ -1073,6 +1106,9 @@ function layoutBlocksPass(
     pages.push(...previous!.pages.slice(0, checkpoint.pageCount));
     pageFragments = [...checkpoint.pageFragments];
     pendingAnchoredDrawings = [...checkpoint.pendingAnchoredDrawings];
+    deferredAnchoredDrawings = [...checkpoint.deferredAnchoredDrawings];
+    anchorPageDeferCounts.clear();
+    for (const [id, n] of checkpoint.anchorPageDeferCounts) anchorPageDeferCounts.set(id, n);
     cursorY = checkpoint.cursorY;
     flowColumnIndex = checkpoint.flowColumnIndex;
     columnIndex = checkpoint.flowColumnIndex;
@@ -1908,15 +1944,7 @@ function layoutBlocksPass(
     const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
-    checkpoints[index] = {
-      pageCount: pages.length,
-      pageFragments: [...pageFragments],
-      pendingAnchoredDrawings: [...pendingAnchoredDrawings],
-      cursorY,
-      lineCounter,
-      previousSpaceAfter,
-      flowColumnIndex,
-    };
+    checkpoints[index] = checkpointNow();
 
     // CONVERGENCE. Once inside the unchanged tail, if the flow returns to exactly the state
     // the previous pass was in at this same paragraph, everything after lays out identically
@@ -1941,7 +1969,10 @@ function layoutBlocksPass(
         mark.flowColumnIndex === flowColumnIndex &&
         mark.pageCount === pages.length &&
         sameFragments(mark.pageFragments, pageFragments) &&
-        sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings)
+        sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings) &&
+        // A flow that still owes the next page a drawing is not one that owes it nothing.
+        sameAnchoredDrawings(mark.deferredAnchoredDrawings, deferredAnchoredDrawings) &&
+        sameDeferCounts(mark.anchorPageDeferCounts, anchorPageDeferCounts)
       ) {
         const tail = previous!.pages.slice(mark.pageCount);
         pages.push(...tail);
@@ -2131,7 +2162,7 @@ function layoutBlocksPass(
       startY: number;
     }> | null = null;
 
-    const markRevision = paragraphMarkRevisionOf(entry.paragraph);
+    const markRevisions = paragraphMarkRevisionsOf(entry.paragraph);
 
     /**
      * How much of the first placed line's topAndBottom skip this paragraph's own anchor caused.
@@ -2304,9 +2335,12 @@ function layoutBlocksPass(
                   : paragraphShadingBox(pending, regionX + indent.left, available)!,
             }),
         ...(marker ? { marker } : {}),
-        // The paragraph MARK lives at the end of the paragraph, so only the final fragment
-        // carries its revision — a paragraph split across pages must not draw two pilcrows.
-        ...(isLast && markRevision ? { markRevision } : {}),
+        // Final fragment only — a paragraph split across pages must not draw two pilcrows —
+        // and `all-markup` only, as Word draws attribution in All Markup alone. The record's
+        // own declaration carries the rest of the reasoning.
+        ...(isLast && showsMarkup
+          ? markRevisionFields(markRevisions, paragraphMarkFormatRevisionOf(entry.paragraph))
+          : {}),
         lines: pending,
         box: { x: columnX + indent.left, y: top, width: available, height },
       });
@@ -2609,15 +2643,7 @@ function layoutBlocksPass(
   // for which nothing was stored, so the most ordinary edit there is, typing at the bottom of
   // a document and pressing Enter, re-placed everything.
   if (!converged) {
-    checkpoints[prepared.length] = {
-      pageCount: pages.length,
-      pageFragments: [...pageFragments],
-      pendingAnchoredDrawings: [...pendingAnchoredDrawings],
-      cursorY,
-      lineCounter,
-      previousSpaceAfter,
-      flowColumnIndex,
-    };
+    checkpoints[prepared.length] = checkpointNow();
   }
 
   // Captured BEFORE the terminal flush, which zeroes the cursor. A converged pass stopped

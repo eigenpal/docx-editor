@@ -212,6 +212,49 @@ describe('changes that decorate no characters', () => {
     ).toHaveLength(0);
   });
 
+  test('a mark carrying both decisions draws ONE pilcrow, and it reads as deleted', () => {
+    // `EG_ParaRPrTrackChanges` is `ins? del? …`, and both halves are what Word writes when a
+    // second author proposes removing a break the first proposed adding. There is still one
+    // pilcrow — a second glyph beside it would read as a second paragraph break — and the
+    // deletion takes the face, because that is where the pair lands if every decision is
+    // accepted. Both ids stay on the element so review chrome can offer both.
+    const root = paint(
+      '<w:p><w:pPr><w:rPr><w:ins w:id="7" w:author="A"/><w:del w:id="8" w:author="B"/></w:rPr>' +
+        `</w:pPr>${run('proposed, then unproposed')}</w:p>`
+    );
+    const glyphs = root.querySelectorAll<HTMLElement>('.docx-revision-pmark');
+    expect(glyphs).toHaveLength(1);
+    expect(glyphs[0]!.dataset.revisionKind).toBe('delete');
+    expect(glyphs[0]!.dataset.revisionAuthor).toBe('B');
+    expect(glyphs[0]!.dataset.revisionIds).toBe('7 8');
+  });
+
+  test('a moved-away mark reads as a removal, like the deletion it becomes', () => {
+    // `w:moveFrom` on the mark says this copy of the break goes away when the move is
+    // accepted. The change bar already counts `moveFrom` as a removal, so a glyph that drew
+    // it in the insertion colour put a blue pilcrow beside a red rule.
+    const root = paint(
+      '<w:p><w:pPr><w:rPr><w:moveFrom w:id="4" w:author="A"/></w:rPr></w:pPr>' +
+        `${run('moved away')}</w:p>`
+    );
+    const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
+    expect(glyph.style.color).toBe('var(--doc-revision-deletion)');
+    expect(glyph.style.textDecorationLine).toBe('line-through');
+    expect(root.querySelector<HTMLElement>('.docx-change-bar')!.className).toContain(
+      'docx-change-bar-deletion'
+    );
+  });
+
+  test('a mark-only change still rules the margin beside its line', () => {
+    // The bar is the only signal a reader scanning the margin has. Built from spans alone, a
+    // paragraph whose sole change is its own break — a split or a merge, the most ordinary
+    // tracked edit there is — announced itself with a coloured ¶ and nothing else.
+    const root = paint(mark('del', 'merges forward'));
+    const bars = root.querySelectorAll<HTMLElement>('.docx-change-bar');
+    expect(bars).toHaveLength(1);
+    expect(bars[0]!.className).toContain('docx-change-bar-deletion');
+  });
+
   test('the pilcrow is furniture, not text', () => {
     const glyph = paint(mark('del', 'x')).querySelector<HTMLElement>('.docx-revision-pmark')!;
     expect(glyph.getAttribute('aria-hidden')).toBe('true');
