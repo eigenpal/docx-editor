@@ -1,4 +1,12 @@
-import { getCurrentScope, onScopeDispose, shallowRef, watch, type ShallowRef } from 'vue';
+import {
+  getCurrentScope,
+  onScopeDispose,
+  shallowRef,
+  toValue,
+  watch,
+  type MaybeRefOrGetter,
+  type ShallowRef,
+} from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 import { useDocxEditor, useEditorStateTick } from './context';
@@ -14,6 +22,7 @@ export function editorStateActiveSubscriptionCount(): number {
 export interface UseEditorStateOptions {
   readonly onSubscribe?: () => void;
   readonly onUnsubscribe?: () => void;
+  readonly extraDeps?: MaybeRefOrGetter<unknown>;
 }
 
 /** @public */
@@ -53,8 +62,13 @@ export function useEditorState<T>(
     activeEditorStateSubscriptions++;
     options?.onSubscribe?.();
     watch(
-      [editorRef, tick],
+      [
+        editorRef,
+        tick,
+        () => (options?.extraDeps !== undefined ? toValue(options.extraDeps) : null),
+      ],
       () => {
+        hasMemo = false;
         const next = read();
         if (!isEqual(out.value, next)) out.value = next;
       },

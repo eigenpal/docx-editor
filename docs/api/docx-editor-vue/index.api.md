@@ -35,6 +35,7 @@ import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { InjectionKey } from 'vue';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
+import { MaybeRefOrGetter } from 'vue';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PropType } from 'vue';
 import { Ref } from 'vue';
@@ -831,13 +832,13 @@ export interface UseDocxSourceResult {
 export function useEditorCaret(): ShallowRef<EditorCaret | null>;
 
 // @public (undocumented)
-export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
+export function useEditorCommand(target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>): EditorCommandState;
 
 // @public (undocumented)
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
 
 // @public (undocumented)
-export function useEditorSnapshot(editor: Editor | null): Ref<number>;
+export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<number>;
 
 // @public (undocumented)
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): Readonly<ShallowRef<T>>;

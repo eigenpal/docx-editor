@@ -1,4 +1,4 @@
-import { computed, shallowRef, type ComputedRef } from 'vue';
+import { computed, shallowRef, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue';
 import {
   runToolbarCommand,
   toolbarCommandState,
@@ -35,11 +35,24 @@ function stableKey(command: EditorCommand): string {
 }
 
 /** @public */
-export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState {
+export function useEditorCommand(
+  target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>
+): EditorCommandState {
   const editorRef = useDocxEditor();
-  const latest = shallowRef(target);
-  latest.value = target;
-  const key = computed(() => (isSlot(target) ? target : stableKey(target)));
+  const latest = shallowRef(toValue(target));
+
+  watch(
+    () => toValue(target),
+    (next) => {
+      latest.value = next;
+    },
+    { flush: 'sync' }
+  );
+
+  const key = computed(() => {
+    const current = latest.value;
+    return isSlot(current) ? current : stableKey(current);
+  });
 
   const selectSlice = (_snapshot: unknown): CommandSlice => {
     const editor = editorRef.value;
@@ -61,7 +74,9 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
     };
   };
 
-  const slice = useEditorState(selectSlice, commandSliceEqual);
+  const slice = useEditorState(selectSlice, commandSliceEqual, { extraDeps: key });
+
+  void key.value;
 
   const execute = (): boolean => {
     const current = latest.value;
@@ -70,8 +85,6 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
     if (!editor) return false;
     return editor.exec(current).ok;
   };
-
-  void key.value;
 
   return {
     execute,

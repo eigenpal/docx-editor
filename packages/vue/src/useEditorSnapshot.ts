@@ -1,12 +1,12 @@
-import { onScopeDispose, ref, watch, type Ref } from 'vue';
+import { onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 
 /** @public */
-export function useEditorSnapshot(editor: Editor | null): Ref<number> {
+export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<number> {
   const revision = ref(0);
 
   const stop = watch(
-    () => editor,
+    () => toValue(editor),
     (instance, _prev, onCleanup) => {
       if (!instance) return;
       const bump = (): void => {
