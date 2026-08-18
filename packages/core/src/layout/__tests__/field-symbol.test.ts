@@ -4,8 +4,11 @@
 // caller falls back to previous behavior) and must never throw.
 
 import { describe, expect, test } from 'bun:test';
-import { parseSymbolInstruction, symbolFieldGlyph } from '../field-symbol.ts';
-import { MAX_FIELD_INSTRUCTION_CHARS } from '../field-instruction.ts';
+import {
+  MAX_SYMBOL_INSTRUCTION_CHARS,
+  parseSymbolInstruction,
+  symbolFieldGlyph,
+} from '../field-symbol.ts';
 
 describe('parseSymbolInstruction', () => {
   test('parses a hex code with a quoted font', () => {
@@ -90,7 +93,7 @@ describe('parseSymbolInstruction', () => {
   });
 
   test('rejects an oversized instruction and an oversized font, without throwing', () => {
-    expect(parseSymbolInstruction(`SYMBOL 65 ${'x'.repeat(MAX_FIELD_INSTRUCTION_CHARS)}`)).toBe(
+    expect(parseSymbolInstruction(`SYMBOL 65 ${'x'.repeat(MAX_SYMBOL_INSTRUCTION_CHARS)}`)).toBe(
       null
     );
     // Oversized font: the switch is ignored, the code still parses.

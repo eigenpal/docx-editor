@@ -17,10 +17,17 @@ import {
   isInstrText as isInstrTextHelper,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
-import { isDeletedInstrText } from '../store/package/field-nodes.ts';
+import { isDeletedInstrText, MAX_FIELD_INSTRUCTION_CHARS } from '../store/package/field-nodes.ts';
 
-/** Caps hostile instruction blobs and nesting depth (fail closed → inert). */
-export const MAX_FIELD_INSTRUCTION_CHARS = 256;
+/**
+ * Caps hostile instruction blobs and nesting depth (fail closed → inert).
+ *
+ * The character cap is the store's `MAX_FIELD_INSTRUCTION_CHARS` — one source of truth, so
+ * `parsedFieldSpansOf` addressing never diverges from what this machine buffers. It matches
+ * the `w:fldSimple` lane (`MAX_HYPERLINK_INSTRUCTION_CHARS`): a long `HYPERLINK` URL parses
+ * identically as a complex field and as a simple field.
+ */
+export { MAX_FIELD_INSTRUCTION_CHARS };
 export const MAX_FIELD_NESTING = 4;
 
 /**

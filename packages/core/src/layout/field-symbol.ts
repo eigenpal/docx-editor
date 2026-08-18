@@ -10,7 +10,6 @@
 // and codepoint validation as `w:sym` — so the two symbol paths cannot drift apart.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
-import { MAX_FIELD_INSTRUCTION_CHARS } from './field-instruction.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import { isSymbolEncodedFamily, mapSymbolPuaText } from './symbol-encoding.ts';
 import {
@@ -19,6 +18,14 @@ import {
   SYMBOL_PUA_BASE,
   SYMBOL_PUA_END,
 } from './symbol-run.ts';
+
+/**
+ * Local parser bound: a legitimate `SYMBOL` instruction is a keyword, a code, and a few short
+ * switches — anything near this length is garbage. Deliberately NOT the shared machine cap
+ * (`MAX_FIELD_INSTRUCTION_CHARS`), which is sized for full-length HYPERLINK targets; this
+ * grammar's rejection threshold must not move when that bound does.
+ */
+export const MAX_SYMBOL_INSTRUCTION_CHARS = 256;
 
 /** Longest character-code token even considered: covers `0x10FFFF` and decimal 1114111. */
 const MAX_CODE_TOKEN_LENGTH = 9;
@@ -96,7 +103,7 @@ function parseCharCode(token: InstructionToken): number | null {
  * character code fails the whole parse.
  */
 export function parseSymbolInstruction(raw: string): SymbolFieldSpec | null {
-  if (raw.length === 0 || raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
+  if (raw.length === 0 || raw.length > MAX_SYMBOL_INSTRUCTION_CHARS) return null;
   const tokens = tokenize(raw);
   if (tokens.length < 2) return null;
   const first = tokens[0]!;

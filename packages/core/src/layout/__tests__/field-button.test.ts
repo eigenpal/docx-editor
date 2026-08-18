@@ -5,8 +5,7 @@
 // the macro name / jump target — is consumed and discarded; only display text comes out.
 
 import { describe, expect, test } from 'bun:test';
-import { parseButtonInstruction } from '../field-button.ts';
-import { MAX_FIELD_INSTRUCTION_CHARS } from '../field-instruction.ts';
+import { MAX_BUTTON_INSTRUCTION_CHARS, parseButtonInstruction } from '../field-button.ts';
 
 describe('parseButtonInstruction', () => {
   test('a bare macro name: display is everything after it', () => {
@@ -117,15 +116,15 @@ describe('parseButtonInstruction', () => {
   test('hostile over-cap input is rejected without a throw', () => {
     const blob = `MACROBUTTON M ${'A'.repeat(100 * 1024)}`;
     expect(parseButtonInstruction(blob)).toBeNull();
-    expect(parseButtonInstruction('"'.repeat(MAX_FIELD_INSTRUCTION_CHARS))).toBeNull();
+    expect(parseButtonInstruction('"'.repeat(MAX_BUTTON_INSTRUCTION_CHARS))).toBeNull();
   });
 
   test('display text stays within the instruction cap', () => {
-    const atCap = `MACROBUTTON M ${'A'.repeat(MAX_FIELD_INSTRUCTION_CHARS - 14)}`;
-    expect(atCap.length).toBe(MAX_FIELD_INSTRUCTION_CHARS);
+    const atCap = `MACROBUTTON M ${'A'.repeat(MAX_BUTTON_INSTRUCTION_CHARS - 14)}`;
+    expect(atCap.length).toBe(MAX_BUTTON_INSTRUCTION_CHARS);
     const spec = parseButtonInstruction(atCap);
     expect(spec).not.toBeNull();
-    expect(spec!.display.length).toBeLessThanOrEqual(MAX_FIELD_INSTRUCTION_CHARS);
+    expect(spec!.display.length).toBeLessThanOrEqual(MAX_BUTTON_INSTRUCTION_CHARS);
     expect(parseButtonInstruction(`${atCap}A`)).toBeNull();
   });
 });

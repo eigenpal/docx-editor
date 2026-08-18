@@ -10,7 +10,14 @@
 // length-capped string and every failure resolves to null (the caller falls back to cached
 // text or nothing, exactly as before this module existed).
 
-import { MAX_FIELD_INSTRUCTION_CHARS } from './field-instruction.ts';
+/**
+ * Local parser bound: a legitimate button field is a keyword, one argument, and short display
+ * text — anything near this length is garbage, and the display it caps must stay paintable.
+ * Deliberately NOT the shared machine cap (`MAX_FIELD_INSTRUCTION_CHARS`), which is sized for
+ * full-length HYPERLINK targets; this grammar's rejection threshold must not move when that
+ * bound does.
+ */
+export const MAX_BUTTON_INSTRUCTION_CHARS = 256;
 
 /** One parsed MACROBUTTON / GOTOBUTTON instruction: the text Word paints, nothing else. */
 export interface ButtonFieldSpec {
@@ -63,7 +70,7 @@ function skipToken(raw: string, index: number): number {
  * upstream bound), or a missing argument is null.
  */
 export function parseButtonInstruction(raw: string): ButtonFieldSpec | null {
-  if (raw.length === 0 || raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
+  if (raw.length === 0 || raw.length > MAX_BUTTON_INSTRUCTION_CHARS) return null;
   const keywordStart = skipWhitespace(raw, 0);
   if (raw[keywordStart] === '"') return null;
   const keywordEnd = skipToken(raw, keywordStart);

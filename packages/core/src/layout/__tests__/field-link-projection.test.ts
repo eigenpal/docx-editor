@@ -182,6 +182,58 @@ describe('a complex HYPERLINK field', () => {
     expect(seen).toEqual([]);
   });
 
+  test('a ~1000-char URL parses and projects — the same URL behaves identically as fldSimple', () => {
+    // Real SharePoint / tracking URLs routinely exceed 256 chars. The complex-lane
+    // instruction buffer used to cap there while the `w:fldSimple` attribute lane parsed up
+    // to 4096, so the same field painted dead text in one shape and a link in the other.
+    const longUrl = `https://example.com/sites/team/${'a'.repeat(940)}?id=1`;
+    expect(longUrl.length).toBeGreaterThan(950);
+    const complexSeen: HyperlinkFieldSpec[] = [];
+    const complexPieces = project(
+      `<w:p>${complexField(` HYPERLINK "${longUrl}" `, '<w:r><w:t>doc</w:t></w:r>')}</w:p>`,
+      projectorStub(complexSeen)
+    );
+    expect(complexPieces.map((piece) => piece.text)).toEqual(['doc']);
+    expect(complexPieces[0]!.link).toEqual({
+      id: `stub:${longUrl}`,
+      kind: 'external',
+      href: longUrl,
+    });
+    // The projector seam is the sanitize boundary: the raw target crossed it exactly once.
+    expect(complexSeen).toEqual([{ target: longUrl, anchor: null, tooltip: null }]);
+
+    const simplePieces = project(
+      `<w:p><w:fldSimple w:instr=' HYPERLINK "${longUrl}" '>` +
+        '<w:r><w:t>doc</w:t></w:r></w:fldSimple></w:p>',
+      projectorStub()
+    );
+    expect(simplePieces.map((piece) => piece.text)).toEqual(['doc']);
+    // Parity pin: both lanes hand the projector the same spec and carry the same record.
+    expect(simplePieces[0]!.link).toEqual(complexPieces[0]!.link);
+  });
+
+  test('an instruction past the shared cap stays inert in both lanes, without a throw', () => {
+    const hugeUrl = `https://example.com/${'a'.repeat(4200)}`;
+    const seen: HyperlinkFieldSpec[] = [];
+    const complexPieces = project(
+      `<w:p>${complexField(` HYPERLINK "${hugeUrl}" `, '<w:r><w:t>dead</w:t></w:r>')}</w:p>`,
+      projectorStub(seen)
+    );
+    // Overflow fails closed: the cached result still paints, carries no link.
+    expect(complexPieces.map((piece) => piece.text)).toEqual(['dead']);
+    expect(complexPieces[0]!.link).toBeUndefined();
+
+    const simplePieces = project(
+      `<w:p><w:fldSimple w:instr=' HYPERLINK "${hugeUrl}" '>` +
+        '<w:r><w:t>dead</w:t></w:r></w:fldSimple></w:p>',
+      projectorStub(seen)
+    );
+    expect(simplePieces.map((piece) => piece.text)).toEqual(['dead']);
+    expect(simplePieces[0]!.link).toBeUndefined();
+    // Neither lane crossed the projector seam with the hostile blob.
+    expect(seen).toEqual([]);
+  });
+
   test('without a projector the result paints as plain text, exactly as before', () => {
     const pieces = project(
       `<w:p>${complexField(' HYPERLINK "https://example.com" ', '<w:r><w:t>plain</w:t></w:r>')}</w:p>`

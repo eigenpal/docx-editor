@@ -12,8 +12,14 @@
 // grammar is recognized and the raw pieces are handed over verbatim, case and
 // percent-encoding preserved.
 
-/** Longest raw instruction even considered — room for a full-length target plus switches. */
-export const MAX_HYPERLINK_INSTRUCTION_CHARS = 4096;
+import { MAX_FIELD_INSTRUCTION_CHARS } from './field-instruction.ts';
+
+/**
+ * Longest raw instruction even considered — room for a full-length target plus switches.
+ * The shared complex-field machine cap IS this bound, so a `HYPERLINK` instruction that fits
+ * a `w:fldSimple` attribute also fits the complex lane's instruction buffer.
+ */
+export const MAX_HYPERLINK_INSTRUCTION_CHARS: number = MAX_FIELD_INSTRUCTION_CHARS;
 /** Longest target captured — the bound the package puts on a relationship target. */
 export const MAX_HYPERLINK_TARGET_CHARS = 2048;
 /** Longest `\l` anchor or `\o` tooltip captured. */

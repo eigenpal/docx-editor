@@ -420,8 +420,24 @@ interface RunChildRef {
 
 const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
 
+/**
+ * Caps hostile complex-field instruction buffers (fail closed → inert).
+ *
+ * ONE bound for the store's span parser and layout's field machine (which re-exports this
+ * constant): if they disagreed, FORMTEXT addressing here would diverge from what layout
+ * paints. Sized to admit a full-length `HYPERLINK` instruction — the same bound the
+ * `w:fldSimple` attribute lane applies (`MAX_HYPERLINK_INSTRUCTION_CHARS` in
+ * `layout/field-link.ts`), so a long URL behaves identically as a complex field and as a
+ * simple field. Short-grammar parsers (SYMBOL, MACROBUTTON) keep their own tighter local
+ * caps on purpose.
+ */
+export const MAX_FIELD_INSTRUCTION_CHARS = 4096;
+
 /** Whether a bounded instruction denotes Word's editable legacy text-form input. */
-export function isEditableFormTextInstruction(raw: string, maxChars = 256): boolean {
+export function isEditableFormTextInstruction(
+  raw: string,
+  maxChars = MAX_FIELD_INSTRUCTION_CHARS
+): boolean {
   if (raw.length > maxChars) return false;
   const collapsed = raw.replace(/\s+/g, ' ').trim().toUpperCase();
   if (collapsed.length > maxChars) return false;
@@ -446,7 +462,7 @@ export function parsedFieldSpansOf(
   options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
 ): readonly ParsedFieldSpan[] {
   const maxNesting = options?.maxNesting ?? 4;
-  const maxInstructionChars = options?.maxInstructionChars ?? 256;
+  const maxInstructionChars = options?.maxInstructionChars ?? MAX_FIELD_INSTRUCTION_CHARS;
   const spans: ParsedFieldSpan[] = [];
 
   // Flatten run children in document order for the complex-field machine.

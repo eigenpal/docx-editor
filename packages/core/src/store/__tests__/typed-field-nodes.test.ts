@@ -29,7 +29,7 @@ import {
   type OoxmlPart,
 } from '../index.ts';
 import { piecesOfParagraph } from '../../layout/field-projection.ts';
-import { parsedFieldSpansOf } from '../package/field-nodes.ts';
+import { MAX_FIELD_INSTRUCTION_CHARS, parsedFieldSpansOf } from '../package/field-nodes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -649,7 +649,7 @@ describe('w:delInstrText addressing', () => {
     // FORMTEXT instruction sitting beside it.
     const hugeDeleted = spansOf(
       fieldWith(
-        `<w:r><w:delInstrText>${'X'.repeat(300)}</w:delInstrText></w:r>` +
+        `<w:r><w:delInstrText>${'X'.repeat(MAX_FIELD_INSTRUCTION_CHARS + 40)}</w:delInstrText></w:r>` +
           '<w:r><w:instrText> FORMTEXT </w:instrText></w:r>'
       )
     );
@@ -663,5 +663,38 @@ describe('w:delInstrText addressing', () => {
     );
     expect(fullyDeleted).toHaveLength(1);
     expect(fullyDeleted[0]!.addressing).toBe('editable-result');
+  });
+
+  test('the store default cap agrees with the layout machine past the old 256 bound', () => {
+    // The store's span parser and layout's field machine share ONE instruction bound. A
+    // FORMTEXT instruction padded past the old 256-char cap must still address an editable
+    // result — before the caps were unified this raw length overflowed here while layout
+    // (called with its own constant) agreed, only by luck of both being 256.
+    const padded = ` FORMTEXT ${' '.repeat(300)}`;
+    const part = parse(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        `<w:r><w:instrText xml:space="preserve">${padded}</w:instrText></w:r>` +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:t>typed</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    );
+    const spans = parsedFieldSpansOf(paragraphOf(part));
+    expect(spans).toHaveLength(1);
+    expect(spans[0]!.addressing).toBe('editable-result');
+  });
+
+  test('an instruction past the shared cap still forms an atomic span, without a throw', () => {
+    const blob = 'X'.repeat(MAX_FIELD_INSTRUCTION_CHARS + 1);
+    const part = parse(
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        `<w:r><w:instrText> FORMTEXT ${blob}</w:instrText></w:r>` +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:t>typed</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+    );
+    const spans = parsedFieldSpansOf(paragraphOf(part));
+    expect(spans).toHaveLength(1);
+    // Overflow fails closed: the buffer cleared itself, so addressing stays atomic.
+    expect(spans[0]!.addressing).toBe('atomic');
   });
 });
