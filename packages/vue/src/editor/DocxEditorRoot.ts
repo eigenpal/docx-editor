@@ -37,6 +37,7 @@ import { deferredTick } from './deferred-notifier';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
 import { createNavigationLayoutStore, navigationLayoutKey } from './navigation/navigation-layout';
+import { ImageInsertProvider } from './images/ImageInsert';
 
 /** @public */
 export interface DocxEditorRootProps {
@@ -251,7 +252,10 @@ export const DocxEditorRoot = defineComponent({
       h(HyperlinkPopupProvider, null, {
         default: () =>
           h(ContentControlProvider, null, {
-            default: () => slots.default?.(),
+            default: () =>
+              h(ImageInsertProvider, null, {
+                default: () => slots.default?.(),
+              }),
           }),
       });
   },

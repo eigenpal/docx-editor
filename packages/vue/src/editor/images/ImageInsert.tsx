@@ -1,6 +1,7 @@
-import { defineComponent, inject, provide, ref, type InjectionKey } from 'vue';
+import { defineComponent, h, inject, provide, ref, type InjectionKey } from 'vue';
 import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import { useTranslation, type TranslationKey } from '../../i18n';
+import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { normalizeImageBytes } from './normalizeImageFile';
@@ -141,17 +142,17 @@ export const ImageInsertProvider = defineComponent({
     provide(ImageInsertContextKey, context);
 
     return () => [
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPT}
-        class="docx-image-insert__input"
-        tabindex={-1}
-        aria-hidden="true"
-        onChange={onInputChange}
-        onMousedown={(event: MouseEvent) => event.stopPropagation()}
-      />,
-      slots.default?.(),
+      h('input', {
+        ref: inputRef,
+        type: 'file',
+        accept: ACCEPT,
+        class: 'docx-image-insert__input',
+        tabindex: -1,
+        'aria-hidden': 'true',
+        onChange: onInputChange,
+        onMousedown: (event: MouseEvent) => event.stopPropagation(),
+      }),
+      ...flattenChildren(slots.default?.() ?? []),
     ];
   },
 });
