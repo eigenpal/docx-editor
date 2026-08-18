@@ -123,9 +123,9 @@ describe('useEditorCommand raw target', () => {
     try {
       app.mount(container);
       await flush();
-      const before = editor().snapshot().revision;
+      const before = editor().surface!.session.revision();
       expect(run!()).toBe(false);
-      expect(editor().snapshot().revision).toBe(before);
+      expect(editor().surface!.session.revision()).toBe(before);
     } finally {
       app.unmount();
     }

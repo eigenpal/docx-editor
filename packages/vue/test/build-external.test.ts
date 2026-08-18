@@ -1,4 +1,4 @@
-import { cpSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const dist = join(import.meta.dir, '..', 'dist', 'index.js');

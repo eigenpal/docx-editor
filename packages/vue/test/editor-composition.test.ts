@@ -85,7 +85,7 @@ describe('DocxEditorRoot lifecycle', () => {
       expect(container.textContent).toContain('hello world');
       const surface = container.querySelector('.docx-paginated-surface')!;
       expect(surface.closest('.docx-editor__scroll-container')).not.toBeNull();
-      expect(ready[0]!.surface).not.toBeNull();
+      expect((ready[0] as DocxEditorInstance).surface).not.toBeNull();
     } finally {
       app.unmount();
       expect(document.querySelectorAll('.docx-page').length).toBe(0);
@@ -150,7 +150,7 @@ describe('DocxEditorRoot lifecycle', () => {
 
 describe('useEditorState', () => {
   test('answers loading snapshot outside Root', () => {
-    let page: EditorSnapshot['page'] | null = null;
+    let page: EditorSnapshot['page'] | undefined;
     const Probe = defineComponent({
       setup() {
         page = useEditorState(selectPage).value;
@@ -259,7 +259,7 @@ describe('useEditorEvent', () => {
         return () => null;
       },
     });
-    const { container, app } = mountEditor(() => [h(Probe), h(DocxEditorContent)]);
+    const { container } = mountEditor(() => [h(Probe), h(DocxEditorContent)]);
     const readyApp = createApp({
       render: () =>
         h(
