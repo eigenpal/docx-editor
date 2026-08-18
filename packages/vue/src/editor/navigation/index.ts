@@ -1,4 +1,20 @@
 export {
+  DocxEditorNavigation,
+  Navigation,
+  NavigationClose,
+  NavigationFind,
+  NavigationHeader,
+  NavigationHeadings,
+  NavigationTab,
+  NavigationTabs,
+  NavigationTitle,
+  NavigationToggle,
+  type DocxEditorNavigationNamespace,
+  type DocxEditorNavigationProps,
+  type NavigationPartProps,
+  type NavigationTabProps,
+} from './DocxEditorNavigation';
+export {
   useNavigationPane,
   type NavigationTab as NavigationTabValue,
   type UseNavigationPaneOptions,

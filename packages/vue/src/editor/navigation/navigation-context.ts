@@ -1,4 +1,4 @@
-import { inject, type InjectionKey } from 'vue';
+import { inject, unref, type InjectionKey } from 'vue';
 import type { UseNavigationPaneResult } from './useNavigationPane';
 import type { UseDocumentOutlineResult } from './useDocumentOutline';
 import type { UseDocumentSearchResult } from './useDocumentSearch';
@@ -20,5 +20,5 @@ export function useNavigationContext(part: string): NavigationContextValue {
       `<DocxEditor.Navigation.${part}> must be rendered inside <DocxEditor.Navigation>`
     );
   }
-  return value;
+  return unref(value) as NavigationContextValue;
 }
