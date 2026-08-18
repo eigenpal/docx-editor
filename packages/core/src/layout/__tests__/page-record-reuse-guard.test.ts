@@ -40,8 +40,10 @@ describe('every field of a reused page has a named guard', () => {
       '<w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
       '<w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const body =
-      Array.from({ length: 24 }, (_, index) => `<w:p><w:r><w:t>page ${index}</w:t></w:r></w:p>`)
-        .join('') +
+      Array.from(
+        { length: 24 },
+        (_, index) => `<w:p><w:r><w:t>page ${index}</w:t></w:r></w:p>`
+      ).join('') +
       table +
       columns;
     const layout = layoutSemanticDocument(load(body), 1, {
