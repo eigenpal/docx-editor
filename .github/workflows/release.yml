@@ -1,20 +1,31 @@
 name: Release
 
-# Two triggers, single job:
+# Two triggers, one flow across three jobs:
 # 1. Every push to main → if there are pending changesets in `.changeset/`,
 #    open or update a "chore: release" PR with the version bumps and CHANGELOG
 #    entries applied. The PR sits there until a maintainer merges it.
-# 2. When that PR is merged → the same job runs again, sees no pending
+# 2. When that PR is merged → the same flow runs again, sees no pending
 #    changesets (they were drained by `changeset version`), and instead
 #    publishes the new versions to npm.
 #
-# The heavy gate (lint, format, typecheck, tests, build, parity)
-# only guards the PUBLISH path (mode 2). On the PR-update path (mode 1) those
-# steps are skipped: `changeset version` just rewrites versions + CHANGELOGs,
-# needs no build, and the work is already validated by each contributing PR's
-# own CI. Skipping keeps PR-update runs to ~1 min so they finish before the
-# next push to main supersedes them in the `release` concurrency group —
-# otherwise slow runs queue and get cancelled, leaving the release PR stale.
+# Job split and runner choice:
+# - `mode` decides which path this run takes (pending changesets ⇒ PR-update,
+#   none ⇒ publish).
+# - `gate` runs the heavy prepublish checks (lint, format, typecheck, tests,
+#   build, parity, notices) on Blacksmith for speed, publish path only, and
+#   hands the built `dist/` + generated notices to `release` as an artifact.
+# - `release` runs the changesets action and everything after it on a
+#   GitHub-hosted runner: npm rejects provenance bundles from self-hosted
+#   runners (E422 "Unsupported GitHub Actions runner environment"), and
+#   Trusted Publishing always signs provenance. Blacksmith counts as
+#   self-hosted, so the publish must not run there.
+#
+# The heavy gate only guards the PUBLISH path. On the PR-update path it is
+# skipped: `changeset version` just rewrites versions + CHANGELOGs, needs no
+# build, and the work is already validated by each contributing PR's own CI.
+# Skipping keeps PR-update runs short so they finish before the next push to
+# main supersedes them in the `release` concurrency group — otherwise slow
+# runs queue and get cancelled, leaving the release PR stale.
 #
 # Manual workflow_dispatch is kept for the rare case of triggering a publish
 # without a fresh push (e.g. recovering from a failed publish step).
@@ -28,16 +39,121 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Release
-    # Must be a GitHub-hosted runner: npm rejects provenance bundles from
-    # self-hosted runners (E422 "Unsupported GitHub Actions runner environment"),
-    # and Trusted Publishing always signs provenance. Blacksmith counts as
-    # self-hosted, so keep this job off it.
+  # Pending changesets ⇒ PR-update path (skip the heavy gate); none ⇒
+  # publish path (run the full gate before publishing to npm). README.md /
+  # config.json are not changesets.
+  mode:
+    name: Detect release mode
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      publishing: ${{ steps.pending.outputs.publishing }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Detect pending changesets
+        id: pending
+        run: |
+          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
+          echo "Pending changesets: $count"
+          if [ "$count" -gt 0 ]; then
+            echo "publishing=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publishing=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The heavy prepublish gate, on Blacksmith for speed. Publish path only —
+  # its `dist/` and third-party notices travel to the release job by artifact.
+  gate:
+    name: Prepublish gate
+    needs: mode
+    if: ${{ needs.mode.outputs.publishing == 'true' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # Default job timeout is 6h; a hung step (e.g. an apt prompt) otherwise burns
     # a runner for hours. A healthy run finishes in well under 10 min.
     timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Type check
+        run: bun run typecheck
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Build packages (publish reuses the dist/)
+        run: bun run build:packages
+        env:
+          # tsup's dts worker (rollup-plugin-dts) loads the full TS program;
+          # core's 67 entries OOM under the default 1.5 GB heap.
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Parity prepublish gate
+        run: bun run parity:prepublish
+
+      # Emit `packages/<pkg>/THIRD_PARTY_NOTICES.md` from the build that is about
+      # to be packed. The published bundles inline third-party source (the
+      # private core package drags fast-xml-parser, fflate and prosemirror-* in
+      # with it), and MIT/Apache-2.0 both require the copyright and permission
+      # notice to travel with the copy — minified `dist/` carries neither.
+      #
+      # Must sit AFTER the last build step: the generator reads
+      # `dist/metafile-*.json`. The files it writes are gitignored, so they
+      # exist only inside this workflow run and reach `changeset publish`
+      # through the artifact below and each package's `files` list. The step
+      # hard-fails on a bundled dependency with no license text, which aborts
+      # the run before anything reaches npm.
+      - name: Generate third-party notices
+        run: bun run notices:generate
+
+      # Hand the exact build the gate validated to the release job. Both path
+      # patterns share `packages/` as their common ancestor, so the artifact
+      # keeps the `<pkg>/dist/...` layout and unpacks back into `packages/`.
+      - name: Upload publish artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: publish-dist
+          path: |
+            packages/*/dist
+            packages/*/THIRD_PARTY_NOTICES.md
+          if-no-files-found: error
+          retention-days: 3
+
+  # The changesets action and everything downstream of it. Must be a
+  # GitHub-hosted runner — see the header comment.
+  release:
+    name: Release
+    needs: [mode, gate]
+    # Run on both paths: `gate` is skipped on the PR-update path by design,
+    # so accept skipped as well as success.
+    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.gate.result == 'success' || needs.gate.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      # Consumed by the notify-failure job to tell "the changesets step itself
+      # failed" apart from "an earlier step failed".
+      changesets_outcome: ${{ steps.changesets.outcome }}
     permissions:
       contents: write # push tags, create GitHub Releases
       pull-requests: write # changesets/action opens / updates the release PR
@@ -78,70 +194,18 @@ jobs:
       # repo's pre-commit hook (typecheck + parity + api:check + lint-staged).
       # That hook is for local dev — it must NOT gate the bot's automated
       # `chore: release` commit, where it both fails (api:check needs a build
-      # this path skips, and breaks on any pre-existing snapshot drift on main)
-      # and is redundant: ci.yml already runs these on contributor PRs, and the
-      # publish path runs them as real steps below. Neuter hooks for the job.
+      # this job doesn't run, and breaks on any pre-existing snapshot drift on
+      # main) and is redundant: ci.yml already runs these on contributor PRs,
+      # and the publish path runs them in the gate job. Neuter hooks for the job.
       - name: Disable git hooks for automated commits
         run: git config core.hooksPath /dev/null
 
-      # Pending changesets ⇒ PR-update path (skip the heavy gate); none ⇒
-      # publish path (run the full gate before publishing to npm). README.md /
-      # config.json are not changesets. Inline check so it works even if a later
-      # step crashes.
-      - name: Detect pending changesets
-        id: pending
-        run: |
-          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
-          echo "Pending changesets: $count"
-          if [ "$count" -gt 0 ]; then
-            echo "publishing=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publishing=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Lint
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run lint
-
-      - name: Format check
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run format:check
-
-      - name: Type check
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run typecheck
-
-      - name: Run tests
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run test
-
-      - name: Build packages (publish reuses the dist/)
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run build:packages
-        env:
-          # tsup's dts worker (rollup-plugin-dts) loads the full TS program;
-          # core's 67 entries OOM under the default 1.5 GB heap.
-          NODE_OPTIONS: --max-old-space-size=8192
-
-      - name: Parity prepublish gate
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run parity:prepublish
-
-      # Emit `packages/<pkg>/THIRD_PARTY_NOTICES.md` from the build that is about
-      # to be packed. The published bundles inline third-party source (the
-      # private core package drags fast-xml-parser, fflate and prosemirror-* in
-      # with it), and MIT/Apache-2.0 both require the copyright and permission
-      # notice to travel with the copy — minified `dist/` carries neither.
-      #
-      # Must sit AFTER the last build step and BEFORE the changesets action:
-      # the generator reads `dist/metafile-*.json`, and the files it writes are
-      # gitignored, so they exist only for the duration of this job and are
-      # picked up by `changeset publish` through each package's `files` list.
-      # The step hard-fails on a bundled dependency with no license text, which
-      # aborts the job before anything reaches npm.
-      - name: Generate third-party notices
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run notices:generate
+      - name: Download publish artifacts
+        if: ${{ needs.mode.outputs.publishing == 'true' }}
+        uses: actions/download-artifact@v7
+        with:
+          name: publish-dist
+          path: packages
 
       # The single step that does both PR-management and publishing.
       # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
@@ -284,35 +348,43 @@ jobs:
             }')
           curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
 
-      # Distinguish three failure modes when notifying Slack:
-      #   - MODE=pre-release → an earlier step failed (lint, format check,
-      #     typecheck, tests, build, install) before the changesets step ever ran.
-      #   - MODE=release-pr  → changesets step failed AND pending changesets
-      #     exist, so the run was trying to open/update the "chore: release" PR
-      #     (no publish was attempted).
-      #   - MODE=publish     → changesets step failed AND no pending changesets,
-      #     so the run was trying to publish to npm and failed mid-publish.
-      # The pending-changeset check is inline (not a step output) so it works
-      # even when the changesets step itself crashed before producing outputs.
-      - name: Notify Slack — workflow failed
-        if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
+  # Distinguish three failure modes when notifying Slack:
+  #   - MODE=pre-release → the gate job failed, or a release-job step failed
+  #     before the changesets step ever ran (install, checkout, artifact
+  #     download).
+  #   - MODE=release-pr  → changesets step failed AND pending changesets
+  #     exist, so the run was trying to open/update the "chore: release" PR
+  #     (no publish was attempted).
+  #   - MODE=publish     → changesets step failed AND no pending changesets,
+  #     so the run was trying to publish to npm and failed mid-publish.
+  # Lives in its own job so a gate failure on Blacksmith still alerts — the
+  # release job never starts in that case.
+  notify-failure:
+    name: Notify Slack — workflow failed
+    needs: [mode, gate, release]
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Notify Slack
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          CHANGESETS_OUTCOME: ${{ steps.changesets.outcome }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          PUBLISHING: ${{ needs.mode.outputs.publishing }}
+          CHANGESETS_OUTCOME: ${{ needs.release.outputs.changesets_outcome }}
         run: |
-          # Count pending changesets (exclude README.md / config.json).
-          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')
           if [ "$CHANGESETS_OUTCOME" != "failure" ]; then
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"
-            detail="A step before the changesets action failed (install, lint, format check, typecheck, tests, or build). No release PR was updated and no publish was attempted. Check the run logs for the failing step."
-          elif [ "$pending" -gt 0 ]; then
+            detail="A step before the changesets action failed (gate: lint, format check, typecheck, tests, build, parity — or release-job setup). No release PR was updated and no publish was attempted. Check the run logs for the failing step."
+          elif [ "$PUBLISHING" = "false" ]; then
             mode="release-pr"
             title=":warning: docx-editor — failed to update release PR"
-            detail="The Release workflow could not assemble the \`chore: release\` PR (\`$pending\` pending changeset(s)). No publish was attempted. Likely cause: a malformed changeset file (wrong package name, bad frontmatter)."
+            detail="The Release workflow could not assemble the \`chore: release\` PR (pending changesets exist). No publish was attempted. Likely cause: a malformed changeset file (wrong package name, bad frontmatter)."
           else
             mode="publish"
             title=":x: docx-editor — release publish failed"
