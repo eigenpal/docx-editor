@@ -97,6 +97,7 @@ import {
   classifyCommand,
   deepFreezeValue,
   docRangeEqual,
+  createTocContextCache,
   editorError,
   formattingEqual,
   normalizeSource,
@@ -950,19 +951,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
   }
 
-  /**
-   * The right-click TOC context, reference-stable while the id holds.
-   *
-   * A fresh object per derivation would make `snapshotsEqual` report every tick as a change
-   * and hand every subscriber a new snapshot, which is the opposite of what the cache is
-   * for. The id is the only value, so one object per id is enough.
-   */
-  let cachedTocContext: { readonly id: string } | null = null;
-  function tocContextOf(id: string | null): { readonly id: string } | null {
-    if (id === null) cachedTocContext = null;
-    else if (cachedTocContext?.id !== id) cachedTocContext = Object.freeze({ id });
-    return cachedTocContext;
-  }
+  /** The right-click TOC context, reference-stable while the id holds — see support. */
+  const tocContextOf = createTocContextCache();
 
   function deriveSnapshot(): EditorSnapshot {
     const state = surface?.state() ?? null;
@@ -2530,12 +2520,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getCurrentPage: (mode) => currentPageOf(surface, mode),
 
     // Page NUMBERS are 1-based in this contract; the layout indexes from 0.
-    scrollToPage: (pageNumber: number) =>
-      Number.isInteger(pageNumber) && pageNumber >= 1
-        ? (surface?.revealPage(pageNumber - 1) ?? false)
-        : false,
+    scrollToPage: (pageNumber: number) => {
+      if (!Number.isInteger(pageNumber) || pageNumber < 1) return false;
+      // A scroll aimed into the open's yield window addresses the just-loaded document:
+      // mount it now, or the call would silently report "no such page".
+      openScheduler.flush();
+      return surface?.revealPage(pageNumber - 1) ?? false;
+    },
     scrollToBlock: (blockId: string) => {
       if (typeof blockId !== 'string' || blockId.length === 0) return false;
+      // Same yield-window rule as `scrollToPage`.
+      openScheduler.flush();
       // Revealing a body block is a move OUT of an open header or note: the outline and the
       // search pane both drive this, and leaving the scope on the furniture left the reader
       // looking at the body with every keystroke going to a story off screen.
@@ -2556,6 +2551,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     focus(scope?: EditorScope) {
+      // Same yield-window rule as `exec`: focusing the just-loaded document mounts it.
+      openScheduler.flush();
       if (!surface) {
         return { ok: false, code: 'invalidTarget', reason: 'no document is loaded' };
       }

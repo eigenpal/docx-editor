@@ -51,23 +51,25 @@ function docx(body: string): Uint8Array {
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
 
 /**
- * Deterministic high-entropy bytes (xorshift32): deflate cannot compress them, so a
- * filler part pushes the ZIP past the engine's 128 KiB open-yield threshold without a
- * body big enough to slow the test's mount down.
+ * ~`length` bytes of numbered text: zips well like real WordprocessingML while staying
+ * far under the zip-bomb ratio cap the parse enforces (zero-fill would be refused).
  */
-function incompressible(length: number): Uint8Array {
-  const bytes = new Uint8Array(length);
-  let state = 0x9e3779b9;
-  for (let i = 0; i < length; i += 1) {
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    bytes[i] = state & 0xff;
+function compressibleText(length: number): Uint8Array {
+  const lines: string[] = [];
+  let total = 0;
+  for (let line = 1; total < length; line += 1) {
+    const text = `filler line ${line} carrying a little ordinary sentence text.\n`;
+    lines.push(text);
+    total += text.length;
   }
-  return bytes;
+  return strToU8(lines.join('').slice(0, length));
 }
 
-/** Past the yield threshold: the engine mounts this one behind a painted frame. */
+/**
+ * Past the engine's open-yield threshold by UNCOMPRESSED content while zipping small:
+ * the engine mounts this one behind a painted frame, exactly as it does a long text
+ * document that zips under any zipped-size threshold.
+ */
 const LARGE_SOURCE = zipSync({
   '[Content_Types].xml': strToU8(
     `<Types xmlns="${CT}">` +
@@ -82,7 +84,7 @@ const LARGE_SOURCE = zipSync({
   'word/document.xml': strToU8(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>large body</w:t></w:r></w:p></w:body></w:document>`
   ),
-  'word/media/filler.bin': incompressible(192 * 1024),
+  'word/media/filler.bin': compressibleText(1024 * 1024),
 });
 
 const LOADING = '.docx-editor__loading';
@@ -285,6 +287,31 @@ describe('DocxEditor.Loading', () => {
     await waitFor(() => {
       expect(view.container.querySelector(LOADING)).toBeNull();
     });
+  });
+
+  test('onReady waits for a LARGE document to mount, so it can scroll a real document', async () => {
+    // The engine opens big files behind one painted frame. A host that scrolls or
+    // selects from onReady must observe the mounted document, not the yield window.
+    const readings: number[] = [];
+    render(
+      <DocxEditorRoot
+        document={LARGE_SOURCE}
+        onReady={(editor) => readings.push(editor.getTotalPages())}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
+    await act(async () => {});
+    expect(readings).toHaveLength(0);
+
+    await waitFor(() => {
+      expect(readings.length).toBeGreaterThan(0);
+    });
+    expect(readings).toHaveLength(1);
+    expect(readings[0]).toBeGreaterThan(0);
   });
 
   test('overlay renders the pinned variant, className still appended last', () => {

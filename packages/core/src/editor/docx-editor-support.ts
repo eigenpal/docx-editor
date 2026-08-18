@@ -827,6 +827,22 @@ export function docRangeEqual(a: DocRange | null, b: DocRange | null): boolean {
 }
 
 /**
+ * A reference-stable cache for the right-click TOC context.
+ *
+ * A fresh object per derivation would make {@link snapshotsEqual} report every tick as
+ * a change and hand every subscriber a new snapshot, which is the opposite of what the
+ * snapshot cache is for. The id is the only value, so one object per id is enough.
+ */
+export function createTocContextCache(): (id: string | null) => { readonly id: string } | null {
+  let cached: { readonly id: string } | null = null;
+  return (id) => {
+    if (id === null) cached = null;
+    else if (cached?.id !== id) cached = Object.freeze({ id });
+    return cached;
+  };
+}
+
+/**
  * Whether two snapshots are value-equal AFTER sub-object reuse — i.e. every field can be
  * compared by reference or primitive. When true, the previous snapshot object itself is
  * kept, so `snapshot()` returns the same reference across ticks that changed nothing.

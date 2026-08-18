@@ -22,8 +22,8 @@ const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/
 
 /**
  * Deterministic high-entropy bytes (xorshift32). Deflate cannot compress them, so a
- * small filler PART pushes the ZIP past the yield threshold without a body large enough
- * to make the mount itself slow in the test.
+ * filler PART pushes the ZIPPED size past the yield threshold without a body large
+ * enough to make the mount itself slow in the test.
  */
 function incompressible(length: number): Uint8Array {
   const bytes = new Uint8Array(length);
@@ -58,8 +58,30 @@ function docx(body: string, filler?: Uint8Array): Uint8Array {
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-/** Past the 128 KiB yield threshold, mostly via the incompressible filler part. */
-const LARGE = docx(p('large document body'), incompressible(192 * 1024));
+/**
+ * ~`length` bytes of numbered text: zips well (like real WordprocessingML, ~10–20×)
+ * while staying far under the 200× per-entry zip-bomb ratio cap that plain zero-fill
+ * trips — the parse must ACCEPT these fixtures, not refuse them.
+ */
+function compressibleText(length: number): Uint8Array {
+  const lines: string[] = [];
+  let total = 0;
+  for (let line = 1; total < length; line += 1) {
+    const text = `filler line ${line} carrying a little ordinary sentence text.\n`;
+    lines.push(text);
+    total += text.length;
+  }
+  return strToU8(lines.join('').slice(0, length));
+}
+
+/**
+ * The shape that motivated the content-size measure: a text-heavy document. It zips
+ * SMALL but its UNCOMPRESSED entries cross the threshold, exactly like a 200-page
+ * tracked-changes file that zips under 90 KiB.
+ */
+const LARGE = docx(p('large document body'), compressibleText(1024 * 1024));
+/** Past the threshold ZIPPED as well — the shortcut branch of `shouldYield`. */
+const LARGE_ZIPPED = docx(p('large zipped body'), incompressible(600 * 1024));
 const SMALL = docx(p('small document body'));
 
 async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
@@ -71,8 +93,27 @@ async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
 }
 
 describe('deferred open of a large document', () => {
-  test('the large fixture actually crosses the yield threshold', () => {
-    expect(LARGE.byteLength).toBeGreaterThanOrEqual(128 * 1024);
+  test('a text-heavy document defers on its CONTENT size, not its zipped size', async () => {
+    // The regression this pins: a long tracked-changes document zips far under any
+    // sensible zipped-size threshold, and the open froze with no loading state.
+    expect(LARGE.byteLength).toBeLessThan(512 * 1024);
+    const editor = createDocxEditor({ document: LARGE });
+    const container = document.createElement('div');
+    editor.attach(container);
+    expect(editor.snapshot().isOpening).toBe(true);
+    await until(() => editor.surface !== null);
+    editor.destroy();
+  });
+
+  test('a document past the threshold ZIPPED defers too', async () => {
+    expect(LARGE_ZIPPED.byteLength).toBeGreaterThanOrEqual(512 * 1024);
+    const editor = createDocxEditor({ document: LARGE_ZIPPED });
+    const container = document.createElement('div');
+    editor.attach(container);
+    expect(editor.snapshot().isOpening).toBe(true);
+    await until(() => editor.surface !== null);
+    expect(container.textContent).toContain('large zipped body');
+    editor.destroy();
   });
 
   test('a small document still mounts synchronously', () => {
@@ -129,7 +170,7 @@ describe('deferred open of a large document', () => {
     const buffer = await editor.save();
     expect(editor.snapshot().isOpening).toBe(false);
     expect(container.textContent).toContain('large document body');
-    expect(buffer.byteLength).toBeGreaterThanOrEqual(128 * 1024);
+    expect(buffer.byteLength).toBeGreaterThan(0);
     editor.destroy();
   });
 
@@ -140,6 +181,21 @@ describe('deferred open of a large document', () => {
     expect(editor.surface).toBeNull();
 
     editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    expect(editor.surface).not.toBeNull();
+    expect(editor.snapshot().isOpening).toBe(false);
+    editor.destroy();
+  });
+
+  test('scrollToPage inside the window flushes the scheduled mount and lands', () => {
+    const editor = createDocxEditor({ document: LARGE });
+    const container = document.createElement('div');
+    editor.attach(container);
+    expect(editor.snapshot().isOpening).toBe(true);
+
+    // A host's onReady-style scroll must address the just-loaded document. The reveal
+    // itself needs real scroller geometry this bare container does not have; what this
+    // pins is the flush — the call finds a MOUNTED document, not the yield window.
+    editor.scrollToPage(1);
     expect(editor.surface).not.toBeNull();
     expect(editor.snapshot().isOpening).toBe(false);
     editor.destroy();

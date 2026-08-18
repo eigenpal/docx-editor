@@ -92,7 +92,9 @@ export interface DocxEditorRootProps {
    */
   zoomMode?: ZoomMode | 'auto';
   /** Fired once per instance, after it is published to the tree (and after any
-   *  `DocxEditor.Content` in the same commit has attached its mount point). */
+   *  `DocxEditor.Content` in the same commit has attached its mount point). A large
+   *  document mounts behind one painted frame; `onReady` fires AFTER that mount lands,
+   *  so scrolling or selecting from it works on any document size. */
   onReady?: (editor: Editor) => void;
   /** Fired when the document changes (revision + identity deltas, not bytes). */
   onChange?: (change: DocumentChange) => void;
@@ -183,9 +185,23 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
-  // has already attached and `onReady` observes a mounted document.
+  // has already attached. A SMALL document is mounted by then and `onReady` observes it
+  // directly. A LARGE one is still behind the engine's open yield (`isOpening`), so the
+  // callback waits for the mount's own `change` — the first and only event that can fire
+  // inside that window — and then observes a real document too: `onReady` scrolling to a
+  // page or selecting a range works on any document size.
   useEffect(() => {
-    if (editor) propsRef.current.onReady?.(editor);
+    if (!editor) return undefined;
+    if (!editor.snapshot().isOpening) {
+      propsRef.current.onReady?.(editor);
+      return undefined;
+    }
+    const off = editor.on('change', () => {
+      off();
+      propsRef.current.onReady?.(editor);
+    });
+    // Unsubscribe is idempotent, so the self-removal above and this cleanup can both run.
+    return off;
   }, [editor]);
 
   // Zoom is a facade parameter, not a remount: tearing the editor down for a zoom
