@@ -1,0 +1,110 @@
+---
+title: 'Props'
+description: 'Reference for the current Vue root props and ref: document source, chrome toggles, menu integration, callbacks, and the shared imperative handle.'
+category: 'Vue'
+order: 36
+---
+
+`<DocxEditor>` is the packaged host over the composition primitives. The full generated reference is at [/docs/2.x/api/vue](/docs/2.x/api/vue); this page groups the current root props by how you actually wire the editor.
+
+## Document and mount state
+
+Use `document` for the current document source and `fonts` for measurement fidelity.
+
+| Prop       | Type                                                             | Description                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `document` | `DocumentSource`                                                 | DOCX bytes or an existing `DocumentHandle`.                                                                                                        |
+| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes used for Word-accurate shaping and pagination, or a resolver called per load with the document's declared families.                     |
+| `author`   | `string`                                                         | Ambient author for authored commands such as comments and review actions.                                                                          |
+| `locale`   | `string`                                                         | Locale passed to the underlying editor instance.                                                                                                   |
+| `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | The mode the editor opens in. Defaults to `'edit'`, so a document that carries `w:trackRevisions` still opens ready to type. Remount to change it. |
+| `zoom`     | `number`                                                         | Mount-time zoom value.                                                                                                                             |
+
+```vue
+<DocxEditor :document="bytes" mode="edit" />
+```
+
+## Modules
+
+`modules` registers capability modules at construction. It is how [`@docx-editor.dev/pro`](/docs/2.x/pro) adds tracked changes, comments, and custom nodes.
+
+| Prop      | Type             | Description                                             |
+| --------- | ---------------- | ------------------------------------------------------- |
+| `modules` | `EditorModule[]` | Capability modules, read once when the editor is built. |
+
+Registration happens at construction, like `mode`, so the array identity has to be stable. Build it outside the component, or the editor rebuilds on every render:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro';
+
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :modules="modules" author="Jess Lin" />
+</template>
+```
+
+## Chrome and layout
+
+These props control the packaged frame around the painted document.
+
+| Prop             | Type                                    | Description                                                   |
+| ---------------- | --------------------------------------- | ------------------------------------------------------------- |
+| `chrome`         | `boolean`                               | Render the packaged title bar, menu, toolbar, and navigation. |
+| `title`          | `string`                                | Document title shown in the title bar.                        |
+| `onTitleChange`  | `(title) => void`                       | Makes the title editable.                                     |
+| `colorMode`      | `'light' \| 'dark' \| 'system'`         | Light, dark, or OS-following theme.                           |
+| `menu`           | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu bar.                    |
+| `navigation`     | `boolean`                               | Toggle the packaged navigation pane.                          |
+| `hyperlinkPopup` | `boolean`                               | Toggle the packaged link popover.                             |
+| `contextMenu`    | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.                |
+| `t`              | `(key, params?) => string`              | Label resolver for the packaged chrome.                       |
+| `i18n`           | `Translations`                          | Same effect as wrapping this editor in `LocaleProvider`.      |
+
+## Callbacks
+
+| Prop          | Type                               | Description                                                                    |
+| ------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
+| `onReady`     | `(editor: Editor) => void`         | Fired after the editor instance is created.                                    |
+| `onChange`    | `(change: DocumentChange) => void` | Fired after document mutations; carries revision + identity deltas, not bytes. |
+| `onSave`      | `() => void`                       | Overrides the packaged File → Save behavior.                                   |
+| `onOpen`      | `() => void`                       | Overrides the packaged File → Open behavior.                                   |
+| `onFontError` | `(error: EditorFontError) => void` | Reports typed font-resolution failures.                                        |
+
+## Ref methods
+
+Capture a `DocxEditorRef` when you want to load, save, focus, or reach the full `Editor` facade:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+
+const editorRef = ref<DocxEditorRef | null>(null);
+
+async function save() {
+  const buf = await editorRef.value?.save();
+  if (buf) void upload(buf);
+}
+</script>
+
+<template>
+  <DocxEditor ref="editorRef" :document="bytes" />
+</template>
+```
+
+| Method           | Returns                        | What it does                           |
+| ---------------- | ------------------------------ | -------------------------------------- |
+| `save()`         | `Promise<ArrayBuffer \| null>` | Serialize the current document.        |
+| `load(document)` | `void`                         | Load DOCX bytes or a `DocumentHandle`. |
+| `getEditor()`    | `Editor \| null`               | Reach the full editor facade.          |
+| `focus()`        | `void`                         | Focus the mounted editor surface.      |
+
+## Next steps
+
+- [Vue quickstart](/docs/2.x/vue)
+- [Vue examples](/docs/2.x/vue/examples)
+- [Full API reference](/docs/2.x/api/vue)

@@ -10,6 +10,24 @@ import {
 const root = resolve(import.meta.dirname, '..');
 const docsRoot = resolve(root, 'docs/site/content');
 
+function isUseExport(name) {
+  return name.startsWith('use') && name[3] === name[3]?.toUpperCase();
+}
+
+function publicComposableExports(entry) {
+  return [...collectNamedExports(resolve(root, `packages/${entry}/src/index.ts`))].filter(isUseExport);
+}
+
+function documentedComposables(mdxPath) {
+  if (!fs.existsSync(mdxPath)) return new Set();
+  const source = fs.readFileSync(mdxPath, 'utf8');
+  const documented = new Set();
+  for (const match of source.matchAll(/\buse[A-Z][A-Za-z0-9]*\b/g)) {
+    documented.add(match[0]);
+  }
+  return documented;
+}
+
 const entries = {
   react: collectNamedExports(resolve(root, 'packages/react/src/index.ts')),
   vue: collectNamedExports(resolve(root, 'packages/vue/src/index.ts')),
@@ -201,6 +219,39 @@ if (docsSurface.missingRootExports.length > 0) {
   for (const claim of docsSurface.missingRootExports) {
     console.error(`  - ${claim.packageName}: ${claim.exportName}`);
   }
+}
+
+const composableDocs = {
+  react: {
+    page: resolve(docsRoot, 'react/hooks.mdx'),
+    exports: publicComposableExports('react'),
+  },
+  vue: {
+    page: resolve(docsRoot, 'vue/composables.mdx'),
+    exports: publicComposableExports('vue'),
+  },
+};
+
+const reactDocumented = documentedComposables(composableDocs.react.page);
+const vueDocumented = documentedComposables(composableDocs.vue.page);
+
+for (const [adapter, { page, exports }] of Object.entries(composableDocs)) {
+  const rel = relative(root, page);
+  const missing = exports.filter((name) => !documentedComposables(page).has(name));
+  if (missing.length > 0) {
+    failed = true;
+    console.error(`Public docs surface drift: composables missing from ${rel}:`);
+    for (const name of missing) console.error(`  - ${name}`);
+  }
+}
+
+const reactOnly = composableDocs.react.exports.filter((name) => !vueDocumented.has(name));
+const vueOnly = composableDocs.vue.exports.filter((name) => !reactDocumented.has(name));
+if (reactOnly.length > 0 || vueOnly.length > 0) {
+  failed = true;
+  console.error('Public docs surface drift: composable docs must cover the same names in both adapters:');
+  for (const name of reactOnly) console.error(`  - missing from vue/composables.mdx: ${name}`);
+  for (const name of vueOnly) console.error(`  - missing from react/hooks.mdx: ${name}`);
 }
 
 if (failed) process.exit(1);

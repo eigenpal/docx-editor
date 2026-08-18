@@ -345,7 +345,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Hover controls insert a row or column. Drag a divider or the outer right edge to resize. The context menu adds seven structural actions. Vue chrome is deferred, and tables stay read-only in the automation object model.',
+      'Hover controls insert a row or column. Drag a divider or the outer right edge to resize. The context menu adds seven structural actions. Both adapters ship the same table chrome. Tables stay read-only in the automation object model.',
   },
   {
     id: 'tables.borders-shading',
@@ -356,7 +356,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'React contextual toolbar controls set borders and fill on the selected cells. Vue chrome is deferred. Authored table and cell borders and table-style shading render and round-trip.',
+      'Both adapters expose contextual toolbar controls that set borders and fill on the selected cells. Authored table and cell borders and table-style shading render and round-trip.',
   },
   {
     id: 'tables.merge',
@@ -389,7 +389,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The innermost table owns the resize controls, the structural edits, and the cell borders and fill. Outer tables stay unchanged through save and reopen. Vue table chrome is deferred.',
+      'The innermost table owns the resize controls, the structural edits, and the cell borders and fill. Outer tables stay unchanged through save and reopen.',
   },
   {
     id: 'tables.conditional-formatting',
@@ -436,7 +436,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. React adds insert and overlay authoring: toolbar, properties dialog, and keyboard resize. Vue authoring UI is deferred; both adapters share the engine commands.',
+      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. Both adapters ship insert and overlay authoring: toolbar, properties dialog, and keyboard resize through the shared engine commands.',
   },
   {
     id: 'images.anchored',
@@ -448,7 +448,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in React. Vue chrome for wrap, alt text, and properties is deferred. Both adapters share setImageWrapType and toolbarCommandState.',
+      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. Both share setImageWrapType and toolbarCommandState.',
   },
   {
     id: 'images.bmp-webp',
@@ -543,7 +543,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Crop renders and round-trips. The React properties dialog edits the crop in percent. Vue chrome is deferred.',
+      'Crop renders and round-trips. The properties dialog edits the crop in percent in both adapters.',
   },
   {
     id: 'images.adjustments',
@@ -633,7 +633,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'React has scoped header and footer editing: enter and exit the story, create and remove it, link and unlink to the previous section, and set the title-page and even/odd options. It also inserts PAGE, NUMPAGES, and SECTIONPAGES. `editHeaderFooter` takes `variant`, `evenPage`, and `firstPage` on the shared Editor contract. Per-section first, even, and default variants paint like Word. Vue chrome is deferred, but Vue can call the same commands. Tracked changes, watermark authoring, and structural table edits inside furniture are not supported.',
+      'Both adapters have scoped header and footer editing: enter and exit the story, create and remove it, link and unlink to the previous section, and set the title-page and even/odd options. They also insert PAGE, NUMPAGES, and SECTIONPAGES. `editHeaderFooter` takes `variant`, `evenPage`, and `firstPage` on the shared Editor contract. Per-section first, even, and default variants paint like Word. Tracked changes, watermark authoring, and structural table edits inside furniture are not supported.',
     docsLink: '/docs/2.x/guides/headers-footers',
   },
   {
@@ -657,7 +657,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'React has a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. Vue chrome is deferred. Tracked note inserts and notes in headers and footers are out of scope.',
+      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. Tracked note inserts and notes in headers and footers are out of scope.',
   },
   {
     id: 'layout.columns',
@@ -700,7 +700,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      "The page number in the document selects the first, even, or default variant, so the alternation carries across section breaks. You can edit each variant in an open furniture scope. `editHeaderFooter({ variant: 'even' })` creates or opens the even story and enables `w:evenAndOddHeaders` in one undo unit. React header and footer chrome can toggle different even and odd pages. Vue chrome is deferred.",
+      "The page number in the document selects the first, even, or default variant, so the alternation carries across section breaks. You can edit each variant in an open furniture scope. `editHeaderFooter({ variant: 'even' })` creates or opens the even story and enables `w:evenAndOddHeaders` in one undo unit. Header and footer chrome in both adapters can toggle different even and odd pages.",
   },
   {
     id: 'layout.vertical-align',

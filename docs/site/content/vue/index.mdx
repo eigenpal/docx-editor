@@ -1,0 +1,120 @@
+---
+title: '@docx-editor.dev/vue'
+description: 'Vue 3 adapter for the DOCX editor: the packaged root component, composition primitives, shared composables, and compound chrome, all from the package root.'
+category: 'Vue'
+order: 35
+---
+
+<PackageStats name="@docx-editor.dev/vue" />
+
+## Install
+
+```bash
+npm install @docx-editor.dev/vue @docx-editor.dev/core
+```
+
+The adapter holds the engine as a peer, so install both. Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes, comments, and custom nodes, or [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the document from code.
+
+## Quickstart
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+</script>
+
+<template>
+  <DocxEditor :document="docxBytes" />
+</template>
+```
+
+`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and the painted editable document. The editor has nothing to SSR. On Nuxt, render it inside `<ClientOnly>` or load it with `defineAsyncComponent`.
+
+<DemoPlayground />
+
+## Root surface
+
+- `DocxEditor`: the one-line host plus compound statics like `DocxEditor.Root`, `DocxEditor.Viewport`, `DocxEditor.Content`, `DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.HyperLink`, and `DocxEditorContextMenu`
+- composables from the same root: `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, `useFontFamily`
+- shared top-level pieces: `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, `DocxEditorPageSetupDialog`
+
+The review module and sidebar are licensed surfaces in [`@docx-editor.dev/pro`](/docs/2.x/pro). They are not exports of the Vue adapter.
+
+There is one export path. Components, composables, and the engine helpers all live on the package root. There are no `/ui`, `/composables`, or `/dialogs` subpaths.
+
+## Composition primitives
+
+When the packaged chrome is not enough, drop to the same primitives the sugar component uses internally:
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorRoot,
+  DocxEditorViewport,
+  DocxEditorContent,
+  DocxEditorToolbar,
+} from '@docx-editor.dev/vue';
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes">
+    <DocxEditorToolbar />
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+## Toolbar
+
+The main chrome compound is exported from the package root as `DocxEditorToolbar`, and attached to the host as `DocxEditor.Toolbar`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useEditorCommand } from '@docx-editor.dev/vue';
+
+const bold = useEditorCommand('text.bold');
+</script>
+
+<template>
+  <DocxEditor.Root :document="bytes">
+    <DocxEditor.Toolbar>
+      <button
+        @mousedown.prevent
+        :disabled="!bold.isEnabled"
+        :data-active="bold.isActive || undefined"
+        @click="bold.execute()"
+      >
+        Bold
+      </button>
+    </DocxEditor.Toolbar>
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</template>
+```
+
+The lower-level composables (`useEditorCommand`, `useEditorState`, `useFontFamily`) also come from the root package.
+
+## Editing API
+
+Drive the open document from code with the Office.js-compatible `@docx-editor.dev/editor-api/browser`, which takes the editor instance this adapter created:
+
+```ts
+import { useDocxEditor } from '@docx-editor.dev/vue';
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+
+const editor = useDocxEditor(); // null until the content is mounted
+const runtime = DocxEditor.createBrowser(editor.value!);
+```
+
+The object model and its rules are in [Editing API](/docs/2.x/editor-api).
+
+## Next steps
+
+- [Composition](/docs/2.x/vue/composition): replace the packaged chrome with your own
+- [Composables](/docs/2.x/vue/composables): the API every packaged control is built on
+- [Props](/docs/2.x/vue/props): `<DocxEditor>` and the imperative ref
+- [Examples](/docs/2.x/vue/examples)
+- [Full API reference](/docs/2.x/api/vue)

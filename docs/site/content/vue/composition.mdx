@@ -1,0 +1,116 @@
+---
+title: 'Composition'
+description: 'Build your own DOCX editor UI on unstyled primitives: root provider, viewport, content, compound parts, slot overrides, and the customization ladder.'
+category: 'Vue'
+order: 37
+---
+
+`<DocxEditor>` is one arrangement of parts that are all public. When the packaged chrome is not what you want, take the parts.
+
+The packaged toolbar is built from the composables and primitives on this page, so a control you write has the same capabilities as one that ships in the box.
+
+## Primitives
+
+Every editor is these three components, in this order:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorRoot, DocxEditorViewport, DocxEditorContent } from '@docx-editor.dev/vue';
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes">
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+- **`DocxEditorRoot`** owns the editor instance and publishes it on context. It renders no DOM of its own. Document-level props live here: `document`, `mode`, `author`, `fonts`, `locale`, `modules`, `onReady`, `onChange`.
+- **`DocxEditorViewport`** is the scroll container, and carries the layout classes the engine positions pages against.
+- **`DocxEditorContent`** is the mount point the engine paints pages into. The painted pages _are_ the editable surface.
+
+Everything else (toolbar, menu, rulers, navigation pane, link popover, context menu) is optional and can be placed anywhere inside `DocxEditorRoot`.
+
+## Customization ladder
+
+Start at the top and go down only as far as you need:
+
+1. **CSS and tokens.** Restate the `--doc-*` palette under your own scope.
+2. **`icon` prop.** Swap a glyph without touching behavior.
+3. **Slot override.** Replace one part of a compound in place; keep the rest.
+4. **`preset={false}`.** Opt out of the default arrangement and order it yourself.
+5. **Composables.** Write the markup yourself. See [Composables](/docs/2.x/vue/composables).
+
+### Slot override
+
+A part child replaces the slot of the same name and leaves the rest of the default arrangement alone. `hidden` removes a slot:
+
+```vue
+<DocxEditorToolbar>
+  <DocxEditorToolbar.Bold class="my-bold" />
+  <DocxEditorToolbar.Highlight hidden />
+</DocxEditorToolbar>
+```
+
+## Custom toolbar
+
+`preset={false}` opts out of the registry's default arrangement, so the order in your template is the order on screen. Every packaged part still drives its chrome slot: enabled state, pressed state, and the command all still come from the engine.
+
+```vue
+<DocxEditorToolbar :preset="false">
+  <DocxEditorToolbar.Bold />
+  <DocxEditorToolbar.Separator />
+  <DocxEditorToolbar.Undo />
+</DocxEditorToolbar>
+```
+
+## Rulers, navigation, and furniture
+
+Place optional chrome by name inside `DocxEditorRoot`:
+
+```vue
+<DocxEditorRoot :document="bytes">
+  <DocxEditorHorizontalRuler />
+  <DocxEditorNavigation :pane-width="280" />
+  <DocxEditorViewport>
+    <DocxEditorVerticalRuler />
+    <DocxEditorHeaderFooterChrome />
+    <DocxEditorNotesChrome />
+    <DocxEditorContent />
+    <DocxEditorHyperLink />
+    <DocxEditorContextMenu />
+  </DocxEditorViewport>
+  <DocxEditorPageNumber />
+  <DocxEditorLoading overlay>
+    <DocxEditorLoadingSpinner />
+    <span>Loading document…</span>
+  </DocxEditorLoading>
+</DocxEditorRoot>
+```
+
+## Menu overrides
+
+`DocxEditorMenu` shares command state with the toolbar. Override one menu, append rows, or replace a whole menu in place:
+
+```vue
+<DocxEditorMenu @open="openFile" @save="saveFile">
+  <DocxEditorMenu.File :preset="false">
+    <DocxEditorMenu.Open />
+    <DocxEditorMenu.Row @select="newDocument">New</DocxEditorMenu.Row>
+    <DocxEditorMenu.Save />
+  </DocxEditorMenu.File>
+  <DocxEditorMenu.Help>
+    <DocxEditorMenu.ReportIssue hidden />
+  </DocxEditorMenu.Help>
+</DocxEditorMenu>
+```
+
+Chrome mousedown must call `preventDefault()` on buttons and menu rows, or the control steals the caret from the painted surface.
+
+## Next steps
+
+- [Composables](/docs/2.x/vue/composables): drive chrome from script
+- [Props](/docs/2.x/vue/props): root props and the ref handle
+- [Toolbar guide](/docs/2.x/guides/toolbar): every slot id `useEditorCommand` accepts

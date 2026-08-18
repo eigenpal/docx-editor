@@ -1,0 +1,111 @@
+---
+title: 'Vue examples'
+description: 'Concrete patterns for the current Vue root surface: mount bytes, save through the ref, compose custom chrome, and automate an open editor.'
+category: 'Vue'
+order: 39
+---
+
+Each example uses the current root exports only.
+
+## Load DOCX bytes
+
+```vue
+<script setup lang="ts">
+import { onMounted, ref } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+const doc = ref<Uint8Array>();
+
+onMounted(() => {
+  void fetch('/template.docx')
+    .then((r) => r.arrayBuffer())
+    .then((buffer) => {
+      doc.value = new Uint8Array(buffer);
+    });
+});
+</script>
+
+<template>
+  <DocxEditor :document="doc" title="Proposal.docx" />
+</template>
+```
+
+## Save through the ref
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+
+const editorRef = ref<DocxEditorRef | null>(null);
+
+async function save() {
+  const next = await editorRef.value?.save();
+  if (!next) return;
+  await fetch('/api/documents/42', { method: 'PUT', body: next });
+}
+</script>
+
+<template>
+  <button @click="save">Save</button>
+  <DocxEditor ref="editorRef" :document="bytes" />
+</template>
+```
+
+## Compose custom chrome
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useEditorCommand } from '@docx-editor.dev/vue';
+
+const bold = useEditorCommand('text.bold');
+</script>
+
+<template>
+  <DocxEditor.Root :document="bytes">
+    <DocxEditor.Toolbar>
+      <button @mousedown.prevent :disabled="!bold.isEnabled" @click="bold.execute()">Bold</button>
+    </DocxEditor.Toolbar>
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</template>
+```
+
+## Fetch bytes and fonts together
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorRoot,
+  DocxEditorViewport,
+  DocxEditorContent,
+  useDocxSource,
+} from '@docx-editor.dev/vue';
+import { defaultFonts } from '@docx-editor.dev/fonts';
+
+const { document, fonts, error } = useDocxSource('/sample.docx', { fonts: defaultFonts });
+</script>
+
+<template>
+  <DocxEditorRoot v-if="document" :document="document" :fonts="fonts">
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+  <p v-else-if="error">{{ error.message }}</p>
+</template>
+```
+
+## Live demo
+
+The [`examples/vue`](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) app is a parity witness for the React Vite demo: composition-layer chrome, menu overrides, rulers, navigation, and published-package build mode. Run it with `bun run dev:vue`.
+
+The [parity deployment](/) serves both adapters from `examples/parity/dist` under `/react/` and `/vue/`.
+
+## Next steps
+
+- [Composition](/docs/2.x/vue/composition)
+- [Composables](/docs/2.x/vue/composables)
+- [Full API reference](/docs/2.x/api/vue)

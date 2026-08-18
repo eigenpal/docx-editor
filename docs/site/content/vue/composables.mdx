@@ -1,0 +1,228 @@
+---
+title: 'Composables'
+description: 'The Vue API the packaged chrome is built on: subscribe to editor state, run commands, read the document outline, search, and drive page setup.'
+category: 'Vue'
+order: 38
+---
+
+Every composable here must be called inside `DocxEditorRoot` (or inside `<DocxEditor>`, which renders one). They read the editor off context.
+
+These are the same composables the packaged toolbar, menu, and navigation pane use. There is no private API behind them.
+
+## useEditorCommand
+
+Most chrome is built on this one. Give it a slot id and get back a button's worth of state:
+
+```vue
+<script setup lang="ts">
+import { useEditorCommand } from '@docx-editor.dev/vue';
+
+const bold = useEditorCommand('text.bold');
+</script>
+
+<template>
+  <button
+    @mousedown.prevent
+    :disabled="!bold.isEnabled"
+    :data-active="bold.isActive || undefined"
+    :title="bold.disabledReason ?? 'Bold'"
+    @click="bold.execute()"
+  >
+    B
+  </button>
+</template>
+```
+
+| Field            | Type             | Meaning                                                   |
+| ---------------- | ---------------- | --------------------------------------------------------- |
+| `execute()`      | `() => boolean`  | Run it. Returns whether it applied.                       |
+| `isActive`       | `boolean`        | The command's state at the caret (bold on, list applied). |
+| `isEnabled`      | `boolean`        | Whether it can run right now.                             |
+| `disabledReason` | `string \| null` | Why not, when it can't. Show it; don't invent your own.   |
+
+It also takes a full `EditorCommand` object when there is no slot for what you want:
+
+```ts
+const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
+```
+
+## useEditorState
+
+Subscribe to a slice of the editor snapshot. The selector runs on every tick; the component re-renders only when the slice changes:
+
+```vue
+<script setup lang="ts">
+import { useEditorState } from '@docx-editor.dev/vue';
+
+const page = useEditorState((s) => s.page);
+const dirty = useEditorState((s) => s.canUndo ?? false);
+</script>
+
+<template>
+  <span>{{ page.current }} / {{ page.total }}</span>
+  <button :disabled="!dirty">Save</button>
+</template>
+```
+
+Pass a comparator as the second argument when the slice is an object. Select narrowly so a page-number read does not re-render on a bold toggle.
+
+## useDocxEditor
+
+The editor instance itself, or `null` before content mounts. The escape hatch for anything the other composables don't cover:
+
+```vue
+<script setup lang="ts">
+import { useDocxEditor } from '@docx-editor.dev/vue';
+
+const editor = useDocxEditor();
+
+async function save() {
+  const bytes = await editor.value?.save();
+  if (bytes) void upload(bytes);
+}
+</script>
+```
+
+Reading state through `editor.snapshot()` in render will not re-render your component when the document changes. That is what `useEditorState` is for.
+
+## useEditorEvent
+
+Subscribe to an editor event for the life of the component:
+
+```ts
+useEditorEvent('selectionChange', () => (panelOpen.value = false));
+useEditorEvent('change', (change) => void autosave(change.revision));
+```
+
+## useEditorCaret
+
+Where the caret is, as a paragraph and an offset — the shape the write APIs take as their `at`. The value is reference-stable, so capturing it in a menu handler is safe.
+
+## useEditorSnapshot
+
+Revision counter for an editor, for your own external-store wiring.
+
+## useZoom
+
+Read and set zoom from chrome. Pairs with the toolbar zoom controls.
+
+## useFontFamily
+
+Backs the font picker. The same shape as any value control: current value, options, setter, enabled flag.
+
+```vue
+<script setup lang="ts">
+import { useFontFamily } from '@docx-editor.dev/vue';
+
+const font = useFontFamily();
+</script>
+
+<template>
+  <select
+    :value="font.value ?? ''"
+    :disabled="!font.isEnabled"
+    @change="font.setValue(($event.target as HTMLSelectElement).value)"
+  >
+    <option v-for="family in font.options" :key="family" :value="family">{{ family }}</option>
+  </select>
+</template>
+```
+
+`useParagraphStyle` has the same shape for the style list.
+
+## usePageSetup
+
+Read and change margins, orientation, and paper size for the current section:
+
+```ts
+const { pageSetup, apply, isEnabled } = usePageSetup();
+apply({ orientation: pageSetup?.orientation === 'landscape' ? 'portrait' : 'landscape' });
+```
+
+## useParagraphIndent
+
+Current indents plus an `apply` for ruler-style editing.
+
+## useDocumentOutline
+
+Headings in document order, plus a jump. This is the whole navigation pane:
+
+```ts
+const { items, selectedBlockId, goTo, isEmpty } = useDocumentOutline();
+```
+
+## useDocumentSearch
+
+Debounced find, with match navigation. `matchCase` / `setMatchCase` and `wholeWord` / `setWholeWord` are on the same object.
+
+## useNavigationPane
+
+Open state and width for the navigation pane.
+
+## useNavigationShift
+
+Horizontal offset the open navigation pane pushes the page by.
+
+## useDocxSource
+
+Fetches bytes and fonts for a URL, `File`, or `Blob`, with cancellation:
+
+```ts
+const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
+  fonts: defaultFonts,
+});
+```
+
+## useFonts
+
+Builds a `FontResolver` from a source plus fragments. See [Fonts](/docs/2.x/guides/fonts).
+
+## useHyperlinkPopup and useHyperlinkPopupInstance
+
+State behind the link popover, for a custom panel. `useHyperlinkPopupInstance` is the context-free variant for a control mounted outside the part that owns the state.
+
+## useContentControl and useContentControlInstance
+
+The content-control inspector: locks, value writes, form fill. `useContentControlInstance` is the context-free variant.
+
+## useHeaderFooterState
+
+Which header/footer scope is being edited, or `null`.
+
+## useNoteScopeState and useNotePropertiesState
+
+Footnote and endnote scope and numbering properties for the current scope.
+
+## useContextMenuTarget
+
+The element the last right-click landed on.
+
+## useEditorValueCommand
+
+Value-taking commands: `'image.wrap'`, `'image.altText'`.
+
+## useTableBorderTargetLabel
+
+Label for the active table border target, for a custom border control.
+
+## useTranslation and useChromeTranslate
+
+`useTranslation` returns `{ t }` bound to the active locale catalog. `useChromeTranslate(overrides?)` is the catalog-backed label resolver for chrome `t` props; an overrides `Map` is consulted first.
+
+## Toolbar helpers
+
+| Composable              | Returns                                             |
+| ----------------------- | --------------------------------------------------- |
+| `useToolbarContext`     | Toolbar compound context for custom slot parts.     |
+| `useToolbarLabel`       | Resolved label for the active toolbar scope.        |
+| `useToolbarLabelFor`    | Label resolver for one slot id.                     |
+| `useScopeClassName`     | Scoped class prefix for chrome under a custom root. |
+| `useScopedChromeAnchor` | Anchor metadata for scoped overlay chrome.          |
+
+Review composables (`useReview`, `useReviewOf`, `useReviewItem`) ship in [`@docx-editor.dev/pro/react`](/docs/2.x/pro). The Vue adapter exposes the same engine commands; the packaged Pro review pane is not part of `@docx-editor.dev/vue`.
+
+## Next steps
+
+- [Composition](/docs/2.x/vue/composition): the primitives these composables live inside
+- [Toolbar](/docs/2.x/guides/toolbar): every slot id `useEditorCommand` accepts
+- [Full API reference](/docs/2.x/api/vue)
