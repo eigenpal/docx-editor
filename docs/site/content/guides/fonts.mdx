@@ -247,6 +247,29 @@ editor?.fontMeasurement();
 `{ measurer: 'fixed', resolving: false }` is the steady state for a document with no
 usable font source; `resolving: true` means shaped resolution is still in flight.
 
+## Serving the shaper's WASM yourself
+
+The text shaper is a WASM binary that ships inside `@docx-editor.dev/core` and
+loads lazily when fonts resolve. Webpack, Turbopack, and Vite emit it as an
+asset automatically, so most apps need no setup.
+
+Bundlers that don't emit `new URL(..., import.meta.url)` assets (esbuild and
+Bun) build cleanly but fail at runtime with
+`Aborted(both async and sync fetching of the wasm failed)`. The failure reaches
+`onFontError` as an `EditorFontError` with code `initializationFailed` whose
+`diagnostic` names the fix. If you see that error, copy
+`node_modules/@docx-editor.dev/core/dist/harfbuzz.wasm` into your served assets
+and point the shaper at it before creating an editor:
+
+```ts
+import { setHarfBuzzWasmUrl } from '@docx-editor.dev/core/layout';
+
+setHarfBuzzWasmUrl('/static/harfbuzz.wasm');
+```
+
+Serve the copy from the installed package version. The shaper refuses a
+version mismatch at load instead of measuring text with unverified metrics.
+
 ## Caveats
 
 - **Metric-compatible is not identical.** Advance widths match, so wrap points match;

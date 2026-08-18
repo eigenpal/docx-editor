@@ -917,7 +917,7 @@ export class HarfBuzzShapingError extends Error {
 }
 
 // @public
-export type HarfBuzzShapingErrorCode = 'notInitialized' | 'fontOverLimit' | 'malformedFont' | 'textOverLimit' | 'codepointsOverLimit' | 'glyphOverLimit' | 'outlineOverLimit' | 'shapedRunOverLimit' | 'unsupportedVariationAxes' | 'unsupportedFallback' | 'unsupportedColorFont' | 'unsupportedNormalization' | 'invalidBidiLevel' | 'shapingLibraryMismatch' | 'disposed';
+export type HarfBuzzShapingErrorCode = 'notInitialized' | 'wasmUnavailable' | 'fontOverLimit' | 'malformedFont' | 'textOverLimit' | 'codepointsOverLimit' | 'glyphOverLimit' | 'outlineOverLimit' | 'shapedRunOverLimit' | 'unsupportedVariationAxes' | 'unsupportedFallback' | 'unsupportedColorFont' | 'unsupportedNormalization' | 'invalidBidiLevel' | 'shapingLibraryMismatch' | 'disposed';
 
 // @public
 export interface HarfBuzzTextShaper extends TextShaper {
@@ -2647,6 +2647,9 @@ export interface SemanticTableStructure {
 
 // @public
 export function setGraphemeBoundary(boundary: GraphemeBoundary): void;
+
+// @public
+export function setHarfBuzzWasmUrl(url: string | URL): void;
 
 // @public
 export const sha256FontBytes: (bytes: Uint8Array) => string;

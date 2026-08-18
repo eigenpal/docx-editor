@@ -80,6 +80,7 @@ export {
   type HarfBuzzTextShaperInstrumentation,
   type HarfBuzzTextShaperOptions,
 } from './harfbuzz-shaper.ts';
+export { setHarfBuzzWasmUrl } from './harfbuzz-wasm-binary.ts';
 export {
   UnsupportedScriptError,
   itemizeScriptFontSlots,

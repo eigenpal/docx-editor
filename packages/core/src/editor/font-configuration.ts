@@ -10,6 +10,7 @@ import {
   HARD_MAX_FONT_BYTES,
   HARD_MAX_FONT_SOURCES,
   FontResolutionError,
+  HarfBuzzShapingError,
   createFontResourceSnapshot,
   createHarfBuzzTextShaper,
   harfBuzzFontValidator,
@@ -45,6 +46,16 @@ export function toEditorFontError(error: unknown): EditorFontError {
     return new EditorFontError(error.code as EditorFontErrorCode, error.message, {
       request: publicRequest(error.request),
       diagnostic: error.diagnostic,
+    });
+  }
+  if (error instanceof HarfBuzzShapingError) {
+    // The shaping error's `diagnostic` is the actionable half — for `wasmUnavailable` it
+    // names `setHarfBuzzWasmUrl` and the file to serve (#282). Collapsing to `message`
+    // alone would hand `onFontError` "HarfBuzz shaping failed (wasmUnavailable)" and
+    // nothing else, which is precisely the unactionable surface that diagnostic exists
+    // to replace.
+    return new EditorFontError('initializationFailed', error.message, {
+      diagnostic: error.diagnostic ?? error.message,
     });
   }
   return new EditorFontError(

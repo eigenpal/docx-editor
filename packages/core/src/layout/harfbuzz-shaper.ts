@@ -59,6 +59,28 @@ export function initializeHarfBuzz(): Promise<void> {
     })
     .catch((error) => {
       harfBuzzInitialization = null;
+      // The runtime aborts with `Aborted(both async and sync fetching of the wasm failed)`
+      // when its binary cannot be fetched — under a bundler that does not emit
+      // `new URL(..., import.meta.url)` assets (esbuild, Bun), that is a clean build 404ing
+      // at runtime (#282). Left as-is, the raw abort surfaces through `onFontError` with
+      // nothing connecting it to the fix, so it is renamed here to the API that fixes it.
+      //
+      // `expected magic word` is the same misconfiguration behind a SPA dev server: the
+      // missing path answers 200 with the HTML fallback page, and instantiation dies on
+      // the bytes instead of the fetch.
+      if (
+        error instanceof Error &&
+        /fetching of the wasm failed|expected magic word/.test(error.message)
+      ) {
+        throw new HarfBuzzShapingError('wasmUnavailable', {
+          diagnostic:
+            'the HarfBuzz WASM binary could not be fetched. If this bundler does not emit ' +
+            '`new URL(..., import.meta.url)` assets (esbuild, Bun), serve ' +
+            '`@docx-editor.dev/core/dist/harfbuzz.wasm` yourself, point `setHarfBuzzWasmUrl` ' +
+            "from '@docx-editor.dev/core/layout' at it before creating an editor, and reload " +
+            `the page. (${error.message})`,
+        });
+      }
       throw error;
     });
   return harfBuzzInitialization;
@@ -87,6 +109,7 @@ function requireHarfBuzz(): HarfBuzzModule {
  */
 export type HarfBuzzShapingErrorCode =
   | 'notInitialized'
+  | 'wasmUnavailable'
   | 'fontOverLimit'
   | 'malformedFont'
   | 'textOverLimit'

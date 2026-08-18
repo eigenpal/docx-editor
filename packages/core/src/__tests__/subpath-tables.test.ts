@@ -19,7 +19,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import tsupConfig from '../../tsup.config.ts';
+import tsupConfig, { WASM_URL_EXPRESSION } from '../../tsup.config.ts';
 
 const CORE = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -30,16 +30,39 @@ const tsconfig = JSON.parse(readFileSync(join(CORE, 'tsconfig.json'), 'utf8')) a
   compilerOptions: { paths: Record<string, string[]> };
 };
 
-const config = tsupConfig as unknown as {
+type BuildConfig = {
   entry: Record<string, string>;
   esbuildOptions: (options: { alias?: Record<string, string> }) => void;
 };
 
-/** The alias table, read by running the hook the way tsup does. */
-function esbuildAlias(): Record<string, string> {
+/**
+ * The two format builds — ESM and CJS. They exist separately only because the ESM one
+ * inlines harfbuzzjs and the CJS one cannot; every table below has to be identical across
+ * them, which the last test in this file asserts outright.
+ */
+const configs = tsupConfig as unknown as readonly BuildConfig[];
+const config = configs[0]!;
+
+/** The alias table of one build, read by running the hook the way tsup does. */
+function esbuildAliasOf(build: BuildConfig): Record<string, string> {
   const options: { alias?: Record<string, string> } = {};
-  config.esbuildOptions(options);
+  build.esbuildOptions(options);
   return options.alias ?? {};
+}
+
+/**
+ * The SELF-reference aliases: the `@docx-editor.dev/core/*` rows the four tables are about.
+ *
+ * The table also carries `module`, which is not a subpath of this package at all — it is
+ * what the inlined HarfBuzz runtime's `await import("module")` resolves to, so that no
+ * consumer's browser bundler has to answer for it (#282). It has no export map entry, no
+ * build entry and no tsconfig path, and it must not be compared against any of them.
+ */
+function esbuildAlias(): Record<string, string> {
+  const alias = esbuildAliasOf(config);
+  return Object.fromEntries(
+    Object.entries(alias).filter(([specifier]) => specifier.startsWith('@docx-editor.dev/core'))
+  );
 }
 
 /** `./contracts/editor` → `contracts/editor`; `.` → `index`. Package-relative, no extension. */
@@ -53,11 +76,13 @@ const asSpecifier = (subpath: string): string =>
 /**
  * The JS subpaths, which is what the four tables are about.
  *
- * `./styles/editor.css` is a copied asset with no build entry, and `./package.json` is the
- * conventional self-reference; neither is a module and neither belongs in the other three.
+ * `./styles/editor.css` and `./dist/harfbuzz.wasm` are copied assets with no build entry,
+ * and `./package.json` is the conventional self-reference; none is a module and none
+ * belongs in the other three tables.
  */
 const jsSubpaths = Object.keys(manifest.exports).filter(
-  (subpath) => subpath !== './package.json' && !subpath.endsWith('.css')
+  (subpath) =>
+    subpath !== './package.json' && !subpath.endsWith('.css') && !subpath.endsWith('.wasm')
 );
 
 describe('the published subpath tables agree', () => {
@@ -112,5 +137,78 @@ describe('the published subpath tables agree', () => {
       }
     }
     expect({ disagreements }).toEqual({ disagreements: [] });
+  });
+
+  test('the format builds publish the same subpaths from the same sources', () => {
+    // The ESM and CJS builds differ in ONE thing — whether harfbuzzjs is inlined — and the
+    // split makes it possible to change one and forget the other. A subpath added to only
+    // one of them ships an export map entry that resolves under `import` and 404s under
+    // `require`, or the reverse.
+    expect(configs).toHaveLength(2);
+    for (const build of configs.slice(1)) {
+      expect(build.entry).toEqual(config.entry);
+      expect(esbuildAliasOf(build)).toEqual(esbuildAliasOf(config));
+    }
+  });
+
+  test('the split carries its reason: exactly the ESM build inlines and patches harfbuzzjs', () => {
+    // Everything that makes the two-build split WORTH having lives on the ESM side: the
+    // inline (no `module` specifier reaches a consumer bundler, #282), the escape-hatch
+    // plugin (setHarfBuzzWasmUrl is wired into the glue), and the wasm copy. Dropping any
+    // of them still builds and still passes every other test — the regression only shows
+    // in a consumer's app. And neither build may clean: tsup runs an array config
+    // concurrently, so cleaning belongs to the package `build` script alone.
+    const [esm, cjs] = configs as readonly (BuildConfig & {
+      format?: readonly string[];
+      clean?: boolean;
+      noExternal?: readonly string[];
+      esbuildPlugins?: readonly unknown[];
+      onSuccess?: unknown;
+    })[];
+    expect({
+      esm: {
+        format: esm!.format,
+        clean: esm!.clean,
+        noExternal: esm!.noExternal,
+        patchesGlue: (esm!.esbuildPlugins?.length ?? 0) > 0,
+        copiesWasm: typeof esm!.onSuccess === 'function',
+      },
+      cjs: {
+        format: cjs!.format,
+        clean: cjs!.clean,
+        noExternal: cjs!.noExternal,
+        patchesGlue: (cjs!.esbuildPlugins?.length ?? 0) > 0,
+        copiesWasm: typeof cjs!.onSuccess === 'function',
+      },
+    }).toEqual({
+      esm: {
+        format: ['esm'],
+        clean: false,
+        noExternal: ['harfbuzzjs'],
+        patchesGlue: true,
+        copiesWasm: true,
+      },
+      cjs: {
+        format: ['cjs'],
+        clean: false,
+        noExternal: undefined,
+        patchesGlue: false,
+        copiesWasm: false,
+      },
+    });
+  });
+
+  test('the installed harfbuzzjs glue still contains the exact expression the plugin patches', () => {
+    // The escape-hatch plugin rewrites ONE exact string in harfbuzzjs's minified glue. The
+    // build refuses when the count is not exactly one, but that guard fires at build time;
+    // this puts the same tripwire in the test suite, so a harfbuzzjs bump that reshapes
+    // the glue fails here first — with the same remedy: re-point the plugin.
+    //
+    // Resolved through the export map like `copyHarfBuzzBinary` does, not a hand-written
+    // node_modules path, so a hoisted or re-laid-out install cannot fail this test while
+    // the build still passes.
+    const entry = fileURLToPath(import.meta.resolve('harfbuzzjs'));
+    const glue = readFileSync(join(dirname(entry), 'harfbuzz.js'), 'utf8');
+    expect(glue.split(WASM_URL_EXPRESSION).length - 1).toBe(1);
   });
 });

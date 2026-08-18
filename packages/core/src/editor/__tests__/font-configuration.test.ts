@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { EditorFontError, type FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
-import { sha256FontBytes } from '@docx-editor.dev/core/layout';
-import { createLayoutShaping } from '../font-configuration.ts';
+import { HarfBuzzShapingError, sha256FontBytes } from '@docx-editor.dev/core/layout';
+import { createLayoutShaping, toEditorFontError } from '../font-configuration.ts';
 
 const fontUrl = new URL('../../layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url);
 
@@ -141,4 +141,20 @@ test('copies each valid source exactly once into snapshot ownership', async () =
 
   expect(counters).toEqual({ copies: 1, hashes: 1, admissions: 1 });
   shaping.shaper.dispose();
+});
+
+test('a HarfBuzz shaping failure keeps its remediation diagnostic through toEditorFontError', () => {
+  // The `wasmUnavailable` diagnostic names `setHarfBuzzWasmUrl` and the file to serve
+  // (#282), and `onFontError` is the only surface a host sees. Collapsed to `message`
+  // alone, the host would get "HarfBuzz shaping failed (wasmUnavailable)" and no pointer
+  // to the fix — which is exactly what the diagnostic exists to replace.
+  const failure = new HarfBuzzShapingError('wasmUnavailable', {
+    diagnostic: 'serve `@docx-editor.dev/core/dist/harfbuzz.wasm` and call `setHarfBuzzWasmUrl`',
+  });
+
+  const surfaced = toEditorFontError(failure);
+
+  expect(surfaced).toBeInstanceOf(EditorFontError);
+  expect(surfaced.code).toBe('initializationFailed');
+  expect(surfaced.diagnostic).toContain('setHarfBuzzWasmUrl');
 });
