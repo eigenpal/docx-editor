@@ -1,12 +1,12 @@
 import {
   defineComponent,
-  onMounted,
+  h,
+  onBeforeMount,
   onUnmounted,
   provide,
   shallowRef,
   watch,
   type PropType,
-  type ShallowRef,
 } from 'vue';
 import type {
   DocumentChange,
@@ -26,12 +26,17 @@ import {
   type ImageDecodePort,
 } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
+import { useTranslation, type TranslationKey } from '../i18n';
 import {
   docxEditorKey,
   editorStateTickKey,
   ReviewRailContext,
   type ReviewRailRegistry,
 } from './context';
+import { deferredTick } from './deferred-notifier';
+import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
+import { ContentControlContext, useContentControlInstance } from './useContentControl';
+import { createNavigationLayoutStore, navigationLayoutKey } from './navigation/navigation-layout';
 
 /** @public */
 export interface DocxEditorRootProps {
@@ -55,17 +60,32 @@ function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
   return left !== null && right !== null && sameZoomMode(left, right);
 }
 
-function deferredTick(tick: ShallowRef<number>): () => void {
-  let scheduled = false;
-  return () => {
-    if (scheduled) return;
-    scheduled = true;
-    queueMicrotask(() => {
-      scheduled = false;
-      tick.value++;
-    });
-  };
+let facadeListenerCount = 0;
+
+/** @internal */
+export function docxEditorFacadeListenerCount(): number {
+  return facadeListenerCount;
 }
+
+/** @internal */
+const HyperlinkPopupProvider = defineComponent({
+  name: 'HyperlinkPopupProvider',
+  setup(_, { slots }) {
+    const popup = useHyperlinkPopupInstance(true);
+    provide(HyperlinkPopupContext, popup);
+    return () => slots.default?.();
+  },
+});
+
+/** @internal */
+const ContentControlProvider = defineComponent({
+  name: 'ContentControlProvider',
+  setup(_, { slots }) {
+    const chrome = useContentControlInstance();
+    provide(ContentControlContext, chrome);
+    return () => slots.default?.();
+  },
+});
 
 /** @public */
 export const DocxEditorRoot = defineComponent({
@@ -99,6 +119,11 @@ export const DocxEditorRoot = defineComponent({
     const tick = shallowRef(0);
     provide(docxEditorKey, editorRef);
     provide(editorStateTickKey, tick);
+    provide(navigationLayoutKey, createNavigationLayoutStore());
+
+    const { t: catalogT } = useTranslation();
+    const defaultTranslate = (key: string, params?: Record<string, string | number>) =>
+      catalogT.value(key as TranslationKey, params);
 
     const railCount = shallowRef(0);
     const railRegistry = shallowRef<ReviewRailRegistry>({
@@ -125,6 +150,8 @@ export const DocxEditorRoot = defineComponent({
     const cleanups: Array<() => void> = [];
 
     const destroyEditor = () => {
+      const listenerCleanups = cleanups.length;
+      if (listenerCleanups >= 3) facadeListenerCount = Math.max(0, facadeListenerCount - 3);
       for (const off of cleanups.splice(0)) off();
       const instance = editorRef.value;
       if (instance) {
@@ -135,7 +162,7 @@ export const DocxEditorRoot = defineComponent({
 
     const createEditor = () => {
       destroyEditor();
-      const translate = props.translate ?? ((key: string) => key);
+      const translate = props.translate ?? defaultTranslate;
       const instance = createDocxEditor({
         ...(props.document !== undefined ? { document: props.document } : {}),
         ...(props.fonts ? { fonts: props.fonts } : {}),
@@ -152,7 +179,10 @@ export const DocxEditorRoot = defineComponent({
         ...(props.imageDecodePort ? { imageDecodePort: props.imageDecodePort } : {}),
         onFontError: (error) => emit('fontError', error),
       });
-      const notify = deferredTick(tick);
+      const notify = deferredTick(() => {
+        tick.value++;
+      });
+      facadeListenerCount += 3;
       cleanups.push(
         instance.on('change', (change) => {
           emit('change', change);
@@ -172,12 +202,12 @@ export const DocxEditorRoot = defineComponent({
       }
     };
 
-    onMounted(createEditor);
-    onUnmounted(destroyEditor);
+    onBeforeMount(createEditor);
     watch(
       () => [props.document, props.fonts, props.translate, props.imageDecodePort] as const,
       createEditor
     );
+    onUnmounted(destroyEditor);
 
     const applied = {
       zoom: undefined as number | undefined,
@@ -216,7 +246,13 @@ export const DocxEditorRoot = defineComponent({
       { flush: 'post' }
     );
 
-    return () => slots.default?.();
+    return () =>
+      h(HyperlinkPopupProvider, null, {
+        default: () =>
+          h(ContentControlProvider, null, {
+            default: () => slots.default?.(),
+          }),
+      });
   },
 });
 

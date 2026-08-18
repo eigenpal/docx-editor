@@ -1,9 +1,19 @@
-import { defineComponent, h, provide, type CSSProperties, type PropType } from 'vue';
+import {
+  defineComponent,
+  h,
+  onMounted,
+  onUnmounted,
+  provide,
+  watch,
+  type CSSProperties,
+  type PropType,
+} from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor, useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { zoomLevelForShortcut } from './zoom-levels';
+import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 const selectZoomFitting = (snapshot: EditorSnapshot): boolean => snapshot.zoomMode?.type === 'fit';
@@ -29,6 +39,19 @@ export const DocxEditorViewport = defineComponent({
     const fitting = useEditorState(selectZoomFitting);
     const rail = useReviewRailRegistry();
     const reserve = (rail.value.mounted ?? 0) > 0;
+    const navShift = useNavigationShift();
+    const layoutStore = useNavigationLayoutStore();
+    let viewportEl: HTMLElement | null = null;
+
+    onMounted(() => {
+      if (viewportEl) layoutStore?.setViewport(viewportEl);
+    });
+    onUnmounted(() => {
+      layoutStore?.setViewport(null);
+    });
+    watch(navShift, () => {
+      if (viewportEl) layoutStore?.setViewport(viewportEl);
+    });
 
     const onKeyDownCapture = (event: KeyboardEvent) => {
       const editor = editorRef.value;
@@ -46,9 +69,13 @@ export const DocxEditorViewport = defineComponent({
     return () => {
       const style: Record<string, string | number | undefined> = {
         ...(props.style as Record<string, string | number | undefined>),
-        '--docx-nav-shift': '0px',
+        '--docx-nav-shift': `${navShift.value}px`,
       };
       const attrs: Record<string, unknown> = {
+        ref: (el: unknown) => {
+          viewportEl = el instanceof HTMLElement ? el : null;
+          layoutStore?.setViewport(viewportEl);
+        },
         'data-testid': 'docx-editor-scroll',
         onKeydownCapture: onKeyDownCapture,
         class: [

@@ -31,8 +31,7 @@ export const DocxEditorContent = defineComponent({
     };
     const detach = () => editorRef.value?.detach();
 
-    watch(editorRef, attach, { immediate: true, flush: 'post' });
-    watch(elementRef, attach, { flush: 'post' });
+    watch([editorRef, elementRef], attach, { immediate: true, flush: 'post' });
     onDeactivated(detach);
     onActivated(attach);
     onUnmounted(detach);
@@ -40,7 +39,10 @@ export const DocxEditorContent = defineComponent({
     return () =>
       h('div', { class: 'docx-content-mount' }, [
         h('div', {
-          ref: elementRef,
+          ref: (el: unknown) => {
+            elementRef.value = el instanceof HTMLDivElement ? el : null;
+            attach();
+          },
           class: ['docx-paginated-surface', props.className].filter(Boolean).join(' '),
         }),
       ]);
