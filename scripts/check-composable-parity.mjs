@@ -23,8 +23,32 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api.md');
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
+const PARITY_CONTRACT = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 
 const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef']);
+
+/** @returns {Record<string, { react: string, vue: string }>} */
+function loadFrameworkSlotFormTypeAliases() {
+  if (!fs.existsSync(PARITY_CONTRACT)) return {};
+  const contract = JSON.parse(fs.readFileSync(PARITY_CONTRACT, 'utf8'));
+  const entries = contract.composableParity?.frameworkSlotFormTypeAliases ?? {};
+  for (const [name, pair] of Object.entries(entries)) {
+    if (!pair || typeof pair.react !== 'string' || typeof pair.vue !== 'string') {
+      throw new Error(
+        `Invalid frameworkSlotFormTypeAliases entry for '${name}' in ${PARITY_CONTRACT}`
+      );
+    }
+  }
+  return entries;
+}
+
+function matchesFrameworkSlotFormAlias(name, reactBody, vueBody, slotFormAliases) {
+  const pair = slotFormAliases[name];
+  if (!pair) return false;
+  const rn = normalizeType(reactBody);
+  const vn = normalizeType(vueBody);
+  return rn === normalizeType(pair.react) && vn === normalizeType(pair.vue);
+}
 
 function isUseExport(name) {
   return name.startsWith('use') && name[3] === name[3]?.toUpperCase();
@@ -112,7 +136,7 @@ function compareFunction(name, reactOverloads, vueOverloads, issues) {
   }
 }
 
-function compareTypeAliases(reactSnap, vueSnap, issues, stats) {
+function compareTypeAliases(reactSnap, vueSnap, issues, stats, slotFormAliases) {
   const reactAliases = extractTypeAliasBodies(reactSnap);
   const vueAliases = extractTypeAliasBodies(vueSnap);
   const names = new Set([...reactAliases.keys(), ...vueAliases.keys()]);
@@ -130,19 +154,23 @@ function compareTypeAliases(reactSnap, vueSnap, issues, stats) {
     stats.aliasChecks += 1;
     const rn = normalizeType(r);
     const vn = normalizeType(v);
-    if (rn !== vn) {
-      issues.push(`TYPE ALIAS '${name}': body mismatch React '${rn}' vs Vue '${vn}'`);
+    if (rn === vn) continue;
+    if (matchesFrameworkSlotFormAlias(name, r, v, slotFormAliases)) {
+      stats.slotFormAliasChecks += 1;
+      continue;
     }
+    issues.push(`TYPE ALIAS '${name}': body mismatch React '${rn}' vs Vue '${vn}'`);
   }
 }
 
-export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
+export function runComposableParityCheck({ reactSnap, vueSnap, slotFormAliases } = {}) {
   const reactSnapshot = normalizeSnapshotText(
     reactSnap ?? fs.readFileSync(REACT_SNAPSHOT, 'utf8')
   );
   const vueSnapshot = normalizeSnapshotText(vueSnap ?? fs.readFileSync(VUE_SNAPSHOT, 'utf8'));
   const issues = [];
-  const stats = { memberTypeChecks: 0, aliasChecks: 0 };
+  const stats = { memberTypeChecks: 0, aliasChecks: 0, slotFormAliasChecks: 0 };
+  const slotForm = slotFormAliases ?? loadFrameworkSlotFormTypeAliases();
 
   const reactFns = extractFunctionExports(reactSnapshot);
   const vueFns = extractFunctionExports(vueSnapshot);
@@ -161,7 +189,7 @@ export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
     compareInterface(name, reactSnapshot, vueSnapshot, issues, stats);
   }
 
-  compareTypeAliases(reactSnapshot, vueSnapshot, issues, stats);
+  compareTypeAliases(reactSnapshot, vueSnapshot, issues, stats, slotForm);
 
   return {
     issues,
@@ -169,6 +197,8 @@ export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
     interfaceCount: interfaceNames.size,
     memberTypeChecks: stats.memberTypeChecks,
     aliasChecks: stats.aliasChecks,
+    slotFormAliasChecks: stats.slotFormAliasChecks,
+    slotFormAliasNames: Object.keys(slotForm),
   };
 }
 
@@ -187,7 +217,7 @@ function main() {
     }
   }
 
-  const { issues, useExportCount, interfaceCount, memberTypeChecks, aliasChecks } =
+  const { issues, useExportCount, interfaceCount, memberTypeChecks, aliasChecks, slotFormAliasChecks, slotFormAliasNames } =
     runComposableParityCheck();
   console.log('Composable parity: docs/api/docx-editor-{react,vue}/index.api.md');
   console.log(`  use* exports checked: ${useExportCount}`);
@@ -195,6 +225,10 @@ function main() {
   console.log(`  member types checked: ${memberTypeChecks}`);
   console.log(`  type aliases checked: ${aliasChecks}`);
   console.log('  normalizations:       Ref unwrap, MaybeRefOrGetter param');
+  console.log(
+    `  slot-form aliases:    ${slotFormAliasNames.length > 0 ? slotFormAliasNames.join(', ') : '(none)'} (${slotFormAliasChecks} reconciled)`
+  );
+  console.log('  alias allowlists:     0');
 
   const MIN_USE_EXPORTS = 20;
   const MIN_MEMBER_TYPE_CHECKS = 100;
@@ -317,6 +351,39 @@ export interface SampleResult { readonly value: SharedAlias; }
   ({ issues } = runComposableParityCheck({ reactSnap: aliasOk, vueSnap: aliasDrift }));
   if (!issues.some((i) => i.includes("TYPE ALIAS 'SharedAlias'"))) {
     console.error('Self-test FAIL: expected type alias body mismatch');
+    process.exit(1);
+  }
+
+  const slotFormAliases = {
+    DocxEditorChildren: { react: 'ReactNode', vue: 'VNode' },
+  };
+  const slotFormReact = `
+export type DocxEditorChildren = ReactNode;
+export interface SampleResult { readonly value: string; }
+`;
+  const slotFormVue = `
+export type DocxEditorChildren = VNode;
+export interface SampleResult { readonly value: string; }
+`;
+  ({ issues } = runComposableParityCheck({
+    reactSnap: slotFormReact,
+    vueSnap: slotFormVue,
+    slotFormAliases,
+  }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: framework slot-form alias should reconcile');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  const slotFormWrongVue = slotFormVue.replace('VNode', 'string');
+  ({ issues } = runComposableParityCheck({
+    reactSnap: slotFormReact,
+    vueSnap: slotFormWrongVue,
+    slotFormAliases,
+  }));
+  if (!issues.some((i) => i.includes("TYPE ALIAS 'DocxEditorChildren'"))) {
+    console.error('Self-test FAIL: unrelated slot-form alias body should fail');
     process.exit(1);
   }
 

@@ -1,13 +1,11 @@
+import type { VNode } from 'vue';
+
 /**
  * Slot and icon content in public component props.
  *
- * React hosts pass {@link https://react.dev/reference/react/ReactNode | ReactNode}.
- * Vue hosts pass {@link https://vuejs.org/api/utility-types.html#vnode | VNode}.
- *
- * The exported alias is intentionally `any` so cross-adapter API parity compares one
- * documented shape while each host keeps its native render tree at runtime.
+ * Vue hosts pass {@link VNode}. React hosts pass {@link https://react.dev/reference/react/ReactNode | ReactNode}
+ * through the paired {@link DocxEditorChildren} alias in `@docx-editor.dev/react`.
  *
  * @public
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type DocxEditorChildren = any;
+export type DocxEditorChildren = VNode;

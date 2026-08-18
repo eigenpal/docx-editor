@@ -1780,7 +1780,7 @@ export { DocxDocument }
 export const DocxEditor: DocxEditorNamespace;
 
 // @public
-export type DocxEditorChildren = any;
+export type DocxEditorChildren = VNode;
 
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
