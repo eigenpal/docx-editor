@@ -33,7 +33,8 @@ import {
 } from './paragraph-flow.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
-  paragraphMarkRevisionOf,
+  markRevisionFields,
+  paragraphMarkRevisionsOf,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import {
@@ -136,6 +137,7 @@ import {
 } from './section-properties.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
 import { layoutSemanticDocumentWithNotes } from './note-pagination.ts';
+import { noteMarksCacheToken } from './note-projection.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   effectiveContentControlLock,
@@ -165,7 +167,13 @@ import {
 import type { NumberingIndex } from './numbering-index.ts';
 import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
-import { sameFragments, sameAnchoredDrawings } from './semantic-fragment-signature.ts';
+import {
+  NO_DEFERRED_DRAWINGS,
+  NO_DEFER_COUNTS,
+  sameAnchoredDrawings,
+  sameDeferCounts,
+  sameFragments,
+} from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
 import { layoutTextboxStory } from './textbox-story-layout.ts';
@@ -726,6 +734,7 @@ function layoutBlocksPass(
   // it into `producer` is what makes a mode switch invalidate the break cache AND the session
   // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const showsMarkup = displayMode === 'all-markup';
   const tocChromeParagraphIds = options.tocFieldChromeParagraphIds;
   const emptyTocPlaceholderIds = options.emptyTocPlaceholderParagraphIds;
   const emptyTocSuppressedResultIds = options.emptyTocSuppressedResultParagraphIds;
@@ -793,9 +802,13 @@ function layoutBlocksPass(
   const notesReserveKey = pageBottomReserves
     ? `|nr:${[...pageBottomReserves].map(([i, h]) => `${i}=${h}`).join(',')}`
     : '';
-  const noteMarksKey = options.noteMarks
-    ? `|nm:${options.noteMarks.reservedMarkText ?? ''}:${options.noteMarks.marks.size}`
-    : '';
+  // Every mark, not the COUNT of them. A renumber leaves the count alone — `w:numFmt`
+  // decimal to lowerRoman, a `w:numStart` shift, `eachSect` restart, a section override, a
+  // note deleted and another inserted in one transaction — and the mark a body citation
+  // paints is derived, so no paragraph subtree and no block key moves with it. Keying on the
+  // count let the pass resume onto pages measured for the old marks; reprojection then wrote
+  // the new digits into a slot sized for the old ones.
+  const noteMarksKey = options.noteMarks ? `|nm:${noteMarksCacheToken(options.noteMarks)}` : '';
   const columnRegionBottom = options.columnRegionBottom;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   // Body line ids are paragraph-local, so a changed line count in an earlier section does
@@ -1040,6 +1053,24 @@ function layoutBlocksPass(
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
+  /**
+   * The flow exactly as it stands: what a later pass resumes from and converges against. The
+   * deferred anchor state is copied only when there is some, because this is taken once per
+   * block and a document that defers nothing should pay one reference for saying so.
+   */
+  const checkpointNow = (): FlowCheckpoint => ({
+    pageCount: pages.length,
+    pageFragments: [...pageFragments],
+    pendingAnchoredDrawings: [...pendingAnchoredDrawings],
+    deferredAnchoredDrawings:
+      deferredAnchoredDrawings.length > 0 ? [...deferredAnchoredDrawings] : NO_DEFERRED_DRAWINGS,
+    anchorPageDeferCounts:
+      anchorPageDeferCounts.size > 0 ? new Map(anchorPageDeferCounts) : NO_DEFER_COUNTS,
+    cursorY,
+    lineCounter,
+    previousSpaceAfter,
+    flowColumnIndex,
+  });
   let startIndex = 0;
   let placed = 0;
   let reusedPages = 0;
@@ -1054,6 +1085,9 @@ function layoutBlocksPass(
     pages.push(...previous!.pages.slice(0, checkpoint.pageCount));
     pageFragments = [...checkpoint.pageFragments];
     pendingAnchoredDrawings = [...checkpoint.pendingAnchoredDrawings];
+    deferredAnchoredDrawings = [...checkpoint.deferredAnchoredDrawings];
+    anchorPageDeferCounts.clear();
+    for (const [id, n] of checkpoint.anchorPageDeferCounts) anchorPageDeferCounts.set(id, n);
     cursorY = checkpoint.cursorY;
     flowColumnIndex = checkpoint.flowColumnIndex;
     columnIndex = checkpoint.flowColumnIndex;
@@ -1882,15 +1916,7 @@ function layoutBlocksPass(
     const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
-    checkpoints[index] = {
-      pageCount: pages.length,
-      pageFragments: [...pageFragments],
-      pendingAnchoredDrawings: [...pendingAnchoredDrawings],
-      cursorY,
-      lineCounter,
-      previousSpaceAfter,
-      flowColumnIndex,
-    };
+    checkpoints[index] = checkpointNow();
 
     // CONVERGENCE. Once inside the unchanged tail, if the flow returns to exactly the state
     // the previous pass was in at this same paragraph, everything after lays out identically
@@ -1915,7 +1941,10 @@ function layoutBlocksPass(
         mark.flowColumnIndex === flowColumnIndex &&
         mark.pageCount === pages.length &&
         sameFragments(mark.pageFragments, pageFragments) &&
-        sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings)
+        sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings) &&
+        // A flow that still owes the next page a drawing is not one that owes it nothing.
+        sameAnchoredDrawings(mark.deferredAnchoredDrawings, deferredAnchoredDrawings) &&
+        sameDeferCounts(mark.anchorPageDeferCounts, anchorPageDeferCounts)
       ) {
         const tail = previous!.pages.slice(mark.pageCount);
         pages.push(...tail);
@@ -2105,7 +2134,7 @@ function layoutBlocksPass(
       startY: number;
     }> | null = null;
 
-    const markRevision = paragraphMarkRevisionOf(entry.paragraph);
+    const markRevisions = paragraphMarkRevisionsOf(entry.paragraph);
 
     /**
      * How much of the first placed line's topAndBottom skip this paragraph's own anchor caused.
@@ -2279,8 +2308,11 @@ function layoutBlocksPass(
             }),
         ...(marker ? { marker } : {}),
         // The paragraph MARK lives at the end of the paragraph, so only the final fragment
-        // carries its revision — a paragraph split across pages must not draw two pilcrows.
-        ...(isLast && markRevision ? { markRevision } : {}),
+        // carries its revisions — a paragraph split across pages must not draw two pilcrows.
+        // `all-markup` only: the other two modes answer what the document WOULD be once every
+        // decision is taken, and a resolved view draws no attribution, as Word draws none in
+        // No Markup or Original.
+        ...(isLast && showsMarkup ? markRevisionFields(markRevisions) : {}),
         lines: pending,
         box: { x: columnX + indent.left, y: top, width: available, height },
       });
@@ -2583,15 +2615,7 @@ function layoutBlocksPass(
   // for which nothing was stored, so the most ordinary edit there is, typing at the bottom of
   // a document and pressing Enter, re-placed everything.
   if (!converged) {
-    checkpoints[prepared.length] = {
-      pageCount: pages.length,
-      pageFragments: [...pageFragments],
-      pendingAnchoredDrawings: [...pendingAnchoredDrawings],
-      cursorY,
-      lineCounter,
-      previousSpaceAfter,
-      flowColumnIndex,
-    };
+    checkpoints[prepared.length] = checkpointNow();
   }
 
   // Captured BEFORE the terminal flush, which zeroes the cursor. A converged pass stopped

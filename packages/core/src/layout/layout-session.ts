@@ -14,6 +14,17 @@ export interface FlowCheckpoint {
   readonly pageFragments: readonly import('./semantic-records.ts').BlockFragmentRecord[];
   /** Anchored drawings already collected for the open page. */
   readonly pendingAnchoredDrawings: readonly AnchoredDrawingRecord[];
+  /**
+   * Anchored drawings overlap resolution pushed onto the NEXT page, and how many times each
+   * drawing has been pushed.
+   *
+   * Flow state like the rest of this record, and carried for the same reason: a resume that
+   * started with an empty list dropped a drawing that the previous pass had deferred but not
+   * yet placed, and a convergence that did not compare them accepted a flow that still owed
+   * the next page a drawing as equal to one that owed it nothing.
+   */
+  readonly deferredAnchoredDrawings: readonly AnchoredDrawingRecord[];
+  readonly anchorPageDeferCounts: ReadonlyMap<string, number>;
   readonly cursorY: number;
   readonly lineCounter: number;
   /** Trailing paragraph spacing participating in adjacent-spacing collapse. */

@@ -392,6 +392,8 @@ export {
   DEFAULT_REVISION_DISPLAY_MODE,
   formatRevisionOf,
   paragraphMarkRevisionOf,
+  paragraphMarkRevisionsOf,
+  shownMarkRevision,
   revisionsAreDeletion,
   revisionsVisible,
   type RevisionAttribution,

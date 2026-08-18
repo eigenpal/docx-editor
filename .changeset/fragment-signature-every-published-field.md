@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Accepting, rejecting or reassigning a tracked change on a paragraph mark now reaches the page instead of leaving the old attribution drawn, and every field a fragment publishes takes part in incremental layout reuse. A mark inside a table cell is unchanged, because layout does not publish its revision yet.
+Tracked changes on a paragraph mark now reach the page: both halves of an insert-then-delete pair are read instead of the first, a mark inside a table cell is drawn at all, the margin gets its change bar, and a resolved view draws no attribution. Renumbering a footnote and any field a fragment publishes now take part in incremental layout reuse, so a page that was reused no longer shows a value the document has moved past.

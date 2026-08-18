@@ -1,0 +1,137 @@
+// A note's displayed mark is DERIVED, so it moves without moving any paragraph subtree.
+// Nothing in a block key or a fragment signature sees it, which leaves the session context
+// as the only thing that can refuse a resume onto pages measured for the old marks.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import { resolveNotesPart } from '../../store/package/note-references.ts';
+import {
+  resolveEndnoteProperties,
+  resolveFootnoteProperties,
+} from '../../store/package/note-properties.ts';
+import { createFixedMeasurer } from '../fixed-measurer.ts';
+import { createLayoutSession } from '../layout-session.ts';
+import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { enumerateDocumentSections } from '../section-properties.ts';
+import { layoutSemanticDocumentWithNotes, type NotesLayoutInput } from '../note-pagination.ts';
+import type { SemanticLayout } from '../semantic-records.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+function doc(): Uint8Array {
+  const paras = Array.from({ length: 8 }, (_, i) =>
+    i === 1
+      ? `<w:p><w:r><w:t>Body ${i} ${'word '.repeat(6)}</w:t><w:footnoteReference w:id="1"/><w:t> tail text</w:t></w:r></w:p>`
+      : i === 3
+        ? `<w:p><w:r><w:t>Body ${i} ${'word '.repeat(6)}</w:t><w:footnoteReference w:id="2"/><w:t> tail text</w:t></w:r></w:p>`
+        : `<w:p><w:r><w:t>Body ${i} ${'word '.repeat(6)}</w:t></w:r></w:p>`
+  ).join('');
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${paras}` +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
+        '</w:body></w:document>'
+    ),
+    'word/footnotes.xml': strToU8(
+      `<w:footnotes xmlns:w="${W}">` +
+        '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>' +
+        '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>' +
+        '<w:footnote w:id="1"><w:p><w:r><w:t>First note</w:t></w:r></w:p></w:footnote>' +
+        '<w:footnote w:id="2"><w:p><w:r><w:t>Second note</w:t></w:r></w:p></w:footnote>' +
+        '</w:footnotes>'
+    ),
+  });
+}
+
+const measurer = createFixedMeasurer();
+
+function layWith(numFmt: string, session?: ReturnType<typeof createLayoutSession>): SemanticLayout {
+  const loaded = readOoxmlPackage(doc());
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+  const sections = enumerateDocumentSections(part);
+  const fp = resolveFootnoteProperties({ numFmt } as never, undefined);
+  const ep = resolveEndnoteProperties(undefined, undefined);
+  const notes: NotesLayoutInput = {
+    footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+    endnotesPart: null,
+    footnotePropsBySection: sections.map(() => fp),
+    endnotePropsBySection: sections.map(() => ep),
+    documentFootnoteProps: fp,
+    documentEndnoteProps: ep,
+    measurer,
+    producer: 'probe',
+  };
+  const options = {
+    measurer,
+    geometry: { width: 612, height: 300, margin: { top: 36, right: 36, bottom: 36, left: 36 } },
+    ...(session ? { session } : {}),
+  };
+  return layoutSemanticDocumentWithNotes(part, sections, options as never, notes, (opts) =>
+    layoutSemanticDocument(part, 1, opts as never)
+  );
+}
+
+const citations = (l: SemanticLayout) =>
+  l.pages.flatMap((p) =>
+    p.fragments.flatMap((f) =>
+      f.kind === 'paragraph'
+        ? f.lines.flatMap((line) =>
+            line.spans
+              .filter((s) => s.noteNav?.direction === 'to-note')
+              .map((s) => ({
+                text: s.text,
+                w: Number(s.box.width.toFixed(2)),
+                x: Number(s.box.x.toFixed(2)),
+              }))
+          )
+        : []
+    )
+  );
+
+describe('a renumbered note is measured, not just relettered', () => {
+  test('a numFmt change reaches an incremental pass', () => {
+    // `1` and `2` are one glyph each; `i` is one and `ii` is two. Reprojection rewrites the
+    // display text on any pass, so the digits alone prove nothing — the width is what tells
+    // a resumed page from a fresh one, and every span after the citation rides on it.
+    const session = createLayoutSession();
+    expect(citations(layWith('decimal', session))).toEqual([
+      { text: '1', w: 5.45, x: 201.82 },
+      { text: '2', w: 5.45, x: 201.82 },
+    ]);
+    const incremental = layWith('lowerRoman', session);
+    expect(citations(incremental)).toEqual(citations(layWith('lowerRoman')));
+    expect(citations(incremental)[1]).toEqual({ text: 'ii', w: 10.91, x: 201.82 });
+  });
+
+  test('an unchanged document still resumes', () => {
+    // The token has to be STABLE, not merely complete: it is rebuilt from a new map every
+    // pass, so a token that varied with allocation would turn every keystroke into a full
+    // pass and pay for this fix with the whole of incremental layout.
+    const session = createLayoutSession();
+    layWith('decimal', session);
+    const before = session.stats.fullPasses;
+    layWith('decimal', session);
+    expect(session.stats.placed).toBe(0);
+    expect(session.stats.reusedPages).toBeGreaterThan(0);
+    expect(session.stats.fullPasses).toBe(before);
+  });
+});

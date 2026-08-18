@@ -1749,7 +1749,9 @@ export interface ParagraphFragmentRecord {
     // (undocumented)
     readonly lines: readonly LineRecord[];
     readonly marker?: ListMarkerRecord;
+    // @deprecated
     readonly markRevision?: RevisionAttribution;
+    readonly markRevisions?: readonly RevisionAttribution[];
     // (undocumented)
     readonly paragraphId: string;
     // (undocumented)
@@ -1857,8 +1859,11 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
 // @public
 export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean;
 
-// @public
+// @public @deprecated (undocumented)
 export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null;
+
+// @public
+export function paragraphMarkRevisionsOf(paragraph: OoxmlNode): readonly RevisionAttribution[];
 
 // @public
 export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
@@ -2800,6 +2805,9 @@ export interface ShapingEnvironmentInput {
     // (undocumented)
     readonly variationAxes: Readonly<Record<string, number>>;
 }
+
+// @public
+export function shownMarkRevision(revisions: readonly RevisionAttribution[]): RevisionAttribution | undefined;
 
 // @public
 export const SINGLE_LINE_SPACING: ParagraphLineSpacing;

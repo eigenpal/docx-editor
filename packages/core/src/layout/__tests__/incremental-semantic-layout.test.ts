@@ -350,7 +350,7 @@ describe('every published field of a fragment participates in its signature', ()
       'accepting the tracked revision on the paragraph mark',
       (base) => ({
         ...base,
-        markRevision: { kind: 'insert', id: '7', author: 'A', nodeId: 'revision-7' },
+        markRevisions: [{ kind: 'insert', id: '7', author: 'A', nodeId: 'revision-7' }],
       }),
     ],
     [
@@ -421,6 +421,13 @@ describe('a tracked paragraph mark reaches the incremental layout', () => {
       '<w:b/>',
     ],
     ['rejecting a deletion the mark carried', '<w:del w:id="7" w:author="A"/><w:b/>', '<w:b/>'],
+    // The pair `EG_ParaRPrTrackChanges` allows and this engine's own writer emits: B proposes
+    // removing a mark A proposed adding. Both decisions have to reach the page.
+    [
+      'a second author proposing the removal of an inserted mark',
+      '<w:ins w:id="7" w:author="A"/>',
+      '<w:ins w:id="7" w:author="A"/><w:del w:id="8" w:author="B"/>',
+    ],
     // Word does not rewrite an author while editing, but two of its own operations produce
     // exactly this: the Document Inspector under `w:removePersonalInformation`, which
     // rewrites every `w:author` and leaves `w:id` alone, and Compare or Combine Documents.

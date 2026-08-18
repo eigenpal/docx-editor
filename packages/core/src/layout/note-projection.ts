@@ -163,23 +163,37 @@ export function noteAtomModelText(): typeof NOTE_ATOM_CHAR {
   return NOTE_ATOM_CHAR;
 }
 
-/** Compact cache token for note-mark identity (bounded; not a full serialization). */
+/**
+ * Cache token for note-mark identity — EVERY mark, not a sample of them.
+ *
+ * The session context this feeds decides whether an incremental pass may resume. A note's
+ * displayed mark is DERIVED (`w:footnotePr/w:numFmt`, `w:numStart`, `w:numRestart`, and the
+ * section overrides of each), so it moves without any paragraph subtree moving with it: no
+ * block key changes, and the pass resumes onto pages measured for the old marks. Body
+ * reprojection then rewrites the display text and deliberately keeps the reserved width, so
+ * the digits update and the geometry stays where the old digits put it — `1` becoming `ii`
+ * kept a one-glyph slot, and every span after it on that line kept its old x.
+ *
+ * Bounding this by count was the same mistake one level down: two documents whose marks
+ * agree for the first N notes and differ after are not the same document. It is memoized on
+ * the context object, so a multi-section pass pays for the walk once rather than per section.
+ */
+const markTokens = new WeakMap<object, string>();
+
 export function noteMarksCacheToken(context: NoteMarkContext | undefined): string {
-  if (!context || context.marks.size === 0) {
-    return context?.reservedMarkText ? `r:${context.reservedMarkText}` : '';
-  }
-  const parts: string[] = [];
-  let n = 0;
-  for (const [key, mark] of context.marks) {
-    if (n >= 64) {
-      parts.push('…');
-      break;
-    }
-    parts.push(`${key}=${mark ?? ''}`);
-    n += 1;
-  }
-  if (context.reservedMarkText) parts.push(`r:${context.reservedMarkText}`);
-  return parts.join(',');
+  if (!context) return '';
+  const cached = markTokens.get(context);
+  if (cached !== undefined) return cached;
+  // Serialized rather than joined with separators: a custom mark (`w:footnoteRef` text) is
+  // author-supplied and may hold any character, and `null` — `customMarkFollows` — is not the
+  // empty mark. Two contexts that differ must not be able to spell the same token.
+  const token = JSON.stringify([
+    [...context.marks],
+    context.reservedMarkText ?? null,
+    context.activeNoteKey ?? null,
+  ]);
+  markTokens.set(context, token);
+  return token;
 }
 
 /** Re-export for callers that already have a note node. */

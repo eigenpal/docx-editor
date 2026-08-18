@@ -36,7 +36,11 @@ import {
 import type { FieldPageContext, HyperlinkProjector } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import {
+  markRevisionFields,
+  paragraphMarkRevisionsOf,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import {
   collapsedSpaceBefore,
   paragraphBorderExtentPt,
@@ -887,6 +891,13 @@ function placeCellParagraph(
             height: Math.max(contentBottom - contentTop, 0),
           }
         : paragraphShadingBox(records, fragmentX, available);
+  // The paragraph MARK, on the fragment that finishes the paragraph — the cell lane publishes
+  // it for the same reason the body lane does, and until it did, a tracked split or merge
+  // inside a `w:tc` drew nothing at all: no pilcrow, no margin rule, no review card.
+  const markRevisions =
+    deps.displayMode === undefined || deps.displayMode === 'all-markup'
+      ? paragraphMarkRevisionsOf(paragraph)
+      : [];
   const marker =
     lineStart === 0
       ? publishListMarker(
@@ -915,6 +926,7 @@ function placeCellParagraph(
     ...(shading === undefined ? {} : { shading }),
     ...(shadingBox === undefined ? {} : { shadingBox }),
     ...(marker ? { marker } : {}),
+    ...(complete ? markRevisionFields(markRevisions) : {}),
     lines: records,
     box: {
       x: fragmentX,

@@ -55,14 +55,13 @@ const PARAGRAPH_FIELDS = {
   borders: 'hashed',
   shading: 'hashed',
   shadingBox: 'hashed',
-  // The revision on the paragraph MARK. Accepting or rejecting a tracked pilcrow rewrites
+  // The revisions on the paragraph MARK. Accepting or rejecting a tracked pilcrow rewrites
   // `w:pPr/w:rPr/w:ins|w:del` and moves no geometry at all, so nothing else here moves with
-  // it: paint kept drawing the attribution of a decision the document no longer records.
-  //
-  // A mark inside a `w:tc` never reaches this: semantic-table-layout builds its own paragraph
-  // fragment and does not publish the field at all. That is a gap in what a cell publishes,
-  // not one in what this compares.
-  markRevision: 'hashed',
+  // them: paint kept drawing the attribution of a decision the document no longer records.
+  markRevisions: 'hashed',
+  // Derived from `markRevisions` at publish time by one shared function, so it cannot move
+  // without the list moving first.
+  markRevision: 'covered',
   marker: 'hashed',
   // WHOLESALE, not a projection of the fields a line happens to publish today. A line owns
   // `contentX` (the only alignment carrier on a span-less line), `leading`, `trailingSpacing`,
@@ -158,6 +157,24 @@ export function sameAnchoredDrawings(
   for (let index = 0; index < left.length; index += 1) {
     if (left[index] === right[index]) continue;
     return false;
+  }
+  return true;
+}
+
+/** Shared empties, so a checkpoint per block costs one reference in a document with none. */
+export const NO_DEFERRED_DRAWINGS: readonly import('./drawing-layout.ts').AnchoredDrawingRecord[] =
+  Object.freeze([]);
+export const NO_DEFER_COUNTS: ReadonlyMap<string, number> = new Map();
+
+/** Are two anchor-deferral tallies the same? Order is irrelevant; the counts are not. */
+export function sameDeferCounts(
+  left: ReadonlyMap<string, number>,
+  right: ReadonlyMap<string, number>
+): boolean {
+  if (left === right) return true;
+  if (left.size !== right.size) return false;
+  for (const [nodeId, count] of left) {
+    if (right.get(nodeId) !== count) return false;
   }
   return true;
 }
