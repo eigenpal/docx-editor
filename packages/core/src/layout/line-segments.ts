@@ -4,7 +4,9 @@
 // POSITION and the hit-test lane resolves a POINT, and they already meet through the records.
 
 import type { InlineDrawingRecord } from './drawing-layout.ts';
-import type { LineRecord, StyleSpanRecord } from './semantic-records.ts';
+import { documentOrderIndex } from './document-order.ts';
+import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
+import type { SemanticPosition } from './semantic-interaction.ts';
 
 /**
  * The part of a line that belongs to ONE paragraph.
@@ -75,4 +77,31 @@ function splitLineByParagraph(line: LineRecord): readonly LineSegment[] {
 /** The segment a paragraph owns on this line, or null when it owns none of it. */
 export function lineSegmentFor(line: LineRecord, paragraphId: string): LineSegment | null {
   return lineSegments(line).find((segment) => segment.paragraphId === paragraphId) ?? null;
+}
+
+/**
+ * The part of ONE PARAGRAPH's share of `line` that a selection covers, in that paragraph's
+ * offsets, or null when the selection does not reach it.
+ *
+ * Asked per segment rather than per line. A resolved display mode lays merged paragraphs out
+ * on shared lines, and both members count from zero, so a line-wide answer highlighted the
+ * wrong characters — or none, when the selection lay entirely in the member the line is not
+ * named after.
+ */
+export function segmentOverlap(
+  layout: SemanticLayout,
+  segment: LineSegment,
+  from: SemanticPosition,
+  to: SemanticPosition
+): { start: number; end: number } | null {
+  const index = documentOrderIndex(layout);
+  const lineParagraph = index.get(segment.paragraphId) ?? -1;
+  const fromParagraph = index.get(from.paragraphId) ?? -1;
+  const toParagraph = index.get(to.paragraphId) ?? -1;
+  if (lineParagraph < fromParagraph || lineParagraph > toParagraph) return null;
+
+  const start =
+    lineParagraph === fromParagraph ? Math.max(segment.start, from.offset) : segment.start;
+  const end = lineParagraph === toParagraph ? Math.min(segment.end, to.offset) : segment.end;
+  return end > start ? { start, end } : null;
 }

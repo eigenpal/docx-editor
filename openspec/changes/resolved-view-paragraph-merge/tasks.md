@@ -50,6 +50,27 @@
 - [ ] 6.2 Changeset
 - [ ] 6.3 `docs/site` word-features note: the resolved views merge, and what a reader sees
 
+## 6b. What two OOXML reviews found, and what was done
+
+- [x] 6b.1 `paragraphTextFromLayout` read the line whole, so BOTH members reported the other's
+      text — and it is the surface's own `paragraphTextOf`, so the deletion range, the clamp
+      and the word walk all followed it. Reads its own segment now
+- [x] 6b.2 `selectionRects`, `keyedRangeRects` and `spansInSelection` resolved through
+      `line.range`: a selection inside the second member painted nothing and read no
+      formatting, one inside the first read the second's. All three go through `segmentOverlap`
+- [x] 6b.3 A merged line's own range stopped at its first span when a member held several runs
+- [x] 6b.4 A TRAILING run of removed marks did not collapse, where accept-all collapses it
+- [x] 6b.5 Layout merged across a block `w:sdt`, where the store cannot. Grouping is per real
+      parent now, so both halves refuse together — a merge Word performs and neither does
+- [x] 6b.6 STORE: `followed` scanned every later sibling, so content merged into the paragraph
+      AFTER a table and arrived behind it. It looks at the next block
+- [x] 6b.7 `markRemovedInMode` matched on local name alone, so `<x:del/>` in the mark's `w:rPr`
+      merged two paragraphs from markup any sender can author. The namespace is checked
+- [x] 6b.8 A field whose `w:fldChar begin` and `end` straddle the mark closed ACROSS it once
+      merged, swallowing the second member into one atomic offset. Refused instead
+- [x] 6b.9 A member the walk over-publishes — content past a nesting cap — refused for the same
+      reason: its characters cannot be read back at offsets the store can address
+
 ## 7. Not done yet
 
 - [ ] 7.1 Backspace and undo through a join (4.2, 4.3)
@@ -57,3 +78,8 @@
       used, but no test pins alignment, indent or numbering across the join
 - [ ] 7.3 Selection rectangles and `spansInSelection` across a join line
 - [ ] 7.4 A merge whose members split across a page boundary
+- [ ] 7.5 Note stories never receive a display mode at all (`note-layout.ts`), so the merge
+      cannot reach them — a pre-existing gap the merge does not widen but does not close
+- [ ] 7.6 Backspace at a join resolves the tracked mark with no visible change. Word's Final
+      view deletes the preceding character instead; the rule wants deciding
+- [ ] 7.7 The join carries two caret stops at one x, so Right-arrow crosses it in two presses

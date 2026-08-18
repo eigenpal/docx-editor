@@ -10,7 +10,14 @@
 import { describe, expect, test } from 'bun:test';
 import { applyTreeOp, readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import { caretAt, caretStops, hitTestSemantic } from '../semantic-interaction.ts';
+import {
+  caretAt,
+  caretStops,
+  hitTestSemantic,
+  paragraphTextFromLayout,
+  selectionRects,
+  spansInSelection,
+} from '../semantic-interaction.ts';
 import { linesOf } from '../semantic-records.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
@@ -210,5 +217,103 @@ describe('a cell is a story like any other', () => {
 
   test('all-markup keeps the two cell paragraphs apart', () => {
     expect(cellLines('all-markup')).toHaveLength(2);
+  });
+});
+
+describe('what reads a merged line reads its own paragraph', () => {
+  // Everything below was published correctly and consumed wrongly: the spans named their own
+  // paragraphs while the consumer walked the line whole, and both members count from zero.
+  const MULTI_RUN =
+    '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
+    '<w:r><w:t xml:space="preserve">Hel</w:t></w:r>' +
+    '<w:r><w:t xml:space="preserve">lo </w:t></w:r></w:p>' +
+    plain('world');
+
+  test('the text of each paragraph comes from its own spans', () => {
+    const layout = lay(load(DELETED_MARK), 'proposed');
+    const ids = linesOf(layout)[0]!.spans.map((span) => span.range.paragraphId);
+    expect(paragraphTextFromLayout(layout, ids[0]!)).toBe('Hello ');
+    expect(paragraphTextFromLayout(layout, ids[1]!)).toBe('world');
+  });
+
+  test('a member of several runs reports its whole extent', () => {
+    // The line names the first member; its range must reach the end of THAT member, not stop
+    // at its first run and not run on into the next member.
+    const line = linesOf(lay(load(MULTI_RUN), 'proposed'))[0]!;
+    expect(line.range.end).toBe(6);
+    expect(paragraphTextFromLayout(lay(load(MULTI_RUN), 'proposed'), line.range.paragraphId)).toBe(
+      'Hello '
+    );
+  });
+
+  test('a selection inside the second half is highlighted', () => {
+    const layout = lay(load(DELETED_MARK), 'proposed');
+    const second = linesOf(layout)[0]!.spans[1]!.range.paragraphId;
+    const rects = selectionRects(layout, {
+      anchor: { paragraphId: second, offset: 0 },
+      head: { paragraphId: second, offset: 5 },
+    });
+    expect(rects).toHaveLength(1);
+    expect(rects[0]!.width).toBeGreaterThan(0);
+    expect(
+      spansInSelection(layout, {
+        anchor: { paragraphId: second, offset: 0 },
+        head: { paragraphId: second, offset: 5 },
+      }).map((span) => span.text)
+    ).toEqual(['world']);
+  });
+
+  test('a selection across the join covers both halves', () => {
+    const layout = lay(load(DELETED_MARK), 'proposed');
+    const ids = linesOf(layout)[0]!.spans.map((span) => span.range.paragraphId);
+    const rects = selectionRects(layout, {
+      anchor: { paragraphId: ids[0]!, offset: 0 },
+      head: { paragraphId: ids[1]!, offset: 5 },
+    });
+    const covered = rects.reduce((total, rect) => total + rect.width, 0);
+    const line = linesOf(layout)[0]!;
+    const lineWidth = line.spans.reduce((total, span) => total + span.box.width, 0);
+    expect(covered).toBeCloseTo(lineWidth, 1);
+  });
+});
+
+describe('a group that cannot be measured is not merged', () => {
+  // The merge places one member's characters at an offset taken from the store and reads them
+  // back out of spans the layout walk produced. Where those two disagree, merging would
+  // publish one paragraph's text at another's offsets — worse than the break it removes.
+
+  test('a field that straddles the mark keeps the paragraphs apart', () => {
+    // Word writes a TOC this way: `begin` in one paragraph, `end` in a later one. Merged, the
+    // field closes across the mark and swallows the whole second paragraph into one atom.
+    const straddling =
+      '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>Chapter One</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>Chapter Two</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    const layout = lay(load(straddling), 'proposed');
+    const paragraphs = new Set(
+      linesOf(layout).flatMap((line) => line.spans.map((span) => span.range.paragraphId))
+    );
+    // Both paragraphs still address themselves, which is the property worth keeping.
+    expect(paragraphs.size).toBe(2);
+  });
+
+  test('a paragraph the walk over-publishes is left alone', () => {
+    // Content past a nesting cap counts differently on each side, so the store cannot address
+    // what layout paints. Merging it would place the survivor's text inside that gap.
+    const deep = (depth: number, inner: string): string =>
+      depth === 0 ? inner : `<w:sdt><w:sdtContent>${deep(depth - 1, inner)}</w:sdtContent></w:sdt>`;
+    const overPublished =
+      '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
+      deep(34, '<w:r><w:t xml:space="preserve">deep </w:t></w:r>') +
+      '</w:p>' +
+      plain('world');
+    const spans = linesOf(lay(load(overPublished), 'proposed')).flatMap((line) => line.spans);
+    // `world` keeps its own offsets whatever happened to the paragraph before it.
+    const world = spans.find((span) => span.text === 'world');
+    expect(world?.range.start).toBe(0);
+    expect(world?.range.end).toBe(5);
   });
 });

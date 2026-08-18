@@ -91,20 +91,20 @@ export function remapMergedLines(
   return lines.map((line) => {
     const spans = line.spans.map((span) => remapSpan(span, boundaries));
     const first = spans[0];
-    const range = first
-      ? { paragraphId: first.range.paragraphId, start: first.range.start, end: 0 }
-      : remapRange(line.range, boundaries);
-    const last = spans[spans.length - 1];
+    // The extent this line holds OF THE PARAGRAPH IT NAMES: from its first span to the last
+    // span that still belongs to that paragraph. Reading the last span of the line instead
+    // reported the other member's end, and reading the first span's end truncated the range
+    // to one run whenever the member contributed several.
+    const owned = first
+      ? spans.filter((span) => span.range.paragraphId === first.range.paragraphId)
+      : [];
     const lineRange: SourceRange = first
       ? {
-          paragraphId: range.paragraphId,
-          start: range.start,
-          // The end of the LAST span that shares the line's paragraph, so a join line reports
-          // the extent it holds of the paragraph it names rather than the other one's.
-          end: (last && last.range.paragraphId === range.paragraphId ? last.range : first.range)
-            .end,
+          paragraphId: first.range.paragraphId,
+          start: first.range.start,
+          end: owned[owned.length - 1]!.range.end,
         }
-      : range;
+      : remapRange(line.range, boundaries);
     const drawings = line.drawings?.map((drawing) => {
       const member = memberAt(boundaries, drawing.start);
       return member

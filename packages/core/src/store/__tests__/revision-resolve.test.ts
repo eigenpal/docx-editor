@@ -415,3 +415,45 @@ describe('a move recorded on the paragraph mark', () => {
     expect(xml(apply(moved('moveTo'), accept(QA))).match(/<w:p[ >]/g)).toHaveLength(2);
   });
 });
+
+describe('a run of removed paragraph marks', () => {
+  // Word merges all of them into the paragraph whose mark survives. Resolving pairwise left
+  // every second paragraph behind, so accepting sixteen deleted marks produced eight
+  // paragraphs and eight blank lines that no decision asked for.
+  const delMark = (text: string) =>
+    `<w:p><w:pPr><w:rPr><w:del w:id="${QA.id}" w:author="${QA.author}" w:date="${QA.date}"/></w:rPr></w:pPr>` +
+    `${run(text)}</w:p>`;
+
+  test('collapses into the one survivor at its end', () => {
+    const part = load(
+      delMark('one ') + delMark('two ') + delMark('three ') + `<w:p>${run('four')}</w:p>`
+    );
+    const out = xml(apply(part, { op: 'acceptAllRevisions' }));
+    expect(out.match(/<w:p[ >]/g)).toHaveLength(1);
+    expect(out).toContain('one ');
+    expect(out).toContain('four');
+  });
+
+  test('a trailing run keeps the last paragraph, which the others merge into', () => {
+    const part = load(`<w:p>${run('keep')}</w:p>` + delMark('a ') + delMark('b '));
+    const out = xml(apply(part, { op: 'acceptAllRevisions' }));
+    expect(out.match(/<w:p[ >]/g)).toHaveLength(2);
+    // Both members' runs, in the paragraph that survived them.
+    expect(out.slice(out.lastIndexOf('<w:p>'))).toContain('a ');
+    expect(out.slice(out.lastIndexOf('<w:p>'))).toContain('b ');
+  });
+
+  test('a table is a boundary: the content stays in front of it', () => {
+    // `followed` looked at any later paragraph, so the text merged into the one AFTER the
+    // table and arrived behind it — in a place the reader never put it.
+    const table =
+      '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>' +
+      `<w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr><w:p>${run('cell')}</w:p>` +
+      '</w:tc></w:tr></w:tbl>';
+    const part = load(delMark('before ') + table + `<w:p>${run('after')}</w:p>`);
+    const out = xml(apply(part, { op: 'acceptAllRevisions' }));
+    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('<w:tbl'));
+    expect(out).not.toContain('before after');
+  });
+});

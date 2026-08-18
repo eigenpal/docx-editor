@@ -16,7 +16,9 @@ import {
 } from './semantic-hit-test.ts';
 import { documentOrder, documentOrderIndex } from './document-order.ts';
 export { documentOrder } from './document-order.ts';
-import { lineSegmentFor, lineSegments, type LineSegment } from './line-segments.ts';
+export { selectionRects, keyedRangeRects, type KeyedRange } from './selection-rects.ts';
+import { xWithinLine } from './line-geometry.ts';
+import { lineSegmentFor, lineSegments, segmentOverlap, type LineSegment } from './line-segments.ts';
 import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
@@ -151,37 +153,6 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
   }
   paragraphLinesCache.set(layout, index);
   return index;
-}
-
-/** The x offset of `offset` within a line, by walking its spans. */
-function xWithinLine(
-  line: LineRecord,
-  offset: number,
-  measurer?: TextMeasurer | undefined,
-  segment?: LineSegment
-): number {
-  // An offset only means something in ONE paragraph, so a mixed line is walked through the
-  // segment that owns it. Given none, the line is its own segment, which is every ordinary
-  // line and the path this function always took.
-  const spans = segment ? segment.spans : line.spans;
-  for (const drawing of segment ? segment.drawings : (line.drawings ?? [])) {
-    if (offset === drawing.start) return drawing.advanceStart;
-    if (offset === drawing.start + 1) return drawing.advanceEnd;
-  }
-  let x = segment ? (segment.spans[0]?.box.x ?? line.contentX) : line.contentX;
-  for (const span of spans) {
-    if (offset <= span.range.start) return span.box.x;
-    if (offset >= span.range.end) {
-      x = span.box.x + span.box.width;
-      continue;
-    }
-    // MEASURED, not interpolated. Interpolating across the span's advance is exact only for a
-    // uniform one — in any proportional face it draws the caret a fraction of the way through
-    // the span rather than at a glyph edge, so a caret between two letters appeared on top of
-    // one. Without a measurer it still interpolates, and says so.
-    return spanOffsetX(span, offset, measurer);
-  }
-  return x;
 }
 
 /**
@@ -553,109 +524,7 @@ export function contentControlsInLayout(
   return contentControlsOfLayout(layout);
 }
 
-/** The rectangles covering a selection, one per line it spans. */
-export function selectionRects(
-  layout: SemanticLayout,
-  selection: SemanticSelection
-): SelectionRect[] {
-  const ordered = orderPositions(layout, selection);
-  if (!ordered) return [];
-  const rects: SelectionRect[] = [];
-  for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
-      for (const line of fragment.lines) {
-        const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
-        if (!overlap) continue;
-        const startX = xWithinLine(line, overlap.start);
-        const endX = xWithinLine(line, overlap.end);
-        rects.push({
-          pageIndex: page.index,
-          x: Math.min(startX, endX),
-          y: line.box.y,
-          width: Math.abs(endX - startX),
-          height: line.box.height,
-        });
-      }
-    }
-  }
-  return rects;
-}
-
-/** A model range to highlight, and the key the caller knows it by. */
-export interface KeyedRange {
-  readonly key: string;
-  readonly from: SemanticPosition;
-  readonly to: SemanticPosition;
-}
-
-/**
- * Rectangles for MANY ranges in ONE pass over the lines.
- *
- * Not `selectionRects` in a loop. That walks every page, fragment and line per range, and a
- * contract with two hundred comments would re-walk the whole document two hundred times on
- * every layout — the highlight would cost more than the layout it decorates. One pass tests
- * each line against every range instead, which is the same work a single selection does.
- */
-export function keyedRangeRects(
-  layout: SemanticLayout,
-  ranges: readonly KeyedRange[],
-  /**
-   * Pages to measure, or every page when absent.
-   *
-   * A band that is not on screen is not painted, so measuring it is pure cost — and it is
-   * cost paid per keystroke, because an edit republishes the layout. Bounding this to the
-   * materialized pages is what keeps typing in a heavily reviewed document as fast as
-   * typing in a clean one.
-   */
-  pages?: ReadonlySet<number>
-): Map<string, SelectionRect[]> {
-  const found = new Map<string, SelectionRect[]>();
-  if (ranges.length === 0) return found;
-  for (const page of layout.pages) {
-    if (pages && !pages.has(page.index)) continue;
-    for (const fragment of paragraphFragmentsOf(page)) {
-      for (const line of fragment.lines) {
-        for (const range of ranges) {
-          const overlap = lineOverlap(layout, line, range.from, range.to);
-          if (!overlap) continue;
-          const startX = xWithinLine(line, overlap.start);
-          const endX = xWithinLine(line, overlap.end);
-          const rects = found.get(range.key) ?? [];
-          rects.push({
-            pageIndex: page.index,
-            x: Math.min(startX, endX),
-            y: line.box.y,
-            width: Math.abs(endX - startX),
-            height: line.box.height,
-          });
-          found.set(range.key, rects);
-        }
-      }
-    }
-  }
-  return found;
-}
-
-/** The part of `line` covered by a selection, in the line's own offsets. */
-function lineOverlap(
-  layout: SemanticLayout,
-  line: LineRecord,
-  from: SemanticPosition,
-  to: SemanticPosition
-): { start: number; end: number } | null {
-  const index = documentOrderIndex(layout);
-  const lineParagraph = index.get(line.range.paragraphId) ?? -1;
-  const fromParagraph = index.get(from.paragraphId) ?? -1;
-  const toParagraph = index.get(to.paragraphId) ?? -1;
-  if (lineParagraph < fromParagraph || lineParagraph > toParagraph) return null;
-
-  const start =
-    lineParagraph === fromParagraph ? Math.max(line.range.start, from.offset) : line.range.start;
-  const end = lineParagraph === toParagraph ? Math.min(line.range.end, to.offset) : line.range.end;
-  return end > start ? { start, end } : null;
-}
-
-function orderPositions(
+export function orderPositions(
   layout: SemanticLayout,
   selection: SemanticSelection
 ): { from: SemanticPosition; to: SemanticPosition } | null {
@@ -710,7 +579,13 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
   const pieces: { start: number; text: string }[] = [];
   const seen = new Set<string>();
   for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
-    for (const span of line.spans) {
+    // ONLY this paragraph's part of the line. A resolved display mode lays merged paragraphs
+    // out together, and both members count their offsets from zero, so reading the line whole
+    // reconstructed one paragraph's text from the other's spans — and this IS the surface's
+    // `paragraphTextOf`, so the deletion range, the clamp and the word walk all followed it.
+    const segment = lineSegmentFor(line, paragraphId);
+    if (!segment) continue;
+    for (const span of segment.spans) {
       // A ZERO-WIDTH span stands for something the model does not spell — a `w:ptab`, an
       // empty field projection. It contributes no characters, and a span whose painted text
       // is longer than its model range would make this reconstruction longer than the
@@ -734,7 +609,7 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
     }
     // Inline drawings occupy one UTF-16 unit each; they live on `line.drawings`, not in span
     // text, but selection clamp, Select All, and surface ops read length from here.
-    for (const drawing of line.drawings ?? []) {
+    for (const drawing of segment.drawings) {
       const start = drawing.start;
       const end = start + 1;
       const key = `${start}:${end}`;
@@ -958,9 +833,11 @@ export function spansInSelection(
   // the toolbar's formatting read scale with document length instead of selection length.
   if (ordered.from.paragraphId === ordered.to.paragraphId) {
     for (const { line } of paragraphLinesIndex(layout).get(ordered.from.paragraphId) ?? []) {
-      const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
+      const segment = lineSegmentFor(line, ordered.from.paragraphId);
+      if (!segment) continue;
+      const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
       if (!overlap) continue;
-      for (const span of line.spans) {
+      for (const span of segment.spans) {
         if (span.range.end > overlap.start && span.range.start < overlap.end) spans.push(span);
       }
     }
@@ -974,9 +851,11 @@ export function spansInSelection(
   if (first === -1 || last === -1) return [];
   for (let at = first; at <= last; at += 1) {
     for (const { line } of lines.get(order[at]!) ?? []) {
-      const overlap = lineOverlap(layout, line, ordered.from, ordered.to);
+      const segment = lineSegmentFor(line, order[at]!);
+      if (!segment) continue;
+      const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
       if (!overlap) continue;
-      for (const span of line.spans) {
+      for (const span of segment.spans) {
         if (span.range.end > overlap.start && span.range.start < overlap.end) spans.push(span);
       }
     }
@@ -992,7 +871,9 @@ export function spansInSelection(
 function caretSpan(layout: SemanticLayout, position: SemanticPosition): StyleSpanRecord[] {
   let rightward: StyleSpanRecord | null = null;
   for (const { line } of paragraphLinesIndex(layout).get(position.paragraphId) ?? []) {
-    for (const span of line.spans) {
+    // This paragraph's spans only: on a merged line the other member's runs sit beside these
+    // and would report their formatting for a caret that is not in them.
+    for (const span of lineSegmentFor(line, position.paragraphId)?.spans ?? []) {
       if (span.range.start < position.offset && position.offset <= span.range.end) return [span];
       if (rightward === null && span.range.start === position.offset) rightward = span;
     }

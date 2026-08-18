@@ -624,7 +624,13 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
         // was refused and Accept All failed for the entire document with an opaque reason.
         // Deleting a trailing paragraph with tracking on is exactly what Word writes, so this
         // was not an exotic file.
-        const followed = children.slice(index + 1).some((entry) => entry.kind === 'paragraph');
+        // The NEXT BLOCK, not any later paragraph. Scanning ahead past a `w:tbl` reported a
+        // paragraph that is not this one's neighbour, and the content then merged into it —
+        // arriving BEHIND the table, in a place the reader never put it.
+        const nextBlock = children
+          .slice(index + 1)
+          .find((entry) => entry.kind === 'paragraph' || entry.kind === 'table');
+        const followed = nextBlock?.kind === 'paragraph';
         if (plan.mergeForward.has(child.id) && followed) {
           // Tested AFTER absorbing, so a RUN of removed marks collapses into the one survivor
           // at its end rather than pairwise. Word merges all of them; stopping at the first

@@ -23,6 +23,7 @@ import {
   MAX_CONTENT_CONTROL_NESTING,
 } from '../store/package/content-control-walk.ts';
 import { MAX_REVISION_DEPTH } from './revision-projection.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 
 /**
  * Matches the layout walk's own container recursion; see `piecesOfParagraph`.
@@ -37,6 +38,23 @@ function childNamed(node: OoxmlNode, localName: string): OoxmlNode | undefined {
   if (node.kind === 'textValue') return undefined;
   for (const child of node.children) {
     if (child.kind !== 'textValue' && child.localName === localName) return child;
+  }
+  return undefined;
+}
+
+/**
+ * A child in the WordprocessingML namespace, by name.
+ *
+ * The namespace is the difference between a revision and a look-alike. A `.docx` is a zip of
+ * XML the sender controls, so an `<x:del/>` sitting in the paragraph mark's `w:rPr` is markup
+ * anyone can author — and matching on the local name alone let it merge two paragraphs in the
+ * default view, a join no decision in the file can produce and no Accept can undo.
+ */
+function wmlChildNamed(node: OoxmlNode, localName: string): OoxmlNode | undefined {
+  if (node.kind === 'textValue') return undefined;
+  for (const child of node.children) {
+    if (child.kind === 'textValue') continue;
+    if (child.namespaceUri === WML_NAMESPACE_URI && child.localName === localName) return child;
   }
   return undefined;
 }
@@ -57,8 +75,8 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
     childNamed(properties, 'runProperties') ?? childNamed(properties, 'rPr');
   if (markRunProperties === undefined) return false;
   return (
-    childNamed(markRunProperties, 'del') !== undefined ||
-    childNamed(markRunProperties, 'moveFrom') !== undefined
+    wmlChildNamed(markRunProperties, 'del') !== undefined ||
+    wmlChildNamed(markRunProperties, 'moveFrom') !== undefined
   );
 }
 
@@ -140,7 +158,7 @@ export function markRemovedInMode(
   if (markRunProperties === undefined) return false;
   const removedNames =
     displayMode === 'proposed' ? (['del', 'moveFrom'] as const) : (['ins', 'moveTo'] as const);
-  return removedNames.some((name) => childNamed(markRunProperties, name) !== undefined);
+  return removedNames.some((name) => wmlChildNamed(markRunProperties, name) !== undefined);
 }
 
 /**
