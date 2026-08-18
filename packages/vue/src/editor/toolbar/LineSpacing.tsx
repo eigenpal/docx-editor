@@ -51,18 +51,16 @@ export const ToolbarLineSpacing = defineComponent({
 
     const applyLines = (lines: number) => {
       open.value = false;
-      const editor = editorRef.value;
-      if (!editor) return;
+      if (!editorRef.value) return;
       const cmd = commandForSlotValue('list.lineSpacing', lines);
-      if (cmd && editor.can(cmd).ok) editor.exec(cmd);
+      if (cmd && editorRef.value!.can(cmd).ok) editorRef.value!.exec(cmd);
     };
 
     const applySpace = (field: 'beforePt' | 'afterPt', points: number | null) => {
       open.value = false;
-      const editor = editorRef.value;
-      if (!editor) return;
+      if (!editorRef.value) return;
       const cmd = { type: 'setParagraphSpacing' as const, [field]: points };
-      if (editor.can(cmd).ok) editor.exec(cmd);
+      if (editorRef.value!.can(cmd).ok) editorRef.value!.exec(cmd);
     };
 
     return () => {

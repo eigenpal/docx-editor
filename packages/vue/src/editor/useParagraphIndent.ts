@@ -35,9 +35,8 @@ export function useParagraphIndent(): UseParagraphIndentReturn {
   );
 
   const apply = (update: IndentUpdate): boolean => {
-    const editor = editorRef.value;
-    if (!editor) return false;
-    const result = editor.exec({
+    if (!editorRef.value) return false;
+    const result = editorRef.value.exec({
       ...(update.left !== undefined ? { left: update.left } : {}),
       ...(update.right !== undefined ? { right: update.right } : {}),
       ...(update.firstLine !== undefined ? { firstLine: update.firstLine } : {}),

@@ -215,8 +215,9 @@ export const DocxEditorRoot = defineComponent({
     };
     watch(
       () => [editorRef.value, props.zoom, props.zoomMode] as const,
-      ([editor, zoom, zoomMode]) => {
-        if (!editor) return;
+      ([, zoom, zoomMode]) => {
+        if (!editorRef.value) return;
+        const editor = editorRef.value;
         if (zoom !== undefined && zoom !== applied.zoom) {
           applied.zoom = zoom;
           editor.setZoom(zoom);

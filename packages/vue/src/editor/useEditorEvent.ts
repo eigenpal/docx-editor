@@ -13,12 +13,12 @@ export function useEditorEvent<E extends keyof EditorEvents>(
 
   watch(
     () => editorRef.value,
-    (editor, _prev, onCleanup) => {
-      if (!editor) return;
+    (_editor, _prev, onCleanup) => {
+      if (!editorRef.value) return;
       const forward = ((...args: unknown[]) => {
         (handlerRef.current as (...forwarded: unknown[]) => void)(...args);
       }) as unknown as EditorEvents[E];
-      const off = editor.on(event, forward);
+      const off = editorRef.value.on(event, forward);
       onCleanup(off);
     },
     { immediate: true, flush: 'post' }

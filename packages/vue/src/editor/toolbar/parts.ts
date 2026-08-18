@@ -83,9 +83,8 @@ export const ToolbarLink = defineComponent({
     const label = useToolbarLabel();
     return () => {
       if (props.hidden) return null;
-      const editor = editorRef.value;
       const probe = chromeProbeForSlot('text.link');
-      const allowed = editor && probe ? editor.can(probe) : null;
+      const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
       const isEnabled = allowed?.ok === true;
       const disabledReason = allowed && !allowed.ok ? allowed.reason : null;
       const control = chromeControlForSlot('text.link');

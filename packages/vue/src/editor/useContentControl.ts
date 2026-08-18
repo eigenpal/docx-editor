@@ -97,9 +97,8 @@ export function useContentControlInstance(): UseContentControlResult {
 
   const control = computed((): ContentControlInspectorState | null => {
     void tick.value;
-    const editor = editorRef.value;
     const contentControls = cc.value;
-    if (!editor) return null;
+    if (!editorRef.value) return null;
 
     const boundary = contentControls?.atCaret() ?? null;
     if (boundary) {
@@ -118,12 +117,12 @@ export function useContentControlInstance(): UseContentControlResult {
       };
     }
 
-    const summary = editor.query({ type: 'contentControlAt' });
-    if (!summary) return null;
+    const summary = editorRef.value?.query({ type: 'contentControlAt' });
+    if (!summary || !editorRef.value) return null;
     const editReason = contentControls?.disabledReason(summary.id, 'edit') ?? null;
     const removeReason = contentControls?.disabledReason(summary.id, 'remove') ?? null;
-    const canEdit = editor.can({ type: 'setContentControlValue', value: '' });
-    const canRemove = editor.can({ type: 'removeContentControl' });
+    const canEdit = editorRef.value!.can({ type: 'setContentControlValue', value: '' });
+    const canRemove = editorRef.value!.can({ type: 'removeContentControl' });
     return {
       id: summary.id,
       tag: summary.tag ?? null,
@@ -155,7 +154,6 @@ export function useContentControlInstance(): UseContentControlResult {
   const setValueDisabledReason = computed(() => {
     const current = control.value;
     const contentControls = cc.value;
-    const editor = editorRef.value;
     if (!current) return 'no content control at the current selection';
     if (contentControls) {
       const reason = contentControls.disabledReason(current.id, 'edit');
@@ -166,8 +164,8 @@ export function useContentControlInstance(): UseContentControlResult {
     }
     if (current.locked) return 'the content control is locked';
     if (current.bound) return 'the content control is bound to external data';
-    if (!editor) return 'no document is loaded';
-    const canEdit = editor.can({ type: 'setContentControlValue', value: '' });
+    if (!editorRef.value) return 'no document is loaded';
+    const canEdit = editorRef.value!.can({ type: 'setContentControlValue', value: '' });
     if (!canEdit.ok) return canEdit.reason;
     return null;
   });
@@ -175,7 +173,6 @@ export function useContentControlInstance(): UseContentControlResult {
   const removeDisabledReason = computed(() => {
     const current = control.value;
     const contentControls = cc.value;
-    const editor = editorRef.value;
     if (!current) return 'no content control at the current selection';
     if (contentControls) {
       const reason = contentControls.disabledReason(current.id, 'remove');
@@ -184,17 +181,16 @@ export function useContentControlInstance(): UseContentControlResult {
       return reason;
     }
     if (current.removalLocked) return 'the content control is locked';
-    if (!editor) return 'no document is loaded';
-    const canRemove = editor.can({ type: 'removeContentControl' });
+    if (!editorRef.value) return 'no document is loaded';
+    const canRemove = editorRef.value!.can({ type: 'removeContentControl' });
     if (!canRemove.ok) return canRemove.reason;
     return null;
   });
 
   const setValue = (value: string): ExecResult => {
-    const editor = editorRef.value;
     const contentControls = cc.value;
     const current = control.value;
-    if (!editor) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
+    if (!editorRef.value) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
     if (contentControls && current) {
       const reason = contentControls.disabledReason(current.id, 'edit');
       if (reason) {
@@ -210,14 +206,13 @@ export function useContentControlInstance(): UseContentControlResult {
         };
       }
     }
-    return editor.exec({ type: 'setContentControlValue', value });
+    return editorRef.value!.exec({ type: 'setContentControlValue', value });
   };
 
   const remove = (): ExecResult => {
-    const editor = editorRef.value;
     const contentControls = cc.value;
     const current = control.value;
-    if (!editor) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
+    if (!editorRef.value) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
     if (contentControls) {
       const id = current?.id;
       if (!id) {
@@ -243,7 +238,7 @@ export function useContentControlInstance(): UseContentControlResult {
         ? { ok: true, changed: true }
         : { ok: false, code: 'unsupported', reason: 'the edit was refused' };
     }
-    return editor.exec({ type: 'removeContentControl' });
+    return editorRef.value!.exec({ type: 'removeContentControl' });
   };
 
   return {

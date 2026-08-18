@@ -50,11 +50,10 @@ export function useParagraphStyle(): UseParagraphStyleResult {
   const command = useEditorCommand('styles.style');
 
   const setValue = (styleId: string) => {
-    const editor = editorRef.value;
-    if (!editor) return;
+    if (!editorRef.value) return;
     const cmd = commandForSlotValue('styles.style', styleId);
     if (!cmd) return;
-    if (editor.can(cmd).ok) editor.exec(cmd);
+    if (editorRef.value!.can(cmd).ok) editorRef.value!.exec(cmd);
   };
 
   return {

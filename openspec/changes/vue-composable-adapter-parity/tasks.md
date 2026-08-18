@@ -211,7 +211,7 @@ Each is a read of the engine plus a call back into it. Group them, but give each
       flattening, last-override-wins, unmatched-appends, `preset` opt-out
 - [x] 8.2 A shared table-driven test asserting the six merge bullets on BOTH adapters
 - [x] 8.3 `Slot`: `cloneVNode` + `mergeProps` over one child, null for zero or several
-- [ ] 8.4 `DocxEditorToolbar` derived from `CHROME_GROUPS`, with the parts as statics, the
+- [x] 8.4 `DocxEditorToolbar` derived from `CHROME_GROUPS`, with the parts as statics, the
       overflow policy from `toolbar-overflow.ts`, and the mousedown guard
 - [ ] 8.5 `DocxEditorMenu` derived from `CHROME_MENUS`, with `chromeMenuSlots` exported
 - [ ] 8.6 `DocxEditorContextMenu` reusing the menu bar's rows — one row vocabulary, two panels

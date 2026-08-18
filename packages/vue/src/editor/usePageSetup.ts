@@ -39,9 +39,8 @@ export function usePageSetup(): UsePageSetupReturn {
   );
 
   const apply = (update: PageSetupUpdate): boolean => {
-    const editor = editorRef.value;
-    if (!editor) return false;
-    const result = editor.exec({
+    if (!editorRef.value) return false;
+    const result = editorRef.value.exec({
       ...(update.pageWidthTwips !== undefined ? { pageWidth: update.pageWidthTwips } : {}),
       ...(update.pageHeightTwips !== undefined ? { pageHeight: update.pageHeightTwips } : {}),
       ...(update.orientation !== undefined ? { orientation: update.orientation } : {}),

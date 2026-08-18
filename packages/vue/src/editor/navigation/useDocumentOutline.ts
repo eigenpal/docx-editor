@@ -45,9 +45,9 @@ export function useDocumentOutline(): UseDocumentOutlineResult {
   const goTo = (blockId: string) => {
     const editor = editorRef.value;
     if (!editor || typeof blockId !== 'string' || blockId.length === 0) return;
-    editor.focus();
+    editorRef.value!.focus();
     const position = { paragraphId: blockId, offset: 0 };
-    editor.exec({ type: 'setSelection', range: { anchor: position, head: position } });
+    editorRef.value!.exec({ type: 'setSelection', range: { anchor: position, head: position } });
     editor.scrollToBlock(blockId);
     selectedBlockId.value = blockId;
   };

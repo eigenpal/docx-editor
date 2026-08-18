@@ -28,11 +28,10 @@ export function useFontFamily(): UseFontFamilyResult {
   const command = useEditorCommand('font.family');
 
   const setValue = (family: string) => {
-    const editor = editorRef.value;
-    if (!editor) return;
+    if (!editorRef.value) return;
     const cmd = commandForSlotValue('font.family', family);
     if (!cmd) return;
-    if (editor.can(cmd).ok) editor.exec(cmd);
+    if (editorRef.value!.can(cmd).ok) editorRef.value!.exec(cmd);
   };
 
   return {

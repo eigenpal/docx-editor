@@ -82,12 +82,10 @@ export function useDocumentSearch(): UseDocumentSearchResult {
   );
 
   const goTo = (index: number) => {
-    const editor = editorRef.value;
-    if (!editor) return;
     const match = matches.value[index];
-    if (!match) return;
-    editor.focus();
-    const result = editor.selectMatch(match);
+    if (!match || !editorRef.value) return;
+    editorRef.value.focus();
+    const result = editorRef.value.selectMatch(match);
     if (result.ok) activeIndex.value = index;
   };
 

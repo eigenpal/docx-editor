@@ -121,7 +121,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       url: link ? (link.kind === 'internal' ? `#${link.anchor ?? ''}` : link.authored) : '',
       copied: false,
       error: false,
-      canEdit: editor ? editor.can({ type: 'insertText', text: '' }).ok : false,
+      canEdit: editor ? editorRef.value!.can({ type: 'insertText', text: '' }).ok : false,
     };
   };
 
@@ -150,7 +150,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
         url: link.kind === 'internal' ? `#${link.anchor ?? ''}` : link.authored,
         copied: false,
         error: false,
-        canEdit: editor ? editor.can({ type: 'insertText', text: '' }).ok : false,
+        canEdit: editor ? editorRef.value!.can({ type: 'insertText', text: '' }).ok : false,
       };
       return;
     }
@@ -164,7 +164,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       url: '',
       copied: false,
       error: false,
-      canEdit: editor ? editor.can({ type: 'insertText', text: '' }).ok : false,
+      canEdit: editor ? editorRef.value!.can({ type: 'insertText', text: '' }).ok : false,
     };
   };
 

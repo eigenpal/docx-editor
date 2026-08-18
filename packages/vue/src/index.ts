@@ -97,13 +97,42 @@ export {
   type UseNavigationPaneResult,
 } from './editor/navigation';
 
-export { useFontFamily, type UseFontFamilyResult } from './editor/toolbar/useFontFamily';
-export {
-  useParagraphStyle,
-  type ParagraphStyleOption,
-  type UseParagraphStyleResult,
-} from './editor/toolbar/useParagraphStyle';
 export { useTableBorderTargetLabel } from './editor/toolbar/useTableBorderTargetLabel';
+export {
+  DocxEditorToolbar,
+  useFontFamily,
+  useParagraphStyle,
+  type DocxEditorToolbarNamespace,
+  type DocxEditorToolbarProps,
+  type ToolbarActionProps,
+  type ToolbarAlignmentComponent,
+  type FontFamilyItemProps,
+  type FontFamilyNamespace,
+  type FontFamilyPartProps,
+  type FontFamilyProps,
+  type ParagraphStyleItemProps,
+  type ParagraphStyleNamespace,
+  type ParagraphStylePartProps,
+  type ParagraphStyleProps,
+  type ToolbarButtonProps,
+  type ToolbarPartComponent,
+  type ToolbarPartProps,
+  type ToolbarSeparatorProps,
+  type ToolbarSlotPartComponent,
+  type ToolbarSlotPartProps,
+  type TableBorderColorNamespace,
+  type TableBorderStyleNamespace,
+  type TableBorderTargetNamespace,
+  type TableBorderWidthNamespace,
+  type TableCellFillNamespace,
+  type TableChromeItemProps,
+  type TableChromePartComponent,
+  type TableChromePartProps,
+  type UseFontFamilyResult,
+  type UseParagraphStyleResult,
+  type ParagraphStyleOption,
+} from './editor/toolbar';
+export { Slot, type SlotProps } from './editor/toolbar/Slot';
 export {
   ToolbarContext,
   useToolbarContext,

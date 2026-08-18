@@ -55,20 +55,19 @@ export function useEditorCommand(
   });
 
   const selectSlice = (_snapshot: unknown): CommandSlice => {
-    const editor = editorRef.value;
     const current = latest.value;
     if (isSlot(current)) {
-      const state = toolbarCommandState(editor, current);
+      const state = toolbarCommandState(editorRef.value, current);
       return {
         active: state.active,
         enabled: state.enabled,
         disabledReason: state.disabledReason,
       };
     }
-    if (!editor) return { active: false, enabled: false, disabledReason: null };
-    const allowed = editor.can(current);
+    if (!editorRef.value) return { active: false, enabled: false, disabledReason: null };
+    const allowed = editorRef.value.can(current);
     return {
-      active: editor.isActive(current),
+      active: editorRef.value.isActive(current),
       enabled: allowed.ok,
       disabledReason: allowed.ok ? null : (allowed.reason ?? null),
     };
@@ -80,10 +79,9 @@ export function useEditorCommand(
 
   const execute = (): boolean => {
     const current = latest.value;
-    const editor = editorRef.value;
-    if (isSlot(current)) return runToolbarCommand(editor, current).ok;
-    if (!editor) return false;
-    return editor.exec(current).ok;
+    if (isSlot(current)) return runToolbarCommand(editorRef.value, current).ok;
+    if (!editorRef.value) return false;
+    return editorRef.value!.exec(current).ok;
   };
 
   return {
