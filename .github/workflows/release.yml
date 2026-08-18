@@ -46,6 +46,8 @@ jobs:
     name: Detect release mode
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
       publishing: ${{ steps.pending.outputs.publishing }}
     steps:
@@ -73,6 +75,8 @@ jobs:
     # Default job timeout is 6h; a hung step (e.g. an apt prompt) otherwise burns
     # a runner for hours. A healthy run finishes in well under 10 min.
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -365,6 +369,8 @@ jobs:
     if: ${{ failure() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Only curls the Slack webhook; needs no GITHUB_TOKEN access at all.
+    permissions: {}
     steps:
       - name: Notify Slack
         if: ${{ env.SLACK_WEBHOOK_URL != '' }}
