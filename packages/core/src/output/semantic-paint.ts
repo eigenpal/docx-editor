@@ -17,6 +17,7 @@ import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { revisionPresentationOf } from './revision-presentation.ts';
 import {
   formatRevisionOf,
+  markRevisionRemovesMark,
   shownMarkRevision,
   type RevisionAttribution,
 } from '@docx-editor.dev/core/layout';
@@ -856,10 +857,11 @@ function paintParagraphMark(
   scale: number
 ): HTMLElement {
   // ONE glyph however many decisions stand on it: there is one pilcrow, and drawing a second
-  // beside it would read as a second paragraph break. The DELETION wins the face when a mark
+  // beside it would read as a second paragraph break. A REMOVAL wins the face when a mark
   // carries both — a break proposed and then unproposed ends up removed, and the same rule
-  // already decides the colour of a change bar over mixed lines. Both attributions are
-  // published on the element, so review chrome can still offer both decisions.
+  // already decides the colour of a change bar over mixed lines. `moveFrom` counts as a
+  // removal, which is what keeps this glyph agreeing with the rule in the margin beside it.
+  // Both attributions are published on the element, so review chrome can offer both.
   const shown = shownMarkRevision(revisions)!;
   const glyph = document.createElement('span');
   glyph.className = `docx-revision-pmark docx-revision-pmark-${shown.kind}`;
@@ -877,9 +879,9 @@ function paintParagraphMark(
   glyph.style.position = 'absolute';
   glyph.style.pointerEvents = 'none';
   glyph.style.marginLeft = `${2 * scale}px`;
-  glyph.style.color =
-    shown.kind === 'delete' ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)';
-  if (shown.kind === 'delete') glyph.style.textDecorationLine = 'line-through';
+  const removes = markRevisionRemovesMark(shown);
+  glyph.style.color = removes ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)';
+  if (removes) glyph.style.textDecorationLine = 'line-through';
   return glyph;
 }
 

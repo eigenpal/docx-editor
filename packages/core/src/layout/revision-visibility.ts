@@ -42,10 +42,12 @@ function childNamed(node: OoxmlNode, localName: string): OoxmlNode | undefined {
 }
 
 /**
- * `w:pPr/w:rPr/w:del` — the paragraph mark was deleted by a tracked revision.
+ * `w:pPr/w:rPr/w:del` or `w:moveFrom` — a tracked revision REMOVES the paragraph mark.
  *
- * Read from the paragraph-mark run properties only. A `w:del` anywhere else in the paragraph
- * deletes run content, which is a different statement entirely.
+ * Both say the break goes away once the decision is taken: a deletion outright, a `moveFrom`
+ * because the paragraph left this place for another. Read from the paragraph-mark run
+ * properties only. A `w:del` anywhere else in the paragraph deletes run content, which is a
+ * different statement entirely.
  */
 export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
   if (paragraph.kind === 'textValue') return false;
@@ -53,7 +55,11 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
   if (!properties) return false;
   const markRunProperties =
     childNamed(properties, 'runProperties') ?? childNamed(properties, 'rPr');
-  return markRunProperties !== undefined && childNamed(markRunProperties, 'del') !== undefined;
+  if (markRunProperties === undefined) return false;
+  return (
+    childNamed(markRunProperties, 'del') !== undefined ||
+    childNamed(markRunProperties, 'moveFrom') !== undefined
+  );
 }
 
 /**

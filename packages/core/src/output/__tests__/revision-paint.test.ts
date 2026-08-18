@@ -229,6 +229,22 @@ describe('changes that decorate no characters', () => {
     expect(glyphs[0]!.dataset.revisionIds).toBe('7 8');
   });
 
+  test('a moved-away mark reads as a removal, like the deletion it becomes', () => {
+    // `w:moveFrom` on the mark says this copy of the break goes away when the move is
+    // accepted. The change bar already counts `moveFrom` as a removal, so a glyph that drew
+    // it in the insertion colour put a blue pilcrow beside a red rule.
+    const root = paint(
+      '<w:p><w:pPr><w:rPr><w:moveFrom w:id="4" w:author="A"/></w:rPr></w:pPr>' +
+        `${run('moved away')}</w:p>`
+    );
+    const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
+    expect(glyph.style.color).toBe('var(--doc-revision-deletion)');
+    expect(glyph.style.textDecorationLine).toBe('line-through');
+    expect(root.querySelector<HTMLElement>('.docx-change-bar')!.className).toContain(
+      'docx-change-bar-deletion'
+    );
+  });
+
   test('a mark-only change still rules the margin beside its line', () => {
     // The bar is the only signal a reader scanning the margin has. Built from spans alone, a
     // paragraph whose sole change is its own break — a split or a merge, the most ordinary

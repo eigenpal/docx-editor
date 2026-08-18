@@ -400,6 +400,16 @@ export interface ParagraphFragmentRecord {
    */
   readonly markRevision?: RevisionAttribution;
   /**
+   * The tracked FORMAT change on this paragraph's mark (`w:pPr/w:rPr/w:rPrChange`), absent
+   * when there is none. Final fragment only, and `all-markup` only, like the decisions above.
+   *
+   * Published without a glyph of its own on purpose. Word draws no pilcrow for a mark whose
+   * only change is its own formatting — the decision belongs to the review pane, which lists
+   * it either way. What was missing was GEOMETRY: with nothing on the fragment, a card had
+   * no place on the page to point at.
+   */
+  readonly markFormatRevision?: RevisionAttribution;
+  /**
    * List marker painted in the hanging-indent slot of the FIRST fragment only.
    *
    * Not part of model text: no UTF-16 range, never contributes to caret/selection offsets,

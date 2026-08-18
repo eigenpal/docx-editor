@@ -61,6 +61,9 @@ const REFUSED_REVISION_NAMES: ReadonlySet<string> = new Set([
 /** Property-change wrappers this pass does resolve: the run and paragraph property records. */
 const PROPERTY_CHANGE_NAMES: ReadonlySet<string> = new Set(['rPrChange', 'pPrChange']);
 
+/** The two members of `EG_ParaRPrTrackChanges` that record a MOVE of the paragraph mark. */
+const MARK_MOVE_NAMES: ReadonlySet<string> = new Set(['moveFrom', 'moveTo']);
+
 /**
  * Parents that make a `w:ins`/`w:del` a STRUCTURAL revision rather than a content one.
  *
@@ -218,8 +221,13 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
       grandparent?.namespaceUri === WML_NAMESPACE_URI ? grandparent.localName : undefined;
     if (node.namespaceUri === WML_NAMESPACE_URI) {
       const isContent = isContentRevisionKind(node.kind);
+      // A mark-position `w:moveFrom`/`w:moveTo` is generic in the tree, so `isContent` misses
+      // it; naming it here is what raises the card for a paragraph that was MOVED whole.
+      const markMove =
+        parentName === 'rPr' && grandparentName === 'pPr' && MARK_MOVE_NAMES.has(node.localName);
       const isNamedRevision =
         isContent ||
+        markMove ||
         REFUSED_REVISION_NAMES.has(node.localName) ||
         PROPERTY_CHANGE_NAMES.has(node.localName) ||
         node.localName === 'ins' ||
@@ -246,7 +254,10 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
         // not a paragraph mark, and treating it as one made accepting it merge two
         // paragraphs — a silent structural edit from markup no valid file contains.
         const paragraphMark =
-          !isContent && parentName === 'rPr' && grandparentName === 'pPr' && !structural;
+          (!isContent || markMove) &&
+          parentName === 'rPr' &&
+          grandparentName === 'pPr' &&
+          !structural;
         sites.push({
           node,
           parent,
@@ -742,9 +753,14 @@ export function resolveRevisions(
       // split or a merge. Accepting a deleted mark, or rejecting an inserted one, removes the
       // mark — and the paragraph then runs into the one after it. Removing only the element
       // would report the decision applied while leaving the split in place.
+      // `moveFrom` and `moveTo` are the same two decisions under another name: accepting a
+      // move removes the mark the paragraph left, rejecting one removes the mark it arrived
+      // at. Both then run the paragraph into the one after it, exactly as `del`/`ins` do.
       const removesMark =
-        (action === 'accept' && site.node.localName === 'del') ||
-        (action === 'reject' && site.node.localName === 'ins');
+        (action === 'accept' &&
+          (site.node.localName === 'del' || site.node.localName === 'moveFrom')) ||
+        (action === 'reject' &&
+          (site.node.localName === 'ins' || site.node.localName === 'moveTo'));
       dropMarks.add(site.node.id);
       if (removesMark) {
         const paragraph = paragraphOwning(part, site.node.id);

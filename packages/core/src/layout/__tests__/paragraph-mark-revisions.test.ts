@@ -118,3 +118,53 @@ describe('a resolved view shows no attribution', () => {
     expect(paragraphFragments(part, 'all-markup')[0]?.markRevisions).toHaveLength(1);
   });
 });
+
+describe('a moved paragraph carries its mark like any other', () => {
+  // `EG_ParaRPrTrackChanges` is `ins? del? moveFrom? moveTo?`. Word writes `w:moveFrom` on the
+  // mark of the copy the paragraph left and `w:moveTo` on the copy it arrived at, so a move of
+  // whole paragraphs is recorded on the mark and nowhere else.
+  test('both move halves are projected', () => {
+    const from = paragraphFragments(load(MARKED('<w:moveFrom w:id="4" w:author="A"/>')));
+    const to = paragraphFragments(load(MARKED('<w:moveTo w:id="5" w:author="A"/>')));
+    expect(from[0]?.markRevisions).toEqual([
+      { kind: 'moveFrom', id: '4', author: 'A', nodeId: expect.any(String) },
+    ]);
+    expect(to[0]?.markRevisions).toEqual([
+      { kind: 'moveTo', id: '5', author: 'A', nodeId: expect.any(String) },
+    ]);
+  });
+
+  test('the half that REMOVES the mark is the one a single-value reader sees', () => {
+    // `moveFrom` is a removal — accepting the move takes this copy of the break away — so it
+    // must win the same way a deletion does, or the glyph and the margin rule disagree.
+    const both = load(MARKED('<w:ins w:id="6" w:author="A"/><w:moveFrom w:id="4" w:author="B"/>'));
+    expect(paragraphFragments(both)[0]?.markRevision).toMatchObject({
+      kind: 'moveFrom',
+      author: 'B',
+    });
+  });
+});
+
+describe('a format change on the mark reaches the page', () => {
+  // `w:rPrChange` on `w:pPr/w:rPr` (§17.13.5.32) is the mark's own formatting changing under
+  // tracking. It draws no pilcrow — Word draws none either — but it needs geometry, or a
+  // review card has no place on the page to point at.
+  const CHANGED =
+    '<w:p><w:pPr><w:rPr><w:b/>' +
+    '<w:rPrChange w:id="11" w:author="A" w:date="2026-01-01T00:00:00Z"><w:rPr/></w:rPrChange>' +
+    '</w:rPr></w:pPr><w:r><w:t>paragraph text</w:t></w:r></w:p>';
+
+  test('it is published, with its own provenance', () => {
+    expect(paragraphFragments(load(CHANGED))[0]?.markFormatRevision).toEqual({
+      kind: 'format',
+      id: '11',
+      author: 'A',
+      date: '2026-01-01T00:00:00Z',
+      nodeId: expect.any(String),
+    });
+  });
+
+  test('a resolved view publishes none of it', () => {
+    expect(paragraphFragments(load(CHANGED), 'proposed')[0]?.markFormatRevision).toBeUndefined();
+  });
+});

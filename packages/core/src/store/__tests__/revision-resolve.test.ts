@@ -383,3 +383,35 @@ describe('accept-all and reject-all', () => {
     );
   });
 });
+
+describe('a move recorded on the paragraph mark', () => {
+  // `EG_ParaRPrTrackChanges` is `ins? del? moveFrom? moveTo?`. When a whole paragraph moves
+  // with tracking on, Word records it on the MARK: `w:moveFrom` on the copy the paragraph
+  // left, `w:moveTo` on the copy it arrived at. Reading only `ins`/`del` there left the move
+  // raising no card at all, so a reviewer had nothing to accept.
+  const moved = (name: 'moveFrom' | 'moveTo') =>
+    load(
+      `<w:p><w:pPr><w:rPr><w:${name} w:id="${QA.id}" w:author="${QA.author}" w:date="${QA.date}"/></w:rPr></w:pPr>` +
+        `${run('first')}</w:p><w:p>${run('second')}</w:p>`
+    );
+
+  test('accepting a moveFrom mark runs the paragraph into the next one', () => {
+    // Accepting the move removes THIS copy of the break, exactly as accepting a deletion does.
+    const out = xml(apply(moved('moveFrom'), accept(QA)));
+    expect(out).not.toContain('<w:moveFrom');
+    expect(out.match(/<w:p[ >]/g)).toHaveLength(1);
+    expect(out).toContain('first');
+    expect(out).toContain('second');
+  });
+
+  test('rejecting a moveFrom mark keeps the break and drops the record', () => {
+    const out = xml(apply(moved('moveFrom'), reject(QA)));
+    expect(out).not.toContain('<w:moveFrom');
+    expect(out.match(/<w:p[ >]/g)).toHaveLength(2);
+  });
+
+  test('a moveTo mark is the other half: rejecting removes the break it arrived at', () => {
+    expect(xml(apply(moved('moveTo'), reject(QA))).match(/<w:p[ >]/g)).toHaveLength(1);
+    expect(xml(apply(moved('moveTo'), accept(QA))).match(/<w:p[ >]/g)).toHaveLength(2);
+  });
+});

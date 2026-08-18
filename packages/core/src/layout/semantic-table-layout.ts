@@ -38,6 +38,7 @@ import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import {
   markRevisionFields,
+  paragraphMarkFormatRevisionOf,
   paragraphMarkRevisionsOf,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
@@ -897,8 +898,9 @@ function placeCellParagraph(
   //
   // Read only when this fragment will carry it. Placement runs for trial rows and for every
   // continuation, and the projection walks `w:pPr/w:rPr` each time it is asked.
-  const markRevisions =
-    complete && deps.displayMode === 'all-markup' ? paragraphMarkRevisionsOf(paragraph) : [];
+  const showsMarkup = complete && deps.displayMode === 'all-markup';
+  const markRevisions = showsMarkup ? paragraphMarkRevisionsOf(paragraph) : [];
+  const markFormatRevision = showsMarkup ? paragraphMarkFormatRevisionOf(paragraph) : null;
   const marker =
     lineStart === 0
       ? publishListMarker(
@@ -927,7 +929,7 @@ function placeCellParagraph(
     ...(shading === undefined ? {} : { shading }),
     ...(shadingBox === undefined ? {} : { shadingBox }),
     ...(marker ? { marker } : {}),
-    ...markRevisionFields(markRevisions),
+    ...markRevisionFields(markRevisions, markFormatRevision),
     lines: records,
     box: {
       x: fragmentX,

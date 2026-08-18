@@ -34,6 +34,7 @@ import {
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
+  paragraphMarkFormatRevisionOf,
   paragraphMarkRevisionsOf,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
@@ -2308,12 +2309,12 @@ function layoutBlocksPass(
                   : paragraphShadingBox(pending, regionX + indent.left, available)!,
             }),
         ...(marker ? { marker } : {}),
-        // The paragraph MARK lives at the end of the paragraph, so only the final fragment
-        // carries its revisions — a paragraph split across pages must not draw two pilcrows.
-        // `all-markup` only: the other two modes answer what the document WOULD be once every
-        // decision is taken, and a resolved view draws no attribution, as Word draws none in
-        // No Markup or Original.
-        ...(isLast && showsMarkup ? markRevisionFields(markRevisions) : {}),
+        // Final fragment only — a paragraph split across pages must not draw two pilcrows —
+        // and `all-markup` only, as Word draws attribution in All Markup alone. The record's
+        // own declaration carries the rest of the reasoning.
+        ...(isLast && showsMarkup
+          ? markRevisionFields(markRevisions, paragraphMarkFormatRevisionOf(entry.paragraph))
+          : {}),
         lines: pending,
         box: { x: columnX + indent.left, y: top, width: available, height },
       });

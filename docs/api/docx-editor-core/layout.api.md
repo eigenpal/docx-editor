@@ -1284,6 +1284,9 @@ export interface ListMarkerRecord {
 export type ListSuffix = 'tab' | 'space' | 'nothing';
 
 // @public
+export function markRevisionRemovesMark(revision: RevisionAttribution): boolean;
+
+// @public
 export interface MaterializationInput {
     // (undocumented)
     readonly layout: SemanticLayout;
@@ -1749,6 +1752,7 @@ export interface ParagraphFragmentRecord {
     // (undocumented)
     readonly lines: readonly LineRecord[];
     readonly marker?: ListMarkerRecord;
+    readonly markFormatRevision?: RevisionAttribution;
     // @deprecated
     readonly markRevision?: RevisionAttribution;
     readonly markRevisions?: readonly RevisionAttribution[];
@@ -1858,6 +1862,9 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
 
 // @public
 export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean;
+
+// @public
+export function paragraphMarkFormatRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null;
 
 // @public @deprecated
 export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null;

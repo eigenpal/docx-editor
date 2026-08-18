@@ -62,6 +62,8 @@ const PARAGRAPH_FIELDS = {
   // Derived from `markRevisions` at publish time by one shared function, so it cannot move
   // without the list moving first.
   markRevision: 'covered',
+  // Its own field, not covered by the list: a mark can carry a format change and no decision.
+  markFormatRevision: 'hashed',
   marker: 'hashed',
   // WHOLESALE, not a projection of the fields a line happens to publish today. A line owns
   // `contentX` (the only alignment carrier on a span-less line), `leading`, `trailingSpacing`,
