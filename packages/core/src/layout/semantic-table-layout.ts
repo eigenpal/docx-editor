@@ -212,6 +212,12 @@ export interface TableFlowDeps {
   readonly projectFieldLink?: FieldLinkProjector;
   /** Document properties for document-property fields; the same object every flow shares. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
+  /**
+   * True when this table is in BODY flow, whose page fields are substituted at document finalize.
+   * Propagates to every cell paragraph so a body-table PAGE field paints a placeholder; a table
+   * in a header/footer keeps this false and its own live page path.
+   */
+  readonly bodyPageFields?: boolean;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
   readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
@@ -646,6 +652,7 @@ function placeCellParagraph(
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
       ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
+      ...(deps.bodyPageFields ? { bodyPageFields: true } : {}),
       displayMode: deps.displayMode,
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
       ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),

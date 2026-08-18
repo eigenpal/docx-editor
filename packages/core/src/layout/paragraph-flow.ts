@@ -129,6 +129,13 @@ export interface ParagraphFlowOptions {
    */
   readonly documentProperties?: DocumentProperties;
   /**
+   * True when this is BODY flow, whose PAGE/NUMPAGES/SECTIONPAGES fields are substituted at
+   * document finalize (`substituteBodyPageFields`). Only then does an empty-cache page field
+   * paint a placeholder digit; headers/footers, notes and text boxes leave it blank, keeping
+   * their own live path or their deferral, so a placeholder is never stranded unsubstituted.
+   */
+  readonly bodyPageFields?: boolean;
+  /**
    * Which revisions this break resolves away.
    *
    * A different mode is a different break — the proposed result drops deleted text, so lines
@@ -679,7 +686,8 @@ export function breakParagraph(
     flow?.inlineDrawingLayout,
     flow?.themeFonts,
     flow?.projectFieldLink,
-    flow?.documentProperties
+    flow?.documentProperties,
+    flow?.bodyPageFields ?? false
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {

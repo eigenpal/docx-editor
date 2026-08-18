@@ -18,7 +18,12 @@ import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
 import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
-import { projectPageFieldValue, type FieldPageContext } from './field-page-furniture.ts';
+import {
+  PAGE_FIELD_PLACEHOLDER,
+  projectPageFieldValue,
+  type FieldPageContext,
+} from './field-page-furniture.ts';
+import type { AllowlistedPageField } from './field-instruction.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
 import { symbolFieldGlyph } from './field-symbol.ts';
 import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
@@ -28,6 +33,12 @@ export interface AtomicFieldSynthesis {
   readonly text: string;
   readonly props: readonly OoxmlProperty[];
   readonly style: ResolvedRunStyle;
+  /**
+   * Present when this is a BODY page-field placeholder: {@link text} is the measurement digit and
+   * document finalize substitutes the real value for this kind. The caller carries the marker onto
+   * the span. Absent for the live header/footer value and every other synthesis.
+   */
+  readonly pageField?: { readonly kind: AllowlistedPageField };
 }
 
 /** Document-global inputs the synthesis reads, none of them per-run. */
@@ -35,6 +46,12 @@ export interface AtomicSynthesisContext {
   readonly pageContext?: FieldPageContext;
   readonly themeFonts?: ThemeFonts;
   readonly documentProperties?: DocumentProperties;
+  /**
+   * True in BODY flow, where an empty-cache PAGE/NUMPAGES/SECTIONPAGES paints a placeholder for
+   * document finalize to substitute. Absent/false in headers, footers, notes and text boxes,
+   * which keep their live path or deferral — a placeholder there would never be substituted.
+   */
+  readonly bodyPageFields?: boolean;
 }
 
 /**
@@ -70,6 +87,17 @@ export function synthesizeAtomicField(
   }
   // Empty cache: synthesize. A result that existed but was hidden stays hidden.
   if (!pending.sawResultContent) {
+    // A BODY page field (no page context): paint a placeholder now and record the kind so
+    // document finalize substitutes the page's real value. Gated on `bodyPageFields` because
+    // headers/footers took the live branch above, and notes / text boxes have no substitute pass.
+    if (pending.kind && ctx.bodyPageFields) {
+      return {
+        text: PAGE_FIELD_PLACEHOLDER,
+        props: pending.props,
+        style: pending.style,
+        pageField: { kind: pending.kind },
+      };
+    }
     if (pending.docPropertySpec) {
       const value = docPropertyValue(pending.docPropertySpec, ctx.documentProperties);
       if (value !== null) return { text: value, props: pending.props, style: pending.style };

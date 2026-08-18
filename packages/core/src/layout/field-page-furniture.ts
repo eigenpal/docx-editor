@@ -14,7 +14,25 @@
 import type { AllowlistedPageField, StoryPageFieldNeeds } from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
 import { formatDecimal, formatNumFmt } from './numbering-format.ts';
-import type { HeaderFooterStoryRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  HeaderFooterStoryRecord,
+  LineRecord,
+  PageRecord,
+  SemanticLayout,
+  StyleSpanRecord,
+} from './semantic-records.ts';
+
+/**
+ * Placeholder a body PAGE/NUMPAGES/SECTIONPAGES atom paints during measurement.
+ *
+ * Body content flows once, before the page count is known, so the real value cannot be measured
+ * in place. The paragraph walk reserves one model unit and paints this single digit; document
+ * finalize substitutes the value the atom lands on ({@link substituteBodyPageFields}). A digit is
+ * chosen so a one-digit page number lays out exactly and a multi-digit one shifts only its own
+ * trailing content on the line — the same non-reflow Word shows.
+ */
+export const PAGE_FIELD_PLACEHOLDER = '0';
 
 /**
  * Page-field evaluation context for furniture projection.
@@ -142,12 +160,87 @@ export function withPageFieldSources(
 }
 
 /**
- * Project allowlisted PAGE/NUMPAGES/SECTIONPAGES onto every page's read-only furniture once
- * the document page count is known. Body stories are unchanged.
+ * Substitute a body page-field placeholder line, or return it by identity.
  *
- * Uses {@link PageFieldSource} when present (section restart + SECTIONPAGES + fmt). Absent
- * source keeps physical 1-based indices (`page.index + 1`) and treats the whole document as
- * one section — the empty-`pgNumType` comprehensive-fixture behaviour.
+ * Only a span carrying a {@link FieldAtomMarker.pageField} marker is touched, and only when the
+ * value the atom lands on differs from what the span already paints. The span's model `range`
+ * stays its reserved one-unit width whatever the substituted text length is — paint and the
+ * offset accounting clamp to that width, so a multi-digit page number never lengthens the model.
+ */
+function substituteBodyPageFieldLine(line: LineRecord, context: FieldPageContext): LineRecord {
+  let spans: StyleSpanRecord[] | null = null;
+  for (let index = 0; index < line.spans.length; index += 1) {
+    const span = line.spans[index]!;
+    const kind = span.fieldAtom?.pageField?.kind;
+    if (!kind) continue;
+    const text = projectPageFieldValue(kind, context);
+    if (text === span.text) continue;
+    if (!spans) spans = line.spans.slice();
+    spans[index] = { ...span, text };
+  }
+  return spans ? { ...line, spans } : line;
+}
+
+/**
+ * Substitute every body page-field placeholder in one block list against a page's context, or
+ * return the list by identity when nothing changed.
+ *
+ * Recurses through table rows and cells, so a PAGE field inside a body table cell resolves the
+ * same way a top-level one does. New records are minted only along the path to a changed span,
+ * mirroring {@link finalizePageFieldProjection}'s identity discipline so incremental layout keeps
+ * reusing untouched pages.
+ */
+export function substituteBodyPageFields(
+  blocks: readonly BlockFragmentRecord[],
+  context: FieldPageContext
+): readonly BlockFragmentRecord[] {
+  let next: BlockFragmentRecord[] | null = null;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    let replacement: BlockFragmentRecord = block;
+    if (block.kind === 'paragraph') {
+      let mutatedLines: LineRecord[] | null = null;
+      for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex += 1) {
+        const line = block.lines[lineIndex]!;
+        const nextLine = substituteBodyPageFieldLine(line, context);
+        if (nextLine === line) continue;
+        if (!mutatedLines) mutatedLines = block.lines.slice();
+        mutatedLines[lineIndex] = nextLine;
+      }
+      if (mutatedLines) replacement = { ...block, lines: mutatedLines };
+    } else {
+      let mutatedRows: (typeof block.rows)[number][] | null = null;
+      for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex += 1) {
+        const row = block.rows[rowIndex]!;
+        let mutatedCells: (typeof row.cells)[number][] | null = null;
+        for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
+          const cell = row.cells[cellIndex]!;
+          const cellBlocks = substituteBodyPageFields(cell.blocks, context);
+          if (cellBlocks === cell.blocks) continue;
+          if (!mutatedCells) mutatedCells = row.cells.slice();
+          mutatedCells[cellIndex] = { ...cell, blocks: cellBlocks };
+        }
+        if (!mutatedCells) continue;
+        if (!mutatedRows) mutatedRows = block.rows.slice();
+        mutatedRows[rowIndex] = { ...row, cells: mutatedCells };
+      }
+      if (mutatedRows) replacement = { ...block, rows: mutatedRows };
+    }
+    if (replacement === block) continue;
+    if (!next) next = blocks.slice();
+    next[index] = replacement;
+  }
+  return next ?? blocks;
+}
+
+/**
+ * Project allowlisted PAGE/NUMPAGES/SECTIONPAGES once the document page count is known.
+ *
+ * Header/footer furniture substitutes through each story's transient projector. Body flow (and
+ * body tables) substitutes the placeholders the paragraph walk reserved, using the SAME per-page
+ * context — {@link PageFieldSource} when present (section restart + SECTIONPAGES + fmt), else the
+ * physical 1-based index and the whole document as one section (empty-`pgNumType` behaviour).
+ * Pages and stories with no page field are returned by identity.
  */
 export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLayout {
   const pageCount = layout.pages.length;
@@ -175,11 +268,16 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     };
     const header = project(page.header);
     const footer = project(page.footer);
-    if (header === page.header && footer === page.footer) return page;
+    const fragments = substituteBodyPageFields(page.fragments, context);
+    if (header === page.header && footer === page.footer && fragments === page.fragments) {
+      return page;
+    }
+    if (fragments !== page.fragments) changed = true;
     return {
       ...page,
       ...(header !== undefined ? { header } : {}),
       ...(footer !== undefined ? { footer } : {}),
+      ...(fragments !== page.fragments ? { fragments } : {}),
     };
   });
 

@@ -1356,6 +1356,8 @@ function layoutBlocksPass(
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+    // Body flow: page fields in table cells paint a placeholder for document finalize to fill.
+    bodyPageFields: true,
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
@@ -1481,6 +1483,8 @@ function layoutBlocksPass(
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
         ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
         ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+        // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
+        bodyPageFields: true,
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout

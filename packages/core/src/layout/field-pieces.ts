@@ -52,6 +52,15 @@ export interface FieldAtomMarker {
    * turns it off — because they mark the blanks somebody is meant to fill in.
    */
   readonly formField: boolean;
+  /**
+   * A BODY PAGE / NUMPAGES / SECTIONPAGES atom whose value depends on pagination.
+   *
+   * The paragraph walk cannot know which page the field lands on — layout runs before the page
+   * count — so it paints a placeholder and records the field's kind here. Document finalize
+   * (`substituteBodyPageFields`) reads this marker and substitutes the real value per page.
+   * Absent in headers/footers, which evaluate live through their own per-page projector.
+   */
+  readonly pageField?: { readonly kind: AllowlistedPageField };
 }
 
 /**

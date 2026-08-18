@@ -38,10 +38,15 @@ import {
   onFldCharBegin,
   onFldCharEnd,
   onFldCharSeparate,
+  type AllowlistedPageField,
   type FieldScanBudget,
 } from './field-instruction.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
-import { projectPageFieldValue, type FieldPageContext } from './field-page-furniture.ts';
+import {
+  PAGE_FIELD_PLACEHOLDER,
+  projectPageFieldValue,
+  type FieldPageContext,
+} from './field-page-furniture.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 import {
   MAX_REVISION_DEPTH,
@@ -246,6 +251,11 @@ export interface SimpleFieldProjection {
   readonly style: ResolvedRunStyle;
   /** The HYPERLINK-instruction link the piece should carry, when one projects. */
   readonly link?: SpanLinkRecord;
+  /**
+   * Present when this is a BODY page-field placeholder (no page context): {@link text} is the
+   * measurement digit and document finalize substitutes the real value for this kind.
+   */
+  readonly pageField?: { readonly kind: AllowlistedPageField };
 }
 
 /**
@@ -282,6 +292,8 @@ export function projectSimpleFieldResult(args: {
   readonly projectFieldLink?: FieldLinkProjector;
   /** Parsed document properties, for a TITLE / AUTHOR / … / DOCPROPERTY simple field. */
   readonly documentProperties?: DocumentProperties;
+  /** True in BODY flow: an empty-cache page field paints a placeholder for finalize to fill. */
+  readonly bodyPageFields?: boolean;
 }): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
@@ -293,6 +305,20 @@ export function projectSimpleFieldResult(args: {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
     return { text: projectPageFieldValue(pageKind, pageContext), props, style };
+  }
+  // A BODY page field (no page context) with no cached result: paint a placeholder and mark the
+  // kind so document finalize substitutes the page's value. A cached result wins — it falls
+  // through to paint normally, exactly as it would in Word until the field is next updated.
+  if (
+    pageKind &&
+    args.bodyPageFields &&
+    !pageContext &&
+    display.text.length === 0 &&
+    !display.sawResultContent
+  ) {
+    const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+    if (style.hidden) return null;
+    return { text: PAGE_FIELD_PLACEHOLDER, props, style, pageField: { kind: pageKind } };
   }
 
   const symbolSpec = parseSymbolInstruction(instr);

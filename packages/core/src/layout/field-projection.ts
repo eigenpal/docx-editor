@@ -9,11 +9,14 @@
 // (aligned with `paragraphTextOf` / `segmentsOf`). FORMTEXT results instead keep their literal
 // character offsets because they are user input. Malformed fields demote so content remains.
 //
-// Shipped scope is furniture-only for live page-number evaluation. Simple and complex
-// PAGE-family fields evaluate alike when a page context is supplied; a non-page field paints
-// its cached result, with allowlisted page fields nested inside that result (complex or
-// simple) evaluated per sheet rather than concatenated from the saved cache. Other nested
-// field instructions stay inert. Body-side evaluation beyond that is deferred.
+// Simple and complex PAGE-family fields evaluate alike when a page context is supplied
+// (headers/footers): the live value paints from that context. In the BODY there is no page
+// context — the value depends on a pagination that has not happened yet — so a page field with
+// no cached result paints a placeholder digit and records its kind on the span's field-atom
+// marker; `substituteBodyPageFields` fills the real value once the page count is known. A
+// non-page field paints its cached result, with allowlisted page fields nested inside that
+// result (complex or simple) evaluated per sheet rather than concatenated from the saved cache.
+// Other nested field instructions stay inert.
 //
 // Projection is a layout concern (span geometry + tab alignment), not paint-time substitution.
 
@@ -170,7 +173,8 @@ export function piecesOfParagraph(
   inlineDrawingLayout?: InlineDrawingLayoutContext,
   themeFonts?: ThemeFonts,
   projectFieldLink?: FieldLinkProjector,
-  documentProperties?: DocumentProperties
+  documentProperties?: DocumentProperties,
+  bodyPageFields = false
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
@@ -329,9 +333,18 @@ export function piecesOfParagraph(
       pageContext,
       themeFonts,
       documentProperties,
+      bodyPageFields,
     });
     if (synthesis) {
-      push(synthesis.text, synthesis.props, synthesis.style, true, start, end, carried());
+      const extras = carried();
+      // A body page-field placeholder rides the same field-atom marker its finalize pass reads.
+      const withPageField = synthesis.pageField
+        ? {
+            ...extras,
+            fieldAtom: { formField: pending.formField, pageField: synthesis.pageField },
+          }
+        : extras;
+      push(synthesis.text, synthesis.props, synthesis.style, true, start, end, withPageField);
     }
     pending = null;
     openAtomicBeginId = null;
@@ -612,7 +625,10 @@ export function piecesOfParagraph(
         const separateLevel = field.nesting;
         const kind = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
-          pending.kind = kind && pageContext ? kind : null;
+          // Capture the allowlisted kind whether or not a page context is present. With one
+          // (header/footer) the flush projects the live value; without one (body) it paints a
+          // placeholder the kind marks, and document finalize substitutes the page's value.
+          pending.kind = kind;
           // Capture the SYMBOL / HYPERLINK / form-field spec while the machine still holds the
           // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
           // Nesting overflow refuses exactly as PAGE projection does: a >4-deep hostile field
@@ -894,11 +910,16 @@ export function piecesOfParagraph(
       currentLink,
       projectFieldLink,
       documentProperties,
+      bodyPageFields,
     });
     if (!projected) return;
-    // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field.
+    // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field. A body
+    // page field carries its kind so document finalize substitutes the page's value.
     push(projected.text, projected.props, projected.style, true, start, start + 1, {
-      fieldAtom: { formField: false },
+      fieldAtom: {
+        formField: false,
+        ...(projected.pageField ? { pageField: projected.pageField } : {}),
+      },
       ...(projected.link ? { linkOverride: projected.link } : {}),
     });
   };
