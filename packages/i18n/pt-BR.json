@@ -482,7 +482,9 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Marca de parágrafo inserida",
-    "runPropertiesChanged": "Formatação do texto alterada"
+    "runPropertiesChanged": "Formatação do texto alterada",
+    "paragraphMarkDeleted": null,
+    "paragraphMarkMoved": null
   },
   "toc": {
     "refresh": "Atualizar tabela inteira",

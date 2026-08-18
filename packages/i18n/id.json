@@ -262,7 +262,9 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Menyisipkan tanda paragraf",
-    "runPropertiesChanged": "Format teks diubah"
+    "runPropertiesChanged": "Format teks diubah",
+    "paragraphMarkDeleted": null,
+    "paragraphMarkMoved": null
   },
   "contextMenu": {
     "ariaLabel": "Menu tindakan AI",

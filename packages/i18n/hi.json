@@ -482,7 +482,9 @@
   },
   "revisions": {
     "paragraphMarkInserted": "अनुच्छेद चिह्न सम्मिलित किया गया",
-    "runPropertiesChanged": "पाठ स्वरूपण बदला गया"
+    "runPropertiesChanged": "पाठ स्वरूपण बदला गया",
+    "paragraphMarkDeleted": null,
+    "paragraphMarkMoved": null
   },
   "toc": {
     "refresh": "पूरी तालिका अपडेट करें",

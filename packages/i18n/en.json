@@ -266,6 +266,8 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Inserted paragraph break",
+    "paragraphMarkDeleted": "Deleted paragraph break",
+    "paragraphMarkMoved": "Moved paragraph break",
     "runPropertiesChanged": "Changed text formatting"
   },
   "contextMenu": {

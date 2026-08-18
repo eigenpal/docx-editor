@@ -2282,6 +2282,7 @@ export interface ReviewRevisionItem {
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';
+    readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
     readonly nesting: number;
     readonly pairedWith?: string;
     readonly ranges: readonly ReviewRange[];

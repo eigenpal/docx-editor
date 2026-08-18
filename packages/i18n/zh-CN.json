@@ -482,7 +482,9 @@
   },
   "revisions": {
     "paragraphMarkInserted": "已插入段落标记",
-    "runPropertiesChanged": "已更改文本格式"
+    "runPropertiesChanged": "已更改文本格式",
+    "paragraphMarkDeleted": null,
+    "paragraphMarkMoved": null
   },
   "toc": {
     "refresh": "更新整个目录",

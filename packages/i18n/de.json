@@ -482,7 +482,9 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Absatzmarke eingefügt",
-    "runPropertiesChanged": "Textformatierung geändert"
+    "runPropertiesChanged": "Textformatierung geändert",
+    "paragraphMarkDeleted": null,
+    "paragraphMarkMoved": null
   },
   "toc": {
     "refresh": "Gesamtes Verzeichnis aktualisieren",

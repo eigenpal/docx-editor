@@ -482,7 +482,9 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Paragraf işareti eklendi",
-    "runPropertiesChanged": "Metin biçimlendirmesi değiştirildi"
+    "runPropertiesChanged": "Metin biçimlendirmesi değiştirildi",
+    "paragraphMarkDeleted": null,
+    "paragraphMarkMoved": null
   },
   "toc": {
     "refresh": "Tüm tabloyu güncelle",

@@ -482,7 +482,9 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Marque de paragraphe insérée",
-    "runPropertiesChanged": "Mise en forme du texte modifiée"
+    "runPropertiesChanged": "Mise en forme du texte modifiée",
+    "paragraphMarkDeleted": null,
+    "paragraphMarkMoved": null
   },
   "toc": {
     "refresh": "Mettre à jour toute la table",

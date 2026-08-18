@@ -5,10 +5,30 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import type { ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
+import type {
+  ReviewRevisionItem,
+  ReviewRevisionKind,
+} from '@docx-editor.dev/core/contracts/editor';
 
-/** The packaged sentence for a revision kind that carries no quoted characters of its own. */
-export function revisionLabelKey(kind: ReviewRevisionKind): TranslationKey {
+/**
+ * The packaged sentence for a revision kind that carries no quoted characters of its own.
+ *
+ * A paragraph MARK needs its direction as well as its kind. The four members of
+ * `EG_ParaRPrTrackChanges` say opposite things about one break — `w:ins` proposes it, `w:del`
+ * proposes removing it — and one sentence for all four told a reviewer the reverse of what
+ * Accept on that card would do.
+ */
+export function revisionLabelKey(
+  kind: ReviewRevisionKind,
+  markDirection?: ReviewRevisionItem['markDirection']
+): TranslationKey {
+  if (kind === 'paragraphMark') {
+    if (markDirection === 'delete') return 'revisions.paragraphMarkDeleted';
+    if (markDirection === 'moveFrom' || markDirection === 'moveTo') {
+      return 'revisions.paragraphMarkMoved';
+    }
+    return 'revisions.paragraphMarkInserted';
+  }
   switch (kind) {
     case 'insert':
       return 'review.inserted';
@@ -22,8 +42,6 @@ export function revisionLabelKey(kind: ReviewRevisionKind): TranslationKey {
       return 'review.movedTo';
     case 'format':
       return 'revisions.runPropertiesChanged';
-    case 'paragraphMark':
-      return 'revisions.paragraphMarkInserted';
     default:
       return 'review.structural';
   }

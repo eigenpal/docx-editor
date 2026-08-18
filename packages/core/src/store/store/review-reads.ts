@@ -71,6 +71,14 @@ export type ReviewRevisionKind =
   /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
   | 'structural';
 
+/** `EG_ParaRPrTrackChanges` by element name: the four decisions a paragraph mark can carry. */
+const MARK_DIRECTIONS: Readonly<Record<string, 'insert' | 'delete' | 'moveFrom' | 'moveTo'>> = {
+  ins: 'insert',
+  del: 'delete',
+  moveFrom: 'moveFrom',
+  moveTo: 'moveTo',
+};
+
 /** One tracked change as the store derives it, keyed per decision rather than per site. */
 export interface ReviewRevisionItem {
   readonly kind: 'revision';
@@ -89,6 +97,15 @@ export interface ReviewRevisionItem {
   /** The words a replacement removes. Empty for every other kind. */
   readonly replacedText: string;
   readonly revisionKind: ReviewRevisionKind;
+  /**
+   * WHICH decision a `paragraphMark` records, absent for every other kind.
+   *
+   * `EG_ParaRPrTrackChanges` is `ins? del? moveFrom? moveTo?`, and the four say opposite
+   * things about the same break: one proposes it, another proposes taking it away. Collapsing
+   * them into the single kind lost that, and a card then described a deleted break as an
+   * inserted one — the reverse of what Accept on that card does.
+   */
+  readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
   readonly author: string;
   readonly date?: string;
   /** Text the revision covers, for the card summary. Empty for changes with no characters. */
@@ -270,6 +287,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
     {
       address: RevisionAddress;
       revisionKind: ReviewRevisionKind;
+      markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
       author: string;
       date?: string;
       text: string;
@@ -299,6 +317,9 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       : site.paragraphMark
         ? 'paragraphMark'
         : (CONTENT_KINDS[site.node.kind] ?? 'structural');
+    // The element name IS the decision for a mark, and it is the only place the direction
+    // survives: `w:pPr/w:rPr` holds the revision as a bare element, not as a wrapper kind.
+    const markDirection = site.paragraphMark ? MARK_DIRECTIONS[site.node.localName] : undefined;
 
     const where = located.get(site.node.id);
     const range: ReviewRange | null = where
@@ -358,6 +379,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
     byAddress.set(key, {
       address,
       revisionKind: kind,
+      ...(markDirection ? { markDirection } : {}),
       author,
       ...(date === undefined ? {} : { date }),
       text:
@@ -380,6 +402,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       address: entry.address,
       addresses: [entry.address],
       revisionKind: entry.revisionKind,
+      ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
       author: entry.author,
       ...(entry.date === undefined ? {} : { date: entry.date }),
       // A pure deletion shows the words it removes as its text; a replacement shows what

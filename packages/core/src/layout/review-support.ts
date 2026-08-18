@@ -142,6 +142,14 @@ export interface ReviewRevisionItem {
   /** The words a replacement removes. Empty for every other kind. */
   readonly replacedText: string;
   readonly revisionKind: ReviewRevisionKind;
+  /**
+   * WHICH decision a `paragraphMark` records, absent for every other kind.
+   *
+   * `EG_ParaRPrTrackChanges` is `ins? del? moveFrom? moveTo?`, and the four say opposite
+   * things about one break. Without this a card called a deleted break an inserted one, which
+   * is the reverse of what Accept on that card does.
+   */
+  readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
   readonly author: string;
   readonly date?: string;
   /** Text the revision covers, for the card summary. Empty for changes with no characters. */
