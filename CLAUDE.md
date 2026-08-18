@@ -240,7 +240,7 @@ clipboard or print:
   `INCLUDE*`) or embedded OLE/macro content. Render inert.
 
 ```bash
-grep -rnE "innerHTML|outerHTML|insertAdjacentHTML|document\.write|window\.open\(|\.href\s*=|font-family:.*\$\{" packages --include="*.ts" --include="*.tsx" --include="*.vue" | grep -viE "test|\.spec\."
+grep -rnE "innerHTML|outerHTML|insertAdjacentHTML|v-html|document\\.write|window\\.open\\(|\\.href\\s*=|font-family:.*\\$\\{" packages --include="*.ts" --include="*.tsx" --include="*.vue" | grep -viE "test|\\.spec\\."
 ```
 
 Fix sibling sinks when you fix one. `openPrintWindow` still builds its popup via

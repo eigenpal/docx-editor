@@ -38,16 +38,24 @@ const required = {
       'DocxEditorPageSetupDialog',
     ],
   },
-  'vue root chrome surface': {
+  'vue composition and composables surface': {
     entries: ['vue'],
     names: [
-      'DocxEditorShell',
-      'DocxEditorTitleBar',
+      'DocxEditorRoot',
+      'DocxEditorViewport',
+      'DocxEditorContent',
+      'useDocxEditor',
+      'useEditorState',
+      'useEditorCommand',
+      'useEditorEvent',
       'DocxEditorToolbar',
-      'DocxEditorSidebar',
-      'PageIndicator',
+      'DocxEditorMenu',
+      'DocxEditorNavigation',
+      'DocxEditorPageSetupDialog',
       'HorizontalRuler',
       'VerticalRuler',
+      'PageIndicator',
+      'PaginatedDocxEditor',
     ],
   },
   // Both automation entries carry the whole documented vocabulary — the lifecycle types, the
@@ -145,7 +153,7 @@ const docsSurface = evaluatePublicDocsSurface({
       subpathClaims: documentedSubpaths('@docx-editor.dev/react', mdxFiles),
     },
     '@docx-editor.dev/vue': {
-      rootClaims: required['vue root chrome surface'].names,
+      rootClaims: required['vue composition and composables surface'].names,
       subpathClaims: documentedSubpaths('@docx-editor.dev/vue', mdxFiles),
     },
   },

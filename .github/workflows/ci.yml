@@ -157,6 +157,12 @@ jobs:
       - name: API report check
         run: bun run api:check
 
+      - name: Parity gates
+        run: bun run check:parity
+
+      - name: Feature parity report
+        run: bun run check:feature-parity
+
       # Same generator the release runs, here as a gate rather than for its
       # output: it fails when a newly bundled dependency ships no license text,
       # or when a tsup config stops emitting the metafile it reads. Catching
@@ -172,13 +178,6 @@ jobs:
 
       - name: Published-package consumer check
         run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
-
-      # Parity contract check is disabled while @docx-editor.dev/vue is WIP and
-      # unpublished — it reads the Vue adapter's API Extractor snapshot, which is no
-      # longer regenerated now that the package is off `build:packages`, so it can only
-      # gate CI on an adapter that doesn't ship. Restore
-      # `- name: Parity contract check / run: bun run check:parity-contract` when the
-      # Vue package drops `private: true`.
 
       - name: i18n per-locale bundle size check
         run: bun run check:i18n-bundle-size

@@ -18,80 +18,27 @@ const VUE_ONLY_PROPS = new Set([
   // React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is
   // one implementation either way. Mirrored in scripts/parity/parity.contract.json.
   'revisionStyles',
+  // Vue sugar host declares `class`; React names the same surface `className`.
+  'class',
 ]);
 
 // React props with no Vue PROP counterpart — each an idiomatic framework
 // divergence, not a missing feature. Vue exposes the same capability another
 // way, so these are declared divergences rather than gaps to close. The same
-// three are recorded in scripts/parity/parity.contract.json.
+// set is recorded in scripts/parity/parity.contract.json.
 const REACT_PROPS_NOT_YET_IN_VUE = new Set([
-  // Vue applies `class` as a native fallthrough attribute.
+  // Vue applies `class` as a declared prop; React names it `className`.
   'className',
-  // Vue exposes these as EMITS (`@ready`, `@change`), which never appear in a
-  // props interface.
+  // Vue exposes these as EMITS (`@ready`, `@change`, `@fontError`), which never
+  // appear in DocxEditorProps.
   'onReady',
   'onChange',
-  // M6V.1 chrome props, React-only until 10V.1 ports the chrome to Vue.
-  //
-  // These are NOT idiomatic-framework divergences like the three above — they are a
-  // deliberate, time-boxed gap with a named closing task. 10V.1 MUST remove all six
-  // entries; a divergence with no closing task is how a gate quietly stops meaning
-  // anything.
-  't',
-  // The catalogue that same chrome resolves through, published as a provider around the
-  // packaged frame. Vue has `provideLocale` already; what it lacks is chrome to language,
-  // so this closes with `t` at 10V.1.
-  'i18n',
-  'chrome',
-  'title',
-  'onTitleChange',
-  'onSave',
-  // Same gap, same closing task: the ruler chrome is part of the React frame,
-  // and Vue has no ruler slot yet, so there is no toggle for it to expose. The
-  // ENGINE half is shared — page setup, zoom and the margin/indent commands all
-  // come from core — so this is the chrome, not the capability.
-  'rulers',
-  // The link popover is part of the provider/hooks layer, which landed React-first: it is
-  // a context-backed hook plus a compound over it, and its Vue twin is the composable form
-  // that lands with the rest of that layer. The ENGINE half is already shared — typed
-  // links, sanitization, click classification, bookmark jumps, the ops, and Vue's
-  // `text.link` enabled state all come from core — so this gap is the panel, not the
-  // capability. Removed when the Vue provider/hooks twin lands.
-  'hyperlinkPopup',
-  // The navigation pane rides that same provider/hooks layer: a compound plus three
-  // behavior hooks over the context-published editor, so its Vue twin is the composable
-  // form. The ENGINE half is already shared — the search derivation, the session memo,
-  // `findMatches`/`selectMatch` and the outline all live in core, and Vue reaches them
-  // through the same facade — so this gap is the panel, not the capability. Removed when
-  // the Vue provider/hooks twin lands.
-  'navigation',
-  // The menu bar rides that same provider/hooks layer. The ENGINE half is already shared
-  // and MORE so than the pane's: `CHROME_MENUS` is the core registry both adapters read,
-  // every actionable row is a `ChromeSlotId` whose enabled state comes from the same
-  // `toolbarCommandState`, the two break commands are core rows, and the styles are in
-  // the core stylesheet — so the Vue twin is markup over data it already has. `onOpen` is
-  // that bar's File row handler and closes with it. Removed when the Vue provider/hooks
-  // twin lands.
-  'menu',
-  'onOpen',
-  // React renders viewport extras as children; Vue's equivalent is its default slot.
+  'onFontError',
+  // React renders viewport-extras as children; Vue's equivalent is the default slot.
   'children',
-  // The right-click menu rides that same provider/hooks layer, and its engine half is the
-  // most shared of the four: `selectAll`, `copy`, `cut` and `paste` are core commands, the
-  // rows ARE the menu bar's rows, every enabled state comes from the same `Editor.can`, the
-  // styles are in the core stylesheet, and the surface's pointer controller already ignores
-  // non-primary buttons so a right-click reaches a menu with the selection intact. The Vue
-  // twin is a panel and a placement rule. Removed when the Vue provider/hooks twin lands.
-  'contextMenu',
-  // Where the display scale comes from: a fixed number, or a fit the engine keeps tracking.
-  // This is the shallowest gap of the lot — the fit runs in the ENGINE, `'auto'` is
-  // `createDocxEditor`'s default, and `getZoomMode`/`setZoomMode`/`snapshot().zoomMode` are
-  // contract members Vue already reaches through the facade. A Vue host has fit-to-viewport
-  // zoom today and can change the mode; what it cannot do is declare it as a prop. Removed
-  // when the Vue prop surface catches up (the adapter change is a prop, a spread and a
-  // watcher), and blocked on nothing but that: `docs/api/docx-editor-vue` is frozen while
-  // the package is `disconnected`, so the parity contract cannot see a Vue prop added today.
-  'zoomMode',
+  // Title-bar render props; Vue uses named slots with the same names.
+  'renderTitleBarLeft',
+  'renderTitleBarRight',
 ]);
 
 function extractInterfaceBody(source, name) {
@@ -111,7 +58,7 @@ function extractInterfaceBody(source, name) {
 function extractPropKeys(source, name) {
   const body = extractInterfaceBody(source, name);
   const keys = new Set();
-  const propRegex = /^\s+([A-Za-z_$][\w$]*)\??\s*:/gm;
+  const propRegex = /^\s+(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*:/gm;
   for (const match of body.matchAll(propRegex)) keys.add(match[1]);
   return keys;
 }

@@ -69,7 +69,7 @@ function extractInterfaceFields(snapshotText, interfaceName) {
     // `name(): Type;`. Matching only the former made method-style members such
     // as `getEditor(): Editor | null` invisible to the gate, so a ref method
     // could be added or dropped on one adapter without the check noticing.
-    const match = /^ {4}(\w+)\??[(:]/.exec(line);
+    const match = /^ {4}(?:readonly\s+)?(\w+)\??[(:]/.exec(line);
     if (match) fields.add(match[1]);
   }
   return fields;

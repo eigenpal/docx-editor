@@ -86,7 +86,7 @@ export default defineNuxtConfig({
 When you need the rest of the Vue adapter surface, import it from `@docx-editor.dev/vue` directly:
 
 - the `DocxEditorProps` and `DocxEditorRef` types
-- root-level helpers like `DocxEditorShell`, `DocxEditorToolbar`, `DocxEditorSidebar`, `HorizontalRuler`, and `PageIndicator`
+- composition primitives like `DocxEditorRoot`, `DocxEditorToolbar`, `DocxEditorNavigation`, `HorizontalRuler`, and `PageIndicator`
 
 These are not re-exported by the Nuxt module. Import them from the adapter directly, and add it to your own `dependencies` so the import is explicit:
 

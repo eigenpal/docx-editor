@@ -9,7 +9,11 @@ export function extractInterfaceFields(snapshotText, interfaceName) {
   const lines = snapshotText.split('\n');
   const startMarker = `export interface ${interfaceName} `;
   const startIdx = lines.findIndex(
-    (l) => l.startsWith(startMarker) || l.startsWith(`export interface ${interfaceName}{`)
+    (l) =>
+      l.startsWith(startMarker) ||
+      l.startsWith(`export interface ${interfaceName}{`) ||
+      l.startsWith(`interface ${interfaceName} `) ||
+      l.startsWith(`interface ${interfaceName}{`)
   );
   if (startIdx === -1) return null;
 
@@ -45,7 +49,11 @@ export function extractInterfaceMemberTypes(snapshotText, interfaceName) {
   const lines = snapshotText.split('\n');
   const startMarker = `export interface ${interfaceName} `;
   const startIdx = lines.findIndex(
-    (l) => l.startsWith(startMarker) || l.startsWith(`export interface ${interfaceName}{`)
+    (l) =>
+      l.startsWith(startMarker) ||
+      l.startsWith(`export interface ${interfaceName}{`) ||
+      l.startsWith(`interface ${interfaceName} `) ||
+      l.startsWith(`interface ${interfaceName}{`)
   );
   if (startIdx === -1) return null;
 
@@ -158,7 +166,7 @@ export function extractFunctionExports(snapshotText) {
 export function extractInterfaceNames(snapshotText) {
   const names = new Set();
   for (const line of snapshotText.split('\n')) {
-    const iface = /^export interface (\w+)/.exec(line);
+    const iface = /^(?:export )?interface (\w+)/.exec(line);
     if (iface) names.add(iface[1]);
     const alias = /^export type (\w+) =/.exec(line);
     if (alias) names.add(alias[1]);

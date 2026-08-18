@@ -5,6 +5,7 @@
     "paired": [
       "author",
       "chrome",
+      "colorMode",
       "contextMenu",
       "document",
       "fonts",
@@ -30,11 +31,12 @@
       "onChange": "React takes a callback prop. Vue exposes the same signal as a `change` EMIT, which is the idiomatic Vue form and does not appear in DocxEditorProps.",
       "onReady": "React takes a callback prop. Vue exposes the same signal as a `ready` EMIT.",
       "onFontError": "React takes a callback prop. Vue exposes the same signal as a `fontError` EMIT.",
-      "children": "React renders viewport-extras children inside the sugar viewport (the pro review pane mounts through it). Vue reaches the same via the default slot on `<DocxEditor>`."
+      "children": "React renders viewport-extras children inside the sugar viewport (the pro review pane mounts through it). Vue reaches the same via the default slot on `<DocxEditor>`.",
+      "renderTitleBarLeft": "React takes a render prop. Vue exposes the same surface as a named slot.",
+      "renderTitleBarRight": "React takes a render prop. Vue exposes the same surface as a named slot."
     },
     "vueExclusive": {
       "class": "Vue sugar host declares `class` on DocxEditorProps; React names the same surface `className`.",
-      "colorMode": "Declared on Vue DocxEditorProps; React carries the same prop on DocxEditorProps but the API Extractor snapshot for React omits it from the counted field list until the next extract lands.",
       "revisionStyles": "Per-author revision styling. React expresses it DECLARATIVELY — `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is one implementation either way."
     }
   },
