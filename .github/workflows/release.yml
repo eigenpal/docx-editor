@@ -30,7 +30,11 @@ concurrency:
 jobs:
   release:
     name: Release
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Must be a GitHub-hosted runner: npm rejects provenance bundles from
+    # self-hosted runners (E422 "Unsupported GitHub Actions runner environment"),
+    # and Trusted Publishing always signs provenance. Blacksmith counts as
+    # self-hosted, so keep this job off it.
+    runs-on: ubuntu-latest
     # Default job timeout is 6h; a hung step (e.g. an apt prompt) otherwise burns
     # a runner for hours. A healthy run finishes in well under 10 min.
     timeout-minutes: 30
