@@ -1,45 +1,45 @@
 ## 0. Baseline before code
 
-- [ ] 0.1 Record the baseline: `bun install`, then `bun run typecheck`, `bun run lint`,
+- [x] 0.1 Record the baseline: `bun install`, then `bun run typecheck`, `bun run lint`,
       `bun run test`, `bun run check:parity`, `bun run api:check`, `bun run i18n:validate`.
       Fresh worktrees are not green — build `@docx-editor.dev/i18n` before typecheck means
       anything, and note every failure that is already there so a new one is visible
-- [ ] 0.2 Record the export gap as numbers, from `scripts/lib/named-exports.mjs`: React exports,
+- [x] 0.2 Record the export gap as numbers, from `scripts/lib/named-exports.mjs`: React exports,
       Vue exports, React-only, Vue-only. The starting point is 273 / 68 / 216 / 11
-- [ ] 0.3 Prove the double-engine defect: `bun run build:packages:vue` as the tree stands, and
+- [x] 0.3 Prove the double-engine defect: `bun run build:packages:vue` as the tree stands, and
       show `dist/index.js` carries the engine rather than importing it
 
 ## 1. Remove the old package, deprecate the old React chrome
 
-- [ ] 1.1 Delete `packages/vue/src` and `packages/vue/test`, then restore
+- [x] 1.1 Delete `packages/vue/src` and `packages/vue/test`, then restore
       `packages/vue/src/styles/editor.css` BYTE FOR BYTE — it is already thin and already passes
       `check:adapter-css-thin`, and rewriting it is how an adapter grows a forked style. Re-create
       `packages/vue/src/index.ts` as an empty entry
-- [ ] 1.2 Tag the pre-v2 React shell chrome `@deprecated`, naming the replacement on each:
+- [x] 1.2 Tag the pre-v2 React shell chrome `@deprecated`, naming the replacement on each:
       `Toolbar`, `ToolbarButton`, `ToolbarGroup`, `ToolbarProps` → `DocxEditor.Toolbar`;
       `TitleBar`, `MenuBar`, `DocumentName`, `Logo`, `TitleBarRight`, `DocxEditorShell`,
       `PaginatedDocxEditorShell`, `PaginatedDocxEditorShellProps` → the packaged `<DocxEditor>`
       and `DocxEditor.Menu`. `bun run api:extract` so the tag lands in the snapshot. NOT
       deprecated: `HorizontalRuler`, `VerticalRuler`, `DocumentOutline`, `PageIndicator`,
       `PaginatedDocxEditor` — the v2 parts wrap them
-- [ ] 1.2b Teach `check-export-parity.mjs` and the new composable gate to skip a symbol the
+- [x] 1.2b Teach `check-export-parity.mjs` and the new composable gate to skip a symbol the
       snapshot marks deprecated. Read the tag; do not maintain a list
-- [ ] 1.2c In the SAME commit as 1.1: grow the divergence file to cover the remaining React
+- [x] 1.2c In the SAME commit as 1.1: grow the divergence file to cover the remaining React
       surface, and remove the `vue root chrome surface` bucket from
       `check-public-docs-surface.mjs`. This is the only commit where the divergence file gets
       larger; from here it only shrinks, to zero
-- [ ] 1.3 Record the gap numbers again: Vue-only becomes 0 and never rises above it; React-only
+- [x] 1.3 Record the gap numbers again: Vue-only becomes 0 and never rises above it; React-only
       is the non-deprecated surface, which is the number this change drives to zero
-- [ ] 1.4 Adopt the mirror rule: a paired export lives at the same relative path in both
+- [x] 1.4 Adopt the mirror rule: a paired export lives at the same relative path in both
       adapters. Write it down in `packages/vue/README.md` and add a check that every Vue source
       file has a React file at the same relative path, modulo the extension
-- [ ] 1.5 Delete the v1 build leftovers with the source: `packages/vue/tailwind.config.js` (the
+- [x] 1.5 Delete the v1 build leftovers with the source: `packages/vue/tailwind.config.js` (the
       stylesheet is compiled and scoped in core), and check `tsconfig.api.json` still describes
       the tsup output
-- [ ] 1.5b Assign every non-deprecated React export to a phase of this plan, in a checklist. A
+- [x] 1.5b Assign every non-deprecated React export to a phase of this plan, in a checklist. A
       name with no phase is a gap in the PLAN, not in the implementation, and this is the only
       step that finds it before `check:export-parity` does at the end
-- [ ] 1.6 Remove the four dead `max-lines` globs in `eslint.config.js` that name three pre-v2 Vue
+- [x] 1.6 Remove the four dead `max-lines` globs in `eslint.config.js` that name three pre-v2 Vue
       files (`components/DocxEditor.vue`, `components/Toolbar.vue`,
       `composables/useDocxEditor.ts`), and add one guard that every file-specific glob matches a
       real file

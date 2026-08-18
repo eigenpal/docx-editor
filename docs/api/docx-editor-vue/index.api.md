@@ -2481,12 +2481,6 @@ export interface DocxEditorProps {
     // (undocumented)
     navigation?: boolean;
     // (undocumented)
-    onOpen?: () => void;
-    // (undocumented)
-    onSave?: () => void;
-    // (undocumented)
-    onTitleChange?: (title: string) => void;
-    // (undocumented)
     rulers?: boolean;
     // (undocumented)
     t?: (key: string, params?: Record<string, string | number>) => string;
@@ -2566,18 +2560,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<ImageDecodePort>;
         default: undefined;
     };
-    onReady: {
-        type: PropType<DocxEditorRootProps["onReady"]>;
-        default: undefined;
-    };
-    onChange: {
-        type: PropType<DocxEditorRootProps["onChange"]>;
-        default: undefined;
-    };
-    onFontError: {
-        type: PropType<DocxEditorRootProps["onFontError"]>;
-        default: undefined;
-    };
 }>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
@@ -2629,18 +2611,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<ImageDecodePort>;
         default: undefined;
     };
-    onReady: {
-        type: PropType<DocxEditorRootProps["onReady"]>;
-        default: undefined;
-    };
-    onChange: {
-        type: PropType<DocxEditorRootProps["onChange"]>;
-        default: undefined;
-    };
-    onFontError: {
-        type: PropType<DocxEditorRootProps["onFontError"]>;
-        default: undefined;
-    };
 }>> & Readonly<{
     onChange?: ((_change: DocumentChange) => any) | undefined;
     onReady?: ((_editor: Editor) => any) | undefined;
@@ -2656,9 +2626,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
-    onChange: ((change: DocumentChange) => void) | undefined;
-    onReady: ((editor: Editor) => void) | undefined;
-    onFontError: ((error: EditorFontError) => void) | undefined;
     zoomMode: "auto" | ZoomMode;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -2680,12 +2647,6 @@ export interface DocxEditorRootProps {
     mode?: 'edit' | 'view' | 'suggesting';
     // (undocumented)
     modules?: readonly EditorModule[];
-    // (undocumented)
-    onChange?: (change: DocumentChange) => void;
-    // (undocumented)
-    onFontError?: (error: EditorFontError) => void;
-    // (undocumented)
-    onReady?: (editor: Editor) => void;
     // (undocumented)
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     // (undocumented)
@@ -4219,150 +4180,8 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
     hidden?: boolean;
 }
 
-// @public (undocumented)
-export function provideDocxEditor(options: DocxEditorRootProps): {
-    DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
-        document: {
-            type: PropType<DocumentSource>;
-            default: undefined;
-        };
-        fonts: {
-            type: PropType<DocxEditorRootProps["fonts"]>;
-            default: undefined;
-        };
-        author: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        locale: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        translate: {
-            type: PropType<DocxEditorRootProps["translate"]>;
-            default: undefined;
-        };
-        modules: {
-            type: PropType<readonly EditorModule[]>;
-            default: undefined;
-        };
-        mode: {
-            type: PropType<"edit" | "view" | "suggesting">;
-            default: undefined;
-        };
-        zoom: {
-            type: NumberConstructor;
-            default: undefined;
-        };
-        zoomMode: {
-            type: PropType<ZoomMode | "auto">;
-            default: undefined;
-        };
-        tableInteractionLabel: {
-            type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
-            default: undefined;
-        };
-        imageDecodePort: {
-            type: PropType<ImageDecodePort>;
-            default: undefined;
-        };
-        onReady: {
-            type: PropType<DocxEditorRootProps["onReady"]>;
-            default: undefined;
-        };
-        onChange: {
-            type: PropType<DocxEditorRootProps["onChange"]>;
-            default: undefined;
-        };
-        onFontError: {
-            type: PropType<DocxEditorRootProps["onFontError"]>;
-            default: undefined;
-        };
-    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
-        [key: string]: any;
-    }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
-        ready: (_editor: Editor) => true;
-        change: (_change: DocumentChange) => true;
-        fontError: (_error: unknown) => true;
-    }, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        document: {
-            type: PropType<DocumentSource>;
-            default: undefined;
-        };
-        fonts: {
-            type: PropType<DocxEditorRootProps["fonts"]>;
-            default: undefined;
-        };
-        author: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        locale: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        translate: {
-            type: PropType<DocxEditorRootProps["translate"]>;
-            default: undefined;
-        };
-        modules: {
-            type: PropType<readonly EditorModule[]>;
-            default: undefined;
-        };
-        mode: {
-            type: PropType<"edit" | "view" | "suggesting">;
-            default: undefined;
-        };
-        zoom: {
-            type: NumberConstructor;
-            default: undefined;
-        };
-        zoomMode: {
-            type: PropType<ZoomMode | "auto">;
-            default: undefined;
-        };
-        tableInteractionLabel: {
-            type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
-            default: undefined;
-        };
-        imageDecodePort: {
-            type: PropType<ImageDecodePort>;
-            default: undefined;
-        };
-        onReady: {
-            type: PropType<DocxEditorRootProps["onReady"]>;
-            default: undefined;
-        };
-        onChange: {
-            type: PropType<DocxEditorRootProps["onChange"]>;
-            default: undefined;
-        };
-        onFontError: {
-            type: PropType<DocxEditorRootProps["onFontError"]>;
-            default: undefined;
-        };
-    }>> & Readonly<{
-        onChange?: ((_change: DocumentChange) => any) | undefined;
-        onReady?: ((_editor: Editor) => any) | undefined;
-        onFontError?: ((_error: unknown) => any) | undefined;
-    }>, {
-        locale: string;
-        zoom: number;
-        fonts: FontConfiguration | FontConfigurationFragment | FontResolver | undefined;
-        document: DocumentSource;
-        author: string;
-        mode: "suggesting" | "edit" | "view";
-        imageDecodePort: ImageDecodePort;
-        translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
-        modules: readonly EditorModule[];
-        tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
-        onChange: ((change: DocumentChange) => void) | undefined;
-        onReady: ((editor: Editor) => void) | undefined;
-        onFontError: ((error: EditorFontError) => void) | undefined;
-        zoomMode: "auto" | ZoomMode;
-    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    props: DocxEditorRootProps;
-};
+// @public
+export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
 
 export { PX_PER_CM }
 
@@ -4933,7 +4752,7 @@ export interface UseContentControlResult {
 }
 
 // @public (undocumented)
-export function useContextMenuTarget(): ContextMenuContextValue['target'];
+export function useContextMenuTarget(): HTMLElement | null;
 
 // @public (undocumented)
 export function useDocumentOutline(): UseDocumentOutlineResult;
@@ -4991,7 +4810,7 @@ export interface UseDocumentSearchResult {
 export function useDocxEditor(): ShallowRef<DocxEditorInstance | null>;
 
 // @public (undocumented)
-export function useDocxSource(source: DocxSource | null | undefined, options?: UseDocxSourceOptions): UseDocxSourceResult;
+export function useDocxSource(source: MaybeRefOrGetter<DocxSource | null | undefined>, options?: MaybeRefOrGetter<UseDocxSourceOptions>): UseDocxSourceResult;
 
 // @public (undocumented)
 export interface UseDocxSourceOptions {
@@ -5050,7 +4869,7 @@ export interface UseFontFamilyResult {
 }
 
 // @public (undocumented)
-export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
+export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: MaybeRefOrGetter<FontConfigurationFragment | undefined>[]): FontResolver;
 
 // @public (undocumented)
 export function useHeaderFooterState(): Readonly<vue.ShallowRef<_docx_editor_dev_core.HeaderFooterState | null>>;

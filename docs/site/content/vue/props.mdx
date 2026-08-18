@@ -1,6 +1,6 @@
 ---
 title: 'Props'
-description: 'Reference for the current Vue root props and ref: document source, chrome toggles, menu integration, callbacks, and the shared imperative handle.'
+description: 'Reference for the current Vue root props and ref: document source, chrome toggles, menu integration, emits, and the shared imperative handle.'
 category: 'Vue'
 order: 36
 ---
@@ -11,14 +11,14 @@ order: 36
 
 Use `document` for the current document source and `fonts` for measurement fidelity.
 
-| Prop       | Type                                                             | Description                                                                                                                                        |
-| ---------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `document` | `DocumentSource`                                                 | DOCX bytes or an existing `DocumentHandle`.                                                                                                        |
-| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes used for Word-accurate shaping and pagination, or a resolver called per load with the document's declared families.                     |
-| `author`   | `string`                                                         | Ambient author for authored commands such as comments and review actions.                                                                          |
-| `locale`   | `string`                                                         | Locale passed to the underlying editor instance.                                                                                                   |
-| `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | The mode the editor opens in. Defaults to `'edit'`, so a document that carries `w:trackRevisions` still opens ready to type. Remount to change it. |
-| `zoom`     | `number`                                                         | Mount-time zoom value.                                                                                                                             |
+| Prop       | Type                                                             | Description                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `document` | `Uint8Array \| ArrayBuffer \| DocumentHandle`                    | DOCX bytes or an existing handle. Pass a URL or path through [`useDocxSource`](/docs/2.x/vue/composables#usedocxsource) and bind the resolved bytes. |
+| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes used for Word-accurate shaping and pagination, or a resolver called per load with the document's declared families.                       |
+| `author`   | `string`                                                         | Ambient author for authored commands such as comments and review actions.                                                                            |
+| `locale`   | `string`                                                         | Locale passed to the underlying editor instance. Changing it rebuilds the editor.                                                                    |
+| `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | The mode the editor opens in. Defaults to `'edit'`, so a document that carries `w:trackRevisions` still opens ready to type. Remount to change it.   |
+| `zoom`     | `number`                                                         | Mount-time zoom value.                                                                                                                               |
 
 ```vue
 <DocxEditor :document="bytes" mode="edit" />
@@ -55,7 +55,6 @@ These props control the packaged frame around the painted document.
 | ---------------- | --------------------------------------- | ------------------------------------------------------------- |
 | `chrome`         | `boolean`                               | Render the packaged title bar, menu, toolbar, and navigation. |
 | `title`          | `string`                                | Document title shown in the title bar.                        |
-| `onTitleChange`  | `(title) => void`                       | Makes the title editable.                                     |
 | `colorMode`      | `'light' \| 'dark' \| 'system'`         | Light, dark, or OS-following theme.                           |
 | `menu`           | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu bar.                    |
 | `navigation`     | `boolean`                               | Toggle the packaged navigation pane.                          |
@@ -64,15 +63,29 @@ These props control the packaged frame around the painted document.
 | `t`              | `(key, params?) => string`              | Label resolver for the packaged chrome.                       |
 | `i18n`           | `Translations`                          | Same effect as wrapping this editor in `LocaleProvider`.      |
 
-## Callbacks
+## Emits
 
-| Prop          | Type                               | Description                                                                    |
-| ------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
-| `onReady`     | `(editor: Editor) => void`         | Fired after the editor instance is created.                                    |
-| `onChange`    | `(change: DocumentChange) => void` | Fired after document mutations; carries revision + identity deltas, not bytes. |
-| `onSave`      | `() => void`                       | Overrides the packaged File → Save behavior.                                   |
-| `onOpen`      | `() => void`                       | Overrides the packaged File → Open behavior.                                   |
-| `onFontError` | `(error: EditorFontError) => void` | Reports typed font-resolution failures.                                        |
+Vue uses emits instead of React callback props for document lifecycle and file actions:
+
+| Emit            | Payload                  | Description                                                                    |
+| --------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `@ready`        | `editor: Editor`         | Fired after the instance is published and `DocxEditorContent` has attached.    |
+| `@change`       | `change: DocumentChange` | Fired after document mutations; carries revision + identity deltas, not bytes. |
+| `@save`         | none                     | File → Save was chosen in the packaged menu.                                   |
+| `@open`         | none                     | File → Open was chosen in the packaged menu.                                   |
+| `@title-change` | `title: string`          | The editable title changed.                                                    |
+| `@font-error`   | `error: EditorFontError` | Reports typed font-resolution failures.                                        |
+
+```vue
+<DocxEditor
+  :document="bytes"
+  title="Proposal.docx"
+  @ready="onReady"
+  @save="save"
+  @open="open"
+  @title-change="title = $event"
+/>
+```
 
 ## Ref methods
 

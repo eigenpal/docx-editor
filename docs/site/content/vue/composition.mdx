@@ -27,11 +27,31 @@ import { DocxEditorRoot, DocxEditorViewport, DocxEditorContent } from '@docx-edi
 </template>
 ```
 
-- **`DocxEditorRoot`** owns the editor instance and publishes it on context. It renders no DOM of its own. Document-level props live here: `document`, `mode`, `author`, `fonts`, `locale`, `modules`, `onReady`, `onChange`.
+- **`DocxEditorRoot`** owns the editor instance and publishes it on context. It renders no DOM of its own. Document-level props live here: `document`, `mode`, `author`, `fonts`, `locale`, `modules`. Listen for `@ready`, `@change`, and `@font-error` on the root.
 - **`DocxEditorViewport`** is the scroll container, and carries the layout classes the engine positions pages against.
 - **`DocxEditorContent`** is the mount point the engine paints pages into. The painted pages _are_ the editable surface.
 
 Everything else (toolbar, menu, rulers, navigation pane, link popover, context menu) is optional and can be placed anywhere inside `DocxEditorRoot`.
+
+## provideDocxEditor()
+
+When the root lives in a parent layout and the painted surface lives deeper in the tree, `provideDocxEditor()` returns the root component plus the props object to spread:
+
+```vue
+<script setup lang="ts">
+import { provideDocxEditor } from '@docx-editor.dev/vue';
+
+const { DocxEditorRoot, rootProps } = provideDocxEditor({ document: bytes });
+</script>
+
+<template>
+  <DocxEditorRoot v-bind="rootProps" @ready="onReady">
+    <!-- chrome and viewport -->
+  </DocxEditorRoot>
+</template>
+```
+
+The helper does not create a second editor. It only packages the same root props the sugar host passes internally.
 
 ## Customization ladder
 
@@ -94,6 +114,7 @@ Place optional chrome by name inside `DocxEditorRoot`:
 
 `DocxEditorMenu` shares command state with the toolbar. Override one menu, append rows, or replace a whole menu in place:
 
+````vue
 ```vue
 <DocxEditorMenu @open="openFile" @save="saveFile">
   <DocxEditorMenu.File :preset="false">
@@ -105,7 +126,7 @@ Place optional chrome by name inside `DocxEditorRoot`:
     <DocxEditorMenu.ReportIssue hidden />
   </DocxEditorMenu.Help>
 </DocxEditorMenu>
-```
+````
 
 Chrome mousedown must call `preventDefault()` on buttons and menu rows, or the control steals the caret from the painted surface.
 
