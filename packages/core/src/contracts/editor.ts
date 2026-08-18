@@ -164,9 +164,16 @@ export interface FontConfiguration {
  * Distinguished rather than collapsed because the responses differ: `overLimit` and `malformed`
  * are the caller's own bytes, while `forbidden` and `hashMismatch` mean the source was not what
  * it claimed and the load should not be retried.
+ *
+ * `wasmUnavailable` is the odd one out and the reason it is separate: every other code is a
+ * DOCUMENT problem, reported per face, while that one means the text shaper's WASM never
+ * loaded, so nothing can be measured at all. It is a host deployment fault, fixed by serving
+ * `harfbuzz.wasm` and calling `setHarfBuzzWasmUrl`, and a host wants to surface it as a setup
+ * error rather than a font warning.
  */
 export type EditorFontErrorCode =
   | 'initializationFailed'
+  | 'wasmUnavailable'
   | 'missing'
   | 'forbidden'
   | 'overLimit'

@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { EditorFontError, type FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { HarfBuzzShapingError, sha256FontBytes } from '@docx-editor.dev/core/layout';
 import { createLayoutShaping, toEditorFontError } from '../font-configuration.ts';
@@ -143,18 +143,43 @@ test('copies each valid source exactly once into snapshot ownership', async () =
   shaping.shaper.dispose();
 });
 
-test('a HarfBuzz shaping failure keeps its remediation diagnostic through toEditorFontError', () => {
-  // The `wasmUnavailable` diagnostic names `setHarfBuzzWasmUrl` and the file to serve
-  // (#282), and `onFontError` is the only surface a host sees. Collapsed to `message`
-  // alone, the host would get "HarfBuzz shaping failed (wasmUnavailable)" and no pointer
-  // to the fix — which is exactly what the diagnostic exists to replace.
+test('a missing WASM keeps its code and remedy, and says so once without a handler', () => {
+  // Three claims, asserted together because the console warning is once-per-session and a
+  // second test could not observe it:
+  //   - the CODE survives, so a host can branch on "your bundler is misconfigured" rather
+  //     than matching English inside `diagnostic`;
+  //   - the DIAGNOSTIC survives, because it is where the remedy is written (#282);
+  //   - it reaches the console even with no `onFontError` registered. Every other font
+  //     failure degrades quietly, but this one disables shaping for the whole document,
+  //     and the same misconfiguration used to fail the BUILD — a silent console after a
+  //     green build would be strictly worse.
   const failure = new HarfBuzzShapingError('wasmUnavailable', {
-    diagnostic: 'serve `@docx-editor.dev/core/dist/harfbuzz.wasm` and call `setHarfBuzzWasmUrl`',
+    diagnostic: 'serve `@docx-editor.dev/core/harfbuzz.wasm` and call `setHarfBuzzWasmUrl`',
   });
+  const error = spyOn(console, 'error').mockImplementation(() => {});
 
-  const surfaced = toEditorFontError(failure);
+  try {
+    const surfaced = toEditorFontError(failure);
 
-  expect(surfaced).toBeInstanceOf(EditorFontError);
+    expect(surfaced).toBeInstanceOf(EditorFontError);
+    expect(surfaced.code).toBe('wasmUnavailable');
+    expect(surfaced.diagnostic).toContain('setHarfBuzzWasmUrl');
+    expect(surfaced.cause).toBe(failure);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0]?.[0])).toContain('text shaping is disabled');
+
+    // A document with many unshapeable runs must not turn the console into a log.
+    toEditorFontError(failure);
+    expect(error).toHaveBeenCalledTimes(1);
+  } finally {
+    error.mockRestore();
+  }
+});
+
+test('shaping failures that are not the WASM keep reporting as initializationFailed', () => {
+  // The new branch must not relabel the resource-limit codes, which are document faults
+  // and were already mapped this way.
+  const surfaced = toEditorFontError(new HarfBuzzShapingError('glyphOverLimit', { limit: 10 }));
+
   expect(surfaced.code).toBe('initializationFailed');
-  expect(surfaced.diagnostic).toContain('setHarfBuzzWasmUrl');
 });

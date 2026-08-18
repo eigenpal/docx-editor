@@ -235,7 +235,7 @@ instance:
 <DocxEditor.Root
   document={bytes}
   fonts={fragment}
-  onFontError={(error) => report(error.code, error.message)}
+  onFontError={(error) => report(error.code, error.diagnostic ?? error.message)}
 />;
 
 // Inside the tree:
@@ -253,13 +253,25 @@ The text shaper is a WASM binary that ships inside `@docx-editor.dev/core` and
 loads lazily when fonts resolve. Webpack, Turbopack, and Vite emit it as an
 asset automatically, so most apps need no setup.
 
-Bundlers that don't emit `new URL(..., import.meta.url)` assets (esbuild and
-Bun) build cleanly but fail at runtime with
-`Aborted(both async and sync fetching of the wasm failed)`. The failure reaches
-`onFontError` as an `EditorFontError` with code `initializationFailed` whose
-`diagnostic` names the fix. If you see that error, copy
-`node_modules/@docx-editor.dev/core/dist/harfbuzz.wasm` into your served assets
-and point the shaper at it before creating an editor:
+Some bundlers don't emit `new URL(..., import.meta.url)` assets. esbuild and Bun
+are the common ones, and so is any build that inlines dynamic imports, such as a
+library bundle. Those builds succeed and then fail at runtime, reaching
+`onFontError` as an `EditorFontError` with code `wasmUnavailable`:
+
+```ts
+<DocxEditor
+  onFontError={(error) => {
+    if (error.code === 'wasmUnavailable') showSetupError(error.diagnostic);
+  }}
+/>
+```
+
+Without that binary the editor keeps rendering, but it measures text with
+fallback metrics, so line breaks and page breaks no longer match Word. The
+engine also logs the failure once, so you see it even with no handler attached.
+
+To fix it, copy `harfbuzz.wasm` into your served assets and point the shaper at
+it before you create an editor:
 
 ```ts
 import { setHarfBuzzWasmUrl } from '@docx-editor.dev/core/layout';
@@ -267,8 +279,27 @@ import { setHarfBuzzWasmUrl } from '@docx-editor.dev/core/layout';
 setHarfBuzzWasmUrl('/static/harfbuzz.wasm');
 ```
 
-Serve the copy from the installed package version. The shaper refuses a
-version mismatch at load instead of measuring text with unverified metrics.
+Resolve the file at `@docx-editor.dev/core/harfbuzz.wasm`, which also works
+under Yarn Plug'n'Play, where there's no `node_modules` directory to copy from.
+
+Call `setHarfBuzzWasmUrl` before the first editor. The shaper reads the location
+once and caches it, so a later call warns and does nothing: move the call and
+reload the page. A Web Worker gets its own module instance, so a worker that
+runs layout needs its own call.
+
+Pass a URL your application controls. The file is fetched and instantiated as
+WebAssembly, so never build it from user input, a query parameter, or remote
+configuration. Serving it from another origin needs that origin in your
+`connect-src` directive, and WebAssembly needs `wasm-unsafe-eval` in `script-src`
+either way.
+
+Serve the copy from the installed package version. The shaper compares the
+HarfBuzz library version it loads against the one it was built for, and refuses a
+mismatch instead of measuring text with unverified metrics.
+
+Because the shaper is bundled into the package, an npm `overrides` entry for
+`harfbuzzjs` doesn't change the code that runs. Upgrade `@docx-editor.dev/core`
+instead.
 
 ## Caveats
 

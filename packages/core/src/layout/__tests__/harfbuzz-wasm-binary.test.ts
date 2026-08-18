@@ -3,17 +3,19 @@
 // The inlined HarfBuzz runtime locates its binary through
 // `resolveHarfBuzzWasmBinaryUrl`, wired in by the build. These tests pin the contract the
 // runtime and `setHarfBuzzWasmUrl` share: the override wins, the bundler's URL is the
-// fallback, the location is read once, and a change after that read REFUSES instead of
-// silently doing nothing.
+// fallback, the location is read once, and a call that arrives too late says so instead of
+// throwing at a consumer who is following the error's own advice.
 
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import {
+  harfBuzzWasmUnavailableDiagnostic,
   resetHarfBuzzWasmUrlForTests,
   resolveHarfBuzzWasmBinaryUrl,
   setHarfBuzzWasmUrl,
 } from '../harfbuzz-wasm-binary.ts';
 
 const BUNDLER_URL = 'https://app.example/assets/harfbuzz-abc123.wasm';
+const SERVED_URL = 'https://app.example/static/harfbuzz.wasm';
 
 afterEach(() => {
   resetHarfBuzzWasmUrlForTests();
@@ -29,35 +31,73 @@ describe('resolveHarfBuzzWasmBinaryUrl', () => {
   test('an override set before the runtime reads wins over the bundler URL', () => {
     // The esbuild/Bun path: nothing was emitted, the argument would 404, and the
     // consumer-served copy is the one that loads.
-    setHarfBuzzWasmUrl('https://app.example/static/harfbuzz.wasm');
-    expect(resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL)).toBe(
-      'https://app.example/static/harfbuzz.wasm'
-    );
+    setHarfBuzzWasmUrl(SERVED_URL);
+    expect(resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL)).toBe(SERVED_URL);
   });
 
   test('a URL object is accepted and normalised to its string form', () => {
-    setHarfBuzzWasmUrl(new URL('https://app.example/static/harfbuzz.wasm'));
-    expect(resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL)).toBe(
-      'https://app.example/static/harfbuzz.wasm'
-    );
+    setHarfBuzzWasmUrl(new URL(SERVED_URL));
+    expect(resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL)).toBe(SERVED_URL);
   });
 });
 
 describe('setHarfBuzzWasmUrl after the runtime has read its location', () => {
-  test('a different URL throws instead of being silently ignored', () => {
-    // The runtime reads the location once, at first WASM instantiation. A later set would
-    // change nothing, and "set but unused" is the failure mode this API exists to avoid.
+  test('a late call warns and does not throw', () => {
+    // The documented remedy for `wasmUnavailable` is to call this function. A consumer who
+    // does that from an error handler must not be met with a second exception — the module
+    // cache pins the runtime either way, so the honest answer is "noted, reload".
     resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL);
-    expect(() => setHarfBuzzWasmUrl('https://app.example/elsewhere/harfbuzz.wasm')).toThrow(
-      /already resolved its binary/
-    );
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(() => setHarfBuzzWasmUrl(SERVED_URL)).not.toThrow();
+      expect(warn.mock.calls[0]?.[0]).toContain('reload');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
-  test('re-setting the URL the runtime already resolved is a no-op, not an error', () => {
-    // Two independent module inits racing to configure the same host should not blow up
-    // when they agree.
-    setHarfBuzzWasmUrl('https://app.example/static/harfbuzz.wasm');
+  test('re-setting the URL the runtime already resolved is silent', () => {
+    setHarfBuzzWasmUrl(SERVED_URL);
     resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL);
-    expect(() => setHarfBuzzWasmUrl('https://app.example/static/harfbuzz.wasm')).not.toThrow();
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      setHarfBuzzWasmUrl(SERVED_URL);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('setHarfBuzzWasmUrl input validation', () => {
+  test.each([
+    ['a number', 42],
+    ['null', null],
+    ['an object', {}],
+  ])('%s is refused with a TypeError', (_label, value) => {
+    // The failure this API exists to fix already surfaces three steps away from its cause.
+    // Coercing junk with String() would add a fourth.
+    expect(() => setHarfBuzzWasmUrl(value as unknown as string)).toThrow(TypeError);
+  });
+
+  test('an empty string is refused rather than resolving to the current page', () => {
+    expect(() => setHarfBuzzWasmUrl('   ')).toThrow(TypeError);
+  });
+});
+
+describe('harfBuzzWasmUnavailableDiagnostic', () => {
+  test('names the API that fixes it, the file to serve, and the underlying cause', () => {
+    // This string is the ONLY thing a consumer sees when their bundler emits no asset, so
+    // every part of the remedy has to survive in it.
+    const diagnostic = harfBuzzWasmUnavailableDiagnostic(new Error('ENOENT: no such file'));
+
+    expect(diagnostic).toContain('setHarfBuzzWasmUrl');
+    expect(diagnostic).toContain('@docx-editor.dev/core/harfbuzz.wasm');
+    expect(diagnostic).toContain('ENOENT: no such file');
+  });
+
+  test('reports the location actually read, so the advice points somewhere real', () => {
+    resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL);
+    expect(harfBuzzWasmUnavailableDiagnostic(new Error('404'))).toContain(BUNDLER_URL);
   });
 });

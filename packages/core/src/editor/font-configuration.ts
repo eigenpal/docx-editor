@@ -34,6 +34,29 @@ function publicRequest(request: FontFaceRequest): FontFaceRequest {
   });
 }
 
+let warnedWasmUnavailable = false;
+
+/**
+ * Say it out loud once, even with no `onFontError` registered.
+ *
+ * Every other font failure degrades quietly on purpose: one refused embedded face is
+ * document data, and the document still renders correctly enough to read. This one is not
+ * that. The shaper is gone, so every line break, page break and caret position in the
+ * document is computed from fallback metrics, and the host that could report it is the
+ * host that misconfigured its bundler. Before this was fixed the same misconfiguration
+ * failed the BUILD; degrading to a silent console after a green build would be a strictly
+ * worse trade.
+ */
+function warnWasmUnavailableOnce(error: { readonly diagnostic?: string }): void {
+  if (warnedWasmUnavailable) return;
+  warnedWasmUnavailable = true;
+  console.error(
+    `[@docx-editor.dev/core] text shaping is disabled: ${error.diagnostic ?? ''}\n` +
+      'Text is being measured with fallback metrics, so line and page breaks will not ' +
+      'match Word.'
+  );
+}
+
 /**
  * Normalize anything thrown during font work into an {@link EditorFontError}.
  *
@@ -49,13 +72,16 @@ export function toEditorFontError(error: unknown): EditorFontError {
     });
   }
   if (error instanceof HarfBuzzShapingError) {
-    // The shaping error's `diagnostic` is the actionable half — for `wasmUnavailable` it
-    // names `setHarfBuzzWasmUrl` and the file to serve (#282). Collapsing to `message`
-    // alone would hand `onFontError` "HarfBuzz shaping failed (wasmUnavailable)" and
-    // nothing else, which is precisely the unactionable surface that diagnostic exists
-    // to replace.
-    return new EditorFontError('initializationFailed', error.message, {
+    // `wasmUnavailable` keeps its own code out to the host. Every other shaping code maps
+    // to `initializationFailed` as before, but this one is a HOST deployment fault rather
+    // than a document fault, and a host must be able to branch on it — matching on the
+    // prose of `diagnostic` would be an API made of an English sentence.
+    const code: EditorFontErrorCode =
+      error.code === 'wasmUnavailable' ? 'wasmUnavailable' : 'initializationFailed';
+    if (error.code === 'wasmUnavailable') warnWasmUnavailableOnce(error);
+    return new EditorFontError(code, error.message, {
       diagnostic: error.diagnostic ?? error.message,
+      cause: error,
     });
   }
   return new EditorFontError(

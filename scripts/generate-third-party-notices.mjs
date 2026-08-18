@@ -222,6 +222,24 @@ function renderNotices(pkg, dependencies) {
     ''
   );
 
+  // A metafile only sees what esbuild READ. Binary assets copied into `dist/` after the
+  // bundle — `harfbuzz.wasm`, the font files — are shipped third-party code this generator
+  // is structurally blind to, so their attribution is carried by hand in `licenses/` and
+  // pointed at from here rather than being silently omitted.
+  if (existsSync(path.join(pkg.dir, 'licenses'))) {
+    const carried = readdirSync(path.join(pkg.dir, 'licenses')).sort();
+    if (carried.length > 0) {
+      lines.push(
+        'This package also ships prebuilt third-party assets that are not esbuild inputs,',
+        'so they cannot appear below. Their licenses travel with the package in',
+        '`licenses/`:',
+        '',
+        ...carried.map((file) => `- \`licenses/${file}\``),
+        ''
+      );
+    }
+  }
+
   if (dependencies.length === 0) {
     lines.push('No third-party code is bundled into this package.', '');
     return lines.join('\n');

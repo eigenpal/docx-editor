@@ -903,6 +903,7 @@ export class HarfBuzzShapingError extends Error {
         readonly limit?: number;
         readonly actual?: number;
         readonly diagnostic?: string;
+        readonly cause?: unknown;
     });
     // (undocumented)
     readonly actual?: number;

@@ -21,6 +21,7 @@ import {
   type TextShaper,
   type VersionedShapingLibrary,
 } from './shaped-run.ts';
+import { harfBuzzWasmUnavailableDiagnostic } from './harfbuzz-wasm-binary.ts';
 
 type HarfBuzzModule = typeof import('harfbuzzjs');
 type HarfBuzzBlob = InstanceType<HarfBuzzModule['Blob']>;
@@ -57,31 +58,22 @@ export function initializeHarfBuzz(): Promise<void> {
       }
       harfBuzzModule = module;
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       harfBuzzInitialization = null;
-      // The runtime aborts with `Aborted(both async and sync fetching of the wasm failed)`
-      // when its binary cannot be fetched — under a bundler that does not emit
-      // `new URL(..., import.meta.url)` assets (esbuild, Bun), that is a clean build 404ing
-      // at runtime (#282). Left as-is, the raw abort surfaces through `onFontError` with
-      // nothing connecting it to the fix, so it is renamed here to the API that fixes it.
+      // Anything that is not the version pin above means the runtime did not come up, and
+      // the reason is always the same class of problem: the WASM could not be loaded.
       //
-      // `expected magic word` is the same misconfiguration behind a SPA dev server: the
-      // missing path answers 200 with the HTML fallback page, and instantiation dies on
-      // the bytes instead of the fetch.
-      if (
-        error instanceof Error &&
-        /fetching of the wasm failed|expected magic word/.test(error.message)
-      ) {
-        throw new HarfBuzzShapingError('wasmUnavailable', {
-          diagnostic:
-            'the HarfBuzz WASM binary could not be fetched. If this bundler does not emit ' +
-            '`new URL(..., import.meta.url)` assets (esbuild, Bun), serve ' +
-            '`@docx-editor.dev/core/dist/harfbuzz.wasm` yourself, point `setHarfBuzzWasmUrl` ' +
-            "from '@docx-editor.dev/core/layout' at it before creating an editor, and reload " +
-            `the page. (${error.message})`,
-        });
-      }
-      throw error;
+      // Deliberately NOT a match on the abort text. Emscripten words each failure
+      // differently — `both async and sync fetching of the wasm failed` for a 404,
+      // `expected magic word` when a SPA dev server answers with its HTML fallback,
+      // `ENOENT` when a deploy step copied the JS but not the asset, and an `EvalError`
+      // under a CSP without `wasm-unsafe-eval`. Matching phrases meant the two most likely
+      // server and enterprise failures fell through to a raw abort with no remedy attached.
+      if (error instanceof HarfBuzzShapingError) throw error;
+      throw new HarfBuzzShapingError('wasmUnavailable', {
+        diagnostic: harfBuzzWasmUnavailableDiagnostic(error),
+        cause: error,
+      });
     });
   return harfBuzzInitialization;
 }
@@ -144,9 +136,10 @@ export class HarfBuzzShapingError extends Error {
       readonly limit?: number;
       readonly actual?: number;
       readonly diagnostic?: string;
+      readonly cause?: unknown;
     } = {}
   ) {
-    super(`HarfBuzz shaping failed (${code})`);
+    super(`HarfBuzz shaping failed (${code})`, { cause: details.cause });
     this.code = code;
     this.limit = details.limit;
     this.actual = details.actual;

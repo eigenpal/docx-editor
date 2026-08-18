@@ -31,13 +31,14 @@ export const WASM_URL_EXPRESSION = 'new URL("harfbuzz.wasm",import.meta.url).hre
  * module, override first, original expression as the fallback argument — still syntactically
  * intact for the bundlers that rewrite it.
  *
- * The count guard is a version-bump tripwire: a harfbuzzjs release that renames the binary or
- * builds different glue must fail THIS build, not ship an escape hatch that silently stopped
- * being wired to anything.
+ * TWO guards, because either one alone fails open. The count guard catches a glue that
+ * changed shape. The applied guard catches a glue that MOVED: `onLoad` simply never fires,
+ * nothing throws, and the build would otherwise ship an escape hatch wired to nothing.
  */
 const harfBuzzWasmUrlEscapeHatch: NonNullable<Options['esbuildPlugins']>[number] = {
   name: 'harfbuzz-wasm-url-escape-hatch',
   setup(build) {
+    let applied = 0;
     build.onLoad({ filter: /harfbuzzjs[/\\]dist[/\\]harfbuzz\.js$/ }, async (args) => {
       const source = await readFile(args.path, 'utf8');
       const occurrences = source.split(WASM_URL_EXPRESSION).length - 1;
@@ -48,14 +49,27 @@ const harfBuzzWasmUrlEscapeHatch: NonNullable<Options['esbuildPlugins']>[number]
             'setHarfBuzzWasmUrl silently stops working.'
         );
       }
+      applied += 1;
       const resolver = JSON.stringify(resolve(here, 'src/layout/harfbuzz-wasm-binary.ts'));
       const contents =
         `import{resolveHarfBuzzWasmBinaryUrl as __docxResolveHarfBuzzWasmBinaryUrl}from${resolver};` +
+        // A replacement FUNCTION, not a string: `$&`, `$'` and `$1` are substitution
+        // patterns in a replacement string, so the day the needle grows a `$` a plain
+        // string would silently rewrite into something else.
         source.replace(
           WASM_URL_EXPRESSION,
-          `__docxResolveHarfBuzzWasmBinaryUrl(${WASM_URL_EXPRESSION})`
+          () => `__docxResolveHarfBuzzWasmBinaryUrl(${WASM_URL_EXPRESSION})`
         );
       return { contents, loader: 'js' };
+    });
+    build.onEnd(() => {
+      if (applied !== 1) {
+        throw new Error(
+          `harfbuzz-wasm-url-escape-hatch patched ${applied} files, expected exactly 1. ` +
+            "The glue is no longer at harfbuzzjs/dist/harfbuzz.js, so setHarfBuzzWasmUrl " +
+            'would ship wired to nothing; re-point the onLoad filter.'
+        );
+      }
     });
   },
 };
@@ -179,11 +193,15 @@ export default defineConfig([
     // Only meaningful here: the CJS build leaves harfbuzzjs external, so its glue never
     // passes through esbuild there.
     esbuildPlugins: [harfBuzzWasmUrlEscapeHatch],
+    // Which is exactly why `setHarfBuzzWasmUrl` has to know which build it is in: patched
+    // here, inert in CJS, and it refuses rather than no-ops there.
+    define: { __DOCX_HARFBUZZ_WASM_URL_SUPPORTED__: 'true' },
   },
   {
     ...shared,
     format: ['cjs'],
     clean: false,
+    define: { __DOCX_HARFBUZZ_WASM_URL_SUPPORTED__: 'false' },
     // harfbuzzjs stays EXTERNAL here, because it cannot be inlined: its entry is a
     // top-level `await` over the WASM instantiation, and CJS has no top-level await. That
     // costs nothing. This output exists for `require()`, which is Node, where `module`
