@@ -23,7 +23,7 @@ import {
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import { revisionRemovesParagraph } from './revision-visibility.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
-import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
+import { mergedFlowBlocks } from './story-roots.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
   EMPTY_TABLE_FORMATTING,
@@ -960,14 +960,9 @@ function readTableStructureUncached(
       // Content controls inside a cell flatten transparently — same rule as body
       // `storyBlocks`. Without this a `w:sdt` wrapping the cell's paragraphs leaves the
       // cell empty in layout while the tree still holds the text.
-      const blocks = collectFlowBlocks(cellNode.children, 0, (block) => {
-        // A paragraph a tracked revision has removed claims a full line box while rendering
-        // nothing; a cell of them is a stack of blank lines that pushes the rest of the table
-        // down the page.
-        if (block.kind === 'paragraph' && revisionRemovesParagraph(block, displayMode))
-          return false;
-        return true;
-      });
+      // Through the shared collector: a cell is a story like any other, so a tracked mark
+      // merges inside it and a paragraph a revision removed leaves no blank line behind.
+      const blocks = mergedFlowBlocks(cellNode.children, displayMode);
       cells.push({
         id: cellNode.id,
         gridSpan,

@@ -124,6 +124,30 @@ function withMergedParagraphs(
 }
 
 /**
+ * One container's blocks: flattened through content controls, merged, then filtered.
+ *
+ * MERGE FIRST, then drop. A mark-removed paragraph merges into the paragraph that follows it
+ * IN THE TREE, which is the rule `resolveRevisions` follows; dropping the empty ones first
+ * would hand a member the wrong survivor, and the survivor's properties govern the result.
+ * After the merge the drop has little left to do: an absorbed member is gone already, and what
+ * remains is a mark-removed paragraph with nothing after it to merge into.
+ *
+ * Every story collects its blocks through here — body, note, textbox and table cell — so a
+ * container is a merge boundary by construction: a paragraph can only merge with one that
+ * shares its parent, which is the same rule the store applies.
+ */
+export function mergedFlowBlocks(
+  children: readonly OoxmlNode[],
+  displayMode: RevisionDisplayMode
+): OoxmlElement[] {
+  const merged = withMergedParagraphs(
+    collectFlowBlocks(children, 0, () => true),
+    displayMode
+  );
+  return merged.filter((block) => acceptStoryBlock(block, displayMode));
+}
+
+/**
  * Memoized per part identity: parts are immutable (edits publish a new part object), so
  * the block list is a pure function of `(part, displayMode)`. Every keystroke flush asks
  * for the body's blocks from several callers — layout, section enumeration, furniture,
@@ -150,16 +174,7 @@ export function storyBlocks(
   const cached = perMode?.[displayMode];
   if (cached) return cached;
   const root = storyRootOf(part);
-  // MERGE FIRST, then drop. A mark-removed paragraph merges into the paragraph that follows it
-  // IN THE TREE, which is the rule `resolveRevisions` follows; dropping the empty ones first
-  // would hand a member the wrong survivor, and the survivor's properties govern the result.
-  // After the merge the drop has little left to do: an absorbed member is already gone, and
-  // what remains is a mark-removed paragraph with nothing after it to merge into.
-  const merged = withMergedParagraphs(
-    root ? collectFlowBlocks(root.children, 0, () => true) : [],
-    displayMode
-  );
-  const blocks = merged.filter((block) => acceptStoryBlock(block, displayMode));
+  const blocks = root ? mergedFlowBlocks(root.children, displayMode) : [];
   if (perMode) perMode[displayMode] = blocks;
   else storyBlocksCache.set(part, { [displayMode]: blocks });
   return blocks;
@@ -176,7 +191,7 @@ export function noteStoryBlocks(
   displayMode: RevisionDisplayMode = 'all-markup'
 ): OoxmlElement[] {
   if (note.kind !== 'note') return [];
-  return collectFlowBlocks(note.children, 0, (block) => acceptStoryBlock(block, displayMode));
+  return mergedFlowBlocks(note.children, displayMode);
 }
 
 /**
@@ -191,5 +206,5 @@ export function textboxStoryBlocks(
   displayMode: RevisionDisplayMode = 'all-markup'
 ): OoxmlElement[] {
   if (content.kind === 'textValue') return [];
-  return collectFlowBlocks(content.children, 0, (block) => acceptStoryBlock(block, displayMode));
+  return mergedFlowBlocks(content.children, displayMode);
 }

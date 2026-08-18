@@ -14,6 +14,9 @@ import {
   hitTestPage,
   spanOffsetX,
 } from './semantic-hit-test.ts';
+import { documentOrder, documentOrderIndex } from './document-order.ts';
+export { documentOrder } from './document-order.ts';
+import { lineSegmentFor, lineSegments, type LineSegment } from './line-segments.ts';
 import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
@@ -97,6 +100,20 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
   const cached = paragraphLinesCache.get(layout);
   if (cached) return cached;
   const index = new Map<string, PlacedLine[]>();
+  /**
+   * Under every paragraph the line carries, not just the one it names.
+   *
+   * A merged line belongs to two paragraphs, and a caret walking either of them has to find
+   * it. An ordinary line has one segment and lands in exactly the one bucket it always did.
+   */
+  const indexLine = (line: LineRecord, pageIndex: number): void => {
+    for (const segment of lineSegments(line)) {
+      const placed = { line, pageIndex };
+      const entry = index.get(segment.paragraphId);
+      if (entry) entry.push(placed);
+      else index.set(segment.paragraphId, [placed]);
+    }
+  };
   const indexFragments = (
     fragments: readonly import('./semantic-records.ts').BlockFragmentRecord[],
     pageIndex: number
@@ -106,12 +123,7 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
     ): void => {
       for (const block of blocks) {
         if (block.kind === 'paragraph') {
-          for (const line of block.lines) {
-            const entry = index.get(line.range.paragraphId);
-            const placed = { line, pageIndex };
-            if (entry) entry.push(placed);
-            else index.set(line.range.paragraphId, [placed]);
-          }
+          for (const line of block.lines) indexLine(line, pageIndex);
           continue;
         }
         for (const row of block.rows) {
@@ -125,12 +137,7 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
   for (const page of layout.pages) {
     // Body first — primary story for caret stops built elsewhere via paragraphFragmentsOf.
     for (const fragment of paragraphFragmentsOf(page)) {
-      for (const line of fragment.lines) {
-        const entry = index.get(line.range.paragraphId);
-        const placed = { line, pageIndex: page.index };
-        if (entry) entry.push(placed);
-        else index.set(line.range.paragraphId, [placed]);
-      }
+      for (const line of fragment.lines) indexLine(line, page.index);
     }
     // Furniture paragraphs share this index so formatting / paragraphTextFromLayout can
     // resolve an open header/footer selection. documentOrder and caretStops stay body-only.
@@ -150,14 +157,19 @@ function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> 
 function xWithinLine(
   line: LineRecord,
   offset: number,
-  measurer?: TextMeasurer | undefined
+  measurer?: TextMeasurer | undefined,
+  segment?: LineSegment
 ): number {
-  for (const drawing of line.drawings ?? []) {
+  // An offset only means something in ONE paragraph, so a mixed line is walked through the
+  // segment that owns it. Given none, the line is its own segment, which is every ordinary
+  // line and the path this function always took.
+  const spans = segment ? segment.spans : line.spans;
+  for (const drawing of segment ? segment.drawings : (line.drawings ?? [])) {
     if (offset === drawing.start) return drawing.advanceStart;
     if (offset === drawing.start + 1) return drawing.advanceEnd;
   }
-  let x = line.contentX;
-  for (const span of line.spans) {
+  let x = segment ? (segment.spans[0]?.box.x ?? line.contentX) : line.contentX;
+  for (const span of spans) {
     if (offset <= span.range.start) return span.box.x;
     if (offset >= span.range.end) {
       x = span.box.x + span.box.width;
@@ -228,8 +240,8 @@ function insideDeletedContent(line: LineRecord, offset: number): boolean {
  * (projected PAGE digits, leaders) — those interiors are not navigable caret stops.
  * Tabs keep a 1:1 `\t` range; their wide box is still only two stops (before/after).
  */
-function isNonNavigableInterior(line: LineRecord, offset: number): boolean {
-  for (const span of line.spans) {
+function isNonNavigableInterior(line: LineRecord, offset: number, segment?: LineSegment): boolean {
+  for (const span of segment ? segment.spans : line.spans) {
     if (offset <= span.range.start || offset >= span.range.end) continue;
     if (span.projected) return true;
     if (span.text.length !== span.range.end - span.range.start) return true;
@@ -264,9 +276,26 @@ function pushLineCaretStops(
   line: LineRecord,
   pageIndex: number,
   fragmentStart: number,
+  measurer?: TextMeasurer,
+  only?: string
+): void {
+  for (const segment of lineSegments(line)) {
+    if (only !== undefined && segment.paragraphId !== only) continue;
+    pushSegmentCaretStops(stops, layout, line, segment, pageIndex, fragmentStart, measurer);
+  }
+}
+
+function pushSegmentCaretStops(
+  stops: CaretGeometry[],
+  layout: SemanticLayout,
+  line: LineRecord,
+  segment: LineSegment,
+  pageIndex: number,
+  fragmentStart: number,
   measurer?: TextMeasurer
 ): void {
-  for (let offset = line.range.start; offset <= line.range.end; offset += 1) {
+  const mixed = lineSegments(line).length > 1;
+  for (let offset = segment.start; offset <= segment.end; offset += 1) {
     // A line ENDED BY A HARD BREAK does not own the position after it — the line the
     // break opened does, and `caretAt` places the caret there. Emitting it here too
     // would put the stop this lane navigates to on a different line from the caret
@@ -274,8 +303,9 @@ function pushLineCaretStops(
     // line entirely, and the empty line a trailing Shift+Enter opens would be
     // unreachable because the dedup below discarded its only stop as a duplicate.
     if (
-      offset === line.range.end &&
-      offset > line.range.start &&
+      offset === segment.end &&
+      offset > segment.start &&
+      !mixed &&
       endsWithLineBreak(line) &&
       laterLineOwns(layout, line, offset)
     ) {
@@ -283,23 +313,23 @@ function pushLineCaretStops(
     }
     // A continuation line's first stop is the same model position as the previous
     // line's last, so it is emitted once — by the line that starts there.
-    if (offset === line.range.start && offset > fragmentStart && stops.length > 0) {
+    if (offset === segment.start && offset > fragmentStart && stops.length > 0) {
       const previous = stops[stops.length - 1]!;
       if (
-        previous.position.paragraphId === line.range.paragraphId &&
+        previous.position.paragraphId === segment.paragraphId &&
         previous.position.offset === offset
       ) {
         continue;
       }
     }
-    if (isNonNavigableInterior(line, offset)) continue;
+    if (isNonNavigableInterior(line, offset, segment)) continue;
     // Deleted content is skipped for the same reason and by the same lane: `moveCaret` reads
     // this list and nothing else, so arrow keys, word jumps, page jumps and Home/End all
     // inherit "step over a deletion, never into it" from one place.
     if (insideDeletedContent(line, offset)) continue;
     stops.push({
-      position: { paragraphId: line.range.paragraphId, offset },
-      x: xWithinLine(line, offset, measurer),
+      position: { paragraphId: segment.paragraphId, offset },
+      x: xWithinLine(line, offset, measurer, segment),
       y: line.box.y,
       height: line.box.height,
       lineId: line.id,
@@ -360,7 +390,7 @@ function paragraphCaretStops(
   return paragraphCaretStopCache.get(layout, paragraphId, measurer, () => {
     const stops: CaretGeometry[] = [];
     for (const { line, pageIndex } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
-      pushLineCaretStops(stops, layout, line, pageIndex, 0, measurer);
+      pushLineCaretStops(stops, layout, line, pageIndex, 0, measurer, paragraphId);
     }
     return indexCaretStops(stops);
   });
@@ -433,10 +463,15 @@ export function caretAt(
   // offset is genuinely shared and the end of the visual line is the conventional answer.
   let afterBreak: { line: LineRecord; pageIndex: number } | null = null;
   for (const { line, pageIndex } of ordered) {
-    if (position.offset < line.range.start || position.offset > line.range.end) continue;
+    // The part of the line this paragraph owns. On a merged line that is half of it, and the
+    // other half counts its offsets in a different paragraph entirely.
+    const segment = lineSegmentFor(line, position.paragraphId);
+    if (!segment) continue;
+    if (position.offset < segment.start || position.offset > segment.end) continue;
     if (
-      position.offset === line.range.end &&
-      position.offset > line.range.start &&
+      position.offset === segment.end &&
+      position.offset > segment.start &&
+      lineSegments(line).length === 1 &&
       endsWithLineBreak(line)
     ) {
       // Remember it, but keep looking for the line that STARTS here. Falling back to it
@@ -445,17 +480,22 @@ export function caretAt(
       continue;
     }
     if (
-      position.offset === line.range.end &&
-      position.offset > line.range.start &&
+      position.offset === segment.end &&
+      position.offset > segment.start &&
       laterLineWithDrawingAt(layout, position.paragraphId, position.offset)
     ) {
       continue;
     }
-    const box = caretBoxOnLine(line, position.offset, options.measurer);
+    const box = caretBoxOnLine(line, position.offset, options.measurer, segment);
     return { position, x: box.x, y: box.y, height: box.height, lineId: line.id, pageIndex };
   }
   if (afterBreak) {
-    const box = caretBoxOnLine(afterBreak.line, position.offset, options.measurer);
+    const box = caretBoxOnLine(
+      afterBreak.line,
+      position.offset,
+      options.measurer,
+      lineSegmentFor(afterBreak.line, position.paragraphId)
+    );
     return {
       position,
       x: box.x,
@@ -615,43 +655,6 @@ function lineOverlap(
   return end > start ? { start, end } : null;
 }
 
-// Memoized PER LAYOUT, which is sound because a published layout is immutable: a new
-// revision is a new object. Without this every selection walk recomputed the order — and
-// `lineOverlap` runs once per line, so `spansInSelection` on a large document recomputed a
-// full-document scan thousands of times per keystroke. The toolbar reading formatting on
-// every commit is what turned that into seconds.
-const documentOrderCache = new WeakMap<SemanticLayout, string[]>();
-const documentOrderIndexCache = new WeakMap<SemanticLayout, Map<string, number>>();
-
-/** Paragraph ids in document order, deduplicated across fragments. */
-export function documentOrder(layout: SemanticLayout): string[] {
-  const cached = documentOrderCache.get(layout);
-  if (cached) return cached;
-  const seen = new Set<string>();
-  const order: string[] = [];
-  for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
-      if (!seen.has(fragment.paragraphId)) {
-        seen.add(fragment.paragraphId);
-        order.push(fragment.paragraphId);
-      }
-    }
-  }
-  documentOrderCache.set(layout, order);
-  return order;
-}
-
-/** Document-order position by paragraph id, for O(1) ordering checks. */
-function documentOrderIndex(layout: SemanticLayout): Map<string, number> {
-  const cached = documentOrderIndexCache.get(layout);
-  if (cached) return cached;
-  const index = new Map<string, number>();
-  for (const [position, id] of documentOrder(layout).entries()) index.set(id, position);
-  documentOrderIndexCache.set(layout, index);
-  return index;
-}
-
-/** A selection's endpoints in document order. */
 function orderPositions(
   layout: SemanticLayout,
   selection: SemanticSelection

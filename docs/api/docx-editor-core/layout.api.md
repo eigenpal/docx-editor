@@ -171,7 +171,10 @@ export interface CaretAtOptions {
 }
 
 // @public
-export function caretBoxOnLine(line: LineRecord, offset: number, measurer: TextMeasurer | undefined): {
+export function caretBoxOnLine(line: LineRecord, offset: number, measurer: TextMeasurer | undefined, segment?: {
+    readonly spans: readonly StyleSpanRecord[];
+    readonly drawings: readonly InlineDrawingRecord[];
+} | null): {
     x: number;
     y: number;
     height: number;

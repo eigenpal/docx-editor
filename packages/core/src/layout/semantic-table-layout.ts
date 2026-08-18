@@ -40,6 +40,8 @@ import type {
 } from './field-projection.ts';
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
+import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
+import { paragraphMergeGroupOf } from './story-roots.ts';
 import {
   markRevisionFields,
   paragraphMarkFormatRevisionOf,
@@ -690,7 +692,7 @@ function placeCellParagraph(
   // paragraph's frame paints over the cell's own top border. Reserved on the FIRST fragment
   // only: a paragraph continued onto the next page opens once, the way it closes once.
   const topExtent = lineStart === 0 ? paragraphBorderExtentPt(borders.top) : 0;
-  const records: LineRecord[] = [];
+  const rawRecords: LineRecord[] = [];
   let y = top + appliedBefore + topExtent;
   let nextLineIndex = lineStart;
   let fitted = false;
@@ -769,7 +771,7 @@ function placeCellParagraph(
       ),
       alignOffset
     );
-    records.push({
+    rawRecords.push({
       id: deps.nextLineId(paragraphId, pendingLine.start, lineIndex),
       range: { paragraphId, start: pendingLine.start, end: pendingLine.end },
       spans: alignedSpans,
@@ -803,7 +805,7 @@ function placeCellParagraph(
   }
 
   const complete = nextLineIndex >= lines.length;
-  const linesTop = records[0]!.box.y;
+  const linesTop = rawRecords[0]!.box.y;
   const linesBottom = y;
   // Every `w:pBdr` edge, in the paint order body flow publishes: open, close, sides, bar.
   //
@@ -908,7 +910,7 @@ function placeCellParagraph(
             width: boxWidth,
             height: Math.max(contentBottom - contentTop, 0),
           }
-        : paragraphShadingBox(records, fragmentX, available);
+        : paragraphShadingBox(rawRecords, fragmentX, available);
   // The paragraph MARK, on the fragment that finishes the paragraph — the cell lane publishes
   // it for the same reason the body lane does, and until it did, a tracked split or merge
   // inside a `w:tc` drew nothing at all: no pilcrow, no margin rule, no review card.
@@ -923,11 +925,17 @@ function placeCellParagraph(
       ? publishListMarker(
           listItem,
           deps.measurer,
-          records[0] ? { y: records[0].box.y, height: records[0].box.height } : undefined,
+          rawRecords[0] ? { y: rawRecords[0].box.y, height: rawRecords[0].box.height } : undefined,
           originX
         )
       : undefined;
 
+  // A cell is a story, so a resolved view merges inside it too — and the identity of the
+  // merged half has to come back the same way it does in the body flow.
+  const mergeGroup = paragraphMergeGroupOf(paragraph);
+  const records = mergeGroup
+    ? remapMergedLines(rawRecords, mergeBoundariesOf(mergeGroup))
+    : rawRecords;
   const fragment = {
     kind: 'paragraph' as const,
     id: `${paragraphId}#f${fragmentIndex}`,
