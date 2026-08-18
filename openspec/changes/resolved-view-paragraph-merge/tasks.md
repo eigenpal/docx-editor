@@ -106,10 +106,11 @@
 - [ ] 7.6 Backspace at a join resolves the tracked mark with no visible change. Word's Final
       view deletes the preceding character instead; the rule wants deciding
 - [ ] 7.7 The join carries two caret stops at one x, so Right-arrow crosses it in two presses
-- [ ] 7.8 Header and footer stories call `storyBlocks(part)` with no display mode, so a tracked
-      mark in a header still draws its break in a resolved view. One word to fix, but it makes
-      the `fragment.paragraphId` readers in `surface-scope.ts`, `paginated-surface.ts` and
-      `surface-formatting.ts` live for HF stories, which is why it is not one word
+- [x] 7.8 Header and footer stories now pass the display mode to their BLOCK list, not only to
+      the inline flow, so a tracked mark in a header merges and a removed paragraph leaves no
+      blank line. The `fragment.paragraphId` readers it made live came with it: scoped document
+      order and the paragraph-properties index read line identity now, and the paint fallback
+      needs nothing because it only fires for a line with no spans, which a merged line never is
 - [ ] 7.9 `w:pPrChange` is not honoured in `original`: the recorded properties are never
       restored, so a reformatted paragraph renders with its NEW formatting in the view that
       answers what the document was. Pre-existing, and invisible to the differential because

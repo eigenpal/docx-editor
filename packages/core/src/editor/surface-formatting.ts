@@ -33,6 +33,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
+import { lineSegments } from '../layout/line-segments.ts';
 
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
 export interface SurfaceProperty {
@@ -70,6 +71,14 @@ export function paragraphPropertiesOf(
     for (const page of layout.pages) {
       for (const fragment of paragraphFragmentsOf(page)) {
         if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, fragment.props);
+        // A merged fragment lays every member out under the SURVIVOR's `w:pPr`, so that is
+        // the projection each member is being shown with. Without this a member the fragment
+        // is not named after read no properties at all, and the toolbar showed defaults.
+        for (const line of fragment.lines) {
+          for (const segment of lineSegments(line)) {
+            if (!index.has(segment.paragraphId)) index.set(segment.paragraphId, fragment.props);
+          }
+        }
       }
     }
     fragmentPropsByLayout.set(layout, index);

@@ -27,6 +27,7 @@ import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
+import { lineSegments } from '../layout/line-segments.ts';
 
 export const SCOPE_BODY: ViewScope = Object.freeze({ kind: 'body' as const });
 
@@ -488,9 +489,21 @@ export function scopedDocumentOrder(
   const order: string[] = [];
   for (const page of layout.pages) {
     for (const fragment of scopedParagraphFragments(page, active, noteScopeId)) {
-      if (seen.has(fragment.paragraphId)) continue;
-      seen.add(fragment.paragraphId);
-      order.push(fragment.paragraphId);
+      // From the LINES, the way `documentOrder` reads the body. A resolved display mode lays a
+      // run of paragraphs out as ONE fragment named after the survivor, and a paragraph missing
+      // from this order compares as before every other one — which would put a selection
+      // anchored in it at the top of the story.
+      for (const line of fragment.lines) {
+        for (const segment of lineSegments(line)) {
+          if (seen.has(segment.paragraphId)) continue;
+          seen.add(segment.paragraphId);
+          order.push(segment.paragraphId);
+        }
+      }
+      if (fragment.lines.length === 0 && !seen.has(fragment.paragraphId)) {
+        seen.add(fragment.paragraphId);
+        order.push(fragment.paragraphId);
+      }
     }
   }
   return order;

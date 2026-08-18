@@ -175,7 +175,11 @@ export function layoutHeaderFooterStory(
 ): HeaderFooterStoryLayout {
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
-  const blocks = storyBlocks(part);
+  // WITH the display mode, like every other consumer of this list. The inline flow already
+  // received it — a deleted run vanished from a header in `proposed` — while the block list
+  // did not, so the paragraph a tracked mark merges away kept its own line, and a paragraph a
+  // revision removed entirely kept a blank one. The cache is namespaced by mode below.
+  const blocks = storyBlocks(part, displayMode);
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
   let baseline: HeaderFooterStoryLayout | undefined;
