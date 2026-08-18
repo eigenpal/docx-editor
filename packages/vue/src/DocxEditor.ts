@@ -33,6 +33,7 @@ import type { DocxEditorRef, EditorMode } from './types';
 const PRE_MOUNT_SNAPSHOT: EditorSnapshot = {
   scope: { kind: 'body' },
   isLoading: true,
+  isOpening: false,
   parseError: null,
   editable: false,
   zoom: 1,

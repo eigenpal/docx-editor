@@ -464,6 +464,7 @@ export interface DocxEditorLoadingComponent {
 export interface DocxEditorLoadingProps {
     children?: ReactNode;
     className?: string;
+    overlay?: boolean;
     style?: CSSProperties;
     when?: boolean;
 }

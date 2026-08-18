@@ -1673,6 +1673,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly image: ImageContext | null;
     readonly isLoading: boolean;
+    readonly isOpening?: boolean;
     readonly lastRejection?: string | null;
     // (undocumented)
     readonly page: {

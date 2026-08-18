@@ -4527,6 +4527,35 @@ a.docx-hyperlink:focus-visible {
   font-size: 14px;
 }
 
+/* The overlay variant (`<DocxEditor.Loading overlay />`): pinned over the nearest
+   positioned ancestor — the workspace row in the packaged frame — and opaque, so it
+   covers the previous document while the next one opens. The 150ms appearance delay
+   keeps an open that finishes inside a few frames from flashing a spinner.
+
+   The fade MUST be a real compositor animation. The engine paints exactly one frame
+   (overlay committed, still in its delay) and then blocks the main thread with the
+   mount — so only the compositor can bring the overlay in. A non-zero opacity
+   animation on a `will-change: opacity` layer runs compositor-side through the block;
+   a zero-duration delay trick would be a main-thread style jump and never show. */
+.docx-editor__loading--overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--doc-z-overlay);
+  background: var(--doc-bg);
+  will-change: opacity;
+  animation: docx-editor-loading-appear 0.2s linear 0.15s backwards;
+}
+
+@keyframes docx-editor-loading-appear {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 /* The default screen when the host supplies no children.
    `display` and `box-sizing` are explicit rather than inherited from Tailwind's
    preflight: the part emits its own `docx-editor`, so it can be composed somewhere the
@@ -4540,6 +4569,9 @@ a.docx-hyperlink:focus-visible {
   border: 3px solid var(--doc-border);
   border-top-color: var(--doc-primary);
   border-radius: 50%;
+  /* Layer-promoted so the rotation runs on the compositor: while a big document
+     mounts, the main thread is blocked and only a composited animation still moves. */
+  will-change: transform;
   animation: docx-editor-loading-spin 0.8s linear infinite;
 }
 

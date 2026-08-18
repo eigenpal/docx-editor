@@ -375,6 +375,12 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
           <PageNumberTranslationContext.Provider value={translate}>
             <DocxEditorPageNumber />
           </PageNumberTranslationContext.Provider>
+          {/* The packaged loading screen, pinned over the workspace (this row is the
+            positioned ancestor). It shows before a document arrives AND while a large
+            one opens — the engine mounts big files behind one painted frame so this
+            overlay can paint instead of the page freezing — and renders nothing
+            otherwise, so it costs the loaded editor nothing. */}
+          <DocxEditorLoading overlay />
         </div>
       </div>
     ) : (

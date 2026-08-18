@@ -17,7 +17,7 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { renderToString } from 'react-dom/server';
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading.tsx';
@@ -49,6 +49,41 @@ function docx(body: string): Uint8Array {
 }
 
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
+
+/**
+ * Deterministic high-entropy bytes (xorshift32): deflate cannot compress them, so a
+ * filler part pushes the ZIP past the engine's 128 KiB open-yield threshold without a
+ * body big enough to slow the test's mount down.
+ */
+function incompressible(length: number): Uint8Array {
+  const bytes = new Uint8Array(length);
+  let state = 0x9e3779b9;
+  for (let i = 0; i < length; i += 1) {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    bytes[i] = state & 0xff;
+  }
+  return bytes;
+}
+
+/** Past the yield threshold: the engine mounts this one behind a painted frame. */
+const LARGE_SOURCE = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="bin" ContentType="application/octet-stream"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>large body</w:t></w:r></w:p></w:body></w:document>`
+  ),
+  'word/media/filler.bin': incompressible(192 * 1024),
+});
 
 const LOADING = '.docx-editor__loading';
 const SPINNER = '.docx-editor__loading-spinner';
@@ -224,6 +259,43 @@ describe('DocxEditor.Loading', () => {
     expect(view.container.querySelector(LOADING)).toBeNull();
   });
 
+  test('a LARGE document holds the screen through the open yield, then yields to pages', async () => {
+    // The engine mounts a document past its yield threshold behind one painted frame,
+    // so a frozen page becomes a visible loading screen. `isOpening` is what this part
+    // reads for that window; no condition is wired up by the host.
+    const view = render(
+      <DocxEditorRoot document={LARGE_SOURCE}>
+        <DocxEditorLoading>
+          <span>opening…</span>
+        </DocxEditorLoading>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+
+    // The store notification is deferred to a microtask; flush it.
+    await act(async () => {});
+    expect(view.container.querySelector(LOADING)).not.toBeNull();
+    expect(view.container.textContent).not.toContain('large body');
+
+    await waitFor(() => {
+      expect(view.container.textContent).toContain('large body');
+    });
+    await waitFor(() => {
+      expect(view.container.querySelector(LOADING)).toBeNull();
+    });
+  });
+
+  test('overlay renders the pinned variant, className still appended last', () => {
+    const view = render(<DocxEditorLoading when overlay className="demo-overlay" />);
+    const el = view.container.querySelector(LOADING)!;
+
+    expect(el.className).toBe(
+      'docx-editor docx-editor__loading docx-editor__loading--overlay demo-overlay'
+    );
+  });
+
   test('renders the packaged spinner when the host supplies no children', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
@@ -267,9 +339,7 @@ describe('DocxEditor.Loading', () => {
 
   test('accepts style, as the other container-shaped parts do', () => {
     const view = render(<DocxEditorLoading when style={{ minHeight: '240px' }} />);
-    expect(
-      (view.container.querySelector(LOADING) as HTMLElement).style.minHeight
-    ).toBe('240px');
+    expect((view.container.querySelector(LOADING) as HTMLElement).style.minHeight).toBe('240px');
   });
 
   test('host children replace the spinner rather than sitting beside it', () => {

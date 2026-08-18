@@ -125,6 +125,16 @@ function mockCanvasContext(): CanvasRenderingContext2D {
   } as CanvasRenderingContext2D;
 }
 
+/** Wait out the open yield: the embedded-font fixtures cross the size threshold past
+ *  which a document mounts behind one painted frame (see `docx-editor-open-scheduler`). */
+async function mounted(editor: DocxEditorInstance): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (editor.surface) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('the deferred open never mounted');
+}
+
 /** Wait until shaped resolution lands (or the editor settles on fixed). */
 async function fontsSettled(editor: DocxEditorInstance): Promise<void> {
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -149,6 +159,7 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       document: docxWithEmbeds(p('shaped hello'), EMBED_BOTH),
       onFontError: (error) => errors.push(error),
     });
+    await mounted(editor);
     expect(editor.surface).not.toBeNull();
     expect(editor.fontMeasurement().measurer).toBe('fixed');
     await fontsSettled(editor);
@@ -218,6 +229,7 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       container,
       document: docxWithEmbeds(p('select this text'), EMBED_BOTH),
     });
+    await mounted(editor);
     const paragraphId = editor.surface!.session.paragraphIds()[0]!;
     const paraId = editor.surface!.session.paraIdOf(paragraphId)!;
     const range = {
@@ -271,6 +283,7 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       ]),
       onFontError: (error) => errors.push(error),
     });
+    await mounted(editor);
     expect(editor.surface).not.toBeNull();
     await fontsSettled(editor);
     // The valid face admitted…
@@ -393,6 +406,9 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       container,
       document: docxWithEmbeds(p('first'), EMBED_BOTH),
     });
+    // Font work starts at the mount, which this big fixture defers — flush it through
+    // the public path so the in-flight window is still open when the next load lands.
+    editor.exec({ type: 'setEditingMode', mode: 'editing' });
     // Immediately supersede with a document that starts NO font work of its own.
     expect(editor.fontMeasurement().resolving).toBe(true);
     editor.load(
@@ -514,6 +530,7 @@ describe('a hostile run family cannot destroy the mounted document', () => {
       document: docxWithEmbeds(HOSTILE_RUN + p('normal'), EMBED_BOTH),
       onFontError: () => {},
     });
+    await mounted(editor);
     expect(container.textContent).toContain('crafted');
     await fontsSettled(editor);
     // Still mounted, still showing the document, still saveable.

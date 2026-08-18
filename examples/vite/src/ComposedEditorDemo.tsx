@@ -737,6 +737,15 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               </DocxEditorReview>
             </DocxEditor.Viewport>
             <DocxEditor.PageNumber />
+            {/* The library's loading overlay, pinned over the workspace (`.demo-main` is
+                the positioned ancestor). Zero conditions wired here: the engine opens a
+                big file behind one painted frame and reports `isOpening`, so picking a
+                large document through Open DOCX shows this screen instead of freezing
+                on the old one. It renders nothing while the document is on screen. */}
+            <DocxEditor.Loading overlay>
+              <DocxEditor.Loading.Spinner />
+              <span>Loading document…</span>
+            </DocxEditor.Loading>
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />
             <CitationPopover

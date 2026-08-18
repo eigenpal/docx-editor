@@ -267,7 +267,7 @@ The pane's parts are statics, so you can hang your own class on each one instead
 
 ## Custom loading screen
 
-`DocxEditor.Loading` renders only while there is no document:
+`DocxEditor.Loading` renders while there is no document to show. It covers two windows with no conditions to wire up: before bytes arrive, and while a large document opens. The engine mounts a big file behind one painted frame and reports `snapshot().isOpening` for that window, so this screen paints instead of the page freezing.
 
 ```tsx
 <DocxEditor.Viewport>
@@ -281,7 +281,18 @@ The pane's parts are statics, so you can hang your own class on each one instead
 </DocxEditor.Viewport>
 ```
 
-To keep the packaged spinner and restyle only it, `DocxEditor.Loading.Spinner` takes a `className`.
+Pass `overlay` to pin it over the nearest positioned ancestor. The overlay is opaque, so it covers the previous document while the next one opens, and it carries a short appearance delay so fast opens never flash it. The sugar `<DocxEditor />` mounts this overlay for you.
+
+```tsx
+<div style={{ position: 'relative' }}>
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+  <DocxEditor.Loading overlay />
+</div>
+```
+
+To keep the packaged spinner and restyle only it, `DocxEditor.Loading.Spinner` takes a `className`. If you gate your own mount point, key that on `snapshot().isLoading`, never on `isOpening`: the scheduled mount needs `DocxEditor.Content` to stay in the tree.
 
 ## Custom link popover
 

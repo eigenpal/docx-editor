@@ -330,7 +330,14 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  * ```
  */
 export interface Editor {
-  /** Load a new document (DOCX bytes or a handle), replacing the current one. */
+  /**
+   * Load a new document (DOCX bytes or a handle), replacing the current one.
+   *
+   * A large document mounts behind one painted frame, so a loading screen keyed on
+   * `snapshot().isOpening` can show instead of a frozen page; a small one mounts before
+   * this returns. Callers that need the document synchronously do not have to care:
+   * `save`, `exec` and `selectMatch` complete a scheduled open before they run.
+   */
   load(document: DocumentSource): void;
   /** Serialize the current canonical document to DOCX bytes — on demand, never per keystroke. */
   save(): Promise<ArrayBuffer>;
@@ -1499,6 +1506,16 @@ export interface EditorSnapshot {
    *  pages paint, so this stays false across a detach and remount. Safe to gate a mount
    *  point on — it never depends on one existing. */
   readonly isLoading: boolean;
+  /**
+   * Whether a supplied document is still on its way to painted pages. Opening a large
+   * document mounts behind one painted frame so a loading screen can show instead of a
+   * frozen page; this is true for exactly that window, and across it the previous
+   * document (if any) stays on screen. Show a loading overlay while it holds — but gate
+   * only chrome on it, never the mount point, which must stay mounted for the open to
+   * complete ({@link EditorSnapshot.isLoading} is the gate-safe flag). Optional and
+   * additive: absent means the implementation has not derived it, read as `false`.
+   */
+  readonly isOpening?: boolean;
   readonly parseError: string | null;
   /** Whether the loaded document is being edited: a patchable document opened in edit mode. A
    *  read-only document (tables/SDTs/unpreservable) or `mode: 'view'` reports false. */

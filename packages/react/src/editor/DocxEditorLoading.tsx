@@ -5,12 +5,18 @@
 // whether a document is ready. Renders nothing once loading ends — it is a conditional
 // wrapper, not a container that stays in the tree.
 //
-// THE CONDITION IS `isLoading`, which the facade defines as "no document handed over
+// THE CONDITION IS `isLoading || isOpening`. `isLoading` is "no document handed over
 // yet, and nothing went wrong" — NOT "nothing painted". That distinction is what makes
-// this part safe to gate a `DocxEditor.Content` on: a definition keyed on painted pages
+// `isLoading` safe to gate a `DocxEditor.Content` on: a definition keyed on painted pages
 // would deadlock, since nothing paints until Content mounts and Content would never
 // mount while the screen is up. It also means a host that unmounts its viewport does not
 // get the loading screen back over a document that is still loaded.
+//
+// `isOpening` is the second half: a LARGE document mounts behind one painted frame (the
+// engine yields so this very screen can paint before the blocking parse+layout), and
+// `isOpening` holds for exactly that window. It is OVERLAY state — this part shows for
+// it, but a host hand-gating its own mount point must key that on `isLoading` alone,
+// because the scheduled mount needs the mount point to stay in the tree.
 //
 // `when` ORs in what the editor cannot see: the host's own async, the fetch of the DOCX
 // bytes and of font faces. It is optional — the default already covers a `Root` mounted
@@ -29,9 +35,10 @@ import { useEditorState } from './useEditorState';
 /**
  * A scalar slice on purpose: `useEditorState` bails out on `Object.is`, so this part
  * re-renders only when the answer actually flips — not on every keystroke that bumps the
- * snapshot.
+ * snapshot. `isOpening` is optional and additive in the contract; absent reads `false`.
  */
-const selectIsLoading = (snapshot: EditorSnapshot) => snapshot.isLoading;
+const selectShowLoading = (snapshot: EditorSnapshot) =>
+  snapshot.isLoading || snapshot.isOpening === true;
 
 /** Props for `DocxEditor.Loading`. @public */
 export interface DocxEditorLoadingProps {
@@ -43,6 +50,16 @@ export interface DocxEditorLoadingProps {
    * provider only after those resolve.
    */
   when?: boolean;
+  /**
+   * Render as an opaque overlay pinned over the nearest positioned ancestor, covering
+   * the previous document while the next one opens. This is the shape for the big-file
+   * case: a large document mounts behind one painted frame, and the overlay is what
+   * that frame shows. It carries a short appearance delay, so an open that finishes
+   * quickly never flashes it. Compose it INSIDE a positioned box (the packaged frame
+   * puts it in the workspace row); without `overlay` the part is an in-flow box that
+   * fills whatever the host gives it.
+   */
+  overlay?: boolean;
   /** Appended after the load-bearing `docx-editor docx-editor__loading` classes. */
   className?: string;
   /** Inline styles for the loading container, as on `DocxEditor.Viewport`. */
@@ -82,21 +99,20 @@ export function DocxEditorLoadingSpinner({ className }: DocxEditorLoadingSpinner
 
 function DocxEditorLoadingImpl({
   when = false,
+  overlay = false,
   className,
   style,
   children,
 }: DocxEditorLoadingProps) {
-  const isLoading = useEditorState(selectIsLoading);
+  const showLoading = useEditorState(selectShowLoading);
   const { t } = useTranslation();
-  if (!when && !isLoading) return null;
+  if (!when && !showLoading) return null;
 
+  const classes = `docx-editor docx-editor__loading${
+    overlay ? ' docx-editor__loading--overlay' : ''
+  }${className ? ` ${className}` : ''}`;
   return (
-    <div
-      className={`docx-editor docx-editor__loading${className ? ` ${className}` : ''}`}
-      style={style}
-      role="status"
-      aria-live="polite"
-    >
+    <div className={classes} style={style} role="status" aria-live="polite">
       {children ?? (
         <>
           <DocxEditorLoadingSpinner />
@@ -136,11 +152,17 @@ export interface DocxEditorLoadingComponent {
  * </DocxEditor.Root>
  * ```
  *
- * It clears as soon as bytes are handed over — NOT when pages finish painting — so it is
- * safe to gate a `DocxEditor.Content` on, and an unmounted viewport does not bring it
- * back. A parse failure clears it too, so a broken document never spins forever; report
- * that from `snapshot().parseError` or the `error` event. Add `when` only for async the
- * editor cannot observe, typically a host that mounts the provider after its own fetch.
+ * It covers TWO windows. Before bytes arrive it is the empty-state screen. And while a
+ * LARGE document opens — the engine mounts it behind one painted frame precisely so this
+ * screen can paint before the blocking parse and layout — it holds until the pages land;
+ * pass `overlay` to pin it over the previous document for that window. A parse failure
+ * clears both, so a broken document never spins forever; report that from
+ * `snapshot().parseError` or the `error` event. Add `when` only for async the editor
+ * cannot observe, typically a host that mounts the provider after its own fetch.
+ *
+ * A host gating its own `DocxEditor.Content` must key that on `snapshot().isLoading`,
+ * which clears as soon as bytes are handed over — never on `isOpening`, whose scheduled
+ * mount needs the mount point to stay in the tree.
  *
  * Rendered OUTSIDE a `DocxEditor.Root` it always shows, because there is no editor to
  * report otherwise — the same rule `useEditorState` documents for a null editor. Place

@@ -13,6 +13,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 export const LOADING_SNAPSHOT: EditorSnapshot = Object.freeze({
   scope: Object.freeze({ kind: 'body' as const }),
   isLoading: true,
+  isOpening: false,
   parseError: null,
   editable: false,
   zoom: 1,

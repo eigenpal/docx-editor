@@ -835,6 +835,7 @@ export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
   return (
     a.scope === b.scope &&
     a.isLoading === b.isLoading &&
+    a.isOpening === b.isOpening &&
     a.parseError === b.parseError &&
     a.editable === b.editable &&
     a.zoom === b.zoom &&
