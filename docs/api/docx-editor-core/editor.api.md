@@ -1153,6 +1153,9 @@ export interface LoadFontsResult extends FontConfigurationFragment {
 }
 
 // @public
+export const LOADING_SNAPSHOT: EditorSnapshot;
+
+// @public
 export function lowerColorValueForBorder(color: ColorValue, themeColors: readonly DocumentThemeColorEntry[]): ColorLowerResult;
 
 // @public

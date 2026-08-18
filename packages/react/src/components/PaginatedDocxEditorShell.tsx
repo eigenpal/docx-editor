@@ -82,6 +82,7 @@ const hexOf = (value: string): string | null => {
   return match ? match[1]!.toUpperCase() : null;
 };
 
+/** @deprecated Use `<DocxEditor>` from the composition layer instead. */
 export function PaginatedDocxEditorShell({
   source,
   scale,

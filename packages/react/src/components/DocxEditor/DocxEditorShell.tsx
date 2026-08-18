@@ -66,6 +66,7 @@ interface OutlineProps {
  * `expandedSidebarItem` + `trackedChanges` because they need to live
  * inside the editor-content `<div>` for proper scoping.
  */
+/** @deprecated Use `<DocxEditor>` from the composition layer instead. */
 export function DocxEditorShell({
   i18n,
   isDark,

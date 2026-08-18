@@ -20,6 +20,7 @@ export {
   disposeLayoutShaping,
   toEditorFontError,
 } from './font-configuration.ts';
+export { LOADING_SNAPSHOT } from './loading-snapshot.ts';
 export {
   MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,

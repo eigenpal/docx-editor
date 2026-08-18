@@ -114,6 +114,7 @@ export type FormattingAction =
 
 /**
  * Props for the Toolbar (formatting rail) component
+ * @deprecated Use `DocxEditor.Toolbar` from the composition layer instead.
  */
 export interface ToolbarProps {
   /** Current formatting of the selection */
@@ -284,6 +285,7 @@ export interface ToolbarGroupProps {
 /**
  * Individual toolbar button with shadcn styling
  */
+/** @deprecated Use `DocxEditor.Toolbar` button parts instead. */
 export function ToolbarButton({
   active = false,
   disabled = false,
@@ -345,6 +347,7 @@ export function ToolbarButton({
 /**
  * Toolbar button group with modern styling
  */
+/** @deprecated Use `DocxEditor.Toolbar` group parts instead. */
 export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) {
   return (
     <div
@@ -398,6 +401,7 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
  * Icon-based formatting toolbar — undo/redo, zoom, styles, fonts,
  * bold/italic/underline, colors, alignment, lists, table/image context, clear formatting.
  */
+/** @deprecated Use `DocxEditor.Toolbar` from the composition layer instead. */
 export function Toolbar(explicitProps: ToolbarProps) {
   const { t } = useTranslation();
   const props = useToolbarProps(explicitProps);

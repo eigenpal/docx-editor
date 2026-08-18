@@ -107,6 +107,7 @@ export interface LogoProps {
   children: ReactNode;
 }
 
+/** @deprecated Use `<DocxEditor>` title slots instead. */
 export function Logo({ children }: LogoProps) {
   return <div className="flex items-center flex-shrink-0">{children}</div>;
 }
@@ -126,6 +127,7 @@ function stripExtension(name: string): string {
   return name.replace(/\.docx$/i, '');
 }
 
+/** @deprecated Use `<DocxEditor>` document name slot instead. */
 export function DocumentName({ value, onChange, placeholder, editable = true }: DocumentNameProps) {
   const { t } = useTranslation();
   const resolvedPlaceholder = placeholder ?? t('titleBar.untitled');
@@ -161,6 +163,7 @@ export interface TitleBarRightProps {
   children: ReactNode;
 }
 
+/** @deprecated Use `<DocxEditor>` title slots instead. */
 export function TitleBarRight({ children }: TitleBarRightProps) {
   return <div className="flex items-center gap-2 ml-auto flex-shrink-0">{children}</div>;
 }
@@ -169,6 +172,7 @@ export function TitleBarRight({ children }: TitleBarRightProps) {
 // MenuBar
 // ============================================================================
 
+/** @deprecated Use `DocxEditor.Menu` from the composition layer instead. */
 export function MenuBar() {
   const { t } = useTranslation();
   const ctx = useEditorToolbar();
@@ -393,6 +397,7 @@ export interface TitleBarProps {
  * Logo and TitleBarRight span full height. DocumentName + MenuBar
  * stack vertically in the center column.
  */
+/** @deprecated Use `<DocxEditor>` from the composition layer instead. */
 export function TitleBar({ children }: TitleBarProps) {
   let logoItem: ReactNode = null;
   let rightItem: ReactNode = null;

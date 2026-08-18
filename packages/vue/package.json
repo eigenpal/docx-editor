@@ -1,39 +1,46 @@
 {
   "name": "@docx-editor.dev/vue",
   "version": "2.5.0",
-  "private": true,
-  "author": {
-    "name": "Jedr Blaszyk",
-    "email": "jedr@eigenpal.com",
-    "url": "https://github.com/jedrazb"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/eigenpal/docx-editor.git",
-    "directory": "packages/vue"
-  },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "devDependencies": {
-    "@docx-editor.dev/core": "workspace:*",
-    "fflate": "^0.8.2",
-    "vite-plugin-dts": "^5.0.0"
-  },
-  "peerDependencies": {
-    "vue": "^3.3.0"
-  },
+  "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     }
   },
-  "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
   "files": [
-    "dist"
+    "dist",
+    "!dist/metafile-*.json",
+    "THIRD_PARTY_NOTICES.md"
   ],
-  "homepage": "https://docx-editor.dev/",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
+  },
+  "peerDependencies": {
+    "@docx-editor.dev/core": "^2.0.1",
+    "vue": "^3.3.0"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "fflate": "^0.8.2"
+  },
+  "dependencies": {
+    "@docx-editor.dev/i18n": "^2.5.0",
+    "emf-converter": "2.0.2",
+    "harfbuzzjs": "1.6.0"
+  },
   "keywords": [
     "docx",
     "editor",
@@ -41,22 +48,20 @@
     "word",
     "document"
   ],
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
   "license": "Apache-2.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/vue"
+  },
   "publishConfig": {
     "access": "public"
   },
-  "scripts": {
-    "build": "vite build && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/vue",
-    "typecheck": "tsc --noEmit",
-    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
-    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
-  },
-  "type": "module",
-  "types": "./dist/index.d.ts",
-  "dependencies": {
-    "@docx-editor.dev/core": "workspace:*",
-    "@docx-editor.dev/i18n": "workspace:*",
-    "emf-converter": "2.0.2",
-    "harfbuzzjs": "1.6.0"
-  }
+  "type": "module"
 }
