@@ -74,7 +74,7 @@ export function Editor() {
         <button onClick={onSave}>Save .docx</button>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
-        <DocxEditor ref={editorRef} document={buffer ?? undefined} />
+        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
       </div>
     </div>
   );

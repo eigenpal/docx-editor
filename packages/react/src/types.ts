@@ -174,7 +174,8 @@ export interface DocxEditorProps {
    * `DocxEditor.HorizontalRuler` / `DocxEditor.VerticalRuler` yourself.
    */
   rulers?: boolean;
-  /** A document to load: DOCX bytes or an existing handle. */
+  /** A document to load: DOCX bytes, `'blank'` for an empty one, or an existing handle.
+   * Omitting it mounts NO document, which is not the same as an empty one. */
   document?: DocumentSource;
   /**
    * The mode the editor opens in, matching the toolbar's three-state pill. Applied at
@@ -232,7 +233,8 @@ export interface DocxEditorProps {
  * mirrors capabilities the `Editor` contract already names.
  */
 export interface DocxEditorRef {
-  /** Load a document: DOCX bytes or an existing handle. No-op before mount. */
+  /** Load a document: DOCX bytes, `'blank'` for an empty one, or an existing handle.
+   * No-op before mount. */
   load(document: DocumentSource): void;
   /** Serialize the current document; `null` when no editor is mounted. */
   save(): Promise<ArrayBuffer | null>;

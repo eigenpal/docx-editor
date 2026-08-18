@@ -29,7 +29,7 @@ npm install @docx-editor.dev/fonts
 
 ## Mount it
 
-Import the component and the stylesheet once. `document` takes an `ArrayBuffer`, a `Uint8Array`, or a `DocumentHandle`; omit it to mount an empty editor.
+Import the component and the stylesheet once. `document` takes an `ArrayBuffer`, a `Uint8Array`, a `DocumentHandle`, or `'blank'` for an empty document. Omitting it means no document at all. The editor shows its loading screen, and every control stays disabled until you supply bytes.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';

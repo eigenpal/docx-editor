@@ -12,11 +12,10 @@
 // same document still opens — revisions render in their final state and the
 // review controls disable with the engine's own reason.
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
 import { reviewModule } from '@docx-editor.dev/pro';
 import { DocxEditorReview } from '@docx-editor.dev/pro/react';
-import { emptyDocx } from '../../../shared/demoDocument';
 import { ExampleSwitcher } from '../../../shared/ExampleSwitcher';
 import { GitHubBadge } from '../../../shared/GitHubBadge';
 
@@ -25,7 +24,6 @@ const PRO_MODULES = [reviewModule()];
 
 export function Editor() {
   const [title, setTitle] = useState('Untitled document');
-  const documentBytes = useMemo(() => emptyDocx(), []);
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Host chrome stays HOST composition — nothing threads through the editor. */}
@@ -43,7 +41,7 @@ export function Editor() {
       </header>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         <DocxEditor
-          document={documentBytes}
+          document="blank"
           author="Demo Reviewer"
           modules={PRO_MODULES}
           title={title}

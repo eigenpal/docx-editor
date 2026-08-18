@@ -33,7 +33,16 @@ export type DocxFontsSource =
   | Promise<DocxFontsInput>
   | (() => DocxFontsInput | Promise<DocxFontsInput>);
 
-/** What the document itself can be: a URL to fetch, or bytes already in hand. @public */
+/**
+ * What the document itself can be: a URL to fetch, or bytes already in hand.
+ *
+ * A string here is ALWAYS a URL — this hook exists to fetch one. That is the opposite of
+ * the `document` prop, whose `DocumentSource` reads the string `'blank'` as Word's blank
+ * template; `useDocxSource('blank')` would request `./blank` and report the 404. There is
+ * nothing to fetch for an empty document, so pass `'blank'` straight to `document`.
+ *
+ * @public
+ */
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
 
 /** Options for {@link useDocxSource}. @public */

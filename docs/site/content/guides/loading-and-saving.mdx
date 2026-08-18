@@ -15,6 +15,33 @@ The editor takes the document through the `document` prop. The most common value
 <DocxEditor document={bytes} />
 ```
 
+### Starting empty
+
+To open the editor on an empty page, pass `'blank'`. It is Word's blank template, with the
+same Calibri 11pt defaults a new document in Word has:
+
+```tsx
+<DocxEditor document="blank" />
+```
+
+Omitting `document` is not the same thing. It means no document at all, so the editor shows
+its loading screen and every control stays disabled. Use `undefined` only while your own
+fetch is still running.
+
+For a **File > New** command that a user can run more than once, call `blankDocumentBytes()`
+instead. `'blank'` is a constant, so the editor treats a second `'blank'` as the same
+document and keeps what the user typed. Fresh bytes replace it:
+
+```tsx
+import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+
+<button onClick={() => ref.current?.load(blankDocumentBytes())}>New</button>;
+```
+
+Call `blankDocumentBytes()` inside an event handler or into state, never inline in the
+`document` prop. It returns a new array each time, so an inline call rebuilds the editor on
+every render.
+
 ### From a URL
 
 ```tsx

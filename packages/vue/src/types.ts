@@ -38,7 +38,8 @@ export interface DocxEditorProps {
    * `{ sources, substitutions }` fragment (what `loadDefaultFonts()` returns).
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
-  /** A document to load: DOCX bytes or an existing handle. */
+  /** A document to load: DOCX bytes, `'blank'` for an empty one, or an existing handle.
+   * Omitting it mounts NO document, which is not the same as an empty one. */
   document?: DocumentSource;
   /**
    * The mode the editor opens in: 'edit' (default), 'suggesting' (needs a review module
@@ -68,7 +69,8 @@ export interface DocxEditorProps {
  * the template ref from first render without guarding it.
  */
 export interface DocxEditorRef {
-  /** Load a document: DOCX bytes or an existing handle. No-op before mount. */
+  /** Load a document: DOCX bytes, `'blank'` for an empty one, or an existing handle.
+   * No-op before mount. */
   load(document: DocumentSource): void;
   /** Serialize the current document; `null` when no editor is mounted. */
   save(): Promise<ArrayBuffer | null>;

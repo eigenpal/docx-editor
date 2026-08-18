@@ -37,9 +37,10 @@ export interface DocxEditorConfig {
    */
   container?: HTMLElement;
   /**
-   * A document to load at construction. Bytes only in practice: a `DocumentHandle` cannot
-   * be re-opened (the handle is identity, not content), so passing one emits a typed
-   * `error` event rather than silently loading nothing.
+   * A document to load at construction: DOCX bytes, or `'blank'` for Word's blank
+   * template. A `DocumentHandle` cannot be re-opened (the handle is identity, not
+   * content), so passing one emits a typed `error` event rather than silently loading
+   * nothing. Omitting this mounts NO document, which is not the same as an empty one.
    */
   document?: DocumentSource;
   /**

@@ -12,6 +12,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { blankDocumentBytes } from '../blank-document.ts';
+import { normalizeSource } from '../docx-editor-support.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -1187,5 +1188,95 @@ describe('DocAnchor addressing (w14:paraId)', () => {
     expect(
       editor.query({ type: 'paragraphs', container: { part: 'header', rId: 'rId9' } })
     ).toEqual([]);
+  });
+});
+
+// Omitting the document is not a way to ask for an empty one (#275).
+//
+// A host that mounts the editor with nothing to show gets no editing surface, so every
+// command refuses and the whole chrome renders disabled — which reads as a broken editor,
+// not as "waiting". The docs' own Next.js snippet did exactly this and called it "an empty
+// editor until the user picks a file". `'blank'` is the way to actually ask.
+describe("document: 'blank'", () => {
+  test('mounts a real editable document, where omitting one mounts nothing', () => {
+    const empty = createDocxEditor({ container: document.createElement('div') });
+    // The state the issue reported: no surface, so `can` refuses everything by the same
+    // reason the toolbar quotes into every tooltip.
+    expect(empty.surface).toBeNull();
+    const refusal = empty.can({ type: 'toggleMark', mark: 'bold' });
+    expect(refusal.ok).toBe(false);
+    expect(refusal.ok === false && refusal.reason).toBe('no document is loaded');
+
+    const blank = createDocxEditor({ container: document.createElement('div'), document: 'blank' });
+    expect(blank.surface).not.toBeNull();
+    expect(blank.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+    expect(blank.snapshot().isLoading).toBe(false);
+  });
+
+  test('is Word’s blank template, byte for byte', () => {
+    const container = document.createElement('div');
+    const fromLiteral = createDocxEditor({ container, document: 'blank' });
+    const fromBytes = createDocxEditor({
+      container: document.createElement('div'),
+      document: blankDocumentBytes(),
+    });
+    // Same template, so the defaults a host sees cannot depend on which spelling it used.
+    expect(fromLiteral.snapshot().formatting?.fontFamily).toBe(
+      fromBytes.snapshot().formatting?.fontFamily
+    );
+    expect(fromLiteral.snapshot().formatting?.fontSizePt).toBe(
+      fromBytes.snapshot().formatting?.fontSizePt
+    );
+    expect(fromLiteral.getPageSetup()?.pageWidthTwips).toBe(
+      fromBytes.getPageSetup()?.pageWidthTwips
+    );
+  });
+
+  test('load() takes it too, so a New gesture needs no import', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docx('<w:p><w:r><w:t>old</w:t></w:r></w:p>'),
+    });
+    expect(container.textContent).toContain('old');
+
+    editor.load('blank');
+    expect(editor.surface).not.toBeNull();
+    expect(container.textContent).not.toContain('old');
+    expect(editor.snapshot().formatting?.fontFamily).toBe('Calibri');
+  });
+
+  test('each resolution mints its own bytes, which no caller may share', () => {
+    // Asserted on the BYTES, not through the editor: the engine parses into its own tree,
+    // so a module-level singleton template would leak nothing observable through two
+    // editors and this guarantee would go unguarded. `blank-document.ts` promises the
+    // caller may hand the bytes to a loader that takes ownership of the buffer, and that
+    // promise is only true if every call allocates.
+    const first = normalizeSource('blank');
+    const second = normalizeSource('blank');
+    expect(first).not.toBeNull();
+    expect(first).not.toBe(second);
+    expect(first!.buffer).not.toBe(second!.buffer);
+    first![0] = (first![0]! + 1) % 256;
+    expect(first![0]).not.toBe(second![0]);
+  });
+
+  test('a string that is not `blank` is refused by name, not as a handle', () => {
+    // The type admits one string literal now, so a plain-JS host or a typo can land here.
+    // Answering `'Blank'` with "a DocumentHandle cannot be re-loaded" names a type the
+    // caller never mentioned and sends them looking in the wrong place.
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: 'Blank' as 'blank',
+    });
+    expect(editor.surface).toBeNull();
+    expect(editor.snapshot().parseError).toContain("'Blank' is not a document");
+    expect(editor.snapshot().parseError).not.toContain('DocumentHandle');
+
+    const errors: string[] = [];
+    const loaded = createDocxEditor({ container: document.createElement('div') });
+    loaded.on('error', (error) => errors.push(error.message));
+    loaded.load('/report.docx' as 'blank');
+    expect(errors.join()).toContain("'/report.docx' is not a document");
   });
 });

@@ -50,7 +50,10 @@ export default defineComponent({
   name: 'DocxEditor',
   props: {
     document: {
-      type: [ArrayBuffer, Uint8Array, Object] as unknown as PropType<DocumentSource>,
+      // `String` carries `'blank'`. Vue validates against this array at RUNTIME, so a
+      // member missing here warns on every mount even though the cast says otherwise —
+      // and the cast is why neither `check:parity` nor `api:check` can see the gap.
+      type: [ArrayBuffer, Uint8Array, Object, String] as unknown as PropType<DocumentSource>,
       default: undefined,
     },
     mode: { type: String as PropType<EditorMode>, default: 'edit' },

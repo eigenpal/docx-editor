@@ -972,7 +972,7 @@ export interface DocumentHandle {
 }
 
 // @public
-export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle;
+export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
 
 // @public
 export interface DocxDocument {

@@ -54,7 +54,9 @@ import {
  * @public
  */
 export interface DocxEditorRootProps {
-  /** A document to load: DOCX bytes or an existing handle. Identity change remounts. */
+  /** A document to load: DOCX bytes, `'blank'` for an empty one, or an existing handle.
+   * Identity change remounts; `'blank'` is a constant, so holding it across renders does
+   * not. Omitting this mounts NO document, which is not the same as an empty one. */
   document?: DocumentSource;
   /**
    * Font bytes for Word-accurate (HarfBuzz-shaped) wrap and pagination. Omitted, layout

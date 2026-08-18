@@ -74,14 +74,16 @@ export function Editor() {
         <button onClick={onSave}>Save .docx</button>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
-        <DocxEditor ref={editorRef} document={buffer ?? undefined} />
+        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
       </div>
     </div>
   );
 }
 ```
 
-Leaving `document` undefined mounts an empty editor until the user picks a file. The stylesheet import is required once, and the editor fills its parent so it needs a box with a real height.
+`document={buffer ?? 'blank'}` starts the user on an empty page, and replaces it with their file when they pick one. Leaving `document` undefined is not the same thing. It means no document at all. The editor shows its loading screen, and every control reports `no document is loaded` until bytes arrive. Use `undefined` only while your fetch is still running.
+
+The stylesheet import is required once, and the editor fills its parent so it needs a box with a real height.
 
 ## Why this pattern
 

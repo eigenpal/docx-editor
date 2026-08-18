@@ -106,6 +106,7 @@ import {
   pageSetupEqual,
   selectionsMatch,
   snapshotsEqual,
+  unloadableSourceReason,
 } from './docx-editor-support.ts';
 import {
   createT,
@@ -1093,7 +1094,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const bytes = normalizeSource(config.document);
     if (bytes) loadBytes(bytes);
     else {
-      parseError = 'a DocumentHandle cannot be re-loaded; pass DOCX bytes';
+      parseError = unloadableSourceReason(config.document);
       emitError(editorError('unsupported', parseError));
     }
   }
@@ -1780,11 +1781,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     load(document) {
       const bytes = normalizeSource(document);
       if (!bytes) {
-        // A handle is identity, not content — there are no bytes to reopen. The current
-        // document (if any) stays mounted rather than being torn down for nothing.
-        emitError(
-          editorError('unsupported', 'a DocumentHandle cannot be re-loaded; pass DOCX bytes')
-        );
+        // A handle is identity, not content — there are no bytes to reopen, and an
+        // unrecognized string is a typo. The current document (if any) stays mounted
+        // rather than being torn down for nothing.
+        emitError(editorError('unsupported', unloadableSourceReason(document)));
         return;
       }
       loadBytes(bytes);

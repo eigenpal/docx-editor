@@ -13,7 +13,7 @@ Use `document` for the current document source and `fonts` for measurement fidel
 
 | Prop       | Type                                                             | Description                                                                                                                                        |
 | ---------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `document` | `DocumentSource`                                                 | DOCX bytes or an existing `DocumentHandle`.                                                                                                        |
+| `document` | `DocumentSource`                                                 | DOCX bytes, `'blank'` for an empty document, or an existing `DocumentHandle`.                                                                      |
 | `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes used for Word-accurate shaping and pagination, or a resolver called per load with the document's declared families.                     |
 | `author`   | `string`                                                         | Ambient author for authored commands such as comments and review actions.                                                                          |
 | `locale`   | `string`                                                         | Locale passed to the underlying editor instance.                                                                                                   |
@@ -189,7 +189,7 @@ Common methods:
 | Method                    | Returns                        | What it does                                                                        |
 | ------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
 | `save()`                  | `Promise<ArrayBuffer \| null>` | Serialize the current document to a `.docx` buffer. `null` if there is no document. |
-| `load(document)`          | `void`                         | Load DOCX bytes or an existing `DocumentHandle`.                                    |
+| `load(document)`          | `void`                         | Load DOCX bytes, `'blank'`, or an existing `DocumentHandle`.                        |
 | `getDocumentHandle()`     | `DocumentHandle \| null`       | Current handle + revision.                                                          |
 | `getEditor()`             | `Editor \| null`               | Reach the full editor facade.                                                       |
 | `exec(command, options?)` | `ExecResult`                   | Run a typed command against the current scope.                                      |

@@ -112,12 +112,23 @@ export interface DocumentHandle {
 }
 
 /**
- * What `createDocxEditor`/`load` accept as a document: raw DOCX bytes, or an existing
- * in-memory `DocumentHandle` (shared/handed off). The engine is byte-native
+ * What `createDocxEditor`/`load` accept as a document: raw DOCX bytes, an existing
+ * in-memory `DocumentHandle` (shared/handed off), or `'blank'`. The engine is byte-native
  * (`PackageModel` is canonical); there is intentionally no structured-tree input,
  * which would be lossy against the canonical package.
+ *
+ * `'blank'` is Word's blank template, the same bytes `blankDocumentBytes()` returns from
+ * `@docx-editor.dev/core/editor`. OMITTING the document is not a way to ask for an empty
+ * one: with no document there is no editing surface, so every command refuses with "no
+ * document is loaded" behind a loading screen waiting for bytes that are not coming.
+ *
+ * The two spellings serve different gestures. `'blank'` is a CONSTANT, so an adapter that
+ * remounts on document identity holds one document — right for MOUNTING.
+ * `blankDocumentBytes()` allocates, so it starts a fresh document every call — right for
+ * File › New. Call the function into `load()` or host state, never inline in a prop,
+ * where a new array per render rebuilds the editor per render.
  */
-export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle;
+export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
 
 /** A concrete font face requested by authored document content. */
 export interface FontFaceRequest {
@@ -331,7 +342,7 @@ export type CanResult = { ok: true } | { ok: false; code: ExecErrorCode; reason:
  */
 export interface Editor {
   /**
-   * Load a new document (DOCX bytes or a handle), replacing the current one.
+   * Load a new document (DOCX bytes, `'blank'`, or a handle), replacing the current one.
    *
    * A large document mounts behind one painted frame, so a loading screen keyed on
    * `snapshot().isOpening` can show instead of a frozen page; a small one mounts before
