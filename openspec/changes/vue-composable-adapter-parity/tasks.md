@@ -297,27 +297,27 @@ the v2 context-fed components WRAP, so Vue needs them. No composables, no inject
 
 ## 12. Docs and demo
 
-- [ ] 12.1 `docs/site/content/vue/`: `index`, `composition`, `composables`, `props`, `examples`,
+- [x] 12.1 `docs/site/content/vue/`: `index`, `composition`, `composables`, `props`, `examples`,
       following the Google developer documentation style guide
-- [ ] 12.1b `check:public-docs-surface` requires EVERY composable name in both `react/hooks` and
+- [x] 12.1b `check:public-docs-surface` requires EVERY composable name in both `react/hooks` and
       `vue/composables`, so a new one cannot be documented for one adapter alone
-- [ ] 12.2 Register every page in BOTH `meta.json` files — the `"root": true` one with full
+- [x] 12.2 Register every page in BOTH `meta.json` files — the `"root": true` one with full
       paths, and the subfolder's
-- [ ] 12.3 Update `docs/site/data/word-features.ts` where a claim now covers both adapters
-- [ ] 12.4 Rebuild `examples/vue` on the composition layer, so the demo is the parity witness the
+- [x] 12.3 Update `docs/site/data/word-features.ts` where a claim now covers both adapters
+- [x] 12.4 Rebuild `examples/vue` on the composition layer, so the demo is the parity witness the
       React demo is; wire it into `bun run dev` and the parity build
-- [ ] 12.5 Diagrams as mermaid, never ASCII
+- [x] 12.5 Diagrams as mermaid, never ASCII
 
 ## 13. Ship
 
-- [ ] 13.1 `bun run typecheck`, `bun run lint`, `bun run test`, `bun run api:check`, then
+- [x] 13.1 `bun run typecheck`, `bun run lint`, `bun run test`, `bun run api:check`, then
       `bun run check:parity` (which now carries `check:composable-parity`),
       `bun run i18n:validate`, `bun run format`. Snapshot-reading gates run AFTER `api:check`
-- [ ] 13.2 `openspec validate vue-composable-adapter-parity --strict`
-- [ ] 13.3 `bun run api:extract` and commit the Vue snapshot
-- [ ] 13.4 Changeset: one bump for the fixed group, one sentence, consumer-facing. A deprecation
+- [x] 13.2 `openspec validate vue-composable-adapter-parity --strict`
+- [x] 13.3 `bun run api:extract` and commit the Vue snapshot
+- [x] 13.4 Changeset: one bump for the fixed group, one sentence, consumer-facing. A deprecation
       is a MINOR — the removal is the major that follows, and it is not this change
-- [ ] 13.5 Compare the run against the 0.1 baseline and report every gate that was already red
+- [x] 13.5 Compare the run against the 0.1 baseline and report every gate that was already red
 
 ## 14. Not in this change
 
