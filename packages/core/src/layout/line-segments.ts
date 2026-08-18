@@ -5,6 +5,7 @@
 
 import type { InlineDrawingRecord } from './drawing-layout.ts';
 import { documentOrderIndex } from './document-order.ts';
+import { paragraphFragmentsOf } from './semantic-records.ts';
 import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
 import type { SemanticPosition } from './semantic-interaction.ts';
 
@@ -104,4 +105,30 @@ export function segmentOverlap(
     lineParagraph === fromParagraph ? Math.max(segment.start, from.offset) : segment.start;
   const end = lineParagraph === toParagraph ? Math.min(segment.end, to.offset) : segment.end;
   return end > start ? { start, end } : null;
+}
+
+/**
+ * The paragraphs drawn BEFORE this one inside the same paragraph box, nearest first.
+ *
+ * Empty for an ordinary paragraph. A resolved display mode lays a run of paragraphs out as
+ * one, and the breaks between them are not breaks the reader can see — so a key that acts on
+ * "the boundary before the caret" must know it is standing on one of them.
+ */
+export function mergedPredecessorsOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): readonly string[] {
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOf(page)) {
+      const held: string[] = [];
+      for (const line of fragment.lines) {
+        for (const segment of lineSegments(line)) {
+          if (!held.includes(segment.paragraphId)) held.push(segment.paragraphId);
+        }
+      }
+      const at = held.indexOf(paragraphId);
+      if (at > 0) return held.slice(0, at).reverse();
+    }
+  }
+  return [];
 }

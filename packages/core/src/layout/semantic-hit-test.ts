@@ -565,11 +565,13 @@ function resolveParagraph(
   // display mode merges the paragraphs a tracked decision merges, so one line can carry two,
   // and the offset the walk just resolved counts in the one under the pointer.
   const segment = segmentAtX(line, point.x);
-  const position: SemanticPosition = {
-    paragraphId: segment.paragraphId,
-    offset: resolved.offset,
-  };
-  const box = caretBoxOnLine(line, resolved.offset, context.measurer, segment);
+  // The offset comes from a walk over the WHOLE line and the paragraph from the segment under
+  // the pointer, so on a merged line the two are counted in different paragraphs. Clamping
+  // ties them back together: a click past the end of the line lands at the end of the
+  // paragraph the pointer is over, not at an offset that paragraph does not have.
+  const offset = Math.min(Math.max(resolved.offset, segment.start), segment.end);
+  const position: SemanticPosition = { paragraphId: segment.paragraphId, offset };
+  const box = caretBoxOnLine(line, offset, context.measurer, segment);
   return {
     position,
     caret: {
@@ -592,8 +594,7 @@ function resolveParagraph(
       point.y < line.box.y + line.box.height,
     // Filled by {@link hitTestPage} once the point is known; keep null on the inner path.
     contentControlId: null,
-    drawing:
-      resolved.drawing && resolved.withinSpan ? drawingHitIdentity(line, resolved.drawing) : null,
+    drawing: resolved.drawing && resolved.withinSpan ? drawingHitIdentity(resolved.drawing) : null,
   };
 }
 
@@ -637,7 +638,7 @@ interface LineOffset {
   readonly drawing?: InlineDrawingRecord | null;
 }
 
-function drawingHitIdentity(line: LineRecord, drawing: InlineDrawingRecord): SemanticHitDrawing {
+function drawingHitIdentity(drawing: InlineDrawingRecord): SemanticHitDrawing {
   return Object.freeze({
     drawingNodeId: drawing.drawingNodeId,
     // The drawing's own paragraph. On a merged line the record names a member, and the line

@@ -18,7 +18,8 @@ import {
   selectionRects,
   spansInSelection,
 } from '../semantic-interaction.ts';
-import { linesOf } from '../semantic-records.ts';
+import { lineAtPosition, linesOf } from '../semantic-records.ts';
+import { reviewAnchorIndex } from '../review-support.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -301,19 +302,102 @@ describe('a group that cannot be measured is not merged', () => {
   });
 
   test('a paragraph the walk over-publishes is left alone', () => {
-    // Content past a nesting cap counts differently on each side, so the store cannot address
-    // what layout paints. Merging it would place the survivor's text inside that gap.
+    // Content at the nesting cap counts differently on each side — the store stops one level
+    // before layout does — so the store cannot address what layout paints. Merging would put
+    // the survivor's text inside that gap. The depth matters: BELOW the cap both lanes agree
+    // and the merge is right; far ABOVE it neither lane publishes the text, so the interesting
+    // case is the cap itself.
     const deep = (depth: number, inner: string): string =>
       depth === 0 ? inner : `<w:sdt><w:sdtContent>${deep(depth - 1, inner)}</w:sdtContent></w:sdt>`;
-    const overPublished =
+    const atTheCap =
       '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
-      deep(34, '<w:r><w:t xml:space="preserve">deep </w:t></w:r>') +
+      deep(32, '<w:r><w:t xml:space="preserve">deep </w:t></w:r>') +
       '</w:p>' +
       plain('world');
-    const spans = linesOf(lay(load(overPublished), 'proposed')).flatMap((line) => line.spans);
-    // `world` keeps its own offsets whatever happened to the paragraph before it.
-    const world = spans.find((span) => span.text === 'world');
-    expect(world?.range.start).toBe(0);
-    expect(world?.range.end).toBe(5);
+    expect(textPerLine(load(atTheCap), 'proposed')).toEqual(['deep ', 'world']);
+
+    const belowTheCap =
+      '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
+      deep(3, '<w:r><w:t xml:space="preserve">deep </w:t></w:r>') +
+      '</w:p>' +
+      plain('world');
+    expect(textPerLine(load(belowTheCap), 'proposed')).toEqual(['deep world']);
+  });
+
+  test('markup that only looks like a revision merges nothing', () => {
+    // A `.docx` is a zip of XML the sender controls. Matching the mark by local name alone —
+    // at any level — let foreign markup join two paragraphs in the default view, a join no
+    // decision in the file can produce and no Accept can undo.
+    const spoofed = [
+      '<w:pPr><x:rPr xmlns:x="urn:x"><w:del w:id="1" w:author="A"/></x:rPr></w:pPr>',
+      '<x:pPr xmlns:x="urn:x"><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></x:pPr>',
+      '<w:pPr><w:rPr><x:del xmlns:x="urn:x" w:id="1" w:author="A"/></w:rPr></w:pPr>',
+    ];
+    for (const pPr of spoofed) {
+      const part = load(
+        `<w:p>${pPr}<w:r><w:t xml:space="preserve">Hello </w:t></w:r></w:p>` + plain('world')
+      );
+      expect(textPerLine(part, 'proposed')).toEqual(['Hello ', 'world']);
+    }
+  });
+});
+
+describe('a click past the end of a merged line', () => {
+  test('lands at the end of the paragraph under the pointer', () => {
+    // The offset comes from a walk over the whole line and the paragraph from the segment
+    // under the pointer, so without a clamp the two were counted in different paragraphs and
+    // a click in the margin produced an offset the second paragraph does not have.
+    const layout = lay(load(DELETED_MARK), 'proposed');
+    const line = linesOf(layout)[0]!;
+    const hit = hitTestSemantic(layout, {
+      x: line.box.x + line.box.width + 200,
+      y: line.box.y + line.box.height / 2,
+      pageIndex: 0,
+    });
+    expect(shortId(hit!.position.paragraphId)).toBe('0.0.1');
+    expect(hit!.position.offset).toBe(5);
+  });
+});
+
+describe('a field that closes in an earlier paragraph', () => {
+  test('does not read as balanced', () => {
+    // Counting a net let an `end` with no `begin` cancel a later `begin`, so a paragraph that
+    // both closes one field and opens another read as balanced and merged anyway.
+    const closesThenOpens =
+      '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r></w:p>' +
+      '<w:p><w:pPr><w:rPr><w:del w:id="2" w:author="A"/></w:rPr></w:pPr>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '<w:r><w:t xml:space="preserve">TWO</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r></w:p>' +
+      plain('three');
+    const spans = linesOf(lay(load(closesThenOpens), 'proposed')).flatMap((line) => line.spans);
+    const two = spans.find((span) => span.text.includes('TWO'));
+    // `TWO` addresses its own paragraph from offset 0, whatever the fields around it do.
+    expect(two?.range.start).toBe(0);
+  });
+});
+
+describe('a merged member is still findable by the things that index paragraphs', () => {
+  test('lineAtPosition answers for both members', () => {
+    // An inline image is resolved through this, so a member it could not answer for was a
+    // picture in the merged half that could not be selected.
+    const layout = lay(load(DELETED_MARK), 'proposed');
+    const ids = linesOf(layout)[0]!.spans.map((span) => span.range.paragraphId);
+    expect(lineAtPosition(layout, ids[0]!, 3)).not.toBeNull();
+    expect(lineAtPosition(layout, ids[1]!, 3)).not.toBeNull();
+    expect(lineAtPosition(layout, ids[1]!, 0)).not.toBeNull();
+  });
+
+  test('the review rail can anchor a card in either member', () => {
+    const layout = lay(load(DELETED_MARK), 'proposed');
+    const ids = linesOf(layout)[0]!.spans.map((span) => span.range.paragraphId);
+    const anchors = reviewAnchorIndex(layout, (page) =>
+      page.fragments.filter((fragment) => fragment.kind === 'paragraph')
+    );
+    expect(anchors.has(ids[0]!)).toBe(true);
+    expect(anchors.has(ids[1]!)).toBe(true);
   });
 });

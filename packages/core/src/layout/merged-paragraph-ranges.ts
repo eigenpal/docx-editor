@@ -47,7 +47,7 @@ export function mergeBoundariesOf(group: ParagraphMergeGroup): MergeBoundaries {
  * The LAST member whose content starts at or before the offset, which puts a position at a
  * member boundary — the caret between the two halves — at the start of the following member,
  * where an insertion belongs to the paragraph the reader is typing into. An empty member has
- * zero length and no offset of its own, so it never wins.
+ * no offsets of its own, so it only wins a boundary offset that no later member claims.
  */
 function memberAt(boundaries: MergeBoundaries, offset: number): MergeMember | undefined {
   let found: MergeMember | undefined;

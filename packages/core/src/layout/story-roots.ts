@@ -128,14 +128,19 @@ function withMergedParagraphs(
       out.push(block);
       continue;
     }
-    if (!memberIsAddressable(block, displayMode)) {
+    const removed = markRemovedInMode(block, displayMode);
+    // Measuring costs a walk of the paragraph, so it is asked ONLY where a merge could happen:
+    // of a paragraph whose mark is removed, and of the survivor a pending run would merge into.
+    // A document with no tracked marks answers `false` to the cheap question and stops, which
+    // is every keystroke in the view the free engine renders by default.
+    if ((removed || pendingMembers.length > 0) && !memberIsAddressable(block, displayMode)) {
       // Cannot be measured, so cannot be merged INTO either: a survivor whose own offsets do
       // not line up would take the previous members' characters at the wrong index.
       endRun();
       out.push(block);
       continue;
     }
-    if (markRemovedInMode(block, displayMode)) {
+    if (removed) {
       pendingMembers.push(block);
       pendingParent = parentKey;
       continue;
@@ -221,6 +226,11 @@ function flowBlocksWithParent(children: readonly OoxmlNode[]): readonly Parented
  * field; and content past a nesting cap counts differently on each side. Both publish one
  * member's text at another member's offsets, which is worse than the break this change exists
  * to remove, so a group that cannot be measured is not merged.
+ *
+ * A refusal is fail-visible, not fail-safe: the reader keeps a break the document says is
+ * gone, and if the refused member carried `w:pPr/w:sectPr` they also keep a section break —
+ * so the pages before it stay at their own paper size, where accepting the change would put
+ * them on the next section's.
  */
 function memberIsAddressable(member: OoxmlElement, displayMode: RevisionDisplayMode): boolean {
   if (!fieldCharsBalanced(member)) return false;
@@ -253,6 +263,7 @@ function memberIsAddressable(member: OoxmlElement, displayMode: RevisionDisplayM
  */
 function fieldCharsBalanced(paragraph: OoxmlElement): boolean {
   let open = 0;
+  let underflowed = false;
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
     if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldChar') {
@@ -260,12 +271,18 @@ function fieldCharsBalanced(paragraph: OoxmlElement): boolean {
         (attribute) => attribute.localName === 'fldCharType'
       )?.value;
       if (type === 'begin') open += 1;
-      else if (type === 'end') open -= 1;
+      else if (type === 'end') {
+        open -= 1;
+        // An `end` with no `begin` in this paragraph closes a field that started in an
+        // earlier one. Counting a net would let it cancel a later `begin` and call the
+        // paragraph balanced, which is the case this guard exists to catch.
+        if (open < 0) underflowed = true;
+      }
     }
     for (const child of node.children) visit(child);
   };
   visit(paragraph);
-  return open === 0;
+  return open === 0 && !underflowed;
 }
 
 /**

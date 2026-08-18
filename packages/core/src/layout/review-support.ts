@@ -613,21 +613,32 @@ export function reviewAnchorIndex<
     readonly lines?: readonly {
       readonly range: { readonly end: number };
       readonly box: { readonly y: number };
+      /** Present on a real line; a merged one carries spans from more than one paragraph. */
+      readonly spans?: readonly { readonly range: { readonly paragraphId: string } }[];
     }[];
   }[]
 ): Map<string, ReviewParagraphAnchor> {
   const index = new Map<string, ReviewParagraphAnchor>();
   for (const page of layout.pages) {
     for (const fragment of paragraphFragments(page)) {
-      // FIRST fragment wins: a paragraph split across a page break is anchored where it
-      // starts, which is where its comment marker was written.
-      if (index.has(fragment.paragraphId)) continue;
-      index.set(fragment.paragraphId, {
-        pageIndex: page.index,
-        contentY: page.contentBox.y,
-        fragmentY: fragment.box.y,
-        ...(fragment.lines ? { lines: fragment.lines } : {}),
-      });
+      // Every paragraph whose content this fragment HOLDS. A resolved view lays a merged
+      // group out as one fragment named after the survivor, and a card anchored in any other
+      // member would have no geometry and drop out of the rail.
+      const held = new Set<string>([fragment.paragraphId]);
+      for (const line of fragment.lines ?? []) {
+        for (const span of line.spans ?? []) held.add(span.range.paragraphId);
+      }
+      for (const paragraphId of held) {
+        // FIRST fragment wins: a paragraph split across a page break is anchored where it
+        // starts, which is where its comment marker was written.
+        if (index.has(paragraphId)) continue;
+        index.set(paragraphId, {
+          pageIndex: page.index,
+          contentY: page.contentBox.y,
+          fragmentY: fragment.box.y,
+          ...(fragment.lines ? { lines: fragment.lines } : {}),
+        });
+      }
     }
   }
   return index;

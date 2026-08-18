@@ -126,7 +126,7 @@ import {
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
 } from './drawing-exclusion.ts';
 import { drawingModelOffsetsInParagraph } from './drawing-layout.ts';
-import { drawingResourceLayoutToken, drawingTokenForTableBlock } from './inline-drawing-source.ts';
+import { drawingTokenForTableBlock } from './inline-drawing-source.ts';
 import { projectDrawingsInPart } from '../store/package/drawing-projection.ts';
 import {
   emptyTocPlaceholderParagraphIds,
@@ -2282,10 +2282,12 @@ function layoutBlocksPass(
         paragraphId,
         fragmentIndex,
         range: mergedLines
-          ? // A merged fragment holds more than one paragraph, and this field holds one range.
-            // It takes the one its LAST line reports, so the field describes where the fragment
-            // ENDS in the document. Everything that resolves a position reads spans instead,
-            // and they name their own paragraphs.
+          ? // A merged fragment holds more than one paragraph and this field holds one range,
+            // so it cannot be the fragment's extent. It takes the one its LAST line reports —
+            // where the fragment ENDS — and everything that resolves a position reads spans
+            // instead, which name their own paragraphs. `pushLineCaretStops` reads `start`
+            // from here only to dedupe a continuation line's first stop, and a merged
+            // fragment's lines are compared against their own segment starts anyway.
             mergedLines[mergedLines.length - 1]!.range
           : {
               paragraphId,

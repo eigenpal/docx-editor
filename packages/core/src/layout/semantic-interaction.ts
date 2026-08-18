@@ -8,12 +8,7 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import {
-  caretBoxOnLine,
-  contentControlAtPoint,
-  hitTestPage,
-  spanOffsetX,
-} from './semantic-hit-test.ts';
+import { caretBoxOnLine, contentControlAtPoint, hitTestPage } from './semantic-hit-test.ts';
 import { documentOrder, documentOrderIndex } from './document-order.ts';
 export { documentOrder } from './document-order.ts';
 export { selectionRects, keyedRangeRects, type KeyedRange } from './selection-rects.ts';

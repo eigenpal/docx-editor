@@ -2195,6 +2195,11 @@ export function reviewAnchorIndex<TPage extends {
         readonly box: {
             readonly y: number;
         };
+        readonly spans?: readonly {
+            readonly range: {
+                readonly paragraphId: string;
+            };
+        }[];
     }[];
 }[]): Map<string, ReviewParagraphAnchor>;
 

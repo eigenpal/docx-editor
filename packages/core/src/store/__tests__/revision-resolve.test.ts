@@ -443,6 +443,20 @@ describe('a run of removed paragraph marks', () => {
     expect(out.slice(out.lastIndexOf('<w:p>'))).toContain('b ');
   });
 
+  test('a content control is a boundary too', () => {
+    // A `w:sdt` holds its own children, so the paragraph before it and the first paragraph
+    // inside it are not siblings. Scanning past it merged the text into a paragraph in
+    // another parent, where it arrived behind the control.
+    const part = load(
+      delMark('before ') +
+        `<w:sdt><w:sdtContent><w:p>${run('inside')}</w:p></w:sdtContent></w:sdt>` +
+        `<w:p>${run('after')}</w:p>`
+    );
+    const out = xml(apply(part, { op: 'acceptAllRevisions' }));
+    expect(out.indexOf('before ')).toBeLessThan(out.indexOf('<w:sdt'));
+    expect(out).not.toContain('before after');
+  });
+
   test('a table is a boundary: the content stays in front of it', () => {
     // `followed` looked at any later paragraph, so the text merged into the one AFTER the
     // table and arrived behind it — in a place the reader never put it.

@@ -31,6 +31,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isContentControl } from '../package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
@@ -570,6 +571,18 @@ function isWmlNamed(node: OoxmlNode, localName: string): boolean {
  * rejected insertion inside a rejected deletion survived: the outer unwrap consumed the inner
  * wrapper as ordinary content.
  */
+/**
+ * Is this a block-level sibling — something a paragraph cannot merge THROUGH?
+ *
+ * Paragraphs and tables are the flow's own blocks. A content control is one too for this
+ * question: its paragraphs live in `w:sdtContent`, so the paragraph before it and the first
+ * paragraph inside it have different parents and are not siblings at all.
+ */
+function isBlockLevel(node: OoxmlNode): boolean {
+  if (node.kind === 'paragraph' || node.kind === 'table') return true;
+  return node.kind !== 'textValue' && isContentControl(node);
+}
+
 function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): OoxmlNode[] {
   const out: OoxmlNode[] = [];
   /** Content of paragraphs whose mark was resolved away, waiting for the paragraph after. */
@@ -624,12 +637,12 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
         // was refused and Accept All failed for the entire document with an opaque reason.
         // Deleting a trailing paragraph with tracking on is exactly what Word writes, so this
         // was not an exotic file.
-        // The NEXT BLOCK, not any later paragraph. Scanning ahead past a `w:tbl` reported a
-        // paragraph that is not this one's neighbour, and the content then merged into it —
-        // arriving BEHIND the table, in a place the reader never put it.
-        const nextBlock = children
-          .slice(index + 1)
-          .find((entry) => entry.kind === 'paragraph' || entry.kind === 'table');
+        // The NEXT BLOCK, not any later paragraph, and EVERY kind of block counts. Scanning
+        // ahead past a `w:tbl` — or past a `w:sdt`, which holds paragraphs of its own that
+        // this one is not a sibling of — reported a paragraph that is not this one's
+        // neighbour, and the content then merged into it, arriving behind the block in a
+        // place the reader never put it.
+        const nextBlock = children.slice(index + 1).find((entry) => isBlockLevel(entry));
         const followed = nextBlock?.kind === 'paragraph';
         if (plan.mergeForward.has(child.id) && followed) {
           // Tested AFTER absorbing, so a RUN of removed marks collapses into the one survivor

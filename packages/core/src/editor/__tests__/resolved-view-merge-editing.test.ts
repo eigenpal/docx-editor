@@ -85,4 +85,49 @@ describe('editing across a merged paragraph break', () => {
       dispose();
     }
   });
+
+  test('Backspace at the join deletes a character, not the paragraph break', () => {
+    // The break between two merged members is not one the reader can see, so it is not one
+    // they can delete. Joining here also carried the first paragraph's `w:del` onto a mark
+    // nobody edited — and the last mark of a body, which Word cannot write.
+    const { surface, dispose } = mountMerged();
+    try {
+      const [first, second] = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: second!, offset: 0 },
+        head: { paragraphId: second!, offset: 0 },
+      });
+      surface.deleteBackward();
+      expect(paragraphTextOf(surface.session.part(), first!)).toBe('Hello');
+      expect(paragraphTextOf(surface.session.part(), second!)).toBe('world');
+      expect(surface.session.paragraphIds()).toHaveLength(2);
+    } finally {
+      dispose();
+    }
+  });
+
+  test('Backspace at the START of the group still joins with what precedes it', () => {
+    // The group's own first break IS visible, so it behaves as it always did.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(
+      container,
+      docx('<w:p><w:r><w:t>before</w:t></w:r></w:p>' + DELETED_MARK),
+      { revisionDisplayMode: 'proposed' }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    try {
+      const ids = opened.surface.session.paragraphIds();
+      opened.surface.setSelection({
+        anchor: { paragraphId: ids[1]!, offset: 0 },
+        head: { paragraphId: ids[1]!, offset: 0 },
+      });
+      opened.surface.deleteBackward();
+      expect(opened.surface.session.paragraphIds()).toHaveLength(2);
+      expect(paragraphTextOf(opened.surface.session.part(), ids[0]!)).toBe('beforeHello ');
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
+  });
 });

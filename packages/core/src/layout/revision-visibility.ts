@@ -34,14 +34,6 @@ import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
  */
 const MAX_INLINE_DEPTH = MAX_REVISION_DEPTH;
 
-function childNamed(node: OoxmlNode, localName: string): OoxmlNode | undefined {
-  if (node.kind === 'textValue') return undefined;
-  for (const child of node.children) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
-  }
-  return undefined;
-}
-
 /**
  * A child in the WordprocessingML namespace, by name.
  *
@@ -69,10 +61,11 @@ function wmlChildNamed(node: OoxmlNode, localName: string): OoxmlNode | undefine
  */
 export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
   if (paragraph.kind === 'textValue') return false;
-  const properties = childNamed(paragraph, 'paragraphProperties') ?? childNamed(paragraph, 'pPr');
+  const properties =
+    wmlChildNamed(paragraph, 'paragraphProperties') ?? wmlChildNamed(paragraph, 'pPr');
   if (!properties) return false;
   const markRunProperties =
-    childNamed(properties, 'runProperties') ?? childNamed(properties, 'rPr');
+    wmlChildNamed(properties, 'runProperties') ?? wmlChildNamed(properties, 'rPr');
   if (markRunProperties === undefined) return false;
   return (
     wmlChildNamed(markRunProperties, 'del') !== undefined ||
@@ -151,10 +144,14 @@ export function markRemovedInMode(
 ): boolean {
   if (displayMode === 'all-markup') return false;
   if (paragraph.kind === 'textValue') return false;
-  const properties = childNamed(paragraph, 'paragraphProperties') ?? childNamed(paragraph, 'pPr');
+  // The namespace at EVERY step. Checking only the innermost element left the containers
+  // spoofable: `<x:rPr><w:del/></x:rPr>` in a `w:pPr` merged two paragraphs from markup any
+  // sender can author, and no Accept could undo the join it produced.
+  const properties =
+    wmlChildNamed(paragraph, 'paragraphProperties') ?? wmlChildNamed(paragraph, 'pPr');
   if (!properties) return false;
   const markRunProperties =
-    childNamed(properties, 'runProperties') ?? childNamed(properties, 'rPr');
+    wmlChildNamed(properties, 'runProperties') ?? wmlChildNamed(properties, 'rPr');
   if (markRunProperties === undefined) return false;
   const removedNames =
     displayMode === 'proposed' ? (['del', 'moveFrom'] as const) : (['ins', 'moveTo'] as const);

@@ -71,6 +71,29 @@
 - [x] 6b.9 A member the walk over-publishes — content past a nesting cap — refused for the same
       reason: its characters cannot be read back at offsets the store can address
 
+## 6c. What a third review found, and what was done
+
+- [x] 6c.1 The namespace check reached only the innermost element, so `<x:rPr><w:del/></x:rPr>`
+      still merged two paragraphs from markup any sender can author. Every step is checked
+- [x] 6c.2 STORE: `followed` skipped a `w:sdt` the way it had skipped a `w:tbl`, so content
+      merged into a paragraph in another parent and arrived behind the control
+- [x] 6c.3 A click PAST the end of a merged line took its offset from the whole line and its
+      paragraph from the segment, producing an offset the paragraph does not have
+- [x] 6c.4 `fieldCharsBalanced` counted a net, so an `end` with no `begin` cancelled a later
+      `begin` and a straddling field read as balanced
+- [x] 6c.5 The measurement guard ran on every paragraph of every document, costing 12x on the
+      default render path. It is asked only where a merge could happen
+- [x] 6c.6 `lineAtPosition` never answered for the second member, so an inline image in the
+      merged half could not be selected
+- [x] 6c.7 Review anchors were keyed by `fragment.paragraphId`, so a card anchored in any
+      member but the survivor dropped out of the rail
+- [x] 6c.8 Backspace at a join carried the first paragraph's `w:del` onto a mark nobody edited.
+      The break is invisible in a resolved view, so the key deletes a character instead
+- [x] 6c.9 `bun run typecheck` passes across all eight packages; five dead symbols the
+      extraction left behind are gone
+- [x] 6c.10 The over-publish fixture asserted nothing: the refusal fires AT the nesting cap,
+      not above it, where neither lane publishes the text
+
 ## 7. Not done yet
 
 - [ ] 7.1 Backspace and undo through a join (4.2, 4.3)
@@ -83,3 +106,17 @@
 - [ ] 7.6 Backspace at a join resolves the tracked mark with no visible change. Word's Final
       view deletes the preceding character instead; the rule wants deciding
 - [ ] 7.7 The join carries two caret stops at one x, so Right-arrow crosses it in two presses
+- [ ] 7.8 Header and footer stories call `storyBlocks(part)` with no display mode, so a tracked
+      mark in a header still draws its break in a resolved view. One word to fix, but it makes
+      the `fragment.paragraphId` readers in `surface-scope.ts`, `paginated-surface.ts` and
+      `surface-formatting.ts` live for HF stories, which is why it is not one word
+- [ ] 7.9 `w:pPrChange` is not honoured in `original`: the recorded properties are never
+      restored, so a reformatted paragraph renders with its NEW formatting in the view that
+      answers what the document was. Pre-existing, and invisible to the differential because
+      the `original` assertion compares joined text rather than lines
+- [ ] 7.10 The oracle covers the body story only, and only `w:del` on a mark. Neither the
+      `original` direction of a merge, nor cells, nor a block `w:sdt`, nor headers, footers or
+      notes are in the fixture. Run the line-for-line assertion for `original` too, and add a
+      fixture carrying `w:ins` marks, a mark in a cell and a mark inside a `w:sdt`
+- [ ] 7.11 Enter inside the FIRST member copies the whole `w:pPr` onto both halves, so both
+      carry the same `w:id`; accepting then collapses three paragraphs where Word gives two

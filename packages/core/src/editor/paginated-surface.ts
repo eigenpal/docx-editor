@@ -60,6 +60,7 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
   paintSelectionOverlay,
   paintSemanticLayout,
@@ -3299,6 +3300,32 @@ export function mountPaginatedSurface(
         // Backspace at the start of a paragraph pulls it into the previous one. Refusing
         // here made the key look broken: a caret at the paragraph start is where a user
         // presses Backspace precisely because they want the paragraphs merged.
+        // A break the reader cannot SEE is not a break they can delete. In a resolved display
+        // mode a tracked paragraph mark is already merged away on the page, so Backspace at
+        // the start of a later member takes the character before it — the one under the
+        // caret's left edge — instead of joining two paragraphs and carrying a mark revision
+        // onto a paragraph nobody edited.
+        for (const member of mergedPredecessorsOf(currentLayout, position.paragraphId)) {
+          const text = textOf(member);
+          if (text.length === 0) continue;
+          commit(
+            () =>
+              applyOps(
+                [
+                  {
+                    op: 'deleteText',
+                    paragraphId: member,
+                    start: text.length - 1,
+                    end: text.length,
+                  },
+                ],
+                selectionMark()
+              ),
+            () => collapsedAt({ paragraphId: member, offset: text.length - 1 }),
+            { rearmPending: armed }
+          );
+          return;
+        }
         const order = paragraphOrder();
         const index = order.indexOf(position.paragraphId);
         const previous = order[index - 1];

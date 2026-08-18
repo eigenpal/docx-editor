@@ -7,7 +7,7 @@
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
-import type { SemanticLayout, TextMeasurer } from './semantic-records.ts';
+import type { SemanticLayout } from './semantic-records.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
 

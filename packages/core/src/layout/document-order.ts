@@ -55,5 +55,3 @@ export function documentOrderIndex(layout: SemanticLayout): Map<string, number> 
   documentOrderIndexCache.set(layout, index);
   return index;
 }
-
-/** A selection's endpoints in document order. */

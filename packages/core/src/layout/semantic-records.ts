@@ -906,9 +906,19 @@ export function lineAtPosition(
   offset: number
 ): LineRecord | null {
   for (const line of linesOf(layout)) {
-    if (line.range.paragraphId !== paragraphId) continue;
+    // The part of the line this paragraph OWNS. A resolved display mode lays merged
+    // paragraphs out on shared lines, and the half the line is not named after would
+    // otherwise never match — its spans are there, its name is not.
+    let start = line.range.paragraphId === paragraphId ? line.range.start : Number.NaN;
+    let end = line.range.paragraphId === paragraphId ? line.range.end : Number.NaN;
+    for (const span of line.spans) {
+      if (span.range.paragraphId !== paragraphId) continue;
+      start = Number.isNaN(start) ? span.range.start : Math.min(start, span.range.start);
+      end = Number.isNaN(end) ? span.range.end : Math.max(end, span.range.end);
+    }
+    if (Number.isNaN(start)) continue;
     // End-inclusive on the last line of a paragraph, so a caret at the very end resolves.
-    if (offset >= line.range.start && offset <= line.range.end) return line;
+    if (offset >= start && offset <= end) return line;
   }
   return null;
 }
