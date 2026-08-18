@@ -894,10 +894,11 @@ function placeCellParagraph(
   // The paragraph MARK, on the fragment that finishes the paragraph — the cell lane publishes
   // it for the same reason the body lane does, and until it did, a tracked split or merge
   // inside a `w:tc` drew nothing at all: no pilcrow, no margin rule, no review card.
+  //
+  // Read only when this fragment will carry it. Placement runs for trial rows and for every
+  // continuation, and the projection walks `w:pPr/w:rPr` each time it is asked.
   const markRevisions =
-    deps.displayMode === undefined || deps.displayMode === 'all-markup'
-      ? paragraphMarkRevisionsOf(paragraph)
-      : [];
+    complete && deps.displayMode === 'all-markup' ? paragraphMarkRevisionsOf(paragraph) : [];
   const marker =
     lineStart === 0
       ? publishListMarker(
@@ -926,7 +927,7 @@ function placeCellParagraph(
     ...(shading === undefined ? {} : { shading }),
     ...(shadingBox === undefined ? {} : { shadingBox }),
     ...(marker ? { marker } : {}),
-    ...(complete ? markRevisionFields(markRevisions) : {}),
+    ...markRevisionFields(markRevisions),
     lines: records,
     box: {
       x: fragmentX,

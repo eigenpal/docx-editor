@@ -30,11 +30,26 @@ function load(body: string): OoxmlPart {
 
 describe('every field of a reused page has a named guard', () => {
   test('a real page publishes nothing the table does not classify', () => {
-    const layout = layoutSemanticDocument(load('<w:p><w:r><w:t>page one</w:t></w:r></w:p>'), 1, {
+    // A plain paragraph publishes barely half the record. This document carries a table, a
+    // column separator and enough content to open a second page, so the optional fields are
+    // present to be checked rather than absent and trivially passing.
+    const columns = '<w:sectPr><w:cols w:num="2" w:sep="1" w:space="360"/></w:sectPr>';
+    const table =
+      '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>' +
+      '<w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
+      '<w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const body =
+      Array.from({ length: 24 }, (_, index) => `<w:p><w:r><w:t>page ${index}</w:t></w:r></w:p>`)
+        .join('') +
+      table +
+      columns;
+    const layout = layoutSemanticDocument(load(body), 1, {
       measurer: createFixedMeasurer(6, 14),
       geometry: GEOMETRY,
     });
-    expect(unguardedPageFields(layout.pages[0]!)).toEqual([]);
+    expect(layout.pages.length).toBeGreaterThan(1);
+    for (const page of layout.pages) expect(unguardedPageFields(page)).toEqual([]);
   });
 
   test('the flow fields are the ones a stopping pass actually compares', () => {

@@ -868,9 +868,11 @@ function paintParagraphMark(
   glyph.dataset.revisionKind = shown.kind;
   glyph.dataset.revisionId = shown.id;
   glyph.dataset.revisionAuthor = shown.author;
-  if (revisions.length > 1) {
-    glyph.dataset.revisionIds = revisions.map((revision) => revision.id).join(' ');
-  }
+  // Always, not only for a pair: a consumer reading `data-revision-ids` should not have to
+  // fall back to `data-revision-id` for the ordinary case. Kinds ride alongside, because the
+  // ids alone cannot say which decision each one is.
+  glyph.dataset.revisionIds = revisions.map((revision) => revision.id).join(' ');
+  glyph.dataset.revisionKinds = revisions.map((revision) => revision.kind).join(' ');
   glyph.textContent = '\u00b6';
   glyph.style.position = 'absolute';
   glyph.style.pointerEvents = 'none';

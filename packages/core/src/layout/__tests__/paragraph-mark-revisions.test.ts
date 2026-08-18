@@ -57,8 +57,8 @@ describe('a paragraph mark can carry more than one decision', () => {
   test('both halves of an insert-then-delete pair are projected, in file order', () => {
     // `EG_ParaRPrTrackChanges` is `ins? del? moveFrom? moveTo?`, and this engine's own writer
     // emits the first two together: B proposing removal of a break A proposed adding. Reading
-    // only the first hid B's decision from the page and from the review pane, and no later
-    // edit could move a field that was never published.
+    // only the first hid B's decision from the PAGE. The review pane reads the tree directly
+    // and always listed both, which is the worse shape: a card for a change nothing showed.
     const part = load(MARKED('<w:ins w:id="7" w:author="A"/><w:del w:id="8" w:author="B"/>'));
     const body = part.root.children.find(
       (child) => child.kind !== 'textValue' && child.localName === 'body'
@@ -81,8 +81,13 @@ describe('a paragraph mark can carry more than one decision', () => {
 });
 
 describe('a mark inside a table cell is a mark', () => {
+  // `CT_Tbl` declares `w:tblPr` without `minOccurs`, so it is required, and Word writes
+  // `w:tcW` on every cell. A fixture the reader happens to accept is still a document Word
+  // would call damaged.
   const CELL_DOC =
-    '<w:tbl><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>' +
+    '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>' +
+    '<w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>' +
     MARKED('<w:del w:id="3" w:author="A"/>', 'cell paragraph') +
     '</w:tc></w:tr></w:tbl>';
 

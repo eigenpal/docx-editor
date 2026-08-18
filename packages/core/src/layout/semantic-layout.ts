@@ -52,6 +52,7 @@ import { resolveParagraphBorders } from './paragraph-border-resolve.ts';
 import {
   adjustedBreakIndex,
   keepNextFlowKeys,
+  listMarkerFlowKeys,
   keepNextGroupHeight,
   paragraphKeeps,
   MAX_KEEP_NEXT_CHAIN,
@@ -741,6 +742,10 @@ function layoutBlocksPass(
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
+    // In `producer`, not beside it in the section context: a note mark is measured INTO the
+    // broken lines, so the break cache holds the citation's width under a key built from
+    // this. Keying only the section left a warm cache serving `1`-wide slots to roman marks.
+    (options.noteMarks ? `|nm:${noteMarksCacheToken(options.noteMarks)}` : '') +
     (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '') +
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
@@ -802,18 +807,11 @@ function layoutBlocksPass(
   const notesReserveKey = pageBottomReserves
     ? `|nr:${[...pageBottomReserves].map(([i, h]) => `${i}=${h}`).join(',')}`
     : '';
-  // Every mark, not the COUNT of them. A renumber leaves the count alone — `w:numFmt`
-  // decimal to lowerRoman, a `w:numStart` shift, `eachSect` restart, a section override, a
-  // note deleted and another inserted in one transaction — and the mark a body citation
-  // paints is derived, so no paragraph subtree and no block key moves with it. Keying on the
-  // count let the pass resume onto pages measured for the old marks; reprojection then wrote
-  // the new digits into a slot sized for the old ones.
-  const noteMarksKey = options.noteMarks ? `|nm:${noteMarksCacheToken(options.noteMarks)}` : '';
   const columnRegionBottom = options.columnRegionBottom;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   // Body line ids are paragraph-local, so a changed line count in an earlier section does
   // not invalidate this section. Geometry, flow start, and document page index still do.
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${noteMarksKey}${columnsContext}`;
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${columnsContext}`;
 
   const pages: PageRecord[] = [];
   /**
@@ -955,9 +953,15 @@ function layoutBlocksPass(
     displayMode
   );
   const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
+  const markerTexts = prepared.map((entry) =>
+    entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
+  );
   // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
   // stored under; only `w:keepNext` makes the two differ (§17.3.1.15).
-  const flowKeys = keepNextFlowKeys(keys, (index) => keepsNext[index]!);
+  const flowKeys = listMarkerFlowKeys(
+    keepNextFlowKeys(keys, (index) => keepsNext[index]!),
+    (index) => markerTexts[index]
+  );
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow.
@@ -1053,11 +1057,8 @@ function layoutBlocksPass(
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
-  /**
-   * The flow exactly as it stands: what a later pass resumes from and converges against. The
-   * deferred anchor state is copied only when there is some, because this is taken once per
-   * block and a document that defers nothing should pay one reference for saying so.
-   */
+  /** The flow as it stands: what a later pass resumes from and converges against. The
+   * deferred anchor state is copied only when there is some — this runs once per block. */
   const checkpointNow = (): FlowCheckpoint => ({
     pageCount: pages.length,
     pageFragments: [...pageFragments],

@@ -37,8 +37,9 @@ export const PAGE_REUSE_GUARDS = {
   box: 'context',
   contentBox: 'context',
   fragments: 'flow',
-  // `columnsContext` carries `w:cols`, and `resumable` additionally requires a single column,
-  // so a multi-column section never reaches the reuse paths at all.
+  // `columnsContext` carries `w:cols`. Note that a multi-column section DOES reach reuse: the
+  // resume and convergence paths require `resumable`, which is single-column, but the
+  // unchanged-document exit gates on `comparable` and returns the previous pages by identity.
   columnSeparators: 'context',
   // Produced by the blocks on the page: the per-block key carries the drawing token, and the
   // open page's pending and deferred lists are compared where a pass may stop early.
@@ -55,8 +56,8 @@ export const PAGE_REUSE_GUARDS = {
   // `withPageFieldSources` re-annotates every page every pass, which is what keeps PAGE and
   // SECTIONPAGES right when only the numbering moved.
   pageFieldSource: 'rebuilt',
-  // `withContentControlMetadata` re-attaches boundaries, and returns the same array only
-  // when the control-context token matches.
+  // `attachContentControlBoundaries`, from `finish()`, rebuilds the per-page boundaries every
+  // pass and early-returns only on a matching control-context token.
   contentControls: 'rebuilt',
 } as const satisfies Record<keyof PageRecord, PageReuseGuard>;
 

@@ -29,7 +29,13 @@ import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
  * — fail-open with an empty display (model atom preserved).
  */
 export interface NoteMarkContext {
-  /** scopeId → formatted mark (or null when suppressed). */
+  /**
+   * scopeId → formatted mark (or null when suppressed).
+   *
+   * IMMUTABLE once the context is built. `noteMarksCacheToken` memoizes on the context object
+   * and that token reaches every paragraph's cache key, so a later `marks.set` would pin the
+   * whole document to a token for marks it no longer has.
+   */
   readonly marks: ReadonlyMap<string, string | null>;
   /**
    * When set, every automatic mark measures at least this string's width (eachPage
@@ -163,6 +169,16 @@ export function noteAtomModelText(): typeof NOTE_ATOM_CHAR {
   return NOTE_ATOM_CHAR;
 }
 
+/** FNV-1a over 32 bits, in `Math.imul` arithmetic: no BigInt on a per-pass path. */
+function fnv1a32(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
 /**
  * Cache token for note-mark identity — EVERY mark, not a sample of them.
  *
@@ -186,12 +202,17 @@ export function noteMarksCacheToken(context: NoteMarkContext | undefined): strin
   if (cached !== undefined) return cached;
   // Serialized rather than joined with separators: a custom mark (`w:footnoteRef` text) is
   // author-supplied and may hold any character, and `null` — `customMarkFollows` — is not the
-  // empty mark. Two contexts that differ must not be able to spell the same token.
-  const token = JSON.stringify([
+  // empty mark. Two contexts that differ must not be able to spell the same serialization.
+  const serialized = JSON.stringify([
     [...context.marks],
     context.reservedMarkText ?? null,
     context.activeNoteKey ?? null,
   ]);
+  // HASHED to a constant width, because this reaches the key of every paragraph in the
+  // document, not just the section context. A thousand-note document would otherwise carry
+  // tens of kilobytes into every one of those keys and compare it there. The count rides
+  // along, so two documents would have to collide on both to be mistaken for each other.
+  const token = `${context.marks.size}:${fnv1a32(serialized)}`;
   markTokens.set(context, token);
   return token;
 }

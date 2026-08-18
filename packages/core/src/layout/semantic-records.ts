@@ -380,6 +380,13 @@ export interface ParagraphFragmentRecord {
    * a deletion of that insertion by the next. Published only in `all-markup`: the other two
    * display modes answer what the document WOULD be, and a resolved view draws no
    * attribution.
+   *
+   * Those two modes are ATTRIBUTION-resolved, not STRUCTURE-resolved. Taking a deleted mark
+   * in `proposed` merges the paragraph into the next one, and taking an inserted mark in
+   * `original` un-splits it, but `revision-visibility.ts` does that only for a paragraph that
+   * renders no text. So a resolved view still shows the break — it just no longer draws a
+   * coloured pilcrow beside it. The merge is the fix for that; suppressing the glyph is not,
+   * and must not be read as it.
    */
   readonly markRevisions?: readonly RevisionAttribution[];
   /**

@@ -221,6 +221,32 @@ export function keepNextGroupHeight(
  * paragraph cannot grow a key linear in its own length. Returns the input array unchanged
  * when nothing keeps, which is the overwhelming majority of passes.
  */
+/**
+ * Flow keys that also carry each block's LIST MARKER text.
+ *
+ * The marker is derived from `numbering.xml` and the counter state, not from the paragraph, so
+ * a `w:start`, `w:startOverride` or restart change renumbers a list while every paragraph
+ * subtree stays byte-identical. The break-cache key holds the marker's LENGTH on purpose —
+ * only the length can move a line break — so on its own it let `1.` become `2.` with no key
+ * moving anywhere, and the unchanged-document exit then returned the previous pages whole.
+ *
+ * Separate from the break key for that same reason: renumbering must re-place the blocks
+ * without discarding measurements that are still correct.
+ */
+export function listMarkerFlowKeys(
+  keys: string[],
+  markerAt: (index: number) => string | undefined
+): string[] {
+  let flow = keys;
+  for (let index = 0; index < keys.length; index += 1) {
+    const marker = markerAt(index);
+    if (marker === undefined) continue;
+    if (flow === keys) flow = [...keys];
+    flow[index] = `${flow[index]}~mk~${marker}`;
+  }
+  return flow;
+}
+
 export function keepNextFlowKeys(keys: string[], keepsNext: (index: number) => boolean): string[] {
   let flow = keys;
   let chain = 0;

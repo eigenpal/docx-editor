@@ -15,6 +15,7 @@ import {
 } from '../../store/package/note-properties.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createLayoutSession } from '../layout-session.ts';
+import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { enumerateDocumentSections } from '../section-properties.ts';
 import { layoutSemanticDocumentWithNotes, type NotesLayoutInput } from '../note-pagination.ts';
@@ -63,7 +64,11 @@ function doc(): Uint8Array {
 
 const measurer = createFixedMeasurer();
 
-function layWith(numFmt: string, session?: ReturnType<typeof createLayoutSession>): SemanticLayout {
+function layWith(
+  numFmt: string,
+  session?: ReturnType<typeof createLayoutSession>,
+  cache?: ReturnType<typeof createParagraphLayoutCache>
+): SemanticLayout {
   const loaded = readOoxmlPackage(doc());
   if (!loaded.ok) throw new Error(loaded.reason);
   const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
@@ -84,6 +89,7 @@ function layWith(numFmt: string, session?: ReturnType<typeof createLayoutSession
     measurer,
     geometry: { width: 612, height: 300, margin: { top: 36, right: 36, bottom: 36, left: 36 } },
     ...(session ? { session } : {}),
+    ...(cache ? { cache } : {}),
   };
   return layoutSemanticDocumentWithNotes(part, sections, options as never, notes, (opts) =>
     layoutSemanticDocument(part, 1, opts as never)
@@ -120,6 +126,17 @@ describe('a renumbered note is measured, not just relettered', () => {
     const incremental = layWith('lowerRoman', session);
     expect(citations(incremental)).toEqual(citations(layWith('lowerRoman')));
     expect(citations(incremental)[1]).toEqual({ text: 'ii', w: 10.91, x: 201.82 });
+  });
+
+  test('a numFmt change reaches a warm break cache', () => {
+    // The session is one of TWO caches keyed on this. The paragraph break cache holds the
+    // measured line — citation width included — under a key built from `producer`, and a mark
+    // is derived, so the paragraph's own subtree cannot move when its citation does.
+    const cache = createParagraphLayoutCache();
+    layWith('decimal', undefined, cache);
+    expect(citations(layWith('lowerRoman', undefined, cache))).toEqual(
+      citations(layWith('lowerRoman'))
+    );
   });
 
   test('an unchanged document still resumes', () => {

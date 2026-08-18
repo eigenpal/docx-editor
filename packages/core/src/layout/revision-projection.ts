@@ -155,7 +155,12 @@ export function revisionsVisible(
 }
 
 /**
- * Every revision on a paragraph's own MARK, from `w:pPr/w:rPr/w:ins|w:del`.
+ * The insert and delete revisions on a paragraph's own MARK, from `w:pPr/w:rPr/w:ins|w:del`.
+ *
+ * `w:moveFrom` and `w:moveTo` sit in the same group and are NOT read here, which matches the
+ * store lane: `revisionItemsOf` ignores them under `pPr/rPr` too, so a moved paragraph's mark
+ * raises no card either. Reading them needs the same change to widen `paragraphMarkDeleted`
+ * and the removal face, or the margin rule and the glyph would disagree about a `moveFrom`.
  *
  * `EG_ParaRPrTrackChanges` records that the pilcrow itself was inserted or deleted, which is how
  * Word writes a paragraph split or merge. It is not content — there is no text to decorate — so
@@ -165,8 +170,9 @@ export function revisionsVisible(
  * A LIST, because the group is `ins? del? moveFrom? moveTo?` and the first two can both be
  * there: that pair is what Word writes when a second author proposes removing a mark the first
  * proposed adding, and it is what this engine's own writer emits (`tree-op-tracked.ts`).
- * Answering with the first one hid the second author's decision from every reader and from the
- * review pane, and no later edit could move a field that was never published.
+ * Answering with the first one hid the second author's decision from the PAGE. The review pane
+ * walks the tree itself and always listed both, which is the worse shape of the two: a card
+ * offering a decision the reader could see no sign of.
  *
  * Ordered as the file orders them, which is the order the group declares.
  *

@@ -161,7 +161,12 @@ export function sameAnchoredDrawings(
   return true;
 }
 
-/** Shared empties, so a checkpoint per block costs one reference in a document with none. */
+/**
+ * Shared empties, so a checkpoint per block costs one reference in a document with none.
+ *
+ * Module-internal on purpose. A `Map` cannot be frozen the way the array is, so the only thing
+ * keeping this one empty is that nothing outside this file can reach it to write to it.
+ */
 export const NO_DEFERRED_DRAWINGS: readonly import('./drawing-layout.ts').AnchoredDrawingRecord[] =
   Object.freeze([]);
 export const NO_DEFER_COUNTS: ReadonlyMap<string, number> = new Map();

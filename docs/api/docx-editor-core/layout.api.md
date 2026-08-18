@@ -1859,7 +1859,7 @@ export function paragraphLineSpacing(props: readonly OoxmlProperty[]): Paragraph
 // @public
 export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean;
 
-// @public @deprecated (undocumented)
+// @public @deprecated
 export function paragraphMarkRevisionOf(paragraph: OoxmlNode): RevisionAttribution | null;
 
 // @public

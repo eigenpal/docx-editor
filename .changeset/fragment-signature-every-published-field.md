@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Tracked changes on a paragraph mark now reach the page: both halves of an insert-then-delete pair are read instead of the first, a mark inside a table cell is drawn at all, the margin gets its change bar, and a resolved view draws no attribution. Renumbering a footnote and any field a fragment publishes now take part in incremental layout reuse, so a page that was reused no longer shows a value the document has moved past.
+Tracked changes on a paragraph mark now reach the page: both decisions on a mark are read instead of the first, a mark inside a table cell is drawn, the margin gets its change bar, and a resolved view draws no attribution. Renumbering a list or a footnote, and every field a fragment publishes, now take part in incremental layout reuse, so a reused page no longer shows a value the document has moved past.
