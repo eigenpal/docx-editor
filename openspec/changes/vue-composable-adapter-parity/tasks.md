@@ -213,16 +213,16 @@ Each is a read of the engine plus a call back into it. Group them, but give each
 - [x] 8.3 `Slot`: `cloneVNode` + `mergeProps` over one child, null for zero or several
 - [x] 8.4 `DocxEditorToolbar` derived from `CHROME_GROUPS`, with the parts as statics, the
       overflow policy from `toolbar-overflow.ts`, and the mousedown guard
-- [ ] 8.5 `DocxEditorMenu` derived from `CHROME_MENUS`, with `chromeMenuSlots` exported
-- [ ] 8.6 `DocxEditorContextMenu` reusing the menu bar's rows — one row vocabulary, two panels
-- [ ] 8.7 `DocxEditorNavigation` and its parts, over the three composables
-- [ ] 8.8 `DocxEditorHyperLink`, `DocxEditorContentControl`, `DocxEditorPageSetupDialog`,
+- [x] 8.5 `DocxEditorMenu` derived from `CHROME_MENUS`, with `chromeMenuSlots` exported
+- [x] 8.6 `DocxEditorContextMenu` reusing the menu bar's rows — one row vocabulary, two panels
+- [x] 8.7 `DocxEditorNavigation` and its parts, over the three composables
+- [x] 8.8 `DocxEditorHyperLink`, `DocxEditorContentControl`, `DocxEditorPageSetupDialog`,
       `DocxEditorLoading` (+ `.Spinner`), `DocxEditorFontNotice`,
       `DocxEditorHeaderFooterChrome`, `DocxEditorNotesChrome`, `DocxEditorDocumentOutline`,
       `DocxEditorHorizontalRuler`, `DocxEditorVerticalRuler`, `DocxEditorPageNumber`
-- [ ] 8.9 Tests per compound: default arrangement, one override, `hidden`, append, `preset`
+- [x] 8.9 Tests per compound: default arrangement, one override, `hidden`, append, `preset`
       false, a `v-for` over overrides, and minified identification
-- [ ] 8.10 The image authoring surface, which parity puts here and which no other phase covers:
+- [x] 8.10 The image authoring surface, which parity puts here and which no other phase covers:
       `ImageInsertProvider`, `ImageInsertTrigger`, `ImageWrap`, `ImageAltText`,
       `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog`, `normalizeImageBytes` and
       `NormalizedImagePayload`. The engine half is shared — `SelectedImageState`,
@@ -232,20 +232,20 @@ Each is a read of the engine plus a call back into it. Group them, but give each
 
 ## 9. The sugar host
 
-- [ ] 9.1 `DocxEditor` composing Root + Viewport + Content + chrome, with the statics React
+- [x] 9.1 `DocxEditor` composing Root + Viewport + Content + chrome, with the statics React
       carries on its namespace
-- [ ] 9.2 `expose` the seven-member handle unchanged
-- [ ] 9.3 Props pair by name, with three documented form differences and no fourth: EMITS for
+- [x] 9.2 `expose` the seven-member handle unchanged
+- [x] 9.3 Props pair by name, with three documented form differences and no fourth: EMITS for
       React callbacks (`change`, `ready`, `fontError`, `save`, `open`, `titleChange`), SLOTS for
       `children` / `renderTitleBarLeft` / `renderTitleBarRight`, and native attribute
       fallthrough for `className`
-- [ ] 9.3b Every Boolean prop declares `default: undefined` and resolves its default in the body.
+- [x] 9.3b Every Boolean prop declares `default: undefined` and resolves its default in the body.
       Vue casts an absent Boolean to `false`, and `chrome`/`menu`/`navigation`/`rulers`/
       `contextMenu` all default to TRUE in React. Test: the component with only a `document`
       renders the full packaged chrome
-- [ ] 9.4 `translate` and `tableInteractionLabel` stay PROPS on both adapters — the engine calls
+- [x] 9.4 `translate` and `tableInteractionLabel` stay PROPS on both adapters — the engine calls
       them and uses the return value, which an emit has no way to give
-- [ ] 9.5 Chrome-off renders the surface alone and the parts self-scope
+- [x] 9.5 Chrome-off renders the surface alone and the parts self-scope
 
 ## 9b. The props-driven primitives
 

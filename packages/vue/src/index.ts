@@ -7,6 +7,7 @@
 export const VERSION = '0.0.2';
 
 export { DocxEditor } from './components/DocxEditor';
+export type { DocxEditorProps, DocxEditorRef, EditorMode } from './types';
 
 export {
   DocxEditorRoot,
@@ -239,8 +240,19 @@ export {
 } from './editor/DocxEditorRulers';
 
 export {
+  DocxEditorFontNotice,
+  type DocxEditorFontNoticeProps,
+} from './editor/DocxEditorFontNotice';
+
+export {
+  DocxEditorDocumentOutline,
+  type DocxEditorDocumentOutlineProps,
+} from './editor/DocxEditorOutline';
+
+export {
   DocxEditorPageNumber,
   type DocxEditorPageNumberProps,
+  PageNumberTranslationContext,
 } from './editor/DocxEditorPageNumber';
 
 export {

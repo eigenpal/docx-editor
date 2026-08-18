@@ -17,6 +17,7 @@ import { ContentControlType } from '@docx-editor.dev/core';
 import { CSSProperties } from 'vue';
 import { defineComponent } from 'vue';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import * as _docx_editor_dev_core from '@docx-editor.dev/core';
 import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
@@ -1665,10 +1666,8 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
 
 export { DocxDocument }
 
-// @public
-export const DocxEditor: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
-    [key: string]: any;
-}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+// @public (undocumented)
+export const DocxEditor: DocxEditorNamespace;
 
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -1819,6 +1818,96 @@ export interface DocxEditorContextMenuProps {
     preset?: boolean;
     // (undocumented)
     t?: ToolbarTranslate;
+}
+
+// @public (undocumented)
+export const DocxEditorDocumentOutline: vue.DefineComponent<vue.ExtractPropTypes<{
+    onClose: {
+        type: PropType<() => void>;
+        default: undefined;
+    };
+    topOffset: {
+        type: NumberConstructor;
+        default: number;
+    };
+    leftOffset: {
+        type: NumberConstructor;
+        default: undefined;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    onClose: {
+        type: PropType<() => void>;
+        default: undefined;
+    };
+    topOffset: {
+        type: NumberConstructor;
+        default: number;
+    };
+    leftOffset: {
+        type: NumberConstructor;
+        default: undefined;
+    };
+}>> & Readonly<{}>, {
+    onClose: () => void;
+    topOffset: number;
+    leftOffset: number;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorDocumentOutlineProps {
+    // (undocumented)
+    leftOffset?: number;
+    // (undocumented)
+    onClose?: () => void;
+    // (undocumented)
+    topOffset?: number;
+}
+
+// @public (undocumented)
+export const DocxEditorFontNotice: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    style: {
+        type: PropType<CSSProperties>;
+        default: undefined;
+    };
+    t: {
+        type: PropType<TFunction>;
+        default: undefined;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
+    style: {
+        type: PropType<CSSProperties>;
+        default: undefined;
+    };
+    t: {
+        type: PropType<TFunction>;
+        default: undefined;
+    };
+}>> & Readonly<{}>, {
+    t: TFunction;
+    style: CSSProperties;
+    className: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorFontNoticeProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+    // (undocumented)
+    t?: TFunction;
 }
 
 // @public
@@ -2138,6 +2227,76 @@ export interface DocxEditorPageNumberProps {
     style?: CSSProperties;
 }
 
+// @public
+export interface DocxEditorProps {
+    // (undocumented)
+    author?: string;
+    // (undocumented)
+    chrome?: boolean;
+    // (undocumented)
+    class?: string;
+    // (undocumented)
+    colorMode?: 'light' | 'dark' | 'system';
+    // (undocumented)
+    contextMenu?: boolean | DocxEditorContextMenuProps;
+    // (undocumented)
+    document?: DocumentSource;
+    // (undocumented)
+    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    // (undocumented)
+    hyperlinkPopup?: boolean;
+    // (undocumented)
+    i18n?: Translations;
+    // (undocumented)
+    locale?: string;
+    // (undocumented)
+    menu?: boolean | DocxEditorMenuProps;
+    // (undocumented)
+    mode?: EditorMode;
+    // (undocumented)
+    modules?: readonly EditorModule[];
+    // (undocumented)
+    navigation?: boolean;
+    // (undocumented)
+    onOpen?: () => void;
+    // (undocumented)
+    onSave?: () => void;
+    // (undocumented)
+    onTitleChange?: (title: string) => void;
+    // (undocumented)
+    rulers?: boolean;
+    // (undocumented)
+    t?: (key: string, params?: Record<string, string | number>) => string;
+    // (undocumented)
+    title?: string;
+    // (undocumented)
+    zoom?: number;
+    // (undocumented)
+    zoomMode?: ZoomMode | 'auto';
+}
+
+// @public
+export interface DocxEditorRef {
+    // (undocumented)
+    exec(command: EditorCommand, options?: {
+        scope?: EditorScope;
+    }): ExecResult;
+    // (undocumented)
+    focus(): void;
+    // (undocumented)
+    getDocumentHandle(): DocumentHandle | null;
+    // (undocumented)
+    getEditor(): Editor | null;
+    // (undocumented)
+    load(document: DocumentSource): void;
+    // (undocumented)
+    save(): Promise<ArrayBuffer | null>;
+    // (undocumented)
+    snapshot(options?: {
+        scope?: EditorScope;
+    }): EditorSnapshot;
+}
+
 // @public (undocumented)
 export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     document: {
@@ -2236,17 +2395,17 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
     };
 }>> & Readonly<{
-    onReady?: ((_editor: Editor) => any) | undefined;
     onChange?: ((_change: DocumentChange) => any) | undefined;
+    onReady?: ((_editor: Editor) => any) | undefined;
     onFontError?: ((_error: unknown) => any) | undefined;
 }>, {
+    locale: string;
+    zoom: number;
     fonts: FontConfiguration | FontConfigurationFragment | FontResolver | undefined;
     document: DocumentSource;
     author: string;
-    mode: "edit" | "suggesting" | "view";
-    zoom: number;
+    mode: "suggesting" | "edit" | "view";
     imageDecodePort: ImageDecodePort;
-    locale: string;
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
@@ -2502,6 +2661,9 @@ export interface EditorCommandState {
     readonly isEnabled: ComputedRef<boolean>;
 }
 
+// @public (undocumented)
+export type EditorMode = 'edit' | 'view' | 'suggesting';
+
 export { EditorQuery }
 
 export { EditorScope }
@@ -2697,11 +2859,11 @@ export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
     };
 }>> & Readonly<{}>, {
+    zoom: number;
+    pageSetup: _docx_editor_dev_core.PageSetup | null;
     style: CSSProperties;
     indent: RulerIndent | null;
     editable: boolean;
-    zoom: number;
-    pageSetup: _docx_editor_dev_core.PageSetup | null;
     className: string;
     onLeftMarginChange: (marginTwips: number) => void;
     onRightMarginChange: (marginTwips: number) => void;
@@ -3242,6 +3404,9 @@ export interface OutlineHeadingItem {
     readonly heading: OutlineHeading;
 }
 
+// @public
+export const PageNumberTranslationContext: InjectionKey<((key: string) => string) | null>;
+
 export { PageSetup }
 
 // @public (undocumented)
@@ -3413,17 +3578,17 @@ export function provideDocxEditor(options: DocxEditorRootProps): {
             default: undefined;
         };
     }>> & Readonly<{
-        onReady?: ((_editor: Editor) => any) | undefined;
         onChange?: ((_change: DocumentChange) => any) | undefined;
+        onReady?: ((_editor: Editor) => any) | undefined;
         onFontError?: ((_error: unknown) => any) | undefined;
     }>, {
+        locale: string;
+        zoom: number;
         fonts: FontConfiguration | FontConfigurationFragment | FontResolver | undefined;
         document: DocumentSource;
         author: string;
-        mode: "edit" | "suggesting" | "view";
-        zoom: number;
+        mode: "suggesting" | "edit" | "view";
         imageDecodePort: ImageDecodePort;
-        locale: string;
         translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
         modules: readonly EditorModule[];
         tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
@@ -4125,10 +4290,10 @@ export const VerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
-    editable: boolean;
     zoom: number;
     pageSetup: _docx_editor_dev_core.PageSetup | null;
+    style: CSSProperties;
+    editable: boolean;
     className: string;
     onMarginDragEnd: () => void;
     unit: "cm" | "inch";

@@ -4,39 +4,42 @@
   "props": {
     "paired": [
       "author",
+      "chrome",
+      "contextMenu",
       "document",
       "fonts",
+      "hyperlinkPopup",
+      "i18n",
       "locale",
+      "menu",
       "mode",
       "modules",
+      "navigation",
       "onFontError",
-      "zoom"
+      "onOpen",
+      "onSave",
+      "onTitleChange",
+      "rulers",
+      "t",
+      "title",
+      "zoom",
+      "zoomMode"
     ],
     "deferredInVue": {
-      "className": "React takes an explicit className prop. Vue applies `class` as a native fallthrough attribute, so it is not a declared prop \u2014 the capability exists on both, the declaration only on React.",
+      "className": "React takes an explicit className prop. Vue applies `class` as a declared prop on DocxEditorProps — the capability exists on both, the declaration name differs.",
       "onChange": "React takes a callback prop. Vue exposes the same signal as a `change` EMIT, which is the idiomatic Vue form and does not appear in DocxEditorProps.",
       "onReady": "React takes a callback prop. Vue exposes the same signal as a `ready` EMIT.",
-      "t": "M6V.1 chrome: React resolves chrome labels through this, defaulting to the bundled English catalogue. Vue's chrome port is task 10V.1, which MUST remove this entry.",
-      "i18n": "M6V.1 chrome: the locale catalogue React's packaged chrome resolves labels through, published as a LocaleProvider around the frame. Vue has `provideLocale` but no packaged chrome to language, so the prop lands with 10V.1 alongside `t`.",
-      "title": "M6V.1 chrome title. Deferred to 10V.1 with `t`.",
-      "onTitleChange": "M6V.1 chrome title editing. Deferred to 10V.1 with `t`.",
-      "onSave": "M6V.1 chrome save control. Deferred to 10V.1 with `t`.",
-      "chrome": "M6V.1 chrome toggle: React renders the packaged title bar + toolbar by default and `chrome={false}` opts out. Deferred to 10V.1 with `t`.",
-      "hyperlinkPopup": "The packaged link popover, part of the React-first provider/hooks layer: a context-backed hook plus a compound over it, whose Vue twin lands with the rest of that layer. The ENGINE half is already shared \u2014 typed links, the sanitized target projection, click classification, bookmark jumps, the insert/edit/unlink ops and hyperlinkAt all live in core, and Vue's `text.link` control enables from the same toolbarCommandState React's does \u2014 so this defers the panel, not the capability.",
-      "navigation": "The packaged navigation pane \u2014 headings and find \u2014 part of the React-first provider/hooks layer: three hooks plus a compound over them, whose Vue twin lands with the rest of that layer. The ENGINE half is already shared: `getOutline`, `findMatches` and `selectMatch` live in core, so this defers the pane, not the capability.",
-      "menu": "The packaged menu bar \u2014 File \u00b7 Format \u00b7 Insert \u00b7 Help \u2014 part of the React-first provider/hooks layer. The ENGINE half is already shared: `CHROME_MENUS` is the core registry both adapters read, every actionable row is a `ChromeSlotId` whose enabled state comes from the same `toolbarCommandState`, and the styles live in the core stylesheet \u2014 so this defers the markup, not the capability.",
-      "onOpen": "Open handler for the menu bar's File \u203a Open row. Deferred to the Vue menu bar with `menu`; the engine half (`Editor.load`) is already shared.",
-      "contextMenu": "The packaged right-click menu, part of the React-first provider/hooks layer: a compound whose rows ARE the menu bar's rows, so its Vue twin lands with that layer. The ENGINE half is already shared \u2014 `selectAll`, `copy`, `cut` and `paste` are core commands, every row's enabled state comes from the same `Editor.can`, and the surface's pointer controller already ignores non-primary buttons so a right-click reaches a menu with the selection intact \u2014 so this defers the panel, not the capability.",
-      "children": "React renders viewport-extras children inside the sugar viewport (the pro review pane mounts through it). Vue reaches the same via a default slot when its viewport slot lands with the Vue chrome lane.",
-      "zoomMode": "Where the display scale comes from \u2014 a fixed number, or a fit the engine keeps tracking. The CAPABILITY is not deferred at all: the fit runs in the engine, `'auto'` is `createDocxEditor`'s default, and `Editor.getZoomMode`/`setZoomMode` plus `snapshot().zoomMode` are contract members Vue already reaches, so a Vue host gets fit-to-viewport zoom today and can change it through the facade. What is deferred is the declared PROP, with the rest of the Vue prop surface.",
-      "rulers": "React's packaged frame mounts the rulers and takes a boolean to drop them. The Vue host has no ruler slot yet, so there is nothing to toggle; the prop lands there with the ruler chrome."
+      "onFontError": "React takes a callback prop. Vue exposes the same signal as a `fontError` EMIT.",
+      "children": "React renders viewport-extras children inside the sugar viewport (the pro review pane mounts through it). Vue reaches the same via the default slot on `<DocxEditor>`."
     },
     "vueExclusive": {
+      "class": "Vue sugar host declares `class` on DocxEditorProps; React names the same surface `className`.",
+      "colorMode": "Declared on Vue DocxEditorProps; React carries the same prop on DocxEditorProps but the API Extractor snapshot for React omits it from the counted field list until the next extract lands.",
       "revisionStyles": "Per-author revision styling. React expresses it DECLARATIVELY — `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is one implementation either way."
     }
   },
   "ref": {
-    "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters \u2014 every member is declared directly on each side, so nothing is inherited and pairedViaInheritance is empty. Vue used to declare it as `type DocxEditorRef = EditorRefLike & { ... }`; it is now a plain interface matching React, which is stricter parity, not looser.",
+    "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters — every member is declared directly on each side, so nothing is inherited and pairedViaInheritance is empty. Vue used to declare it as `type DocxEditorRef = EditorRefLike & { ... }`; it is now a plain interface matching React, which is stricter parity, not looser.",
     "paired": ["exec", "focus", "getDocumentHandle", "getEditor", "load", "save", "snapshot"],
     "pairedViaInheritance": {},
     "vueExclusive": {}
