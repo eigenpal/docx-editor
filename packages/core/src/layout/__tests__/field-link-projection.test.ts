@@ -159,12 +159,16 @@ describe('a complex HYPERLINK field', () => {
     expect(pieces[0]!.link).toBeUndefined();
   });
 
-  test('an empty result paints nothing — never the URL', () => {
+  test('an empty result paints nothing — never the URL, and never mints a link', () => {
+    const seen: HyperlinkFieldSpec[] = [];
     const pieces = project(
       `<w:p><w:r><w:t>A</w:t></w:r>${complexField(' HYPERLINK "https://example.com" ')}<w:r><w:t>B</w:t></w:r></w:p>`,
-      projectorStub()
+      projectorStub(seen)
     );
     expect(pieces.map((piece) => piece.text)).toEqual(['A', 'B']);
+    // Nothing paints the atom, so the projector seam is never crossed — no id is minted for a
+    // link no anchor would ever carry.
+    expect(seen).toEqual([]);
   });
 
   test('an enclosing w:hyperlink wins over the field instruction', () => {

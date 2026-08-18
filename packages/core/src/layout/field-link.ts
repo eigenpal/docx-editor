@@ -101,7 +101,9 @@ export function parseHyperlinkInstruction(raw: string): HyperlinkFieldSpec | nul
   let target: string | null = null;
   let targetTaken = false;
   let anchor: string | null = null;
+  let anchorTaken = false;
   let tooltip: string | null = null;
+  let tooltipTaken = false;
   for (let i = 1; i < tokens.length; i += 1) {
     const token = tokens[i]!;
     if (!token.quoted && token.value.startsWith('\\')) {
@@ -113,8 +115,21 @@ export function parseHyperlinkInstruction(raw: string): HyperlinkFieldSpec | nul
       if (!arg || (!arg.quoted && arg.value.startsWith('\\'))) continue;
       i += 1;
       const withinCap = arg.value.length > 0 && arg.value.length <= MAX_HYPERLINK_SWITCH_ARG_CHARS;
-      if (name === '\\l' && anchor === null && withinCap) anchor = arg.value;
-      else if (name === '\\o' && tooltip === null && withinCap) tooltip = arg.value;
+      // First `\l` / `\o` CONSUMES the switch even when its argument is invalid (over-cap), so a
+      // later duplicate cannot win — the same first-wins rule the target token follows. An
+      // invalid first argument means the switch contributes nothing, not that it forfeits its
+      // slot to a later occurrence.
+      if (name === '\\l') {
+        if (!anchorTaken) {
+          anchorTaken = true;
+          if (withinCap) anchor = arg.value;
+        }
+      } else if (name === '\\o') {
+        if (!tooltipTaken) {
+          tooltipTaken = true;
+          if (withinCap) tooltip = arg.value;
+        }
+      }
       // `\t` / `\m` / `\n` / `\*` / `\#` / `\@`: argument consumed and ignored.
       continue;
     }

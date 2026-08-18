@@ -33,6 +33,48 @@ describe('projecting a field link', () => {
     expect(record).toMatchObject({ kind: 'internal', href: '#section3', anchor: 'section3' });
   });
 
+  test('a target AND an \\l anchor carry the anchor as a #fragment on the external href', () => {
+    const registry = createFieldLinkRegistry();
+    const record = registry.project({
+      target: 'https://example.com/p',
+      anchor: 'sec2',
+      tooltip: null,
+    });
+    expect(record).toMatchObject({ kind: 'external', href: 'https://example.com/p#sec2' });
+  });
+
+  test('a target that already carries a # keeps its own fragment (target-wins)', () => {
+    const registry = createFieldLinkRegistry();
+    const record = registry.project({
+      target: 'https://example.com/p#top',
+      anchor: 'sec2',
+      tooltip: null,
+    });
+    expect(record).toMatchObject({ kind: 'external', href: 'https://example.com/p#top' });
+  });
+
+  test('a control char in the \\l anchor never reaches the #fragment', () => {
+    const registry = createFieldLinkRegistry();
+    const external = registry.project({
+      target: 'https://example.com/p',
+      anchor: 'se\x00c',
+      tooltip: null,
+    });
+    expect(external).toMatchObject({ kind: 'external', href: 'https://example.com/p#sec' });
+    const internal = registry.project({ target: null, anchor: 'se\x00c', tooltip: null });
+    expect(internal).toMatchObject({ kind: 'internal', href: '#sec', anchor: 'sec' });
+  });
+
+  test('a control char in the \\o tooltip never reaches the title', () => {
+    const registry = createFieldLinkRegistry();
+    const record = registry.project({
+      target: 'https://example.com',
+      anchor: null,
+      tooltip: 'a\x01b',
+    });
+    expect(record).toMatchObject({ tooltip: 'ab' });
+  });
+
   test('a javascript: target with no anchor projects nothing', () => {
     const registry = createFieldLinkRegistry();
     expect(registry.project({ target: 'javascript:alert(1)', anchor: null, tooltip: null })).toBe(

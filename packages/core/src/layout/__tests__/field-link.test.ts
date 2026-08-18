@@ -8,6 +8,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   MAX_HYPERLINK_INSTRUCTION_CHARS,
+  MAX_HYPERLINK_SWITCH_ARG_CHARS,
   MAX_HYPERLINK_TARGET_CHARS,
   parseHyperlinkInstruction,
 } from '../field-link.ts';
@@ -159,5 +160,32 @@ describe('hostile input', () => {
     expect(
       parseHyperlinkInstruction(` HYPERLINK "https://example.com" \\o "${'t'.repeat(300)}" `)
     ).toEqual({ target: 'https://example.com', anchor: null, tooltip: null });
+  });
+
+  test('an over-cap first \\l consumes the switch; a later \\l never takes it', () => {
+    const blob = 'a'.repeat(MAX_HYPERLINK_SWITCH_ARG_CHARS + 1);
+    // First occurrence is invalid but still consumes anchor-hood, so "second" cannot win — and
+    // with no target and no anchor the instruction is no link at all.
+    expect(parseHyperlinkInstruction(` HYPERLINK \\l "${blob}" \\l "second" `)).toBeNull();
+    // With a target present, the invalid first \l still locks out the later one: no anchor.
+    expect(
+      parseHyperlinkInstruction(` HYPERLINK "https://example.com" \\l "${blob}" \\l "second" `)
+    ).toEqual({ target: 'https://example.com', anchor: null, tooltip: null });
+    // A VALID first \l still wins over a later duplicate.
+    expect(parseHyperlinkInstruction(' HYPERLINK \\l "first" \\l "second" ')).toEqual({
+      target: null,
+      anchor: 'first',
+      tooltip: null,
+    });
+  });
+
+  test('an over-cap first \\o consumes the switch; a later \\o never takes it', () => {
+    const blob = 't'.repeat(MAX_HYPERLINK_SWITCH_ARG_CHARS + 1);
+    expect(
+      parseHyperlinkInstruction(` HYPERLINK "https://example.com" \\o "${blob}" \\o "second" `)
+    ).toEqual({ target: 'https://example.com', anchor: null, tooltip: null });
+    expect(
+      parseHyperlinkInstruction(' HYPERLINK "https://example.com" \\o "first" \\o "second" ')
+    ).toEqual({ target: 'https://example.com', anchor: null, tooltip: 'first' });
   });
 });

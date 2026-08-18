@@ -304,15 +304,20 @@ export function piecesOfParagraph(
     }
     // A HYPERLINK field becomes a live link only when nothing already links it: an enclosing
     // `w:hyperlink` captured into `resultLink` wins, exactly as it does for every other field.
-    const fieldLink =
-      !pending.resultLink && pending.linkSpec
-        ? (projectFieldLink?.(pending.linkSpec) ?? null)
-        : null;
-    const carriedLink = pending.resultLink ?? fieldLink;
-    const carried = {
-      ...(pending.resultRevisions.length > 0 ? { revisionsOverride: pending.resultRevisions } : {}),
-      ...(carriedLink ? { linkOverride: carriedLink } : {}),
-      fieldAtom: { formField: pending.formField },
+    // Resolved LAZILY (and memoized): a field that paints nothing — empty result, no synthesized
+    // glyph — must never reach `projectFieldLink`, or it mints a registry id no piece ever uses.
+    const { resultLink, linkSpec, resultRevisions, formField } = pending;
+    let carriedMemo: NonNullable<Parameters<typeof push>[6]> | undefined;
+    const carried = (): NonNullable<Parameters<typeof push>[6]> => {
+      if (carriedMemo) return carriedMemo;
+      const fieldLink = !resultLink && linkSpec ? (projectFieldLink?.(linkSpec) ?? null) : null;
+      const carriedLink = resultLink ?? fieldLink;
+      carriedMemo = {
+        ...(resultRevisions.length > 0 ? { revisionsOverride: resultRevisions } : {}),
+        ...(carriedLink ? { linkOverride: carriedLink } : {}),
+        fieldAtom: { formField },
+      };
+      return carriedMemo;
     };
     // SYMBOL renders from its instruction — Word never trusts a cached result for it, so a
     // synthesized glyph wins over stale cached text. An unresolvable spec falls through to
@@ -320,7 +325,7 @@ export function piecesOfParagraph(
     if (pending.symbolSpec) {
       const glyph = symbolFieldGlyph(pending.symbolSpec, pending.props, themeFonts);
       if (glyph) {
-        push(glyph.text, glyph.props, glyph.style, true, start, end, carried);
+        push(glyph.text, glyph.props, glyph.style, true, start, end, carried());
         pending = null;
         openAtomicBeginId = null;
         return;
@@ -330,23 +335,23 @@ export function piecesOfParagraph(
     // authority, a stale cached glyph must not win), a dropdown only when the cache is empty.
     const form = formFieldResult(pending, themeFonts);
     if (form) {
-      push(form.text, form.props, form.style, true, start, end, carried);
+      push(form.text, form.props, form.style, true, start, end, carried());
       pending = null;
       openAtomicBeginId = null;
       return;
     }
     if (pending.kind && pageContext) {
       const text = projectPageFieldValue(pending.kind, pageContext);
-      push(text, pending.props, pending.style, true, start, end, carried);
+      push(text, pending.props, pending.style, true, start, end, carried());
     } else if (pending.cachedText.length > 0) {
       // Inert non-page field: paint cached result as layout-owned substitution for the
       // single model unit (same as live PAGE) so hit-test/span ranges stay one atom.
-      push(pending.cachedText, pending.props, pending.style, true, start, end, carried);
+      push(pending.cachedText, pending.props, pending.style, true, start, end, carried());
     } else if (pending.buttonSpec && !pending.sawResultContent) {
       // MACROBUTTON / GOTOBUTTON display their text; the macro / target never runs. A cached
       // result (what Word last painted) wins above — this fills in only when the file cached
       // NONE. A result that existed but was hidden stays hidden (`sawResultContent`).
-      push(pending.buttonSpec.display, pending.props, pending.style, true, start, end, carried);
+      push(pending.buttonSpec.display, pending.props, pending.style, true, start, end, carried());
     }
     pending = null;
     openAtomicBeginId = null;

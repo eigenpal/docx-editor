@@ -14,7 +14,7 @@
 // Nothing here fetches or navigates; opening stays with `surface-navigation.ts`.
 
 import { sanitizeHref } from '../store/package/sinks.ts';
-import { validateExternalTarget } from '../store/package/opc-names.ts';
+import { stripControlChars, validateExternalTarget } from '../store/package/opc-names.ts';
 import type { HyperlinkFieldSpec } from '../layout/field-link.ts';
 import type { SpanLinkRecord } from '../layout/semantic-records.ts';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';
@@ -51,17 +51,32 @@ interface ResolvedFieldLink {
  * is no link at all — never an attribute built from raw input.
  */
 function resolveFieldLink(spec: HyperlinkFieldSpec): ResolvedFieldLink | null {
-  const tooltip = spec.tooltip !== null ? { tooltip: spec.tooltip } : {};
+  // The anchor becomes an inert `#fragment` and the tooltip a plain `title`, so neither can
+  // form a script href; still, the external path rejects control chars, so both scrub them for
+  // consistency (dropped, never smuggled through).
+  const tooltip = spec.tooltip !== null ? { tooltip: stripControlChars(spec.tooltip) } : {};
   if (spec.target !== null) {
     const projection = sanitizeHref(spec.target);
     const admitted =
       projection.ok && projection.href.length > 0 && validateExternalTarget(projection.href).ok;
     if (admitted) {
+      // Word navigates to `target#anchor` when a field carries BOTH an admitted external target
+      // and a `\l` anchor. Append the anchor as a fragment through the same sanitize path the
+      // anchor-only branch below uses. Skip it when the target already carries a `#` — Word's
+      // rule there is target-wins — so the separator is never doubled.
+      const anchorHref =
+        spec.anchor !== null && !projection.href.includes('#')
+          ? sanitizeHref(stripControlChars(spec.anchor))
+          : null;
+      const href =
+        anchorHref && anchorHref.ok && anchorHref.href.length > 0
+          ? `${projection.href}#${anchorHref.href}`
+          : projection.href;
       return {
         kind: 'external',
-        href: projection.href,
+        href,
         authored: spec.target,
-        ...(spec.anchor !== null ? { anchor: spec.anchor } : {}),
+        ...(spec.anchor !== null ? { anchor: stripControlChars(spec.anchor) } : {}),
         ...tooltip,
       };
     }
@@ -69,13 +84,15 @@ function resolveFieldLink(spec: HyperlinkFieldSpec): ResolvedFieldLink | null {
   }
   if (spec.anchor !== null) {
     // A fragment, not a URL — same rule as a typed `w:hyperlink w:anchor`: the name is
-    // file-derived, so it clears the same allowlist before a `#` is put in front of it.
-    const fragment = sanitizeHref(spec.anchor);
+    // file-derived, so it clears the same allowlist (and the control-char scrub the external
+    // path applies) before a `#` is put in front of it.
+    const anchor = stripControlChars(spec.anchor);
+    const fragment = sanitizeHref(anchor);
     return {
       kind: 'internal',
       href: fragment.ok && fragment.href.length > 0 ? `#${fragment.href}` : null,
       authored: spec.anchor,
-      anchor: spec.anchor,
+      anchor,
       ...tooltip,
     };
   }

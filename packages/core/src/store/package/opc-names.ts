@@ -34,7 +34,19 @@ export type NameResult =
   | { readonly ok: true; readonly partName: string }
   | { readonly ok: false; readonly reason: NameRejection };
 
-const CONTROL_RE = /[\x00-\x1f\x7f]/;
+/** ASCII/DEL control characters. `test` rejects; {@link stripControlChars} drops. */
+export const CONTROL_RE = /[\x00-\x1f\x7f]/;
+const CONTROL_RE_GLOBAL = new RegExp(CONTROL_RE.source, 'g');
+
+/**
+ * Drop every control character from a value. The external-target path REJECTS these
+ * ({@link validateExternalTarget}); a `\l` anchor fragment and a `\o` tooltip are inert sinks,
+ * so they scrub for consistency rather than fail closed — the char is removed, never smuggled on.
+ */
+export function stripControlChars(value: string): string {
+  return value.replace(CONTROL_RE_GLOBAL, '');
+}
+
 const ENCODED_SEP_RE = /%(2f|5c)/i; // %2f "/", %5c "\"
 const ENCODED_DOT_RE = /%2e/i; // %2e "."
 const DRIVE_RE = /^[a-zA-Z]:/;
