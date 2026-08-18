@@ -63,13 +63,18 @@ function docx(settings: string | null): Uint8Array {
 
 // `null` for "no author", not `undefined`: a default parameter fills in for an explicit
 // `undefined`, so passing it would have silently kept the default author.
-function mount(settings: string | null, author: string | null = 'Grace Hopper') {
+function mount(
+  settings: string | null,
+  author: string | null = 'Grace Hopper',
+  mode?: 'edit' | 'view' | 'suggesting'
+) {
   const container = document.createElement('div');
   const editor: DocxEditorInstance = createDocxEditor({
     container,
     document: docx(settings),
     modules: [testReviewModule()],
     ...(author === null ? {} : { author }),
+    ...(mode === undefined ? {} : { mode }),
   });
   if (!editor.surface) throw new Error('surface failed to mount');
   return editor;
@@ -173,6 +178,43 @@ describe('honouring what the document asks for', () => {
   });
 });
 
+describe('an explicit `mode` outranks the file', () => {
+  test("`mode: 'edit'` opens editing even when the document asks for tracked changes", () => {
+    const editor = mount('<w:trackRevisions/>', 'Grace Hopper', 'edit');
+    expect(editor.getEditingMode()).toBe('editing');
+    expect(editor.snapshot().lastRejection).toBeNull();
+  });
+
+  test('the toolbar still reaches suggesting afterwards', () => {
+    const editor = mount('<w:trackRevisions/>', 'Grace Hopper', 'edit');
+    expect(editor.setEditingMode('suggesting').ok).toBe(true);
+    expect(editor.getEditingMode()).toBe('suggesting');
+  });
+
+  test("`mode: 'suggesting'` opens suggesting in a document that asked for nothing", () => {
+    const editor = mount(null, 'Grace Hopper', 'suggesting');
+    expect(editor.getEditingMode()).toBe('suggesting');
+  });
+
+  test("`mode: 'suggesting'` with no author falls back to editing, and the reason is published", () => {
+    const editor = mount(null, null, 'suggesting');
+    expect(editor.getEditingMode()).toBe('editing');
+    expect(editor.snapshot().lastRejection).toContain('author');
+  });
+
+  test("`mode: 'suggesting'` with no review module falls back to editing, and the reason is published", () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docx(null),
+      author: 'Grace Hopper',
+      mode: 'suggesting',
+    });
+    expect(editor.getEditingMode()).toBe('editing');
+    expect(editor.snapshot().lastRejection).toContain('review module');
+  });
+});
+
 describe('protection restricted to tracked changes', () => {
   const PROTECTED =
     '<w:trackRevisions/><w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>';
@@ -197,5 +239,23 @@ describe('protection restricted to tracked changes', () => {
     const editor = mount(PROTECTED);
     expect(editor.setEditingMode('viewing').ok).toBe(true);
     expect(editor.getEditingMode()).toBe('viewing');
+  });
+
+  test("the protection outranks an explicit `mode: 'edit'`", () => {
+    // `setEditingMode('editing')` is refused `locked` in this document, so opening in
+    // editing would put the editor in a mode its own gate refuses to enter.
+    const editor = mount(PROTECTED, 'Grace Hopper', 'edit');
+    expect(editor.getEditingMode()).toBe('suggesting');
+  });
+
+  test('without a review module the same document still opens editable, untracked', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: docx(PROTECTED),
+      author: 'Grace Hopper',
+      mode: 'edit',
+    });
+    expect(editor.getEditingMode()).toBe('editing');
   });
 });

@@ -29,7 +29,7 @@ export type {
   FontSourceSubstitution,
 } from '@docx-editor.dev/core/contracts/editor';
 
-export type EditorMode = 'edit' | 'view';
+export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 /**
  * Props for the React `DocxEditor`. The adapter is a thin renderer over the
@@ -176,7 +176,17 @@ export interface DocxEditorProps {
   rulers?: boolean;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
-  /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */
+  /**
+   * The mode the editor opens in, matching the toolbar's three-state pill. Applied at
+   * mount only — not reactive; remount to change.
+   *
+   * Defaults to `'edit'`: the packaged editor opens every document ready to type, even
+   * one whose `w:trackRevisions` asks for tracked changes. Pass `'suggesting'` (needs
+   * `modules` with a review module and an `author`) to open in suggesting, or `'view'`
+   * for read-only. To let the DOCUMENT decide — Word's behavior, where
+   * `w:trackRevisions` opens in suggesting — compose `DocxEditor.Root`, which follows
+   * the file's request when `mode` is omitted.
+   */
   mode?: EditorMode;
   /** A fixed scale. Supplying one also makes the mode fixed unless `zoomMode` says otherwise. */
   zoom?: number;

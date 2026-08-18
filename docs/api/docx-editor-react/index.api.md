@@ -676,7 +676,7 @@ export interface DocxEditorRootProps {
     imageDecodePort?: ImageDecodePort;
     // (undocumented)
     locale?: string;
-    mode?: 'edit' | 'view';
+    mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
     onChange?: (change: DocumentChange) => void;
     onFontError?: (error: EditorFontError) => void;
@@ -888,7 +888,7 @@ export { EditorFontError }
 export { EditorFontErrorCode }
 
 // @public (undocumented)
-export type EditorMode = 'edit' | 'view';
+export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 export { EditorQuery }
 

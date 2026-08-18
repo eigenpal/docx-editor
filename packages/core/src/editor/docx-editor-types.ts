@@ -69,8 +69,20 @@ export interface DocxEditorConfig {
    * reason. See {@link EditorModule}.
    */
   modules?: readonly EditorModule[];
-  /** `'view'` refuses every mutating command through the facade; default `'edit'`. */
-  mode?: 'edit' | 'view';
+  /**
+   * The mode the editor opens in — one prop, matching the toolbar's three-state pill.
+   *
+   * - `'edit'` — opens in editing, even when the document's `w:trackRevisions` asks for
+   *   tracked changes; the reader still moves between modes from the toolbar.
+   * - `'suggesting'` — opens in suggesting. It needs what suggesting always needs — a
+   *   review module and an {@link DocxEditorConfig.author} — and falls back to editing
+   *   with the reason published when either is missing.
+   * - `'view'` — read-only: every mutating command through the facade is refused, and
+   *   the toolbar cannot leave viewing.
+   * - Omitted — the DOCUMENT decides: a package carrying `w:trackRevisions` opens in
+   *   suggesting, everything else in editing.
+   */
+  mode?: 'edit' | 'view' | 'suggesting';
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**

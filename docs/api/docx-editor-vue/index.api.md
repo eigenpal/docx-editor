@@ -649,7 +649,7 @@ export interface EditorHost {
 }
 
 // @public (undocumented)
-export type EditorMode = 'edit' | 'view';
+export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 // @public (undocumented)
 export type EditorQuery = {

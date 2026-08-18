@@ -577,7 +577,7 @@ function treeOpRejectionToExecResult(
 function gateContentControlCommand(
   command: ContentControlEditorCommand,
   surface: PaginatedSurface | null,
-  mode: 'edit' | 'view',
+  mode: 'edit' | 'view' | 'suggesting',
   options?: { scope?: EditorScope }
 ): CommandGate {
   if (options?.scope && options.scope.kind !== 'body') {
@@ -618,7 +618,7 @@ function gateContentControlCommand(
 export function canContentControlCommand(
   command: ContentControlEditorCommand,
   surface: PaginatedSurface | null,
-  mode: 'edit' | 'view',
+  mode: 'edit' | 'view' | 'suggesting',
   options?: { scope?: EditorScope }
 ): CanResult {
   const gated = gateContentControlCommand(command, surface, mode, options);

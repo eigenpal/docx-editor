@@ -75,8 +75,16 @@ export interface DocxEditorRootProps {
    * construction-time in the engine.
    */
   modules?: readonly EditorModule[];
-  /** `'edit'` (default) or `'view'` (read-only). Sampled at mount only. */
-  mode?: 'edit' | 'view';
+  /**
+   * The mode the editor opens in, matching the toolbar's three-state pill. Sampled at
+   * mount only.
+   *
+   * `'edit'` opens in editing even when the document's `w:trackRevisions` asks for
+   * tracked changes; `'suggesting'` opens in suggesting (needs a review module and an
+   * `author`); `'view'` is read-only and the toolbar cannot leave it. Omitted, the
+   * DOCUMENT decides: a package carrying `w:trackRevisions` opens in suggesting.
+   */
+  mode?: 'edit' | 'view' | 'suggesting';
   /**
    * A fixed scale. Supplying one also means the mode is fixed, unless `zoomMode` says
    * otherwise: an app that pinned 100% keeps 100% on every window size.

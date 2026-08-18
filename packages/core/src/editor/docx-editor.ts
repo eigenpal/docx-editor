@@ -179,6 +179,11 @@ import {
 import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import { surfaceScroller } from './surface-pages.ts';
 import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
+import {
+  documentTrackingAdoption,
+  PRO_REVIEW_REASON,
+  resolveOpeningEditingMode,
+} from './opening-editing-mode.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -196,15 +201,6 @@ export type {
 const SCOPE_BODY: EditorScope = Object.freeze({ kind: 'body' as const });
 /** One frozen empty answer, so "nothing substituted" never mints a new reference. */
 const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
-
-/**
- * The refusal every review write gets when no review module is registered.
- *
- * One string, quoted verbatim by `toolbarCommandState` as the disabled tooltip — the
- * same "the engine's own reason" channel every other unavailable control uses.
- */
-const PRO_REVIEW_REASON =
-  'comments and tracked changes require the pro review module (@docx-editor.dev/pro)';
 
 /**
  * Build an editor: the full `Editor` contract over a paginated surface.
@@ -253,9 +249,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
   });
   /**
-   * How edits are written. `mode: 'view'` at construction opens in viewing; everything else
-   * opens in editing, and the toolbar moves between all three. Declared here because the
-   * surface is handed it at mount, and a document reload keeps the reader's choice.
+   * How edits are written. `mode: 'view'` opens in viewing; everything else starts editing
+   * and the opening-mode decision below may move it. Declared here because the surface is
+   * handed it at mount, and a document reload keeps the reader's choice.
    */
   let editingMode: DocumentEditingMode = config.mode === 'view' ? 'viewing' : 'editing';
 
@@ -275,6 +271,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
   const mode = config.mode ?? 'edit';
+
+  // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
+  // in `opening-editing-mode.ts`. Applied before the first mount reads `editingMode`.
+  const openingModeDecision = resolveOpeningEditingMode(config.mode, {
+    reviewEnabled,
+    hasAuthor: Boolean(config.author),
+  });
+  if (openingModeDecision.mode !== null) editingMode = openingModeDecision.mode;
+  if (openingModeDecision.rejection !== null) facadeRejection = openingModeDecision.rejection;
 
   let surface: PaginatedSurface | null = null;
   let parseError: string | null = null;
@@ -1628,30 +1633,25 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   /**
-   * Enter suggesting mode when the DOCUMENT asked for it.
-   *
-   * `w:trackRevisions` is a property of the file, not of the reader, so a package that
-   * carries it opens in suggesting — otherwise the first keystroke is an untracked edit in a
-   * document whose author asked for the opposite, with the pill reading "Editing".
-   *
-   * Two things override it, and both are the reader's own decision rather than the file's:
-   * a document opened `mode: 'view'` stays viewing, and a mode the reader has already moved
-   * off is not moved back on a reload. With no author configured the mode is not entered —
-   * suggesting refuses every edit without one — and the reason is published rather than the
-   * request being dropped in silence.
+   * Enter suggesting mode when the DOCUMENT asked for it — `w:trackRevisions` asks, and
+   * enforced trackedChanges protection requires. What overrides what, and why a refusal
+   * is published, lives with the decision: `documentTrackingAdoption` in
+   * `opening-editing-mode.ts`.
    */
   function adoptDocumentTracking(): void {
-    // Suggesting writes `w:ins`/`w:del` — authoring tracked changes, which is the
-    // review module's capability. Without one the document still opens and edits
-    // normally; the edits are simply untracked, exactly as `can(setEditingMode:
-    // 'suggesting')` reports.
-    if (!reviewEnabled) return;
-    if (mode === 'view' || editingMode !== 'editing' || readerChoseMode) return;
-    if (!documentTracking().trackRevisions) return;
-    if (!config.author) {
-      facadeRejection = 'this document asks for tracked changes, but no author is configured';
-      return;
-    }
+    const tracking = documentTracking();
+    const decision = documentTrackingAdoption({
+      viewOnly: mode === 'view',
+      reviewEnabled,
+      hasAuthor: Boolean(config.author),
+      hostChoseMode: config.mode !== undefined,
+      readerChoseMode,
+      currentMode: editingMode,
+      trackRevisions: tracking.trackRevisions,
+      restrictedToTrackedChanges: tracking.restrictedToTrackedChanges,
+    });
+    if (decision.rejection !== null) facadeRejection = decision.rejection;
+    if (decision.mode !== 'suggesting') return;
     editingMode = 'suggesting';
     surface?.setEditingMode('suggest');
   }

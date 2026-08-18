@@ -776,7 +776,7 @@ export interface DocxEditorConfig {
     imageDecodePort?: ImageDecodePort;
     // (undocumented)
     locale?: string;
-    mode?: 'edit' | 'view';
+    mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
     // (undocumented)
     onFontError?: (error: EditorFontError) => void;

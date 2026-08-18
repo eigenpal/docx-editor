@@ -666,6 +666,9 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         <DocxEditor.Root
           document={bytes}
           author="Demo Reviewer"
+          // The demo always opens ready to type: without an explicit mode, a document
+          // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
+          mode="edit"
           modules={PRO_MODULES}
           {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}

@@ -47,6 +47,20 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 
 `DocumentEditingMode` is `'editing' | 'suggesting' | 'viewing'`. The packaged toolbar already ships this control as the `review.editingMode` slot, so `<DocxEditor.Toolbar />` gives you the same thing without writing the toggle.
 
+## Choose the opening mode
+
+The `mode` prop decides how a document opens, matching the toolbar's pill: `'edit'`, `'suggesting'`, or `'view'`.
+
+```tsx
+<DocxEditor.Root document={bytes} author="Jess Lin" mode="suggesting">
+```
+
+A document can also ask for tracked changes itself: Word writes `w:trackRevisions` into `word/settings.xml` when its author turns the feature on. If you omit `mode` on `DocxEditor.Root`, the editor honors that request and opens the document in suggesting mode. Following the request needs the same two things as `mode="suggesting"`: a review module and an `author`.
+
+An explicit `mode` wins over that request. With `'edit'` or `'suggesting'`, the reader still switches modes from the toolbar; with `'view'`, the editor stays read-only. One exception: a document whose enforced protection permits editing only as tracked changes still opens in suggesting mode.
+
+The `<DocxEditor>` component defaults `mode` to `'edit'`, so the packaged editor opens every document ready to type.
+
 ## What gets tracked
 
 The revision model covers more than inline text:

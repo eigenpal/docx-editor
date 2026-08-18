@@ -231,7 +231,7 @@ export function tableCommandState(
 export function gateCommand(
   command: EditorCommand,
   surface: PaginatedSurface | null,
-  mode: 'edit' | 'view',
+  mode: 'edit' | 'view' | 'suggesting',
   options?: { scope?: EditorScope }
 ): CommandGate {
   // Scope option: body and the currently open furniture story are writable; `all` and

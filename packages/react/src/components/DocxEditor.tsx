@@ -219,7 +219,10 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       colorMode = 'light',
       author,
       locale,
-      mode,
+      // The packaged editor opens ready to type, even when the file's `w:trackRevisions`
+      // asks for suggesting — the sugar's opinionated default. `DocxEditor.Root` stays
+      // neutral and follows the document's request when given no mode.
+      mode = 'edit',
       modules,
       zoom,
       zoomMode,
@@ -401,7 +404,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {...(author !== undefined ? { author } : {})}
         {...(locale !== undefined ? { locale } : {})}
         translate={translate}
-        {...(mode !== undefined ? { mode } : {})}
+        mode={mode}
         {...(modules !== undefined ? { modules } : {})}
         {...(zoom !== undefined ? { zoom } : {})}
         {...(zoomMode !== undefined ? { zoomMode } : {})}

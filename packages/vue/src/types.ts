@@ -23,7 +23,7 @@ export type {
   FontSourceSubstitution,
 } from '@docx-editor.dev/core/contracts/editor';
 
-export type EditorMode = 'edit' | 'view';
+export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 /**
  * Props for the Vue `DocxEditor`. The adapter is a thin renderer over the
@@ -40,7 +40,11 @@ export interface DocxEditorProps {
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** A document to load: DOCX bytes or an existing handle. */
   document?: DocumentSource;
-  /** 'edit' (default) or 'view' (read-only). Applied at mount only — not reactive; remount to change. */
+  /**
+   * The mode the editor opens in: 'edit' (default), 'suggesting' (needs a review module
+   * and an `author`), or 'view' (read-only). Applied at mount only — not reactive;
+   * remount to change.
+   */
   mode?: EditorMode;
   zoom?: number;
   locale?: string;
