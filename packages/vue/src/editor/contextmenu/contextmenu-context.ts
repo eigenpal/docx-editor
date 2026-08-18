@@ -1,4 +1,4 @@
-import { inject, type InjectionKey } from 'vue';
+import { inject, unref, type InjectionKey, type MaybeRef } from 'vue';
 
 /** @public */
 export interface ContextMenuAnchor {
@@ -17,7 +17,7 @@ export interface ContextMenuContextValue {
 }
 
 /** @public */
-export const ContextMenuContext: InjectionKey<ContextMenuContextValue> =
+export const ContextMenuContext: InjectionKey<MaybeRef<ContextMenuContextValue>> =
   Symbol('ContextMenuContext');
 
 const fallback: ContextMenuContextValue = {
@@ -31,10 +31,10 @@ const fallback: ContextMenuContextValue = {
 
 /** @internal */
 export function useContextMenuContext(): ContextMenuContextValue {
-  return inject(ContextMenuContext, fallback);
+  return unref(inject(ContextMenuContext, fallback)) as ContextMenuContextValue;
 }
 
 /** @public */
 export function useContextMenuTarget(): ContextMenuContextValue['target'] {
-  return inject(ContextMenuContext, fallback).target;
+  return unref(inject(ContextMenuContext, fallback))?.target ?? null;
 }

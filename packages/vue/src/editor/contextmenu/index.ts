@@ -1,0 +1,38 @@
+export {
+  DocxEditorContextMenu,
+  ContextMenu,
+  contextMenuDefaultSet,
+  type DocxEditorContextMenuNamespace,
+  type DocxEditorContextMenuProps,
+} from './DocxEditorContextMenu';
+export {
+  ContextMenuCopy,
+  ContextMenuCut,
+  ContextMenuCellVerticalAlignment,
+  ContextMenuDelete,
+  ContextMenuItem,
+  ContextMenuPaste,
+  ContextMenuSelectAll,
+  ContextMenuDeleteTable,
+  ContextMenuDeleteTableColumn,
+  ContextMenuDeleteTableRow,
+  ContextMenuInsertColumnLeft,
+  ContextMenuInsertColumnRight,
+  ContextMenuInsertRowAbove,
+  ContextMenuInsertRowBelow,
+  ContextMenuRefreshToc,
+  ContextMenuRefreshTocPageNumbers,
+  useTableContextMenuVisible,
+  TABLE_CONTEXT_ROWS,
+  TOC_CONTEXT_ROWS,
+  type ContextMenuCommandProps,
+  type ContextMenuItemProps,
+  type ContextMenuTableRowProps,
+} from './parts';
+export {
+  ContextMenuContext,
+  useContextMenuContext,
+  useContextMenuTarget,
+  type ContextMenuAnchor,
+  type ContextMenuContextValue,
+} from './contextmenu-context';
