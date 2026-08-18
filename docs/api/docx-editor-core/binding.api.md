@@ -125,6 +125,7 @@ export interface TreeDocxSession {
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     documentFonts(): readonly string[];
     documentOutline(): readonly DocumentOutlineEntry[];
+    documentProperties(): DocumentProperties;
     documentStyles(): readonly DocumentStyleEntry[];
     documentThemeColors(): readonly DocumentThemeColorEntry[];
     documentThemeFonts(): DocumentThemeFonts;

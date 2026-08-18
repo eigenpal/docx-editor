@@ -596,6 +596,9 @@ export function expandLvlText(lvlText: string, counters: readonly number[], form
 // @public
 export interface FieldAtomMarker {
     readonly formField: boolean;
+    readonly pageField?: {
+        readonly kind: AllowlistedPageField;
+    };
 }
 
 // @public
@@ -1106,7 +1109,7 @@ export interface LayoutCacheStats {
 }
 
 // @public
-export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, hfPageContext?: HeaderFooterPageContext): HeaderFooterStoryLayout;
+export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, hfPageContext?: HeaderFooterPageContext, documentProperties?: DocumentProperties): HeaderFooterStoryLayout;
 
 // @public
 export function layoutNoteById(part: OoxmlPart | null | undefined, noteId: number, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
@@ -1486,6 +1489,7 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly documentEndnoteProps: ResolvedEndnoteProperties;
     readonly documentFootnoteProps: ResolvedFootnoteProperties;
+    readonly documentProperties?: DocumentProperties;
     readonly drawingsForPart?: (ownerPartName: string) => NoteStoryDrawings | undefined;
     readonly endnotePropsBySection: readonly ResolvedEndnoteProperties[];
     // (undocumented)
@@ -2512,6 +2516,7 @@ export interface SemanticLayoutOptions {
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
     readonly defaultTabStopPt?: number;
     readonly displayMode?: RevisionDisplayMode;
+    readonly documentProperties?: DocumentProperties;
     readonly drawingExclusionConverged?: boolean;
     readonly drawingExclusionPass?: number;
     readonly drawingExclusionZonesByPage?: ReadonlyMap<number, readonly ExclusionZone[]>;

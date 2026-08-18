@@ -1093,6 +1093,18 @@ export function directParagraphMarkProperties(part: OoxmlPart, paragraphId: stri
 export function directParagraphProperties(part: OoxmlPart, paragraphId: string): readonly OoxmlProperty[];
 
 // @public
+export interface DocumentProperties {
+    readonly company?: string;
+    readonly creator?: string;
+    readonly description?: string;
+    readonly keywords?: string;
+    readonly lastModifiedBy?: string;
+    readonly manager?: string;
+    readonly subject?: string;
+    readonly title?: string;
+}
+
+// @public
 export interface DocumentTrackingSettings {
     readonly doNotTrackFormatting: boolean;
     readonly doNotTrackMoves: boolean;

@@ -1333,6 +1333,7 @@ function layoutBlocksPass(
       styleCascade,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
       ...(displayMode ? { displayMode } : {}),
+      ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
       inlineDrawingLayout: options.inlineDrawingLayout,
       drawingTokenForParagraph: options.drawingTokenForParagraph,
     });

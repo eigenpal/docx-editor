@@ -439,12 +439,10 @@ export {
   readViewSettings,
   type DocumentViewSettings,
 } from './view-settings.ts';
-export {
-  EMPTY_DOCUMENT_PROPERTIES,
-  MAX_DOCUMENT_PROPERTY_CHARS,
-  readDocumentProperties,
-  type DocumentProperties,
-} from './document-properties.ts';
+// Only the result type is public — it names `SemanticLayoutOptions.documentProperties` and the
+// session accessor. The reader and its caps stay engine-internal; `binding` and tests import them
+// directly from `./document-properties.ts`.
+export { type DocumentProperties } from './document-properties.ts';
 export {
   CONTENT_CONTROL_ID_MAX,
   CONTENT_CONTROL_PROPERTY_ORDER,
