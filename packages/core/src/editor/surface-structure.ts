@@ -11,7 +11,6 @@ import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
 import {
   documentOrder,
   enumerateDocumentSections,
-  paragraphFragmentsOf,
   readSectionProperties,
   storyBlocks,
   type SemanticLayout,
@@ -19,6 +18,7 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
+import { fragmentHolding } from '../layout/line-segments.ts';
 import {
   directParagraphProperties,
   mergedProperties,
@@ -183,16 +183,13 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
   /** The marker layout resolved for a paragraph, or null when it is not a list item. */
   function markerOf(paragraphId: string): ListMarkerRecord | null {
-    for (const page of currentLayout.value.pages) {
-      // Paragraphs inside table cells are nested under table/row/cell records rather than
-      // published as top-level page fragments. Use the layout's canonical recursive walk so
-      // list Enter/Tab/toggle behaviour is identical in body text and arbitrarily nested cells.
-      for (const fragment of paragraphFragmentsOf(page)) {
-        if (fragment.paragraphId !== paragraphId) continue;
-        return fragment.marker ?? null;
-      }
-    }
-    return null;
+    // Paragraphs inside table cells are nested under table/row/cell records rather than
+    // published as top-level page fragments, and a resolved display mode publishes a merged
+    // run under the survivor's name alone. `fragmentHolding` covers both: it walks the same
+    // canonical recursive walk, and falls back to the paragraphs a fragment DRAWS when no
+    // fragment carries the name. Without that, the caret in the absorbed half of a merged
+    // list item read as "not a list item", so Tab inserted a tab instead of demoting it.
+    return fragmentHolding(currentLayout.value, paragraphId)?.marker ?? null;
   }
 
   /**

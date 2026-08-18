@@ -916,6 +916,15 @@ export function lineAtPosition(
       start = Number.isNaN(start) ? span.range.start : Math.min(start, span.range.start);
       end = Number.isNaN(end) ? span.range.end : Math.max(end, span.range.end);
     }
+    // An inline drawing is an ATOM with an offset of its own and no span to speak for it, so
+    // a half that opens with a picture began at the picture, one offset before its first
+    // character. Without this the caret there resolved to no line, and the image it was
+    // sitting on could not be selected.
+    for (const drawing of line.drawings ?? []) {
+      if (drawing.paragraphId !== paragraphId) continue;
+      start = Number.isNaN(start) ? drawing.start : Math.min(start, drawing.start);
+      end = Number.isNaN(end) ? drawing.start + 1 : Math.max(end, drawing.start + 1);
+    }
     if (Number.isNaN(start)) continue;
     // End-inclusive on the last line of a paragraph, so a caret at the very end resolves.
     if (offset >= start && offset <= end) return line;

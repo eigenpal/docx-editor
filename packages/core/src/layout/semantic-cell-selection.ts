@@ -13,6 +13,7 @@
 // the rectangle ask for it.
 
 import { paragraphTextFromLayout, type SemanticSelection } from './semantic-interaction.ts';
+import { fragmentParagraphs } from './line-segments.ts';
 import type { TableCellAddress } from './semantic-hit-test.ts';
 import {
   paragraphFragmentsOf,
@@ -254,9 +255,14 @@ export function paragraphsInCells(
 
 function collectParagraphs(block: BlockFragmentRecord, into: string[], seen: Set<string>): void {
   if (block.kind === 'paragraph') {
-    if (!seen.has(block.paragraphId)) {
-      seen.add(block.paragraphId);
-      into.push(block.paragraphId);
+    // EVERY paragraph the fragment draws, not just the one it is named after. A resolved
+    // display mode merges a run into the survivor's fragment, and a cell selection that
+    // listed the survivor alone deleted half of what the reader had highlighted: the
+    // absorbed members' text stayed behind in a cell reported as emptied.
+    for (const paragraphId of fragmentParagraphs(block)) {
+      if (seen.has(paragraphId)) continue;
+      seen.add(paragraphId);
+      into.push(paragraphId);
     }
     return;
   }

@@ -35,12 +35,12 @@
 // sub-objects are reused if value-equal, so selector results stay reference-stable too.
 
 import {
+  anchorLineY,
   commentBodyText,
   commentInitials,
   documentOrder,
   paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
-  reviewAnchorIndex,
   reviewItemGeometry,
   reviewItemKey,
   type ReviewItem,
@@ -93,6 +93,8 @@ import {
   type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
+import { createAnchorIndex } from './docx-editor-anchors.ts';
+import { fragmentParagraphs } from '../layout/line-segments.ts';
 import {
   classifyCommand,
   deepFreezeValue,
@@ -1170,57 +1172,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     );
   }
 
-  /**
-   * Paragraph anchors, built once per layout.
-   *
-   * Keyed on the layout OBJECT: a published layout is immutable, so the index is valid for
-   * exactly as long as that object is the current one, and a new revision brings a new one.
-   */
-  const anchorIndexCache = new WeakMap<SemanticLayout, Map<string, ReviewParagraphAnchor>>();
-  function anchorIndexOf(layout: SemanticLayout): Map<string, ReviewParagraphAnchor> {
-    const cached = anchorIndexCache.get(layout);
-    if (cached) return cached;
-    const index = reviewAnchorIndex(layout, (page) => paragraphFragmentsOf(page));
-    // Header/footer stories join the same index so their cards get real geometry. A story's
-    // box is sheet-absolute like a page's content box, and its fragments are story-relative
-    // like body fragments are content-relative — the same two-space sum `reviewItemGeometry`
-    // performs. FIRST page wins, matching the body rule: a shared part painted on every
-    // page anchors its card where the reader first meets it.
-    for (const page of layout.pages) {
-      for (const story of [page.header, page.footer]) {
-        if (!story) continue;
-        for (const fragment of paragraphFragmentsOfBlocks(story.fragments)) {
-          if (index.has(fragment.paragraphId)) continue;
-          index.set(fragment.paragraphId, {
-            pageIndex: page.index,
-            contentY: story.box.y,
-            fragmentY: fragment.box.y,
-            ...(fragment.lines ? { lines: fragment.lines } : {}),
-          });
-        }
-      }
-      // Note stories, on the same terms. Without these a note card came back with
-      // `anchorY: null` and `pageIndex: null`: the rail sorts a null page last, so a
-      // footnote change on page 2 of a long document rendered below the final page's
-      // cards, with no leader line to the text it belongs to.
-      for (const area of [page.footnotes, page.endnotes]) {
-        if (!area) continue;
-        for (const note of area.notes) {
-          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-            if (index.has(fragment.paragraphId)) continue;
-            index.set(fragment.paragraphId, {
-              pageIndex: page.index,
-              contentY: note.box.y,
-              fragmentY: fragment.box.y,
-              ...(fragment.lines ? { lines: fragment.lines } : {}),
-            });
-          }
-        }
-      }
-    }
-    anchorIndexCache.set(layout, index);
-    return index;
-  }
+  const anchorIndexOf = createAnchorIndex();
 
   /**
    * Paragraph id → note scope id, built once per LAYOUT from the painted note stories.
@@ -1240,7 +1192,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (!area) continue;
         for (const note of area.notes) {
           for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-            if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, note.scopeId);
+            // Every paragraph the fragment DRAWS. A note whose paragraphs a resolved view
+            // merges publishes one fragment, and an absorbed member with no scope made its
+            // card look like a body card: no note to accept it in, no note to scroll to.
+            for (const paragraphId of fragmentParagraphs(fragment)) {
+              if (!index.has(paragraphId)) index.set(paragraphId, note.scopeId);
+            }
           }
         }
       }
@@ -1489,10 +1446,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (!range || !layout) return null;
     const anchor = anchorIndexOf(layout).get(range.from.paragraphId);
     if (!anchor) return null;
-    const line = anchor.lines?.find((entry) => range.from.offset < entry.range.end);
     return {
       pageIndex: anchor.pageIndex,
-      anchorY: anchor.contentY + (line ? line.box.y : anchor.fragmentY),
+      anchorY: anchor.contentY + anchorLineY(anchor, range.from.paragraphId, range.from.offset),
     };
   }
 

@@ -18,6 +18,9 @@ export interface AbstractNumDefinition {
 export function activeReviewItem(items: readonly ReviewItem[], position: ReviewPosition, order: ReadonlyMap<string, number>): ReviewItem | null;
 
 // @public
+export function anchorLineY(anchor: ReviewParagraphAnchor, paragraphId: string, offset: number): number;
+
+// @public
 export function appliedSpaceBefore(before: number, previousAfter: number, atTopOfPage: boolean, firstParagraphOfSection: boolean): number;
 
 // @public
@@ -2198,6 +2201,7 @@ export function reviewAnchorIndex<TPage extends {
         readonly spans?: readonly {
             readonly range: {
                 readonly paragraphId: string;
+                readonly end: number;
             };
         }[];
     }[];
@@ -2288,6 +2292,12 @@ export interface ReviewParagraphAnchor {
         readonly box: {
             readonly y: number;
         };
+        readonly spans?: readonly {
+            readonly range: {
+                readonly paragraphId: string;
+                readonly end: number;
+            };
+        }[];
     }[];
     // (undocumented)
     readonly pageIndex: number;

@@ -8,6 +8,7 @@
 // sectEnd / docEnd. Hostile counts and oscillation fail closed with named reasons.
 
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import { fragmentOwnsPosition, fragmentParagraphs } from './line-segments.ts';
 import { collectNoteReferences } from '../store/package/note-references.ts';
 import type { DocumentSection } from './section-properties.ts';
 import { storyBlocks } from './story-roots.ts';
@@ -250,23 +251,24 @@ export function filterRefsOnPage(
   const fragments = paragraphFragmentsOfBlocks(page.fragments);
   if (!refIndex) {
     return allRefs.filter((ref) =>
-      fragments.some(
-        (fragment) =>
-          fragment.paragraphId === ref.paragraphId &&
-          fragmentOwnsAtomOffset(fragment, ref.atomOffset)
-      )
+      fragments.some((fragment) => fragmentOwnsPosition(fragment, ref.paragraphId, ref.atomOffset))
     );
   }
   const out: PageRefHit[] = [];
   const claimed = new Set<PageRefHit>();
   for (const fragment of fragments) {
-    const candidates = refIndex.get(fragment.paragraphId);
-    if (!candidates) continue;
-    for (const ref of candidates) {
-      if (claimed.has(ref)) continue;
-      if (!fragmentOwnsAtomOffset(fragment, ref.atomOffset)) continue;
-      claimed.add(ref);
-      out.push(ref);
+    // Asked per paragraph the fragment DRAWS. A resolved display mode publishes a merged run
+    // under the survivor's name, so a reference in an absorbed member matched no fragment at
+    // all: the note it calls never reached the page, and the reader saw a mark with no note.
+    for (const paragraphId of fragmentParagraphs(fragment)) {
+      const candidates = refIndex.get(paragraphId);
+      if (!candidates) continue;
+      for (const ref of candidates) {
+        if (claimed.has(ref)) continue;
+        if (!fragmentOwnsPosition(fragment, paragraphId, ref.atomOffset)) continue;
+        claimed.add(ref);
+        out.push(ref);
+      }
     }
   }
   return out;

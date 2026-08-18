@@ -159,13 +159,43 @@ mounted surface, caret and selection, the review rail, Accept All, and the save 
       `original` direction of a merge, nor cells, nor a block `w:sdt`, nor headers, footers or
       notes are in the fixture. Run the line-for-line assertion for `original` too, and add a
       fixture carrying `w:ins` marks, a mark in a cell and a mark inside a `w:sdt`
-- [ ] 7.11a A review item's id omits the part name, so a `w:id="1"` mark in the body and one
-      in a header share a key — the React key, the active card, the dismissed set. Pre-existing,
-      and reachable for the first time now that header marks are drawn
-- [ ] 7.11b Consumers a sweep flagged and nobody has run end to end: `surface-structure.ts`
-      `markerOf`, `semantic-cell-selection.ts` `collectParagraphs`, `note-pagination.ts`
-      `filterRefsOnPage`, the card line-pick in `review-support.ts` and `docx-editor.ts`, the
-      hand-rolled header/footer twin of `reviewAnchorIndex`, `semantic-paint.ts` line drawings,
-      and `docx-editor-images.ts` drawing match. Each reads a fragment or a line whole
+## 6f. The consumers, run end to end
+
+Two shapes, each with a witness that fails without its fix.
+
+- [x] 6f.1 A review item's id names its PART. `@w:id` is unique within a part and Word numbers
+      each part from 1, so a body `w:ins` and a header `w:ins` by one author on one date made
+      one id for two decisions: the rail's `byId` map kept the last, so one card was
+      unreachable and its replies attached to the other
+- [x] 6f.2 `fragmentParagraphs` / `fragmentExtentOf` / `fragmentOwnsPosition` / `fragmentHolding`
+      answer for every paragraph a fragment DRAWS. An ordinary fragment answers from its own
+      `range` without touching a line, so nothing about a document without a merge moves
+- [x] 6f.3 `surface-structure.ts` `markerOf` — the caret in the absorbed half of a list item
+      read as "not a list item": the list controls greyed out mid-line, and Tab typed a tab
+- [x] 6f.4 `semantic-cell-selection.ts` `collectParagraphs` — a cell selection listed the
+      survivor alone, so deleting it left the absorbed member's text in an emptied cell
+- [x] 6f.5 `note-pagination.ts` `filterRefsOnPage` — a footnote reference in the absorbed half
+      matched no fragment, so the note never reached the page and the reader saw a mark with
+      no note. The offsets stay half-open: widening WHICH paragraphs answer must not widen
+      which offsets do
+- [x] 6f.6 The card line-pick in `review-support.ts` and `docx-editor.ts` — the join line's
+      `range` names one of two paragraphs, so an offset from the other was compared in the
+      wrong coordinate space. New `anchorLineY` reads the member
+- [x] 6f.7 The hand-rolled header/footer and note twins of `reviewAnchorIndex` in
+      `docx-editor.ts`, which never got the `held` set the body index has. Lifted whole into
+      `editor/docx-editor-anchors.ts`, which also kept the file under its `max-lines` cap
+- [x] 6f.8 `noteScopeIndexOf` — a ninth site the extraction turned up. A card in the absorbed
+      half of a merged note paragraph had no note scope, so activation set a body selection
+      from a note paragraph id and comment deletion passed no note id. Fixed by inspection;
+      the observable needs a footnote package fixture and has no dedicated test
+- [x] 6f.9 `output/semantic-paint.ts` — inline drawings were flushed in numeric offset order
+      across two paragraphs that both count from zero, so both advances opened in the first
+      half and none in the second
+- [x] 6f.10 `docx-editor-images.ts` — the image at the caret was matched on offset alone, so
+      the caret in one half selected the other half's picture
+- [x] 6f.11 Found on the way, and worse than what it was found under: a merged line's range
+      was computed from SPANS only, so a member opening with a picture began after it.
+      `lineAtPosition` was blind to drawing atoms for the same reason, so the caret on that
+      picture resolved to no line at all and no image could be selected there
 - [ ] 7.11 Enter inside the FIRST member copies the whole `w:pPr` onto both halves, so both
       carry the same `w:id`; accepting then collapses three paragraphs where Word gives two

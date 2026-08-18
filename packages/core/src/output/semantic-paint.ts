@@ -39,6 +39,7 @@ import type {
 } from '@docx-editor.dev/core/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
+import { lineSegments } from '../layout/line-segments.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import {
   collectUsedDrawingElementKeys,
@@ -1239,12 +1240,26 @@ function paintLine(
   // offset, so it opens its own — even with an identical target and thus the same content-keyed
   // id. Null while the current anchor is a typed link or there is none.
   let anchorFieldStart: number | null = null;
-  const inlineDrawings = [...(line.drawings ?? [])].sort((left, right) => left.start - right.start);
+  // Sorted in the order the READER meets them, which on an ordinary line is the offset order
+  // it always was. A resolved display mode draws two paragraphs on the join line and each
+  // counts its offsets from zero, so a plain numeric sort interleaved the two halves' images
+  // and flushed a spacer for the wrong one.
+  const segmentRank = new Map<string, number>();
+  for (const [rank, segment] of lineSegments(line).entries()) {
+    segmentRank.set(segment.paragraphId, rank);
+  }
+  const rankOf = (paragraphId: string): number => segmentRank.get(paragraphId) ?? 0;
+  const inlineDrawings = [...(line.drawings ?? [])].sort(
+    (left, right) =>
+      rankOf(left.paragraphId) - rankOf(right.paragraphId) || left.start - right.start
+  );
   let nextInlineDrawing = 0;
-  const appendDrawingAdvancesBefore = (modelOffset: number): void => {
+  const appendDrawingAdvancesBefore = (paragraphId: string, modelOffset: number): void => {
     while (
       nextInlineDrawing < inlineDrawings.length &&
-      inlineDrawings[nextInlineDrawing]!.start < modelOffset
+      (rankOf(inlineDrawings[nextInlineDrawing]!.paragraphId) < rankOf(paragraphId) ||
+        (rankOf(inlineDrawings[nextInlineDrawing]!.paragraphId) === rankOf(paragraphId) &&
+          inlineDrawings[nextInlineDrawing]!.start < modelOffset))
     ) {
       const drawing = inlineDrawings[nextInlineDrawing]!;
       const advance = Math.max(0, drawing.advanceEnd - drawing.advanceStart);
@@ -1293,7 +1308,7 @@ function paintLine(
   };
 
   for (const [spanIndex, span] of line.spans.entries()) {
-    appendDrawingAdvancesBefore(span.range.start);
+    appendDrawingAdvancesBefore(span.range.paragraphId, span.range.start);
     appendWrapAdvance(span);
     const band = Math.min(span.box.height + leading, line.box.height);
     const painted = paintSpan(document, span, ctx, band, leading);
@@ -1334,7 +1349,11 @@ function paintLine(
     }
     anchor.append(painted);
   }
-  appendDrawingAdvancesBefore(Number.POSITIVE_INFINITY);
+  // Past the end of the LAST segment, so a trailing image in either half still flushes.
+  appendDrawingAdvancesBefore(
+    lineSegments(line)[lineSegments(line).length - 1]?.paragraphId ?? line.range.paragraphId,
+    Number.POSITIVE_INFINITY
+  );
   // A span-less line (empty paragraph) has no inline content, and a browser will not
   // draw a caret at a position with no inline box to measure. The <br> is the anchor;
   // sizing it to the line keeps the caret the paragraph's font height, not the div's

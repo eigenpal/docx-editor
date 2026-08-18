@@ -398,7 +398,12 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
   const items = [...byAddress.values()].map(
     (entry): ReviewRevisionItem => ({
       kind: 'revision' as const,
-      id: `${entry.revisionKind}-${addressKey(entry.address)}`,
+      // The PART is in the id, because `@w:id` is unique only within one. A body `w:ins`
+      // and a header `w:ins` numbered 1 by the same author on the same date produced one
+      // id for two decisions: the rail's `byId` map kept whichever came last, so one card
+      // was unreachable, its replies were attached to the other, and React saw two
+      // children under one key.
+      id: `${entry.revisionKind}-${part.name}\u0000${addressKey(entry.address)}`,
       address: entry.address,
       addresses: [entry.address],
       revisionKind: entry.revisionKind,

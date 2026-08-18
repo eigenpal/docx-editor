@@ -68,10 +68,15 @@ export type ImageMutationPreconditions = Readonly<{
 
 function inlineDrawingAtOffset(
   line: ReturnType<typeof lineAtPosition>,
+  paragraphId: string,
   offset: number
 ): InlineDrawingRecord | null {
   if (!line) return null;
   for (const drawing of line.drawings ?? []) {
+    // The PARAGRAPH as well as the offset. A resolved display mode draws two paragraphs on
+    // the join line and both count from zero, so an offset alone selected the other half's
+    // image — and every later command addressed that one.
+    if (drawing.paragraphId !== paragraphId) continue;
     if (drawing.start === offset || drawing.start + 1 === offset) return drawing;
   }
   return null;
@@ -114,7 +119,7 @@ export function resolveSelectedDrawingRecord(
   const { anchor, head } = surface.state().selection;
   if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
   const line = lineAtPosition(surface.layout(), anchor.paragraphId, anchor.offset);
-  const inline = inlineDrawingAtOffset(line, anchor.offset);
+  const inline = inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset);
   if (inline) return inline;
   return anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset);
 }

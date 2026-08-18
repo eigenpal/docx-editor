@@ -372,6 +372,7 @@ export {
 // is the vocabulary and its pure helpers.
 export {
   activeReviewItem,
+  anchorLineY,
   reviewThreadRootOf,
   commentBodyText,
   commentInitials,

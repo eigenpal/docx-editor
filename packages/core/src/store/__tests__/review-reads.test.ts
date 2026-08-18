@@ -205,6 +205,54 @@ describe('the deep paragraph order reaches paragraphs the shallow one cannot', (
   });
 });
 
+describe('a card id names the part it lives in', () => {
+  const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+  function storyWith(name: string, body: string): OoxmlPart {
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}"><w:body>${body}</w:body></w:document>`,
+      { name, contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    return result.part;
+  }
+
+  // The SAME triple in two parts. `@w:id` is unique within a part and nowhere else, and
+  // Word numbers each part from 1, so this is what an ordinary document looks like — not a
+  // contrived collision.
+  const TRACKED =
+    `<w:p><w:ins w:id="1" w:author="QA" w:date="2024-01-01T00:00:00Z">` +
+    `<w:r><w:t>alpha</w:t></w:r></w:ins></w:p>`;
+
+  test('the body and a header do not share one card id', () => {
+    const body = storyWith('/word/document.xml', TRACKED);
+    const header = storyWith('/word/header1.xml', TRACKED);
+    const items = collectReviewItems({ storyPart: body, furnitureParts: [header] });
+    expect(items).toHaveLength(2);
+    expect(new Set(items.map((item) => item.id)).size).toBe(2);
+  });
+
+  test('a rail keyed by id can still reach both cards', () => {
+    // The failure this prevents is not the duplicate id itself: it is what every consumer
+    // does with one. A `Map` keyed by id kept the last writer, so the body's card was
+    // unreachable — no activation, no accept, no reject.
+    const body = storyWith('/word/document.xml', TRACKED);
+    const header = storyWith('/word/header1.xml', TRACKED);
+    const items = collectReviewItems({ storyPart: body, furnitureParts: [header] });
+    const byId = new Map(items.map((item) => [item.id, item]));
+    expect(byId.size).toBe(2);
+    const parts = [...byId.values()].map((item) =>
+      item.kind === 'revision' ? item.ranges[0]?.partName : undefined
+    );
+    expect(new Set(parts)).toEqual(new Set(['/word/document.xml', '/word/header1.xml']));
+  });
+
+  test('the id is stable across reads, because a React key and an active card depend on it', () => {
+    const body = storyWith('/word/document.xml', TRACKED);
+    expect(revisionItemsOf(body)[0]!.id).toBe(revisionItemsOf({ ...body })[0]!.id);
+  });
+});
+
 describe('the revision-card memo is keyed on the part, not just its root', () => {
   test('two parts sharing one root under different names each get their own part name', () => {
     const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

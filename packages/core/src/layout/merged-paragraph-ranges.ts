@@ -91,6 +91,15 @@ export function remapMergedLines(
   return lines.map((line) => {
     const spans = line.spans.map((span) => remapSpan(span, boundaries));
     const first = spans[0];
+    // Remapped FIRST, because the line's own extent has to count them: an inline drawing is
+    // an atom with an offset of its own, and a member that opens with a picture starts at the
+    // picture, not at its first character.
+    const remappedDrawings = line.drawings?.map((drawing) => {
+      const member = memberAt(boundaries, drawing.start);
+      return member
+        ? { ...drawing, paragraphId: member.paragraphId, start: drawing.start - member.base }
+        : drawing;
+    });
     // The extent this line holds OF THE PARAGRAPH IT NAMES: from its first span to the last
     // span that still belongs to that paragraph. Reading the last span of the line instead
     // reported the other member's end, and reading the first span's end truncated the range
@@ -98,19 +107,23 @@ export function remapMergedLines(
     const owned = first
       ? spans.filter((span) => span.range.paragraphId === first.range.paragraphId)
       : [];
+    const ownedDrawings = first
+      ? (remappedDrawings ?? []).filter(
+          (drawing) => drawing.paragraphId === first.range.paragraphId
+        )
+      : [];
     const lineRange: SourceRange = first
       ? {
           paragraphId: first.range.paragraphId,
-          start: first.range.start,
-          end: owned[owned.length - 1]!.range.end,
+          start: Math.min(first.range.start, ...ownedDrawings.map((drawing) => drawing.start)),
+          // An atom occupies ONE offset, so a trailing picture ends one past its own.
+          end: Math.max(
+            owned[owned.length - 1]!.range.end,
+            ...ownedDrawings.map((drawing) => drawing.start + 1)
+          ),
         }
       : remapRange(line.range, boundaries);
-    const drawings = line.drawings?.map((drawing) => {
-      const member = memberAt(boundaries, drawing.start);
-      return member
-        ? { ...drawing, paragraphId: member.paragraphId, start: drawing.start - member.base }
-        : drawing;
-    });
+    const drawings = remappedDrawings;
     // A deleted range is a pair of offsets with no paragraph of its own, so on a join line it
     // can only be expressed in one paragraph's terms. Kept for the paragraph the line names and
     // dropped for the other — and in practice empty either way, because a mode that merges has

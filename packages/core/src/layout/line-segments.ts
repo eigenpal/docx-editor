@@ -6,7 +6,12 @@
 import type { InlineDrawingRecord } from './drawing-layout.ts';
 import { documentOrderIndex } from './document-order.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
-import type { LineRecord, SemanticLayout, StyleSpanRecord } from './semantic-records.ts';
+import type {
+  LineRecord,
+  ParagraphFragmentRecord,
+  SemanticLayout,
+  StyleSpanRecord,
+} from './semantic-records.ts';
 import type { SemanticPosition } from './semantic-interaction.ts';
 
 /**
@@ -120,15 +125,102 @@ export function mergedPredecessorsOf(
 ): readonly string[] {
   for (const page of layout.pages) {
     for (const fragment of paragraphFragmentsOf(page)) {
-      const held: string[] = [];
-      for (const line of fragment.lines) {
-        for (const segment of lineSegments(line)) {
-          if (!held.includes(segment.paragraphId)) held.push(segment.paragraphId);
-        }
-      }
-      const at = held.indexOf(paragraphId);
-      if (at > 0) return held.slice(0, at).reverse();
+      const at = fragmentParagraphs(fragment).indexOf(paragraphId);
+      if (at > 0) return fragmentParagraphs(fragment).slice(0, at).reverse();
     }
   }
   return [];
+}
+
+/** Cached per fragment: the answer is a walk of every line, and most callers ask repeatedly. */
+const fragmentParagraphsCache = new WeakMap<ParagraphFragmentRecord, readonly string[]>();
+
+/**
+ * Every paragraph a fragment DRAWS, in visual order.
+ *
+ * `[fragment.paragraphId]` for an ordinary one, which is what it has always been. A resolved
+ * display mode publishes a merged run as one fragment under the SURVIVOR's identity, so the
+ * absorbed members have no fragment named after them. Anything keyed on `fragment.paragraphId`
+ * alone reports those paragraphs as unlaid — no marker, no anchor, no note reference — while
+ * the reader is looking straight at them.
+ */
+export function fragmentParagraphs(fragment: ParagraphFragmentRecord): readonly string[] {
+  const cached = fragmentParagraphsCache.get(fragment);
+  if (cached) return cached;
+  // From the LINES, so the order is the order the reader meets them, and the fragment's own
+  // name last if no line named it — an empty paragraph has no span to speak for it.
+  const held: string[] = [];
+  for (const line of fragment.lines ?? []) {
+    for (const segment of lineSegments(line)) {
+      if (!held.includes(segment.paragraphId)) held.push(segment.paragraphId);
+    }
+  }
+  if (!held.includes(fragment.paragraphId)) held.push(fragment.paragraphId);
+  fragmentParagraphsCache.set(fragment, held);
+  return held;
+}
+
+/**
+ * The extent of ONE paragraph inside a fragment, in that paragraph's own offsets.
+ *
+ * An ordinary fragment answers from its own `range`, unchanged and without touching a line —
+ * the shape every caller has always read. Only a merged fragment pays for the walk.
+ */
+export function fragmentExtentOf(
+  fragment: ParagraphFragmentRecord,
+  paragraphId: string
+): { readonly start: number; readonly end: number } | null {
+  const held = fragmentParagraphs(fragment);
+  if (held.length === 1) {
+    return held[0] === paragraphId
+      ? { start: fragment.range.start, end: fragment.range.end }
+      : null;
+  }
+  let start = Number.POSITIVE_INFINITY;
+  let end = Number.NEGATIVE_INFINITY;
+  for (const line of fragment.lines ?? []) {
+    const segment = lineSegmentFor(line, paragraphId);
+    if (!segment) continue;
+    start = Math.min(start, segment.start);
+    end = Math.max(end, segment.end);
+  }
+  return end >= start ? { start, end } : null;
+}
+
+/**
+ * Whether a fragment draws `paragraphId` at `offset`.
+ *
+ * Half-open — `[start, end)` — so a boundary offset belongs to the later fragment, which is
+ * the affinity every fragment-ownership question in the engine already uses.
+ */
+export function fragmentOwnsPosition(
+  fragment: ParagraphFragmentRecord,
+  paragraphId: string,
+  offset: number
+): boolean {
+  const extent = fragmentExtentOf(fragment, paragraphId);
+  return extent !== null && offset >= extent.start && offset < extent.end;
+}
+
+/**
+ * The fragment that DRAWS a paragraph, wherever it is nested, or null.
+ *
+ * The fast path is the old lookup by name and returns on the first hit; the walk of the lines
+ * runs only when no fragment claims the id, which is the merged case.
+ */
+export function fragmentHolding(
+  layout: SemanticLayout,
+  paragraphId: string
+): ParagraphFragmentRecord | null {
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOf(page)) {
+      if (fragment.paragraphId === paragraphId) return fragment;
+    }
+  }
+  for (const page of layout.pages) {
+    for (const fragment of paragraphFragmentsOf(page)) {
+      if (fragmentParagraphs(fragment).includes(paragraphId)) return fragment;
+    }
+  }
+  return null;
 }
