@@ -95,8 +95,12 @@ const DocxEditorMenuRoot = defineComponent({
     t: { type: Function as PropType<ToolbarTranslate>, default: undefined },
     fileName: { type: String, default: undefined },
     onOpen: { type: Function as PropType<() => void>, default: undefined },
+    /** Prefer over {@link onOpen} — Vue TSX treats `onOpen` as a listener. */
+    openHandler: { type: Function as PropType<() => void>, default: undefined },
     onOpenFile: { type: Function as PropType<(file: File) => void>, default: undefined },
     onSave: { type: Function as PropType<() => void>, default: undefined },
+    /** Prefer over {@link onSave} — Vue TSX treats `onSave` as a listener. */
+    saveHandler: { type: Function as PropType<() => void>, default: undefined },
     onPageSetup: { type: Function as PropType<() => void>, default: undefined },
     onReportIssue: { type: Function as PropType<() => void>, default: undefined },
     reportIssue: { type: Boolean, default: undefined },
@@ -156,10 +160,10 @@ const DocxEditorMenuRoot = defineComponent({
     };
 
     const resolvedOpen = computed(() =>
-      editorRef.value ? (props.onOpen ?? packagedOpen) : undefined
+      editorRef.value ? (props.openHandler ?? props.onOpen ?? packagedOpen) : undefined
     );
     const resolvedSave = computed(() =>
-      editorRef.value ? (props.onSave ?? packagedSave) : undefined
+      editorRef.value ? (props.saveHandler ?? props.onSave ?? packagedSave) : undefined
     );
     const resolvedPageSetup = computed(() =>
       editorRef.value ? (props.onPageSetup ?? packagedPageSetup) : undefined

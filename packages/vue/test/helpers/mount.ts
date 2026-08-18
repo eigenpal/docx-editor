@@ -65,6 +65,7 @@ export async function mountSugarAsync(
   const container = document.createElement('div');
   document.body.appendChild(container);
   const ready: DocxEditorInstance[] = [];
+  const { onSave, onOpen, ...rest } = props;
   const app = createApp({
     render: () =>
       h(
@@ -73,7 +74,9 @@ export async function mountSugarAsync(
           document: SOURCE,
           onReady: (editor: import('@docx-editor.dev/core/contracts/editor').Editor) =>
             ready.push(editor as DocxEditorInstance),
-          ...props,
+          ...rest,
+          ...(onSave !== undefined ? { saveHandler: onSave } : {}),
+          ...(onOpen !== undefined ? { openHandler: onOpen } : {}),
         },
         slots
       ),

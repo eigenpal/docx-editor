@@ -96,26 +96,42 @@ describe('DocxEditor sugar host', () => {
 });
 
 describe('DocxEditor sugar emits', () => {
-  test('forwards save emit to the host listener', async () => {
+  function openFileMenu(container: HTMLElement): void {
+    const trigger = container.querySelector(
+      '[data-menu="file"] .docx-menubar__trigger'
+    ) as HTMLButtonElement | null;
+    if (!trigger) throw new Error('file menu trigger not found');
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  }
+
+  function clickMenuRow(container: HTMLElement, slot: string): void {
+    const row = container.querySelector(`[data-slot="${slot}"]`) as HTMLButtonElement | null;
+    if (!row) throw new Error(`menu row ${slot} not found`);
+    row.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    row.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  }
+
+  test('forwards save when File > Save is chosen', async () => {
     const saves: number[] = [];
     const view = await mountSugarAsync({ onSave: () => saves.push(1) });
     await view.flush();
-    const host = view.app._instance?.subTree?.component?.proxy as {
-      $emit?: (event: string) => void;
-    };
-    host?.$emit?.('save');
+    openFileMenu(view.container);
+    await view.flush();
+    clickMenuRow(view.container, 'file.save');
+    await view.flush();
     expect(saves).toEqual([1]);
     view.unmount();
   });
 
-  test('forwards open emit to the host listener', async () => {
+  test('forwards open when File > Open is chosen', async () => {
     const opens: number[] = [];
     const view = await mountSugarAsync({ onOpen: () => opens.push(1) });
     await view.flush();
-    const host = view.app._instance?.subTree?.component?.proxy as {
-      $emit?: (event: string) => void;
-    };
-    host?.$emit?.('open');
+    openFileMenu(view.container);
+    await view.flush();
+    clickMenuRow(view.container, 'file.open');
     expect(opens).toEqual([1]);
     view.unmount();
   });

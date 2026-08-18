@@ -186,6 +186,10 @@ const docxEditorFrameProps = {
   modules: { type: Array as PropType<readonly EditorModule[]>, default: undefined },
   onSave: { type: Function as PropType<() => void>, default: undefined },
   onOpen: { type: Function as PropType<() => void>, default: undefined },
+  /** Prefer over {@link onSave} when passing from TSX — `onSave` binds as a listener. */
+  saveHandler: { type: Function as PropType<() => void>, default: undefined },
+  /** Prefer over {@link onOpen} when passing from TSX — `onOpen` binds as a listener. */
+  openHandler: { type: Function as PropType<() => void>, default: undefined },
   onTitleChange: { type: Function as PropType<(title: string) => void>, default: undefined },
 } as const;
 
@@ -194,6 +198,8 @@ const docxEditorSugarProps = {
   i18n: { type: Object as PropType<DocxEditorProps['i18n']>, default: undefined },
   onSave: { type: Function as PropType<() => void>, default: undefined },
   onOpen: { type: Function as PropType<() => void>, default: undefined },
+  saveHandler: { type: Function as PropType<() => void>, default: undefined },
+  openHandler: { type: Function as PropType<() => void>, default: undefined },
   onTitleChange: { type: Function as PropType<(title: string) => void>, default: undefined },
 } as const;
 
@@ -203,8 +209,20 @@ const DocxEditorFrame = defineComponent({
   props: docxEditorFrameProps,
   emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
   setup(props, { attrs, emit, slots, expose }) {
-    const hostSave = computed(() => props.onSave ?? (attrs.onSave as (() => void) | undefined));
-    const hostOpen = computed(() => props.onOpen ?? (attrs.onOpen as (() => void) | undefined));
+    const hostSave = computed(
+      () =>
+        props.saveHandler ??
+        props.onSave ??
+        (attrs.saveHandler as (() => void) | undefined) ??
+        (attrs.onSave as (() => void) | undefined)
+    );
+    const hostOpen = computed(
+      () =>
+        props.openHandler ??
+        props.onOpen ??
+        (attrs.openHandler as (() => void) | undefined) ??
+        (attrs.onOpen as (() => void) | undefined)
+    );
     const hostTitleChange = computed(
       () => props.onTitleChange ?? (attrs.onTitleChange as ((title: string) => void) | undefined)
     );
@@ -329,8 +347,11 @@ const DocxEditorFrame = defineComponent({
                           value: props.title ?? '',
                           placeholder: translate('titleBar.untitled'),
                           style: TITLE_INPUT_STYLE,
-                          onInput: (event: Event) =>
-                            emit('titleChange', (event.target as HTMLInputElement).value),
+                          onInput: (event: Event) => {
+                            const value = (event.target as HTMLInputElement).value;
+                            hostTitleChange.value?.(value);
+                            emit('titleChange', value);
+                          },
                         })
                       : h(
                           'span',
@@ -341,8 +362,8 @@ const DocxEditorFrame = defineComponent({
                       ? h(DocxEditorMenu, {
                           t: translate,
                           ...(props.title !== undefined ? { fileName: props.title } : {}),
-                          ...(hostOpen.value !== undefined ? { onOpen: () => emit('open') } : {}),
-                          ...(hostSave.value !== undefined ? { onSave: () => emit('save') } : {}),
+                          ...(hostOpen.value !== undefined ? { openHandler: hostOpen.value } : {}),
+                          ...(hostSave.value !== undefined ? { saveHandler: hostSave.value } : {}),
                           ...menuProps,
                         })
                       : null,
@@ -398,7 +419,19 @@ const DocxEditorImpl = defineComponent({
   inheritAttrs: false,
   props: docxEditorSugarProps,
   emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
-  setup(props, { emit, slots, expose }) {
+  setup(props, { attrs, emit, slots, expose }) {
+    const hostSaveProp = () =>
+      props.saveHandler ??
+      props.onSave ??
+      (attrs.saveHandler as (() => void) | undefined) ??
+      (attrs.onSave as (() => void) | undefined);
+    const hostOpenProp = () =>
+      props.openHandler ??
+      props.onOpen ??
+      (attrs.openHandler as (() => void) | undefined) ??
+      (attrs.onOpen as (() => void) | undefined);
+    const hostTitleChangeProp = () =>
+      props.onTitleChange ?? (attrs.onTitleChange as ((title: string) => void) | undefined);
     const api = shallowRef<DocxEditorRef | null>(null);
     expose({
       load: (document) => api.value?.load(document),
@@ -433,11 +466,26 @@ const DocxEditorImpl = defineComponent({
               onReady: (editor: unknown) => emit('ready', editor),
               onChange: (change: unknown) => emit('change', change),
               onFontError: (error: unknown) => emit('fontError', error),
-              onSave: props.onSave !== undefined ? () => emit('save') : undefined,
-              onOpen: props.onOpen !== undefined ? () => emit('open') : undefined,
+              saveHandler:
+                hostSaveProp() !== undefined
+                  ? () => {
+                      hostSaveProp()!();
+                      emit('save');
+                    }
+                  : undefined,
+              openHandler:
+                hostOpenProp() !== undefined
+                  ? () => {
+                      hostOpenProp()!();
+                      emit('open');
+                    }
+                  : undefined,
               onTitleChange:
-                props.onTitleChange !== undefined
-                  ? (title: string) => emit('titleChange', title)
+                hostTitleChangeProp() !== undefined
+                  ? (title: string) => {
+                      hostTitleChangeProp()!(title);
+                      emit('titleChange', title);
+                    }
                   : undefined,
             } as Record<string, unknown>,
             {

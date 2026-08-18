@@ -12,16 +12,22 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { useEditorCommand } from '../src/editor/useEditorCommand';
-import { SEARCH_MATCH_LIMIT as VUE_SEARCH_LIMIT } from '../src/editor/navigation/useDocumentSearch';
+import { useZoom } from '../src/editor/useZoom';
+import {
+  SEARCH_MATCH_LIMIT,
+  SEARCH_DEBOUNCE_MS,
+  useDocumentSearch,
+} from '../src/editor/navigation/useDocumentSearch';
+import { usePageSetup } from '../src/editor/usePageSetup';
 import { stepZoomLevel as vueStepZoomLevel } from '../src/editor/zoom-levels';
 import {
   COMPOSABLE_PARITY_CASES,
   DIFFERENTIAL_SOURCE,
+  OFF_LADDER_ZOOM,
+  SEARCH_HEAVY_SOURCE,
   offLadderZoomIn,
 } from '../../react/test/cross-adapter-composable-cases';
 
-const { SEARCH_MATCH_LIMIT: REACT_SEARCH_LIMIT } =
-  await import('../../react/src/editor/navigation/useDocumentSearch.ts');
 const { stepZoomLevel } = await import('../../react/src/editor/zoom-levels.ts');
 
 async function flush(): Promise<void> {
@@ -30,25 +36,34 @@ async function flush(): Promise<void> {
   await new Promise((r) => setTimeout(r, 150));
 }
 
-async function mountVue(onReady: (editor: Editor) => void) {
+async function mountVue(
+  source: Uint8Array,
+  probe: ReturnType<typeof defineComponent>
+): Promise<{ app: ReturnType<typeof createApp>; editor: () => DocxEditorInstance }> {
+  let editor: DocxEditorInstance | null = null;
   const container = document.createElement('div');
   document.body.appendChild(container);
   const app = createApp({
     render: () =>
       h(
         DocxEditorRoot,
-        { document: DIFFERENTIAL_SOURCE, onReady },
+        {
+          document: source,
+          onReady: (instance: Editor) => {
+            editor = instance as DocxEditorInstance;
+          },
+        },
         {
           default: () =>
             h(DocxEditorViewport, null, {
-              default: () => h(DocxEditorContent),
+              default: () => [h(DocxEditorContent), h(probe)],
             }),
         }
       ),
   });
   app.mount(container);
   await flush();
-  return { app, container };
+  return { app, editor: () => editor! };
 }
 
 afterEach(() => {
@@ -59,71 +74,110 @@ describe('cross-adapter differential (Vue harness)', () => {
   for (const parityCase of COMPOSABLE_PARITY_CASES) {
     test(parityCase.id, async () => {
       if (parityCase.composable === 'useEditorCommand') {
-        let editor: DocxEditorInstance | null = null;
-        const { app } = await mountVue((instance) => {
-          editor = instance as DocxEditorInstance;
+        let binding: ReturnType<typeof useEditorCommand> | null = null;
+        const Probe = defineComponent({
+          setup() {
+            binding = useEditorCommand(parityCase.slot);
+            return () => null;
+          },
         });
+        const { app, editor } = await mountVue(DIFFERENTIAL_SOURCE, Probe);
         try {
-          let binding: ReturnType<typeof useEditorCommand> | null = null;
-          const Probe = defineComponent({
-            setup() {
-              binding = useEditorCommand(parityCase.slot);
-              return () => null;
-            },
-          });
-          const probeApp = createApp({
-            render: () =>
-              h(
-                DocxEditorRoot,
-                { document: DIFFERENTIAL_SOURCE },
-                {
-                  default: () =>
-                    h(DocxEditorViewport, null, {
-                      default: () => [h(DocxEditorContent), h(Probe)],
-                    }),
-                }
-              ),
-          });
-          const probeContainer = document.createElement('div');
-          document.body.appendChild(probeContainer);
-          probeApp.mount(probeContainer);
-          await flush();
           expect(() =>
             parityCase.assert(
               {
-                isEnabled: (binding as unknown as { isEnabled: { value: boolean } }).isEnabled
-                  .value,
-                isActive: (binding as unknown as { isActive: { value: boolean } }).isActive.value,
-                disabledReason: (binding as unknown as { disabledReason: { value: string | null } })
-                  .disabledReason.value,
+                isEnabled: binding!.isEnabled.value,
+                isActive: binding!.isActive.value,
+                disabledReason: binding!.disabledReason.value,
               },
-              editor!
+              editor()
             )
           ).not.toThrow();
-          probeApp.unmount();
-          probeContainer.remove();
         } finally {
           app.unmount();
         }
         return;
       }
 
-      let editor: DocxEditorInstance | null = null;
-      const { app } = await mountVue((instance) => {
-        editor = instance as DocxEditorInstance;
-      });
-      try {
-        if (parityCase.composable === 'useZoom') {
-          expect(stepZoomLevel(0.73, 'in')).toBe(vueStepZoomLevel(0.73, 'in'));
-          expect(() => parityCase.assert(editor!, offLadderZoomIn())).not.toThrow();
-        } else if (parityCase.composable === 'useDocumentSearch') {
-          expect(REACT_SEARCH_LIMIT).toBe(VUE_SEARCH_LIMIT);
-          expect(() => parityCase.assert(VUE_SEARCH_LIMIT)).not.toThrow();
-        } else if (parityCase.composable === 'usePageSetup') {
-          expect(() => parityCase.assert(editor!)).not.toThrow();
+      if (parityCase.composable === 'useZoom') {
+        let zoomApi: ReturnType<typeof useZoom> | null = null;
+        const Probe = defineComponent({
+          setup() {
+            zoomApi = useZoom();
+            return () => null;
+          },
+        });
+        const { app, editor } = await mountVue(DIFFERENTIAL_SOURCE, Probe);
+        try {
+          editor().setZoom(OFF_LADDER_ZOOM);
+          await flush();
+          zoomApi!.zoomIn();
+          await flush();
+          expect(stepZoomLevel(OFF_LADDER_ZOOM, 'in')).toBe(
+            vueStepZoomLevel(OFF_LADDER_ZOOM, 'in')
+          );
+          expect(() =>
+            parityCase.assert({
+              scale: zoomApi!.zoom.value,
+              canZoomIn: zoomApi!.canZoomIn.value,
+              expectedStepIn: offLadderZoomIn(),
+            })
+          ).not.toThrow();
+        } finally {
+          app.unmount();
         }
-      } finally {
-        app.unmount();
+        return;
+      }
+
+      if (parityCase.composable === 'useDocumentSearch') {
+        let searchApi: ReturnType<typeof useDocumentSearch> | null = null;
+        const Probe = defineComponent({
+          setup() {
+            searchApi = useDocumentSearch();
+            return () => null;
+          },
+        });
+        const { app } = await mountVue(SEARCH_HEAVY_SOURCE, Probe);
+        try {
+          searchApi!.setQuery('a');
+          await new Promise((r) => setTimeout(r, SEARCH_DEBOUNCE_MS + 100));
+          await flush();
+          expect(() =>
+            parityCase.assert({
+              truncated: searchApi!.truncated.value,
+              matchCount: searchApi!.matches.value.length,
+              limit: SEARCH_MATCH_LIMIT,
+            })
+          ).not.toThrow();
+        } finally {
+          app.unmount();
+        }
+        return;
+      }
+
+      if (parityCase.composable === 'usePageSetup') {
+        let pageSetupApi: ReturnType<typeof usePageSetup> | null = null;
+        const Probe = defineComponent({
+          setup() {
+            pageSetupApi = usePageSetup();
+            return () => null;
+          },
+        });
+        const { app, editor } = await mountVue(DIFFERENTIAL_SOURCE, Probe);
+        try {
+          const widthBefore = editor().getPageSetup()!.pageWidthTwips;
+          pageSetupApi!.apply({ pageWidthTwips: widthBefore + 144 });
+          await flush();
+          const widthAfterApply = editor().getPageSetup()!.pageWidthTwips;
+          editor().exec({ type: 'undo' });
+          await flush();
+          const widthAfterUndo = editor().getPageSetup()!.pageWidthTwips;
+          expect(() =>
+            parityCase.assert({ widthBefore, widthAfterApply, widthAfterUndo })
+          ).not.toThrow();
+        } finally {
+          app.unmount();
+        }
       }
     });
   }

@@ -1,10 +1,11 @@
-import { computed, shallowRef, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue';
+import { computed, shallowRef, toValue, watch, type ComputedRef } from 'vue';
 import {
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
@@ -35,8 +36,10 @@ function stableKey(command: EditorCommand): string {
 }
 
 /** @public */
-export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState {
-  const reactiveTarget = target as MaybeRefOrGetter<ChromeSlotId | EditorCommand>;
+export function useEditorCommand(
+  target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>
+): EditorCommandState {
+  const reactiveTarget = target;
   const editorRef = useDocxEditor();
   const latest = shallowRef(toValue(reactiveTarget));
 

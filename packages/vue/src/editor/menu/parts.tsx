@@ -14,7 +14,7 @@ import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
+import { useMenuContext, useMenuLabel, type MenuContextValue, type MenuId } from './menu-context';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsert } from '../images/ImageInsert';
 //
@@ -30,9 +30,9 @@ import { useImageInsert } from '../images/ImageInsert';
 // the menu context, which the root resolves once — host override, else the packaged
 // default — so the row itself holds no policy.
 
-/** Vue reserves `slot`; spread onto MenuRow as data-slot. */
-export function menuRowSlot(id: string): { 'data-slot': string } {
-  return { 'data-slot': id };
+/** Vue reserves `slot` for vnode slots; MenuRow accepts `rowSlot` and paints `data-slot`. */
+export function menuRowSlot(id: string): { rowSlot: string } {
+  return { rowSlot: id };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,9 +65,13 @@ export interface MenuRowProps {
    */
   selected?: true;
   /** Stable marker for hosts, tests and e2e — pass via {@link menuRowSlot}. */
-  'data-slot'?: string;
-  /** React parity — maps to `data-slot` at runtime. */
+  rowSlot?: string;
+  /** React parity alias for {@link rowSlot}. */
   slot?: string;
+  /** @deprecated Pass {@link rowSlot} — `data-slot` does not bind through Vue TSX spread. */
+  'data-slot'?: string;
+  /** Row activation handler. Prefer this name — Vue TSX treats `onSelect` as a listener. */
+  selectHandler?: () => void;
   onSelect?: () => void;
   className?: string;
   children?: DocxEditorChildren;
@@ -90,13 +94,14 @@ export const MenuRow = defineComponent({
     title: { type: String, default: undefined },
     active: { type: Boolean, default: undefined },
     selected: { type: Boolean, default: undefined },
+    rowSlot: { type: String, default: undefined },
+    slot: { type: String, default: undefined },
     'data-slot': { type: String, default: undefined },
+    selectHandler: { type: Function as PropType<() => void>, default: undefined },
     onSelect: { type: Function as PropType<() => void>, default: undefined },
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
-    const { icon, shortcut, disabled, title, active, selected, onSelect, className } = props;
-    const dataSlot = (props as MenuRowProps)['data-slot'];
     const reasonId = `docx-${Math.random().toString(36).slice(2, 9)}`;
     // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
     // order and stops firing pointer events, so its `title` never renders and a screen
@@ -104,43 +109,49 @@ export const MenuRow = defineComponent({
     // disabled, with the reason" design delivering nothing to the users who most need it.
     // The APG says a disabled menu item stays focusable for exactly this reason. The reason
     // itself rides `aria-describedby`, so it is ANNOUNCED rather than hover-only.
-    const describe = disabled && title ? reasonId : undefined;
-    const role =
-      active === undefined
-        ? 'menuitem'
-        : selected === undefined
-          ? 'menuitemcheckbox'
-          : 'menuitemradio';
-    return () => (
-      <button
-        type="button"
-        role={role}
-        class={`docx-toolbar__menu-item docx-menubar__item${className ? ` ${className}` : ''}`}
-        // Every row is reachable by the menu's own arrow keys, never by Tab: one tab stop
-        // per menu, which is the menu pattern (and what keeps a 36-cell grid from being 36
-        // tab stops).
-        tabindex={-1}
-        {...(dataSlot ? { 'data-slot': dataSlot } : {})}
-        {...(active ? { 'data-active': '' } : {})}
-        {...(disabled ? { 'data-disabled': '', 'aria-disabled': true } : {})}
-        {...(active !== undefined ? { 'aria-checked': active } : {})}
-        {...(describe ? { 'aria-describedby': describe } : {})}
-        {...(title ? { title } : {})}
-        onMousedown={guardToolbarMousedown}
-        onClick={disabled ? undefined : onSelect}
-      >
-        <span class="docx-menubar__item-icon" aria-hidden="true">
-          {icon}
-        </span>
-        <span class="docx-menubar__item-label">{slots.default?.()}</span>
-        {shortcut ? <span class="docx-menubar__item-shortcut">{shortcut}</span> : null}
-        {describe ? (
-          <span id={reasonId} class="docx-editor-sr-only">
-            {title}
+    return () => {
+      const { icon, shortcut, disabled, title, active, selected, className } = props;
+      const onSelect = props.selectHandler ?? props.onSelect;
+      const dataSlot =
+        props.rowSlot ?? props.slot ?? (props as MenuRowProps)['data-slot'] ?? undefined;
+      const describe = disabled && title ? reasonId : undefined;
+      const role =
+        active === undefined
+          ? 'menuitem'
+          : selected === undefined
+            ? 'menuitemcheckbox'
+            : 'menuitemradio';
+      return (
+        <button
+          type="button"
+          role={role}
+          class={`docx-toolbar__menu-item docx-menubar__item${className ? ` ${className}` : ''}`}
+          // Every row is reachable by the menu's own arrow keys, never by Tab: one tab stop
+          // per menu, which is the menu pattern (and what keeps a 36-cell grid from being 36
+          // tab stops).
+          tabindex={-1}
+          {...(dataSlot ? { 'data-slot': dataSlot } : {})}
+          {...(active ? { 'data-active': '' } : {})}
+          {...(disabled ? { 'data-disabled': '', 'aria-disabled': true } : {})}
+          {...(active !== undefined ? { 'aria-checked': active } : {})}
+          {...(describe ? { 'aria-describedby': describe } : {})}
+          {...(title ? { title } : {})}
+          onMousedown={guardToolbarMousedown}
+          onClick={disabled ? undefined : onSelect}
+        >
+          <span class="docx-menubar__item-icon" aria-hidden="true">
+            {icon}
           </span>
-        ) : null}
-      </button>
-    );
+          <span class="docx-menubar__item-label">{slots.default?.()}</span>
+          {shortcut ? <span class="docx-menubar__item-shortcut">{shortcut}</span> : null}
+          {describe ? (
+            <span id={reasonId} class="docx-editor-sr-only">
+              {title}
+            </span>
+          ) : null}
+        </button>
+      );
+    };
   },
 });
 
@@ -237,10 +248,11 @@ export const MenuItem = defineComponent({
   setup(props) {
     const slotId = computed(() => props.slot as ChromeSlotId);
     const slotCmd = useEditorCommand(slotId as unknown as ChromeSlotId);
-    const { setOpenMenu } = useMenuContext();
+    const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
       if (props.hidden) return null;
+      const { setOpenMenu } = menuContext.value;
       const slot = slotId.value;
       const control = chromeControlForSlot(slot);
       const text = label(props.labelKey ?? control?.labelKey ?? slot);
@@ -256,7 +268,7 @@ export const MenuItem = defineComponent({
           {...(slotCmd.disabledReason.value ? { title: slotCmd.disabledReason.value } : {})}
           {...(isToggle ? { active: slotCmd.isActive.value } : {})}
           {...(isRadio ? { selected: true as const } : {})}
-          onSelect={() => {
+          selectHandler={() => {
             slotCmd.execute();
             setOpenMenu(null);
           }}
@@ -293,7 +305,7 @@ function defineActionRow(
   slot: ChromeSlotId,
   labelKey: string | undefined,
   shortcutKey: string | undefined,
-  pick: (context: ReturnType<typeof useMenuContext>) => (() => void) | undefined
+  pick: (context: MenuContextValue) => (() => void) | undefined
 ) {
   const Part = defineComponent({
     name: `MenuAction_${slot}`,
@@ -302,9 +314,10 @@ function defineActionRow(
       hidden: { type: Boolean, default: undefined },
     },
     setup(props) {
-      const context = useMenuContext();
+      const menuContext = useMenuContext();
       const label = useMenuLabel();
       return () => {
+        const context = menuContext.value;
         const handler = pick(context);
         if (props.hidden) return null;
         const control = chromeControlForSlot(slot);
@@ -315,7 +328,7 @@ function defineActionRow(
             icon={chromeIcon(control?.paths) ?? undefined}
             {...(shortcutKey ? { shortcut: label(shortcutKey) } : {})}
             disabled={!handler}
-            onSelect={() => {
+            selectHandler={() => {
               handler?.();
               context.setOpenMenu(null);
             }}
@@ -356,10 +369,11 @@ const MenuPageSetupImpl = defineComponent({
   },
   setup(props) {
     const editorRef = useDocxEditor();
-    const context = useMenuContext();
+    const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
       if (props.hidden) return null;
+      const context = menuContext.value;
       const probe = chromeProbeForSlot('file.pageSetup');
       const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
       const engineOk = allowed?.ok === true;
@@ -373,7 +387,7 @@ const MenuPageSetupImpl = defineComponent({
           icon={chromeIcon(control?.paths) ?? undefined}
           disabled={!enabled}
           {...(engineReason ? { title: engineReason } : {})}
-          onSelect={() => {
+          selectHandler={() => {
             context.onPageSetup?.();
             context.setOpenMenu(null);
           }}
@@ -398,10 +412,11 @@ const MenuImageInsertImpl = defineComponent({
   },
   setup(props) {
     const { openFilePicker, isEnabled, disabledReason } = useImageInsert();
-    const context = useMenuContext();
+    const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
       if (props.hidden) return null;
+      const context = menuContext.value;
       const control = chromeControlForSlot('image.insert');
       const text = label(control?.labelKey ?? 'toolbar.image');
       return (
@@ -410,7 +425,7 @@ const MenuImageInsertImpl = defineComponent({
           icon={chromeIcon(control?.paths) ?? undefined}
           disabled={!isEnabled}
           {...(disabledReason ? { title: disabledReason } : {})}
-          onSelect={() => {
+          selectHandler={() => {
             openFilePicker();
             context.setOpenMenu(null);
           }}
@@ -605,7 +620,7 @@ export const Menu = defineComponent({
     preset: { type: Boolean, default: true },
   },
   setup(props, { slots }) {
-    const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
+    const menuContext = useMenuContext();
     const label = useMenuLabel();
     const panelId = `docx-${Math.random().toString(36).slice(2, 9)}`;
     const triggerRef = ref<HTMLButtonElement | null>(null);
@@ -614,12 +629,13 @@ export const Menu = defineComponent({
     const switchedByHover = ref(false);
 
     const closeToTrigger = () => {
-      setOpenMenu(null);
+      menuContext.value.setOpenMenu(null);
       triggerRef.value?.focus();
     };
 
     return () => {
       if (props.hidden) return null;
+      const { openMenu, setOpenMenu, activeMenu } = menuContext.value;
       const registry = CHROME_MENUS.find((menu) => menu.id === props.id);
       const open = openMenu === props.id;
       const text = props.label ?? label(props.labelKey ?? registry?.labelKey ?? props.id);
@@ -784,15 +800,16 @@ const MenuReportIssueImpl = defineComponent({
     onSelect: { type: Function as PropType<() => void>, default: undefined },
   },
   setup(props) {
-    const { setOpenMenu, onReportIssue, reportIssue } = useMenuContext();
+    const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
+      const { setOpenMenu, onReportIssue, reportIssue } = menuContext.value;
       if (props.hidden || reportIssue === false) return null;
       const run = props.onSelect ?? onReportIssue ?? openReportIssue;
       return (
         <MenuRow
           {...menuRowSlot('help.reportIssue')}
-          onSelect={() => {
+          selectHandler={() => {
             run();
             setOpenMenu(null);
           }}
@@ -836,8 +853,9 @@ const MenuHelpImpl = defineComponent({
   name: 'MenuHelpImpl',
   inheritAttrs: false,
   setup(_, { attrs, slots }) {
-    const { reportIssue } = useMenuContext();
+    const menuContext = useMenuContext();
     return () => {
+      const { reportIssue } = menuContext.value;
       if (slots.default === undefined && reportIssue === false) return null;
       return (
         <Menu id="help" {...attrs}>

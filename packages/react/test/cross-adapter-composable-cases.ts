@@ -30,6 +30,10 @@ export const DIFFERENTIAL_SOURCE = differentialDocx(
   '<w:p><w:r><w:t>parity differential</w:t></w:r></w:p>'
 );
 
+export const SEARCH_HEAVY_SOURCE = differentialDocx(
+  `<w:p><w:r><w:t>${'a '.repeat(5000)}</w:t></w:r></w:p>`
+);
+
 export const DIFFERENTIAL_SLOTS = CHROME_GROUPS.flatMap((group) =>
   group.controls.map((control) => chromeSlotId(group, control))
 );
@@ -40,34 +44,57 @@ export function offLadderZoomIn(): number | null {
   return stepZoomLevel(OFF_LADDER_ZOOM, 'in');
 }
 
+export interface CommandObservation {
+  readonly isEnabled: boolean;
+  readonly isActive: boolean;
+  readonly disabledReason: string | null;
+}
+
+export interface ZoomObservation {
+  readonly scale: number;
+  readonly canZoomIn: boolean;
+  readonly expectedStepIn: number | null;
+}
+
+export interface SearchObservation {
+  readonly truncated: boolean;
+  readonly matchCount: number;
+  readonly limit: number;
+}
+
+export interface PageSetupObservation {
+  readonly widthBefore: number;
+  readonly widthAfterApply: number;
+  readonly widthAfterUndo: number;
+}
+
+export type ComposableObservation =
+  | { readonly kind: 'useEditorCommand'; readonly command: CommandObservation }
+  | { readonly kind: 'useZoom'; readonly zoom: ZoomObservation }
+  | { readonly kind: 'useDocumentSearch'; readonly search: SearchObservation }
+  | { readonly kind: 'usePageSetup'; readonly pageSetup: PageSetupObservation };
+
 export type ComposableParityCase =
   | {
       readonly id: string;
       readonly composable: 'useEditorCommand';
       readonly slot: ChromeSlotId;
-      readonly assert: (
-        binding: {
-          isEnabled: boolean;
-          isActive: boolean;
-          disabledReason: string | null;
-        },
-        editor: DocxEditorInstance
-      ) => void;
+      readonly assert: (observation: CommandObservation, editor: DocxEditorInstance) => void;
     }
   | {
       readonly id: string;
       readonly composable: 'useZoom';
-      readonly assert: (editor: DocxEditorInstance, stepIn: number | null) => void;
+      readonly assert: (observation: ZoomObservation) => void;
     }
   | {
       readonly id: string;
       readonly composable: 'useDocumentSearch';
-      readonly assert: (limit: number) => void;
+      readonly assert: (observation: SearchObservation) => void;
     }
   | {
       readonly id: string;
       readonly composable: 'usePageSetup';
-      readonly assert: (editor: DocxEditorInstance) => void;
+      readonly assert: (observation: PageSetupObservation) => void;
     };
 
 export const COMPOSABLE_PARITY_CASES: readonly ComposableParityCase[] = [
@@ -93,32 +120,39 @@ export const COMPOSABLE_PARITY_CASES: readonly ComposableParityCase[] = [
   {
     id: 'useZoom:offLadder',
     composable: 'useZoom',
-    assert(editor, stepIn) {
-      editor.setZoom(OFF_LADDER_ZOOM);
-      editor.setZoom(stepIn ?? OFF_LADDER_ZOOM);
-      if (editor.snapshot().zoom !== stepIn) {
-        throw new Error('off-ladder zoom step mismatch');
+    assert(observation) {
+      const expected = offLadderZoomIn();
+      if (expected === null) throw new Error('expected a step-up rung');
+      if (observation.scale !== expected) {
+        throw new Error(`off-ladder zoom step mismatch: ${observation.scale} vs ${expected}`);
+      }
+      if (observation.expectedStepIn !== expected) {
+        throw new Error('expectedStepIn disagrees with ladder');
+      }
+      if (!observation.canZoomIn) {
+        throw new Error('canZoomIn should stay true after stepping up');
       }
     },
   },
   {
     id: 'useDocumentSearch:cap',
     composable: 'useDocumentSearch',
-    assert(limit) {
-      if (!(limit > 0)) throw new Error('search cap must be positive');
+    assert(observation) {
+      if (!observation.truncated) throw new Error('search results should be truncated at the cap');
+      if (observation.matchCount !== observation.limit) {
+        throw new Error('truncated search should report the engine cap as the match count');
+      }
+      if (!(observation.limit > 0)) throw new Error('search cap must be positive');
     },
   },
   {
     id: 'usePageSetup:undo',
     composable: 'usePageSetup',
-    assert(editor) {
-      const beforeWidth = editor.getPageSetup()!.pageWidthTwips;
-      editor.exec({ type: 'setPageSetup', pageWidth: beforeWidth + 144 });
-      if (editor.getPageSetup()!.pageWidthTwips !== beforeWidth + 144) {
+    assert(observation) {
+      if (observation.widthAfterApply !== observation.widthBefore + 144) {
         throw new Error('page setup write did not apply');
       }
-      editor.exec({ type: 'undo' });
-      if (editor.getPageSetup()!.pageWidthTwips !== beforeWidth) {
+      if (observation.widthAfterUndo !== observation.widthBefore) {
         throw new Error('page setup undo did not restore width');
       }
     },

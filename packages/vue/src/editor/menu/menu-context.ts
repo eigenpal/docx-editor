@@ -1,4 +1,4 @@
-import { inject, unref, type InjectionKey, type MaybeRef } from 'vue';
+import { computed, inject, unref, type ComputedRef, type InjectionKey, type MaybeRef } from 'vue';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ChromeMenuId } from '@docx-editor.dev/core/editor';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -32,13 +32,13 @@ const defaultMenuContext: MenuContextValue = {
   reportIssue: undefined,
 };
 
-export function useMenuContext(): MenuContextValue {
+export function useMenuContext(): ComputedRef<MenuContextValue> {
   const value = inject(MenuContext, defaultMenuContext);
-  return unref(value) as MenuContextValue;
+  return computed(() => unref(value) as MenuContextValue);
 }
 
 export function useMenuLabel() {
-  const { t } = useMenuContext();
+  const context = useMenuContext();
   const { t: catalogT } = useTranslation();
-  return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
+  return (key: string) => context.value.t?.(key) ?? catalogT(key as TranslationKey);
 }

@@ -13,32 +13,52 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { useEditorCommand } from '../src/editor/useEditorCommand.ts';
-import { SEARCH_MATCH_LIMIT as REACT_SEARCH_LIMIT } from '../src/editor/navigation/useDocumentSearch.ts';
-import { stepZoomLevel } from '../src/editor/zoom-levels.ts';
+import { useZoom } from '../src/editor/useZoom.ts';
+import {
+  SEARCH_MATCH_LIMIT,
+  SEARCH_DEBOUNCE_MS,
+  useDocumentSearch,
+} from '../src/editor/navigation/useDocumentSearch.ts';
+import { usePageSetup } from '../src/editor/usePageSetup.ts';
 import {
   COMPOSABLE_PARITY_CASES,
   DIFFERENTIAL_SOURCE,
+  OFF_LADDER_ZOOM,
+  SEARCH_HEAVY_SOURCE,
   offLadderZoomIn,
 } from './cross-adapter-composable-cases.ts';
 
-const { stepZoomLevel: vueStepZoomLevel } = await import('../../vue/src/editor/zoom-levels.ts');
-
-function mountReact(onReady: (editor: DocxEditorInstance) => void) {
+function mountReact(
+  source: Uint8Array,
+  probe: () => null,
+  onReady: (editor: DocxEditorInstance) => void = () => {}
+) {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     createElement(
       DocxEditorRoot,
       {
-        document: DIFFERENTIAL_SOURCE,
+        document: source,
         onReady: (editor) => {
           instance = editor as DocxEditorInstance;
           onReady(instance);
         },
       },
-      createElement(DocxEditorViewport, null, createElement(DocxEditorContent))
+      createElement(
+        DocxEditorViewport,
+        null,
+        createElement(DocxEditorContent),
+        createElement(probe)
+      )
     )
   );
   return { view, editor: () => instance! };
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 200));
+  });
 }
 
 afterEach(cleanup);
@@ -52,46 +72,99 @@ describe('cross-adapter differential (React harness)', () => {
           binding = useEditorCommand(parityCase.slot);
           return null;
         };
-        const { view, editor } = mountReact(() => {});
-        view.rerender(
-          createElement(
-            DocxEditorRoot,
-            { document: DIFFERENTIAL_SOURCE },
-            createElement(
-              DocxEditorViewport,
-              null,
-              createElement(DocxEditorContent),
-              createElement(Probe)
-            )
+        const { view, editor } = mountReact(DIFFERENTIAL_SOURCE, Probe);
+        await settle();
+        expect(() =>
+          parityCase.assert(
+            {
+              isEnabled: binding!.isEnabled,
+              isActive: binding!.isActive,
+              disabledReason: binding!.disabledReason,
+            },
+            editor()
           )
-        );
-        await act(async () => {
-          await new Promise((r) => setTimeout(r, 200));
-        });
-        expect(() => parityCase.assert(binding!, editor())).not.toThrow();
+        ).not.toThrow();
         view.unmount();
         return;
       }
 
-      let ready: DocxEditorInstance | null = null;
-      const { view } = mountReact((editor) => {
-        ready = editor;
-      });
-      await act(async () => {
-        await new Promise((r) => setTimeout(r, 200));
-      });
       if (parityCase.composable === 'useZoom') {
-        expect(stepZoomLevel(0.73, 'in')).toBe(vueStepZoomLevel(0.73, 'in'));
-        expect(() => parityCase.assert(ready!, offLadderZoomIn())).not.toThrow();
-      } else if (parityCase.composable === 'useDocumentSearch') {
-        const { SEARCH_MATCH_LIMIT: VUE_SEARCH_LIMIT } =
-          await import('../../vue/src/editor/navigation/useDocumentSearch.ts');
-        expect(REACT_SEARCH_LIMIT).toBe(VUE_SEARCH_LIMIT);
-        expect(() => parityCase.assert(REACT_SEARCH_LIMIT)).not.toThrow();
-      } else if (parityCase.composable === 'usePageSetup') {
-        expect(() => parityCase.assert(ready!)).not.toThrow();
+        let zoomApi: ReturnType<typeof useZoom> | null = null;
+        const Probe = () => {
+          zoomApi = useZoom();
+          return null;
+        };
+        const { view, editor } = mountReact(DIFFERENTIAL_SOURCE, Probe);
+        await settle();
+        act(() => {
+          editor().setZoom(OFF_LADDER_ZOOM);
+        });
+        await settle();
+        act(() => {
+          zoomApi!.zoomIn();
+        });
+        await settle();
+        expect(offLadderZoomIn()).toBe(
+          (await import('../../vue/src/editor/zoom-levels.ts')).stepZoomLevel(OFF_LADDER_ZOOM, 'in')
+        );
+        expect(() =>
+          parityCase.assert({
+            scale: zoomApi!.zoom,
+            canZoomIn: zoomApi!.canZoomIn,
+            expectedStepIn: offLadderZoomIn(),
+          })
+        ).not.toThrow();
+        view.unmount();
+        return;
       }
-      view.unmount();
+
+      if (parityCase.composable === 'useDocumentSearch') {
+        let searchApi: ReturnType<typeof useDocumentSearch> | null = null;
+        const Probe = () => {
+          searchApi = useDocumentSearch();
+          return null;
+        };
+        const { view } = mountReact(SEARCH_HEAVY_SOURCE, Probe);
+        await settle();
+        act(() => {
+          searchApi!.setQuery('a');
+        });
+        await act(async () => {
+          await new Promise((r) => setTimeout(r, SEARCH_DEBOUNCE_MS + 100));
+        });
+        expect(() =>
+          parityCase.assert({
+            truncated: searchApi!.truncated,
+            matchCount: searchApi!.matches.length,
+            limit: SEARCH_MATCH_LIMIT,
+          })
+        ).not.toThrow();
+        view.unmount();
+        return;
+      }
+
+      if (parityCase.composable === 'usePageSetup') {
+        let pageSetupApi: ReturnType<typeof usePageSetup> | null = null;
+        const Probe = () => {
+          pageSetupApi = usePageSetup();
+          return null;
+        };
+        const { view, editor } = mountReact(DIFFERENTIAL_SOURCE, Probe);
+        await settle();
+        const widthBefore = editor().getPageSetup()!.pageWidthTwips;
+        act(() => {
+          pageSetupApi!.apply({ pageWidthTwips: widthBefore + 144 });
+        });
+        const widthAfterApply = editor().getPageSetup()!.pageWidthTwips;
+        act(() => {
+          editor().exec({ type: 'undo' });
+        });
+        const widthAfterUndo = editor().getPageSetup()!.pageWidthTwips;
+        expect(() =>
+          parityCase.assert({ widthBefore, widthAfterApply, widthAfterUndo })
+        ).not.toThrow();
+        view.unmount();
+      }
     });
   }
 });

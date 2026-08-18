@@ -1,8 +1,9 @@
-import { computed, ref, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue';
+import { computed, ref, toValue, watch, type ComputedRef } from 'vue';
 import { scopeDispose } from './scope-dispose';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
+import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 
 /** @public */
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
@@ -42,11 +43,11 @@ async function resolveFonts(source: DocxFontsSource): Promise<DocxFontsInput> {
 
 /** @public */
 export function useDocxSource(
-  source: DocxSource | null | undefined,
-  options: UseDocxSourceOptions = {}
+  source: MaybeRefOrGetter<DocxSource | null | undefined>,
+  options: MaybeRefOrGetter<UseDocxSourceOptions> = {}
 ): UseDocxSourceResult {
-  const reactiveSource = source as MaybeRefOrGetter<DocxSource | null | undefined>;
-  const reactiveOptions = options as MaybeRefOrGetter<UseDocxSourceOptions>;
+  const reactiveSource = source;
+  const reactiveOptions = options;
   const bytes = ref<Uint8Array | undefined>(undefined);
   const fonts = ref<FontConfiguration | undefined>(undefined);
   const error = ref<Error | null>(null);

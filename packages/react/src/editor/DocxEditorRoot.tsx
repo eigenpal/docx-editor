@@ -157,7 +157,6 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     fonts,
     zoom,
     zoomMode,
-    modules,
     tableInteractionLabel,
     imageDecodePort,
     children,
@@ -219,7 +218,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, defaultTranslate, imageDecodePort, modules, revisionStyleRegistry]);
+  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree

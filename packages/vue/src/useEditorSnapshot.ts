@@ -1,10 +1,11 @@
-import { ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
+import { ref, toValue, watch, type Ref } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
+import type { MaybeRefOrGetter } from './maybe-ref-or-getter';
 import { scopeDispose } from './editor/scope-dispose';
 
 /** @public */
-export function useEditorSnapshot(editor: Editor | null): Ref<number> {
-  const reactiveEditor = editor as MaybeRefOrGetter<Editor | null>;
+export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<number> {
+  const reactiveEditor = editor;
   const revision = ref(0);
 
   const stop = watch(

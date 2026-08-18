@@ -1,4 +1,13 @@
-import { defineComponent, h, provide, reactive, type PropType } from 'vue';
+import {
+  defineComponent,
+  h,
+  inject,
+  onUnmounted,
+  provide,
+  shallowRef,
+  type PropType,
+  type ShallowRef,
+} from 'vue';
 import type {
   DocumentChange,
   DocumentSource,
@@ -10,8 +19,10 @@ import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlink
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
 import { ImageInsertProvider } from './images/ImageInsert';
 import {
+  docxEditorRootHostEmitKey,
   useDocxEditorRootOwned,
   useDocxEditorRootOwner,
+  type DocxEditorRootEmit,
   type DocxEditorRootProps,
 } from './useDocxEditorRoot';
 import { useDocxEditor } from './context';
@@ -41,9 +52,15 @@ const ContentControlProvider = defineComponent({
 /** @public */
 export interface ProvideDocxEditorResult {
   readonly DocxEditorRoot: typeof DocxEditorRoot;
-  readonly rootProps: DocxEditorRootProps;
+  readonly rootProps: ShallowRef<DocxEditorRootProps>;
   readonly editorRef: ReturnType<typeof useDocxEditor>;
 }
+
+const noopEmit: DocxEditorRootEmit = {
+  ready: () => {},
+  change: () => {},
+  fontError: () => {},
+};
 
 /**
  * Setup composable for hosts that own the editor above the packaged root.
@@ -53,11 +70,22 @@ export interface ProvideDocxEditorResult {
  * @public
  */
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult {
-  const rootProps = reactive({ ...options });
+  const rootProps = shallowRef({ ...options });
+  const hostEmit = shallowRef({ ...noopEmit });
+  provide(docxEditorRootHostEmitKey, hostEmit);
   const { editorRef } = useDocxEditorRootOwner(rootProps, {
-    ready: () => {},
-    change: () => {},
-    fontError: () => {},
+    ready: (editor) => {
+      rootProps.value.onReady?.(editor);
+      hostEmit.value.ready(editor);
+    },
+    change: (change) => {
+      rootProps.value.onChange?.(change);
+      hostEmit.value.change(change);
+    },
+    fontError: (error) => {
+      rootProps.value.onFontError?.(error);
+      hostEmit.value.fontError(error);
+    },
   });
   return {
     DocxEditorRoot,
@@ -95,7 +123,17 @@ export const DocxEditorRoot = defineComponent({
   },
   setup(props, { emit, slots }) {
     const ownedAbove = useDocxEditorRootOwned();
-    if (!ownedAbove) {
+    const hostEmit = inject(docxEditorRootHostEmitKey, null);
+    if (ownedAbove && hostEmit) {
+      hostEmit.value = {
+        ready: (editor) => emit('ready', editor),
+        change: (change) => emit('change', change),
+        fontError: (error) => emit('fontError', error),
+      };
+      onUnmounted(() => {
+        hostEmit.value = { ...noopEmit };
+      });
+    } else if (!ownedAbove) {
       useDocxEditorRootOwner(props, {
         ready: (editor) => emit('ready', editor),
         change: (change) => emit('change', change),

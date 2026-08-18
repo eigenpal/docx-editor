@@ -59,8 +59,8 @@ import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
+import { LocaleStrings } from '@docx-editor.dev/i18n';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
-import { MaybeRefOrGetter } from 'vue';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
@@ -3423,6 +3423,9 @@ export interface LocaleProviderProps {
 export { MAX_RESOLVER_FAMILIES }
 
 // @public
+export type MaybeRefOrGetter<T> = T | Ref<T> | (() => T);
+
+// @public
 export interface MenuActionProps {
     // (undocumented)
     className?: string;
@@ -3486,6 +3489,7 @@ export interface MenuReportIssueProps {
 
 // @public
 export interface MenuRowProps {
+    // @deprecated (undocumented)
     'data-slot'?: string;
     active?: boolean;
     // (undocumented)
@@ -3497,7 +3501,9 @@ export interface MenuRowProps {
     icon?: DocxEditorChildren;
     // (undocumented)
     onSelect?: () => void;
+    rowSlot?: string;
     selected?: true;
+    selectHandler?: () => void;
     shortcut?: string;
     slot?: string;
     title?: string;
@@ -4815,7 +4821,7 @@ export interface UseDocumentSearchResult {
 export function useDocxEditor(): ShallowRef<DocxEditorInstance | null>;
 
 // @public (undocumented)
-export function useDocxSource(source: DocxSource | null | undefined, options?: UseDocxSourceOptions): UseDocxSourceResult;
+export function useDocxSource(source: MaybeRefOrGetter<DocxSource | null | undefined>, options?: MaybeRefOrGetter<UseDocxSourceOptions>): UseDocxSourceResult;
 
 // @public (undocumented)
 export interface UseDocxSourceOptions {
@@ -4841,13 +4847,13 @@ export interface UseDocxSourceResult {
 export function useEditorCaret(): ShallowRef<EditorCaret | null>;
 
 // @public (undocumented)
-export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
+export function useEditorCommand(target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>): EditorCommandState;
 
 // @public (undocumented)
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
 
 // @public (undocumented)
-export function useEditorSnapshot(editor: Editor | null): Ref<number>;
+export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<number>;
 
 // @public (undocumented)
 export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): Readonly<ShallowRef<T>>;
@@ -4874,7 +4880,7 @@ export interface UseFontFamilyResult {
 }
 
 // @public (undocumented)
-export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
+export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: readonly MaybeRefOrGetter<FontConfigurationFragment | undefined>[]): FontResolver;
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;
@@ -5023,6 +5029,7 @@ export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: strin
 // @public (undocumented)
 export function useTranslation(): {
     t: TFunction;
+    catalogue: ShallowRef<LocaleStrings>;
 };
 
 // @public (undocumented)

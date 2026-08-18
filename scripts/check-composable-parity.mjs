@@ -12,6 +12,7 @@ import {
   extractFunctionExports,
   extractInterfaceFields,
   extractInterfaceMemberTypes,
+  extractTypeAliasBodies,
   normalizeSnapshotText,
   normalizeType,
   normalizeParamSignature,
@@ -22,8 +23,16 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api.md');
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
+const PARITY_CONTRACT = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 
 const EXCLUDED_INTERFACES = new Set(['DocxEditorProps', 'DocxEditorRef']);
+
+function loadFrameworkLocalTypeAliases() {
+  if (!fs.existsSync(PARITY_CONTRACT)) return new Set();
+  const contract = JSON.parse(fs.readFileSync(PARITY_CONTRACT, 'utf8'));
+  const entries = contract.composableParity?.frameworkLocalTypeAliases ?? {};
+  return new Set(Object.keys(entries));
+}
 
 function isUseExport(name) {
   return name.startsWith('use') && name[3] === name[3]?.toUpperCase();
@@ -111,13 +120,39 @@ function compareFunction(name, reactOverloads, vueOverloads, issues) {
   }
 }
 
-export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
+function compareTypeAliases(reactSnap, vueSnap, issues, stats, frameworkLocal) {
+  const reactAliases = extractTypeAliasBodies(reactSnap);
+  const vueAliases = extractTypeAliasBodies(vueSnap);
+  const names = new Set([...reactAliases.keys(), ...vueAliases.keys()]);
+  for (const name of [...names].sort()) {
+    if (frameworkLocal.has(name)) continue;
+    const r = reactAliases.get(name);
+    const v = vueAliases.get(name);
+    if (!r) {
+      issues.push(`TYPE ALIAS '${name}' missing from React snapshot`);
+      continue;
+    }
+    if (!v) {
+      issues.push(`TYPE ALIAS '${name}' missing from Vue snapshot`);
+      continue;
+    }
+    stats.aliasChecks += 1;
+    const rn = normalizeType(r);
+    const vn = normalizeType(v);
+    if (rn !== vn) {
+      issues.push(`TYPE ALIAS '${name}': body mismatch React '${rn}' vs Vue '${vn}'`);
+    }
+  }
+}
+
+export function runComposableParityCheck({ reactSnap, vueSnap, frameworkLocal } = {}) {
   const reactSnapshot = normalizeSnapshotText(
     reactSnap ?? fs.readFileSync(REACT_SNAPSHOT, 'utf8')
   );
   const vueSnapshot = normalizeSnapshotText(vueSnap ?? fs.readFileSync(VUE_SNAPSHOT, 'utf8'));
   const issues = [];
-  const stats = { memberTypeChecks: 0 };
+  const stats = { memberTypeChecks: 0, aliasChecks: 0 };
+  const frameworkLocalAliases = frameworkLocal ?? loadFrameworkLocalTypeAliases();
 
   const reactFns = extractFunctionExports(reactSnapshot);
   const vueFns = extractFunctionExports(vueSnapshot);
@@ -136,11 +171,20 @@ export function runComposableParityCheck({ reactSnap, vueSnap } = {}) {
     compareInterface(name, reactSnapshot, vueSnapshot, issues, stats);
   }
 
+  compareTypeAliases(
+    reactSnapshot,
+    vueSnapshot,
+    issues,
+    stats,
+    frameworkLocalAliases
+  );
+
   return {
     issues,
     useExportCount: useExports.size,
     interfaceCount: interfaceNames.size,
     memberTypeChecks: stats.memberTypeChecks,
+    aliasChecks: stats.aliasChecks,
   };
 }
 
@@ -159,11 +203,14 @@ function main() {
     }
   }
 
-  const { issues, useExportCount, interfaceCount, memberTypeChecks } = runComposableParityCheck();
+  const { issues, useExportCount, interfaceCount, memberTypeChecks, aliasChecks } =
+    runComposableParityCheck();
   console.log('Composable parity: docs/api/docx-editor-{react,vue}/index.api.md');
   console.log(`  use* exports checked: ${useExportCount}`);
   console.log(`  interfaces checked:   ${interfaceCount}`);
   console.log(`  member types checked: ${memberTypeChecks}`);
+  console.log(`  type aliases checked: ${aliasChecks}`);
+  console.log('  normalizations:       Ref unwrap, MaybeRefOrGetter param');
 
   const MIN_USE_EXPORTS = 20;
   const MIN_MEMBER_TYPE_CHECKS = 100;
@@ -261,7 +308,35 @@ export interface Editor {}
     process.exit(1);
   }
 
-  const dispatchOk = `
+  const maybeRefOk = `
+export function useSample(source: Editor | null): SampleResult;
+export interface SampleResult { readonly value: string; }
+export interface Editor {}
+`;
+  const maybeRefVue = `
+export function useSample(source: MaybeRefOrGetter<Editor | null>): SampleResult;
+export interface SampleResult { readonly value: string; }
+export interface Editor {}
+`;
+  ({ issues } = runComposableParityCheck({ reactSnap: maybeRefOk, vueSnap: maybeRefVue }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: MaybeRefOrGetter param should normalize');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  const aliasOk = `
+export type SharedAlias = string;
+export interface SampleResult { readonly value: SharedAlias; }
+`;
+  const aliasDrift = aliasOk.replace('string', 'number');
+  ({ issues } = runComposableParityCheck({ reactSnap: aliasOk, vueSnap: aliasDrift }));
+  if (!issues.some((i) => i.includes("TYPE ALIAS 'SharedAlias'"))) {
+    console.error('Self-test FAIL: expected type alias body mismatch');
+    process.exit(1);
+  }
+
+  const dispatchReact = `
 export function useCounter(setRevision: Dispatch<SetStateAction<number>>): void;
 
 export interface SampleResult {
@@ -275,10 +350,9 @@ export interface SampleResult {
     readonly value: string;
 }
 `;
-  ({ issues } = runComposableParityCheck({ reactSnap: dispatchOk, vueSnap: dispatchVue }));
-  if (issues.length !== 0) {
-    console.error('Self-test FAIL: Dispatch should normalize to setter');
-    for (const i of issues) console.error(`  - ${i}`);
+  ({ issues } = runComposableParityCheck({ reactSnap: dispatchReact, vueSnap: dispatchVue }));
+  if (!issues.some((i) => i.includes('useCounter') || i.includes('param signature'))) {
+    console.error('Self-test FAIL: Dispatch vs setter must not normalize');
     process.exit(1);
   }
 

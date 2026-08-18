@@ -73,6 +73,9 @@ export interface PaginatedDocxEditorHandle {
   save(): Uint8Array | null;
 }
 
+/** Vue name for the same handle contract. @public */
+export type PaginatedDocxEditorExpose = PaginatedDocxEditorHandle;
+
 export function PaginatedDocxEditor({
   source,
   scale,

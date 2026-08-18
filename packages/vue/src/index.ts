@@ -6,6 +6,8 @@
 
 export const VERSION = '0.0.2';
 
+export type { MaybeRefOrGetter } from './maybe-ref-or-getter';
+
 export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
 export type { DocxEditorProps, DocxEditorRef, EditorMode } from './types';
 

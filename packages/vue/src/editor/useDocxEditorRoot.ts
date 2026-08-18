@@ -64,6 +64,10 @@ export interface DocxEditorRootProps {
 /** @internal Root ownership already established by {@link provideDocxEditor}. */
 export const docxEditorRootOwnerKey: InjectionKey<boolean> = Symbol('docxEditorRootOwner');
 
+/** @internal Bridges {@link provideDocxEditor} host emits to {@link DocxEditorRoot}. */
+export const docxEditorRootHostEmitKey: InjectionKey<ShallowRef<DocxEditorRootEmit>> =
+  Symbol('docxEditorRootHostEmit');
+
 export interface DocxEditorRootEmit {
   ready: (editor: Editor) => void;
   change: (change: DocumentChange) => void;
@@ -99,8 +103,9 @@ export function useDocxEditorRootOwner(
   provide(navigationLayoutKey, createNavigationLayoutStore());
   provide(docxEditorRootOwnerKey, true);
 
-  const { t: catalogT } = useTranslation();
+  const { t: catalogT, catalogue } = useTranslation();
   const translateResolver = computed(() => {
+    catalogue.value;
     const custom = toValue(props).translate;
     if (custom) return custom;
     const t = catalogT;
@@ -222,7 +227,6 @@ export function useDocxEditorRootOwner(
           toValue(props).fonts,
           translateResolver.value,
           toValue(props).imageDecodePort,
-          toValue(props).modules,
         ] as const,
       createEditor,
       { immediate: true, flush: 'post' }

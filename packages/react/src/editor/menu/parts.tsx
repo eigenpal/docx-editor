@@ -68,7 +68,17 @@ export interface MenuRowProps {
   selected?: true;
   /** Stable marker for hosts, tests and e2e. */
   slot?: string;
+  /**
+   * Vue TSX maps row identity through `rowSlot` because `slot` is reserved.
+   * React uses {@link slot} directly.
+   */
+  rowSlot?: string;
   onSelect?: () => void;
+  /**
+   * Vue TSX binds row activation through `selectHandler` because `onSelect`
+   * is treated as a listener. React uses {@link onSelect} directly.
+   */
+  selectHandler?: () => void;
   className?: string;
   children?: DocxEditorChildren;
 }

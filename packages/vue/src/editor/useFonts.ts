@@ -1,4 +1,4 @@
-import { toValue, type MaybeRefOrGetter } from 'vue';
+import { toValue } from 'vue';
 import {
   composeFontConfiguration,
   type FontConfigurationFragment,
@@ -6,6 +6,7 @@ import {
   type FontResolver,
 } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
+import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 
 /** @public */
 export type FontsInput =
@@ -17,11 +18,11 @@ export type FontsInput =
 
 /** @public */
 export function useFonts(
-  source: FontsInput,
-  ...fragments: readonly (FontConfigurationFragment | undefined)[]
+  source: MaybeRefOrGetter<FontsInput>,
+  ...fragments: readonly MaybeRefOrGetter<FontConfigurationFragment | undefined>[]
 ): FontResolver {
-  const reactiveSource = source as MaybeRefOrGetter<FontsInput>;
-  const reactiveFragments = fragments as MaybeRefOrGetter<FontConfigurationFragment | undefined>[];
+  const reactiveSource = source;
+  const reactiveFragments = fragments;
   const readInputs = () => ({
     source: toValue(reactiveSource),
     fragments: reactiveFragments.map((fragment) => toValue(fragment)),

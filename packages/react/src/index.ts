@@ -11,6 +11,8 @@
 
 export const VERSION = '0.0.2';
 
+export type { MaybeRefOrGetter } from './maybe-ref-or-getter';
+
 export { DocxEditor, type DocxEditorNamespace } from './components/DocxEditor';
 
 // Provider-first composition layer: the primitives behind `DocxEditor` (also reachable
@@ -337,8 +339,7 @@ export { PaginatedDocxEditorShell } from './components/PaginatedDocxEditorShell'
 export type { PaginatedDocxEditorShellProps } from './components/PaginatedDocxEditorShell';
 export type {
   PaginatedDocxEditorHandle,
-  // The Vue name for the same contract, exported so the two adapters pair by name.
-  PaginatedDocxEditorHandle as PaginatedDocxEditorExpose,
+  PaginatedDocxEditorExpose,
   PaginatedDocxEditorProps,
 } from './components/PaginatedDocxEditor';
 export { EditorFontError } from './types';

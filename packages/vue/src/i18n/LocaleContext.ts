@@ -53,7 +53,7 @@ export const LocaleProvider = defineComponent({
 });
 
 /** @public */
-export function useTranslation(): { t: TFunction } {
+export function useTranslation(): { t: TFunction; catalogue: ShallowRef<LocaleStrings> } {
   const strings = inject(localeKey, shallowRef(en));
   const lang = inject(langKey, shallowRef('en'));
   const t = shallowRef(createT(strings.value, lang.value));
@@ -61,6 +61,7 @@ export function useTranslation(): { t: TFunction } {
     t.value = createT(strings.value, lang.value);
   });
   return {
+    catalogue: strings,
     get t() {
       return t.value;
     },

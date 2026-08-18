@@ -31,9 +31,9 @@ export function LocaleProvider({ i18n, children }: LocaleProviderProps) {
   );
 }
 
-export function useTranslation(): { t: TFunction } {
+export function useTranslation(): { t: TFunction; catalogue: LocaleStrings } {
   const strings = useContext(LocaleContext);
   const lang = useContext(LangContext);
   const t = useMemo(() => createT(strings, lang), [strings, lang]);
-  return { t };
+  return { t, catalogue: strings };
 }

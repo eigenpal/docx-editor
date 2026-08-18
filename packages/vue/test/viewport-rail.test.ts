@@ -26,6 +26,18 @@ const RailRegistrar = defineComponent({
   },
 });
 
+let railUnregister: (() => void) | undefined;
+
+const DynamicRail = defineComponent({
+  setup() {
+    const rail = useReviewRailRegistry();
+    onMounted(() => {
+      railUnregister = rail.value.register();
+    });
+    return () => null;
+  },
+});
+
 const ShiftWriter = defineComponent({
   setup() {
     const store = useNavigationLayoutStore();
@@ -60,6 +72,19 @@ describe('DocxEditorViewport review rail', () => {
     const shift = scroller.style.getPropertyValue('--docx-nav-shift');
     expect(shift).not.toBe('');
     expect(Number.parseFloat(shift)).toBeGreaterThanOrEqual(0);
+    view.unmount();
+  });
+
+  test('clears data-review-pane when a rail unregisters while Viewport stays mounted', async () => {
+    const view = mountEditorTree(() => h(DynamicRail));
+    await flush();
+    const scroller = view.container.querySelector(
+      '[data-testid="docx-editor-scroll"]'
+    ) as HTMLElement;
+    expect(scroller.hasAttribute('data-review-pane')).toBe(true);
+    railUnregister?.();
+    await flush();
+    expect(scroller.hasAttribute('data-review-pane')).toBe(false);
     view.unmount();
   });
 

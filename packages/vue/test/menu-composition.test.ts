@@ -8,6 +8,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorMenu } from '../src/editor/menu';
+import { mountEditorTree } from './helpers/mount';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -73,5 +74,21 @@ describe('DocxEditorMenu composition', () => {
       app.unmount();
       container.remove();
     }
+  });
+
+  test('host onSave runs when File > Save is chosen', async () => {
+    let saved = 0;
+    const view = mountEditorTree(() => h(DocxEditorMenu, { onSave: () => (saved += 1) }));
+    await flush();
+    const trigger = view.container.querySelector(
+      '[data-menu="file"] .docx-menubar__trigger'
+    ) as HTMLButtonElement;
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    const row = view.container.querySelector('[data-slot="file.save"]') as HTMLButtonElement;
+    row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(saved).toBe(1);
+    view.unmount();
   });
 });

@@ -23,7 +23,7 @@ The framework-neutral entry is `@docx-editor.dev/pro`; React chrome lives at `@d
 
 ## Register a module
 
-Capabilities are modules you pass to the editor root. Module registration happens at construction, like `mode`, so the array identity must be stable. Build it outside the component or memoize it, or the editor rebuilds on every render.
+Capabilities are modules you pass to the editor root. Module registration happens at construction, like `mode`. The editor reads the array when it is created and when `document`, `fonts`, `translate`, or `imageDecodePort` identity changes. Build the array outside the component or memoize it so the first mount sees the modules you intend.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';

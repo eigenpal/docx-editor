@@ -202,16 +202,40 @@ function unwrapRefWrappers(type) {
  * Normalize types for cross-adapter parity.
  * Allowed rules only:
  * 1. Vue ref wrappers unwrap to the contained value.
- * 2. React Dispatch<SetStateAction<T>> equals Vue (value: T) => void.
+ * 2. MaybeRefOrGetter<T> in parameter position reduces to T.
  */
+function unwrapMaybeRefOrGetter(type) {
+  let t = type;
+  for (let i = 0; i < 8; i++) {
+    const next = t.replace(/MaybeRefOrGetter<([^>]+)>(\[\])?/g, (_, inner, suffix = '') =>
+      suffix ? `(${inner})${suffix}` : inner
+    );
+    if (next === t) break;
+    t = next;
+  }
+  return t;
+}
+
+function unwrapRefWrappersDeep(type) {
+  let t = type;
+  for (let i = 0; i < 16; i++) {
+    const before = t;
+    t = unwrapRefWrappers(t);
+    t = t
+      .replace(/ShallowRef<([^>]+)>/g, '$1')
+      .replace(/ComputedRef<([^>]+)>/g, '$1')
+      .replace(/Ref<([^>]+)>/g, '$1');
+    if (t === before) break;
+  }
+  return t;
+}
+
 export function normalizeType(type, { parameterPosition = false } = {}) {
   let t = type.trim().replace(/\s+/g, ' ');
-  t = unwrapRefWrappers(t);
-  t = t.replace(/Dispatch<SetStateAction<([^>]+)>>/g, '(value: $1) => void');
-  t = t.replace(/DocxEditorRefCallback<([^>]+)>/g, '(node: $1 | null) => void');
-  t = t.replace(/RefCallback<([^>]+)>/g, '(node: $1 | null) => void');
-  t = t.replace(/react__default\.RefObject<([^>]+)>/g, 'RefObject<$1>');
-  t = t.replace(/React\.RefObject<([^>]+)>/g, 'RefObject<$1>');
+  t = t.replace(/\/\*\*[^*]*\*+(?:[^/*][^*]*\*+)*\//g, ' ');
+  t = t.replace(/\s+/g, ' ').trim();
+  t = unwrapRefWrappersDeep(t);
+  if (parameterPosition) t = unwrapMaybeRefOrGetter(t);
   return t;
 }
 
@@ -318,4 +342,39 @@ export function extractInterfaceNames(snapshotText) {
 export function composableParityInterfaces(snapshotText) {
   const skip = new Set(['DocxEditorProps', 'DocxEditorRef']);
   return [...extractInterfaceNames(snapshotText)].filter((n) => !skip.has(n)).sort();
+}
+
+/**
+ * Parse `export type Alias = Body;` from a snapshot.
+ * Returns Map<name, body> for single-line aliases only.
+ */
+export function extractTypeAliasBodies(snapshotText) {
+  const aliases = new Map();
+  const lines = linesOf(snapshotText);
+  for (let i = 0; i < lines.length; i++) {
+    const single = /^export type (\w+) = (.+);$/.exec(lines[i].trim());
+    if (single) {
+      aliases.set(single[1], single[2].trim());
+      continue;
+    }
+    const start = /^export type (\w+) =/.exec(lines[i].trim());
+    if (!start) continue;
+    let body = lines[i].trim().slice(start[0].length).trim();
+    let depth = 0;
+    for (const ch of body) {
+      if (ch === '<' || ch === '(' || ch === '{' || ch === '[') depth++;
+      else if (ch === '>' || ch === ')' || ch === '}' || ch === ']') depth--;
+    }
+    while (!body.endsWith(';') && i + 1 < lines.length) {
+      i++;
+      const next = lines[i].trim();
+      body += ` ${next}`;
+      for (const ch of next) {
+        if (ch === '<' || ch === '(' || ch === '{' || ch === '[') depth++;
+        else if (ch === '>' || ch === ')' || ch === '}' || ch === ']') depth--;
+      }
+    }
+    aliases.set(start[1], body.replace(/;$/, '').trim());
+  }
+  return aliases;
 }

@@ -201,7 +201,7 @@ export const MenuTableGrid = defineComponent({
         () => (props.slot as ChromeSlotId | undefined) ?? 'table.insert'
       ) as unknown as ChromeSlotId
     );
-    const { setOpenMenu } = useMenuContext();
+    const menuContext = useMenuContext();
     const hover = ref<{ rows: number; cols: number } | null>(null);
     const cursor = ref({ rows: 1, cols: 1 });
     const gridRef = ref<HTMLDivElement | null>(null);
@@ -211,7 +211,7 @@ export const MenuTableGrid = defineComponent({
       const command = { type: 'insertTable' as const, rows, cols };
       if (!editorRef.value.can(command).ok) return;
       editorRef.value.exec(command);
-      setOpenMenu(null);
+      menuContext.value.setOpenMenu(null);
       editorRef.value.focus();
     };
 
