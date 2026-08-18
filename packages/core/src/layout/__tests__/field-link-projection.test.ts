@@ -43,14 +43,16 @@ function paragraphOf(body: string): OoxmlNode {
 }
 
 /**
- * A projector shaped like the surface's: external targets become records, `javascript:`
- * emulates the sanitizer's refusal (anchor fallback, else no link). It also RECORDS the
- * specs it was asked about, so a test can assert the seam was (or was not) crossed.
+ * A projector shaped like the surface's: external targets become records, a dangerous scheme
+ * (`javascript:`/`data:`/`vbscript:`/`file:`) emulates the sanitizer's refusal (anchor fallback,
+ * else no link). It also RECORDS the specs it was asked about, so a test can assert the seam was
+ * (or was not) crossed.
  */
 function projectorStub(seen: HyperlinkFieldSpec[] = []): FieldLinkProjector {
   return (spec) => {
     seen.push(spec);
-    const refused = spec.target !== null && spec.target.startsWith('javascript:');
+    const refused =
+      spec.target !== null && /^\s*(javascript|data|vbscript|file):/i.test(spec.target);
     if (spec.target !== null && !refused) {
       return {
         id: `stub:${spec.target}`,
