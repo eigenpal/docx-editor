@@ -39,7 +39,6 @@ import {
   commentBodyText,
   commentInitials,
   documentOrder,
-  paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
   reviewItemGeometry,
   reviewItemKey,
