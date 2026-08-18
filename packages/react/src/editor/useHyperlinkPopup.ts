@@ -94,8 +94,9 @@ export interface UseHyperlinkPopupResult {
  * A field-derived link (a `HYPERLINK` field's instruction) rather than a typed
  * `w:hyperlink`. Structurally signalled: the field registry mints every record with no
  * addressable range (`paragraphId` stays empty), because no `w:hyperlink` node backs it.
- * The caret can never sit inside one, and the typed editing lane (edit / unlink) can never
- * resolve its id — chrome must neither caret-dismiss on it nor offer those actions.
+ * The typed editing lane (edit / unlink) can never resolve its id, so chrome offers neither
+ * action. Caret dismissal DOES apply: the field is a one-unit atom, and `fieldLinkAtCaret`
+ * resolves the caret onto it (boundary-inclusive) so the panel closes when the caret leaves.
  */
 export function isFieldLink(link: SurfaceHyperlink): boolean {
   return link.paragraphId === '';
@@ -235,9 +236,18 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
    */
   const openAtCaret = useCallback(() => {
     const anchor = caretViewportAnchor();
-    const link = editor?.surface?.hyperlinks.linkAtCaret() ?? null;
+    const link =
+      editor?.surface?.hyperlinks.linkAtCaret() ??
+      editor?.surface?.hyperlinks.fieldLinkAtCaret() ??
+      null;
+    if (link && isFieldLink(link)) {
+      // A FIELD link has no editable tree node — Edit and Unlink cannot apply to it — so Ctrl+K
+      // opens the same READING panel a click produces (Open / Copy only), never an edit panel.
+      open(link, anchor);
+      return;
+    }
     if (link) {
-      // Ctrl+K on an existing link goes straight to EDIT — the user pressed the key to
+      // Ctrl+K on an existing TYPED link goes straight to EDIT — the user pressed the key to
       // change it, and making them press Edit as well is a step for nothing.
       setState({
         mode: 'editing',
@@ -267,7 +277,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       error: false,
       canEdit: editor ? editor.can({ type: 'insertText', text: '' }).ok : false,
     });
-  }, [editor]);
+  }, [editor, open]);
 
   // Register with the engine: a plain click on an external link opens the popover under it,
   // Ctrl/Cmd+K opens insert-or-edit. The cleanup restores whatever was registered before, so
@@ -296,12 +306,15 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   useEffect(() => {
     const current = stateRef.current;
     if (current.mode !== 'reading' || !current.link) return;
-    // A FIELD link is an atom with no range the caret could sit in, so "did the caret leave
-    // it" has no honest answer — `linkAtCaret` walks the typed lane and never returns one,
-    // and asking anyway closed the panel on the very tick that followed the opening click.
-    // Escape and an outside mousedown still dismiss it; those paths never ask the caret.
-    if (isFieldLink(current.link)) return;
-    const atCaret = editor?.surface?.hyperlinks.linkAtCaret() ?? null;
+    // A FIELD link is a painted atom, not a tree node, so `linkAtCaret` (the typed tree walk)
+    // never returns one. `fieldLinkAtCaret` resolves it from the layout at the caret, and it is
+    // boundary-INCLUSIVE: a field atom is `[start, start + 1)`, and the click that opens the
+    // panel lands the caret on that boundary. The inclusive test keeps the panel open on the
+    // opening tick and closes it only once the caret truly moves off the atom. Escape and an
+    // outside mousedown still dismiss through paths that never ask the caret.
+    const atCaret = isFieldLink(current.link)
+      ? (editor?.surface?.hyperlinks.fieldLinkAtCaret() ?? null)
+      : (editor?.surface?.hyperlinks.linkAtCaret() ?? null);
     if (atCaret && atCaret.id === current.link.id) return;
     setState(CLOSED);
   }, [snapshot, editor]);

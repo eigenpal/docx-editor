@@ -698,6 +698,10 @@ export function mountPaginatedSurface(
   });
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
+    // A HYPERLINK field is not a tree node, so its link resolves from the layout projection
+    // plus the field-link registry rather than the typed tree walk.
+    layout: () => currentLayout,
+    fieldLinkById: (linkId) => fieldLinks.linkById(linkId),
     // Asked BEFORE the relationship is minted. The gated session refuses the ops in viewing mode
     // either way, but the mint is a package write that the refusal does not roll back — Ctrl+K in a
     // document open for reading left its target declared in `.rels`.

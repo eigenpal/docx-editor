@@ -537,3 +537,58 @@ describe('Ctrl/Cmd+K reports the request to the host', () => {
     expect(order).toEqual(['inner', 'outer']);
   });
 });
+
+/** A complete complex field around one instruction, with an optional cached result. */
+function complexField(instr: string, result = ''): string {
+  return (
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    result +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
+  );
+}
+
+describe('a field link at the caret', () => {
+  // 'See ' is four characters; the HYPERLINK field's result projects as ONE atom over [4, 5).
+  const FIELD_DOC =
+    '<w:p><w:r><w:t>See </w:t></w:r>' +
+    complexField(' HYPERLINK "https://example.com" ', '<w:r><w:t>site</w:t></w:r>') +
+    '</w:p>';
+
+  test('resolves the field link when the caret sits on the atom start', () => {
+    const mounted = mount(FIELD_DOC);
+    caret(mounted, 0, 4);
+    const link = mounted.editor.surface!.hyperlinks.fieldLinkAtCaret();
+    expect(link).not.toBeNull();
+    expect(link!.href).toBe('https://example.com');
+    // A field link names no tree node, so it carries no addressable paragraph.
+    expect(link!.paragraphId).toBe('');
+  });
+
+  test('resolves the field link at the atom trailing edge too', () => {
+    const mounted = mount(FIELD_DOC);
+    caret(mounted, 0, 5);
+    expect(mounted.editor.surface!.hyperlinks.fieldLinkAtCaret()?.href).toBe('https://example.com');
+  });
+
+  test('returns null when the caret is off the atom', () => {
+    const mounted = mount(FIELD_DOC);
+    caret(mounted, 0, 1);
+    expect(mounted.editor.surface!.hyperlinks.fieldLinkAtCaret()).toBeNull();
+  });
+
+  test('the typed lane never returns the field link', () => {
+    const mounted = mount(FIELD_DOC);
+    caret(mounted, 0, 4);
+    // `linkAtCaret` walks `w:hyperlink` nodes; a field has none, so link-create cannot mistake
+    // the atom for an existing editable link.
+    expect(mounted.editor.surface!.hyperlinks.linkAtCaret()).toBeNull();
+  });
+
+  test('returns null in a document with no field link', () => {
+    const mounted = mount(p('plain text'));
+    caret(mounted, 0, 3);
+    expect(mounted.editor.surface!.hyperlinks.fieldLinkAtCaret()).toBeNull();
+  });
+});

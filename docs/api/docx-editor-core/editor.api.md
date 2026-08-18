@@ -978,6 +978,7 @@ export interface HyperlinkOps {
         readonly text?: string;
         readonly tooltip?: string;
     }): boolean;
+    fieldLinkAtCaret(): SurfaceHyperlink | null;
     linkAtCaret(): SurfaceHyperlink | null;
     linkById(linkId: string): SurfaceHyperlink | null;
     linksInCaretParagraph(): SurfaceHyperlink[];

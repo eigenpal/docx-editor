@@ -37,7 +37,9 @@ function docx(body: string, rels = ''): Uint8Array {
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
-    'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}">${rels}</Relationships>`),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">${rels}</Relationships>`
+    ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`
     ),
@@ -119,6 +121,17 @@ function pressCommandK(mounted: Mounted): void {
   if (!pages) throw new Error('no pages layer');
   act(() => {
     fireEvent.keyDown(pages, { key: 'k', metaKey: true });
+  });
+}
+
+/**
+ * Flush the store's DEFERRED notification. `useEditorState` coalesces `change` /
+ * `selectionChange` into a microtask (a task under input pressure), so a caret move that
+ * should re-run the popover's dismiss effect only lands after one asynchronous tick.
+ */
+async function tick(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 
@@ -269,26 +282,36 @@ describe('DocxEditor.HyperLink', () => {
   });
 });
 
+// 'See ' is four characters; the field result projects as ONE atom over [4, 5). A real click
+// lands the caret ON that atom, which is where these tests place it before clicking.
+const FIELD_ATOM = 4;
+
 describe('a HYPERLINK field link', () => {
-  test('the popover survives the snapshot ticks after the click', () => {
+  test('the panel stays open on the opening tick and closes when the caret leaves the atom', async () => {
     const mounted = mount(FIELD_LINKED);
-    caret(mounted, 2);
+    // Where a real click lands the caret: on the field atom.
+    caret(mounted, FIELD_ATOM);
     clickLink(mounted, 'FieldLink');
-    // The caret can never sit inside a field link (`linkAtCaret` walks the typed lane), so
-    // the caret-based dismissal must not run: the panel is still standing after the click's
-    // own ticks, and stays standing across a further selection tick.
     const panel = mounted.view.getByTestId('hyperlink-popup');
     expect(panel.dataset.mode).toBe('reading');
     expect(mounted.view.getByTestId('hyperlink-popup-url').textContent).toContain(
       'https://field.example'
     );
-    caret(mounted, 1);
+    // The opening tick must NOT self-close it: the boundary-inclusive resolver still finds the
+    // field at the atom edge the click landed the caret on. A selection tick that keeps the
+    // caret on the atom (its trailing edge is inclusive) leaves the panel standing.
+    caret(mounted, 5);
+    await tick();
     expect(mounted.view.queryByTestId('hyperlink-popup')).not.toBeNull();
+    // Moving the caret OFF the atom closes it, the same rule a typed link follows.
+    caret(mounted, 1);
+    await tick();
+    expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
   });
 
   test('offers open and copy, but not edit or unlink', () => {
     const mounted = mount(FIELD_LINKED);
-    caret(mounted, 2);
+    caret(mounted, FIELD_ATOM);
     clickLink(mounted, 'FieldLink');
     expect(mounted.view.getByTestId('hyperlink-popup-copy')).toBeTruthy();
     expect(mounted.view.getByTestId('hyperlink-popup-url')).toBeTruthy();
@@ -300,12 +323,13 @@ describe('a HYPERLINK field link', () => {
 
   test('escape and an outside mousedown still dismiss it', () => {
     const mounted = mount(FIELD_LINKED);
-    caret(mounted, 2);
+    caret(mounted, FIELD_ATOM);
     clickLink(mounted, 'FieldLink');
     act(() => {
       fireEvent.keyDown(document, { key: 'Escape' });
     });
     expect(mounted.view.queryByTestId('hyperlink-popup')).toBeNull();
+    caret(mounted, FIELD_ATOM);
     clickLink(mounted, 'FieldLink');
     act(() => {
       fireEvent.mouseDown(document.body);
@@ -338,6 +362,21 @@ describe('Ctrl/Cmd+K', () => {
     expect((mounted.view.getByTestId('hyperlink-popup-text') as HTMLInputElement).value).toBe(
       'Example'
     );
+  });
+
+  test('on a field link it opens the READING panel, not editing', () => {
+    const mounted = mount(FIELD_LINKED);
+    caret(mounted, FIELD_ATOM);
+    pressCommandK(mounted);
+    const panel = mounted.view.getByTestId('hyperlink-popup');
+    // Edit and Unlink cannot apply to a field link, so Ctrl+K reaches it read-only.
+    expect(panel.dataset.mode).toBe('reading');
+    expect(mounted.view.getByTestId('hyperlink-popup-url').textContent).toContain(
+      'https://field.example'
+    );
+    expect(mounted.view.queryByTestId('hyperlink-popup-copy')).not.toBeNull();
+    expect(mounted.view.queryByTestId('hyperlink-popup-edit')).toBeNull();
+    expect(mounted.view.queryByTestId('hyperlink-popup-unlink')).toBeNull();
   });
 });
 

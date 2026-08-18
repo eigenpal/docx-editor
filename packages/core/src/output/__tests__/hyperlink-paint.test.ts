@@ -16,7 +16,11 @@ import {
   type OoxmlNode,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
+import {
+  createFixedMeasurer,
+  layoutSemanticDocument,
+  type HyperlinkFieldSpec,
+} from '@docx-editor.dev/core/layout';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -47,11 +51,21 @@ function packageOf(body: string, rels = ''): OoxmlPackage {
   return loaded.package;
 }
 
-function paint(body: string, rels = ''): HTMLElement {
+/**
+ * A content-keyed field-link projector, like the surface registry: two fields naming the same
+ * target share one id, which is exactly the shape that used to coalesce two field anchors.
+ */
+function projectFieldLink(spec: HyperlinkFieldSpec) {
+  if (spec.target === null) return null;
+  return { id: `field:${spec.target}`, kind: 'external' as const, href: spec.target };
+}
+
+function paint(body: string, rels = '', withFieldLinks = false): HTMLElement {
   const pkg = packageOf(body, rels);
   const part = pkg.parts.get(pkg.mainDocumentPart)!;
   const layout = layoutSemanticDocument(part, 3, {
     measurer: createFixedMeasurer(6, 14),
+    ...(withFieldLinks ? { projectFieldLink } : {}),
     projectLink: (link: OoxmlNode) => {
       if (link.kind === 'textValue') return null;
       const target = hyperlinkTargetOf(link, (id) =>
@@ -188,5 +202,61 @@ describe('painted hyperlink anchors', () => {
     const anchor = container.querySelector('a.docx-hyperlink')!;
     expect(anchor.getAttribute('title')).toBe('<img src=x onerror=alert(1)>');
     expect(anchor.textContent).toBe('<script>');
+  });
+});
+
+/** A complete complex field around one instruction, with an optional cached result. */
+function complexField(instr: string, result = ''): string {
+  return (
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    result +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>'
+  );
+}
+
+describe('each HYPERLINK field is its own anchor', () => {
+  test('two adjacent fields with an identical target paint TWO anchors', () => {
+    // Content-keyed ids make both fields share one link id; before the fix the anchor loop
+    // coalesced them into a single <a> a screen reader announced once.
+    const container = paint(
+      '<w:p>' +
+        complexField(' HYPERLINK "https://example.com" ', '<w:r><w:t>A</w:t></w:r>') +
+        complexField(' HYPERLINK "https://example.com" ', '<w:r><w:t>B</w:t></w:r>') +
+        '</w:p>',
+      '',
+      true
+    );
+    const anchors = [...container.querySelectorAll('a[data-docx-link]')];
+    expect(anchors).toHaveLength(2);
+    expect(anchors.map((a) => a.textContent)).toEqual(['A', 'B']);
+  });
+
+  test('a field followed by a typed link with the same target paints two anchors', () => {
+    const container = paint(
+      '<w:p>' +
+        complexField(' HYPERLINK "https://example.com" ', '<w:r><w:t>A</w:t></w:r>') +
+        '<w:hyperlink r:id="rId9"><w:r><w:t>B</w:t></w:r></w:hyperlink>' +
+        '</w:p>',
+      EXTERNAL_REL,
+      true
+    );
+    const anchors = [...container.querySelectorAll('a[data-docx-link]')];
+    expect(anchors).toHaveLength(2);
+    expect(anchors.map((a) => a.textContent)).toEqual(['A', 'B']);
+  });
+
+  test('a single typed link across two formatting runs is still ONE anchor', () => {
+    // The field split must not disturb ordinary run coalescing.
+    const container = paint(
+      '<w:p><w:hyperlink w:anchor="top">' +
+        '<w:r><w:rPr><w:b/></w:rPr><w:t>Bold</w:t></w:r>' +
+        '<w:r><w:t> and plain</w:t></w:r>' +
+        '</w:hyperlink></w:p>',
+      '',
+      true
+    );
+    expect(container.querySelectorAll('a[data-docx-link]')).toHaveLength(1);
   });
 });

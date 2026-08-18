@@ -18,7 +18,12 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import type { SemanticPosition, SemanticSelection } from '@docx-editor.dev/core/layout';
+import {
+  fragmentsOfParagraph,
+  type SemanticLayout,
+  type SemanticPosition,
+  type SemanticSelection,
+} from '@docx-editor.dev/core/layout';
 
 /** Inline `w:sdt` nesting bound — matches `segmentsOf` and formatting walks. */
 const MAX_SDT_NESTING = 32;
@@ -189,8 +194,47 @@ export function hyperlinkAtPosition(
   return null;
 }
 
+/**
+ * The painted field link whose atom the position sits on, or null.
+ *
+ * A `HYPERLINK` field has no `w:hyperlink` node, so the typed lane above can never resolve it.
+ * It paints as ONE atom span over `[start, start + 1)` carrying `fieldAtom` and `link`. This
+ * walks the caret paragraph's laid-out fragments for that span and returns its link id.
+ *
+ * INCLUSIVE OF BOTH EDGES (`start <= offset <= end`), the same rule field shading uses: a field
+ * is one model unit, and the click that opens the reading panel lands the caret on a boundary.
+ * An exclusive test would report "the caret left the field" on the very tick after the opening
+ * click and self-close the panel.
+ *
+ * Two known edges, both narrow and left unhandled on purpose: at a boundary shared by two
+ * adjacent field atoms the first span in line order wins (left-biased), and the walk covers
+ * only body fragments — a field link inside a header/footer or note story does not resolve here
+ * (headers/footers never open the panel anyway; note-story links share the typed lane's own
+ * body-caret limitation).
+ */
+export function fieldLinkAtomIdAtPosition(
+  layout: SemanticLayout,
+  position: SemanticPosition
+): string | null {
+  for (const fragment of fragmentsOfParagraph(layout, position.paragraphId)) {
+    for (const line of fragment.lines) {
+      for (const span of line.spans) {
+        if (!span.fieldAtom || !span.link) continue;
+        if (position.offset >= span.range.start && position.offset <= span.range.end) {
+          return span.link.id;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export interface HyperlinkOpsDeps {
   readonly session: TreeDocxSession;
+  /** The current layout projection, for resolving a field link at the caret. */
+  readonly layout: () => SemanticLayout;
+  /** Resolve a field-link id minted by the field-link registry back to its record. */
+  readonly fieldLinkById: (linkId: string) => SurfaceHyperlink | null;
   /**
    * Whether a write would be refused right now — viewing, or suggesting with no author.
    *
@@ -223,6 +267,14 @@ export interface HyperlinkOps {
   linksInCaretParagraph(): SurfaceHyperlink[];
   /** The link the caret sits in, or null. */
   linkAtCaret(): SurfaceHyperlink | null;
+  /**
+   * The FIELD link whose painted atom the caret sits on, or null.
+   *
+   * Separate from {@link linkAtCaret} on purpose: a `HYPERLINK` field is not a tree node, so
+   * the typed lane never returns one, and link-create must not mistake a field atom for an
+   * editable link. Resolved from the layout projection, boundary-inclusive.
+   */
+  fieldLinkAtCaret(): SurfaceHyperlink | null;
   /** The link with this node id, or null. */
   linkById(linkId: string): SurfaceHyperlink | null;
   /**
@@ -261,6 +313,12 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
   const linkAtCaret = (): SurfaceHyperlink | null =>
     hyperlinkAtPosition(linksIn(deps.selection().head.paragraphId), deps.selection().head);
 
+  const fieldLinkAtCaret = (): SurfaceHyperlink | null => {
+    const head = deps.selection().head;
+    const id = fieldLinkAtomIdAtPosition(deps.layout(), head);
+    return id === null ? null : deps.fieldLinkById(id);
+  };
+
   const linkById = (linkId: string): SurfaceHyperlink | null => {
     // The link's own paragraph is the one holding it; walking the caret's paragraph first
     // covers every real caller in one lookup, and the full scan is the fallback.
@@ -277,6 +335,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
   return {
     linksInCaretParagraph: () => linksIn(deps.selection().head.paragraphId),
     linkAtCaret,
+    fieldLinkAtCaret,
     linkById,
 
     applyHyperlink(input) {

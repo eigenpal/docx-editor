@@ -1208,6 +1208,12 @@ function paintLine(
   // only shape an absolutely-positioned line model can express.
   let anchor: HTMLElement | null = null;
   let anchorLinkId: string | null = null;
+  // For a FIELD anchor, the model offset of the field it paints. A field's own result can
+  // break into several spans (a space in the result, or a line wrap), all sharing one link id
+  // AND one model range, so they stay one anchor. A DIFFERENT field starts at a different
+  // offset, so it opens its own — even with an identical target and thus the same content-keyed
+  // id. Null while the current anchor is a typed link or there is none.
+  let anchorFieldStart: number | null = null;
   const inlineDrawings = [...(line.drawings ?? [])].sort((left, right) => left.start - right.start);
   let nextInlineDrawing = 0;
   const appendDrawingAdvancesBefore = (modelOffset: number): void => {
@@ -1272,12 +1278,33 @@ function paintLine(
     if (!link) {
       anchor = null;
       anchorLinkId = null;
+      anchorFieldStart = null;
       element.append(painted);
       continue;
     }
-    if (!anchor || anchorLinkId !== link.id) {
+    // A field atom joins the current anchor only when it is the SAME field: same link id and
+    // same model offset. Two adjacent fields share one content-keyed id when their targets
+    // match, so keying on the id alone would merge two discrete links into one anchor a screen
+    // reader announces once. Keying on the offset too keeps each field its own link unit while
+    // still letting one field's wrapped or space-split result stay a single anchor.
+    if (span.fieldAtom) {
+      const sameField =
+        anchor !== null && anchorLinkId === link.id && anchorFieldStart === span.range.start;
+      if (!sameField) {
+        anchor = paintHyperlinkAnchor(document, link, ctx);
+        anchorLinkId = link.id;
+        anchorFieldStart = span.range.start;
+        element.append(anchor);
+      }
+      anchor!.append(painted);
+      continue;
+    }
+    // A typed link never joins a field anchor (`anchorFieldStart !== null`), and a field never
+    // joins this one, so the two link kinds stay distinct even when adjacent.
+    if (!anchor || anchorLinkId !== link.id || anchorFieldStart !== null) {
       anchor = paintHyperlinkAnchor(document, link, ctx);
       anchorLinkId = link.id;
+      anchorFieldStart = null;
       element.append(anchor);
     }
     anchor.append(painted);
