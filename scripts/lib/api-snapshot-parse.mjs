@@ -98,6 +98,41 @@ export function normalizeType(type, { parameterPosition = false } = {}) {
   return t;
 }
 
+/** Split a parameter list on commas not nested inside brackets. */
+function splitTopLevelParams(params) {
+  const out = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < params.length; i++) {
+    const c = params[i];
+    if (c === '<' || c === '(' || c === '{') depth++;
+    else if (c === '>' || c === ')' || c === '}') depth--;
+    else if (c === ',' && depth === 0) {
+      out.push(params.slice(start, i));
+      start = i + 1;
+    }
+  }
+  out.push(params.slice(start));
+  return out.map((part) => part.trim()).filter(Boolean);
+}
+
+/** Normalize a function parameter list for cross-adapter comparison. */
+export function normalizeParamSignature(params) {
+  if (!params.trim()) return '';
+  return splitTopLevelParams(params)
+    .map((part) => {
+      const idx = part.indexOf(':');
+      if (idx < 0) return part;
+      const name = part.slice(0, idx).trim();
+      let type = part.slice(idx + 1).trim();
+      type = normalizeType(type, { parameterPosition: true });
+      const getter = /^\(\)\s*=>\s*(.+)$/.exec(type);
+      if (getter) type = getter[1].trim();
+      return `${name}: ${type}`;
+    })
+    .join(', ');
+}
+
 /**
  * Parse `export function useFoo(...)` declarations including overloads.
  * Returns Map<name, Array<{ params, returnType }>>.

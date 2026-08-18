@@ -13,6 +13,7 @@ import {
   extractInterfaceFields,
   extractInterfaceMemberTypes,
   normalizeType,
+  normalizeParamSignature,
 } from './lib/api-snapshot-parse.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -120,7 +121,9 @@ function compareFunction(name, reactOverloads, vueOverloads, issues) {
   for (let i = 0; i < count; i++) {
     const r = reactOverloads[i];
     const v = vueOverloads[i];
-    if (r.params !== v.params) {
+    const rParams = normalizeParamSignature(r.params);
+    const vParams = normalizeParamSignature(v.params);
+    if (rParams !== vParams) {
       issues.push(
         `FUNCTION '${name}' overload ${i + 1}: param signature React '(${r.params})' vs Vue '(${v.params})'`
       );
@@ -247,6 +250,23 @@ export interface SampleResult {
   ({ issues } = runComposableParityCheck({ reactSnap: base, vueSnap: droppedOverload }));
   if (!issues.some((i) => i.includes('overload count'))) {
     console.error('Self-test FAIL: expected overload count detection');
+    process.exit(1);
+  }
+
+  const getterOk = `
+export function useLive(editor: Editor | null): number;
+
+export interface Editor {}
+`;
+  const getterVue = `
+export function useLive(editor: MaybeRefOrGetter<Editor | null>): Ref<number>;
+
+export interface Editor {}
+`;
+  ({ issues } = runComposableParityCheck({ reactSnap: getterOk, vueSnap: getterVue }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: MaybeRefOrGetter param should normalize');
+    for (const i of issues) console.error(`  - ${i}`);
     process.exit(1);
   }
 
