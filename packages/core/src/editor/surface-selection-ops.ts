@@ -6,6 +6,7 @@
 // selection and part, so every function is a plain input-to-output computation.
 
 import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
   parentNodeOf,
   type OoxmlElement,
@@ -92,13 +93,20 @@ export function selectedTextIn(
   const firstIndex = effectiveOrder.indexOf(from.paragraphId);
   const lastIndex = effectiveOrder.indexOf(to.paragraphId);
   if (firstIndex === -1 || lastIndex === -1) return '';
-  const parts = [paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset)];
-  for (let index = firstIndex + 1; index < lastIndex; index += 1) {
-    parts.push(paragraphTextFromLayout(layout, effectiveOrder[index]!));
+  const ids = effectiveOrder.slice(firstIndex, lastIndex + 1);
+  let text = paragraphTextFromLayout(layout, from.paragraphId).slice(from.offset);
+  for (let index = 1; index < ids.length; index += 1) {
+    const paragraphId = ids[index]!;
+    const whole = paragraphTextFromLayout(layout, paragraphId);
+    // A break the reader cannot SEE is not one to copy. A resolved display mode draws a run
+    // of paragraphs as one, so a newline here pasted two paragraphs out of a line that was
+    // drawn as one — and the file the reader is looking at says the break is gone.
+    const separator = mergedPredecessorsOf(layout, paragraphId).includes(ids[index - 1]!)
+      ? ''
+      : '\n';
+    text += separator + (index === ids.length - 1 ? whole.slice(0, to.offset) : whole);
   }
-  parts.push(paragraphTextFromLayout(layout, to.paragraphId).slice(0, to.offset));
-  // Paragraphs are newline-separated, which is what a paste target expects.
-  return parts.join('\n');
+  return text;
 }
 
 /**

@@ -348,6 +348,28 @@ export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): Car
   return stops;
 }
 
+/**
+ * Caret stops for every paragraph on the caret's line, or null when the line holds one.
+ *
+ * Built only for a merged line, so an ordinary document keeps the per-paragraph index it
+ * always used — that index is memoized per paragraph and this is not.
+ */
+function mergedLineCaretStops(
+  layout: SemanticLayout,
+  position: SemanticPosition,
+  measurer?: TextMeasurer
+): IndexedCaretStops<CaretGeometry> | null {
+  const placed = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
+  const found = placed.find(({ line }) => {
+    const segment = lineSegmentFor(line, position.paragraphId);
+    return segment !== null && position.offset >= segment.start && position.offset <= segment.end;
+  });
+  if (!found || lineSegments(found.line).length < 2) return null;
+  const stops: CaretGeometry[] = [];
+  pushLineCaretStops(stops, layout, found.line, found.pageIndex, 0, measurer);
+  return indexCaretStops(stops);
+}
+
 function paragraphCaretStops(
   layout: SemanticLayout,
   paragraphId: string,
@@ -668,10 +690,14 @@ export function moveCaret(
       : { position: { paragraphId: position.paragraphId, offset: target }, desiredX: null };
   }
   if (!options.stops && (command === 'lineStart' || command === 'lineEnd')) {
+    // Home and End mean the ends of the LINE a reader sees. One paragraph's stops describe
+    // that line only while the line holds one paragraph: on a line a resolved view merged,
+    // they stopped at the member boundary, in the middle of the text on screen.
     const target = moveToLineEdge(
       position,
       command === 'lineStart' ? -1 : 1,
-      paragraphCaretStops(layout, position.paragraphId, options.measurer)
+      mergedLineCaretStops(layout, position, options.measurer) ??
+        paragraphCaretStops(layout, position.paragraphId, options.measurer)
     );
     return target ? { position: target, desiredX: null } : null;
   }

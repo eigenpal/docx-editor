@@ -94,6 +94,23 @@
 - [x] 6c.10 The over-publish fixture asserted nothing: the refusal fires AT the nesting cap,
       not above it, where neither lane publishes the text
 
+## 6d. What a verification pass against a real document found
+
+Verified against `tracked-paragraph-marks.docx`: header, body, cell and a mark before a table.
+All eight checks passed — merge, attribution, identity against `paragraphTextOf`, editing on a
+mounted surface, caret and selection, the review rail, Accept All, and the save round-trip.
+
+- [x] 6d.1 A delete ACROSS a merged break left the deleted mark on the survivor, so the next
+      pass merged it into the paragraph after it and the rail kept a card for a mark that no
+      longer exists. A join now carries the mark revisions of the paragraph whose mark
+      survives, the way it already carried `w:sectPr`
+- [x] 6d.2 Home and End stopped at the member boundary, in the middle of the visible line,
+      because they were built from one paragraph's stops
+- [x] 6d.3 Copying across the join put a newline in the clipboard, so one visible line pasted
+      as two paragraphs
+- [ ] 6d.4 The join still carries two caret slots at one painted position, so one arrow press
+      does not move. Recorded at 7.7
+
 ## 7. Not done yet
 
 - [ ] 7.1 Backspace and undo through a join (4.2, 4.3)

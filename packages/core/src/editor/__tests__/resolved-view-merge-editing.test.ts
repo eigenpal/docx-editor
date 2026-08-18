@@ -130,4 +130,38 @@ describe('editing across a merged paragraph break', () => {
       container.remove();
     }
   });
+
+  test('copying across the join copies one line, not two paragraphs', () => {
+    // The reader sees one line. A newline in the clipboard pasted two paragraphs out of it.
+    const { surface, dispose } = mountMerged();
+    try {
+      const [first, second] = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: first!, offset: 0 },
+        head: { paragraphId: second!, offset: 5 },
+      });
+      expect(surface.selectedText()).toBe('Hello world');
+    } finally {
+      dispose();
+    }
+  });
+
+  test('Home and End reach the ends of the line a reader sees', () => {
+    // One paragraph's stops describe the line only while the line holds one paragraph. On a
+    // merged line they stopped at the member boundary, in the middle of the visible text.
+    const { surface, dispose } = mountMerged();
+    try {
+      const [first, second] = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: second!, offset: 2 },
+        head: { paragraphId: second!, offset: 2 },
+      });
+      surface.navigate('lineStart');
+      expect(surface.state().selection.head).toEqual({ paragraphId: first!, offset: 0 });
+      surface.navigate('lineEnd');
+      expect(surface.state().selection.head).toEqual({ paragraphId: second!, offset: 5 });
+    } finally {
+      dispose();
+    }
+  });
 });

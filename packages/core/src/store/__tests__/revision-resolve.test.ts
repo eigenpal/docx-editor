@@ -471,3 +471,51 @@ describe('a run of removed paragraph marks', () => {
     expect(out).not.toContain('before after');
   });
 });
+
+describe('joining paragraphs moves the mark, not just the section break', () => {
+  // A join deletes the FIRST paragraph's mark, so the merged paragraph ends with the SECOND's.
+  // Keeping the first's left the survivor proposing to delete a break the user had just
+  // deleted: the next layout pass merged it into the paragraph after it, and the review pane
+  // kept a card for a mark that no longer exists.
+  const markDel = (id: string) =>
+    `<w:pPr><w:rPr><w:del w:id="${id}" w:author="${QA.author}" w:date="${QA.date}"/></w:rPr></w:pPr>`;
+
+  test('the survivor does not inherit a mark revision the join deleted', () => {
+    const part = load(
+      `<w:p>${markDel('1')}${run('Hello ')}</w:p><w:p>${run('world')}</w:p><w:p>${run('after')}</w:p>`
+    );
+    const ids = [...xml(part).matchAll(/<w:p[ >]/g)].length;
+    expect(ids).toBe(3);
+    const body = part.root.children[0]!;
+    const paragraphs = (body as { children: { kind: string; id: string }[] }).children.filter(
+      (child) => child.kind === 'paragraph'
+    );
+    const joined = applyTreeOp(part, {
+      op: 'joinParagraphs',
+      firstId: paragraphs[0]!.id,
+      secondId: paragraphs[1]!.id,
+    });
+    if (!joined.ok) throw new Error(joined.reason);
+    const out = xml(joined.part);
+    expect(out).toContain('Hello ');
+    expect(out).toContain('world');
+    expect(out).not.toContain('<w:del');
+  });
+
+  test('a mark revision on the SECOND paragraph rides onto the survivor', () => {
+    const part = load(
+      `<w:p>${run('Hello ')}</w:p><w:p>${markDel('2')}${run('world')}</w:p><w:p>${run('after')}</w:p>`
+    );
+    const body = part.root.children[0]!;
+    const paragraphs = (body as { children: { kind: string; id: string }[] }).children.filter(
+      (child) => child.kind === 'paragraph'
+    );
+    const joined = applyTreeOp(part, {
+      op: 'joinParagraphs',
+      firstId: paragraphs[0]!.id,
+      secondId: paragraphs[1]!.id,
+    });
+    if (!joined.ok) throw new Error(joined.reason);
+    expect(xml(joined.part)).toContain('<w:del');
+  });
+});

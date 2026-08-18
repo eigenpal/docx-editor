@@ -2777,24 +2777,48 @@ function applyJoin(
   return result;
 }
 
+/** `EG_ParaRPrTrackChanges` — the four revisions a paragraph mark can carry (§17.13.5). */
+const MARK_REVISION_NAMES: ReadonlySet<string> = new Set(['ins', 'del', 'moveFrom', 'moveTo']);
+
+const isMarkRevision = (node: OoxmlNode): boolean =>
+  node.kind !== 'textValue' &&
+  node.namespaceUri === WML_NAMESPACE_URI &&
+  MARK_REVISION_NAMES.has(node.localName);
+
 /**
- * The join survivor, carrying the SECTION MARK of the paragraph that leaves.
+ * The join survivor, carrying the TRACKED STATE of the mark that survives.
  *
- * `w:sectPr` in a paragraph's mark is not formatting: it is where a section ENDS (17.6.17).
- * A join deletes the FIRST paragraph's mark, so the mark that survives the merge is the
- * second's, and the section boundary rides on it. Dropping it with the rest of the second
- * paragraph's `w:pPr` merged the section into the one that follows, taking that section's
- * page size, orientation and headers over every page of it.
+ * A join deletes the FIRST paragraph's mark, so the mark the merged paragraph ends with is
+ * the SECOND's — and two things ride on a mark rather than on formatting. `w:sectPr` says
+ * where a section ENDS (§17.6.17); dropping it merged the section into the one that follows,
+ * taking that section's page size, orientation and headers over every page of it. The mark's
+ * own `w:ins`/`w:del` says the break itself is a pending decision; keeping the FIRST
+ * paragraph's left the survivor proposing to delete a break the user had just deleted, so the
+ * next layout pass merged it into the paragraph after it and the review pane kept a card for
+ * a mark that no longer exists.
+ *
+ * Formatting is the other way round, and stays as it was: the survivor keeps its own
+ * properties, which is what Word does when you join into a paragraph.
  */
 function withSectionMarkOf(
   first: OoxmlNode & { readonly children: readonly OoxmlNode[] },
   second: OoxmlParagraphNode,
   nextId: () => string
 ): OoxmlNode & { readonly children: readonly OoxmlNode[] } {
+  const secondMarkRevisions = (
+    namedChild(paragraphPropertiesNodeOf(second), 'rPr')?.children ?? []
+  ).filter(isMarkRevision);
+  const survivorHasMarkRevision = (
+    namedChild(paragraphPropertiesNodeOf(first), 'rPr')?.children ?? []
+  ).some(isMarkRevision);
+  const withMark =
+    secondMarkRevisions.length > 0 || survivorHasMarkRevision
+      ? withMarkRevisionsOf(first, secondMarkRevisions, nextId)
+      : first;
   const sectPr = namedChild(paragraphPropertiesNodeOf(second), 'sectPr');
-  if (!sectPr) return first;
+  if (!sectPr) return withMark;
   const carried = cloneWithNewIds(sectPr, nextId);
-  const pPr = paragraphPropertiesNodeOf(first);
+  const pPr = paragraphPropertiesNodeOf(withMark);
   if (!pPr) {
     const minted = {
       id: nextId(),
@@ -2807,7 +2831,7 @@ function withSectionMarkOf(
       children: [carried],
     } as unknown as OoxmlNode;
     // `w:pPr` must be the paragraph's FIRST child per the schema.
-    return { ...first, children: [minted, ...first.children] } as OoxmlNode & {
+    return { ...withMark, children: [minted, ...withMark.children] } as OoxmlNode & {
       readonly children: readonly OoxmlNode[];
     };
   }
@@ -2825,8 +2849,85 @@ function withSectionMarkOf(
     children: [...others.slice(0, at), carried, ...others.slice(at)],
   } as OoxmlNode;
   return {
-    ...first,
-    children: first.children.map((child) => (child.id === pPr.id ? rebuilt : child)),
+    ...withMark,
+    children: withMark.children.map((child) => (child.id === pPr.id ? rebuilt : child)),
+  } as OoxmlNode & { readonly children: readonly OoxmlNode[] };
+}
+
+/**
+ * The survivor with the mark revisions of the paragraph whose mark it inherits.
+ *
+ * Its own go, whatever they were: that mark is the one the join deletes. `EG_ParaRPrTrackChanges`
+ * opens `CT_ParaRPr`, so the carried elements go FIRST inside `w:rPr`.
+ */
+function withMarkRevisionsOf(
+  survivor: OoxmlNode & { readonly children: readonly OoxmlNode[] },
+  revisions: readonly OoxmlNode[],
+  nextId: () => string
+): OoxmlNode & { readonly children: readonly OoxmlNode[] } {
+  const carried = revisions.map((revision) => cloneWithNewIds(revision, nextId));
+  const pPr = paragraphPropertiesNodeOf(survivor);
+  if (!pPr) {
+    if (carried.length === 0) return survivor;
+    const rPr = {
+      id: nextId(),
+      kind: 'runProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'rPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: carried,
+    } as unknown as OoxmlNode;
+    const minted = {
+      id: nextId(),
+      kind: 'paragraphProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'pPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: [rPr],
+    } as unknown as OoxmlNode;
+    return { ...survivor, children: [minted, ...survivor.children] } as OoxmlNode & {
+      readonly children: readonly OoxmlNode[];
+    };
+  }
+  const existingRPr = namedChild(pPr, 'rPr');
+  const keptFace = (existingRPr?.children ?? []).filter((child) => !isMarkRevision(child));
+  const rebuiltRPr =
+    existingRPr === undefined
+      ? carried.length > 0
+        ? ({
+            id: nextId(),
+            kind: 'runProperties',
+            namespaceUri: WML_NAMESPACE_URI,
+            localName: 'rPr',
+            prefix: 'w',
+            namespaceBindings: [],
+            attributes: [],
+            children: carried,
+          } as unknown as OoxmlNode)
+        : undefined
+      : ({ ...existingRPr, children: [...carried, ...keptFace] } as OoxmlNode);
+  if (!rebuiltRPr) return survivor;
+  // `w:rPr` follows the base properties and precedes `w:sectPr` and `w:pPrChange`.
+  const children =
+    existingRPr === undefined
+      ? (() => {
+          const tail = pPr.children.findIndex(
+            (child) =>
+              child.kind !== 'textValue' &&
+              (child.localName === 'sectPr' || child.localName === 'pPrChange')
+          );
+          const at = tail === -1 ? pPr.children.length : tail;
+          return [...pPr.children.slice(0, at), rebuiltRPr, ...pPr.children.slice(at)];
+        })()
+      : pPr.children.map((child) => (child.id === existingRPr.id ? rebuiltRPr : child));
+  const rebuiltPPr = { ...pPr, children } as OoxmlNode;
+  return {
+    ...survivor,
+    children: survivor.children.map((child) => (child.id === pPr.id ? rebuiltPPr : child)),
   } as OoxmlNode & { readonly children: readonly OoxmlNode[] };
 }
 
