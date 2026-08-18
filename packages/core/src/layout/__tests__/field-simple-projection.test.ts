@@ -225,6 +225,66 @@ describe('a simple PAGE field', () => {
   });
 });
 
+describe('a nested simple field inside a tracked complex cache', () => {
+  // Everything between a tracked inner field's separate and its end is the REPLACED result.
+  // A nested `w:fldSimple PAGE` in that cache used to self-append its live value AND leave
+  // the tracked end appending another — the same number painted twice on every sheet. It is
+  // noted as replaced content instead: one live value, from the tracked end only.
+  const TRACKED_NESTED_SIMPLE =
+    '<w:p><w:fldSimple w:instr=" QUOTE x ">' +
+    '<w:r><w:t>p. </w:t></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    '<w:fldSimple w:instr=" PAGE "><w:r><w:t>7</w:t></w:r></w:fldSimple>' +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+    '</w:fldSimple></w:p>';
+
+  test('paints exactly ONE live value', () => {
+    expect(
+      piecesOfParagraph(paragraphOf(TRACKED_NESTED_SIMPLE), [], { pageNumber: 3, pageCount: 9 })
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('p. 3');
+  });
+
+  test('a visible nested-fldSimple result keeps the tracked end appending', () => {
+    // The nested simple field's cached run still notes the tracker as VISIBLE replaced
+    // content — without that, `seen && !visible` reads as a hidden result and the tracked
+    // end appends nothing at all.
+    const visible =
+      '<w:p><w:fldSimple w:instr=" QUOTE x ">' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:fldSimple w:instr=" REF y "><w:r><w:t>7</w:t></w:r></w:fldSimple>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '</w:fldSimple></w:p>';
+    expect(
+      piecesOfParagraph(paragraphOf(visible), [], { pageNumber: 3, pageCount: 9 })
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('3');
+
+    // Contrast: a nested simple field whose whole cached result the file hides suppresses
+    // the live value too — a live number would resurrect a result the file says not to show.
+    const hidden =
+      '<w:p><w:fldSimple w:instr=" QUOTE x ">' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:fldSimple w:instr=" REF y ">' +
+      '<w:r><w:rPr><w:vanish/></w:rPr><w:t>7</w:t></w:r></w:fldSimple>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '</w:fldSimple></w:p>';
+    expect(
+      piecesOfParagraph(paragraphOf(hidden), [], { pageNumber: 3, pageCount: 9 })
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('');
+  });
+});
+
 describe('a tracked simple field', () => {
   const inserted =
     '<w:p><w:ins w:id="1" w:author="Author" w:date="2026-07-07T20:18:00Z">' +

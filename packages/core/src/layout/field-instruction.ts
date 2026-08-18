@@ -473,6 +473,14 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
   // that paints identical text on every page. Cleared at paragraph boundaries.
   let paragraphPoisoned = false;
 
+  // Notes are provisional until the OUTER span closes cleanly. A note fires at separate-time,
+  // but a LATER nesting overflow in the same span demotes the whole store span (the parser
+  // above breaks for the suffix), so projection paints the noted field's cached digits
+  // verbatim — a note that stood would buy a per-sheet relayout of identical text. Level-1
+  // notes buffer the same way: the overflow demotes the level-1 span too. Flushed at the
+  // outer end when the paragraph was not poisoned; dropped otherwise.
+  let pendingNotes: AllowlistedPageField[] = [];
+
   const processFieldChild = (grand: OoxmlNode, depth: number): void => {
     if (grand.kind === 'runProperties') return;
 
@@ -497,12 +505,16 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
       // inside an outer INSTRUCTION (`IF { PAGE } = 1 "x"`) is never painted at all, and a
       // field past the nesting cap demotes to verbatim text — noting either buys a per-sheet
       // relayout that paints identical text on every page.
-      if (kind && (level <= 1 || phase === 'result')) note(kind);
+      if (kind && (level <= 1 || phase === 'result')) pendingNotes.push(kind);
       return;
     }
 
     if (isFldChar(grand, 'end')) {
       onFldCharEnd(field);
+      if (field.nesting === 0) {
+        if (!paragraphPoisoned) for (const kind of pendingNotes) note(kind);
+        pendingNotes.length = 0;
+      }
     }
   };
 
@@ -521,11 +533,21 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
         'children' in grand &&
         grand.children.length > 0
       ) {
-        const saved = { ...field };
+        // Deep-copy the per-level captures: a shallow copy aliases the `inner` array and its
+        // level objects, so the nested story's paragraph resets would empty the saved capture
+        // too and a level-2 field straddling the drawing would lose its instruction. Level-1
+        // fields are strings/booleans — the spread copies those by value.
+        const saved: ComplexFieldParseState = {
+          ...field,
+          inner: field.inner.map((level) => ({ ...level })),
+        };
         const savedPoison = paragraphPoisoned;
+        const savedPending = pendingNotes;
+        pendingNotes = [];
         walk(grand, depth + 1);
         Object.assign(field, saved);
         paragraphPoisoned = savedPoison;
+        pendingNotes = savedPending;
       }
       if (complete() || budget.exhausted) return;
     }
@@ -542,6 +564,9 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     if (node.kind === 'paragraph') {
       resetFieldParseState(field);
       paragraphPoisoned = false;
+      // A span still open at a paragraph boundary is malformed and never projects; its
+      // buffered notes drop with it.
+      pendingNotes.length = 0;
       for (const child of node.children) {
         walk(child, depth + 1);
         if (complete()) return;
@@ -549,6 +574,7 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
       }
       resetFieldParseState(field);
       paragraphPoisoned = false;
+      pendingNotes.length = 0;
       return;
     }
 

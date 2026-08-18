@@ -403,6 +403,39 @@ describe('nesting overflow keeps detection aligned with projection', () => {
     ).toBe('3');
   });
 
+  test('an early nested PAGE before an overflow in the SAME field stays undetected', () => {
+    // The level-2 PAGE separates cleanly BEFORE the hostile depth arrives, but the later
+    // overflow demotes the whole outer store span, so projection paints the cached digits
+    // verbatim. A note taken at separate-time that stood would buy a per-sheet relayout
+    // that paints identical text on every sheet; detection buffers notes per outer span
+    // and drops them when the span demotes.
+    const body = outerField(
+      textRun('A') +
+        complexField(' PAGE ', '7') +
+        BEGIN +
+        SEPARATE +
+        BEGIN +
+        SEPARATE +
+        BEGIN +
+        SEPARATE +
+        BEGIN +
+        SEPARATE +
+        END +
+        END +
+        END +
+        END +
+        textRun('Z')
+    );
+    const pieces = piecesOfParagraph(paragraphOf(body), [], { pageNumber: 3, pageCount: 9 });
+    expect(pieces.map((piece) => piece.text).join('')).toBe('A7Z');
+    expect(pieces.every((piece) => !piece.projected)).toBe(true);
+    expect(detectStoryPageFields(partOf(body).root)).toEqual({
+      hasPage: false,
+      hasNumPages: false,
+      hasSectionPages: false,
+    });
+  });
+
   test('an in-cap PAGE after an overflow in the SAME field stays verbatim and undetected', () => {
     // The overflow demotes the whole outer field, so projection paints the cached digits
     // verbatim. Detection must agree, or every sheet pays a layout for identical text.
@@ -429,6 +462,64 @@ describe('nesting overflow keeps detection aligned with projection', () => {
     expect(detectStoryPageFields(partOf(body).root)).toEqual({
       hasPage: false,
       hasNumPages: false,
+      hasSectionPages: false,
+    });
+  });
+});
+
+describe('a nested field straddling a drawing descend', () => {
+  const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
+  const partWithDrawing = (body: string): OoxmlPart => {
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+        `<w:body>${body}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    return result.part;
+  };
+
+  /** Anchored textbox drawing whose story holds `content` (paragraphs). */
+  const textboxDrawing = (content: string): string =>
+    '<w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0"' +
+    ' relativeHeight="1" behindDoc="1" locked="0" layoutInCell="1" allowOverlap="1">' +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>3600450</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>9000000</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="914400" cy="457200"/>' +
+    '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>' +
+    '<wp:docPr id="1" name="TB"/>' +
+    `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+    '<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>' +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+    `<wps:txbx><w:txbxContent>${content}</w:txbxContent></wps:txbx>` +
+    '<wps:bodyPr/>' +
+    '</wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>';
+
+  const NUMPAGES_PARA = `<w:p>${complexField(' NUMPAGES ', '99')}</w:p>`;
+
+  // A level-2 PAGE whose instruction is split around a run carrying the drawing: the descend
+  // saves the host field state, and the textbox story's paragraph resets must not reach the
+  // saved copy. A shallow copy aliased the per-level `inner` captures, so the reset emptied
+  // them in the saved state too, the second instruction chunk had no buffer to join, and the
+  // nested PAGE went undetected — stale digits on every sheet.
+  const STRADDLE = `<w:p>${outerMarkers(
+    BEGIN +
+      instrRun(' PA') +
+      `<w:r>${textboxDrawing(NUMPAGES_PARA)}</w:r>` +
+      instrRun('GE ') +
+      SEPARATE +
+      textRun('7') +
+      END
+  )}</w:p>`;
+
+  test('keeps the level-2 capture across the descend and detects the textbox field too', () => {
+    expect(detectStoryPageFields(partWithDrawing(STRADDLE).root)).toEqual({
+      hasPage: true,
+      hasNumPages: true,
       hasSectionPages: false,
     });
   });
