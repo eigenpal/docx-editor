@@ -1,3 +1,4 @@
+import { toValue, type MaybeRefOrGetter } from 'vue';
 import {
   composeFontConfiguration,
   type FontConfigurationFragment,
@@ -16,19 +17,16 @@ export type FontsInput =
 
 /** @public */
 export function useFonts(
-  source: FontsInput,
-  ...fragments: readonly (FontConfigurationFragment | undefined)[]
+  source: MaybeRefOrGetter<FontsInput>,
+  ...fragments: MaybeRefOrGetter<FontConfigurationFragment | undefined>[]
 ): FontResolver {
-  const latest = {
-    current: { source, fragments } as {
-      source: FontsInput;
-      fragments: readonly (FontConfigurationFragment | undefined)[];
-    },
-  };
-  latest.current = { source, fragments };
+  const readInputs = () => ({
+    source: toValue(source),
+    fragments: fragments.map((fragment) => toValue(fragment)),
+  });
 
   const resolver: FontResolver = async (request: FontResolutionRequest) => {
-    const current = latest.current;
+    const current = readInputs();
     const resolved =
       typeof current.source === 'function' ? await current.source(request) : await current.source;
     const origins = [resolved, ...current.fragments].filter(

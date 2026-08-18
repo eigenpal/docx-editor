@@ -37,9 +37,6 @@ export interface DocxEditorProps {
   i18n?: Translations;
   chrome?: boolean;
   title?: string;
-  onTitleChange?: (title: string) => void;
-  onSave?: () => void;
-  onOpen?: () => void;
   menu?: boolean | DocxEditorMenuProps;
   hyperlinkPopup?: boolean;
   contextMenu?: boolean | DocxEditorContextMenuProps;

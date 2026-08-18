@@ -35,6 +35,8 @@ export function useContextMenuContext(): ContextMenuContextValue {
 }
 
 /** @public */
-export function useContextMenuTarget(): ContextMenuContextValue['target'] {
-  return unref(inject(ContextMenuContext, fallback))?.target ?? null;
+export function useContextMenuTarget(): HTMLElement | null {
+  const ctx = unref(inject(ContextMenuContext, fallback));
+  const target: HTMLElement | null = ctx?.target ?? null;
+  return target;
 }

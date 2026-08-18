@@ -5,6 +5,7 @@ import {
   onUnmounted,
   provide,
   watch,
+  computed,
   type CSSProperties,
   type PropType,
   type VNode,
@@ -41,10 +42,11 @@ export const DocxEditorViewport = defineComponent({
     const paneOpen = useEditorState(selectPaneOpen);
     const fitting = useEditorState(selectZoomFitting);
     const rail = useReviewRailRegistry();
-    const reserve = (rail.value.mounted ?? 0) > 0;
+    const reserve = computed(() => (rail.value.mounted ?? 0) > 0);
     const navShift = useNavigationShift();
     const layoutStore = useNavigationLayoutStore();
     let viewportEl: HTMLElement | null = null;
+    let navShiftPx = 0;
 
     onMounted(() => {
       if (viewportEl) layoutStore?.setViewport(viewportEl);
@@ -52,8 +54,10 @@ export const DocxEditorViewport = defineComponent({
     onUnmounted(() => {
       layoutStore?.setViewport(null);
     });
-    watch(navShift, () => {
-      if (viewportEl) layoutStore?.setViewport(viewportEl);
+    watch(navShift, (shift) => {
+      navShiftPx = shift;
+      if (viewportEl) viewportEl.style.setProperty('--docx-nav-shift', `${shift}px`);
+      layoutStore?.setViewport(viewportEl);
     });
 
     const onKeyDownCapture = (event: KeyboardEvent) => {
@@ -72,8 +76,15 @@ export const DocxEditorViewport = defineComponent({
     return () => {
       const style: Record<string, string | number | undefined> = {
         ...(props.style as Record<string, string | number | undefined>),
-        '--docx-nav-shift': `${navShift.value}px`,
       };
+      if (navShiftPx !== navShift.value) {
+        navShiftPx = navShift.value;
+      }
+      if (viewportEl) {
+        viewportEl.style.setProperty('--docx-nav-shift', `${navShiftPx}px`);
+      } else {
+        style['--docx-nav-shift'] = `${navShift.value}px`;
+      }
       const attrs: Record<string, unknown> = {
         ref: (el: unknown) => {
           viewportEl = el instanceof HTMLElement ? el : null;

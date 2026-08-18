@@ -170,9 +170,6 @@ const docxEditorFrameProps = {
   colorMode: { type: String as PropType<'light' | 'dark' | 'system'>, default: 'light' },
   chrome: { type: Boolean, default: undefined },
   title: { type: String, default: undefined },
-  onTitleChange: { type: Function as PropType<(title: string) => void>, default: undefined },
-  onSave: { type: Function as PropType<() => void>, default: undefined },
-  onOpen: { type: Function as PropType<() => void>, default: undefined },
   menu: { type: [Boolean, Object] as PropType<boolean | DocxEditorMenuProps>, default: undefined },
   hyperlinkPopup: { type: Boolean, default: undefined },
   contextMenu: {
@@ -198,7 +195,7 @@ const DocxEditorFrame = defineComponent({
   name: 'DocxEditorFrame',
   inheritAttrs: false,
   props: docxEditorFrameProps,
-  emits: ['ready', 'change', 'fontError'] as const,
+  emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
   setup(props, { attrs, emit, slots, expose }) {
     const chrome = computed(() => props.chrome ?? true);
     const menu = computed(() => props.menu ?? true);
@@ -315,14 +312,14 @@ const DocxEditorFrame = defineComponent({
                 h('div', { style: TITLE_BAR_STYLE }, [
                   slots.titleBarLeft?.(),
                   h('div', { style: TITLE_BLOCK_STYLE }, [
-                    props.onTitleChange
+                    attrs.onTitleChange
                       ? h('input', {
                           'aria-label': translate('titleBar.documentNameAriaLabel'),
                           value: props.title ?? '',
                           placeholder: translate('titleBar.untitled'),
                           style: TITLE_INPUT_STYLE,
                           onInput: (event: Event) =>
-                            props.onTitleChange?.((event.target as HTMLInputElement).value),
+                            emit('titleChange', (event.target as HTMLInputElement).value),
                         })
                       : h(
                           'span',
@@ -333,8 +330,8 @@ const DocxEditorFrame = defineComponent({
                       ? h(DocxEditorMenu, {
                           t: translate,
                           ...(props.title !== undefined ? { fileName: props.title } : {}),
-                          ...(props.onOpen ? { onOpen: props.onOpen } : {}),
-                          ...(props.onSave ? { onSave: props.onSave } : {}),
+                          ...(attrs.onOpen ? { onOpen: () => emit('open') } : {}),
+                          ...(attrs.onSave ? { onSave: () => emit('save') } : {}),
                           ...menuProps,
                         })
                       : null,
@@ -390,7 +387,7 @@ const DocxEditorImpl = defineComponent({
   name: 'DocxEditor',
   inheritAttrs: false,
   props: docxEditorSugarProps,
-  emits: ['ready', 'change', 'fontError'] as const,
+  emits: ['ready', 'change', 'fontError', 'save', 'open', 'titleChange'] as const,
   setup(props, { attrs, emit, slots, expose }) {
     const api = shallowRef<DocxEditorRef | null>(null);
     expose({

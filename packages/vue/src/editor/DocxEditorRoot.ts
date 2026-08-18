@@ -1,6 +1,8 @@
 import {
+  computed,
   defineComponent,
   h,
+  onMounted,
   onUnmounted,
   provide,
   shallowRef,
@@ -12,7 +14,6 @@ import type {
   DocumentChange,
   DocumentSource,
   Editor,
-  EditorFontError,
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import {
@@ -51,9 +52,6 @@ export interface DocxEditorRootProps {
   mode?: 'edit' | 'view' | 'suggesting';
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
-  onReady?: (editor: Editor) => void;
-  onChange?: (change: DocumentChange) => void;
-  onFontError?: (error: EditorFontError) => void;
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
   children?: VNode;
@@ -94,6 +92,21 @@ const ContentControlProvider = defineComponent({
 });
 
 /** @public */
+export interface ProvideDocxEditorResult {
+  readonly DocxEditorRoot: typeof DocxEditorRoot;
+  readonly rootProps: DocxEditorRootProps;
+}
+
+/**
+ * Setup helper for hosts that mount {@link DocxEditorRoot} outside the packaged sugar host.
+ *
+ * @public
+ */
+export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult {
+  return { DocxEditorRoot, rootProps: options };
+}
+
+/** @public */
 export const DocxEditorRoot = defineComponent({
   name: 'DocxEditorRoot',
   props: {
@@ -114,12 +127,6 @@ export const DocxEditorRoot = defineComponent({
       default: undefined,
     },
     imageDecodePort: { type: Object as PropType<ImageDecodePort>, default: undefined },
-    onReady: { type: Function as PropType<DocxEditorRootProps['onReady']>, default: undefined },
-    onChange: { type: Function as PropType<DocxEditorRootProps['onChange']>, default: undefined },
-    onFontError: {
-      type: Function as PropType<DocxEditorRootProps['onFontError']>,
-      default: undefined,
-    },
   },
   emits: {
     ready: (_editor: Editor) => true,
@@ -134,8 +141,11 @@ export const DocxEditorRoot = defineComponent({
     provide(navigationLayoutKey, createNavigationLayoutStore());
 
     const { t: catalogT } = useTranslation();
-    const defaultTranslate = (key: string, params?: Record<string, string | number>) =>
-      catalogT.value(key as TranslationKey, params);
+    const defaultTranslate = computed(
+      () => (key: string, params?: Record<string, string | number>) =>
+        catalogT.value(key as TranslationKey, params)
+    );
+    const translateResolver = computed(() => props.translate ?? defaultTranslate.value);
 
     const railCount = shallowRef(0);
     const railRegistry = shallowRef<ReviewRailRegistry>({
@@ -160,29 +170,28 @@ export const DocxEditorRoot = defineComponent({
     provide(ReviewRailContext, railRegistry);
 
     const cleanups: Array<() => void> = [];
+    let readyFired = false;
 
     const destroyEditor = () => {
-      const listenerCleanups = cleanups.length;
-      if (listenerCleanups >= 3) facadeListenerCount = Math.max(0, facadeListenerCount - 3);
+      if (cleanups.length >= 3) facadeListenerCount = Math.max(0, facadeListenerCount - 3);
       for (const off of cleanups.splice(0)) off();
       const instance = editorRef.value;
       if (instance) {
         instance.destroy();
         editorRef.value = null;
       }
+      readyFired = false;
     };
 
     const createEditor = () => {
       if (typeof window === 'undefined') return;
       destroyEditor();
-      let readyFired = false;
-      const translate = props.translate ?? defaultTranslate;
       const instance = createDocxEditor({
         ...(props.document !== undefined ? { document: props.document } : {}),
         ...(props.fonts ? { fonts: props.fonts } : {}),
         ...(props.author !== undefined ? { author: props.author } : {}),
         ...(props.locale !== undefined ? { locale: props.locale } : {}),
-        translate,
+        translate: translateResolver.value,
         ...(props.mode !== undefined ? { mode: props.mode } : {}),
         ...(props.modules !== undefined ? { modules: props.modules } : {}),
         ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
@@ -191,9 +200,7 @@ export const DocxEditorRoot = defineComponent({
           ? { tableInteractionLabel: props.tableInteractionLabel }
           : {}),
         ...(props.imageDecodePort ? { imageDecodePort: props.imageDecodePort } : {}),
-        onFontError: (error) => {
-          emit('fontError', error);
-        },
+        onFontError: (error) => emit('fontError', error),
       });
       const notify = deferredTick(() => {
         tick.value++;
@@ -208,26 +215,46 @@ export const DocxEditorRoot = defineComponent({
       cleanups.push(instance.on('selectionChange', notify));
       cleanups.push(instance.on('error', notify));
       editorRef.value = instance;
-      const fireReady = () => {
-        if (readyFired) return;
-        readyFired = true;
-        emit('ready', instance);
-      };
-      if (!instance.snapshot().isOpening) fireReady();
-      else {
-        const off = instance.on('change', () => {
-          off();
-          fireReady();
-        });
-        cleanups.push(off);
-      }
     };
 
-    watch(
-      () => [props.document, props.fonts, props.translate, props.imageDecodePort] as const,
-      createEditor,
-      { immediate: true }
-    );
+    const emitReady = (instance: DocxEditorInstance) => {
+      if (readyFired) return;
+      readyFired = true;
+      emit('ready', instance);
+    };
+
+    onMounted(() => {
+      watch(
+        editorRef,
+        (instance) => {
+          if (!instance) return;
+          if (!instance.snapshot().isOpening) {
+            emitReady(instance);
+            return;
+          }
+          const off = instance.on('change', () => {
+            off();
+            emitReady(instance);
+          });
+          cleanups.push(off);
+        },
+        { flush: 'post', immediate: true }
+      );
+
+      watch(
+        () =>
+          [
+            props.document,
+            props.fonts,
+            translateResolver.value,
+            props.imageDecodePort,
+            props.locale,
+          ] as const,
+        createEditor,
+        { immediate: true, flush: 'post' }
+      );
+    });
+
     onUnmounted(destroyEditor);
 
     const applied = {
@@ -280,8 +307,3 @@ export const DocxEditorRoot = defineComponent({
       });
   },
 });
-
-/** @public */
-export function provideDocxEditor(options: DocxEditorRootProps) {
-  return { DocxEditorRoot, props: options };
-}

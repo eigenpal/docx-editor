@@ -44,7 +44,6 @@ export const DocxEditorContent = defineComponent({
         h('div', {
           ref: (el: unknown) => {
             elementRef.value = el instanceof HTMLDivElement ? el : null;
-            attach();
           },
           class: ['docx-paginated-surface', props.class].filter(Boolean).join(' '),
         }),

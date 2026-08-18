@@ -1,4 +1,12 @@
-import { computed, onScopeDispose, ref, watch, type ComputedRef } from 'vue';
+import {
+  computed,
+  onScopeDispose,
+  ref,
+  toValue,
+  watch,
+  type ComputedRef,
+  type MaybeRefOrGetter,
+} from 'vue';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
@@ -41,24 +49,26 @@ async function resolveFonts(source: DocxFontsSource): Promise<DocxFontsInput> {
 
 /** @public */
 export function useDocxSource(
-  source: DocxSource | null | undefined,
-  options: UseDocxSourceOptions = {}
+  source: MaybeRefOrGetter<DocxSource | null | undefined>,
+  options: MaybeRefOrGetter<UseDocxSourceOptions> = {}
 ): UseDocxSourceResult {
   const bytes = ref<Uint8Array | undefined>(undefined);
   const fonts = ref<FontConfiguration | undefined>(undefined);
   const error = ref<Error | null>(null);
-  const documentLoading = ref(source != null);
-  const fontsSettled = ref(options.fonts === undefined);
-
-  const latest = { current: options };
-  latest.current = options;
+  const documentLoading = ref(toValue(source) != null);
+  const fontsSettled = ref(toValue(options).fonts === undefined);
+  let fetchGeneration = 0;
 
   onScopeDispose(
     watch(
-      () => latest.current.fonts,
+      () => toValue(options).fonts,
       (fontsSource) => {
-        if (fontsSource === undefined) return;
+        if (fontsSource === undefined) {
+          fontsSettled.value = true;
+          return;
+        }
         let live = true;
+        fontsSettled.value = false;
         void (async () => {
           try {
             const resolved = await resolveFonts(fontsSource);
@@ -79,8 +89,10 @@ export function useDocxSource(
 
   onScopeDispose(
     watch(
-      () => source,
+      () => toValue(source),
       (nextSource) => {
+        fetchGeneration += 1;
+        const generation = fetchGeneration;
         if (nextSource == null) {
           bytes.value = undefined;
           error.value = null;
@@ -102,7 +114,7 @@ export function useDocxSource(
         void (async () => {
           try {
             const response = await fetch(String(nextSource), {
-              ...latest.current.fetchOptions,
+              ...toValue(options).fetchOptions,
               signal: controller.signal,
             });
             if (!response.ok) {
@@ -111,11 +123,12 @@ export function useDocxSource(
               );
             }
             const loaded = new Uint8Array(await response.arrayBuffer());
-            if (!live) return;
+            if (!live || generation !== fetchGeneration) return;
             bytes.value = loaded;
             documentLoading.value = false;
           } catch (cause) {
-            if (!live || (cause instanceof Error && cause.name === 'AbortError')) return;
+            if (!live || generation !== fetchGeneration) return;
+            if (cause instanceof Error && cause.name === 'AbortError') return;
             error.value = cause instanceof Error ? cause : new Error('could not open the document');
             documentLoading.value = false;
           }
@@ -125,7 +138,7 @@ export function useDocxSource(
           controller.abort();
         };
       },
-      { immediate: true }
+      { immediate: true, flush: 'post' }
     )
   );
 
