@@ -8,6 +8,7 @@
 // only ever receive names this module has already bounded.
 
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 
 /**
  * The same shape `semantic-paint.ts` enforces at the CSS sink (its `FONT_NAME`):
@@ -83,6 +84,37 @@ export function collectDocumentFonts(
   const fonts = [...byFold.values()];
   fonts.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return fonts;
+}
+
+/**
+ * Whether any of `roots` actually puts CHARACTERS on a page.
+ *
+ * `collectDocumentFonts` answers what the document DECLARES, which is what a font picker
+ * wants: a catalog of names. A font-substitution notice asks a different question — is
+ * any text rendering in the wrong face — and a declaration alone never renders anything.
+ * A freshly created document carries Word's `w:docDefaults` (Calibri) over a single empty
+ * paragraph, so it declares a family while showing no glyph of it.
+ *
+ * Deliberately literal characters only: `w:t` (typed or demoted to generic) holding a
+ * non-empty value. A drawing, a bookmark or an empty run puts no glyph on the page, so a
+ * document made only of those has nothing a substitute face could get wrong. Same
+ * iterative, depth-safe walk as the font catalog, and the same roots, so the two
+ * derivations can never disagree about what "the document" is.
+ */
+export function documentRendersText(roots: readonly OoxmlElement[]): boolean {
+  const stack: OoxmlNode[] = [...roots];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (!isElement(node)) continue;
+    if (node.localName === 't' && node.namespaceUri === WML_NAMESPACE_URI) {
+      for (const child of node.children) {
+        if (!isElement(child) && child.value.length > 0) return true;
+      }
+      continue;
+    }
+    for (const child of node.children) stack.push(child);
+  }
+  return false;
 }
 
 /**

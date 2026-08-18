@@ -159,6 +159,63 @@ describe('documentFonts', () => {
   });
 });
 
+describe('rendersText', () => {
+  test('a document that only DECLARES a family renders no text', () => {
+    // Word's blank template in miniature: docDefaults name a face, the body is one empty
+    // paragraph. `documentFonts` still reports the family (the picker wants it); nothing
+    // is on the page for a substitute face to get wrong.
+    const session = open(
+      docx({
+        body: '<w:p/>',
+        styles:
+          `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr>` +
+          '<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>' +
+          '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+      })
+    );
+    expect(session.documentFonts()).toEqual(['Calibri']);
+    expect(session.rendersText()).toBe(false);
+  });
+
+  test('an empty w:t is still no text; one character flips it', () => {
+    const empty = open(docx({ body: '<w:p><w:r><w:t></w:t></w:r></w:p>' }));
+    expect(empty.rendersText()).toBe(false);
+
+    const session = open(docx({ body: '<w:p><w:r><w:t></w:t></w:r></w:p>' }));
+    const [paragraphId] = session.paragraphIds();
+    const applied = session.applyTreeOps([
+      { op: 'insertText', paragraphId: paragraphId!, offset: 0, text: 'Z' },
+    ]);
+    expect(applied.committed).toBe(true);
+    // The answer is revision-keyed, so the first typed character must move it.
+    expect(session.rendersText()).toBe(true);
+  });
+
+  test('text in a referenced header counts, an unreferenced part does not', () => {
+    const referenced = open(
+      docx({
+        body: `<w:p/><w:sectPr><w:headerReference xmlns:r="${R}" w:type="default" r:id="rId11"/></w:sectPr>`,
+        header: `<w:hdr xmlns:w="${W}"><w:p>${run('Impact', 'head')}</w:p></w:hdr>`,
+      })
+    );
+    expect(referenced.rendersText()).toBe(true);
+
+    const unreferenced = open(
+      docx({
+        body: '<w:p/>',
+        header: `<w:hdr xmlns:w="${W}"><w:p>${run('Impact', 'head')}</w:p></w:hdr>`,
+      })
+    );
+    expect(unreferenced.rendersText()).toBe(false);
+  });
+
+  test('memoized per revision', () => {
+    const session = open(docx({ body: `<w:p>${run('Calibri', 'hello')}</w:p>` }));
+    expect(session.rendersText()).toBe(true);
+    expect(session.rendersText()).toBe(true);
+  });
+});
+
 describe('documentStyles', () => {
   test('returns the accepted definitions with name fallback and type filtering', () => {
     const session = open(docx({ body: '<w:p><w:r><w:t>x</w:t></w:r></w:p>', styles: STYLES_XML }));

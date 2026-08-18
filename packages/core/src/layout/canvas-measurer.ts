@@ -28,6 +28,26 @@ import { createFixedMeasurer } from './fixed-measurer.ts';
  */
 export const DEFAULT_CANVAS_FONT_STACK = 'Calibri, Carlito, Helvetica, Arial, sans-serif';
 
+/**
+ * Declared family (case-folded) → the METRIC-COMPATIBLE face this stack falls through to
+ * when the declared one is not installed.
+ *
+ * Only families whose substitute actually appears in {@link DEFAULT_CANVAS_FONT_STACK}
+ * belong here, because only those are what the browser will really pick: a run declaring
+ * `Times New Roman` is measured against `"Times New Roman", ${DEFAULT_CANVAS_FONT_STACK}`,
+ * which names no serif substitute, so an installed Liberation Serif never gets used and
+ * must not be claimed. Carlito is Calibri's metric twin — identical advance widths — so a
+ * Calibri run on a host with Carlito wraps and paginates exactly where Word puts it, in
+ * both measurement and paint (the paint sink trails the same stack).
+ *
+ * The compatibility notice reads this to avoid warning about a substitution that costs no
+ * fidelity. `packages/core/src/layout/__tests__/canvas-measurer.test.ts` pins every entry
+ * against the stack so the two cannot drift.
+ */
+export const METRIC_COMPATIBLE_FALLBACK_FAMILIES: ReadonlyMap<string, string> = new Map([
+  ['calibri', 'Carlito'],
+]);
+
 /** Default width-cache capacity before least-recently-used eviction. */
 export const DEFAULT_MAX_CANVAS_WIDTH_CACHE_ENTRIES = 4096;
 /** Default line-metrics cache capacity (one entry per distinct font shorthand). */

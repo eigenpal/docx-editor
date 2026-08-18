@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
 import {
+  DEFAULT_CANVAS_FONT_STACK,
   DEFAULT_RUN_STYLE,
   createFixedMeasurer,
   isCanvasMeasurementAvailable,
@@ -14,6 +15,9 @@ import {
   type PageGeometry,
   type ResolvedRunStyle,
 } from '../index.ts';
+// Not re-exported from the lane index: an internal detail of the fallback stack, and the
+// notice's detector imports it from the module for the same reason.
+import { METRIC_COMPATIBLE_FALLBACK_FAMILIES } from '../canvas-measurer.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -382,5 +386,21 @@ describe('centered cover title uses measured width, not the fixed grid', () => {
     expect(usedWidth(fixedLine)).toBeLessThan(usedWidth(canvasLine));
     // Underestimated width → larger centre slack → origin shifts right of the true centre.
     expect(fixedLine.spans[0]!.box.x).toBeGreaterThan(canvasLine.spans[0]!.box.x);
+  });
+});
+
+describe('METRIC_COMPATIBLE_FALLBACK_FAMILIES', () => {
+  test('every twin is a face the default stack actually falls through to', () => {
+    // The map is a promise about what the BROWSER will pick. A run declaring `X` measures
+    // and paints against `"X", ${DEFAULT_CANVAS_FONT_STACK}`, so a twin the stack never
+    // names would never be used — and the compatibility notice would go quiet about a
+    // real fidelity loss. Adding an entry means adding it to the stack too.
+    const stack = DEFAULT_CANVAS_FONT_STACK.split(',').map((entry) => entry.trim());
+    for (const [declared, twin] of METRIC_COMPATIBLE_FALLBACK_FAMILIES) {
+      expect(declared).toBe(declared.toLowerCase());
+      expect(stack).toContain(twin);
+      // The twin must precede nothing that would win first except the declared face.
+      expect(stack.indexOf(twin)).toBeLessThan(stack.length - 1);
+    }
   });
 });

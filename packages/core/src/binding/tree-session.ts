@@ -79,6 +79,7 @@ import {
 import {
   collectDocumentFonts,
   collectDocumentStyles,
+  documentRendersText,
   type DocumentStyleEntry,
 } from './document-catalog.ts';
 import {
@@ -248,6 +249,15 @@ export interface TreeDocxSession {
    * Memoized per package revision.
    */
   documentFonts(): readonly string[];
+  /**
+   * Whether the document puts any literal character on a page, over the same roots
+   * {@link TreeDocxSession.documentFonts} reads. Memoized per package revision.
+   *
+   * The font-substitution notice needs it: `documentFonts` reports what the document
+   * DECLARES, and a brand-new document declares Word's Calibri default over a single
+   * empty paragraph — a declaration with no glyph behind it.
+   */
+  rendersText(): boolean;
   /**
    * The `w:style` definitions of the styles part, validated and projected for a style
    * picker. Memoized once: the styles part is immutable for the session's lifetime.
@@ -822,9 +832,32 @@ export function openTreeSession(
   };
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
+  let rendersTextCache: { readonly revision: number; readonly rendersText: boolean } | null = null;
   let stylesCache: readonly DocumentStyleEntry[] | null = null;
   let themeColorsCache: readonly DocumentThemeColorEntry[] | null = null;
   let themeFontsCache: DocumentThemeFonts | null = null;
+  /**
+   * The trees the document-wide catalogs read: the live body, the styles part, and every
+   * distinct header/footer part across sections. Shared so `documentFonts` and
+   * `rendersText` can never disagree about what "the document" covers. Not memoized —
+   * both callers cache their own answer per package revision, and this only gathers
+   * already-resolved roots.
+   */
+  const catalogRoots = (): OoxmlElement[] => {
+    const roots: OoxmlElement[] = [bodyStore().part.root];
+    const styles = resolveStylesRoot();
+    if (styles) roots.push(styles);
+    const seen = new Set<OoxmlPart>();
+    for (const section of resolvedHeaderFooterBySection().parts) {
+      for (const part of [...section.headers.values(), ...section.footers.values()]) {
+        if (seen.has(part)) continue;
+        seen.add(part);
+        roots.push(part.root);
+      }
+    }
+    return roots;
+  };
+
   let runDefaultsResolver:
     | ((styleId: string | null, runProperties?: readonly RunPropertyLike[]) => StyleRunDefaults)
     | null = null;
@@ -1010,28 +1043,27 @@ export function openTreeSession(
         if (fontsCache && fontsCache.revision === packageStore.packageRevision) {
           return fontsCache.fonts;
         }
-        const bySection = resolvedHeaderFooterBySection().parts;
-        const roots: OoxmlElement[] = [bodyStore().part.root];
-        const styles = resolveStylesRoot();
-        if (styles) roots.push(styles);
-        const seen = new Set<OoxmlPart>();
-        for (const section of bySection) {
-          for (const part of section.headers.values()) {
-            if (seen.has(part)) continue;
-            seen.add(part);
-            roots.push(part.root);
-          }
-          for (const part of section.footers.values()) {
-            if (seen.has(part)) continue;
-            seen.add(part);
-            roots.push(part.root);
-          }
-        }
         fontsCache = {
           revision: packageStore.packageRevision,
-          fonts: collectDocumentFonts(roots, collectDocumentThemeFonts(resolveThemeRoot())),
+          fonts: collectDocumentFonts(
+            catalogRoots(),
+            collectDocumentThemeFonts(resolveThemeRoot())
+          ),
         };
         return fontsCache.fonts;
+      },
+
+      rendersText() {
+        // Same revision key as `documentFonts`, and for the same reason: typing the first
+        // character of a document is exactly the edit this answer must notice.
+        if (rendersTextCache && rendersTextCache.revision === packageStore.packageRevision) {
+          return rendersTextCache.rendersText;
+        }
+        rendersTextCache = {
+          revision: packageStore.packageRevision,
+          rendersText: documentRendersText(catalogRoots()),
+        };
+        return rendersTextCache.rendersText;
       },
 
       documentStyles() {

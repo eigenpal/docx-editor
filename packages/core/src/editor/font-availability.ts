@@ -13,6 +13,15 @@
 // measurements, while an unresolved one leaves both at the generic face. A family
 // metrically identical to BOTH generic defaults could in principle hide, but no real
 // text face matches a monospace grid.
+//
+// "Resolved" is not the same question as "renders in a face the author would notice".
+// A declared family the platform cannot resolve still measures and paints against the
+// surface fallback stack, and for Calibri that stack names Carlito — the metric twin.
+// Identical advance widths mean wrap and pagination land where Word puts them, so no
+// fidelity is lost and there is nothing for a fidelity notice to report. Detection asks
+// about the face measurement will really use, never about the declared name alone.
+
+import { METRIC_COMPATIBLE_FALLBACK_FAMILIES } from '../layout/canvas-measurer.ts';
 
 /** Measures a fixed sample under one CSS font shorthand; width in px. */
 export type FontProbeMeasure = (font: string) => number;
@@ -65,8 +74,9 @@ export function createLocalFontProbe(
 }
 
 /**
- * The document families that will render in a substitute: not covered by an embedded or
- * app-supplied face, and not resolvable by the platform. Order follows `families`
+ * The document families that will render in a face with DIFFERENT metrics: not covered by
+ * an embedded or app-supplied face, not resolvable by the platform, and with no
+ * metric-compatible twin in the surface fallback stack either. Order follows `families`
  * (already sorted by the catalog).
  */
 export function detectFontSubstitutions(
@@ -78,6 +88,11 @@ export function detectFontSubstitutions(
   for (const family of families) {
     if (covered(family)) continue;
     if (resolves(family)) continue;
+    // The declared face is missing, but the stack may still fall through to its metric
+    // twin. That is a substitution the user cannot measure and Word cannot out-paginate,
+    // so it is not what this notice reports.
+    const twin = METRIC_COMPATIBLE_FALLBACK_FAMILIES.get(family.toLowerCase());
+    if (twin !== undefined && resolves(twin)) continue;
     substituted.push(family);
   }
   return substituted;

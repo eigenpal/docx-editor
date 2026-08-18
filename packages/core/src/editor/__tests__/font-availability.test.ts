@@ -57,4 +57,37 @@ describe('detectFontSubstitutions', () => {
       )
     ).toEqual([]);
   });
+
+  test('a metric-compatible twin in the fallback stack is not a reportable substitution', () => {
+    // Calibri is missing but Carlito — its metric twin, and the next entry in the stack
+    // both measurement and paint use — resolves. Advances are identical, so wrap and
+    // pagination match Word and there is no fidelity loss to report.
+    expect(
+      detectFontSubstitutions(
+        ['Calibri', 'Aptos'],
+        () => false,
+        (family) => family === 'Carlito'
+      )
+    ).toEqual(['Aptos']);
+  });
+
+  test('a family whose twin is also missing is still reported', () => {
+    expect(
+      detectFontSubstitutions(
+        ['Calibri'],
+        () => false,
+        () => false
+      )
+    ).toEqual(['Calibri']);
+  });
+
+  test('the twin lookup is case-insensitive, like the document catalog', () => {
+    expect(
+      detectFontSubstitutions(
+        ['calibri'],
+        () => false,
+        (family) => family === 'Carlito'
+      )
+    ).toEqual([]);
+  });
 });

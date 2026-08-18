@@ -402,9 +402,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /**
    * While font work is still in flight the answer would flicker: embedded faces register
    * at resolution, so a file whose own fonts are arriving must not flash a notice first.
+   *
+   * A document that renders no character has nothing a substitute face could get wrong.
+   * That is not a special case for the blank template but the notice's own definition:
+   * `documentFonts()` reports DECLARED families, and Word's `w:docDefaults` declares
+   * Calibri over a document with no runs at all — so the first thing a user saw on a page
+   * they had just created was a warning about text that does not exist. The gate lifts on
+   * the first typed character, when the claim becomes true.
    */
   const deriveFontSubstitutions = (): readonly string[] => {
     if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
+    if (!surface.session.rendersText()) return EMPTY_FONT_SUBSTITUTIONS;
     return detectFontSubstitutions(
       surface.session.documentFonts(),
       fontFamilyCovered,
