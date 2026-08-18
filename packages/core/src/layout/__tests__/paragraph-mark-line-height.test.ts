@@ -7,9 +7,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { readOoxmlPart, readOoxmlPackage, type OoxmlPart } from '@docx-editor.dev/core/store';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   applyLineSpacing,
   buildStyleCascadeTable,
@@ -17,11 +15,6 @@ import {
   linesOf,
   type TextMeasurer,
 } from '../index.ts';
-import {
-  DEFAULT_DRAWING_PROJECTION_LIMITS,
-  indexInlineDrawingProjectionsInPart,
-  projectDrawing,
-} from '../../store/package/drawing-projection.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -201,59 +194,5 @@ describe('second case: BodyText line=336 extras stay below (same fixture family)
       wrapped[1]!.box.y + wrapped[1]!.leading - (wrapped[0]!.box.y + wrapped[0]!.leading + RUN_H);
     const extra336 = RUN_H * (336 / 240) - RUN_H;
     expect(gap).toBeCloseTo(extra336, 5);
-  });
-});
-
-// A smoke test over a real package, and genuinely optional: the document it reads was never
-// committed alongside the test, so on a clean checkout there is nothing to open. The
-// below-band rule itself is covered above against authored fixtures — this only adds the
-// evidence that a producer's own file behaves the same. Skipped rather than deleted so it
-// starts running again the day the document lands.
-const PR140_FIXTURE = resolve(
-  import.meta.dir,
-  '../../../../../e2e/fixtures/pr140-shapes-and-page-breaks.docx'
-);
-const describeWithPr140 = existsSync(PR140_FIXTURE) ? describe : describe.skip;
-
-describeWithPr140('real package smoke (optional geometry)', () => {
-  test('pr140 fixture title lines expose below-band extras on line=460 paras', () => {
-    const loaded = readOoxmlPackage(new Uint8Array(readFileSync(PR140_FIXTURE)));
-    expect(loaded.ok).toBe(true);
-    if (!loaded.ok) return;
-    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
-    const cascade = buildStyleCascadeTable(loaded.package.parts.get('/word/styles.xml')!.root);
-    const atoms = indexInlineDrawingProjectionsInPart(main);
-    const ready = Object.freeze({
-      kind: 'ready' as const,
-      partName: '/word/media/image1.png',
-      contentId: 'image1',
-      resourceKey: 'k1',
-      mime: 'image/png',
-      pixelWidth: 100,
-      pixelHeight: 100,
-      dpiX: 96,
-      dpiY: 96,
-    });
-    const layout = layoutSemanticDocument(main, 1, {
-      measurer,
-      styleCascade: cascade,
-      inlineDrawingLayout: {
-        ownerPartName: OWNER,
-        projectionForAtom: (id) => atoms.get(id) ?? null,
-        project: (node) =>
-          atoms.get(node.id) ??
-          projectDrawing(node, {
-            ownerPartName: OWNER,
-            limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
-          }),
-        resourceOf: () => ready,
-      },
-    });
-    const between = linesOf(layout).find((line) =>
-      line.spans.some((span) => span.text.includes('between'))
-    );
-    expect(between).toBeDefined();
-    expect(between!.leading).toBeCloseTo(0, 5);
-    expect(between!.box.height).toBeGreaterThan(between!.baseline + 2);
   });
 });
