@@ -76,6 +76,9 @@ describe('DocxEditorHeaderFooterChrome', () => {
       ) as HTMLElement;
       expect(chrome).toBeTruthy();
       expect(chrome.style.visibility).toBe('visible');
+      expect(chrome.style.left).toMatch(/px$/);
+      expect(chrome.style.top).toMatch(/px$/);
+      expect(chrome.style.width).toMatch(/px$/);
       expect(chrome.textContent).toContain('Header');
     } finally {
       mounted.unmount();

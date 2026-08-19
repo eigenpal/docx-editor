@@ -1,5 +1,6 @@
 import { ref, watch, type CSSProperties, type ShallowRef } from 'vue';
 import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
+import { formatPx } from '../lib/units';
 import { scopeDispose } from './scope-dispose';
 import { absolutePointInScroller } from './scroller-geometry';
 
@@ -75,16 +76,24 @@ export function useScopedChromeAnchor(
 
         style.value = {
           position: attachedInsideViewport ? 'absolute' : 'fixed',
-          left:
-            placement === 'story-label' ? documentLeft : Math.max(viewportEdge, documentLeft + 8),
-          top:
+          left: formatPx(
+            placement === 'story-label' ? documentLeft : Math.max(viewportEdge, documentLeft + 8)
+          ),
+          top: formatPx(
             placement === 'story-label'
               ? documentTop
-              : Math.max(attachedInsideViewport ? viewport.scrollTop + 8 : 8, documentTop),
+              : Math.max(attachedInsideViewport ? viewport.scrollTop + 8 : 8, documentTop)
+          ),
           ...(placement === 'story-label'
-            ? { width: Math.max(240, Math.min(anchorRect.width, viewport.clientWidth - 16)) }
+            ? {
+                width: formatPx(
+                  Math.max(240, Math.min(anchorRect.width, viewport.clientWidth - 16))
+                ),
+              }
             : {
-                maxWidth: Math.max(240, Math.min(anchorRect.width - 16, viewport.clientWidth - 16)),
+                maxWidth: formatPx(
+                  Math.max(240, Math.min(anchorRect.width - 16, viewport.clientWidth - 16))
+                ),
               }),
           visibility: 'visible',
         };

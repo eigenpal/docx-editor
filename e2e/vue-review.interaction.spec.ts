@@ -84,8 +84,15 @@ test.describe('Vue review chrome', () => {
     await page.waitForSelector('.docx-page', { timeout: 30_000 });
     const headerBand = page.locator('[data-docx-hf="header"]').first();
     await headerBand.dblclick();
-    await expect(page.locator('[data-testid="docx-hf-chrome"]')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('[data-testid="docx-hf-chrome"]')).toContainText('Header');
+    const chrome = page.locator('[data-testid="docx-hf-chrome"]');
+    await expect(chrome).toBeVisible({ timeout: 15_000 });
+    await expect(chrome).toContainText('Header');
+    const [headerBox, chromeBox] = await Promise.all([
+      headerBand.boundingBox(),
+      chrome.boundingBox(),
+    ]);
+    expect(chromeBox?.x).toBeCloseTo(headerBox?.x ?? 0, 0);
+    expect(chromeBox?.width).toBeCloseTo(headerBox?.width ?? 0, 0);
     await page.getByRole('button', { name: 'Options' }).click();
     await expect(page.getByRole('menuitem', { name: 'Insert current page number' })).toBeVisible();
   });
