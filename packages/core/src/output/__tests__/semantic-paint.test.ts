@@ -99,10 +99,12 @@ describe('the painter is a non-authoritative consumer', () => {
     for (const span of spans) expect(span.style.left).toBe('');
   });
 
-  test('justified paint follows published gaps without expanding nonbreaking spaces', () => {
-    // CSS word-spacing expands NBSPs in Chromium, but layout only justifies ordinary spaces.
-    // Paint each published gap explicitly so later carets stay on their semantic boxes.
-    // Enough words that the paragraph wraps: the first line is justified, the last is not.
+  test('justified paint stretches trailing spaces so the selection band stays continuous', () => {
+    // A justify gap is painted as `word-spacing` on the span BEFORE it: the browser
+    // highlights a space's advance but never a margin, so margin gaps broke the native
+    // selection into one block per word. Layout only justifies ordinary spaces — the NBSPs
+    // here must not stretch. Enough words that the paragraph wraps: the first line is
+    // justified, the last is not.
     const words = Array.from({ length: 20 }, (_, index) => `w${index}`).join(' ');
     const body =
       `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
@@ -146,9 +148,56 @@ describe('the painter is a non-authoritative consumer', () => {
     for (let index = 1; index < line.spans.length; index += 1) {
       const previous = line.spans[index - 1]!;
       const expected = line.spans[index]!.box.x - (previous.box.x + previous.box.width);
-      const actual = Number.parseFloat(paintedSpans[index]!.style.marginLeft || '0');
-      expect(actual).toBeCloseTo(expected > 0.25 ? expected : 0, 5);
+      const stretch = Number.parseFloat(paintedSpans[index - 1]!.style.wordSpacing || '0');
+      const margin = Number.parseFloat(paintedSpans[index]!.style.marginLeft || '0');
+      // Each gap is painted exactly once — a stretched space AND a margin would double it.
+      expect(stretch + margin).toBeCloseTo(expected > 0.25 ? expected : 0, 5);
+      // Every gap in this fixture follows a plain-space word, so every gap is a stretch.
+      expect(margin).toBe(0);
+      // Selection mapping requires the span's characters to stay in ONE text node.
+      expect(paintedSpans[index]!.childNodes).toHaveLength(1);
     }
+  });
+
+  test('a justify gap after a span holding an NBSP falls back to the margin', () => {
+    // Every engine's `word-spacing` expands NBSP too, which would shift painted glyphs off
+    // their published boxes — such a span keeps the margin on its neighbour instead.
+    const words = Array.from({ length: 20 }, (_, index) => `w${index}`).join(' ');
+    const body =
+      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
+      `<w:r><w:t xml:space="preserve">a b ${words}</w:t></w:r>` +
+      `</w:p>`;
+    const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
+      name: '/word/document.xml',
+      contentType: 'app/xml',
+    });
+    if (!read.ok) throw new Error(read.reason);
+    const layout = layoutSemanticDocument(read.part, 7, {
+      measurer: createFixedMeasurer(6, 14),
+      geometry: {
+        width: 220,
+        height: 400,
+        margin: { top: 10, right: 10, bottom: 10, left: 10 },
+      },
+    });
+    const fragment = layout.pages[0]!.fragments[0]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected paragraph');
+    const line = fragment.lines[0]!;
+    const nbspIndex = line.spans.findIndex((span) => span.text.includes(' '));
+    expect(nbspIndex).toBeGreaterThanOrEqual(0);
+    const nbspSpan = line.spans[nbspIndex]!;
+    const next = line.spans[nbspIndex + 1]!;
+    const gap = next.box.x - (nbspSpan.box.x + nbspSpan.box.width);
+    expect(gap).toBeGreaterThan(0.25);
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const paintedSpans = [
+      ...container
+        .querySelector<HTMLElement>('.docx-line')!
+        .querySelectorAll<HTMLElement>('.layout-run'),
+    ];
+    expect(paintedSpans[nbspIndex]!.style.wordSpacing).toBe('');
+    expect(Number.parseFloat(paintedSpans[nbspIndex + 1]!.style.marginLeft)).toBeCloseTo(gap, 5);
   });
 
   test('a line is as tall as the record says, so lines cannot drift apart', () => {

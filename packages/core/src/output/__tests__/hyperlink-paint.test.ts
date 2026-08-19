@@ -259,4 +259,58 @@ describe('each HYPERLINK field is its own anchor', () => {
     );
     expect(container.querySelectorAll('a[data-docx-link]')).toHaveLength(1);
   });
+
+  test('a justify gap never stretches a link over the following plain text', () => {
+    // The stretch lives inside the span's box AND its anchor. A link's last span absorbing
+    // the gap would widen the <a> hit target across blank slack, so a click there would
+    // follow the link. That boundary keeps the margin; gaps INSIDE the link still stretch.
+    const words = Array.from({ length: 16 }, (_, index) => `w${index}`).join(' ');
+    const body =
+      '<w:p><w:pPr><w:jc w:val="both"/></w:pPr>' +
+      '<w:hyperlink r:id="rId9"><w:r><w:t xml:space="preserve">link text </w:t></w:r></w:hyperlink>' +
+      `<w:r><w:t xml:space="preserve">${words}</w:t></w:r>` +
+      '</w:p>';
+    const pkg = packageOf(body, EXTERNAL_REL);
+    const part = pkg.parts.get(pkg.mainDocumentPart)!;
+    const layout = layoutSemanticDocument(part, 3, {
+      measurer: createFixedMeasurer(6, 14),
+      geometry: { width: 220, height: 400, margin: { top: 10, right: 10, bottom: 10, left: 10 } },
+      projectLink: (link: OoxmlNode) => {
+        if (link.kind === 'textValue') return null;
+        const target = hyperlinkTargetOf(link, (id) =>
+          relationshipTargetIn(pkg, pkg.mainDocumentPart, id)
+        );
+        return { id: link.id, kind: target.kind, href: target.href };
+      },
+    });
+    const fragment = layout.pages[0]!.fragments[0]!;
+    if (fragment.kind !== 'paragraph') throw new Error('expected paragraph');
+    const line = fragment.lines[0]!;
+    const gapAfter = (index: number): number => {
+      const span = line.spans[index]!;
+      const next = line.spans[index + 1]!;
+      return next.box.x - (span.box.x + span.box.width);
+    };
+    // "link " → "text ": both in the anchor, with justify slack between them.
+    expect(line.spans[0]!.link).toBeDefined();
+    expect(line.spans[1]!.link).toBeDefined();
+    expect(gapAfter(0)).toBeGreaterThan(0.25);
+    // "text " → first plain word: the anchor boundary, also with slack.
+    expect(line.spans[2]!.link).toBeUndefined();
+    expect(gapAfter(1)).toBeGreaterThan(0.25);
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1, ariaHidden: false });
+    const painted = [
+      ...container
+        .querySelector<HTMLElement>('.docx-line')!
+        .querySelectorAll<HTMLElement>('.layout-run'),
+    ];
+    // Inside the anchor: the gap stretches, so the band and the hit target stay one piece.
+    expect(Number.parseFloat(painted[0]!.style.wordSpacing)).toBeCloseTo(gapAfter(0), 5);
+    // At the boundary: no stretch on the link's last span — the gap is the margin again.
+    expect(painted[1]!.style.wordSpacing).toBe('');
+    expect(Number.parseFloat(painted[2]!.style.marginLeft)).toBeCloseTo(gapAfter(1), 5);
+    // And the anchor's own text still ends at the link text; the slack is outside it.
+    expect(container.querySelector('a.docx-hyperlink')!.textContent).toBe('link text ');
+  });
 });
