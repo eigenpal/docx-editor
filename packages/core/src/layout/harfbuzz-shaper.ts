@@ -21,7 +21,10 @@ import {
   type TextShaper,
   type VersionedShapingLibrary,
 } from './shaped-run.ts';
-import { harfBuzzWasmUnavailableDiagnostic } from './harfbuzz-wasm-binary.ts';
+import {
+  harfBuzzVersionMismatchDiagnostic,
+  harfBuzzWasmUnavailableDiagnostic,
+} from './harfbuzz-wasm-binary.ts';
 
 type HarfBuzzModule = typeof import('harfbuzzjs');
 type HarfBuzzBlob = InstanceType<HarfBuzzModule['Blob']>;
@@ -53,7 +56,11 @@ export function initializeHarfBuzz(): Promise<void> {
       const version = module.versionString();
       if (version !== HARFBUZZ_SHAPING_LIBRARY.version) {
         throw new HarfBuzzShapingError('shapingLibraryMismatch', {
-          diagnostic: `expected ${HARFBUZZ_SHAPING_LIBRARY.version}, loaded ${version}`,
+          // A self-hosted binary makes this the SECOND step of the workflow the docs send
+          // esbuild and Bun consumers down: copy the file, then upgrade the package and
+          // forget to re-copy it. `expected X, loaded Y` alone names no file and no remedy,
+          // which is the dead end the rest of this error handling exists to remove.
+          diagnostic: harfBuzzVersionMismatchDiagnostic(HARFBUZZ_SHAPING_LIBRARY.version, version),
         });
       }
       harfBuzzModule = module;

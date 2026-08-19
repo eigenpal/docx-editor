@@ -130,6 +130,26 @@ export function harfBuzzWasmUnavailableDiagnostic(cause: unknown): string {
   );
 }
 
+/**
+ * Why the loaded runtime is the wrong version, and what to do about it.
+ *
+ * Worth its own text because the likely cause differs by how the binary got there. A
+ * self-hosted copy (the esbuild/Bun path) goes stale the moment the package is upgraded and
+ * nobody re-copies it — so that case names the file and the step, rather than leaving the
+ * consumer with two version numbers and no instruction.
+ */
+export function harfBuzzVersionMismatchDiagnostic(expected: string, loaded: string): string {
+  const mismatch = `expected HarfBuzz ${expected}, loaded ${loaded}`;
+  if (overrideUrl === null) {
+    return `${mismatch}. The bundled binary does not match this build of the engine.`;
+  }
+  return (
+    `${mismatch}. The copy served at ${overrideUrl} is from a different version of ` +
+    '`@docx-editor.dev/core`. Re-copy `@docx-editor.dev/core/harfbuzz.wasm` from the ' +
+    'installed package into your served assets, and reload the page.'
+  );
+}
+
 /** Test seam: forget both URLs so one test's override cannot leak into the next. */
 export function resetHarfBuzzWasmUrlForTests(): void {
   overrideUrl = null;

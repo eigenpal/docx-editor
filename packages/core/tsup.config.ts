@@ -150,10 +150,6 @@ const shared = {
   // because core-lane-graph.test.ts reads that file with a plain JSON.parse.
   esbuildOptions(options) {
     options.alias = {
-      // See `src/layout/node-module-shim.ts`: the inlined HarfBuzz runtime asks for Node's
-      // `module` behind a guard no browser runs, and this is what it gets instead. Harmless
-      // in the CJS build, which inlines nothing that asks for it.
-      module: resolve(here, 'src/layout/node-module-shim.ts'),
       '@docx-editor.dev/core': resolve(here, 'src/index.ts'),
       '@docx-editor.dev/core/automation': resolve(here, 'src/automation/index.ts'),
       '@docx-editor.dev/core/binding': resolve(here, 'src/binding/index.ts'),
@@ -193,6 +189,17 @@ export default defineConfig([
     // Only meaningful here: the CJS build leaves harfbuzzjs external, so its glue never
     // passes through esbuild there.
     esbuildPlugins: [harfBuzzWasmUrlEscapeHatch],
+    // Scoped to THIS build, not `shared`. Only the ESM bundle inlines the runtime that asks
+    // for `module`, and aliasing a bare Node specifier package-wide would hand any future
+    // bundled dependency a stub that silently lacks `builtinModules` instead of failing the
+    // build. See `src/layout/node-module-shim.ts`.
+    esbuildOptions(options) {
+      shared.esbuildOptions(options);
+      options.alias = {
+        ...options.alias,
+        module: resolve(here, 'src/layout/node-module-shim.ts'),
+      };
+    },
     // Which is exactly why `setHarfBuzzWasmUrl` has to know which build it is in: patched
     // here, inert in CJS, and it refuses rather than no-ops there.
     define: { __DOCX_HARFBUZZ_WASM_URL_SUPPORTED__: 'true' },

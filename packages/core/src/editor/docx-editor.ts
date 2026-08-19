@@ -157,6 +157,7 @@ import {
   createLayoutShaping,
   disposeLayoutShaping,
   toEditorFontError,
+  warnFontFailureOnce,
 } from './font-configuration.ts';
 import {
   MAX_RESOLVER_FAMILIES,
@@ -669,6 +670,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   function reportFontError(error: EditorFontError): void {
+    // A shaper that never loaded is not a per-face degradation: NOTHING measures correctly,
+    // and the fault is the host's build rather than the document's content. Said out loud
+    // exactly once, and only when nobody is listening — a host that reports it in its own
+    // UI does not need library noise it cannot switch off. Before this was fixed the same
+    // misconfiguration failed the BUILD, so a green build with a silent console would be a
+    // strictly worse trade (#282).
+    if (error.code === 'wasmUnavailable' && !config.onFontError && handlers.error.size === 0) {
+      warnFontFailureOnce(error);
+    }
     // A host handler that throws must not abort font resolution — reporting a dropped
     // face would then cost the whole shaped measurer, and the catch's own report would
     // throw again as an unhandled rejection.

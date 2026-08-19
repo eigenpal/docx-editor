@@ -140,15 +140,36 @@ describe('the published subpath tables agree', () => {
   });
 
   test('the format builds publish the same subpaths from the same sources', () => {
-    // The ESM and CJS builds differ in ONE thing — whether harfbuzzjs is inlined — and the
-    // split makes it possible to change one and forget the other. A subpath added to only
-    // one of them ships an export map entry that resolves under `import` and 404s under
-    // `require`, or the reverse.
+    // The ESM and CJS builds differ only in how they reach harfbuzzjs, and the split makes
+    // it possible to change one and forget the other. A subpath added to only one of them
+    // ships an export map entry that resolves under `import` and 404s under `require`, or
+    // the reverse. The SELF-REFERENCE aliases must agree for the same reason; the `module`
+    // alias is compared separately below, since it is deliberately ESM-only.
+    const selfReferenceAliases = (build: BuildConfig): Record<string, string> =>
+      Object.fromEntries(
+        Object.entries(esbuildAliasOf(build)).filter(([specifier]) =>
+          specifier.startsWith('@docx-editor.dev/core')
+        )
+      );
+
     expect(configs).toHaveLength(2);
     for (const build of configs.slice(1)) {
       expect(build.entry).toEqual(config.entry);
-      expect(esbuildAliasOf(build)).toEqual(esbuildAliasOf(config));
+      expect(selfReferenceAliases(build)).toEqual(selfReferenceAliases(config));
     }
+  });
+
+  test('only the build that inlines the runtime aliases Node’s `module`', () => {
+    // `module` is a bare Node specifier, not a subpath of this package. Aliasing it is how
+    // the inlined HarfBuzz runtime stops reaching for a builtin no browser bundler can
+    // resolve (#282) — but scoped to the ESM build alone, because a package-wide override
+    // would hand any FUTURE bundled dependency a stub silently missing `builtinModules`
+    // instead of failing the build.
+    const [esm, cjs] = configs;
+    expect({
+      esm: 'module' in esbuildAliasOf(esm!),
+      cjs: 'module' in esbuildAliasOf(cjs!),
+    }).toEqual({ esm: true, cjs: false });
   });
 
   test('the split carries its reason: exactly the ESM build inlines and patches harfbuzzjs', () => {

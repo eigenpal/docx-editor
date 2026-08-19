@@ -258,7 +258,7 @@ are the common ones, and so is any build that inlines dynamic imports, such as a
 library bundle. Those builds succeed and then fail at runtime, reaching
 `onFontError` as an `EditorFontError` with code `wasmUnavailable`:
 
-```ts
+```tsx
 <DocxEditor
   onFontError={(error) => {
     if (error.code === 'wasmUnavailable') showSetupError(error.diagnostic);
@@ -279,8 +279,22 @@ import { setHarfBuzzWasmUrl } from '@docx-editor.dev/core/layout';
 setHarfBuzzWasmUrl('/static/harfbuzz.wasm');
 ```
 
-Resolve the file at `@docx-editor.dev/core/harfbuzz.wasm`, which also works
-under Yarn Plug'n'Play, where there's no `node_modules` directory to copy from.
+Copy it as a build step. Resolving the package subpath works under Yarn
+Plug'n'Play too, where there's no `node_modules` directory to read from:
+
+```js
+// scripts/copy-shaper.mjs — run before your bundler
+import { copyFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
+await copyFile(
+  fileURLToPath(import.meta.resolve('@docx-editor.dev/core/harfbuzz.wasm')),
+  'public/static/harfbuzz.wasm'
+);
+```
+
+Re-run that step on every upgrade. The shaper refuses a binary from a different
+version, so a stale copy fails the same way a missing one does.
 
 Call `setHarfBuzzWasmUrl` before the first editor. The shaper reads the location
 once and caches it, so a later call warns and does nothing: move the call and

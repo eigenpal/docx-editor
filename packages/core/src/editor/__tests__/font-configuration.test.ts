@@ -1,7 +1,12 @@
 import { expect, spyOn, test } from 'bun:test';
 import { EditorFontError, type FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { HarfBuzzShapingError, sha256FontBytes } from '@docx-editor.dev/core/layout';
-import { createLayoutShaping, toEditorFontError } from '../font-configuration.ts';
+import {
+  createLayoutShaping,
+  resetFontFailureWarningForTests,
+  toEditorFontError,
+  warnFontFailureOnce,
+} from '../font-configuration.ts';
 
 const fontUrl = new URL('../../layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url);
 
@@ -143,43 +148,63 @@ test('copies each valid source exactly once into snapshot ownership', async () =
   shaping.shaper.dispose();
 });
 
-test('a missing WASM keeps its code and remedy, and says so once without a handler', () => {
-  // Three claims, asserted together because the console warning is once-per-session and a
-  // second test could not observe it:
-  //   - the CODE survives, so a host can branch on "your bundler is misconfigured" rather
-  //     than matching English inside `diagnostic`;
-  //   - the DIAGNOSTIC survives, because it is where the remedy is written (#282);
-  //   - it reaches the console even with no `onFontError` registered. Every other font
-  //     failure degrades quietly, but this one disables shaping for the whole document,
-  //     and the same misconfiguration used to fail the BUILD — a silent console after a
-  //     green build would be strictly worse.
+test('a shaper that never loaded keeps its code and its remedy out to the host', () => {
+  // `onFontError` is the only surface a host sees. The CODE has to survive so a host can
+  // branch on "your bundler is misconfigured" rather than matching English inside
+  // `diagnostic`, and the diagnostic has to survive because it is where the remedy is
+  // written (#282). `toEditorFontError` is public API, so it stays a pure mapper —
+  // the console side of this lives in `reportFontError`, which knows who is listening.
   const failure = new HarfBuzzShapingError('wasmUnavailable', {
     diagnostic: 'serve `@docx-editor.dev/core/harfbuzz.wasm` and call `setHarfBuzzWasmUrl`',
   });
-  const error = spyOn(console, 'error').mockImplementation(() => {});
 
-  try {
-    const surfaced = toEditorFontError(failure);
+  const surfaced = toEditorFontError(failure);
 
-    expect(surfaced).toBeInstanceOf(EditorFontError);
-    expect(surfaced.code).toBe('wasmUnavailable');
-    expect(surfaced.diagnostic).toContain('setHarfBuzzWasmUrl');
-    expect(surfaced.cause).toBe(failure);
-    expect(error).toHaveBeenCalledTimes(1);
-    expect(String(error.mock.calls[0]?.[0])).toContain('text shaping is disabled');
-
-    // A document with many unshapeable runs must not turn the console into a log.
-    toEditorFontError(failure);
-    expect(error).toHaveBeenCalledTimes(1);
-  } finally {
-    error.mockRestore();
-  }
+  expect(surfaced).toBeInstanceOf(EditorFontError);
+  expect(surfaced.code).toBe('wasmUnavailable');
+  expect(surfaced.diagnostic).toContain('setHarfBuzzWasmUrl');
+  expect(surfaced.cause).toBe(failure);
 });
 
-test('shaping failures that are not the WASM keep reporting as initializationFailed', () => {
+test('a stale self-hosted binary reports as the same host-deployment fault', () => {
+  // The second step of the documented workflow: copy the wasm, then upgrade the package
+  // and forget to re-copy it. Version mismatch is the same class of problem as a missing
+  // binary — the shaper is not running — so it must not collapse into the generic code.
+  const surfaced = toEditorFontError(
+    new HarfBuzzShapingError('shapingLibraryMismatch', {
+      diagnostic: 'expected HarfBuzz 14.3.0, loaded 14.2.1. Re-copy …',
+    })
+  );
+
+  expect(surfaced.code).toBe('wasmUnavailable');
+  expect(surfaced.diagnostic).toContain('Re-copy');
+});
+
+test('shaping failures that are not the shaper keep reporting as initializationFailed', () => {
   // The new branch must not relabel the resource-limit codes, which are document faults
   // and were already mapped this way.
   const surfaced = toEditorFontError(new HarfBuzzShapingError('glyphOverLimit', { limit: 10 }));
 
   expect(surfaced.code).toBe('initializationFailed');
+});
+
+test('the shaper-failure console warning fires once, and only for the whole-document fault', () => {
+  // Every other font failure degrades quietly on purpose. This one disables shaping for the
+  // entire document, and before #282 was fixed the same misconfiguration failed the BUILD —
+  // so a green build with a silent console would be a strictly worse trade.
+  resetFontFailureWarningForTests();
+  const error = spyOn(console, 'error').mockImplementation(() => {});
+
+  try {
+    warnFontFailureOnce({ diagnostic: 'serve the binary' });
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(String(error.mock.calls[0]?.[0])).toContain('text shaping is disabled');
+
+    // A document with many unshapeable runs must not turn the console into a log.
+    warnFontFailureOnce({ diagnostic: 'serve the binary' });
+    expect(error).toHaveBeenCalledTimes(1);
+  } finally {
+    error.mockRestore();
+    resetFontFailureWarningForTests();
+  }
 });

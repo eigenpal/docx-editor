@@ -167,9 +167,10 @@ export interface FontConfiguration {
  *
  * `wasmUnavailable` is the odd one out and the reason it is separate: every other code is a
  * DOCUMENT problem, reported per face, while that one means the text shaper's WASM never
- * loaded, so nothing can be measured at all. It is a host deployment fault, fixed by serving
- * `harfbuzz.wasm` and calling `setHarfBuzzWasmUrl`, and a host wants to surface it as a setup
- * error rather than a font warning.
+ * loaded — unreachable, or the wrong version after a package upgrade left a self-hosted copy
+ * behind — so nothing can be measured at all. It is a host deployment fault, and its
+ * `diagnostic` carries the remedy, so a host wants to surface it as a setup error rather
+ * than a font warning.
  */
 export type EditorFontErrorCode =
   | 'initializationFailed'

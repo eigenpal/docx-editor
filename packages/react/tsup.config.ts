@@ -39,5 +39,5 @@ export default defineConfig({
   // the adapter painted from another.
   // emf-converter is lazily imported; external keeps the metafile rasterizer out of
   // the main bundle.
-  external: ['react', 'react-dom', 'harfbuzzjs', 'emf-converter'],
+  external: ['react', 'react-dom', 'emf-converter'],
 });

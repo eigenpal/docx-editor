@@ -34,27 +34,31 @@ function publicRequest(request: FontFaceRequest): FontFaceRequest {
   });
 }
 
-let warnedWasmUnavailable = false;
+let warnedFontFailure = false;
 
 /**
- * Say it out loud once, even with no `onFontError` registered.
+ * Say a shaper-level failure out loud once, for hosts that registered no reporting at all.
  *
  * Every other font failure degrades quietly on purpose: one refused embedded face is
- * document data, and the document still renders correctly enough to read. This one is not
- * that. The shaper is gone, so every line break, page break and caret position in the
- * document is computed from fallback metrics, and the host that could report it is the
- * host that misconfigured its bundler. Before this was fixed the same misconfiguration
- * failed the BUILD; degrading to a silent console after a green build would be a strictly
- * worse trade.
+ * document data, and the document still renders well enough to read. This one is not that.
+ * The shaper is gone, so every line break, page break and caret position comes from
+ * fallback metrics. Called only from `reportFontError`, which knows whether anyone is
+ * listening — a host reporting it in its own UI must not also get library console noise.
  */
-function warnWasmUnavailableOnce(error: { readonly diagnostic?: string }): void {
-  if (warnedWasmUnavailable) return;
-  warnedWasmUnavailable = true;
+export function warnFontFailureOnce(error: { readonly diagnostic?: string }): void {
+  if (warnedFontFailure) return;
+  warnedFontFailure = true;
+  const detail = error.diagnostic ? `: ${error.diagnostic}` : '.';
   console.error(
-    `[@docx-editor.dev/core] text shaping is disabled: ${error.diagnostic ?? ''}\n` +
+    `[@docx-editor.dev/core] text shaping is disabled${detail}\n` +
       'Text is being measured with fallback metrics, so line and page breaks will not ' +
       'match Word.'
   );
+}
+
+/** Test seam: the warning is once-per-process, so a test asserting it must clear the latch. */
+export function resetFontFailureWarningForTests(): void {
+  warnedFontFailure = false;
 }
 
 /**
@@ -72,13 +76,16 @@ export function toEditorFontError(error: unknown): EditorFontError {
     });
   }
   if (error instanceof HarfBuzzShapingError) {
-    // `wasmUnavailable` keeps its own code out to the host. Every other shaping code maps
-    // to `initializationFailed` as before, but this one is a HOST deployment fault rather
-    // than a document fault, and a host must be able to branch on it — matching on the
-    // prose of `diagnostic` would be an API made of an English sentence.
+    // Both ways the shaper can fail to come up keep their own code out to the host: the
+    // binary was unreachable, or the one that loaded is the wrong version — which is the
+    // same fault after a package upgrade left a self-hosted copy behind. Every other
+    // shaping code stays `initializationFailed`, because those are document faults. A host
+    // must be able to branch on this one, and matching the prose of `diagnostic` would be
+    // an API made of an English sentence.
     const code: EditorFontErrorCode =
-      error.code === 'wasmUnavailable' ? 'wasmUnavailable' : 'initializationFailed';
-    if (error.code === 'wasmUnavailable') warnWasmUnavailableOnce(error);
+      error.code === 'wasmUnavailable' || error.code === 'shapingLibraryMismatch'
+        ? 'wasmUnavailable'
+        : 'initializationFailed';
     return new EditorFontError(code, error.message, {
       diagnostic: error.diagnostic ?? error.message,
       cause: error,

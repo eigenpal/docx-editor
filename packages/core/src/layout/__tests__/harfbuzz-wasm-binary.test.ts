@@ -8,6 +8,7 @@
 
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import {
+  harfBuzzVersionMismatchDiagnostic,
   harfBuzzWasmUnavailableDiagnostic,
   resetHarfBuzzWasmUrlForTests,
   resolveHarfBuzzWasmBinaryUrl,
@@ -99,5 +100,28 @@ describe('harfBuzzWasmUnavailableDiagnostic', () => {
   test('reports the location actually read, so the advice points somewhere real', () => {
     resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL);
     expect(harfBuzzWasmUnavailableDiagnostic(new Error('404'))).toContain(BUNDLER_URL);
+  });
+});
+
+describe('harfBuzzVersionMismatchDiagnostic', () => {
+  test('a self-hosted copy is told which file went stale and what to do', () => {
+    // The second step of the workflow the docs send esbuild/Bun consumers down: copy the
+    // binary, then upgrade the package. Two version numbers alone name no remedy.
+    setHarfBuzzWasmUrl(SERVED_URL);
+
+    const diagnostic = harfBuzzVersionMismatchDiagnostic('14.3.0', '14.2.1');
+
+    expect(diagnostic).toContain(SERVED_URL);
+    expect(diagnostic).toContain('Re-copy');
+    expect(diagnostic).toContain('14.2.1');
+  });
+
+  test('a bundled copy is not told to re-copy a file it never served', () => {
+    // Without an override the binary came from the bundler, so the re-copy advice would
+    // send the reader looking for a file they never created.
+    const diagnostic = harfBuzzVersionMismatchDiagnostic('14.3.0', '14.2.1');
+
+    expect(diagnostic).not.toContain('Re-copy');
+    expect(diagnostic).toContain('does not match this build');
   });
 });

@@ -152,6 +152,9 @@ jobs:
       - name: Published-package artifact check
         run: bun run check:package-artifacts
 
+      - name: Shipped text-shaper check
+        run: bun run check:shipped-shaper
+
       - name: Published-package consumer check
         run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
 

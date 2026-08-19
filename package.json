@@ -45,6 +45,7 @@
     "check:lane-boundaries": "node scripts/check-lane-boundaries.mjs",
     "check:core-css-compiled": "node scripts/check-core-css-compiled.mjs",
     "check:package-artifacts": "node scripts/check-package-artifacts.mjs && node scripts/check-core-css-compiled.mjs",
+    "check:shipped-shaper": "node scripts/check-shipped-shaper.mjs",
     "check:parity": "bun run check:export-parity && bun run check:editor-contract && bun run check:public-docs-surface && bun run check:parity-contract && bun run check:adapter-css-thin",
     "check:license-headers": "bun run check:pro-license-headers && bun run check:editor-api-license-headers",
     "check:parity-contract": "node scripts/check-parity-contract.mjs",
