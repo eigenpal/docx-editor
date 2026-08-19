@@ -83,6 +83,30 @@ describe('reviewGutter', () => {
     expect(1150 - gutter.inlineStart - gutter.inlineEnd).toBeGreaterThanOrEqual(PAGE + CLEARANCE);
   });
 
+  test('an open navigation pane counts against the column', () => {
+    // Navigation asks for 328px at the start. Judged against the raw viewport, the column
+    // stood at 1500px and the pane's displacement then squeezed the fit below the page's
+    // entitlement — the two-pane composition of the very bug this rule removes. The ask
+    // is subtracted first: page + column + pane + clearance need 1508.
+    const NAV = 328;
+    expect(
+      reviewGutter({
+        open: true,
+        viewportWidth: 1500,
+        pageWidthPx: PAGE,
+        inlineStartReservation: NAV,
+      })
+    ).toEqual(STRIP);
+    expect(
+      reviewGutter({
+        open: true,
+        viewportWidth: PAGE + REVIEW_PANE_GUTTER + CLEARANCE + NAV,
+        pageWidthPx: PAGE,
+        inlineStartReservation: NAV,
+      })
+    ).toEqual(FULL);
+  });
+
   test('answers the stylesheet fallback for a measurement it does not have yet', () => {
     // A viewport that has not been laid out, or a document with no page setup. The full
     // column is what the stylesheet painted before this measurement existed, so an

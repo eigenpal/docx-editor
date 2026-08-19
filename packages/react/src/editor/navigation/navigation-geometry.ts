@@ -41,6 +41,12 @@ export interface NavigationShiftInput {
   /** Padding already reserved at the inline end, for example by the review rail. */
   readonly inlineEndReservation?: number;
   /**
+   * Padding already standing at the inline START besides the shift itself — the review
+   * gutter's mirrored strip. It moves the page exactly as the shift does, so a shift
+   * computed without it lands the page that far past the reservation.
+   */
+  readonly inlineStartReservation?: number;
+  /**
    * Whether the page's WIDTH follows the padding right now.
    *
    * This turns the answer binary, and it has to. The proportional branch below assumes a page
@@ -72,30 +78,38 @@ export function navigationShift({
   pageWidthPx,
   reservation,
   inlineEndReservation = 0,
+  inlineStartReservation = 0,
   docked = false,
 }: NavigationShiftInput): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 0;
   if (!Number.isFinite(pageWidthPx) || pageWidthPx <= 0) return 0;
   if (!Number.isFinite(reservation) || reservation <= 0) return 0;
   if (!Number.isFinite(inlineEndReservation) || inlineEndReservation < 0) return 0;
+  if (!Number.isFinite(inlineStartReservation) || inlineStartReservation < 0) return 0;
 
   // A review rail (or other inline-end chrome) reduces the box in which the page centres.
   // Ignoring it makes the left gutter look wider than it is, so navigation can cover the
   // page instead of pushing the combined layout into horizontal overflow.
   const gutter = (viewportWidth - inlineEndReservation - pageWidthPx) / 2;
-  // Already room to the left of the page: the pane overlays empty space, the page holds
-  // still. This is the common case on any reasonably wide window, and it is the whole
-  // point of computing a shift instead of hard-coding one.
-  if (gutter >= reservation) return 0;
-
-  // Still centred: padding P moves the page by P/2, so twice the deficit lands it exactly
-  // on the reservation. Valid while the padded box is still at least a page wide, which
-  // is the same condition as `reservation <= 2 * gutter` — and only while the page's width
-  // is independent of the padding, which a fit mode is exactly the case where it is not.
-  if (!docked && reservation <= 2 * gutter) return Math.ceil(2 * (reservation - gutter));
-
-  // The padded box is narrower than the page: `margin-inline: auto` resolves to zero, the
-  // page pins to the padding edge, and the padding IS the offset. Horizontal scrolling
-  // appears here, which is correct — there is genuinely not enough room for both.
-  return Math.ceil(reservation);
+  // The TOTAL start padding the page needs; the shift is what remains of it after the
+  // padding already standing there. Solving for the shift alone and adding it on top of
+  // the mirrored strip landed the page past the reservation by the strip's width.
+  const total =
+    // Already room to the left of the page: the pane overlays empty space, the page holds
+    // still. This is the common case on any reasonably wide window, and it is the whole
+    // point of computing a shift instead of hard-coding one.
+    gutter >= reservation
+      ? 0
+      : // Still centred: total padding S moves the page by S/2, so twice the deficit lands it
+        // exactly on the reservation. Valid while the padded box is still at least a page
+        // wide, which is the same condition as `reservation <= 2 * gutter` — and only while
+        // the page's width is independent of the padding, which a fit mode is exactly the
+        // case where it is not.
+        !docked && reservation <= 2 * gutter
+        ? 2 * (reservation - gutter)
+        : // The padded box is narrower than the page: `margin-inline: auto` resolves to zero,
+          // the page pins to the padding edge, and the padding IS the offset. Horizontal
+          // scrolling appears here, which is correct — there is genuinely not enough room.
+          reservation;
+  return Math.ceil(Math.max(0, total - inlineStartReservation));
 }

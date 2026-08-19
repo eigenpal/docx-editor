@@ -36,7 +36,10 @@ import { ZOOM_MAX } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { ReviewRailContext } from './context';
 import { useEditorState } from './useEditorState';
-import { useNavigationViewportElement } from './navigation/navigation-layout';
+import {
+  useNavigationReservation,
+  useNavigationViewportElement,
+} from './navigation/navigation-layout';
 
 /** Full reservation: the 300px card column plus its 16px gutter off the page edge. */
 export const REVIEW_PANE_GUTTER = 316;
@@ -81,6 +84,15 @@ export interface ReviewGutterInput {
   /** The width the page is entitled to paint at — authored width times the entitled zoom. */
   readonly pageWidthPx: number;
   /**
+   * Start-edge room OTHER chrome is asking for — an open navigation pane's reservation.
+   * Without it the column judged only page-against-viewport, stood in the two-pane case,
+   * and the pane's displacement then squeezed the fit below the page's entitlement — the
+   * very symptom the measurement exists to remove. The STATIC ask (open pane × width),
+   * never the pane's computed shift: the shift depends on this gutter, and reading it
+   * back would close a cycle the two reservations then chase around.
+   */
+  readonly inlineStartReservation?: number;
+  /**
    * An uncapped fit is in force: the page fills whatever box it is given, so there is no
    * entitlement to measure the leftover against. The full column stands.
    */
@@ -100,13 +112,18 @@ export function reviewGutter({
   open,
   viewportWidth,
   pageWidthPx,
+  inlineStartReservation = 0,
   docked = false,
 }: ReviewGutterInput): ReviewGutter {
   if (!open) return BALANCED_STRIP;
   if (docked) return FULL_COLUMN;
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return FULL_COLUMN;
   if (!Number.isFinite(pageWidthPx) || pageWidthPx <= 0) return FULL_COLUMN;
-  const leftover = viewportWidth - pageWidthPx - 2 * REVIEW_GUTTER_PAGE_CLEARANCE;
+  const start =
+    Number.isFinite(inlineStartReservation) && inlineStartReservation > 0
+      ? inlineStartReservation
+      : 0;
+  const leftover = viewportWidth - start - pageWidthPx - 2 * REVIEW_GUTTER_PAGE_CLEARANCE;
   return leftover >= REVIEW_PANE_GUTTER ? FULL_COLUMN : BALANCED_STRIP;
 }
 
@@ -189,6 +206,9 @@ export function useReviewGutter(): ReviewGutter {
     sameGutterGeometry
   );
   const viewport = useNavigationViewportElement();
+  // An open navigation pane's STATIC ask, from the shared layout store — see the input's
+  // own doc for why it is never the pane's computed shift.
+  const navigationReservation = useNavigationReservation();
   // The snapshot reports `pageSetup` as null on some ticks even with a document loaded,
   // and a gutter derived from one of those would snap to the full column and back inside
   // one frame. The last width a document actually had is the honest answer for a tick
@@ -208,10 +228,11 @@ export function useReviewGutter(): ReviewGutter {
           pageWidthTwips === null || entitledZoom === null
             ? 0
             : twipsToPixels(pageWidthTwips) * entitledZoom,
+        inlineStartReservation: navigationReservation,
         docked: entitledZoom === null,
       });
     },
-    [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom]
+    [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom, navigationReservation]
   );
 
   const [gutter, setGutter] = useState<ReviewGutter>(() =>

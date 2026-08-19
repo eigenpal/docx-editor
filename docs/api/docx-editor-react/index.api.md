@@ -1287,6 +1287,7 @@ export function navigationShift(input: NavigationShiftInput): number;
 export interface NavigationShiftInput {
     readonly docked?: boolean;
     readonly inlineEndReservation?: number;
+    readonly inlineStartReservation?: number;
     readonly pageWidthPx: number;
     readonly reservation: number;
     readonly viewportWidth: number;
@@ -1517,6 +1518,7 @@ export function reviewGutter(input: ReviewGutterInput): ReviewGutter;
 // @public (undocumented)
 export interface ReviewGutterInput {
     readonly docked?: boolean;
+    readonly inlineStartReservation?: number;
     readonly open: boolean;
     readonly pageWidthPx: number;
     readonly viewportWidth: number;

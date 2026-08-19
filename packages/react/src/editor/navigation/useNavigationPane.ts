@@ -148,6 +148,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   );
   const [viewportWidth, setViewportWidth] = useState(0);
   const [inlineEndReservation, setInlineEndReservation] = useState(0);
+  const [inlineStartReservation, setInlineStartReservation] = useState(0);
 
   // `open` is a dependency as well as `viewport`: a window resized while the pane was
   // closed leaves no observation to react to (a hidden or throttled tab delivers no
@@ -157,12 +158,19 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     if (!viewport) {
       setViewportWidth(0);
       setInlineEndReservation(0);
+      setInlineStartReservation(0);
       return undefined;
     }
     const measure = () => {
       setViewportWidth(viewport.clientWidth);
-      const padding = Number.parseFloat(getComputedStyle(viewport).paddingInlineEnd);
+      const style = getComputedStyle(viewport);
+      const padding = Number.parseFloat(style.paddingInlineEnd);
       setInlineEndReservation(Number.isFinite(padding) ? padding : 0);
+      // The review gutter's mirrored strip, standing on the SAME edge the shift pads. The
+      // custom property, not `paddingInlineStart` — that computed value already contains
+      // this hook's own published shift, and measuring it back would be circular.
+      const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
+      setInlineStartReservation(Number.isFinite(strip) ? strip : 0);
     };
     measure();
     if (typeof ResizeObserver === 'undefined') return undefined;
@@ -187,9 +195,19 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
       pageWidthPx: twipsToPixels(pageWidthTwips) * zoom,
       reservation: navigationPaneReservation(paneWidth),
       inlineEndReservation,
+      inlineStartReservation,
       docked: fitting,
     });
-  }, [open, pageWidthTwips, zoom, viewportWidth, paneWidth, inlineEndReservation, fitting]);
+  }, [
+    open,
+    pageWidthTwips,
+    zoom,
+    viewportWidth,
+    paneWidth,
+    inlineEndReservation,
+    inlineStartReservation,
+    fitting,
+  ]);
 
   useEffect(() => {
     if (!store) return undefined;
@@ -197,6 +215,15 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     // A pane unmounting mid-shift would otherwise leave the chrome permanently displaced.
     return () => store.setShift(0);
   }, [store, shift]);
+
+  // What an OPEN pane is asking for, published for the review gutter's affordability
+  // check. The STATIC reservation, never the measured shift — the shift depends on the
+  // gutter, and publishing it here would close a cycle (see the store's own comment).
+  useEffect(() => {
+    if (!store) return undefined;
+    store.setReservation(open ? navigationPaneReservation(paneWidth) : 0);
+    return () => store.setReservation(0);
+  }, [store, open, paneWidth]);
 
   return { open, setOpen, toggle, tab, setTab, paneWidth, shift };
 }

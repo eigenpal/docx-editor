@@ -19,6 +19,16 @@ export interface NavigationLayoutStore {
   getShift(): number;
   setShift(px: number): void;
   subscribeShift(listener: () => void): () => void;
+  /**
+   * The start-edge room an OPEN pane asks for (`navigationPaneReservation`), 0 while it
+   * is closed or unmounted. STATIC on purpose — a function of the pane's own state, never
+   * of the measured shift: the review gutter reads this to decide whether its column is
+   * affordable, and the shift in turn depends on the gutter, so publishing the shift here
+   * instead would close a cycle the two reservations then chase around.
+   */
+  getReservation(): number;
+  setReservation(px: number): void;
+  subscribeReservation(listener: () => void): () => void;
   /** The scroll container, registered by `DocxEditor.Viewport` so the pane can measure it. */
   getViewport(): HTMLElement | null;
   setViewport(element: HTMLElement | null): void;
@@ -27,8 +37,10 @@ export interface NavigationLayoutStore {
 
 export function createNavigationLayoutStore(): NavigationLayoutStore {
   let shift = 0;
+  let reservation = 0;
   let viewport: HTMLElement | null = null;
   const shiftListeners = new Set<() => void>();
+  const reservationListeners = new Set<() => void>();
   const viewportListeners = new Set<() => void>();
   const notify = (listeners: Set<() => void>) => {
     for (const listener of [...listeners]) listener();
@@ -46,6 +58,17 @@ export function createNavigationLayoutStore(): NavigationLayoutStore {
     subscribeShift(listener) {
       shiftListeners.add(listener);
       return () => shiftListeners.delete(listener);
+    },
+    getReservation: () => reservation,
+    setReservation(px) {
+      const next = Math.max(0, Math.round(px));
+      if (next === reservation) return;
+      reservation = next;
+      notify(reservationListeners);
+    },
+    subscribeReservation(listener) {
+      reservationListeners.add(listener);
+      return () => reservationListeners.delete(listener);
     },
     getViewport: () => viewport,
     setViewport(element) {
@@ -82,6 +105,21 @@ export function useNavigationShift(): number {
     [store]
   );
   const getSnapshot = useCallback(() => (store ? store.getShift() : 0), [store]);
+  return useSyncExternalStore(subscribe, getSnapshot, ZERO);
+}
+
+/**
+ * The start-edge room the navigation pane is asking for right now — 0 while it is closed
+ * or unmounted. Internal: the review gutter subtracts it before judging whether its card
+ * column is affordable, so the two panes never claim the same pixels.
+ */
+export function useNavigationReservation(): number {
+  const store = useNavigationLayoutStore();
+  const subscribe = useCallback(
+    (listener: () => void) => (store ? store.subscribeReservation(listener) : NOOP_UNSUBSCRIBE()),
+    [store]
+  );
+  const getSnapshot = useCallback(() => (store ? store.getReservation() : 0), [store]);
   return useSyncExternalStore(subscribe, getSnapshot, ZERO);
 }
 

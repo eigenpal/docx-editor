@@ -117,6 +117,43 @@ describe('navigationShift', () => {
     }
   });
 
+  test('padding already standing at the inline start comes off the shift', () => {
+    // The review gutter's mirrored 44px strip moves the page exactly as the shift does.
+    // Solving for the shift alone and adding it ON TOP of the strip landed the page 22px
+    // (proportional) to 44px (docked) past the reservation.
+    const strip = 44;
+    // Proportional: 1200px viewport, 192px gutter. The TOTAL start padding the page needs
+    // is 272 (see the test above); the strip supplies 44 of it.
+    const shift = navigationShift({
+      viewportWidth: 1200,
+      pageWidthPx: PAGE,
+      reservation: RESERVATION,
+      inlineStartReservation: strip,
+    });
+    expect(shift).toBe(272 - strip);
+    // The page still lands exactly on the reservation: total padding over two, plus gutter.
+    expect((shift + strip) / 2 + (1200 - PAGE) / 2).toBe(RESERVATION);
+    // Docked: the page pins at the total padding, so the shift is the remainder.
+    expect(
+      navigationShift({
+        viewportWidth: 900,
+        pageWidthPx: PAGE,
+        reservation: RESERVATION,
+        inlineStartReservation: strip,
+        docked: true,
+      })
+    ).toBe(RESERVATION - strip);
+    // A strip that already clears the whole deficit asks for no shift at all.
+    expect(
+      navigationShift({
+        viewportWidth: 1200,
+        pageWidthPx: PAGE,
+        reservation: RESERVATION,
+        inlineStartReservation: 300,
+      })
+    ).toBe(0);
+  });
+
   test('answers zero for a measurement it does not have yet', () => {
     // A viewport that has not been laid out, or a document with no page setup. Shifting on
     // a zero measurement would make the pane jump on the first frame and settle on the
