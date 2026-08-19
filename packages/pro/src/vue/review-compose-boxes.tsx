@@ -8,6 +8,7 @@ import {
   defineComponent,
   getCurrentInstance,
   h,
+  onBeforeUnmount,
   onMounted,
   ref,
   type ComputedRef,
@@ -44,11 +45,13 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         const text = ref('');
         const refused = ref(false);
         const fieldId = useReviewStableId('draft');
+        let measuredBy: ReviewRailValue['measure'] | null = null;
 
         onMounted(() => {
           const root = getCurrentInstance()?.proxy?.$el;
           if (root instanceof HTMLElement) {
-            rail.value.measure(root, COMPOSE_KEY);
+            measuredBy = rail.value.measure;
+            measuredBy(root, COMPOSE_KEY);
           }
           if (rail.value.readOnly) return;
           const input =
@@ -56,6 +59,9 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
               ? root.querySelector('[data-testid="review-draft-input"]')
               : null;
           (input as HTMLInputElement | null)?.focus({ preventScroll: true });
+        });
+        onBeforeUnmount(() => {
+          measuredBy?.(null, COMPOSE_KEY);
         });
 
         const submit = () => {

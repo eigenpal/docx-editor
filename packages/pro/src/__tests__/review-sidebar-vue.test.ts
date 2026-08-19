@@ -236,6 +236,45 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
+  test('stops observing the compose slot when a draft closes', async () => {
+    const original = globalThis.ResizeObserver;
+    const observed: Element[] = [];
+    const unobserved: Element[] = [];
+    class ProbeResizeObserver {
+      constructor(_callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        observed.push(target);
+      }
+      unobserve(target: Element) {
+        unobserved.push(target);
+      }
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = ProbeResizeObserver as unknown as typeof ResizeObserver;
+    const mounted = mountReview(SOURCE);
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('.docx-page') !== null);
+      await selectAllWithPlacement(mounted.editor());
+      (
+        mounted.container.querySelector('[data-testid="review-add-comment"]') as HTMLButtonElement
+      ).click();
+      await waitFor(() => mounted.container.querySelector('[data-testid="review-draft"]') !== null);
+      const slot = observed.find(
+        (node) =>
+          node.classList.contains('docx-review__slot') &&
+          node.querySelector('[data-testid="review-draft"]')
+      );
+      expect(slot).toBeDefined();
+      mounted.editor().exec({ type: 'toggleReviewPane' });
+      await waitFor(() => unobserved.includes(slot!));
+      expect(unobserved.includes(slot!)).toBe(true);
+    } finally {
+      mounted.unmount();
+      globalThis.ResizeObserver = original;
+    }
+  });
+
   test('lists existing comment cards from a commented document', async () => {
     const mounted = mountReview(COMMENTED_SOURCE);
     try {
