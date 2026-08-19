@@ -26,7 +26,7 @@ import {
 // review module on the Root and mount the pane; without the module the same
 // document still opens (final-state view) and the review toolbar controls
 // disable with the engine's own "requires the pro review module" reason.
-import { customNodesModule, reviewModule, saveForExport } from '@docx-editor.dev/pro';
+import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
@@ -34,7 +34,7 @@ import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
-import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
+import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
 import {
   citationCardAt,
   CitationCardActions,
@@ -400,30 +400,6 @@ function EditorChrome({
       downloadDocx(buffer, `${base}.docx`);
     });
   };
-  /**
-   * The same document, with `preserveOnExport` applied.
-   *
-   * A SEPARATE PIPELINE from Save, which is the whole point of the option: the saved file keeps
-   * its chips so reopening it here gives them back, and the exported one carries whatever the
-   * definitions said should travel. The demo's citation is `'text'`, so the words survive and
-   * the tag, the binding and the payload do not.
-   *
-   * It removes THIS LIBRARY's markup and nothing else — `docProps`, comment authors and rsids
-   * are untouched, so the result is not an anonymous document and must not be described as one.
-   */
-  const exportDocument = () => {
-    if (!editor) return;
-    // No definition list: `saveForExport` reads them off the editor's registered modules, so a
-    // node cannot leave because this call site forgot to name it.
-    void saveForExport(editor).then((exported) => {
-      if (!exported.ok) {
-        window.alert(`Export refused: ${exported.reason}`);
-        return;
-      }
-      const base = title.trim() || 'document';
-      downloadDocx(exported.bytes, `${base}-exported.docx`);
-    });
-  };
 
   return (
     // The chrome surface is header + toolbar ONLY: its seam (border + shadow)
@@ -540,25 +516,6 @@ function EditorChrome({
             onClick={newDocument}
           >
             New
-          </button>
-          <button
-            type="button"
-            style={DEMO_SECONDARY_BUTTON}
-            disabled={!editor}
-            onMouseDown={keepCaret}
-            onClick={exportDocument}
-            title="Save with preserveOnExport applied: the citation's words stay, its tag, binding and payload go"
-          >
-            Export
-          </button>
-          <button
-            type="button"
-            style={DEMO_BUTTON}
-            disabled={!editor}
-            onMouseDown={keepCaret}
-            onClick={saveDocument}
-          >
-            Save
           </button>
         </div>
       </header>

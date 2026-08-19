@@ -73,25 +73,6 @@
         >
           New
         </button>
-        <button
-          type="button"
-          :style="DEMO_SECONDARY_BUTTON"
-          :disabled="!editor"
-          title="Save with preserveOnExport applied: the citation's words stay, its tag, binding and payload go"
-          @mousedown="keepCaret"
-          @click="exportDocument"
-        >
-          Export
-        </button>
-        <button
-          type="button"
-          :style="DEMO_BUTTON"
-          :disabled="!editor"
-          @mousedown="keepCaret"
-          @click="saveDocument"
-        >
-          Save
-        </button>
       </div>
     </header>
 
@@ -130,17 +111,11 @@ import {
   type EditorCaret,
 } from '@docx-editor.dev/vue';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
-import { saveForExport } from '@docx-editor.dev/pro';
 import BrandLogo from '../../shared/BrandLogo.vue';
 import AdapterSwitcher from './AdapterSwitcher.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import FontPreviewItems from './FontPreviewItems.vue';
-import {
-  DEMO_BUTTON,
-  DEMO_PRIMARY_BUTTON,
-  DEMO_SECONDARY_BUTTON,
-  keepCaret,
-} from './demoButtons';
+import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
 
 const props = defineProps<{
   title: string;
@@ -210,18 +185,6 @@ function saveDocument(): void {
   void editor.value?.save().then((buffer) => {
     if (!buffer) return;
     downloadDocx(buffer, `${titleBase()}.docx`);
-  });
-}
-
-function exportDocument(): void {
-  const instance = editor.value;
-  if (!instance) return;
-  void saveForExport(instance).then((exported) => {
-    if (!exported.ok) {
-      window.alert(`Export refused: ${exported.reason}`);
-      return;
-    }
-    downloadDocx(exported.bytes, `${titleBase()}-exported.docx`);
   });
 }
 
