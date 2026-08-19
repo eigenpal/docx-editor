@@ -6,6 +6,7 @@
 
 import * as react from 'react';
 import { ReactNode } from 'react';
+import { RevisionAuthor } from '@docx-editor.dev/react';
 import { ToolbarTranslate } from '@docx-editor.dev/react';
 
 // @public
@@ -163,6 +164,9 @@ export function useCustomNodeDefinitions(nodes: readonly AnyCustomNodeDefinition
 
 // @public
 export function useReview(query?: ReviewItemQuery): UseReviewReturn;
+
+// @public
+export function useReviewAuthor(author: string | undefined): RevisionAuthor | undefined;
 
 // @public
 export function useReviewItem(): ReviewItemView | null;

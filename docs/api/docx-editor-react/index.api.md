@@ -68,6 +68,10 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
+import { RevisionAuthor } from '@docx-editor.dev/core/editor';
+import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
+import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
+import { RevisionStyles } from '@docx-editor.dev/core/editor';
 import { RulerIndent } from '@docx-editor.dev/core/editor';
 import { rulerPageBox } from '@docx-editor.dev/core/editor';
 import { RulerTick } from '@docx-editor.dev/core/editor';
@@ -297,6 +301,17 @@ export { DocxDocument }
 
 // @public (undocumented)
 export const DocxEditor: DocxEditorNamespace;
+
+// @public
+export function DocxEditorAuthorStyle(props: DocxEditorAuthorStyleProps): null;
+
+// @public
+export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
+    author: string;
+}
+
+// @public
+export function DocxEditorColorByChangeType(): null;
 
 // @public
 export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
@@ -529,6 +544,10 @@ export interface DocxEditorMenuProps {
 
 // @public
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
+    // (undocumented)
+    readonly AuthorStyle: typeof DocxEditorAuthorStyle;
+    // (undocumented)
+    readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
     readonly Content: typeof DocxEditorContent;
     readonly ContentControl: typeof DocxEditorContentControl;
@@ -1487,6 +1506,14 @@ export interface ReviewRailRegistry {
     readonly register: () => () => void;
 }
 
+export { RevisionAuthor }
+
+export { RevisionAuthorAssignments }
+
+export { RevisionAuthorStyle }
+
+export { RevisionStyles }
+
 // @public (undocumented)
 export const RULER_WIDTH = 20;
 
@@ -1980,6 +2007,9 @@ export interface UseParagraphStyleResult {
     readonly setValue: (styleId: string) => void;
     readonly value: string | null;
 }
+
+// @public
+export function useRevisionAuthors(): readonly RevisionAuthor[];
 
 // @public
 export function useTableBorderTargetLabel(): string;

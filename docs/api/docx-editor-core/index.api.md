@@ -1008,6 +1008,7 @@ export interface DocxEditorConfig {
     modules?: readonly EditorModule[];
     // (undocumented)
     onFontError?: (error: EditorFontError) => void;
+    revisionStyles?: RevisionStyles;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
     zoom?: number;
@@ -1019,8 +1020,11 @@ export interface DocxEditorInstance extends Editor {
     attach(el: HTMLElement): void;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
+    getRevisionAuthors(): readonly RevisionAuthor[];
+    getRevisionAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setRevisionStyles(styles: RevisionStyles): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;
 }

@@ -14,7 +14,15 @@
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core/layout';
 import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
-import { revisionPresentationOf } from './revision-presentation.ts';
+import {
+  REVIEW_AUTHOR_SLOTS,
+  reviewAuthorSlotColor,
+  revisionStyleContextKey,
+  revisionStyleContextOf,
+  revisionPresentationOf,
+  type RevisionStyleContext,
+  type RevisionStyles,
+} from './revision-presentation.ts';
 import {
   formatRevisionOf,
   markRevisionRemovesMark,
@@ -121,6 +129,12 @@ export interface PaintContext {
    * inverted at the read so this states what to DO rather than what to skip.
    */
   readonly shadeFormFields?: boolean;
+  /**
+   * Resolved per-author colouring for tracked changes, or absent for the default kind
+   * colouring. Resolved once per paint from {@link PaintOptions.revisionStyles} so every
+   * page shares one author→slot map.
+   */
+  readonly revisionStyles?: RevisionStyleContext;
 }
 
 /**
@@ -177,6 +191,12 @@ export interface PaintOptions {
   readonly fieldShading?: FieldShadingMode;
   /** See {@link PaintContext.shadeFormFields}. */
   readonly shadeFormFields?: boolean;
+  /**
+   * How tracked changes are coloured: by AUTHOR through the `--doc-review-author-N`
+   * ramp (the default, as in Word), by kind, or by author with host-pinned colours.
+   * See {@link RevisionStyles}.
+   */
+  readonly revisionStyles?: RevisionStyles;
   /**
    * Relationship id of the header/footer story currently open for editing.
    *
@@ -792,13 +812,18 @@ function applyFieldShading(element: HTMLElement, span: StyleSpanRecord, ctx: Pai
   }
 }
 
-function applyRevisionPresentation(element: HTMLElement, span: StyleSpanRecord): void {
+function applyRevisionPresentation(
+  element: HTMLElement,
+  span: StyleSpanRecord,
+  ctx: PaintContext
+): void {
   // A tracked FORMAT change alters no characters, so it has no strike or underline of its own
   // to wear. It still has to be visible: the reader is looking at text whose appearance is
   // itself a pending decision. A dashed rule and a tint say "this changed" without claiming
   // the words were added or removed.
   const format = formatRevisionOf(span.props);
-  const presentation = revisionPresentationOf(span.revisions);
+  const colors = ctx.revisionStyles;
+  const presentation = revisionPresentationOf(span.revisions, colors?.authorSlots, colors?.styles);
   if (!presentation && !format) return;
 
   if (presentation) {
@@ -808,7 +833,35 @@ function applyRevisionPresentation(element: HTMLElement, span: StyleSpanRecord):
     element.dataset.revisionId = attribution.id;
     element.dataset.revisionAuthor = attribution.author;
     if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
-    element.style.color = presentation.color;
+    // The author's ramp slot, as a CSS hook: `[data-revision-author-slot='2']` restyles one
+    // reviewer's changes without the host knowing the name. Only under author colouring,
+    // because the slot map is in the paint-reuse key only then — emitted always, a new
+    // author appearing would have to repaint every page in every scheme.
+    const authorStyle = colors?.styles.get(attribution.author);
+    if (colors) {
+      element.dataset.revisionAuthorSlot = String(
+        (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
+      );
+      // Host classes for this author's changes, for whatever the typed fields do not
+      // cover. Pre-split when the context resolved, so paint adds tokens rather than
+      // running a regex for every painted span.
+      const tokens = colors.classTokens.get(attribution.author);
+      if (tokens) for (let i = 0; i < tokens.length; i += 1) element.classList.add(tokens[i]!);
+    }
+    // SELECTIVE, and only where the host actually asked for a COLOUR. A declaration that
+    // names only an avatar or a class says nothing about ink, so the ink stays on the kind
+    // colours: "give this reviewer a picture" must not silently recolour their text.
+    // An unstyled author takes whatever the scheme says for `others` — the ramp under
+    // by-author colouring, the kind colours otherwise, so "highlight one reviewer, keep the
+    // rest green/red" is expressible.
+    //
+    // Under author colouring the KIND still reads from the decoration — underline for an
+    // insertion, strike for a deletion — while the colour answers "whose", exactly Word's
+    // by-author view. The strike/underline rules above are untouched by the scheme.
+    const byAuthor =
+      colors !== undefined && (authorStyle?.color !== undefined || colors.others === 'author');
+    const color = byAuthor ? presentation.authorColor : presentation.color;
+    element.style.color = color;
     // The TINT is what makes a change findable when scanning rather than reading. A decoration
     // alone is a hairline: on a dense page of small type it disappears, and a reviewer skims
     // straight past an edit.
@@ -817,13 +870,21 @@ function applyRevisionPresentation(element: HTMLElement, span: StyleSpanRecord):
     // band layer covers only the open one and adds the full tint over this. Painting both at
     // full strength gave pending and open changes the same weight — the pale/open distinction
     // the band exists to draw never appeared, because this was already at the band's colour.
-    element.style.backgroundColor = presentation.deleted
-      ? 'var(--doc-revision-deletion-wash)'
-      : 'var(--doc-revision-insertion-wash)';
+    //
+    // The wash keeps the KIND pair under either scheme — unless the host's style for this
+    // author says otherwise. At its faint strength an author-mixed wash is
+    // indistinguishable anyway, and the kind pair keeps "added" and "removed" scannable
+    // while the ink answers "whose". It also needs no `color-mix()`, which a host-supplied
+    // literal colour would have forced on every painted run.
+    element.style.backgroundColor =
+      authorStyle?.background ??
+      (presentation.deleted
+        ? 'var(--doc-revision-deletion-wash)'
+        : 'var(--doc-revision-insertion-wash)');
     if (presentation.line) {
       element.style.textDecorationLine = presentation.line;
       element.style.textDecorationStyle = presentation.decorationStyle;
-      element.style.textDecorationColor = presentation.color;
+      element.style.textDecorationColor = color;
     }
     return;
   }
@@ -840,6 +901,20 @@ function applyRevisionPresentation(element: HTMLElement, span: StyleSpanRecord):
   element.dataset.revisionId = format!.id;
   element.dataset.revisionAuthor = format!.author;
   if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
+  // A format revision has an AUTHOR like any other, so the per-author hooks belong here
+  // too — a host rule scoped to a reviewer's slot or class would otherwise skip what can be
+  // the largest population of tracked changes in a document. The ink stays the stylesheet's
+  // grey unless the host named a colour: a format change is not an addition or a removal,
+  // and painting it in the author's ink would claim it was.
+  if (colors) {
+    const formatStyle = colors.styles.get(format!.author);
+    element.dataset.revisionAuthorSlot = String(
+      (colors.authorSlots.get(format!.author) ?? 0) % REVIEW_AUTHOR_SLOTS
+    );
+    const tokens = colors.classTokens.get(format!.author);
+    if (tokens) for (let i = 0; i < tokens.length; i += 1) element.classList.add(tokens[i]!);
+    if (formatStyle?.color !== undefined) element.style.color = formatStyle.color;
+  }
 }
 
 /**
@@ -855,7 +930,8 @@ function applyRevisionPresentation(element: HTMLElement, span: StyleSpanRecord):
 function paintParagraphMark(
   document: Document,
   revisions: readonly RevisionAttribution[],
-  scale: number
+  scale: number,
+  colors: RevisionStyleContext | undefined
 ): HTMLElement {
   // ONE glyph however many decisions stand on it: there is one pilcrow, and drawing a second
   // beside it would read as a second paragraph break. A REMOVAL wins the face when a mark
@@ -881,7 +957,25 @@ function paintParagraphMark(
   glyph.style.pointerEvents = 'none';
   glyph.style.marginLeft = `${2 * scale}px`;
   const removes = markRevisionRemovesMark(shown);
-  glyph.style.color = removes ? 'var(--doc-revision-deletion)' : 'var(--doc-revision-insertion)';
+  // Under author colouring the glyph follows its author, like the spans beside it; the
+  // strike still says a removal is a removal.
+  const markStyle = colors?.styles.get(shown.author);
+  const markSlot = colors ? (colors.authorSlots.get(shown.author) ?? 0) % REVIEW_AUTHOR_SLOTS : 0;
+  if (colors) {
+    glyph.dataset.revisionAuthorSlot = String(markSlot);
+    const tokens = colors.classTokens.get(shown.author);
+    if (tokens) for (let i = 0; i < tokens.length; i += 1) glyph.classList.add(tokens[i]!);
+  }
+  // The same selective rule as the spans, read straight off the maps: building a whole
+  // presentation object for one field allocated per paragraph mark, and a heavily revised
+  // document has one per paragraph.
+  glyph.style.color =
+    markStyle?.color ??
+    (colors?.others === 'author'
+      ? reviewAuthorSlotColor(markSlot)
+      : removes
+        ? 'var(--doc-revision-deletion)'
+        : 'var(--doc-revision-insertion)');
   if (removes) glyph.style.textDecorationLine = 'line-through';
   return glyph;
 }
@@ -1022,7 +1116,7 @@ function paintSpan(
   }
   applyRunFaceStyle(element, span.style, ctx);
   applyFieldShading(element, span, ctx);
-  applyRevisionPresentation(element, span);
+  applyRevisionPresentation(element, span, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
   // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
   // native tab). Both must take the published box width so following runs start where
@@ -1442,7 +1536,7 @@ function paintFragment(
   const bars = paintChangeBars(document, fragment, scale);
   if (bars) element.append(bars);
   if (fragment.markRevisions && fragment.markRevisions.length > 0) {
-    const glyph = paintParagraphMark(document, fragment.markRevisions, scale);
+    const glyph = paintParagraphMark(document, fragment.markRevisions, scale, ctx.revisionStyles);
     const last = fragment.lines[fragment.lines.length - 1];
     if (last) {
       // At the end of the last line's text, which is where the mark itself sits.
@@ -2494,6 +2588,9 @@ export function paintSemanticLayout(
     ? [...options.emptyTocPlaceholderIds].sort().join(',')
     : '';
   const tocKey = chrome?.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : '';
+  // Once per paint, from the WHOLE layout, so every page shares one author→slot map and an
+  // incremental repaint cannot disagree with a full one.
+  const revisionStyles = revisionStyleContextOf(options.revisionStyles, layout);
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
@@ -2507,6 +2604,7 @@ export function paintSemanticLayout(
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
     ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
+    ...(revisionStyles ? { revisionStyles } : {}),
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
     ...(options.activeHeaderFooterRId
       ? { activeHeaderFooterRId: options.activeHeaderFooterRId }
@@ -2536,7 +2634,10 @@ export function paintSemanticLayout(
     `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +
     `ro:${readOnlyKey}|tocEmpty:${emptyTocKey}|` +
     `${options.imageUrlPort ? 'url' : ''}|` +
-    `${drawingPaintStringsCacheToken(drawingStrings)}`;
+    `${drawingPaintStringsCacheToken(drawingStrings)}|` +
+    // The slot map derives from the whole layout: an edit elsewhere can renumber an author,
+    // recolouring pages whose own records did not change. The key must move with the map.
+    `rev:${revisionStyleContextKey(revisionStyles)}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;
   const reusable = parametersUnchanged

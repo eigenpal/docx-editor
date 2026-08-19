@@ -9,6 +9,7 @@ import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/bin
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
@@ -120,6 +121,13 @@ export interface PaginatedSurfaceOptions {
    * without remeasuring a single line.
    */
   readonly fieldShading?: FieldShadingMode;
+  /**
+   * How tracked changes are coloured: by AUTHOR (the default), by kind, or by author with
+   * host-pinned colours. A paint-level option like {@link fieldShading}: it changes no
+   * geometry, so switching it repaints without remeasuring a line. Applies wherever
+   * revision markup paints, whatever the {@link revisionDisplayMode} leaves visible.
+   */
+  readonly revisionStyles?: RevisionStyles;
   /**
    * The review module's derivation hooks for this surface's session. Absent,
    * `session.reviewItems()` is the typed empty queue and every review affordance
@@ -672,6 +680,17 @@ export interface PaginatedSurface {
    */
   editingMode(): SurfaceEditingMode;
   setEditingMode(mode: SurfaceEditingMode): void;
+  /**
+   * Every author with a revision in the CURRENT layout, mapped to Word's colour slot by
+   * order of first appearance. One map instance per layout, so a caller can key caches on
+   * its identity.
+   */
+  revisionAuthors(): ReadonlyMap<string, number>;
+  /**
+   * Replace how tracked changes are coloured, live. Paint-level: the pages repaint without
+   * remeasuring a line, and the caret, selection and undo history stay where they are.
+   */
+  setRevisionStyles(colors: RevisionStyles | undefined): void;
   /**
    * Commit ops that came from automation, through the gate a keystroke goes through.
    *

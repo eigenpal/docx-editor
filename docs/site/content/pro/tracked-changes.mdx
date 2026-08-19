@@ -80,6 +80,343 @@ the document would be once every decision is taken, so they show no colors, no p
 change bars. They also merge: a paragraph whose mark a change deleted runs into the next one in
 **No Markup**, the way accepting that change leaves it.
 
+## Style changes by author
+
+Every reviewer gets their own color. A paragraph three people edited reads as three
+people, the way Word shows it — you don't configure anything to get this.
+
+Color says who made a change. The decoration says what the change was: insertions stay
+underlined, deletions stay struck through, whatever the colors are.
+
+Each author takes a color from the `--doc-review-author-0` … `--doc-review-author-7`
+ramp, assigned in order of first appearance in the document. Past eight authors the ramp
+repeats. The review sidebar follows the same colors: each card carries its author's color
+on its leading edge and in the avatar disc, so a card and the text it annotates pair up
+without you reading either.
+
+### Restyle the ramp
+
+To change the palette everyone draws from, restate the slots under `.docx-editor`. This
+moves the painted document and the review cards together:
+
+```css
+.docx-editor {
+  --doc-review-author-0: #7c3aed;
+  --doc-review-author-1: #0e7490;
+}
+```
+
+The packaged stylesheet defines the light ramp on `.docx-editor` and the dark one on
+`.docx-editor.dark`, so restate the slots for both, or use a selector at least as specific
+as the one you are replacing.
+
+### The declarative syntax
+
+To go further than the ramp, mount declarations. There is no styling prop:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+<DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+  <DocxEditor.AuthorStyle author="Jess Lin" color="#7c3aed" />
+
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>;
+```
+
+`AuthorStyle` and `ColorByChangeType` render no DOM. They declare presentation, and the
+engine follows:
+
+- **Mounting** applies the declaration. Declarations present when the editor is created
+  reach it before the first paint, so the document opens already styled.
+- **Changing a prop** re-applies it live. The pages repaint without a remount, so the
+  caret, the selection, and the undo history survive.
+- **Unmounting** removes it. The author returns to their ramp color.
+
+Because they are components, styling follows your state the way the rest of your UI does:
+render one conditionally, map over a config, or drive one from a color picker. Place them
+anywhere inside `DocxEditor.Root` — they find the editor through context.
+
+The engine paints the page, not React, which is why this is the one part of the editor you
+declare rather than render. Everything here is presentation: none of it is written into
+the file.
+
+### Map your own authors to colors
+
+When you know the reviewers up front, map your config to declarations:
+
+```tsx
+const AUTHOR_COLORS: Record<string, string> = {
+  'Jess Lin': '#7c3aed',
+  'Sam Reyes': '#0e7490',
+  'Legal Bot': '#b91c1c',
+};
+
+<DocxEditor.Root document={bytes} modules={MODULES}>
+  {Object.entries(AUTHOR_COLORS).map(([author, color]) => (
+    <DocxEditor.AuthorStyle key={author} author={author} color={color} />
+  ))}
+  {/* … */}
+</DocxEditor.Root>;
+```
+
+`author` matches the document's `w:author` string exactly. A name your document does not
+carry costs nothing, so one shared config can serve every document your app opens. Authors
+you don't name keep their ramp color.
+
+Each declaration accepts more than a color:
+
+```tsx
+<DocxEditor.AuthorStyle
+  author="Jess Lin"
+  color="#7c3aed" // ink and decoration in the document, and their card accent
+  background="rgb(124 58 237 / 8%)" // the wash behind their changes
+  className="jess-edit" // classes added to their painted changes
+  avatarUrl="https://example.com/avatars/jess.png" // their avatar in the review sidebar
+/>
+```
+
+`className` is the escape hatch for painted text: any rule your CSS system can express,
+per author. Keep those rules metric-safe. Outlines, shadows, and background accents are
+fine. A class that changes font size, weight, or family drifts the page away from the
+layout the engine measured.
+
+### Color by change type instead
+
+To color by what happened rather than by whom — insertions green, deletions red — mount
+`ColorByChangeType`:
+
+```tsx
+<DocxEditor.Root document={bytes} modules={MODULES}>
+  <DocxEditor.ColorByChangeType />
+  {/* … */}
+</DocxEditor.Root>
+```
+
+Composed with `AuthorStyle`, it also expresses "highlight these reviewers, leave everyone
+else green and red". The authors you name keep their own color; the rest take the change
+colors:
+
+```tsx
+<DocxEditor.AuthorStyle author="Legal Bot" color="#b91c1c" />
+<DocxEditor.ColorByChangeType />
+```
+
+### Discover the authors in a document
+
+The reviewers depend on the file, so a legend cannot be written in advance — it reads
+them. `useRevisionAuthors()` returns every author whose revision the current view renders,
+in slot order, with the color and style each one resolves to. It re-renders when a document
+loads and when the styling changes. A resolved view hides the revisions it has resolved
+away, so an author whose only change is hidden there is not listed.
+
+```tsx
+import { useRevisionAuthors } from '@docx-editor.dev/react';
+
+function ReviewerLegend() {
+  const authors = useRevisionAuthors();
+
+  return (
+    <ul>
+      {authors.map(({ author, color }) => (
+        <li key={author}>
+          <span style={{ background: color, width: 10, height: 10, display: 'inline-block' }} />
+          {author}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Combine the two for a color picker: hold the picks in state and render them as
+declarations.
+
+```tsx
+import { useState } from 'react';
+import { DocxEditor, useRevisionAuthors } from '@docx-editor.dev/react';
+
+function ReviewerColors() {
+  const authors = useRevisionAuthors();
+  const [picks, setPicks] = useState<Record<string, string>>({});
+
+  return (
+    <>
+      {Object.entries(picks).map(([author, color]) => (
+        <DocxEditor.AuthorStyle key={author} author={author} color={color} />
+      ))}
+      {authors.map(({ author, color }) => (
+        <input
+          key={author}
+          type="color"
+          aria-label={author}
+          value={picks[author] ?? (color.startsWith('var(') ? '#000000' : color)}
+          onChange={(event) =>
+            setPicks((previous) => ({ ...previous, [author]: event.target.value }))
+          }
+        />
+      ))}
+    </>
+  );
+}
+```
+
+Two related reads. `useReview().items` carries an `author` on every card, including people
+who only left comments. `getRevisionAuthors()` on the editor instance is the same read
+without React, for a headless host.
+
+### Add custom avatars
+
+A review card shows the author's initials in a colored disc. Give an author an
+`avatarUrl` and the packaged card renders that image in the disc instead:
+
+```tsx
+<DocxEditor.AuthorStyle author="Jess Lin" avatarUrl="https://example.com/avatars/jess.png" />
+```
+
+The image covers the disc and inherits its round shape. The author's color still paints
+the disc underneath, so it shows while the image loads and stays visible if the image
+fails. Authors with no `avatarUrl` keep their initials, so you can supply pictures for the
+people you have them for and leave the rest.
+
+An avatar on its own changes nothing in the painted document. Only `color` moves an
+author's ink, so you can give someone a picture without recoloring their text.
+
+Avatars come from your own directory, and the browser fetches the URL when the card
+renders — with the referrer suppressed. Point it at a host you control; the editor never
+loads an image address that came out of the document. Addresses the editor cannot load
+safely, such as a script scheme or a protocol-relative host, are dropped when the
+declaration is read, so the initials stand in and `useReviewAuthor` reports no avatar.
+
+Declarations match on the author's name as the document spells it, which is a value the
+document's sender controls. A file can therefore name its author after one of yours and
+inherit that person's color and picture. Treat the styling as a reading aid, not as proof
+of identity.
+
+To resize or reshape the disc, style the packaged class:
+
+```css
+.docx-editor .docx-review__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+```
+
+Inside a custom card, read the avatar from `useReviewAuthor` and render your own image —
+see [Per-author card design](#per-author-card-design).
+
+### Style one author's comment cards
+
+Every review card, hover balloon, and gutter marker that has an author carries it:
+
+- `data-author` — the author's name, exactly as the document spells it.
+- `data-author-slot` — their ramp slot (`0`–`7`), for styling by position rather than by
+  name.
+- `--doc-review-author` — a CSS variable holding that author's resolved color, which the
+  packaged card already uses for its avatar disc and accents.
+
+So restyling one reviewer's cards is a CSS rule:
+
+```css
+/* Every card from one reviewer. The leading edge is already their color. */
+.docx-review__card[data-author='Legal Bot'] {
+  background: #fef2f2;
+  font-weight: 600;
+}
+
+/* Or by slot, when you do not know the names in advance. */
+.docx-review__card[data-author-slot='2'] {
+  outline: 1px solid var(--doc-review-author);
+}
+```
+
+This works for **comment authors too**, including reviewers who left comments but proposed
+no tracked changes. They are not part of the document's revision roster, so
+`useRevisionAuthors()` does not list them — but a declaration for them still colors their
+cards and shows their avatar:
+
+```tsx
+// Sam only comments. Their cards still get this color and picture.
+<DocxEditor.AuthorStyle author="Sam Reyes" color="#0e7490" avatarUrl="/avatars/sam.png" />
+```
+
+### Per-author hooks in the document
+
+The painted text carries the same pair of hooks as the cards. Every revision span has
+`data-revision-author`, and it also has `data-revision-author-slot` — the same number the
+matching card carries — unless you mounted `ColorByChangeType` with no author
+declarations.
+Use them for anything the declaration's typed fields do not cover:
+
+```css
+/* One author, by name. The value matches `w:author` exactly. */
+.docx-editor [data-revision-author='Jess Lin'] {
+  outline: 1px dotted currentColor;
+  outline-offset: 1px;
+}
+
+/* One slot, without knowing the name — survives whoever opens the document. */
+.docx-editor [data-revision-author-slot='1'] {
+  text-shadow: 0 0 6px currentColor;
+}
+```
+
+The ink color and the underline or strikethrough are painted as inline styles, so a
+stylesheet rule does not move them: set those with `color` on the declaration, or restyle
+the ramp tokens. Keep these rules metric-safe, because the engine measures the text it
+paints.
+
+### Per-author card design
+
+Cards are styled by composition, not by configuration. The packaged card already follows
+the author system on its own: its accent, avatar disc, and gutter marker take the author's
+resolved color, and `avatarUrl` fills the avatar. Past that, style them with the
+`data-author` hooks shown earlier, or replace them outright.
+
+The `List` render callback receives each item with its `author`, so a particular author can
+get an entirely different card component:
+
+```tsx
+<DocxEditorReview>
+  <DocxEditorReview.List>
+    {(item) => (item.author === 'Legal Bot' ? <LegalCard item={item} /> : <MyCard item={item} />)}
+  </DocxEditorReview.List>
+</DocxEditorReview>
+```
+
+A custom card links back to the author styling system through `useReviewAuthor`. It
+returns the resolved color, ramp slot, and declared style for one author — the same
+answers the painted text draws with, so your card and the document agree. It covers
+comment authors as well, and it is live: change a declaration and the card re-renders
+with it.
+
+```tsx
+import { DocxEditorReview, useReviewAuthor, type ReviewItemView } from '@docx-editor.dev/pro/react';
+
+function MyCard({ item }: { item: ReviewItemView }) {
+  const author = useReviewAuthor(item.author);
+  return (
+    <div className="my-card" style={{ borderLeft: `3px solid ${author?.color ?? 'transparent'}` }}>
+      {author?.style?.avatarUrl ? <img src={author.style.avatarUrl} alt="" /> : item.author}
+      {item.text}
+    </div>
+  );
+}
+
+<DocxEditorReview>
+  <DocxEditorReview.List>{(item) => <MyCard item={item} />}</DocxEditorReview.List>
+</DocxEditorReview>;
+```
+
+See [Composition](/docs/2.x/react/composition) for the card parts the packaged design is
+made of.
+
 ## The review sidebar
 
 `<DocxEditorReview />` renders one card per pending decision beside the page, anchored at the change. Place it inside the viewport so it scrolls with the document rather than chasing it.

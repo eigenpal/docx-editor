@@ -67,6 +67,9 @@ import {
   paintSemanticLayout,
   type OverlayRect,
 } from '@docx-editor.dev/core/output';
+// By module path: the roster walk is an engine internal, not part of the output barrel's
+// public surface. See the note there.
+import { authorSlotsOf } from '../output/revision-presentation.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,
@@ -634,6 +637,16 @@ export function mountPaginatedSurface(
   };
 
   let currentLayout = layoutOnce();
+  // Presentation state, not document state: replaceable live through `setRevisionStyles`,
+  // because a colour change must never cost the reader their undo history to a remount.
+  // Declared before the first paint can run — `render` reads it.
+  let revisionStyles = options.revisionStyles;
+  // One roster per layout instance, so `revisionAuthors()` is cheap to poll and callers can
+  // key their own caches on the returned map's identity.
+  let authorRoster: {
+    layout: typeof currentLayout | null;
+    value: ReadonlyMap<string, number>;
+  } | null = null;
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
   const format = createSurfaceFormat({
@@ -887,6 +900,12 @@ export function mountPaginatedSurface(
     },
     currentRevision: () => session.packageRevision(),
     publish: (layout) => {
+      // Release the previous layout BEFORE the new one replaces it: the roster cache held
+      // it by strong reference, and a 200-page graph kept alive beside the live one is tens
+      // of megabytes of retained records. `layout: null` means "recompute on the next read"
+      // while keeping the map itself, which that read compares against to decide whether
+      // the author set actually moved.
+      if (authorRoster !== null) authorRoster = { layout: null, value: authorRoster.value };
       currentLayout = layout;
       // Repaint from HERE, so a commit that never went through this surface — undo, or
       // another editor sharing the store — still reaches the screen. Otherwise the painted
@@ -1890,6 +1909,7 @@ export function mountPaginatedSurface(
       ariaHidden: false,
       drawingStrings,
       ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+      ...(revisionStyles !== undefined ? { revisionStyles } : {}),
       shadeFormFields: shadeFormFields(),
       ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
       ...(activeHf
@@ -3808,6 +3828,36 @@ export function mountPaginatedSurface(
       // "the document is open for viewing" over a document that had just become editable.
       lastRejection = null;
       options.onChange?.(currentState());
+    },
+
+    revisionAuthors: () => {
+      if (authorRoster?.layout !== currentLayout) {
+        const next = authorSlotsOf(currentLayout);
+        // IDENTITY IS THE CONTRACT. A layout is replaced on every commit, but the author
+        // set almost never changes with it — typing inside a tracked change introduces
+        // nobody. Handing back the previous map when the content matches is what lets a
+        // `useSyncExternalStore` consumer bail out instead of re-rendering the review rail
+        // on every keystroke.
+        const previous = authorRoster?.value;
+        const unchanged =
+          previous !== undefined &&
+          previous.size === next.size &&
+          [...next].every(([author, slot]) => previous.get(author) === slot);
+        authorRoster = { layout: currentLayout, value: unchanged ? previous : next };
+      }
+      return authorRoster.value;
+    },
+    setRevisionStyles: (colors) => {
+      if (colors === revisionStyles) return;
+      revisionStyles = colors;
+      // BEFORE the repaint, as `rematerialize` does: `render` adopts a pending DOM gesture,
+      // which moves the selection without passing `setSelection`'s buffer guard. A style
+      // change can land mid-typing-burst — a colour picker is a live control — and buffered
+      // characters are still destined for the old selection.
+      flushTypeBuffer();
+      // Paint-level only: the reuse key moves with the resolved styles, so the pages
+      // repaint in the new colours without a layout pass.
+      render(false);
     },
 
     setReviewActivationExclusions(kinds) {

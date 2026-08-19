@@ -13,6 +13,11 @@ import type {
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
+import type {
+  RevisionAuthor,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from '../output/revision-presentation.ts';
 import type { FontConfigurationFragment, FontResolver } from './font-composition.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
@@ -83,6 +88,25 @@ export interface DocxEditorConfig {
    *   suggesting, everything else in editing.
    */
   mode?: 'edit' | 'view' | 'suggesting';
+  /**
+   * How painted tracked changes are coloured. Presentation only — nothing is serialised.
+   *
+   * - `'author'` (the DEFAULT) — every change takes its author's colour from the
+   *   `--doc-review-author-N` ramp, by order of first appearance, as Word does. Restyle a
+   *   slot under `.docx-editor` to change the ramp.
+   * - `'kind'` — insertions green, deletions red, so "added" and "removed" are what a
+   *   glance tells apart, whoever proposed them.
+   * - {@link RevisionAuthorAssignments} — style the named authors; `others` decides
+   *   whether the rest take the ramp (the default) or the kind colours.
+   *
+   * The opening value. In React this is authored declaratively — `DocxEditor.ColorByChangeType`
+   * and `DocxEditor.AuthorStyle` compose and apply it, seeding this config for the first
+   * paint — so React hosts never pass it by hand; it is the entry for headless hosts. Read
+   * the document's resolved roster with `getRevisionAuthors`. Applies wherever revision
+   * markup paints: the full all-markup view needs a review module registered; without one
+   * the proposed view still marks surviving insertions.
+   */
+  revisionStyles?: RevisionStyles;
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**
@@ -175,6 +199,36 @@ export interface DocxEditorInstance extends Editor {
    * `stateVersion()`.
    */
   fontMeasurement(): FontMeasurementState;
+  /**
+   * Every author with a revision the current view RENDERS, in Word's slot order, with the
+   * colour and style each resolves to under the current
+   * {@link DocxEditorConfig.revisionStyles}. The discovery surface a legend or colour
+   * picker builds on — authors depend on the loaded file, so they cannot be known at
+   * configuration time.
+   *
+   * Read of the rendered projection, not of the package: a resolved view hides the
+   * revisions it has resolved away, so an author whose only change is hidden there is not
+   * listed. Empty while detached. Reference-stable between changes, so it is safe as a
+   * dependency; changes bump `stateVersion()`.
+   */
+  getRevisionAuthors(): readonly RevisionAuthor[];
+  /**
+   * The style declared for one author, whether or not the DOCUMENT carries a revision by
+   * them — so review chrome can draw a COMMENT-only author's card in their colour, which
+   * {@link DocxEditorInstance.getRevisionAuthors} (a read of the document) cannot answer.
+   */
+  getRevisionAuthorStyle(author: string): RevisionAuthorStyle | undefined;
+  /**
+   * Replace how tracked changes are coloured, live. Paint-level: pages repaint without a
+   * layout pass, and the caret, selection and undo history stay where they are. Pass
+   * `'author'` to restore the default, or `'kind'` to opt out to the green/red
+   * rendering. Survives a document reload.
+   *
+   * The imperative PRIMITIVE beneath React's declarative lane: `DocxEditor.ColorByChangeType`
+   * and `DocxEditor.AuthorStyle` drive this seam, and React hosts declare those instead
+   * of calling it. Call it directly from headless and non-React hosts.
+   */
+  setRevisionStyles(styles: RevisionStyles): void;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

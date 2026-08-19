@@ -37,6 +37,7 @@ export { reviewModule, type ReviewModuleOptions } from '../review/review-module.
 export { type ProLicenseOptions } from '../license.ts';
 export {
   DocxEditorReview,
+  useReviewAuthor,
   useReviewItem,
   type DocxEditorReviewNamespace,
   type ReviewActionProps,

@@ -48,7 +48,7 @@ export function editorStateActiveSubscriptionCount(): number {
  *    synchronous React store updates without yielding and trip React's maximum-update-depth
  *    guard even though the updates are legitimate.
  */
-function deferredNotifier(onStoreChange: () => void): () => void {
+export function deferredNotifier(onStoreChange: () => void): () => void {
   let scheduled = false;
   return () => {
     if (scheduled) return;

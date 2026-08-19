@@ -266,3 +266,10 @@ export type {
 } from '@docx-editor.dev/core/layout';
 // Same reason: `PaginatedSurfaceOptions.fieldShading` is typed by it.
 export type { FieldShadingMode } from '../output/semantic-paint.ts';
+// And `DocxEditorConfig.revisionStyles`, `getRevisionAuthors` by these.
+export type {
+  RevisionAuthor,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from '../output/revision-presentation.ts';

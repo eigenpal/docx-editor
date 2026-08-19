@@ -185,6 +185,7 @@ import {
   PRO_REVIEW_REASON,
   resolveOpeningEditingMode,
 } from './opening-editing-mode.ts';
+import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -262,6 +263,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * the first mount, which reads it.
    */
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
+  // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
+  const revisionStyleState = createRevisionStyleState(config.revisionStyles);
   /**
    * True once the reader has moved the mode themselves.
    *
@@ -493,6 +496,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
       ...(config.author ? { author: config.author } : {}),
+      // Presentation policy for tracked changes, applied wherever revision markup paints.
+      // The facade's state, not `config`: a reload keeps a live `setRevisionStyles`.
+      ...(revisionStyleState.current() !== undefined
+        ? { revisionStyles: revisionStyleState.current() }
+        : {}),
       editingMode:
         editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
       // The free engine renders the FINAL-STATE projection (Word's "No Markup"):
@@ -2154,6 +2162,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     isReviewPaneOpen: () => reviewPaneOpen,
 
     getEditingMode: () => editingMode,
+    getRevisionAuthors: () =>
+      revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
+    getRevisionAuthorStyle: (author) => revisionStyleState.styleFor(author),
+    setRevisionStyles(colors) {
+      revisionStyleState.set(colors);
+      surface?.setRevisionStyles(colors);
+      // Presentation state moved: bump so snapshot readers re-render, and broadcast the
+      // way a mode change does, so subscribed hooks hear it.
+      bump();
+      emitSelectionChange();
+    },
     setEditingMode: (mode) => editor.exec({ type: 'setEditingMode', mode }),
 
     getReviewRevision: () => reviewRevision(),

@@ -10,7 +10,7 @@ import type {
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import type { EditorModule, FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { createT, deepMerge, en, locales, type LocaleCode } from '@docx-editor.dev/i18n';
-import type { DocxEditorRef, EditorMode } from './types';
+import type { DocxEditorRef, EditorMode, RevisionStyles } from './types';
 
 /**
  * Vue host for the docx editor.
@@ -54,6 +54,14 @@ export default defineComponent({
       default: undefined,
     },
     mode: { type: String as PropType<EditorMode>, default: 'edit' },
+    /**
+     * How painted tracked changes are coloured: 'author' (default), 'kind', or per-author
+     * assignments. The opening value; `editor.setRevisionStyles` replaces it live.
+     */
+    revisionStyles: {
+      type: [String, Object] as PropType<RevisionStyles>,
+      default: undefined,
+    },
     zoom: { type: Number, default: undefined },
     locale: { type: String, default: undefined },
     author: { type: String, default: undefined },
@@ -112,6 +120,7 @@ export default defineComponent({
         ...(props.locale !== undefined ? { locale: props.locale } : {}),
         translate,
         ...(props.mode !== undefined ? { mode: props.mode } : {}),
+        ...(props.revisionStyles !== undefined ? { revisionStyles: props.revisionStyles } : {}),
         ...(props.modules !== undefined ? { modules: props.modules } : {}),
         ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
         onFontError: (error) => emit('fontError', error),

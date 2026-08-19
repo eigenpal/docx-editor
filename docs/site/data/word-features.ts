@@ -745,7 +745,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'A full revision model, including structural changes to paragraph breaks, paragraph properties, and table rows and cells. A change to a paragraph mark draws a pilcrow and a change bar wherever the paragraph is, table cells included, and a mark that one author inserted and another proposed removing carries both decisions. A tracked insert or delete around a field result paints as tracked, not as ordinary text. Attribution is drawn in All Markup only, as in Word. The resolved views drop the attribution and merge the paragraphs the decision merges, so No Markup shows the document as accepting every change would leave it. The output opens cleanly in Word’s review pane.',
+      'A full revision model, including structural changes to paragraph breaks, paragraph properties, and table rows and cells. A change to a paragraph mark draws a pilcrow and a change bar wherever the paragraph is, table cells included, and a mark that one author inserted and another proposed removing carries both decisions. A tracked insert or delete around a field result paints as tracked, not as ordinary text. Attribution is drawn in All Markup only, as in Word. The resolved views drop the attribution and merge the paragraphs the decision merges, so No Markup shows the document as accepting every change would leave it. Painted markup follows Word’s by-author view by default — one color per author, matched by the review cards — and named authors can take a color, a background, class names, and an avatar of their own. The output opens cleanly in Word’s review pane.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
