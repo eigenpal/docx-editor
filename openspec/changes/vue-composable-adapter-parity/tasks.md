@@ -327,3 +327,6 @@ the v2 context-fed components WRAP, so Vue needs them. No composables, no inject
       tracking change for that phase — owner call, not one to make by accident
 - [ ] 14.3 REMOVING the deprecated React chrome. That is the next major
 - [ ] 14.4 An e2e suite for the Vue demo, mirroring `e2e/editor-smoke.config.ts`
+- [x] 14.5 Port the Pro custom-node chrome to `@docx-editor.dev/pro/vue`:
+      `CustomNodeChrome`, `CustomNodeContextMenu`, activation helpers, Vue
+      interaction tests, public API snapshots, and Vue documentation.

@@ -1,7 +1,7 @@
 <template>
   <div v-if="open" class="citation-dialog-backdrop" @mousedown.self="emit('close')">
     <form class="citation-dialog" @submit.prevent="submit">
-      <h2>Insert citation</h2>
+      <h2>{{ editing ? 'Edit citation' : 'Insert citation' }}</h2>
       <label>
         Source ID
         <input v-model="form.sourceId" required />
@@ -22,7 +22,9 @@
         <button type="button" :style="DEMO_SECONDARY_BUTTON" @mousedown="keepCaret" @click="emit('close')">
           Cancel
         </button>
-        <button type="submit" :style="DEMO_PRIMARY_BUTTON" @mousedown="keepCaret">Insert</button>
+        <button type="submit" :style="DEMO_PRIMARY_BUTTON" @mousedown="keepCaret">
+          {{ editing ? 'Save' : 'Insert' }}
+        </button>
       </div>
     </form>
   </div>
@@ -31,7 +33,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
 import { useDocxEditor } from '@docx-editor.dev/vue';
-import { insertCustomNode } from '@docx-editor.dev/pro';
+import { insertCustomNode, updateCustomNode } from '@docx-editor.dev/pro';
 import { DEMO_CITATION, DEMO_CITATION_DEFAULTS, type CitationFormState } from './demoCitation';
 import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
 
@@ -43,6 +45,7 @@ const emit = defineEmits<{ close: [] }>();
 
 const editor = useDocxEditor();
 const open = computed(() => props.form !== null);
+const editing = computed(() => props.form?.mode === 'edit');
 const form = reactive({ ...DEMO_CITATION_DEFAULTS });
 const authorsText = computed({
   get: () => form.authors.join(', '),
@@ -58,19 +61,29 @@ watch(
   () => props.form,
   (next) => {
     if (!next) return;
-    Object.assign(form, DEMO_CITATION_DEFAULTS);
+    const current = next.mode === 'edit' ? DEMO_CITATION.dataOf(next) : undefined;
+    Object.assign(form, current ?? DEMO_CITATION_DEFAULTS);
   }
 );
 
 function submit(): void {
   const instance = editor.value;
-  const at = props.form?.at;
-  if (!instance || !at) {
+  const state = props.form;
+  if (!instance || !state) {
     emit('close');
     return;
   }
-  void insertCustomNode(instance, DEMO_CITATION, { at, data: { ...form } }).then((result) => {
-    if (!result.ok) window.alert(`Insert refused: ${result.reason}`);
+  const result =
+    state.mode === 'edit'
+      ? updateCustomNode(instance, DEMO_CITATION, state.nodeId, { data: { ...form } })
+      : insertCustomNode(instance, DEMO_CITATION, {
+          ...(state.at ? { at: state.at } : {}),
+          data: { ...form },
+        });
+  void Promise.resolve(result).then((outcome) => {
+    if (!outcome.ok) {
+      window.alert(`${state.mode === 'edit' ? 'Edit' : 'Insert'} refused: ${outcome.reason}`);
+    }
     emit('close');
   });
 }

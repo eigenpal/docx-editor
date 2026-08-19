@@ -127,6 +127,8 @@ Everything else is optional: `label` and `chrome.color` for the chip, `onClick` 
 
 Chips are content-locked by default, so editing runs through the context menu:
 
+For React, mount both components inside the viewport:
+
 ```tsx
 import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
 
@@ -137,6 +139,32 @@ import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/re
     <CustomNodeContextMenu onEditNode={(node) => openEditForm(node)} />
   </DocxEditor.ContextMenu>
 </DocxEditor.Viewport>;
+```
+
+For Vue, import the same components from the Vue Pro entry:
+
+```vue
+<script setup lang="ts">
+import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/vue';
+import type { ActivatedCustomNode } from '@docx-editor.dev/pro';
+
+const openPopover = (node: ActivatedCustomNode) => {
+  // Open your popover.
+};
+const openEditForm = (node: ActivatedCustomNode) => {
+  // Open your edit form.
+};
+</script>
+
+<template>
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+    <CustomNodeChrome :on-node-click="openPopover" />
+    <DocxEditor.ContextMenu>
+      <CustomNodeContextMenu :on-edit-node="openEditForm" />
+    </DocxEditor.ContextMenu>
+  </DocxEditor.Viewport>
+</template>
 ```
 
 An activated node carries `name`, `attrs`, `tag`, `data` and `rect` (viewport-relative, for

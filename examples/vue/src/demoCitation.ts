@@ -30,9 +30,16 @@ export const DEMO_CITATION = defineCustomNode({
   }),
 });
 
-export interface CitationFormState {
-  at: import('@docx-editor.dev/vue').EditorCaret | null;
-}
+export type CitationFormState =
+  | {
+      readonly mode: 'insert';
+      readonly at: import('@docx-editor.dev/vue').EditorCaret | null;
+    }
+  | {
+      readonly mode: 'edit';
+      readonly nodeId: string;
+      readonly data?: unknown;
+    };
 
 export const DEMO_CITATION_DEFAULTS: CitationData = {
   sourceId: 'demo-source',

@@ -18,7 +18,7 @@
         :show-adapter-switcher="showAdapterSwitcher"
         @update:title="title = $event"
         @update:color-mode="colorMode = $event"
-        @insert-citation="citationForm = { at: $event }"
+        @insert-citation="citationForm = { mode: 'insert', at: $event }"
       />
       <div class="demo-ruler-row">
         <DocxEditorHorizontalRuler />
@@ -32,7 +32,10 @@
           <DocxEditorHeaderFooterChrome />
           <DocxEditorNotesChrome />
           <DocxEditorContent />
-          <DocxEditorContextMenu />
+          <CustomNodeChrome :on-node-click="editCitation" />
+          <DocxEditorContextMenu>
+            <CustomNodeContextMenu :on-edit-node="editCitation" />
+          </DocxEditorContextMenu>
           <DocxEditorHyperLink />
           <DocxEditorReview :card="{ className: 'demo-review-card' }" />
         </DocxEditorViewport>
@@ -73,15 +76,25 @@ import {
   DocxEditorPageNumber,
   DocxEditorLoading,
   useDocxSource,
-  type EditorCaret,
 } from '@docx-editor.dev/vue';
-import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
-import { DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import {
+  customNodesModule,
+  reviewModule,
+  type ActivatedCustomNode,
+} from '@docx-editor.dev/pro';
+import {
+  CustomNodeChrome,
+  CustomNodeContextMenu,
+  DocxEditorReview,
+} from '@docx-editor.dev/pro/vue';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import EditorChrome from './EditorChrome.vue';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
-import { DEMO_CITATION } from './demoCitation';
+import {
+  DEMO_CITATION,
+  type CitationFormState,
+} from './demoCitation';
 
 void DocxEditorToolbar;
 void DocxEditorMenu;
@@ -105,7 +118,7 @@ const title = ref(
   props.fixtureUrl.split('/').pop()?.replace(/\.docx$/i, '') ?? 'Document'
 );
 const colorMode = ref<'light' | 'dark'>('light');
-const citationForm = ref<{ at: EditorCaret | null } | null>(null);
+const citationForm = ref<CitationFormState | null>(null);
 
 const { document: bytes, fonts, error: loadError } = useDocxSource(props.fixtureUrl, {
   fonts: defaultFonts,
@@ -113,6 +126,15 @@ const { document: bytes, fonts, error: loadError } = useDocxSource(props.fixture
 
 function onFontError(error: { code: string; message: string }): void {
   console.warn(`[fonts] ${error.code}: ${error.message}`);
+}
+
+function editCitation(node: ActivatedCustomNode): void {
+  if (!node.nodeId) return;
+  citationForm.value = {
+    mode: 'edit',
+    nodeId: node.nodeId,
+    ...(node.data === undefined ? {} : { data: node.data }),
+  };
 }
 
 const DocxEditorLoadingSpinner = DocxEditorLoading.Spinner;

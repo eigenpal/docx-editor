@@ -42,6 +42,7 @@
     "node_modules",
     "dist",
     "src/vue",
+    "src/__tests__/custom-node-vue-chrome.test.ts",
     "src/__tests__/review-sidebar-vue.test.ts",
     "src/__tests__/review-vue-harness.ts"
   ]

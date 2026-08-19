@@ -137,9 +137,18 @@ export const PACKAGES = [
           'ReviewSummary',
           'ReviewTime',
         ],
-        // Vue review rail exports compound parts on the namespace; only cross-package
-        // types referenced in public signatures remain forgotten here.
-        vue: ['DocxEditorInstance', 'EditorModule', 'ReviewItemPlacement', 'ReviewItemQuery'],
+        // Vue compounds follow the same rule as React. Custom-node types come from this
+        // package's main entry, and editor contracts come from core.
+        vue: [
+          'ActivatedCustomNode',
+          'AnyCustomNodeDefinition',
+          'CustomNodeDefinition',
+          'DocxEditorInstance',
+          'Editor',
+          'EditorModule',
+          'ReviewItemPlacement',
+          'ReviewItemQuery',
+        ],
       },
     },
   },

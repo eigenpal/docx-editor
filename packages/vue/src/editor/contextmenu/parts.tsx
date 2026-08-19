@@ -1,4 +1,4 @@
-import { computed, defineComponent, type PropType, type VNode } from 'vue';
+import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { tableChromeIconPaths } from '@docx-editor.dev/core/editor';
@@ -441,21 +441,22 @@ export const ContextMenuItem = defineComponent({
   },
   setup(props) {
     const { close } = useContextMenuContext();
-    return () => (
-      <MenuRow
-        {...(props.icon ? { icon: props.icon } : {})}
-        {...(props.shortcut ? { shortcut: props.shortcut } : {})}
-        {...(props.disabled ? { disabled: props.disabled } : {})}
-        {...(props.disabled && props.disabledReason ? { title: props.disabledReason } : {})}
-        {...(props.active !== undefined ? { active: props.active } : {})}
-        onSelect={() => {
-          props.onSelect?.();
-          close(true);
-        }}
-        {...(props.className ? { className: props.className } : {})}
-      >
-        {props.label}
-      </MenuRow>
-    );
+    return () =>
+      h(
+        MenuRow,
+        {
+          ...(props.icon ? { icon: props.icon } : {}),
+          ...(props.shortcut ? { shortcut: props.shortcut } : {}),
+          ...(props.disabled ? { disabled: props.disabled } : {}),
+          ...(props.disabled && props.disabledReason ? { title: props.disabledReason } : {}),
+          ...(props.active !== undefined ? { active: props.active } : {}),
+          onSelect: () => {
+            props.onSelect?.();
+            close(true);
+          },
+          ...(props.className ? { className: props.className } : {}),
+        },
+        { default: () => props.label }
+      );
   },
 });

@@ -187,6 +187,34 @@ centre beside an empty column for every consumer that mounted no rail.
 - **THEN** the props are merged onto that child, and a slot rendering zero or several roots
   renders nothing rather than guessing
 
+### Requirement: Pro custom-node chrome SHALL support Vue
+
+`@docx-editor.dev/pro/vue` SHALL export `CustomNodeChrome`,
+`CustomNodeContextMenu`, `useCustomNodeDefinitions`,
+`resolveCustomNodeActivation`, and `activatedCustomNodeOf` with the same
+capabilities as the React Pro entry.
+
+The chrome SHALL resolve definitions from the `nodes` prop or the editor module,
+apply host-authored colors without interpolating file data into CSS, dispatch
+click and hover activation, and add edit and remove rows to the context menu.
+
+#### Scenario: A registered definition colors and activates a chip
+
+- **WHEN** `CustomNodeChrome` mounts with a registered definition
+- **THEN** the painted chip uses the definition color
+- **AND** a primary press and release on the same node calls its click hook
+
+#### Scenario: A custom node contributes context menu rows
+
+- **WHEN** the context menu opens on a recognized custom node
+- **THEN** its review-card text and available edit and remove actions render
+  before the packaged rows
+
+#### Scenario: Plain text contributes no custom-node section
+
+- **WHEN** the context menu opens outside a recognized custom node
+- **THEN** `CustomNodeContextMenu` renders nothing
+
 ### Requirement: Painted-surface chrome SHALL sanitize every document-supplied value
 
 No Vue component SHALL pass a document-derived value to `v-html`, and every `href` and every

@@ -5,8 +5,8 @@
 ```ts
 
 import { ComputedRef } from 'vue';
-import { MaybeRefOrGetter } from '@docx-editor.dev/vue';
-import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
+import { MaybeRefOrGetter } from 'vue';
+import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from '@docx-editor.dev/vue';
 import { Node as Node_2 } from 'prosemirror-model';
 import { PropType } from 'vue';
 import { Ref } from 'vue';
@@ -14,6 +14,39 @@ import { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import { VNode } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
+
+// @public
+export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
+
+// @public
+export const CustomNodeChrome: {
+    new (): {
+        $props: CustomNodeChromeProps;
+    };
+};
+
+// @public
+export interface CustomNodeChromeProps {
+    readonly nodes?: readonly CustomNodeDefinition[];
+    readonly onNodeClick?: (node: ActivatedCustomNode) => void;
+    readonly onNodeHover?: (node: ActivatedCustomNode) => void;
+}
+
+// @public
+export const CustomNodeContextMenu: {
+    readonly docxRowPlacement: "start";
+    new (): {
+        $props: CustomNodeContextMenuProps;
+    };
+};
+
+// @public
+export interface CustomNodeContextMenuProps {
+    readonly nodes?: readonly CustomNodeDefinition[];
+    readonly onEditNode?: (node: ActivatedCustomNode, definition: CustomNodeDefinition) => void;
+    readonly onRemoveRefused?: (node: ActivatedCustomNode, reason: string) => void;
+    readonly remove?: boolean;
+}
 
 // @public (undocumented)
 export const DocxEditorReview: {
@@ -626,6 +659,19 @@ export interface ProLicenseOptions {
     readonly licenseKey?: string;
 }
 
+// @public
+export function resolveCustomNodeActivation(target: EventTarget | null, nodes: readonly AnyCustomNodeDefinition[]): ResolvedCustomNodeActivation | null;
+
+// @public
+export interface ResolvedCustomNodeActivation {
+    // (undocumented)
+    readonly controlId: string | null;
+    // (undocumented)
+    readonly definition: AnyCustomNodeDefinition;
+    // (undocumented)
+    readonly node: ActivatedCustomNode;
+}
+
 // @public (undocumented)
 export interface ReviewActionProps extends ReviewPartProps {
     // (undocumented)
@@ -701,17 +747,20 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
     t?: (key: string, params?: Record<string, string | number>) => string;
 }
 
+// @public
+export function useCustomNodeDefinitions(nodes?: MaybeRefOrGetter<readonly AnyCustomNodeDefinition[] | undefined>): ComputedRef<readonly AnyCustomNodeDefinition[]>;
+
 // @public (undocumented)
-export function useReview(query?: MaybeRefOrGetter<ReviewItemQuery | undefined>): UseReviewReturn;
+export function useReview(query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;
 
 // @public
-export function useReviewAuthor(author: MaybeRefOrGetter_2<string | undefined>): ComputedRef<ReviewAuthorInfo | undefined>;
+export function useReviewAuthor(author: MaybeRefOrGetter<string | undefined>): ComputedRef<ReviewAuthorInfo | undefined>;
 
 // @public (undocumented)
 export function useReviewItem(): ComputedRef<ReviewItemView | null>;
 
 // @public (undocumented)
-export function useReviewOf(editorRef: Ref<DocxEditorInstance | null>, query?: MaybeRefOrGetter<ReviewItemQuery | undefined>): UseReviewReturn;
+export function useReviewOf(editorRef: Ref<DocxEditorInstance | null>, query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;
 
 // @public (undocumented)
 export interface UseReviewReturn {
@@ -748,10 +797,10 @@ export interface UseReviewReturn {
 }
 
 // @public (undocumented)
-export function useStackedReviewPositions(items: MaybeRefOrGetter<readonly {
+export function useStackedReviewPositions(items: MaybeRefOrGetter_2<readonly {
     readonly key: string;
     readonly anchorY: number | null;
-}[]>, heights: MaybeRefOrGetter<ReadonlyMap<string, number>>, options?: MaybeRefOrGetter<{
+}[]>, heights: MaybeRefOrGetter_2<ReadonlyMap<string, number>>, options?: MaybeRefOrGetter_2<{
     readonly gap?: number;
     readonly scale?: number;
     readonly defaultHeight?: number;

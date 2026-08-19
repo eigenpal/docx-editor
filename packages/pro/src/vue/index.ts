@@ -35,3 +35,14 @@ export {
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview.ts';
+export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.ts';
+export {
+  CustomNodeContextMenu,
+  type CustomNodeContextMenuProps,
+} from './CustomNodeContextMenu.tsx';
+export {
+  activatedCustomNodeOf,
+  resolveCustomNodeActivation,
+  useCustomNodeDefinitions,
+  type ResolvedCustomNodeActivation,
+} from './custom-node-activation.ts';

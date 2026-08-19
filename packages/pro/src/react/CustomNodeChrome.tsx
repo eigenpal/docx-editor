@@ -91,7 +91,7 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
       const color =
         definition.chrome?.color !== undefined && CSS.supports('color', definition.chrome.color)
           ? definition.chrome.color
-          : '#2563eb';
+          : 'var(--doc-accent)';
       rules.push(
         `${selectors.map((selector) => `${selector} ${BOUNDARY}`).join(', ')} {`,
         '  pointer-events: auto !important;',

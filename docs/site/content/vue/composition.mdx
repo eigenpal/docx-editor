@@ -481,8 +481,31 @@ Use the `item` slot for unrelated card markup:
 Set `:preset="false"` to arrange all rail parts. Use `useReview()` for data
 without chrome. Use `useReviewItem()` inside a card.
 
-Pro custom-node chrome is React-only. The Vue Pro entry point does not export
-custom-node chrome.
+## Custom-node chrome
+
+Import the custom-node components from the Vue Pro entry:
+
+```vue
+<script setup lang="ts">
+import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/vue';
+import type { ActivatedCustomNode } from '@docx-editor.dev/pro';
+
+const openNode = (node: ActivatedCustomNode) => {
+  // Open your popover or form.
+};
+</script>
+
+<template>
+  <CustomNodeChrome :on-node-click="openNode" />
+  <DocxEditor.ContextMenu>
+    <CustomNodeContextMenu :on-edit-node="openNode" />
+  </DocxEditor.ContextMenu>
+</template>
+```
+
+`CustomNodeChrome` applies each definition's chip color. It also dispatches
+click and hover activation. `CustomNodeContextMenu` adds information, edit, and
+remove rows before the packaged rows.
 
 ## Full composition
 
