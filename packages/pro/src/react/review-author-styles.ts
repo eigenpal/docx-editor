@@ -25,7 +25,7 @@ export const AUTHOR_SLOTS = 8;
  *
  * The accent is the ONLY styling the packaged card takes from a declaration. Card DESIGN
  * belongs to composition — a custom card over `useReviewAuthor`, or CSS on the
- * `data-author`/`data-author-slot` hooks — never to a config record.
+ * `data-review-author`/`data-review-author-slot` hooks — never to a config record.
  */
 export function authorAccent(info: ReviewAuthorInfo | undefined, fallbackSlot: number): string {
   return info?.color ?? `var(--doc-review-author-${fallbackSlot % AUTHOR_SLOTS})`;
@@ -35,7 +35,7 @@ export function authorCardStyle(
   info: ReviewAuthorInfo | undefined,
   fallbackSlot: number
 ): CSSProperties {
-  return { '--doc-review-author': authorAccent(info, fallbackSlot) } as CSSProperties;
+  return { '--doc-review-author-current': authorAccent(info, fallbackSlot) } as CSSProperties;
 }
 
 /**
@@ -43,7 +43,7 @@ export function authorCardStyle(
  *
  * The FACADE's slot whenever the roster carries the author — which is every author of a
  * tracked change OR a comment — so the card, the painted text and the highlight band all
- * agree. That is the same number the painter writes as `data-revision-author-slot`. The
+ * agree. That is the same number the painter writes as `data-review-author-slot`. The
  * rail's own item-order slot stands in only for an author the roster has not published yet.
  */
 export function authorSlot(info: ReviewAuthorInfo | undefined, fallbackSlot: number): number {

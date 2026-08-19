@@ -147,7 +147,7 @@ describe('the reader can see which text is tracked', () => {
     const root = paint(`<w:p>${ins('7', run('added'), 'QA Reviewer')}</w:p>`);
     const span = trackedSpans(root)[0]!;
     expect(span.dataset.revisionId).toBe('7');
-    expect(span.dataset.revisionAuthor).toBe('QA Reviewer');
+    expect(span.dataset.reviewAuthor).toBe('QA Reviewer');
     expect(span.dataset.revisionDate).toBe('2026-03-26T11:00:00Z');
   });
 });
@@ -175,16 +175,16 @@ describe('colouring by author', () => {
     // The wash keeps the kind pair: the ink answers "whose", the wash keeps the change
     // findable when scanning.
     expect(spans[0]!.style.backgroundColor).toBe('var(--doc-revision-insertion-wash)');
-    // The slot rides as a CSS hook, so `[data-revision-author-slot='0']` restyles one
+    // The slot rides as a CSS hook, so `[data-review-author-slot='0']` restyles one
     // reviewer's changes beyond the colour.
-    expect(spans.map((span) => span.dataset.revisionAuthorSlot)).toEqual(['0', '1']);
+    expect(spans.map((span) => span.dataset.reviewAuthorSlot)).toEqual(['0', '1']);
   });
 
   test('the slot hook is absent under kind colouring', () => {
     // Emitted always, a new author appearing would repaint every page in every scheme —
     // the slot map is in the paint-reuse key only under author colouring.
     const root = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`, 'kind');
-    expect(trackedSpans(root)[0]!.dataset.revisionAuthorSlot).toBeUndefined();
+    expect(trackedSpans(root)[0]!.dataset.reviewAuthorSlot).toBeUndefined();
   });
 
   test('assignments are SELECTIVE: a styled author takes their colour, the rest keep the kind colours', () => {
@@ -230,7 +230,7 @@ describe('colouring by author', () => {
     const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
     expect(glyph.style.color).toBe('var(--doc-review-author-0)');
     expect(glyph.style.textDecorationLine).toBe('line-through');
-    expect(glyph.dataset.revisionAuthorSlot).toBe('0');
+    expect(glyph.dataset.reviewAuthorSlot).toBe('0');
   });
 
   test('switching the scheme repaints pages whose own records did not change', () => {
@@ -273,7 +273,7 @@ describe('colouring by author', () => {
   test("host class names land on one author's spans, split on whitespace", () => {
     const root = paint(
       `<w:p>${ins('1', run('added'), 'Ada')}${ins('2', run('more'), 'Grace')}</w:p>`,
-      { authors: { Ada: { className: 'agent-edit  ring' } } }
+      { authors: { Ada: { spanClassName: 'agent-edit  ring' } } }
     );
     const spans = trackedSpans(root);
     expect(spans[0]!.classList.contains('agent-edit')).toBe(true);
@@ -293,7 +293,7 @@ describe('colouring by author', () => {
 
     const classOnly = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`, {
       others: 'kind',
-      authors: { Ada: { className: 'agent-edit' } },
+      authors: { Ada: { spanClassName: 'agent-edit' } },
     });
     const span = trackedSpans(classOnly)[0]!;
     expect(span.style.color).toBe('var(--doc-revision-insertion)');
@@ -342,12 +342,14 @@ describe('colouring by author', () => {
     const body =
       '<w:p><w:r><w:rPr><w:rPrChange w:id="5" w:author="Zed" w:date="D"><w:rPr/>' +
       '</w:rPrChange></w:rPr><w:t>restyled</w:t></w:r></w:p>';
-    const root = paint(body, { authors: { Zed: { color: 'var(--brand-zed)', className: 'z' } } });
+    const root = paint(body, {
+      authors: { Zed: { color: 'var(--brand-zed)', spanClassName: 'z' } },
+    });
     const span = root.querySelector<HTMLElement>('.docx-revision-format')!;
-    expect(span.dataset.revisionAuthor).toBe('Zed');
+    expect(span.dataset.reviewAuthor).toBe('Zed');
     // Format revisions are the largest tracked population in a heavily restyled document;
     // a host rule scoped to the author has to reach them too.
-    expect(span.dataset.revisionAuthorSlot).toBe('0');
+    expect(span.dataset.reviewAuthorSlot).toBe('0');
     expect(span.classList.contains('z')).toBe(true);
     expect(span.style.color).toBe('var(--brand-zed)');
   });
@@ -456,7 +458,7 @@ describe('changes that decorate no characters', () => {
     const glyphs = root.querySelectorAll<HTMLElement>('.docx-revision-pmark');
     expect(glyphs).toHaveLength(1);
     expect(glyphs[0]!.dataset.revisionKind).toBe('delete');
-    expect(glyphs[0]!.dataset.revisionAuthor).toBe('B');
+    expect(glyphs[0]!.dataset.reviewAuthor).toBe('B');
     expect(glyphs[0]!.dataset.revisionIds).toBe('7 8');
   });
 
@@ -508,7 +510,7 @@ describe('changes that decorate no characters', () => {
     expect(span.style.textDecorationLine).toBe('');
     expect(span.style.backgroundColor).toBe('');
     expect(span.dataset.revisionKind).toBe('format');
-    expect(span.dataset.revisionAuthor).toBe('QA');
+    expect(span.dataset.reviewAuthor).toBe('QA');
   });
 });
 

@@ -109,8 +109,8 @@ async function mount() {
 function cardSlot(view: { container: HTMLElement }, author: string): string | null {
   return (
     view.container
-      .querySelector(`.docx-review__card[data-author="${author}"]`)
-      ?.getAttribute('data-author-slot') ?? null
+      .querySelector(`.docx-review__card[data-review-author="${author}"]`)
+      ?.getAttribute('data-review-author-slot') ?? null
   );
 }
 
@@ -118,8 +118,8 @@ function cardSlot(view: { container: HTMLElement }, author: string): string | nu
 function bandSlot(container: HTMLElement, author: string): string | null {
   return (
     container
-      .querySelector(`.docx-comment-band[data-author="${author}"]`)
-      ?.getAttribute('data-author-slot') ?? null
+      .querySelector(`.docx-comment-band[data-review-author="${author}"]`)
+      ?.getAttribute('data-review-author-slot') ?? null
   );
 }
 
@@ -128,13 +128,15 @@ afterEach(cleanup);
 describe('the comment band carries its author', () => {
   test('a band exposes the author, the slot, and the colour as CSS hooks', async () => {
     const { view } = await mount();
-    const band = view.container.querySelector<HTMLElement>('.docx-comment-band[data-author]');
+    const band = view.container.querySelector<HTMLElement>(
+      '.docx-comment-band[data-review-author]'
+    );
     expect(band).not.toBeNull();
-    expect(band!.dataset.author).toBe('Grace Hopper');
-    expect(band!.dataset.authorSlot).toBeDefined();
-    // The resolved colour, so a host rule reading `var(--doc-review-author)` on the band gets
+    expect(band!.dataset.reviewAuthor).toBe('Grace Hopper');
+    expect(band!.dataset.reviewAuthorSlot).toBeDefined();
+    // The resolved colour, so a host rule reading `var(--doc-review-author-current)` on the band gets
     // the same value the card got — not a fallback, and not the empty string.
-    expect(band!.style.getPropertyValue('--doc-review-author')).not.toBe('');
+    expect(band!.style.getPropertyValue('--doc-review-author-current')).not.toBe('');
   });
 
   test('the band and the card agree on the slot, for a commenter and for an editor', async () => {
@@ -159,7 +161,9 @@ describe('the comment band carries its author', () => {
 
   test('the band stays Word’s yellow: the author is a handle, not a default', async () => {
     const { view } = await mount();
-    const band = view.container.querySelector<HTMLElement>('.docx-comment-band[data-author]');
+    const band = view.container.querySelector<HTMLElement>(
+      '.docx-comment-band[data-review-author]'
+    );
     // Nothing inline paints the band. A host opting in writes the rule; the engine does not.
     expect(band!.style.background).toBe('');
     expect(band!.style.backgroundColor).toBe('');
@@ -171,11 +175,11 @@ describe('the comment band carries its author', () => {
       editor.setRevisionStyles({ authors: { 'Grace Hopper': '#0b7285' } });
     });
     const band = view.container.querySelector<HTMLElement>(
-      '.docx-comment-band[data-author="Grace Hopper"]'
+      '.docx-comment-band[data-review-author="Grace Hopper"]'
     );
     // A live colour change is paint-level, and the band layer is repainted by the same pass.
     // The declaration has to survive the trip: the card and the text cannot disagree about a
     // colour the host set explicitly.
-    expect(band!.style.getPropertyValue('--doc-review-author')).toBe('#0b7285');
+    expect(band!.style.getPropertyValue('--doc-review-author-current')).toBe('#0b7285');
   });
 });

@@ -53,7 +53,7 @@ function mount() {
 }
 
 function inkOf(container: HTMLElement, author: string): string | undefined {
-  return container.querySelector<HTMLElement>(`.docx-revision[data-revision-author="${author}"]`)
+  return container.querySelector<HTMLElement>(`.docx-revision[data-review-author="${author}"]`)
     ?.style.color;
 }
 

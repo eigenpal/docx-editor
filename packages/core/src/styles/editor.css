@@ -5242,23 +5242,31 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* THE CHROME'S READING OF AN AUTHOR'S COLOUR.
-   The review surface sets `--doc-review-author` inline on each card, balloon and marker,
+   The review surface sets `--doc-review-author-current` inline on each card, balloon and marker,
    from the same ramp the painted document draws that author in. These two derive from it,
    and they are declared on the elements themselves because a custom property that
-   references `--doc-review-author` has to be computed where that property is actually set —
+   references `--doc-review-author-current` has to be computed where that property is actually set —
    an ancestor rule would resolve the fallback and inherit it down.
    Light: the page and the chrome agree on the value. Dark: the PAGE is rendered through an
    inverting filter and the chrome is not, so only the chrome lifts. */
 .docx-review__card,
 .docx-review__marker {
-  --doc-review-author-ink: var(--doc-review-author, #c0392b);
-  --doc-review-author-disc: color-mix(in srgb, var(--doc-review-author, #c0392b) 82%, white);
+  --doc-review-author-ink: var(--doc-review-author-current, #c0392b);
+  --doc-review-author-disc: color-mix(
+    in srgb,
+    var(--doc-review-author-current, #c0392b) 82%,
+    white
+  );
 }
 
 .docx-editor.dark .docx-review__card,
 .docx-editor.dark .docx-review__marker {
-  --doc-review-author-ink: color-mix(in srgb, var(--doc-review-author, #c0392b) 55%, white);
-  --doc-review-author-disc: color-mix(in srgb, var(--doc-review-author, #c0392b) 62%, white);
+  --doc-review-author-ink: color-mix(in srgb, var(--doc-review-author-current, #c0392b) 55%, white);
+  --doc-review-author-disc: color-mix(
+    in srgb,
+    var(--doc-review-author-current, #c0392b) 62%,
+    white
+  );
 }
 
 .docx-review__card {
@@ -5275,7 +5283,7 @@ a.docx-hyperlink:focus-visible {
      card that annotates them carries the same colour on its leading edge — the eye pairs
      the two without reading either. An edge rather than a wash: the card is chrome and its
      text has to keep full contrast, and eight tinted slabs down a rail read as warnings.
-     `--doc-review-author` is set per card by the review surface; `--doc-review-author-ink`
+     `--doc-review-author-current` is set per card by the review surface; `--doc-review-author-ink`
      is the chrome-side reading of it, lifted under `.dark` (see below). */
   border-left: 3px solid var(--doc-review-author-ink, var(--doc-border, #e3e5e8));
   /* The card is CHROME, so it is themed; the document canvas beside it never is. */
@@ -5602,7 +5610,7 @@ a.docx-hyperlink:focus-visible {
 
 /* WHOSE COMMENT THIS IS, for CSS only.
  *
- * Every band carries `data-author`, `data-author-slot` and `--doc-review-author` — the same
+ * Every band carries `data-review-author`, `data-review-author-slot` and `--doc-review-author-current` — the same
  * three hooks the review card carries, so one selector restyles a reviewer's card and the text
  * it annotates together. Nothing here paints them: Word keeps every comment the same yellow,
  * and eight highlighter colours down a page reads as eight meanings rather than eight people.
@@ -5611,14 +5619,14 @@ a.docx-hyperlink:focus-visible {
  * To tint by author, a host writes the one rule this deliberately does not:
  *
  *   .docx-editor .docx-comment-band {
- *     background: color-mix(in srgb, var(--doc-review-author) 22%, transparent);
+ *     background: color-mix(in srgb, var(--doc-review-author-current) 22%, transparent);
  *   }
  *
  * The band is CHROME, not page content: this layer is a sibling of the pages, so the page's
  * inverting filter never reaches it. It composites over the already-inverted sheet, and the
  * blend mode flips from `multiply` to `screen` under `.dark` for that reason. A colour used
  * here therefore needs its own dark value, the way `--doc-comment-bg` has one — nothing
- * corrects it downstream. `--doc-review-author` carries the light ramp value in both themes,
+ * corrects it downstream. `--doc-review-author-current` carries the light ramp value in both themes,
  * so a rule that tints by author should lift it under `.docx-editor.dark` itself. */
 
 /* Tracked changes carry a band always, in the change's OWN colour, so it never contradicts

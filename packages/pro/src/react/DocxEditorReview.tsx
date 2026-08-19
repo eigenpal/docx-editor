@@ -1055,11 +1055,11 @@ function ReviewMarkers({
             data-testid="review-marker"
             data-kind={entry.kind === 'revision' ? entry.revisionKind : entry.kind}
             // Per-author CSS hooks, mirroring the painted document's
-            // `data-revision-author`/`data-revision-author-slot`. A custom card has no author.
+            // `data-review-author`/`data-review-author-slot`. A custom card has no author.
             {...(entry.author
               ? {
-                  'data-author': entry.author,
-                  'data-author-slot': authorSlot(
+                  'data-review-author': entry.author,
+                  'data-review-author-slot': authorSlot(
                     authorInfo.get(entry.author),
                     authorSlots.get(entry.author) ?? 0
                   ),
@@ -1072,7 +1072,7 @@ function ReviewMarkers({
               // The accent only — a card background has no business on a gutter glyph.
               ...(entry.author
                 ? ({
-                    '--doc-review-author': authorAccent(
+                    '--doc-review-author-current': authorAccent(
                       authorInfo.get(entry.author),
                       authorSlots.get(entry.author) ?? 0
                     ),
@@ -1209,7 +1209,7 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       const end = Number(element.dataset.end);
       setAnchor({
         revisionId: element.dataset.revisionId!,
-        author: element.dataset.revisionAuthor ?? '',
+        author: element.dataset.reviewAuthor ?? '',
         ...(element.dataset.revisionDate !== undefined
           ? { date: element.dataset.revisionDate }
           : {}),
@@ -1368,8 +1368,8 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
                 className="docx-review__card"
                 data-testid="review-balloon-card"
                 data-kind={served.revisionKind ?? 'revision'}
-                data-author={served.author}
-                data-author-slot={authorSlot(
+                data-review-author={served.author}
+                data-review-author-slot={authorSlot(
                   authorInfo.get(served.author),
                   authorSlots.get(served.author) ?? 0
                 )}
@@ -1402,8 +1402,8 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
               data-kind={fallbackKind}
               {...(anchor.author
                 ? {
-                    'data-author': anchor.author,
-                    'data-author-slot': authorSlot(
+                    'data-review-author': anchor.author,
+                    'data-review-author-slot': authorSlot(
                       authorInfo.get(anchor.author),
                       authorSlots.get(anchor.author) ?? 0
                     ),
@@ -1496,13 +1496,13 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     'data-testid': 'review-card',
     'aria-labelledby': `${cardId}-author ${cardId}-summary`,
     'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
-    // Per-author CSS hooks, mirroring the painted document's `data-revision-author` /
-    // `data-revision-author-slot`: `[data-author='Name']` restyles one reviewer's cards,
-    // `[data-author-slot='2']` does it without knowing the name.
+    // Per-author CSS hooks, mirroring the painted document's `data-review-author` /
+    // `data-review-author-slot`: `[data-review-author='Name']` restyles one reviewer's cards,
+    // `[data-review-author-slot='2']` does it without knowing the name.
     ...(entry.author
       ? {
-          'data-author': entry.author,
-          'data-author-slot': authorSlot(authorInfo.get(entry.author), slot),
+          'data-review-author': entry.author,
+          'data-review-author-slot': authorSlot(authorInfo.get(entry.author), slot),
         }
       : {}),
     // Which custom node, not just that it is one: every custom card is `data-kind="custom"`,

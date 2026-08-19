@@ -831,15 +831,15 @@ function applyRevisionPresentation(
     element.classList.add('docx-revision', `docx-revision-${attribution.kind}`);
     element.dataset.revisionKind = attribution.kind;
     element.dataset.revisionId = attribution.id;
-    element.dataset.revisionAuthor = attribution.author;
+    element.dataset.reviewAuthor = attribution.author;
     if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
-    // The author's ramp slot, as a CSS hook: `[data-revision-author-slot='2']` restyles one
+    // The author's ramp slot, as a CSS hook: `[data-review-author-slot='2']` restyles one
     // reviewer's changes without the host knowing the name. Only under author colouring,
     // because the slot map is in the paint-reuse key only then — emitted always, a new
     // author appearing would have to repaint every page in every scheme.
     const authorStyle = colors?.styles.get(attribution.author);
     if (colors) {
-      element.dataset.revisionAuthorSlot = String(
+      element.dataset.reviewAuthorSlot = String(
         (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
       );
       // Host classes for this author's changes, for whatever the typed fields do not
@@ -899,7 +899,7 @@ function applyRevisionPresentation(
   element.classList.add('docx-revision', 'docx-revision-format');
   element.dataset.revisionKind = 'format';
   element.dataset.revisionId = format!.id;
-  element.dataset.revisionAuthor = format!.author;
+  element.dataset.reviewAuthor = format!.author;
   if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
   // A format revision has an AUTHOR like any other, so the per-author hooks belong here
   // too — a host rule scoped to a reviewer's slot or class would otherwise skip what can be
@@ -908,7 +908,7 @@ function applyRevisionPresentation(
   // and painting it in the author's ink would claim it was.
   if (colors) {
     const formatStyle = colors.styles.get(format!.author);
-    element.dataset.revisionAuthorSlot = String(
+    element.dataset.reviewAuthorSlot = String(
       (colors.authorSlots.get(format!.author) ?? 0) % REVIEW_AUTHOR_SLOTS
     );
     const tokens = colors.classTokens.get(format!.author);
@@ -946,7 +946,7 @@ function paintParagraphMark(
   glyph.contentEditable = 'false';
   glyph.dataset.revisionKind = shown.kind;
   glyph.dataset.revisionId = shown.id;
-  glyph.dataset.revisionAuthor = shown.author;
+  glyph.dataset.reviewAuthor = shown.author;
   // Always, not only for a pair: a consumer reading `data-revision-ids` should not have to
   // fall back to `data-revision-id` for the ordinary case. Kinds ride alongside, because the
   // ids alone cannot say which decision each one is.
@@ -962,7 +962,7 @@ function paintParagraphMark(
   const markStyle = colors?.styles.get(shown.author);
   const markSlot = colors ? (colors.authorSlots.get(shown.author) ?? 0) % REVIEW_AUTHOR_SLOTS : 0;
   if (colors) {
-    glyph.dataset.revisionAuthorSlot = String(markSlot);
+    glyph.dataset.reviewAuthorSlot = String(markSlot);
     const tokens = colors.classTokens.get(shown.author);
     if (tokens) for (let i = 0; i < tokens.length; i += 1) glyph.classList.add(tokens[i]!);
   }
@@ -2018,7 +2018,7 @@ function paintTableFragment(
       // Dataset assignment escapes; the values are attacker-controlled and never markup.
       rowElement.dataset.revisionKind = row.revisionKind;
       if (row.revisionId !== undefined) rowElement.dataset.revisionId = row.revisionId;
-      if (row.revisionAuthor !== undefined) rowElement.dataset.revisionAuthor = row.revisionAuthor;
+      if (row.revisionAuthor !== undefined) rowElement.dataset.reviewAuthor = row.revisionAuthor;
       if (row.revisionDate !== undefined) rowElement.dataset.revisionDate = row.revisionDate;
     }
     rowElement.dataset.rowId = row.id;

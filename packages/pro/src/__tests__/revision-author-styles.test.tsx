@@ -94,7 +94,7 @@ function mount(declared: Declared = {}) {
 
 function insertionInk(container: HTMLElement, author: string): string | undefined {
   return container.querySelector<HTMLElement>(
-    `.docx-revision-insert[data-revision-author="${author}"]`
+    `.docx-revision-insert[data-review-author="${author}"]`
   )?.style.color;
 }
 
@@ -102,7 +102,7 @@ function insertionInk(container: HTMLElement, author: string): string | undefine
 function colorsByAuthor(container: HTMLElement): Map<string, Set<string>> {
   const byAuthor = new Map<string, Set<string>>();
   for (const span of container.querySelectorAll<HTMLElement>('.docx-revision-insert')) {
-    const author = span.dataset.revisionAuthor ?? '';
+    const author = span.dataset.reviewAuthor ?? '';
     const colors = byAuthor.get(author) ?? new Set<string>();
     colors.add(span.style.color);
     byAuthor.set(author, colors);
@@ -145,17 +145,19 @@ describe('revisionStyles reaches the painted document', () => {
 
   test('per-author CSS hooks land on painted spans and on review cards', () => {
     const view = mount();
-    // The painted document: `data-revision-author-slot` beside the author name.
+    // The painted document: `data-review-author-slot` beside the author name.
     const ada = view.container.querySelector<HTMLElement>(
-      '.docx-revision-insert[data-revision-author="Ada Lovelace"]'
+      '.docx-revision-insert[data-review-author="Ada Lovelace"]'
     );
-    expect(ada?.dataset.revisionAuthorSlot).toBe('0');
+    expect(ada?.dataset.reviewAuthorSlot).toBe('0');
     // The rail's cards carry the mirrored hooks, so one reviewer's cards restyle in CSS.
     const cards = view.getAllByTestId('review-card');
-    expect(cards.map((card) => [card.dataset.author, card.dataset.authorSlot])).toEqual([
-      ['Ada Lovelace', '0'],
-      ['Grace Hopper', '1'],
-    ]);
+    expect(cards.map((card) => [card.dataset.reviewAuthor, card.dataset.reviewAuthorSlot])).toEqual(
+      [
+        ['Ada Lovelace', '0'],
+        ['Grace Hopper', '1'],
+      ]
+    );
   });
 
   test("the packaged card follows the author's colour as its accent, and shows the avatar", () => {
@@ -169,11 +171,11 @@ describe('revisionStyles reaches the painted document', () => {
     });
     const [adaCard, graceCard] = view.getAllByTestId('review-card');
     // Ada's card keys its accent on HER resolved colour — the one her text draws in…
-    expect(adaCard!.style.getPropertyValue('--doc-review-author')).toBe('var(--brand-ada)');
+    expect(adaCard!.style.getPropertyValue('--doc-review-author-current')).toBe('var(--brand-ada)');
     const avatar = adaCard!.querySelector<HTMLImageElement>('.docx-review__avatar-img');
     expect(avatar?.getAttribute('src')).toBe('https://example.com/ada.png');
     // …and Grace's keeps the ramp, with initials in the disc.
-    expect(graceCard!.style.getPropertyValue('--doc-review-author')).toBe(
+    expect(graceCard!.style.getPropertyValue('--doc-review-author-current')).toBe(
       'var(--doc-review-author-1)'
     );
     expect(graceCard!.querySelector('.docx-review__avatar-img')).toBeNull();
@@ -181,15 +183,15 @@ describe('revisionStyles reaches the painted document', () => {
   });
 
   test("host class names land on the author's document spans", () => {
-    const view = mount({ authors: { 'Ada Lovelace': { className: 'agent-edit' } } });
+    const view = mount({ authors: { 'Ada Lovelace': { spanClassName: 'agent-edit' } } });
     const ada = view.container.querySelector<HTMLElement>(
-      '.docx-revision-insert[data-revision-author="Ada Lovelace"]'
+      '.docx-revision-insert[data-review-author="Ada Lovelace"]'
     );
     expect(ada?.classList.contains('agent-edit')).toBe(true);
-    // Card design is composition's job: restyle cards through the `data-author` hooks or a
+    // Card design is composition's job: restyle cards through the `data-review-author` hooks or a
     // custom card, never through the record.
     const [adaCard] = view.getAllByTestId('review-card');
-    expect(adaCard!.dataset.author).toBe('Ada Lovelace');
+    expect(adaCard!.dataset.reviewAuthor).toBe('Ada Lovelace');
   });
 
   test('a fully custom card links to the author styles through useReviewAuthor', () => {
@@ -255,9 +257,9 @@ describe('revisionStyles reaches the painted document', () => {
     });
     const card = view
       .getAllByTestId('review-card')
-      .find((node) => node.dataset.author === 'Sam Reyes');
+      .find((node) => node.dataset.reviewAuthor === 'Sam Reyes');
     expect(card).toBeDefined();
-    expect(card!.style.getPropertyValue('--doc-review-author')).toBe('var(--brand-sam)');
+    expect(card!.style.getPropertyValue('--doc-review-author-current')).toBe('var(--brand-sam)');
     expect(
       card!.querySelector<HTMLImageElement>('.docx-review__avatar-img')?.getAttribute('src')
     ).toBe('/sam.png');

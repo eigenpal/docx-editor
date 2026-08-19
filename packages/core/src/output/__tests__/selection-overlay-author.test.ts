@@ -35,9 +35,9 @@ describe('an overlay rectangle carries its review author', () => {
       },
     ]);
     const band = layer.firstElementChild as HTMLElement;
-    expect(band.dataset.author).toBe('Ada Lovelace');
-    expect(band.dataset.authorSlot).toBe('2');
-    expect(band.style.getPropertyValue('--doc-review-author')).toBe('#7d3c98');
+    expect(band.dataset.reviewAuthor).toBe('Ada Lovelace');
+    expect(band.dataset.reviewAuthorSlot).toBe('2');
+    expect(band.style.getPropertyValue('--doc-review-author-current')).toBe('#7d3c98');
   });
 
   test('WRAPS the slot to the ramp, so the ninth author matches their card', () => {
@@ -51,17 +51,17 @@ describe('an overlay rectangle carries its review author', () => {
         reviewAuthor: { author: 'Ninth Author', slot: REVIEW_AUTHOR_SLOTS, color: '#c0392b' },
       },
     ]);
-    expect((layer.firstElementChild as HTMLElement).dataset.authorSlot).toBe('0');
+    expect((layer.firstElementChild as HTMLElement).dataset.reviewAuthorSlot).toBe('0');
   });
 
   test('a rectangle with no author carries no author attributes at all', () => {
     // Cell selection and the retained-selection band go through this same painter. An empty
-    // `data-author` would make them match a host's `[data-author]` rules.
+    // `data-review-author` would make them match a host's `[data-review-author]` rules.
     const layer = paint([{ ...RECT }]);
     const rect = layer.firstElementChild as HTMLElement;
-    expect(rect.hasAttribute('data-author')).toBe(false);
-    expect(rect.hasAttribute('data-author-slot')).toBe(false);
-    expect(rect.style.getPropertyValue('--doc-review-author')).toBe('');
+    expect(rect.hasAttribute('data-review-author')).toBe(false);
+    expect(rect.hasAttribute('data-review-author-slot')).toBe(false);
+    expect(rect.style.getPropertyValue('--doc-review-author-current')).toBe('');
   });
 
   test('an author name from the file is set as a value, never as markup', () => {
@@ -72,7 +72,7 @@ describe('an overlay rectangle carries its review author', () => {
       { ...RECT, reviewAuthor: { author: hostile, slot: 0, color: '#c0392b' } },
     ]);
     const rect = layer.firstElementChild as HTMLElement;
-    expect(rect.dataset.author).toBe(hostile);
+    expect(rect.dataset.reviewAuthor).toBe(hostile);
     expect(rect.querySelector('img')).toBeNull();
   });
 });

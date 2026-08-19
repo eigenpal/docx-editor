@@ -28,7 +28,7 @@ export const REVIEW_AUTHOR_SLOTS = 8;
  * author's identity data. Review-card DESIGN is not configured here: the review chrome
  * follows `color` as its accent automatically, and everything further is composition —
  * a custom card reading this style through the review surface's `useReviewAuthor`, or
- * CSS on the cards' `data-author`/`data-author-slot` hooks.
+ * CSS on the cards' `data-review-author`/`data-review-author-slot` hooks.
  *
  * @public
  */
@@ -46,7 +46,7 @@ export interface RevisionAuthorStyle {
    * the engine measures the text it paints, and a class that resizes glyphs drifts the
    * page from its layout.
    */
-  className?: string;
+  spanClassName?: string;
   /** Avatar image for this author; the packaged card renders it in place of initials. */
   avatarUrl?: string;
 }
@@ -103,7 +103,7 @@ export interface ReviewAuthorInfo {
   readonly style?: RevisionAuthorStyle;
 }
 
-const STYLE_KEYS = ['color', 'background', 'className', 'avatarUrl'] as const;
+const STYLE_KEYS = ['color', 'background', 'spanClassName', 'avatarUrl'] as const;
 
 /**
  * The subset of {@link STYLE_KEYS} that reaches PAINTED DOM, and so the only fields the
@@ -115,7 +115,7 @@ const STYLE_KEYS = ['color', 'background', 'className', 'avatarUrl'] as const;
  * page. Measured at 228ms and 0 of 41 pages retained for a change that alters no painted
  * pixel; an identical redeclaration kept all 41 at 0.1ms.
  */
-const PAINTED_STYLE_KEYS = ['color', 'background', 'className'] as const;
+const PAINTED_STYLE_KEYS = ['color', 'background', 'spanClassName'] as const;
 
 /**
  * Schemes an avatar may load over. An allowlist, matching the package's `sanitizeHref`
@@ -235,7 +235,7 @@ export function reviewAuthorsOf(
 export interface RevisionStyleContext {
   readonly authorSlots: ReadonlyMap<string, number>;
   readonly styles: ReadonlyMap<string, RevisionAuthorStyle>;
-  /** `className` pre-split into tokens, so paint does not split per span. */
+  /** `spanClassName` pre-split into tokens, so paint does not split per span. */
   readonly classTokens: ReadonlyMap<string, readonly string[]>;
   /** Authors without a style: `'kind'` colours, or the ramp. */
   readonly others: 'kind' | 'author';
@@ -331,8 +331,8 @@ export function revisionStyleContextOf(
   const authorSlots = authorSlotsOf(layout);
   const classTokens = new Map<string, readonly string[]>();
   for (const [author, style] of styles) {
-    if (!style.className) continue;
-    const tokens = style.className.split(/\s+/).filter((token) => token.length > 0);
+    if (!style.spanClassName) continue;
+    const tokens = style.spanClassName.split(/\s+/).filter((token) => token.length > 0);
     if (tokens.length > 0) classTokens.set(author, tokens);
   }
   const context: RevisionStyleContext = {
@@ -495,7 +495,7 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
  * card, and a reader who learns the pairing on one must not have to relearn it on the other.
  *
  * Document authors KEEP the number the layout walk gave them. The painter has already written
- * that number into the page as `data-revision-author-slot`, so renumbering here to make room
+ * that number into the page as `data-review-author-slot`, so renumbering here to make room
  * for a commenter would recolour tracked text that nobody touched. A comment-only author has
  * no painted revision to collide with, so they take the next free slot instead.
  *

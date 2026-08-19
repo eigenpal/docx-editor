@@ -177,13 +177,14 @@ Each declaration accepts more than a color:
   author="Jess Lin"
   color="#7c3aed" // ink and decoration in the document, and their card accent
   background="rgb(124 58 237 / 8%)" // the wash behind their changes
-  className="jess-edit" // classes added to their painted changes
+  spanClassName="jess-edit" // classes added to their painted changes
   avatarUrl="https://example.com/avatars/jess.png" // their avatar in the review sidebar
 />
 ```
 
-`className` is the escape hatch for painted text: any rule your CSS system can express,
-per author. Keep those rules metric-safe. Outlines, shadows, and background accents are
+`spanClassName` is the escape hatch for painted text: any rule your CSS system can
+express, per author. It is named for what it styles — the declaration renders no element of
+its own, so the classes land on the author's painted spans, not on a wrapper. Keep those rules metric-safe. Outlines, shadows, and background accents are
 fine. A class that changes font size, weight, or family drifts the page away from the
 layout the engine measured.
 
@@ -326,24 +327,24 @@ see [Per-author card design](#per-author-card-design).
 
 Every review card, hover balloon, and gutter marker that has an author carries it:
 
-- `data-author` — the author's name, exactly as the document spells it.
-- `data-author-slot` — their ramp slot (`0`–`7`), for styling by position rather than by
+- `data-review-author` — the author's name, exactly as the document spells it.
+- `data-review-author-slot` — their ramp slot (`0`–`7`), for styling by position rather than by
   name.
-- `--doc-review-author` — a CSS variable holding that author's resolved color, which the
+- `--doc-review-author-current` — a CSS variable holding that author's resolved color, which the
   packaged card already uses for its avatar disc and accents.
 
 So restyling one reviewer's cards is a CSS rule:
 
 ```css
 /* Every card from one reviewer. The leading edge is already their color. */
-.docx-review__card[data-author='AI Assistant'] {
+.docx-review__card[data-review-author='AI Assistant'] {
   background: #fef2f2;
   font-weight: 600;
 }
 
 /* Or by slot, when you do not know the names in advance. */
-.docx-review__card[data-author-slot='2'] {
-  outline: 1px solid var(--doc-review-author);
+.docx-review__card[data-review-author-slot='2'] {
+  outline: 1px solid var(--doc-review-author-current);
 }
 ```
 
@@ -362,21 +363,20 @@ Declaring a style for them works the same way:
 
 ### Per-author hooks in the document
 
-The painted text carries the same pair of hooks as the cards, under a name of its own.
-Every revision span has `data-revision-author`, and it also has
-`data-revision-author-slot` — the same number the matching card carries — unless you
-mounted `ColorByChangeType` with no author declarations. Use them for anything the
-declaration's typed fields do not cover:
+The painted text carries the same pair of hooks as the cards. Every revision span has
+`data-review-author`, and it also has `data-review-author-slot` — the same number the
+matching card carries — unless you mounted `ColorByChangeType` with no author
+declarations. Use them for anything the declaration's typed fields do not cover:
 
 ```css
 /* One author, by name. The value matches `w:author` exactly. */
-.docx-editor [data-revision-author='Jess Lin'] {
+.docx-editor [data-review-author='Jess Lin'] {
   outline: 1px dotted currentColor;
   outline-offset: 1px;
 }
 
 /* One slot, without knowing the name — survives whoever opens the document. */
-.docx-editor [data-revision-author-slot='1'] {
+.docx-editor [data-review-author-slot='1'] {
   text-shadow: 0 0 6px currentColor;
 }
 ```
@@ -386,25 +386,27 @@ stylesheet rule does not move them: set those with `color` on the declaration, o
 the ramp tokens. Keep these rules metric-safe, because the engine measures the text it
 paints.
 
-Two attribute names cover the whole surface, and which one you write depends on what you
-are selecting:
+One pair of attributes covers everything with an author — tracked-change spans, comment
+highlight bands, cards, hover balloons, and gutter markers all carry `data-review-author`
+and `data-review-author-slot`, with the same slot number for the same person. So a rule for
+one reviewer is one selector:
 
-| Element                                                                        | Attributes                                          |
-| ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| A tracked-change span in the text                                              | `data-revision-author`, `data-revision-author-slot` |
-| Everything else with an author — cards, balloons, markers, and highlight bands | `data-author`, `data-author-slot`                   |
+```css
+/* Their changes in the text and their cards in the sidebar, together. */
+.docx-editor [data-review-author='Jess Lin'] {
+  outline: 1px dotted currentColor;
+}
+```
 
-The slot number is the same in both, so one person is one slot everywhere they appear.
-
-The two families differ in what else they give you. Cards, balloons, markers, and bands also
-carry `--doc-review-author`, holding that author's resolved color, so a rule on them can
+What differs is how you reach the color. Cards, balloons, markers, and bands also carry
+`--doc-review-author-current`, holding that author's resolved color, so a rule on them can
 paint with it. A painted span does not: the engine writes the author's color into the span's
 inline `color`, so use `currentColor` there, or read the ramp token for the slot directly.
 
 ### Tint commented text by author
 
 Commented text gets a highlight band over it, and the band carries the same three hooks as
-the card: `data-author`, `data-author-slot`, and `--doc-review-author`.
+the card: `data-review-author`, `data-review-author-slot`, and `--doc-review-author-current`.
 
 The band's color does not change with the author on its own. Word highlights every comment
 in the same yellow, and eight highlighter colors on one page read as eight meanings rather
@@ -414,12 +416,16 @@ than eight people. To opt in, write the rule yourself:
 /* Every comment, in its author's color. The fallback keeps a band that has no author
    (a custom node, or a comment the file left unattributed) visible. */
 .docx-editor .docx-comment-band {
-  background: color-mix(in srgb, var(--doc-review-author, var(--doc-comment-bg)) 22%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--doc-review-author-current, var(--doc-comment-bg)) 22%,
+    transparent
+  );
 }
 
 /* Or one reviewer only. */
-.docx-editor .docx-comment-band[data-author='Sam Reyes'] {
-  box-shadow: inset 0 -2px 0 var(--doc-review-author);
+.docx-editor .docx-comment-band[data-review-author='Sam Reyes'] {
+  box-shadow: inset 0 -2px 0 var(--doc-review-author-current);
 }
 ```
 
@@ -427,12 +433,12 @@ Because the band and the card read the same variable, a reviewer's comment highl
 their card match without you repeating the color.
 
 The band is chrome, not page content, so the dark theme's page filter never reaches it.
-Nothing corrects a color you set here. `--doc-review-author` holds the light-theme value in
+Nothing corrects a color you set here. `--doc-review-author-current` holds the light-theme value in
 both themes, so if you tint by author, give the rule its own dark value:
 
 ```css
 .docx-editor.dark .docx-comment-band {
-  background: color-mix(in srgb, var(--doc-review-author) 34%, transparent);
+  background: color-mix(in srgb, var(--doc-review-author-current) 34%, transparent);
 }
 ```
 
@@ -442,7 +448,7 @@ Cards are styled by composition, not by configuration. The packaged card already
 the author system on its own: its leading edge and avatar disc take the author's resolved
 color, and `avatarUrl` fills the avatar. The collapsed gutter marker stays neutral, and
 carries the author hooks for you to color if you want it to. Past that, style them with the
-`data-author` hooks shown earlier, or replace them outright.
+`data-review-author` hooks shown earlier, or replace them outright.
 
 The `List` render callback receives each item with its `author`, so a particular author can
 get an entirely different card component:

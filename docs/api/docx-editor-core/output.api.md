@@ -80,8 +80,8 @@ export interface RevisionAuthorAssignments {
 export interface RevisionAuthorStyle {
     avatarUrl?: string;
     background?: string;
-    className?: string;
     color?: string;
+    spanClassName?: string;
 }
 
 // @public

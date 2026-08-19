@@ -54,7 +54,7 @@ export function DocxEditorColorByChangeType() {
 /**
  * Props for `DocxEditor.AuthorStyle`: one author, and the {@link RevisionAuthorStyle}
  * fields to apply — `color` (document ink and the review chrome's accent), `background`
- * (the wash), `className` (classes on the painted spans), and `avatarUrl`.
+ * (the wash), `spanClassName` (classes on the painted spans), and `avatarUrl`.
  *
  * @public
  */
@@ -84,7 +84,7 @@ export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
  * @public
  */
 export function DocxEditorAuthorStyle(props: DocxEditorAuthorStyleProps) {
-  const { author, color, background, className, avatarUrl } = props;
+  const { author, color, background, spanClassName, avatarUrl } = props;
   const registry = useContext(RevisionStyleRegistryContext);
   const id = useDeclarationId();
   useEffect(() => {
@@ -92,10 +92,10 @@ export function DocxEditorAuthorStyle(props: DocxEditorAuthorStyleProps) {
     registry.register(id, author, {
       ...(color !== undefined ? { color } : {}),
       ...(background !== undefined ? { background } : {}),
-      ...(className !== undefined ? { className } : {}),
+      ...(spanClassName !== undefined ? { spanClassName } : {}),
       ...(avatarUrl !== undefined ? { avatarUrl } : {}),
     });
     return () => registry.unregister(id);
-  }, [registry, id, author, color, background, className, avatarUrl]);
+  }, [registry, id, author, color, background, spanClassName, avatarUrl]);
   return null;
 }
