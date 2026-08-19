@@ -658,6 +658,40 @@ describe('createDocxEditor', () => {
     );
   });
 
+  test('retainSelection and releaseSelection forward to the mounted surface and are safe detached', () => {
+    const editor = createDocxEditor({ document: docx(p('hello')) });
+    expect(() => editor.retainSelection()).not.toThrow();
+    expect(() => editor.releaseSelection()).not.toThrow();
+
+    const container = document.createElement('div');
+    editor.attach(container);
+    const retain = editor.surface!.retainSelection;
+    const release = editor.surface!.releaseSelection;
+    let retained = false;
+    editor.surface!.retainSelection = () => {
+      retained = true;
+      retain.call(editor.surface);
+    };
+    let released = false;
+    editor.surface!.releaseSelection = () => {
+      released = true;
+      release.call(editor.surface);
+    };
+
+    editor.retainSelection();
+    expect(retained).toBe(true);
+    editor.releaseSelection();
+    expect(released).toBe(true);
+
+    editor.detach();
+    retained = false;
+    released = false;
+    editor.retainSelection();
+    editor.releaseSelection();
+    expect(retained).toBe(false);
+    expect(released).toBe(false);
+  });
+
   test('the honest-empty members answer with typed empty values', () => {
     const { editor } = mount(p('hello'));
     expect(editor.isActive({ type: 'toggleMark', mark: 'bold' })).toBe(false);

@@ -33,9 +33,16 @@
       "@docx-editor.dev/core/output": ["../core/src/output/index.ts"],
       "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
       "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"],
-      "@docx-editor.dev/react": ["../react/src/index.ts"]
+      "@docx-editor.dev/react": ["../react/src/index.ts"],
+      "@docx-editor.dev/vue": ["../vue/src/index.ts"]
     }
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/vue",
+    "src/__tests__/review-sidebar-vue.test.ts",
+    "src/__tests__/review-vue-harness.ts"
+  ]
 }

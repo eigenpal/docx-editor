@@ -34,6 +34,7 @@
           <DocxEditorContent />
           <DocxEditorContextMenu />
           <DocxEditorHyperLink />
+          <DocxEditorReview :card="{ className: 'demo-review-card' }" />
         </DocxEditorViewport>
         <DocxEditorPageNumber />
         <DocxEditorLoading overlay>
@@ -75,6 +76,7 @@ import {
   type EditorCaret,
 } from '@docx-editor.dev/vue';
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
+import { DocxEditorReview } from '@docx-editor.dev/pro/vue';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import EditorChrome from './EditorChrome.vue';
 import PerfHud from './PerfHud.vue';

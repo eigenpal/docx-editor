@@ -14,7 +14,8 @@ describe('composed vue demo surface', () => {
     expect(source).toContain('DocxEditorHorizontalRuler');
     expect(source).toContain('DocxEditorVerticalRuler');
     expect(source).toContain('useDocxSource');
-    expect(source).not.toContain('DocxEditorReview');
+    expect(source).toContain('DocxEditorReview');
+    expect(source).toContain('@docx-editor.dev/pro/vue');
   });
 
   test('main bootstraps the composed demo from fixture params', () => {

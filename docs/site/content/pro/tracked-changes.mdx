@@ -47,6 +47,8 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 
 `DocumentEditingMode` is `'editing' | 'suggesting' | 'viewing'`. The packaged toolbar already ships this control as the `review.editingMode` slot, so `<DocxEditor.Toolbar />` gives you the same thing without writing the toggle.
 
+On Vue, import `DocxEditorReview` from `@docx-editor.dev/pro/vue` and mount it inside `DocxEditorViewport` beside `DocxEditorContent`. The composable surface matches React: `useReview()`, `useReviewOf(editorRef, query)`, and `useReviewItem()`.
+
 ## Choose the opening mode
 
 The `mode` prop decides how a document opens, matching the toolbar's pill: `'edit'`, `'suggesting'`, or `'view'`.

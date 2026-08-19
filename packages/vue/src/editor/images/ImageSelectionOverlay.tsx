@@ -111,9 +111,13 @@ export const ImageSelectionOverlay = defineComponent({
     const target = ref<SelectedDrawingOverlayTarget | null>(null);
     const preview = ref<PreviewState | null>(null);
     const previewRef = shallowRef<PreviewState | null>(null);
-    watch(preview, (next) => {
-      previewRef.value = next;
-    });
+    watch(
+      preview,
+      (next) => {
+        previewRef.value = next;
+      },
+      { flush: 'sync' }
+    );
     const pointerStartRef = shallowRef<{ readonly x: number; readonly y: number } | null>(null);
     const captureTargetRef = shallowRef<HTMLElement | null>(null);
     const overlayRef = shallowRef<HTMLDivElement | null>(null);

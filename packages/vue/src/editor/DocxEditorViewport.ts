@@ -1,11 +1,11 @@
 import {
+  computed,
   defineComponent,
   h,
   onMounted,
   onUnmounted,
   provide,
   watch,
-  computed,
   type CSSProperties,
   type PropType,
 } from 'vue';
@@ -59,7 +59,6 @@ export const DocxEditorViewport = defineComponent({
       if (viewportEl) viewportEl.style.setProperty('--docx-nav-shift', `${shift}px`);
       layoutStore?.setViewport(viewportEl);
     });
-
     const onKeyDownCapture = (event: KeyboardEvent) => {
       const editor = editorRef.value;
       if (!editor || !(event.metaKey || event.ctrlKey) || event.altKey) return;

@@ -1,6 +1,16 @@
 import './../dom-setup.ts';
 
-import { createApp, h, nextTick, type App, type Component, type VNode } from 'vue';
+import {
+  createApp,
+  h,
+  nextTick,
+  ref,
+  watchEffect,
+  type App,
+  type Component,
+  type Ref,
+  type VNode,
+} from 'vue';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../../src/editor/DocxEditorViewport';
@@ -16,40 +26,58 @@ export type MountedEditor = {
   app: App;
   editor: () => DocxEditorInstance;
   unmount: () => void;
+  /** Gate viewport-slot children without crossing Vue package instances in tests. */
+  viewportVisible: Ref<boolean>;
 };
 
 export function mountEditorTree(
   rootChildren: () => VNode | VNode[],
   source: Uint8Array = SOURCE,
-  viewportChildren: () => VNode | VNode[] = () => []
+  viewportChildren: () => VNode | VNode[] = () => [],
+  modules?: readonly import('@docx-editor.dev/core/editor').EditorModule[],
+  rootProps: Record<string, unknown> = {}
 ): MountedEditor {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const ready: DocxEditorInstance[] = [];
+  const viewportVisible = ref(true);
   const app = createApp({
-    render: () =>
-      h(
-        DocxEditorRoot,
-        {
-          document: source,
-          onReady: (editor: import('@docx-editor.dev/core/contracts/editor').Editor) =>
-            ready.push(editor as DocxEditorInstance),
-        },
-        {
-          default: () => [
-            ...slotChildren(rootChildren()),
-            h(DocxEditorViewport, null, {
-              default: () => [...slotChildren(viewportChildren()), h(DocxEditorContent)],
-            }),
-          ],
-        }
-      ),
+    setup() {
+      const renderEpoch = ref(0);
+      watchEffect(() => {
+        void viewportVisible.value;
+        renderEpoch.value++;
+      });
+      return () => {
+        void renderEpoch.value;
+        const viewportNodes = viewportVisible.value ? slotChildren(viewportChildren()) : [];
+        return h(
+          DocxEditorRoot,
+          {
+            document: source,
+            ...(modules !== undefined ? { modules } : {}),
+            ...rootProps,
+            onReady: (editor: import('@docx-editor.dev/core/contracts/editor').Editor) =>
+              ready.push(editor as DocxEditorInstance),
+          },
+          {
+            default: () => [
+              ...slotChildren(rootChildren()),
+              h(DocxEditorViewport, null, {
+                default: () => [h(DocxEditorContent), ...viewportNodes],
+              }),
+            ],
+          }
+        );
+      };
+    },
   });
   app.mount(container);
   return {
     container,
     app,
     editor: () => ready.at(-1)!,
+    viewportVisible,
     unmount: () => {
       app.unmount();
       container.remove();
@@ -66,6 +94,7 @@ export async function mountSugarAsync(
   document.body.appendChild(container);
   const ready: DocxEditorInstance[] = [];
   const { onSave, onOpen, ...rest } = props;
+  const viewportVisible = ref(true);
   const app = createApp({
     render: () =>
       h(
@@ -86,6 +115,7 @@ export async function mountSugarAsync(
     container,
     app,
     editor: () => ready.at(-1)!,
+    viewportVisible,
     flush,
     unmount: () => {
       app.unmount();
@@ -101,6 +131,7 @@ export function mountComponent(
   const container = document.createElement('div');
   document.body.appendChild(container);
   const ready: DocxEditorInstance[] = [];
+  const viewportVisible = ref(true);
   const app = createApp({
     render: () =>
       h(
@@ -123,6 +154,7 @@ export function mountComponent(
     container,
     app,
     editor: () => ready.at(-1)!,
+    viewportVisible,
     unmount: () => {
       app.unmount();
       container.remove();

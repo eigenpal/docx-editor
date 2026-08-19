@@ -768,6 +768,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Threaded comments with replies and resolve/reopen in the review rail. React hosts use `@docx-editor.dev/pro/react`; Vue hosts use `@docx-editor.dev/pro/vue` with the same engine commands.',
     docsLink: '/docs/2.x/pro/comments',
   },
   {

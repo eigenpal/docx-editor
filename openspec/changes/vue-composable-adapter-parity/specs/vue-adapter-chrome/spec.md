@@ -158,7 +158,7 @@ wraps its app in one still reaches this chrome and a nested provider composes wi
 
 - **WHEN** `packages/vue/src` is searched for user-facing text
 - **THEN** every such string is a catalogue key resolved through `t`, and `bun run
-  i18n:validate` passes
+i18n:validate` passes
 
 ### Requirement: Vue SHALL ship the seams a capability package composes with
 
@@ -166,9 +166,9 @@ The Vue entry SHALL export `ReviewRailContext` as an injection key with the same
 React's context carries, `Slot` as the single-child prop-merging component, and `LocaleProvider`
 / `useTranslation` / `useChromeTranslate`.
 
-The review PANE lives in the pro package and is not part of this change. The seams are, because
-without them there is nothing for a Vue pane to compose with, and the gutter reservation is
-keyed on a rail actually being mounted — not on a pane's open state, which pushed the page off
+The review pane lives in `@docx-editor.dev/pro/vue`. The adapter supplies its composition seams,
+and the gutter reservation is keyed on a rail actually being mounted — not on a pane's open
+state, which pushed the page off
 centre beside an empty column for every consumer that mounted no rail.
 
 #### Scenario: No rail, no gutter

@@ -13,6 +13,10 @@ import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay';
 import { mergeHostClass } from '../lib/mergeHostClass';
 
+function hasImageFile(transfer: DataTransfer): boolean {
+  return [...transfer.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+}
+
 /** @public */
 export interface DocxEditorContentProps {
   class?: string;
@@ -23,6 +27,7 @@ export interface DocxEditorContentProps {
 /** @public */
 export const DocxEditorContent = defineComponent({
   name: 'DocxEditorContent',
+  inheritAttrs: false,
   props: {
     class: { type: String, default: undefined },
     className: { type: String, default: undefined },
@@ -50,12 +55,16 @@ export const DocxEditorContent = defineComponent({
       if (!insert?.isEnabled) return;
       const items = event.clipboardData;
       if (!items) return;
-      const hasImage = [...items.items].some(
-        (item) => item.kind === 'file' && item.type.startsWith('image/')
-      );
-      if (!hasImage) return;
+      if (!hasImageFile(items)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(items);
+    };
+
+    const onDragOver = (event: DragEvent) => {
+      if (!imageInsert?.isEnabled || !event.dataTransfer || !hasImageFile(event.dataTransfer)) {
+        return;
+      }
+      event.preventDefault();
     };
 
     const onDrop = (event: DragEvent) => {
@@ -63,10 +72,7 @@ export const DocxEditorContent = defineComponent({
       if (!insert?.isEnabled) return;
       const transfer = event.dataTransfer;
       if (!transfer) return;
-      const hasImage = [...transfer.items].some(
-        (item) => item.kind === 'file' && item.type.startsWith('image/')
-      );
-      if (!hasImage) return;
+      if (!hasImageFile(transfer)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(transfer);
     };
@@ -87,6 +93,7 @@ export const DocxEditorContent = defineComponent({
             },
             class: mergeHostClass('docx-paginated-surface', props.class, props.className),
             onPaste,
+            onDragover: onDragOver,
             onDrop,
           }),
           editorRef.value

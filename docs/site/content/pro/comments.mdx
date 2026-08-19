@@ -32,6 +32,8 @@ export function Commentable({ bytes }: { bytes: Uint8Array }) {
 
 `author` is what lands in `w:author` on anything the user writes. OOXML requires it, so the engine refuses a comment or reply with no author rather than writing an empty attribute.
 
+Vue hosts mount the same rail with `DocxEditorReview` from `@docx-editor.dev/pro/vue` and call `useReview()` from that entry point.
+
 ## Writing a comment
 
 `comment(text, author?)` on the review hook comments on the current selection. It returns whether it landed, so a compose box can keep the user's text on refusal instead of clearing it and showing nothing:

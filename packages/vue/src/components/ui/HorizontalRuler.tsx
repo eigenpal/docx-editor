@@ -18,7 +18,7 @@
  * the clamps, so this file only converts pixels to twips and paints.
  */
 
-import { defineComponent, ref, type CSSProperties, type PropType, type VNode } from 'vue';
+import { computed, defineComponent, ref, type CSSProperties, type PropType, type VNode } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import {
   dragIndent,
@@ -172,21 +172,27 @@ export const HorizontalRuler = defineComponent({
     const dragPositionPx = ref<number | null>(null);
     const rulerRef = ref<HTMLDivElement | null>(null);
 
-    const pageWidthTwips = props.pageSetup?.pageWidthTwips ?? DEFAULT_PAGE_WIDTH_TWIPS;
-    const leftMarginTwips = props.pageSetup?.marginsTwips.left ?? DEFAULT_MARGIN_TWIPS;
-    const rightMarginTwips = props.pageSetup?.marginsTwips.right ?? DEFAULT_MARGIN_TWIPS;
-    const gutterTwips = props.pageSetup?.gutterTwips ?? 0;
-
-    const page: RulerPageMetrics = {
-      pageWidth: pageWidthTwips,
-      leftMargin: leftMarginTwips,
-      rightMargin: rightMarginTwips,
-    };
-    const current = props.indent ?? FLUSH;
-
-    const pageWidthPx = twipsToPixels(pageWidthTwips) * (props.zoom ?? 1);
-    const leftMarginPx = twipsToPixels(leftMarginTwips) * (props.zoom ?? 1);
-    const rightMarginPx = twipsToPixels(rightMarginTwips) * (props.zoom ?? 1);
+    const metrics = computed(() => {
+      const pageWidthTwips = props.pageSetup?.pageWidthTwips ?? DEFAULT_PAGE_WIDTH_TWIPS;
+      const leftMarginTwips = props.pageSetup?.marginsTwips.left ?? DEFAULT_MARGIN_TWIPS;
+      const rightMarginTwips = props.pageSetup?.marginsTwips.right ?? DEFAULT_MARGIN_TWIPS;
+      const zoom = props.zoom ?? 1;
+      return {
+        pageWidthTwips,
+        leftMarginTwips,
+        rightMarginTwips,
+        gutterTwips: props.pageSetup?.gutterTwips ?? 0,
+        page: {
+          pageWidth: pageWidthTwips,
+          leftMargin: leftMarginTwips,
+          rightMargin: rightMarginTwips,
+        } satisfies RulerPageMetrics,
+        current: props.indent ?? FLUSH,
+        pageWidthPx: twipsToPixels(pageWidthTwips) * zoom,
+        leftMarginPx: twipsToPixels(leftMarginTwips) * zoom,
+        rightMarginPx: twipsToPixels(rightMarginTwips) * zoom,
+      };
+    });
 
     const twipsAt = (clientX: number): number | null => {
       const rect = rulerRef.value?.getBoundingClientRect();
@@ -197,6 +203,8 @@ export const HorizontalRuler = defineComponent({
     const handleMove = (marker: MarkerType, clientX: number, altKey: boolean) => {
       const positionTwips = twipsAt(clientX);
       if (positionTwips === null) return;
+      const { pageWidthTwips, leftMarginTwips, rightMarginTwips, gutterTwips, page, current } =
+        metrics.value;
       dragPositionPx.value = twipsToPixels(positionTwips) * (props.zoom ?? 1);
       const unit = props.unit ?? 'inch';
       if (marker === 'leftMargin' || marker === 'rightMargin') {
@@ -230,6 +238,7 @@ export const HorizontalRuler = defineComponent({
 
     const nudge = (marker: RulerIndentHandle, direction: -1 | 1, fine: boolean) => {
       const unit = props.unit ?? 'inch';
+      const { current, page } = metrics.value;
       const at = handlePosition(marker, current, page);
       const next = dragIndent(marker, at + direction * nudgeStep(unit, fine), current, page, {
         unit,
@@ -242,6 +251,8 @@ export const HorizontalRuler = defineComponent({
     return () => {
       const zoom = props.zoom ?? 1;
       const unit = props.unit ?? 'inch';
+      const { pageWidthTwips, page, current, pageWidthPx, leftMarginPx, rightMarginPx } =
+        metrics.value;
       const ticks = generateTicks(pageWidthTwips, zoom, unit);
       const indentDraggable =
         (props.showIndentHandles ?? false) &&
@@ -301,7 +312,7 @@ export const HorizontalRuler = defineComponent({
           style={{
             position: 'relative',
             width: formatPx(pageWidthPx),
-            height: RULER_HEIGHT,
+            height: formatPx(RULER_HEIGHT),
             backgroundColor: 'transparent',
             overflow: 'visible',
             userSelect: 'none',
@@ -321,7 +332,7 @@ export const HorizontalRuler = defineComponent({
               top: 0,
               left: 0,
               width: formatPx(leftMarginPx),
-              height: STRIP_HEIGHT,
+              height: formatPx(STRIP_HEIGHT),
               backgroundColor: MARGIN_ZONE_COLOR,
               borderRight: '1px solid var(--doc-shadow-subtle)',
               cursor: (props.editable ?? false) ? 'ew-resize' : 'default',
@@ -352,7 +363,7 @@ export const HorizontalRuler = defineComponent({
               top: 0,
               right: 0,
               width: formatPx(rightMarginPx),
-              height: STRIP_HEIGHT,
+              height: formatPx(STRIP_HEIGHT),
               backgroundColor: MARGIN_ZONE_COLOR,
               borderLeft: '1px solid var(--doc-shadow-subtle)',
               cursor: (props.editable ?? false) ? 'ew-resize' : 'default',
@@ -385,7 +396,7 @@ export const HorizontalRuler = defineComponent({
               top: 0,
               left: 0,
               right: 0,
-              height: STRIP_HEIGHT,
+              height: formatPx(STRIP_HEIGHT),
               pointerEvents: 'none',
             }}
           >
@@ -457,8 +468,8 @@ function RulerTick({ tick }: { tick: TickData }): VNode {
           position: 'absolute',
           left: formatPx(tick.position),
           bottom: 0,
-          width: 1,
-          height: tick.height,
+          width: '1px',
+          height: formatPx(tick.height),
           backgroundColor: RULER_TICK_COLOR,
         }}
       />
@@ -467,7 +478,7 @@ function RulerTick({ tick }: { tick: TickData }): VNode {
           style={{
             position: 'absolute',
             left: formatPx(tick.position),
-            top: 2,
+            top: '2px',
             transform: 'translateX(-50%)',
             fontSize: '9px',
             color: RULER_TEXT_COLOR,
@@ -514,7 +525,7 @@ function handleShell(
   return {
     position: 'absolute',
     left: formatPx(props.positionPx - width / 2),
-    width,
+    width: formatPx(width),
     cursor: props.editable ? 'ew-resize' : 'default',
     zIndex: props.isDragging ? 10 : 4,
     touchAction: 'none',
@@ -547,8 +558,8 @@ function IndentTriangle({ direction, anchor, ...props }: IndentTriangleProps): V
   const color = handleColor(props);
   const vertical: CSSProperties =
     anchor === 'top'
-      ? { top: 0, height: TRI_HEIGHT + 1 }
-      : { top: STRIP_HEIGHT - TRI_HEIGHT, height: TRI_HEIGHT };
+      ? { top: 0, height: formatPx(TRI_HEIGHT + 1) }
+      : { top: formatPx(STRIP_HEIGHT - TRI_HEIGHT), height: formatPx(TRI_HEIGHT) };
 
   return (
     <div
@@ -590,7 +601,10 @@ function IndentBox(props: HandleProps): VNode {
   return (
     <div
       class="docx-ruler-indent docx-ruler-indent--box"
-      style={handleShell(props, TRI_SIZE * 2, { top: STRIP_HEIGHT + 1, height: BOX_HEIGHT })}
+      style={handleShell(props, TRI_SIZE * 2, {
+        top: formatPx(STRIP_HEIGHT + 1),
+        height: formatPx(BOX_HEIGHT),
+      })}
       onPointerenter={props.onPointerEnter}
       onPointerleave={props.onPointerLeave}
       onPointerdown={props.onPointerDown}
@@ -602,12 +616,12 @@ function IndentBox(props: HandleProps): VNode {
       <div
         style={{
           position: 'absolute',
-          left: 1,
+          left: '1px',
           top: 0,
-          width: TRI_SIZE * 2 - 2,
-          height: BOX_HEIGHT,
+          width: formatPx(TRI_SIZE * 2 - 2),
+          height: formatPx(BOX_HEIGHT),
           backgroundColor: handleColor(props),
-          borderRadius: 1,
+          borderRadius: '1px',
           transition: 'background-color 0.1s',
         }}
       />
@@ -621,14 +635,14 @@ function DragTooltip({ value, positionPx }: { value: string; positionPx: number 
       style={{
         position: 'absolute',
         left: formatPx(positionPx),
-        top: -22,
+        top: '-22px',
         transform: 'translateX(-50%)',
         backgroundColor: 'var(--doc-text)',
         color: 'var(--doc-on-primary)',
         fontSize: '10px',
         fontFamily: 'sans-serif',
         padding: '2px 6px',
-        borderRadius: 3,
+        borderRadius: '3px',
         whiteSpace: 'nowrap',
         pointerEvents: 'none',
         zIndex: 20,
@@ -659,13 +673,13 @@ function TabMarker({ tabMark, positionPx, onDoubleClick }: TabMarkerProps): VNod
       style={{
         position: 'absolute',
         left: formatPx(positionPx - 5),
-        top: STRIP_HEIGHT - 12,
-        width: 10,
-        height: 12,
+        top: formatPx(STRIP_HEIGHT - 12),
+        width: '10px',
+        height: '12px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 8,
+        fontSize: '8px',
         fontWeight: 700,
         color: 'var(--doc-text-muted)',
         cursor: 'pointer',

@@ -536,12 +536,12 @@ function ReviewRoot({
     if (!editor || readOnly) return;
     // Pin the range before the compose box takes focus, or the browser drops the highlight
     // off the very words the comment is about.
-    editor.surface?.retainSelection();
+    editor.retainSelection();
     setReviewPaneOpen(true);
     setDraftAnchorY(editor.getSelectionPlacement()?.anchorY ?? null);
   }, [editor, readOnly, setReviewPaneOpen]);
   const endDraft = useCallback(() => {
-    editor?.surface?.releaseSelection();
+    editor?.releaseSelection();
     setDraftAnchorY(null);
     // Back to the document. Closing the box unmounts it, and without this the user landed on
     // `<body>` with Tab restarting at the top of the page.
@@ -551,7 +551,7 @@ function ReviewRoot({
     if (open || draftAnchorY === null) return;
     // Closing the pane abandons its uncommitted draft. Release the pinned range without
     // moving focus away from the toolbar control that closed it.
-    editor?.surface?.releaseSelection();
+    editor?.releaseSelection();
     setDraftAnchorY(null);
   }, [open, draftAnchorY, editor]);
 

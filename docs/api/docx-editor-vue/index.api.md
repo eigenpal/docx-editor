@@ -1857,7 +1857,9 @@ export const DocxEditorContextMenu: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<(open: boolean) => void>;
         default: undefined;
     };
-}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
         type: StringConstructor;
         default: undefined;
@@ -2046,7 +2048,9 @@ export const DocxEditorHeaderFooterChrome: vue.DefineComponent<vue.ExtractPropTy
         type: StringConstructor;
         default: undefined;
     };
-}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
         type: StringConstructor;
         default: undefined;

@@ -319,11 +319,9 @@ the v2 context-fed components WRAP, so Vue needs them. No composables, no inject
       is a MINOR — the removal is the major that follows, and it is not this change
 - [x] 13.5 Compare the run against the 0.1 baseline and report every gate that was already red
 
-## 14. Not in this change
+## 14. Extended and follow-up scope
 
-- [ ] 14.1 `@docx-editor.dev/pro/vue`. Blocked on publishing `retainSelection` / `releaseSelection`
-      on `Editor`: the compose box pins the selection through `editor.surface`, which is the
-      escape hatch, not the contract. Vue ships the seams; the pane is engine work first
+- [x] 14.1 `@docx-editor.dev/pro/vue`. `DocxEditorReview` compound rail, `useReview` composable, selection retention via public `retainSelection` / `releaseSelection`.
 - [ ] 14.2 `vue-drawing-authoring-parity` overlaps phase 8: its image authoring surface is a
       React export, so parity puts it here. Fold it in and archive it, or keep it as the
       tracking change for that phase — owner call, not one to make by accident

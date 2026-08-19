@@ -771,6 +771,15 @@ export interface Editor {
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;
   focus(scope?: EditorScope): InteractionOutcome<void>;
+  /**
+   * Pin the current selection so chrome that takes focus does not collapse it.
+   *
+   * A compose box or hyperlink dialog keeps the highlighted range visible while its field
+   * has focus. Safe when detached: no-op, never throws.
+   */
+  retainSelection(): void;
+  /** Release a pin installed by {@link retainSelection}. Safe when detached: no-op. */
+  releaseSelection(): void;
   destroy(): void;
 
   on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;

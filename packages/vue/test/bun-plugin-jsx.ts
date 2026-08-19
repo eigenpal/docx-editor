@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 plugin({
   name: 'vue-classic-jsx-for-tests',
   setup(build) {
-    build.onLoad({ filter: /\/packages\/vue\/.*\.tsx$/ }, (args) => {
+    build.onLoad({ filter: /\/packages\/(?:vue|pro\/src\/vue)\/.*\.tsx$/ }, (args) => {
       const source = readFileSync(args.path, 'utf8');
       const transpiler = new Bun.Transpiler({
         loader: 'tsx',

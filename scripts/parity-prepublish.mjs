@@ -1,13 +1,9 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 
-// `check:parity` is off this gate while @docx-editor.dev/vue is WIP and unpublished —
-// it compares React against a Vue adapter that no longer ships, so it could only ever
-// block a release on a package nobody installs. The license-header checks that used to
-// ride along inside it stay, on their own. Restore `check:parity` here when the Vue
-// package drops `private: true`.
 const commands = [
   { cmd: 'bun', args: ['run', 'typecheck'] },
+  { cmd: 'bun', args: ['run', 'check:parity'] },
   { cmd: 'bun', args: ['run', 'check:license-headers'] },
   { cmd: 'bun', args: ['run', 'i18n:validate'] },
   {

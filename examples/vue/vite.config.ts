@@ -10,6 +10,7 @@ const monorepoRoot = path.resolve(__dirname, '../..');
 
 function canonicalFixturePlugin(): Plugin {
   const fixtures = new Map([
+    ['/sample.docx', path.join(monorepoRoot, 'examples/vite/public/sample.docx')],
     [
       '/comprehensive-word-element-test.docx',
       path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),
@@ -65,7 +66,16 @@ export default defineConfig({
   root: __dirname,
   resolve: {
     alias: usePublished
-      ? []
+      ? [
+          {
+            find: /^@docx-editor\.dev\/vue$/,
+            replacement: path.join(monorepoRoot, 'packages/vue/dist/index.js'),
+          },
+          {
+            find: '@docx-editor.dev/pro/vue',
+            replacement: path.join(monorepoRoot, 'packages/pro/dist/vue/index.js'),
+          },
+        ]
       : [
           {
             find: '@docx-editor.dev/vue/styles.css',
@@ -86,6 +96,10 @@ export default defineConfig({
           {
             find: /^@docx-editor\.dev\/core\/contracts\/(.+)$/,
             replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
+          },
+          {
+            find: '@docx-editor.dev/pro/vue',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/vue/index.ts'),
           },
           {
             find: '@docx-editor.dev/pro',

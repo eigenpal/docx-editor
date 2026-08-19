@@ -14,10 +14,8 @@ import { spawnSync } from 'node:child_process';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const tempRoot = mkdtempSync(path.join(tmpdir(), 'docx-editor-consumers-'));
 const packDir = path.join(tempRoot, 'packs');
-// The Vue consumer app that used to sit alongside the React one is gone while
-// @docx-editor.dev/vue is WIP and unpublished — there is no tarball for a real
-// consumer to install. Restore it when the package ships again.
 const reactAppDir = path.join(tempRoot, 'react-app');
+const vueAppDir = path.join(tempRoot, 'vue-app');
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -63,6 +61,7 @@ try {
     packPackage('packages/i18n'),
     packPackage('packages/core'),
     packPackage('packages/react'),
+    packPackage('packages/vue'),
     packPackage('packages/fonts'),
     packPackage('packages/editor-api'),
     packPackage('packages/pro'),
@@ -190,10 +189,80 @@ export default defineConfig({ plugins: [react()] });
     throw new Error('consumer CSS contains an unscoped [contenteditable] rule');
   }
   console.log('Fresh React consumer install/build passed (CSS compiled and scoped).');
+
+  mkdirSync(path.join(vueAppDir, 'src'), { recursive: true });
+  writeFileSync(
+    path.join(vueAppDir, 'package.json'),
+    JSON.stringify(
+      {
+        private: true,
+        type: 'module',
+        scripts: {
+          typecheck: 'tsc --noEmit',
+          build: 'npm run typecheck && vite build',
+        },
+        dependencies: {},
+        devDependencies: {},
+      },
+      null,
+      2
+    )
+  );
+  writeFileSync(
+    path.join(vueAppDir, 'index.html'),
+    '<div id="app"></div><script type="module" src="/src/main.ts"></script>\n'
+  );
+  writeFileSync(
+    path.join(vueAppDir, 'src/main.ts'),
+    `import { createApp, h } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import * as Engine from '@docx-editor.dev/core';
+import * as EngineEditor from '@docx-editor.dev/core/editor';
+import * as Fonts from '@docx-editor.dev/fonts';
+import * as EditorApi from '@docx-editor.dev/editor-api';
+import * as Pro from '@docx-editor.dev/pro';
+import * as ProVue from '@docx-editor.dev/pro/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const exportedSurfaceChecks = [Engine, EngineEditor, Fonts, EditorApi, Pro, ProVue];
+console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
+void exportedSurfaceChecks;
+
+createApp({ render: () => h(DocxEditor) }).mount('#app');
+`
+  );
+  writeFileSync(
+    path.join(vueAppDir, 'src/vite-env.d.ts'),
+    '/// <reference types="vite/client" />\n'
+  );
+  writeFileSync(
+    path.join(vueAppDir, 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          strict: true,
+          target: 'ES2022',
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          skipLibCheck: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2
+    )
+  );
+  run(
+    'npm',
+    ['install', '--ignore-scripts', 'vue', 'vite', 'typescript', ...tarballs],
+    { cwd: vueAppDir }
+  );
+  run('npm', ['run', 'build'], { cwd: vueAppDir });
+  console.log('Fresh Vue consumer install/build passed.');
 } finally {
   if (process.env.KEEP_CONSUMER_INSTALL_TEMP !== '1') {
     rmSync(tempRoot, { recursive: true, force: true });
   } else {
-    console.log(`Kept temp app at ${reactAppDir}`);
+    console.log(`Kept temp apps at ${reactAppDir} and ${vueAppDir}`);
   }
 }

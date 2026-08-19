@@ -35,7 +35,9 @@ describe('how this package asks for the engine', () => {
 
   test('the adapter is a peer for the same reason', () => {
     expect(manifest.peerDependencies?.['@docx-editor.dev/react']).toBeDefined();
+    expect(manifest.peerDependencies?.['@docx-editor.dev/vue']).toBeDefined();
     expect(manifest.dependencies?.['@docx-editor.dev/react']).toBeUndefined();
+    expect(manifest.dependencies?.['@docx-editor.dev/vue']).toBeUndefined();
   });
 
   test('nothing is installed on a consumer that this package does not import', () => {

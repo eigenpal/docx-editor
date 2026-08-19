@@ -111,7 +111,7 @@ export const VerticalRuler = defineComponent({
       const ticks = generateVerticalTicks(pageHeightTwips, zoom, props.unit ?? 'inch');
       const rulerStyle: CSSProperties = {
         position: 'relative',
-        width: RULER_WIDTH,
+        width: formatPx(RULER_WIDTH),
         height: formatPx(pageHeightPx),
         backgroundColor: 'transparent',
         overflow: 'visible',
@@ -188,14 +188,14 @@ function VerticalTick(props: { tick: VerticalTickData }): VNode {
     position: 'absolute',
     top: formatPx(props.tick.position),
     right: 0,
-    height: 1,
-    width: props.tick.width,
+    height: '1px',
+    width: formatPx(props.tick.width),
     backgroundColor: RULER_TICK_COLOR,
   };
   const labelStyle: CSSProperties = {
     position: 'absolute',
     top: formatPx(props.tick.position),
-    left: 2,
+    left: '2px',
     transform: 'translateY(-50%)',
     fontSize: '9px',
     color: RULER_TEXT_COLOR,
@@ -230,15 +230,15 @@ function VerticalMarginMarker(props: {
     position: 'absolute',
     top: formatPx(props.position - 5),
     right: 0,
-    width: RULER_WIDTH,
-    height: 10,
+    width: formatPx(RULER_WIDTH),
+    height: '10px',
     cursor: props.editable ? 'ns-resize' : 'default',
     zIndex: props.isDragging ? 10 : 1,
   };
   const triangleStyle: CSSProperties = {
     position: 'absolute',
     top: 0,
-    right: 2,
+    right: '2px',
     width: 0,
     height: 0,
     borderTop: '5px solid transparent',

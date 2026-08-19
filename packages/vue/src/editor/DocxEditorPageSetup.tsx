@@ -40,12 +40,12 @@ const overlayStyle: CSSProperties = {
 
 const dialogStyle: CSSProperties = {
   backgroundColor: 'var(--doc-surface)',
-  borderRadius: 8,
+  borderRadius: '8px',
   boxShadow: '0 4px 20px var(--doc-shadow)',
-  minWidth: 400,
-  maxWidth: 480,
+  minWidth: '400px',
+  maxWidth: '480px',
   width: '100%',
-  margin: 20,
+  margin: '20px',
 };
 
 /** @public */
@@ -144,14 +144,18 @@ export const DocxEditorPageSetupDialog = defineComponent({
     return () => {
       if (!props.open) return null;
       const sizeIndex = findPageSizeIndex(pageWidth.value, pageHeight.value);
-      const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12 };
-      const labelStyle: CSSProperties = { width: 80, fontSize: 13, color: 'var(--doc-text-muted)' };
+      const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: '12px' };
+      const labelStyle: CSSProperties = {
+        width: '80px',
+        fontSize: '13px',
+        color: 'var(--doc-text-muted)',
+      };
       const inputStyle: CSSProperties = {
         flex: 1,
         padding: '6px 8px',
         border: '1px solid var(--doc-border)',
-        borderRadius: 4,
-        fontSize: 13,
+        borderRadius: '4px',
+        fontSize: '13px',
         backgroundColor: 'var(--doc-surface)',
         color: 'var(--doc-text)',
       };
@@ -175,7 +179,9 @@ export const DocxEditorPageSetupDialog = defineComponent({
             }
             aria-label={t(`dialogs.pageSetup.${labelKey}`)}
           />
-          <span style={{ fontSize: 11, color: 'var(--doc-text-muted)', width: 16 }}>in</span>
+          <span style={{ fontSize: '11px', color: 'var(--doc-text-muted)', width: '16px' }}>
+            in
+          </span>
         </div>
       );
 
@@ -203,7 +209,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
               style={{
                 padding: '16px 20px 12px',
                 borderBottom: '1px solid var(--doc-border)',
-                fontSize: 16,
+                fontSize: '16px',
                 fontWeight: 600,
                 color: 'var(--doc-text)',
               }}
@@ -211,11 +217,16 @@ export const DocxEditorPageSetupDialog = defineComponent({
               {t('dialogs.pageSetup.title')}
             </div>
             <div
-              style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}
+              style={{
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+              }}
             >
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: '12px',
                   fontWeight: 600,
                   color: 'var(--doc-text-muted)',
                   textTransform: 'uppercase',
@@ -260,12 +271,12 @@ export const DocxEditorPageSetupDialog = defineComponent({
               </div>
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: '12px',
                   fontWeight: 600,
                   color: 'var(--doc-text-muted)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
-                  marginTop: 4,
+                  marginTop: '4px',
                 }}
               >
                 {t('dialogs.pageSetup.margins')}
@@ -305,16 +316,16 @@ export const DocxEditorPageSetupDialog = defineComponent({
                 borderTop: '1px solid var(--doc-border)',
                 display: 'flex',
                 justifyContent: 'flex-end',
-                gap: 8,
+                gap: '8px',
               }}
             >
               <button
                 type="button"
                 style={{
                   padding: '6px 16px',
-                  fontSize: 13,
+                  fontSize: '13px',
                   border: '1px solid var(--doc-border)',
-                  borderRadius: 4,
+                  borderRadius: '4px',
                   cursor: 'pointer',
                   backgroundColor: 'var(--doc-surface)',
                   color: 'var(--doc-text)',
@@ -327,9 +338,9 @@ export const DocxEditorPageSetupDialog = defineComponent({
                 type="button"
                 style={{
                   padding: '6px 16px',
-                  fontSize: 13,
+                  fontSize: '13px',
                   border: '1px solid var(--doc-primary)',
-                  borderRadius: 4,
+                  borderRadius: '4px',
                   cursor: 'pointer',
                   backgroundColor: 'var(--doc-primary)',
                   color: 'var(--doc-on-primary)',

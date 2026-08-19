@@ -37,7 +37,7 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 - composables from the same root: `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, `useFontFamily`
 - shared top-level pieces: `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, `DocxEditorPageSetupDialog`
 
-The review module and sidebar are licensed surfaces in [`@docx-editor.dev/pro`](/docs/2.x/pro). They are not exports of the Vue adapter.
+The review module and sidebar are licensed surfaces in [`@docx-editor.dev/pro`](/docs/2.x/pro). Import the Vue compound from `@docx-editor.dev/pro/vue`.
 
 There is one export path. Components, composables, and the engine helpers all live on the package root. There are no `/ui`, `/composables`, or `/dialogs` subpaths.
 

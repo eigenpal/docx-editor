@@ -14,6 +14,10 @@ import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
 
 import type { DocxEditorChildren } from '../docx-editor-children';
 
+function hasImageFile(transfer: DataTransfer): boolean {
+  return [...transfer.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+}
+
 /** Props for `DocxEditor.Content`. @public */
 export interface DocxEditorContentProps {
   /** Appended after the load-bearing `docx-paginated-surface` class. */
@@ -58,12 +62,17 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       if (!imageInsert?.isEnabled) return;
       const items = event.clipboardData;
       if (!items) return;
-      const hasImage = [...items.items].some(
-        (item) => item.kind === 'file' && item.type.startsWith('image/')
-      );
-      if (!hasImage) return;
+      if (!hasImageFile(items)) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(items);
+    },
+    [imageInsert]
+  );
+
+  const onDragOver = useCallback(
+    (event: React.DragEvent) => {
+      if (!imageInsert?.isEnabled || !hasImageFile(event.dataTransfer)) return;
+      event.preventDefault();
     },
     [imageInsert]
   );
@@ -71,10 +80,7 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       if (!imageInsert?.isEnabled) return;
-      const hasImage = [...event.dataTransfer.items].some(
-        (item) => item.kind === 'file' && item.type.startsWith('image/')
-      );
-      if (!hasImage) return;
+      if (!hasImageFile(event.dataTransfer)) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(event.dataTransfer);
     },
@@ -87,6 +93,7 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
         ref={elementRef}
         className={`docx-paginated-surface${className ? ` ${className}` : ''}`}
         onPaste={onPaste}
+        onDragOver={onDragOver}
         onDrop={onDrop}
       />
       {editor ? <ImageSelectionOverlay containerRef={elementRef} portalRef={portalRef} /> : null}

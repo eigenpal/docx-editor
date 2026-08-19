@@ -225,7 +225,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   );
 
   const close = useCallback(() => {
-    editor?.surface?.releaseSelection();
+    editor?.releaseSelection();
     setState(CLOSED);
   }, [editor]);
 
@@ -266,7 +266,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     // browser's one selection into it, so without this the highlight the user is about to
     // turn into a link vanishes exactly when they need to see it. The engine draws it on its
     // own overlay and releases the pin when the caret leaves — which is what closes us below.
-    editor?.surface?.retainSelection();
+    editor?.retainSelection();
     setState({
       mode: 'editing',
       link: null,

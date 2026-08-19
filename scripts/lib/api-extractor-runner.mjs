@@ -134,6 +134,7 @@ export function runApiExtractor(options) {
     const dtsPath = path.resolve(packageRoot, dts);
     const configObject = {
       mainEntryPointFilePath: dtsPath,
+      newlineKind: 'lf',
       apiReport: {
         enabled: true,
         reportFolder: reportDir,

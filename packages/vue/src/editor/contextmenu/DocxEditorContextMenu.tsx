@@ -2,7 +2,7 @@ import {
   computed,
   defineComponent,
   Fragment,
-  inject,
+  h,
   nextTick,
   provide,
   ref,
@@ -16,7 +16,7 @@ import {
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
-import { useDocxEditor, editorStateTickKey } from '../context';
+import { useDocxEditor, useEditorStateTick } from '../context';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { MenuContext, type MenuContextValue } from '../menu/menu-context';
@@ -205,7 +205,7 @@ export const DocxEditorContextMenu = defineComponent({
   setup(props, { slots }) {
     const scopeClassName = useScopeClassName();
     const editorRef = useDocxEditor();
-    const tick = inject(editorStateTickKey, shallowRef(0));
+    const stateTick = useEditorStateTick();
     const { t: catalogT } = useTranslation();
     const tableContextVisible = useTableContextMenuVisible();
     const hostRef = ref<HTMLDivElement | null>(null);
@@ -244,30 +244,28 @@ export const DocxEditorContextMenu = defineComponent({
       }
     );
 
-    watchEffect(
-      (onCleanup) => {
-        if (props.disabled) return;
-        void tick.value;
-        if (!editorRef.value?.surface) return;
-        const scroller =
-          scrollerFor(hostRef.value) ??
-          document.querySelector<HTMLElement>('.docx-editor__scroll-container');
-        if (!scroller) return;
-        const onContextMenu = (event: MouseEvent) => {
-          event.preventDefault();
-          const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
-          const box = scroller.getBoundingClientRect();
-          tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
-          target.value = keyboard || !(event.target instanceof HTMLElement) ? null : event.target;
-          anchor.value = keyboard
-            ? { x: box.left + 16, y: box.top + 16 }
-            : { x: event.clientX, y: event.clientY };
-        };
-        scroller.addEventListener('contextmenu', onContextMenu);
-        onCleanup(() => scroller.removeEventListener('contextmenu', onContextMenu));
-      },
-      { flush: 'post' }
-    );
+    watchEffect((onCleanup) => {
+      void stateTick.value;
+      if (props.disabled) return;
+      const scroller =
+        scrollerFor(hostRef.value) ??
+        (typeof document !== 'undefined'
+          ? document.querySelector<HTMLElement>('.docx-editor__scroll-container')
+          : null);
+      if (!scroller) return;
+      const onContextMenu = (event: MouseEvent) => {
+        event.preventDefault();
+        const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
+        const box = scroller.getBoundingClientRect();
+        tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
+        target.value = keyboard || !(event.target instanceof HTMLElement) ? null : event.target;
+        anchor.value = keyboard
+          ? { x: box.left + 16, y: box.top + 16 }
+          : { x: event.clientX, y: event.clientY };
+      };
+      scroller.addEventListener('contextmenu', onContextMenu);
+      onCleanup(() => scroller.removeEventListener('contextmenu', onContextMenu));
+    });
 
     watch(
       anchor,
@@ -365,9 +363,10 @@ export const DocxEditorContextMenu = defineComponent({
     return () => {
       const style: CSSProperties = {
         position: 'fixed',
-        left: (placement.value ?? anchor.value)?.x ?? 0,
-        top: (placement.value ?? anchor.value)?.y ?? 0,
+        left: `${(placement.value ?? anchor.value)?.x ?? 0}px`,
+        top: `${(placement.value ?? anchor.value)?.y ?? 0}px`,
         visibility: placement.value ? 'visible' : 'hidden',
+        pointerEvents: 'auto',
       };
 
       const children = flattenChildren(slots.default?.() ?? []);
@@ -390,42 +389,59 @@ export const DocxEditorContextMenu = defineComponent({
               }),
             ];
 
-      return (
-        <div ref={hostRef} style={{ display: 'contents' }}>
-          {anchor.value ? (
-            <div
-              ref={panelRef}
-              role="menu"
-              aria-label={
-                props.t?.('contextMenu.ariaLabel') ??
-                catalogT('contextMenu.ariaLabel' as TranslationKey)
-              }
-              tabindex={-1}
-              class={`${scopeClassName}docx-toolbar__menu docx-contextmenu${props.className ? ` ${props.className}` : ''}`}
-              style={style}
-              onKeydown={(event: KeyboardEvent) => {
-                const panel = panelRef.value;
-                if (!panel) return;
-                const items = panelItems(panel);
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault();
-                  focusBy(items, document.activeElement, 1);
-                } else if (event.key === 'ArrowUp') {
-                  event.preventDefault();
-                  focusBy(items, document.activeElement, -1);
-                } else if (event.key === 'Home') {
-                  event.preventDefault();
-                  focusEdge(items, 'first');
-                } else if (event.key === 'End') {
-                  event.preventDefault();
-                  focusEdge(items, 'last');
-                }
-              }}
-            >
-              {rows}
-            </div>
-          ) : null}
-        </div>
+      return h(
+        'div',
+        {
+          ref: (element: unknown) => {
+            hostRef.value = element instanceof HTMLDivElement ? element : null;
+          },
+          class: 'docx-contextmenu-host',
+          style: {
+            position: 'absolute',
+            width: 0,
+            height: 0,
+            overflow: 'visible',
+            pointerEvents: 'none',
+          },
+        },
+        anchor.value
+          ? [
+              h(
+                'div',
+                {
+                  ref: (element: unknown) => {
+                    panelRef.value = element instanceof HTMLDivElement ? element : null;
+                  },
+                  role: 'menu',
+                  'aria-label':
+                    props.t?.('contextMenu.ariaLabel') ??
+                    catalogT('contextMenu.ariaLabel' as TranslationKey),
+                  tabindex: -1,
+                  class: `${scopeClassName}docx-toolbar__menu docx-contextmenu${props.className ? ` ${props.className}` : ''}`,
+                  style,
+                  onKeydown: (event: KeyboardEvent) => {
+                    const panel = panelRef.value;
+                    if (!panel) return;
+                    const items = panelItems(panel);
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      focusBy(items, document.activeElement, 1);
+                    } else if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      focusBy(items, document.activeElement, -1);
+                    } else if (event.key === 'Home') {
+                      event.preventDefault();
+                      focusEdge(items, 'first');
+                    } else if (event.key === 'End') {
+                      event.preventDefault();
+                      focusEdge(items, 'last');
+                    }
+                  },
+                },
+                rows
+              ),
+            ]
+          : []
       );
     };
   },

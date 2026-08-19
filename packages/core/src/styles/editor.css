@@ -2330,6 +2330,32 @@ a.docx-hyperlink:focus-visible {
   pointer-events: auto;
 }
 
+.docx-image-selection-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--doc-z-chrome);
+  pointer-events: none;
+  outline: none;
+}
+
+.docx-image-selection-overlay__frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--doc-accent);
+  pointer-events: auto;
+}
+
+.docx-image-selection-overlay__handle {
+  position: absolute;
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1px solid var(--doc-accent);
+  background: var(--doc-bg);
+  pointer-events: auto;
+}
+
 /* The hidden ProseMirror input host. Position, size, clipping, and opacity are
  * owned imperatively by engine-binding's input-host module, which keeps the
  * host attached, non-`display:none`, and tracking the engine caret so browser

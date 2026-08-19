@@ -160,6 +160,22 @@ export default [
       'react-hooks/exhaustive-deps': 'off',
     },
   },
+  // Pro Vue review rail: Vue composables in defineComponent setup(), same as packages/vue.
+  {
+    files: ['packages/pro/src/vue/**/*.{ts,tsx}'],
+    rules: {
+      ...restrictReact,
+      'react-hooks/rules-of-hooks': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+    },
+  },
+  {
+    files: ['packages/pro/src/__tests__/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+    },
+  },
   // React adapter: no Vue imports.
   { files: ['packages/react/src/**/*.{ts,tsx}'], rules: restrictVue },
 

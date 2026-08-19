@@ -113,11 +113,13 @@ const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPan
 const REVIEW_PANE_GUTTER = 316;
 const REVIEW_MARKERS_GUTTER = 44;
 
-function useReviewGutter(): number {
+function useReviewGutter(): ComputedRef<number> {
   const paneOpen = useEditorState(selectPaneOpen);
   const rail = inject(ReviewRailContext, null);
-  if ((rail?.value.mounted ?? 0) === 0) return 0;
-  return paneOpen.value ? REVIEW_PANE_GUTTER : REVIEW_MARKERS_GUTTER;
+  return computed(() => {
+    if ((rail?.value.mounted ?? 0) === 0) return 0;
+    return paneOpen.value ? REVIEW_PANE_GUTTER : REVIEW_MARKERS_GUTTER;
+  });
 }
 
 /** @public */
@@ -174,9 +176,9 @@ export const DocxEditorHorizontalRuler = defineComponent({
           className={props.className ?? ''}
           style={{
             flexShrink: 0,
-            marginRight: reserved,
+            marginRight: `${reserved.value}px`,
             ...props.style,
-            marginInlineStart: shift.value,
+            marginInlineStart: `${shift.value}px`,
             transition: 'margin 0.2s ease',
             transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft.value}px)`,
             clipPath:

@@ -1,4 +1,4 @@
-import { computed, defineComponent, ref, watch, type CSSProperties, type PropType } from 'vue';
+import { computed, defineComponent, h, ref, watch, type CSSProperties, type PropType } from 'vue';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
@@ -293,30 +293,36 @@ export const DocxEditorHeaderFooterChrome = defineComponent({
     return () => {
       if (!state.value?.editing) return null;
       const regionKey = regionLabelKey(state.value.editing, state.value.variant);
-      return (
-        <div
-          ref={anchor.ref as never}
-          class={`docx-context-bar docx-hf-chrome${props.className ? ` ${props.className}` : ''}`}
-          role="region"
-          aria-label={t('headerFooter.chromeAriaLabel')}
-          data-testid="docx-hf-chrome"
-          onMousedown={onChromeMouseDown}
-          style={{ ...anchor.style.value, zIndex: Z_INDEX.hfInlineEditor } as CSSProperties}
-        >
-          <div class="docx-context-bar__label">
-            <span class="docx-context-bar__title">{t(regionKey)}</span>
-            {state.value.inherited ? (
-              <span
-                class="docx-context-bar__status"
-                data-testid="docx-hf-inherited"
-                title={t('headerFooter.sameAsPreviousHint')}
-              >
-                {t('headerFooter.sameAsPrevious')}
-              </span>
-            ) : null}
-          </div>
-          <OptionsMenu state={state.value} onChromeMousedown={onChromeMouseDown} />
-        </div>
+      return h(
+        'div',
+        {
+          ref: (el: unknown) => {
+            anchor.ref(el instanceof HTMLDivElement ? el : null);
+          },
+          class: `docx-context-bar docx-hf-chrome${props.className ? ` ${props.className}` : ''}`,
+          role: 'region',
+          'aria-label': t('headerFooter.chromeAriaLabel'),
+          'data-testid': 'docx-hf-chrome',
+          onMousedown: onChromeMouseDown,
+          style: { ...anchor.style.value, zIndex: Z_INDEX.hfInlineEditor } as CSSProperties,
+        },
+        [
+          h('div', { class: 'docx-context-bar__label' }, [
+            h('span', { class: 'docx-context-bar__title' }, t(regionKey)),
+            state.value.inherited
+              ? h(
+                  'span',
+                  {
+                    class: 'docx-context-bar__status',
+                    'data-testid': 'docx-hf-inherited',
+                    title: t('headerFooter.sameAsPreviousHint'),
+                  },
+                  t('headerFooter.sameAsPrevious')
+                )
+              : null,
+          ]),
+          h(OptionsMenu, { state: state.value, onChromeMousedown: onChromeMouseDown }),
+        ]
       );
     };
   },

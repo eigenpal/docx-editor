@@ -119,7 +119,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   };
 
   const close = () => {
-    editorRef.value?.surface?.releaseSelection();
+    editorRef.value?.releaseSelection();
     state.value = CLOSED;
   };
 
@@ -148,7 +148,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       return;
     }
     const selected = editor?.query({ type: 'selectedText' }) ?? '';
-    editor?.surface?.retainSelection();
+    editor?.retainSelection();
     state.value = {
       mode: 'editing',
       link: null,

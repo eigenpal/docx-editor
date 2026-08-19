@@ -134,13 +134,14 @@ one: the module auto-imports from the package root and points at
   changeset declares one bump and the rest follow. A deprecation is a minor; the removal is the
   major that follows.
 
+## Extended scope
+
+- `@docx-editor.dev/pro/vue` now supplies the `DocxEditorReview` rail and review composables.
+  The public `Editor.retainSelection()` and `Editor.releaseSelection()` methods let compose
+  fields preserve the selected range without using the surface escape hatch.
+
 ## Out of scope
 
-- `@docx-editor.dev/pro/vue`. The review pane pins the selection with
-  `editor.surface.retainSelection()`, and `surface` is the escape hatch, not the contract;
-  publishing retain/release on `Editor` is the prerequisite, and it is engine work. Vue ships
-  the SEAMS the pane composes with (`ReviewRailContext` as an `InjectionKey`, `Slot`,
-  `LocaleProvider`) so the pane is the only thing missing.
 - REMOVING the deprecated React chrome. That is the next major, and it is not this change's to
   spend.
 

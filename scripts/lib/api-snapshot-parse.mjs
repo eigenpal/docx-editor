@@ -207,7 +207,7 @@ function unwrapRefWrappers(type) {
 function unwrapMaybeRefOrGetter(type) {
   let t = type;
   for (let i = 0; i < 8; i++) {
-    const next = t.replace(/MaybeRefOrGetter<([^>]+)>(\[\])?/g, (_, inner, suffix = '') =>
+    const next = t.replace(/MaybeRefOrGetter(?:_\d+)?<([^>]+)>(\[\])?/g, (_, inner, suffix = '') =>
       suffix ? `(${inner})${suffix}` : inner
     );
     if (next === t) break;

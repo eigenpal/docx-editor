@@ -1,6 +1,7 @@
 import { h, watch, type Ref, type VNode } from 'vue';
 import { editorScopeFor } from '../editor-scope';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
+import { useStableDocxId } from '../../lib/stable-id';
 import { guardToolbarMousedown } from './ToolbarButton';
 
 /** Return focus to the painted pages layer after a table colour dialog applies. */
@@ -34,8 +35,6 @@ export interface TableChromeTriggerA11y {
   readonly ariaLabel: string;
 }
 
-let reasonIdCounter = 0;
-
 /** aria-disabled trigger props; reasons ride aria-describedby like menu rows. */
 export function useTableChromeTriggerA11y({
   enabled,
@@ -46,7 +45,7 @@ export function useTableChromeTriggerA11y({
   readonly shared: Record<string, unknown>;
   readonly reasonNode: VNode | null;
 } {
-  const reasonId = `table-chrome-reason-${++reasonIdCounter}`;
+  const reasonId = useStableDocxId('table-chrome-reason');
   const describe = !enabled && disabledReason ? reasonId : undefined;
   return {
     reasonId,

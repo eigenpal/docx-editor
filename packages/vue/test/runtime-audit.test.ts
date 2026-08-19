@@ -44,11 +44,13 @@ describe('paired host class props', () => {
     );
     await flush();
     const viewport = view.container.querySelector('[data-testid="docx-editor-scroll"]')!;
-    const content = view.container.querySelector('.docx-paginated-surface')!;
+    const content = [
+      ...view.container.querySelectorAll('.docx-content-mount > .docx-paginated-surface'),
+    ].find((node) => node.className.includes('host-content'));
     expect(viewport.className).toContain('docx-editor__scroll-container');
     expect(viewport.className).toContain('host-viewport');
-    expect(content.className).toContain('docx-paginated-surface');
-    expect(content.className).toContain('host-content');
+    expect(content?.className).toContain('docx-paginated-surface');
+    expect(content?.className).toContain('host-content');
     view.unmount();
   });
 
@@ -339,6 +341,21 @@ describe('image paste wiring', () => {
     const item = { kind: 'file', type: 'image/png', getAsFile: () => file };
     const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
     Object.defineProperty(event, 'clipboardData', {
+      value: { files: [file], items: [item] },
+    });
+    surface.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    view.unmount();
+  });
+
+  test('Content permits image drops during dragover', async () => {
+    const view = mountEditorTree(() => []);
+    await flush();
+    const surface = view.container.querySelector('.docx-paginated-surface') as HTMLElement;
+    const file = new File([new Uint8Array([137, 80, 78, 71])], 'x.png', { type: 'image/png' });
+    const item = { kind: 'file', type: 'image/png', getAsFile: () => file };
+    const event = new Event('dragover', { bubbles: true, cancelable: true }) as DragEvent;
+    Object.defineProperty(event, 'dataTransfer', {
       value: { files: [file], items: [item] },
     });
     surface.dispatchEvent(event);
