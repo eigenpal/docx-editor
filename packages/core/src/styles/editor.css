@@ -135,6 +135,12 @@
   --doc-revision-deletion: #c62828;
   --doc-revision-insertion-tint: rgba(46, 125, 50, 0.09);
   --doc-revision-deletion-tint: rgba(198, 40, 40, 0.09);
+  /* The OPEN change. Deeper than the pending tint above, and for the same reason the
+     comment bands deepen: opening a card no longer selects the text, so this band is the
+     only thing on the page saying which change the card is about. At the pending 0.09 it
+     was a wash over an already-washed run — a difference a reader had to hunt for. */
+  --doc-revision-insertion-active-tint: rgba(46, 125, 50, 0.24);
+  --doc-revision-deletion-active-tint: rgba(198, 40, 40, 0.24);
   /* The wash a PENDING change wears. The painter puts this on the run itself, so it covers
      tracked text anywhere in the document rather than only where the band layer reaches; the
      band adds the full tint on top for the one the caret is in, and the two multiply into a
@@ -5565,12 +5571,12 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-revision-band--insert.docx-revision-band--active {
-  background: var(--doc-revision-insertion-tint);
+  background: var(--doc-revision-insertion-active-tint);
   box-shadow: inset 0 -1px 0 var(--doc-revision-insertion);
 }
 
 .docx-revision-band--delete.docx-revision-band--active {
-  background: var(--doc-revision-deletion-tint);
+  background: var(--doc-revision-deletion-active-tint);
   box-shadow: inset 0 -1px 0 var(--doc-revision-deletion);
 }
 

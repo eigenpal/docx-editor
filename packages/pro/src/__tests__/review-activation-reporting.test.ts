@@ -156,7 +156,7 @@ describe('activation takes an alignment', () => {
     ).join('')
   );
 
-  test('reveal: false selects the item without moving the viewport', () => {
+  test('reveal: false opens the item without moving the viewport', () => {
     const editor = LONG;
     const card = editor.getReviewItems().find((c) => c.kind === 'revision')!;
     expect(card).toBeDefined();

@@ -1,7 +1,7 @@
 // Which card is OPEN, when two cards cover the same characters.
 //
-// Activation round-trips through the caret: `setActiveReviewItem` installs a selection over the
-// item and the surface classifies that position back into a card. The round trip is lossy the
+// Activation round-trips through the caret: `setActiveReviewItem` puts the caret at the item's
+// range start and the surface classifies that position back into a card. The round trip is lossy the
 // moment two cards cover one span, and OOXML writes that shape routinely — `w:ins` wrapping
 // `w:del` is content one reviewer added and another struck, and the insertion and the deletion
 // carry one identical range. Every click on either card came back as whichever the queue listed
@@ -208,6 +208,39 @@ describe('overlapping review cards', () => {
     editor.destroy();
   });
 
+  test('a plain click never revives the card the rail opened at that offset', () => {
+    // The pin activation raises now holds a CARET, and a caret is exactly what a click
+    // produces — so a pin retired only by value comparison came back to life whenever the
+    // reader clicked the offset it was raised at. The pin outranks the caret rule, so the
+    // left edge of a nested change — the most natural place to click it — reopened the
+    // OUTER card instead of the inner one the position classifies to.
+    const editor = mount(NESTED);
+    const paragraphId = paragraphOf(editor);
+    const clickAt = (offset: number): void => {
+      editor.exec({
+        type: 'setSelection',
+        range: { anchor: { paragraphId, offset }, head: { paragraphId, offset } },
+      });
+    };
+    const openAuthor = (): string | undefined =>
+      (editor.getReviewItems().find((entry) => entry.isActive) as { author?: string } | undefined)
+        ?.author;
+
+    // The rail opens the enclosing insertion, which the caret alone would never pick.
+    const insertion = editor
+      .getReviewItems()
+      .find((entry) => (entry as { author?: string }).author === 'B')!;
+    expect(editor.setActiveReviewItem(insertion.key).ok).toBe(true);
+    expect(openAuthor()).toBe('B');
+
+    // Move away, then click back onto the very offset the rail sent the caret to.
+    clickAt(33);
+    expect(openAuthor()).toBe('C');
+    clickAt(30);
+    expect(openAuthor()).toBe('C');
+    editor.destroy();
+  });
+
   test('the enclosing insertion stays reachable behind the deletion', () => {
     const editor = mount(NESTED);
     // Innermost-first must not mean the wrapper is gone: it is still a listed card, still
@@ -269,12 +302,12 @@ describe('overlapping review cards', () => {
     editor.destroy();
   });
 
-  test('opening a card does not offer to comment on the text it selected', () => {
+  test('opening a card offers no comment, because it selects nothing', () => {
     const editor = mount(NESTED);
     const card = editor.getReviewItems().find((entry) => entry.activatable)!;
     expect(editor.setActiveReviewItem(card.key).ok).toBe(true);
-    // Activation selects the item's span, and a range selection is what the "comment on this"
-    // affordance keys on. Opening a card must not offer to add a comment over the card.
+    // The "comment on this" affordance keys on a RANGE, and activation now leaves a collapsed
+    // caret — so opening a card cannot offer to add a comment over the card it just opened.
     expect(editor.getSelectionPlacement()).toBe(null);
     editor.destroy();
   });

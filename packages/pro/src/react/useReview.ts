@@ -86,10 +86,10 @@ export interface UseReviewReturn {
   /** The item the caret is in, or null. */
   readonly activeKey: string | null;
   /**
-   * Card to document: selects the item's range and scrolls to it.
+   * Card to document: puts the caret at the start of the item's range and scrolls to it. Nothing is selected; the open item draws its own highlight.
    *
    * Reports whether it landed, on the same terms as {@link accept}. False for an item whose
-   * `activatable` is false — no range to select, or a revision kind this rail excluded — and
+   * `activatable` is false — no resolvable range, or a revision kind this rail excluded — and
    * for a story that will not open. A queue walked with next/previous controls has no other
    * way to tell a step that did nothing from one that worked, and skipping to the next item
    * is only possible if you can find out.

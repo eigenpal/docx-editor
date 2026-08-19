@@ -615,7 +615,7 @@ export interface Editor {
   getSelectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null;
 
   /**
-   * Card to document: select the item's range and scroll to it. `null` clears the active item.
+   * Card to document: a COLLAPSED caret at the range start, and a scroll to it. `null` clears it.
    *
    * REPORTS, like {@link acceptReviewItem} and for the same reason. Activation is refused for
    * an item with no resolvable range, for a kind the host's rail excluded (see
@@ -879,7 +879,7 @@ export interface ReviewItemPlacementBase {
  */
 export interface ReviewActivationOptions {
   /**
-   * Where the item lands, or `false` to select it without scrolling at all.
+   * Where the item lands, or `false` to open it without scrolling at all.
    *
    * Default `'centerIfNeeded'`: silent while the item is already on screen, centred when it
    * has to travel. `'nearest'` scrolls the minimum instead, which parks the item flush

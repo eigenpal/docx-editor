@@ -613,7 +613,7 @@ function ReviewRoot({
   }, [open, draftAnchorY, editor]);
 
   // The compose CARD stacks with the cards, because it is one: rendered outside the run it
-  // landed on top of the card whose text had just been re-selected, and its anchor IS that
+  // landed on top of the card the caret had just been sent to, and its anchor IS that
   // card's anchor, so nothing about its own position could have avoided the collision. The
   // BUTTON does not stack — it sits against the page instead, where nothing else is.
   const composeAnchorY = draftAnchorY ?? review.selectionAnchorY;

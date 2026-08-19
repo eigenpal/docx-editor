@@ -1171,18 +1171,16 @@ describe('activating a card', () => {
     expect(editor.getReviewItems()[0]!.isActive).toBe(true);
   });
 
-  test('opening a card selects its span and suppresses the comment affordance', () => {
+  test('opening a card leaves a caret, not a selection, and offers no comment affordance', () => {
     const editor = mount({ body: COMMENTED, comments: COMMENT_PART });
     const [card] = editor.getReviewItems();
     editor.setActiveReviewItem(card!.key);
 
     const selection = editor.surface!.state().selection;
-    // The item's whole range, HEAD AT THE START: the selection overlay is the visible
-    // highlight and the head is what the reveal scrolls to. The old regression this used
-    // to guard — a range selection made "comment on this" offer a second comment on top
-    // of the card just opened — is held off by `getSelectionPlacement` sitting out for
-    // the review-driven selection, asserted right here.
-    expect(selection.anchor.offset).toBeGreaterThan(selection.head.offset);
+    // COLLAPSED: the open item draws its own band, so a selection would only compete.
+    expect(selection.anchor.paragraphId).toBe(selection.head.paragraphId);
+    expect(selection.anchor.offset).toBe(selection.head.offset);
+    // Nothing is selected, so there is nothing to offer a comment on.
     expect(editor.getSelectionPlacement()).toBeNull();
     // And the card is open, which is the point of activating it.
     expect(editor.getReviewItems()[0]!.isActive).toBe(true);
@@ -1195,7 +1193,17 @@ describe('activating a card', () => {
     expect(editor.getSelectionPlacement()).not.toBeNull();
   });
 
-  test('selects the range the card is about, so the document shows what is meant', () => {
+  test('the caret lands at the start of the span, where the reader is looking', () => {
+    // `Kept ` then a tracked `added text`: the insertion starts at offset 5.
+    const editor = mount({ body: INSERTION });
+    const [card] = editor.getReviewItems();
+    editor.setActiveReviewItem(card!.key);
+    const selection = editor.surface!.state().selection;
+    expect(selection.anchor.offset).toBe(selection.head.offset);
+    expect(selection.head.offset).toBe(5);
+  });
+
+  test('opens the card the caret was sent to, and closes it again on null', () => {
     const editor = mount({ body: INSERTION });
     const [card] = editor.getReviewItems();
     editor.setActiveReviewItem(card!.key);

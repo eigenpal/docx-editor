@@ -1170,10 +1170,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /*
    * The ACTIVE card is the one the caret is in — not something a click stores. Clicking a
-   * card selects its range, so both routes converge on one rule, and a caret arriving by
-   * keyboard, by find, or by an outline jump opens the same card a click would. A stored key
-   * would have had to be invalidated by every one of those. The surface answers, because it
-   * also paints the band, and two derivations of "which item is open" can disagree.
+   * card moves the caret into its range, so both routes converge on one rule, and a caret
+   * arriving by keyboard, by find, or by an outline jump opens the same card a click would.
+   * A stored key would have had to be invalidated by every one of those. The surface
+   * answers, because it also paints the band, and two derivations of "which item is open"
+   * can disagree.
    */
 
   function firstReviewRange(item: ReviewItem): ReviewRange | null {
@@ -1459,14 +1460,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** Where a comment on the current selection would sit. */
   function selectionPlacement(): { readonly anchorY: number; readonly pageIndex: number } | null {
-    // Opening a card selects the item's span so the overlay highlights it — but a range
-    // selection is also what the "comment on this" affordance keys on, and v1 shipped exactly
-    // that regression: opening a card offered to add a second comment on top of the one just
-    // opened. Asked of the SURFACE, which owns the pin and invalidates it by value the moment
-    // the reader selects anything else. This used to be a second copy of that fact kept here,
-    // written on one of activation's three branches — so a header or note card, whose branch
-    // never wrote it, still offered to comment on itself. `commentTargetRange` stays untouched,
-    // so replying over the activated text still works.
+    // STILL LOAD-BEARING, though it covers less than it used to. Activation leaves a
+    // collapsed caret, and `commentTargetRange` already declines a collapsed selection — so
+    // the ordinary case needs no help. What this catches is the RETAINED range: a reader who
+    // had text selected, then opened a card whose caret landed inside it, would otherwise be
+    // offered a second comment on a selection they are no longer looking at. Asked of the
+    // SURFACE, which owns the pin and invalidates it by value the moment the reader selects
+    // anything else; a copy kept here was written on only one of activation's three branches,
+    // so a header or note card still offered to comment on itself. `commentTargetRange` stays
+    // untouched, so replying over the activated text still works.
     if (surface && surface.activatedReviewKey() !== null) return null;
     const range = commentTargetRange();
     const layout = surface?.publishedLayout();
@@ -2209,7 +2211,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return {
           ok: false,
           code: 'unsupported',
-          reason: 'this review item has no range to select',
+          reason: 'this review item has no resolvable range',
         };
       }
       // The rail's own exclusion filter. Refused OUT LOUD rather than by falling through to
@@ -2265,30 +2267,34 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // become active again.
         surface.exitNote?.();
         surface.exitHeaderFooter?.();
-        // Select the item's whole span, HEAD AT THE START: the selection overlay is the
-        // highlight (as it was pre-rewrite), and the head is both what `activeReviewKey`
-        // classifies at and what the reveal scrolls to. A replacement's span runs from its
-        // struck half's start to its typed half's end — the ranges are contiguous by
-        // construction — so both halves highlight as one edit. The old "selecting offers a
-        // second comment on the reader's own selection" regression is handled by
-        // `selectionPlacement`, which stays quiet while this review-driven selection is
-        // the live one.
+        // A CARET AT THE START, not a selection over the span.
+        //
+        // Opening a card is a request to look at a change, not a request to select its
+        // text — and selecting it took the reader's own selection away to say something
+        // the page already said: the open item draws its own `--active` band, at full
+        // tint with a rule under it, which is what marks the change while the card is
+        // open. The selection added a second, competing highlight and left the reader
+        // holding a range they never made, one keystroke away from replacing the very
+        // text under review.
+        //
+        // The caret still MOVES, to the start of the span. That is what keeps the keyboard
+        // where the reader is looking, what `activeReviewKey` classifies at, and what the
+        // reveal below scrolls to; a header, footer or note card has always landed a bare
+        // caret this way, so the body branch now agrees with them.
         const span = reviewItemSpan(item!) ?? range;
+        const caret = { paragraphId: span.start.paragraphId, offset: span.start.offset };
         // Through `activateReview`, not `setSelection`: the card this opens has to be named
         // before the selection is published, or the surface reports whichever card the caret
         // classifies to — the wrong twin, when two cards share one span — and corrects itself
         // a frame later.
-        surface.activateReview(key, {
-          anchor: { paragraphId: span.end.paragraphId, offset: span.end.offset },
-          head: { paragraphId: span.start.paragraphId, offset: span.start.offset },
-        });
+        surface.activateReview(key, { anchor: caret, head: caret });
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.
         // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
         // see must not yank the page, but a card 20 pages away scrolled the MINIMUM distance
         // parked the change flush against the bottom edge — the reader arrived looking at the
         // last line of the window rather than at the edit they had just asked to see. A host
-        // whose own list drives the scroll passes `reveal: false` and gets the selection
+        // whose own list drives the scroll passes `reveal: false` and gets the caret move
         // without the engine competing for the viewport.
         const reveal = options?.reveal ?? 'centerIfNeeded';
         if (reveal !== false) surface.revealPosition?.(span.start, { block: reveal });

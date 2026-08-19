@@ -2217,6 +2217,7 @@ export function mountPaginatedSurface(
       // commit runs.
       const next = selectionAfter?.();
       if (next) {
+        retireActivationPin();
         selection = next;
         desiredX = null;
         caretFollowPending = true;
@@ -2278,6 +2279,7 @@ export function mountPaginatedSurface(
     releaseRetainedIfEscaped(next);
     const previousActive = contentControlAtCaret()?.id ?? null;
     const previousToc = tocIdAtParagraph(selection.head.paragraphId);
+    retireActivationPin();
     selection = next;
     // Any plain selection cancels a rectangle. A caret placed by a click, a keystroke or an
     // edit is a text selection by definition, and leaving the rectangle behind would keep
@@ -2350,6 +2352,7 @@ export function mountPaginatedSurface(
     adoptSelection: (next) => {
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
+      retireActivationPin();
       selection = next;
       desiredX = null;
       caretFollowPending = true;
@@ -2382,6 +2385,7 @@ export function mountPaginatedSurface(
       // Entering or leaving a header/footer moves the caret ACROSS STORIES;
       // buffered body keystrokes must land in the body first, not the header.
       flushTypeBuffer();
+      retireActivationPin();
       selection = next;
       cellSelection = null;
       desiredX = null;
@@ -2437,6 +2441,7 @@ export function mountPaginatedSurface(
     cellSelection = next;
     if (next) {
       reconcilePendingWith(next.text);
+      retireActivationPin();
       selection = next.text;
     }
     desiredX = null;
@@ -2654,15 +2659,30 @@ export function mountPaginatedSurface(
    * by position picked whichever the queue listed first, so clicking either card lit up the
    * same one and the other was unreachable.
    *
-   * Checked against the LIVE selection rather than cleared by every caret path, so no
-   * selection route has to remember to invalidate it: a pin whose selection has moved on is
-   * stale by inspection, and the caret answers instead.
+   * Checked against the LIVE selection AND retired by any selection write that is not
+   * activation's own. The value check alone was enough while the pin held a RANGE — no
+   * click can reproduce two distinct positions, so a moved caret invalidated it by
+   * inspection. A pin holding a CARET is exactly what a click produces, so a reader
+   * returning to that offset would revive it, and the pin outranks the caret rule: an
+   * ordinary click on the left edge of a nested change reopened the outer card instead of
+   * the inner one it should classify to.
    */
   let activatedReview: {
     readonly key: string;
     readonly anchor: SemanticPosition;
     readonly head: SemanticPosition;
   } | null = null;
+
+  /**
+   * Set only while {@link activateReview} installs its own caret, so the write below does
+   * not retire the pin it was just asked to raise.
+   */
+  let activationSelectionWrite = false;
+
+  /** Any selection the reader (or an edit) moves retires the pin. See {@link activatedReview}. */
+  function retireActivationPin(): void {
+    if (!activationSelectionWrite) activatedReview = null;
+  }
 
   /** The pinned item, while its own selection is still the live one. */
   function activatedReviewItem(): ReviewItem | null {
@@ -3836,7 +3856,12 @@ export function mountPaginatedSurface(
         ? { key, anchor: next.anchor, head: next.head }
         : { key, anchor: selection.anchor, head: selection.head };
       if (next) {
-        setSelection(next);
+        activationSelectionWrite = true;
+        try {
+          setSelection(next);
+        } finally {
+          activationSelectionWrite = false;
+        }
         return;
       }
       renderCommentHighlights();
