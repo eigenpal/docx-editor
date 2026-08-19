@@ -33,6 +33,17 @@ Sequence:
 
 ## Local preview
 
+For live source development, start both adapter servers:
+
+```bash
+bun run dev
+```
+
+Open React at `http://localhost:5173/react/` or Vue at
+`http://localhost:5174/vue/`. The switcher moves between these routes.
+
+For the assembled production build on one origin, run:
+
 ```bash
 bun run preview
 ```

@@ -4258,6 +4258,10 @@ export interface ReviewRailRegistry {
     readonly mounted: number;
     // (undocumented)
     readonly register: () => () => void;
+    // (undocumented)
+    readonly registerCommentDraft: (handler: () => void) => () => void;
+    // (undocumented)
+    readonly requestCommentDraft: () => boolean;
 }
 
 // @public (undocumented)

@@ -38,8 +38,8 @@ const active: React.CSSProperties = {
 const isDev =
   typeof import.meta !== 'undefined' &&
   (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
-const reactHref = isDev ? 'http://localhost:5173/' : '/react/';
-const vueHref = isDev ? 'http://localhost:5174/' : '/vue/';
+const reactHref = isDev ? 'http://localhost:5173/react/' : '/react/';
+const vueHref = isDev ? 'http://localhost:5174/vue/' : '/vue/';
 
 export function AdapterSwitcher({ current }: Props) {
   return (

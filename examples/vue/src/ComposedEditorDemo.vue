@@ -88,14 +88,8 @@ void DocxEditorMenu;
 
 const props = defineProps<{ fixtureUrl: string }>();
 
-declare const __ENABLE_FRAMEWORK_SWITCHER__: boolean;
-const showAdapterSwitcher = (() => {
-  try {
-    return __ENABLE_FRAMEWORK_SWITCHER__;
-  } catch {
-    return false;
-  }
-})();
+const showAdapterSwitcher =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
 
 const proModules = [
   reviewModule(),

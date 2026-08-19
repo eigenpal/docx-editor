@@ -28,8 +28,8 @@ withDefaults(
 );
 
 const isDev = import.meta.env.DEV;
-const reactHref = isDev ? 'http://localhost:5173/' : '/react/';
-const vueHref = isDev ? 'http://localhost:5174/' : '/vue/';
+const reactHref = isDev ? 'http://localhost:5173/react/' : '/react/';
+const vueHref = isDev ? 'http://localhost:5174/vue/' : '/vue/';
 </script>
 
 <style scoped>

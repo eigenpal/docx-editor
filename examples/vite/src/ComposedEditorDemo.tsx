@@ -73,8 +73,6 @@ const PRO_MODULES = [
   }),
 ];
 
-declare const __ENABLE_FRAMEWORK_SWITCHER__: boolean;
-
 /** Hand DOCX bytes to the browser as a download. */
 function downloadDocx(bytes: ArrayBuffer | Uint8Array, name: string): void {
   // `BlobPart`, not `ArrayBuffer`: `saveForExport` answers a `Uint8Array`, and casting its
@@ -625,13 +623,8 @@ function RulerRow() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
-  const showAdapterSwitcher = (() => {
-    try {
-      return __ENABLE_FRAMEWORK_SWITCHER__;
-    } catch {
-      return false;
-    }
-  })();
+  const showAdapterSwitcher =
+    import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   // Named after the document it opens with, and after whichever file is opened later.
   const [title, setTitle] = useState(
