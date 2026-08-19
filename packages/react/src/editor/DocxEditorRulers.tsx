@@ -10,14 +10,14 @@
 // no relayout storm at mousemove frequency. Editability follows what the engine reports
 // (`usePageSetup().isEnabled`), so against a read-only document the handles stay inert.
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import type { RulerIndent } from '@docx-editor.dev/core/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
 import { twipsToPixels } from '../lib/units';
-import { ReviewRailContext, useDocxEditor } from './context';
+import { useDocxEditor } from './context';
 // A ruler MEASURES the page, and while the document is absent there is no page — the
 // primitive fell back to drawing default Letter ticks over a document that was not
 // there. Render nothing instead; a host that wants the bar to hold its height sizes the
@@ -27,6 +27,10 @@ import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
 import { useNavigationShift, useNavigationViewportElement } from './navigation/navigation-layout';
+// The gutter the review pane reserves. Read from the shared measurement rather than a
+// local constant, because the ruler and the scroller must agree: two components deciding
+// independently is how a ruler ends up an inch off the page it is measuring.
+import { useReviewGutter, useViewportClientWidth } from './review-gutter';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
 
@@ -154,31 +158,6 @@ function useIndentDrag(): IndentDrag {
   );
 }
 
-/**
- * The scroll container's client width, kept live by a ResizeObserver.
- *
- * `null` while no viewport is registered — a bare composition without
- * `DocxEditor.Viewport` gets no measurement and must not act on one.
- */
-function useViewportClientWidth(): number | null {
-  const viewport = useNavigationViewportElement();
-  const [width, setWidth] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!viewport) {
-      setWidth(null);
-      return undefined;
-    }
-    const sync = () => setWidth(viewport.clientWidth);
-    sync();
-    const observer = new ResizeObserver(sync);
-    observer.observe(viewport);
-    return () => observer.disconnect();
-  }, [viewport]);
-
-  return width;
-}
-
 /** Horizontal viewport movement shared by the painted page and the ruler above it. */
 function useViewportScrollLeft(): number {
   const viewport = useNavigationViewportElement();
@@ -266,28 +245,6 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
     </div>
   );
 }
-
-/**
- * The gutter the review pane reserves, in pixels.
- *
- * Read from the engine's pane state rather than from a prop, because the ruler and the
- * scroller must agree: two components deciding independently is how a ruler ends up an inch
- * off the page it is measuring.
- */
-function useReviewGutter(): number {
-  // The SNAPSHOT, not the review hook — the ruler needs one boolean, not the queue. And no
-  // gutter at all unless a rail is mounted to occupy it.
-  const paneOpen = useEditorState(selectPaneOpen);
-  const rail = useContext(ReviewRailContext);
-  if ((rail?.mounted ?? 0) === 0) return 0;
-  return paneOpen ? REVIEW_PANE_GUTTER : REVIEW_MARKERS_GUTTER;
-}
-
-const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
-
-/** Kept in step with the `[data-review-pane]` rules in the core stylesheet. */
-const REVIEW_PANE_GUTTER = 316;
-const REVIEW_MARKERS_GUTTER = 44;
 
 /**
  * The vertical ruler as a context-fed part (`DocxEditor.VerticalRuler`): page height,

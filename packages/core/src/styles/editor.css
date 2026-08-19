@@ -4774,9 +4774,17 @@ a.docx-hyperlink:focus-visible {
 
 /* Room for the review pane. The page centres inside the scroller's padding box, so
  * reserving the rail's width here shifts the sheet left by half of it and the document and
- * its cards read as one centred pair. Closed, only the marker strip is reserved. */
+ * its cards read as one centred pair. Closed, only the marker strip is reserved.
+ *
+ * The open reservation is a MEASUREMENT, not a constant: `DocxEditor.Viewport` publishes
+ * `--docx-review-gutter` from the viewport's width and the page's rendered width, so on a
+ * host too narrow for the page and the full column the gutter narrows to what is left
+ * after the sheet keeps a little clearance (never below the marker strip) instead of
+ * shoving the sheet against the left edge.
+ * The 316px fallback is the full column — a 300px card column plus its 16px gutter — and
+ * stands only while nothing has measured. */
 .docx-editor__scroll-container[data-review-pane='open'] {
-  padding-right: 316px;
+  padding-right: var(--docx-review-gutter, 316px);
 }
 
 .docx-editor__scroll-container[data-review-pane='closed'] {

@@ -14,6 +14,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
+import { useReviewGutter } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 
@@ -46,6 +47,11 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   // whole placement derivation — anchors and all — inside the parent of the painted document,
   // on every selection change, to learn one boolean.
   const paneOpen = useEditorState(selectPaneOpen);
+  // How wide that gutter may actually be. A fixed reservation shoved the sheet against the
+  // viewport's left edge on narrow hosts, with a mostly-empty band standing where the page
+  // should be; the measured value narrows to the leftover width instead (never below the
+  // marker strip), and the stylesheet consumes it through `--docx-review-gutter`.
+  const reviewGutter = useReviewGutter();
   const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
   const reserve = (rail?.mounted ?? 0) > 0;
@@ -90,7 +96,13 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
       className={`${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container${
         className ? ` ${className}` : ''
       }`}
-      style={{ ...style, ['--docx-nav-shift' as string]: `${shift}px` } as CSSProperties}
+      style={
+        {
+          ...style,
+          ['--docx-nav-shift' as string]: `${shift}px`,
+          ...(reserve ? { ['--docx-review-gutter' as string]: `${reviewGutter}px` } : {}),
+        } as CSSProperties
+      }
     >
       {/* Everything below this div has a scoped ancestor: either the packaged
           wrapper above us, or this element, which scoped itself just now. Say
