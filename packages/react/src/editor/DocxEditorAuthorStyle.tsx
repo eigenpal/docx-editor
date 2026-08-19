@@ -5,7 +5,7 @@
 // review item, only under a mounted rail, and only after the page painted). It CAN be
 // declared as ordinary render-nothing components under the Root: mounting one applies it,
 // changing a prop re-applies it, unmounting restores what was left. Both compose with
-// `useRevisionAuthors` (the roster) and `useReviewAuthor` (inside custom cards).
+// `useReviewAuthors` (the roster) and `useReviewAuthor` (inside custom cards).
 //
 // The DEFAULT needs no component at all: the engine colours by author, as Word does.
 
@@ -71,7 +71,7 @@ export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
  * are. Prop changes re-apply live — pages repaint without a remount, so the caret and undo
  * history stay — and unmounting returns that author to the ramp.
  *
- * Read who is in the document with `useRevisionAuthors`, and read these declarations back
+ * Read who is in the document with `useReviewAuthors`, and read these declarations back
  * inside a custom review card with `useReviewAuthor`.
  *
  * ```tsx

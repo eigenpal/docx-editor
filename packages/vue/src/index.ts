@@ -23,7 +23,7 @@ export type {
   DocxEditorProps,
   DocxEditorRef,
   EditorMode,
-  RevisionAuthor,
+  ReviewAuthorInfo,
   RevisionAuthorAssignments,
   RevisionAuthorStyle,
   RevisionStyles,

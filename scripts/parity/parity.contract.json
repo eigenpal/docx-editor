@@ -32,7 +32,7 @@
       "rulers": "React's packaged frame mounts the rulers and takes a boolean to drop them. The Vue host has no ruler slot yet, so there is nothing to toggle; the prop lands there with the ruler chrome."
     },
     "vueExclusive": {
-      "revisionStyles": "Per-author revision styling. React expresses it DECLARATIVELY — `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared instance API (`setRevisionStyles`, `getRevisionAuthors`) — so it deliberately has no React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is one implementation either way."
+      "revisionStyles": "Per-author revision styling. React expresses it DECLARATIVELY — `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is one implementation either way."
     }
   },
   "ref": {

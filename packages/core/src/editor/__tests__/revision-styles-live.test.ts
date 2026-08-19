@@ -1,4 +1,4 @@
-// `getRevisionAuthors` and `setRevisionStyles` on the facade.
+// `getReviewAuthors` and `setRevisionStyles` on the facade.
 //
 // The roster is the discovery surface: authors depend on the loaded file, so a legend or a
 // per-reviewer colour picker has to READ who is in the document rather than be configured
@@ -60,7 +60,7 @@ function inkOf(container: HTMLElement, author: string): string | undefined {
 describe('the author roster', () => {
   test('lists every revision author, in slot order, with the colour each resolves to', () => {
     const { editor } = mount();
-    expect(editor.getRevisionAuthors()).toEqual([
+    expect(editor.getReviewAuthors()).toEqual([
       { author: 'Ada Lovelace', slot: 0, color: 'var(--doc-review-author-0)' },
       { author: 'Grace Hopper', slot: 1, color: 'var(--doc-review-author-1)' },
     ]);
@@ -69,11 +69,11 @@ describe('the author roster', () => {
 
   test('is reference-stable between changes, and resolves host styles when set', () => {
     const { editor } = mount();
-    expect(editor.getRevisionAuthors()).toBe(editor.getRevisionAuthors());
+    expect(editor.getReviewAuthors()).toBe(editor.getReviewAuthors());
     editor.setRevisionStyles({
       authors: { 'Ada Lovelace': { color: '#7c3aed', avatarUrl: '/ada.png' } },
     });
-    const authors = editor.getRevisionAuthors();
+    const authors = editor.getReviewAuthors();
     expect(authors[0]).toEqual({
       author: 'Ada Lovelace',
       slot: 0,
@@ -86,7 +86,7 @@ describe('the author roster', () => {
 
   test('answers empty while no surface is mounted', () => {
     const editor = createDocxEditor({});
-    expect(editor.getRevisionAuthors()).toEqual([]);
+    expect(editor.getReviewAuthors()).toEqual([]);
     editor.destroy();
   });
 });
@@ -121,7 +121,7 @@ describe('setRevisionStyles, live', () => {
     expect(inkOf(container, 'Grace Hopper')).toBe('var(--brand-grace)');
     // Ada has no assignment, and `others` defaults to the by-author ramp.
     expect(inkOf(container, 'Ada Lovelace')).toBe('var(--doc-review-author-0)');
-    expect(editor.getRevisionAuthors()[1]!.color).toBe('var(--brand-grace)');
+    expect(editor.getReviewAuthors()[1]!.color).toBe('var(--brand-grace)');
 
     // `others: 'kind'` is how "highlight Grace, leave the rest green and red" is said.
     editor.setRevisionStyles({

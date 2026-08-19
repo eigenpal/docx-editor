@@ -6,11 +6,11 @@
 // `setRevisionStyles` call all re-render the consumer.
 
 import { useCallback, useSyncExternalStore } from 'react';
-import type { RevisionAuthor } from '@docx-editor.dev/core/editor';
+import type { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { deferredNotifier } from './useEditorState';
 
-const EMPTY: readonly RevisionAuthor[] = [];
+const EMPTY: readonly ReviewAuthorInfo[] = [];
 const NOOP_UNSUBSCRIBE = () => {};
 
 /**
@@ -27,7 +27,7 @@ const NOOP_UNSUBSCRIBE = () => {};
  * `<DocxEditor.AuthorStyle>` elements.
  *
  * ```tsx
- * const authors = useRevisionAuthors();
+ * const authors = useReviewAuthors();
  * authors.map(({ author }) => (
  *   <DocxEditor.AuthorStyle key={author} author={author} color={myTeam[author]?.color} />
  * ));
@@ -35,7 +35,7 @@ const NOOP_UNSUBSCRIBE = () => {};
  *
  * @public
  */
-export function useRevisionAuthors(): readonly RevisionAuthor[] {
+export function useReviewAuthors(): readonly ReviewAuthorInfo[] {
   const editor = useDocxEditor();
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
@@ -57,7 +57,7 @@ export function useRevisionAuthors(): readonly RevisionAuthor[] {
   );
   return useSyncExternalStore(
     subscribe,
-    () => editor?.getRevisionAuthors() ?? EMPTY,
+    () => editor?.getReviewAuthors() ?? EMPTY,
     () => EMPTY
   );
 }

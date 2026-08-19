@@ -56,9 +56,9 @@ import {
   Slot,
   useDocxEditor,
   useEditorState,
-  useRevisionAuthors,
+  useReviewAuthors,
   useTranslation,
-  type RevisionAuthor,
+  type ReviewAuthorInfo,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition';
@@ -124,7 +124,7 @@ export function useReviewItem(): ReviewItemView | null {
  *
  * @public
  */
-export function useReviewAuthor(author: string | undefined): RevisionAuthor | undefined {
+export function useReviewAuthor(author: string | undefined): ReviewAuthorInfo | undefined {
   const { authorInfo } = useRail();
   return author === undefined ? undefined : authorInfo.get(author);
 }
@@ -150,7 +150,7 @@ interface ReviewRailValue {
    * a card and its text cannot disagree about who draws in what — and the carrier of any
    * host-supplied per-author style (colour, wash, class names, avatar).
    */
-  readonly authorInfo: ReadonlyMap<string, RevisionAuthor>;
+  readonly authorInfo: ReadonlyMap<string, ReviewAuthorInfo>;
   /** Comment items by id, so a card can render its replies without walking the list. */
   readonly byId: ReadonlyMap<string, ReviewItemView>;
   /** Report a slot element so the rail can keep its measured height current. */
@@ -730,7 +730,7 @@ function ReviewRoot({
   const cardClassName = card?.className;
   // The facade's resolved roster (reference-stable, live through `setRevisionStyles`),
   // keyed by author for the card parts.
-  const roster = useRevisionAuthors();
+  const roster = useReviewAuthors();
   const authorInfo = useReviewAuthorInfo(roster, items, authorSlots, editor);
   const value = useMemo<ReviewRailValue>(
     () => ({

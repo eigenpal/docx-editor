@@ -33,7 +33,7 @@ import { useDocxEditor } from '../src/editor/context.ts';
 import { useEditorState } from '../src/editor/useEditorState.ts';
 import { useEditorCommand, type EditorCommandState } from '../src/editor/useEditorCommand.ts';
 import { useEditorEvent } from '../src/editor/useEditorEvent.ts';
-import { useRevisionAuthors } from '../src/editor/useRevisionAuthors.ts';
+import { useReviewAuthors } from '../src/editor/useReviewAuthors.ts';
 import {
   DocxEditorColorByChangeType,
   DocxEditorAuthorStyle,
@@ -419,7 +419,7 @@ describe('declarative revision styles', () => {
   });
 });
 
-describe('useRevisionAuthors', () => {
+describe('useReviewAuthors', () => {
   const TRACKED_SOURCE = docx(
     '<w:p><w:r><w:t xml:space="preserve">base </w:t></w:r>' +
       '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-01T00:00:00Z">' +
@@ -429,7 +429,7 @@ describe('useRevisionAuthors', () => {
   test('lists the loaded document’s authors and follows setRevisionStyles live', async () => {
     let instance: DocxEditorInstance | null = null;
     function Legend() {
-      const authors = useRevisionAuthors();
+      const authors = useReviewAuthors();
       return (
         <div data-testid="legend">
           {authors.map((entry) => `${entry.author}:${entry.color}`).join('|')}

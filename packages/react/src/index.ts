@@ -177,7 +177,7 @@ export {
   type ContentControlProps,
 } from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
-export { useRevisionAuthors } from './editor/useRevisionAuthors';
+export { useReviewAuthors } from './editor/useReviewAuthors';
 export {
   DocxEditorAuthorStyle,
   DocxEditorColorByChangeType,
@@ -305,7 +305,7 @@ export type {
   DocxEditorProps,
   DocxEditorRef,
   EditorMode,
-  RevisionAuthor,
+  ReviewAuthorInfo,
   RevisionAuthorAssignments,
   RevisionAuthorStyle,
   RevisionStyles,

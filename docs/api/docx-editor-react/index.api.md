@@ -68,7 +68,7 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { RefAttributes } from 'react';
-import { RevisionAuthor } from '@docx-editor.dev/core/editor';
+import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
 import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
 import { RevisionStyles } from '@docx-editor.dev/core/editor';
@@ -1495,6 +1495,8 @@ export { PX_PER_CM }
 
 export { PX_PER_INCH }
 
+export { ReviewAuthorInfo }
+
 // @public (undocumented)
 export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
 
@@ -1505,8 +1507,6 @@ export interface ReviewRailRegistry {
     // (undocumented)
     readonly register: () => () => void;
 }
-
-export { RevisionAuthor }
 
 export { RevisionAuthorAssignments }
 
@@ -2009,7 +2009,7 @@ export interface UseParagraphStyleResult {
 }
 
 // @public
-export function useRevisionAuthors(): readonly RevisionAuthor[];
+export function useReviewAuthors(): readonly ReviewAuthorInfo[];
 
 // @public
 export function useTableBorderTargetLabel(): string;

@@ -27,7 +27,7 @@ export type {
 export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 export type {
-  RevisionAuthor,
+  ReviewAuthorInfo,
   RevisionAuthorAssignments,
   RevisionAuthorStyle,
   RevisionStyles,
@@ -57,7 +57,7 @@ export interface DocxEditorProps {
   /**
    * How painted tracked changes are coloured — the opening value; replace it live with
    * `editor.setRevisionStyles` on the instance, and read the document's resolved roster
-   * with `editor.getRevisionAuthors`.
+   * with `editor.getReviewAuthors`.
    *
    * `'author'` (the default) colours every change by who proposed it, through the
    * `--doc-review-author-N` ramp, as Word does; `'kind'` opts out and colours by what

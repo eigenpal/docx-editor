@@ -17,7 +17,7 @@ export interface OverlayRect {
     readonly height: number;
     // (undocumented)
     readonly pageIndex: number;
-    readonly reviewAuthor?: RevisionAuthor;
+    readonly reviewAuthor?: ReviewAuthorInfo;
     // (undocumented)
     readonly width: number;
     // (undocumented)
@@ -62,7 +62,7 @@ export function paintSelectionOverlay(layer: HTMLElement, layout: SemanticLayout
 export function paintSemanticLayout(container: HTMLElement, layout: SemanticLayout, options?: PaintOptions): void;
 
 // @public
-export interface RevisionAuthor {
+export interface ReviewAuthorInfo {
     readonly author: string;
     readonly color: string;
     readonly slot: number;

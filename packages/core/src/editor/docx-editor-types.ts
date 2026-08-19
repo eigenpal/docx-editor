@@ -14,7 +14,7 @@ import type {
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
 import type {
-  RevisionAuthor,
+  ReviewAuthorInfo,
   RevisionAuthorStyle,
   RevisionStyles,
 } from '../output/revision-presentation.ts';
@@ -102,7 +102,7 @@ export interface DocxEditorConfig {
    * The opening value. In React this is authored declaratively — `DocxEditor.ColorByChangeType`
    * and `DocxEditor.AuthorStyle` compose and apply it, seeding this config for the first
    * paint — so React hosts never pass it by hand; it is the entry for headless hosts. Read
-   * the document's resolved roster with `getRevisionAuthors`. Applies wherever revision
+   * the document's resolved roster with `getReviewAuthors`. Applies wherever revision
    * markup paints: the full all-markup view needs a review module registered; without one
    * the proposed view still marks surviving insertions.
    */
@@ -216,17 +216,17 @@ export interface DocxEditorInstance extends Editor {
    * listed only if they also commented. Empty while detached. Reference-stable between
    * changes, so it is safe as a dependency; changes bump `stateVersion()`.
    */
-  getRevisionAuthors(): readonly RevisionAuthor[];
+  getReviewAuthors(): readonly ReviewAuthorInfo[];
   /**
    * The style declared for one author, whether or not the DOCUMENT carries a revision by
    * them — so review chrome can draw a COMMENT-only author's card in their colour, which
-   * {@link DocxEditorInstance.getRevisionAuthors} (a read of the document) cannot answer.
+   * {@link DocxEditorInstance.getReviewAuthors} (a read of the document) cannot answer.
    *
    * @internal The seam `@docx-editor.dev/pro`'s review rail resolves those authors
-   * through. A consumer reads `useReviewAuthor` (pro) or `useRevisionAuthors` (react)
+   * through. A consumer reads `useReviewAuthor` (pro) or `useReviewAuthors` (react)
    * instead; nothing here answers a question those two do not.
    */
-  getRevisionAuthorStyle(author: string): RevisionAuthorStyle | undefined;
+  getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
   /**
    * Replace how tracked changes are coloured, live. Paint-level: pages repaint without a
    * layout pass, and the caret, selection and undo history stay where they are. Pass

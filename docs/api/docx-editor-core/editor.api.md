@@ -792,9 +792,9 @@ export interface DocxEditorInstance extends Editor {
     attach(el: HTMLElement): void;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
-    getRevisionAuthors(): readonly RevisionAuthor[];
+    getReviewAuthors(): readonly ReviewAuthorInfo[];
     // @internal
-    getRevisionAuthorStyle(author: string): RevisionAuthorStyle | undefined;
+    getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
@@ -1518,6 +1518,14 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
 
 // @public
+export interface ReviewAuthorInfo {
+    readonly author: string;
+    readonly color: string;
+    readonly slot: number;
+    readonly style?: RevisionAuthorStyle;
+}
+
+// @public
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
@@ -1538,14 +1546,6 @@ export interface ReviewModuleContribution {
     readonly collectReviewItems: CollectReviewItems;
     readonly displayModes: readonly RevisionDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
-}
-
-// @public
-export interface RevisionAuthor {
-    readonly author: string;
-    readonly color: string;
-    readonly slot: number;
-    readonly style?: RevisionAuthorStyle;
 }
 
 // @public

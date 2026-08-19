@@ -2162,9 +2162,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     isReviewPaneOpen: () => reviewPaneOpen,
 
     getEditingMode: () => editingMode,
-    getRevisionAuthors: () =>
+    getReviewAuthors: () =>
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
-    getRevisionAuthorStyle: (author) => revisionStyleState.styleFor(author),
+    getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);
       surface?.setRevisionStyles(colors);

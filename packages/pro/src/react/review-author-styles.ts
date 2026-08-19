@@ -12,7 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
-import type { DocxEditorInstance, RevisionAuthor } from '@docx-editor.dev/core/editor';
+import type { DocxEditorInstance, ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import type { ReviewItemView } from './useReview';
 
 /** How many author slots the token ramp defines; past it, colours repeat. */
@@ -28,12 +28,12 @@ export const AUTHOR_SLOTS = 8;
  * belongs to composition — a custom card over `useReviewAuthor`, or CSS on the
  * `data-author`/`data-author-slot` hooks — never to a config record.
  */
-export function authorAccent(info: RevisionAuthor | undefined, fallbackSlot: number): string {
+export function authorAccent(info: ReviewAuthorInfo | undefined, fallbackSlot: number): string {
   return info?.color ?? `var(--doc-review-author-${fallbackSlot % AUTHOR_SLOTS})`;
 }
 
 export function authorCardStyle(
-  info: RevisionAuthor | undefined,
+  info: ReviewAuthorInfo | undefined,
   fallbackSlot: number
 ): CSSProperties {
   return { '--doc-review-author': authorAccent(info, fallbackSlot) } as CSSProperties;
@@ -47,7 +47,7 @@ export function authorCardStyle(
  * rail's own item-order slot stands in only for an author the document has no revision by
  * (a comment-only reviewer), whom the painter never numbers at all.
  */
-export function authorSlot(info: RevisionAuthor | undefined, fallbackSlot: number): number {
+export function authorSlot(info: ReviewAuthorInfo | undefined, fallbackSlot: number): number {
   return (info?.slot ?? fallbackSlot) % AUTHOR_SLOTS;
 }
 
@@ -64,22 +64,22 @@ export function authorSlot(info: RevisionAuthor | undefined, fallbackSlot: numbe
  * `useReviewAuthor` in a dependency array a new identity on every comment.
  */
 export function useReviewAuthorInfo(
-  roster: readonly RevisionAuthor[],
+  roster: readonly ReviewAuthorInfo[],
   items: readonly ReviewItemView[],
   authorSlots: ReadonlyMap<string, number>,
   editor: DocxEditorInstance | null
-): ReadonlyMap<string, RevisionAuthor> {
-  const synthetic = useRef(new Map<string, RevisionAuthor>());
+): ReadonlyMap<string, ReviewAuthorInfo> {
+  const synthetic = useRef(new Map<string, ReviewAuthorInfo>());
   return useMemo(() => {
-    const byAuthor = new Map<string, RevisionAuthor>();
+    const byAuthor = new Map<string, ReviewAuthorInfo>();
     for (const info of roster) byAuthor.set(info.author, info);
     for (const entry of items) {
       if (!entry.author || byAuthor.has(entry.author)) continue;
       const slot = authorSlots.get(entry.author) ?? 0;
-      const style = editor?.getRevisionAuthorStyle(entry.author);
+      const style = editor?.getReviewAuthorStyle(entry.author);
       const color = style?.color ?? `var(--doc-review-author-${slot % AUTHOR_SLOTS})`;
       const cached = synthetic.current.get(entry.author);
-      const resolved: RevisionAuthor =
+      const resolved: ReviewAuthorInfo =
         cached !== undefined &&
         cached.slot === slot &&
         cached.color === color &&

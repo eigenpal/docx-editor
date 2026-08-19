@@ -211,7 +211,7 @@ colors:
 ### Discover the authors in a document
 
 The reviewers depend on the file, so a legend cannot be written in advance — it reads
-them. `useRevisionAuthors()` returns every author the review surface draws, in slot order,
+them. `useReviewAuthors()` returns every author the review surface draws, in slot order,
 with the color and style each one resolves to. It re-renders when a document loads and when
 the styling changes.
 
@@ -222,10 +222,10 @@ revisions it has resolved away, so an author whose only change is hidden there i
 only if they also commented.
 
 ```tsx
-import { useRevisionAuthors } from '@docx-editor.dev/react';
+import { useReviewAuthors } from '@docx-editor.dev/react';
 
 function ReviewerLegend() {
-  const authors = useRevisionAuthors();
+  const authors = useReviewAuthors();
 
   return (
     <ul>
@@ -245,10 +245,10 @@ declarations.
 
 ```tsx
 import { useState } from 'react';
-import { DocxEditor, useRevisionAuthors } from '@docx-editor.dev/react';
+import { DocxEditor, useReviewAuthors } from '@docx-editor.dev/react';
 
 function ReviewerColors() {
-  const authors = useRevisionAuthors();
+  const authors = useReviewAuthors();
   const [picks, setPicks] = useState<Record<string, string>>({});
 
   return (
@@ -273,7 +273,7 @@ function ReviewerColors() {
 ```
 
 Two related reads. `useReview().items` carries an `author` on every card, including people
-who only left comments. `getRevisionAuthors()` on the editor instance is the same read
+who only left comments. `getReviewAuthors()` on the editor instance is the same read
 without React.
 
 Outside React there are no declarations to mount, so a headless or Vue host configures the
@@ -349,7 +349,7 @@ So restyling one reviewer's cards is a CSS rule:
 
 This works for **comment authors too**. Review covers comments and tracked changes
 together, so one person draws in one color across both. A reviewer who left comments but
-proposed no tracked changes still gets a slot: `useRevisionAuthors()` lists them after the
+proposed no tracked changes still gets a slot: `useReviewAuthors()` lists them after the
 authors the document's tracked changes introduce, and their card, avatar, and comment
 highlight all use it.
 

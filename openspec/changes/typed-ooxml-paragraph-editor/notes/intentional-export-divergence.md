@@ -58,10 +58,10 @@ exemptions go when it lands.
 - `EditorCaret` — that hook's return shape.
 - `useEditorState` — `useSyncExternalStore` selector hook over the version-cached
   snapshot; Vue twin is a reactivity-based composable, future task.
-- `useRevisionAuthors` — the document's resolved author roster, live. The engine half
-  (`getRevisionAuthors`/`setRevisionStyles` on the instance) is shared, so a Vue host
-  reaches the capability through the facade today; the Vue twin is a composable, with the
-  rest of that layer.
+- `useReviewAuthors` — the resolved author roster, live: everyone who owns a tracked change
+  or a comment. The engine half (`getReviewAuthors`/`setRevisionStyles` on the instance) is
+  shared, so a Vue host reaches the capability through the facade today; the Vue twin is a
+  composable, with the rest of that layer.
 - `DocxEditorColorByChangeType` — declarative opt-out from by-author revision colouring
   (render-nothing component over the shared `setRevisionStyles`). Vue reaches the
   capability through its `revisionStyles` prop and the facade; a declarative twin lands

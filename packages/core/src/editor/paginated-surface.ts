@@ -71,9 +71,9 @@ import {
 // public surface. See the note there.
 import {
   authorSlotsOf,
-  revisionAuthorsOf,
+  reviewAuthorsOf,
   reviewAuthorSlotsOf,
-  type RevisionAuthor,
+  type ReviewAuthorInfo,
 } from '../output/revision-presentation.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -655,7 +655,7 @@ export function mountPaginatedSurface(
     items: readonly ReviewItem[] | null;
     styles: typeof revisionStyles;
     value: ReadonlyMap<string, number>;
-    resolved: ReadonlyMap<string, RevisionAuthor>;
+    resolved: ReadonlyMap<string, ReviewAuthorInfo>;
   } | null = null;
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
@@ -2783,7 +2783,7 @@ export function mountPaginatedSurface(
    */
   function reviewAuthorState(): {
     value: ReadonlyMap<string, number>;
-    resolved: ReadonlyMap<string, RevisionAuthor>;
+    resolved: ReadonlyMap<string, ReviewAuthorInfo>;
   } {
     const items = session.reviewItems();
     const prior = authorRoster;
@@ -2813,7 +2813,7 @@ export function mountPaginatedSurface(
     const resolved =
       prior !== null && unchanged && prior.styles === revisionStyles
         ? prior.resolved
-        : new Map(revisionAuthorsOf(value, revisionStyles).map((it) => [it.author, it]));
+        : new Map(reviewAuthorsOf(value, revisionStyles).map((it) => [it.author, it]));
     authorRoster = { layout: currentLayout, items, styles: revisionStyles, value, resolved };
     return authorRoster;
   }
@@ -2863,7 +2863,7 @@ export function mountPaginatedSurface(
 
   let commentHighlightLayout: SemanticLayout | null = null;
   let commentHighlightActiveKey: string | null | undefined;
-  let commentHighlightAuthors: ReadonlyMap<string, RevisionAuthor> | null = null;
+  let commentHighlightAuthors: ReadonlyMap<string, ReviewAuthorInfo> | null = null;
 
   function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();

@@ -32,7 +32,7 @@ export type {
 export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 export type {
-  RevisionAuthor,
+  ReviewAuthorInfo,
   RevisionAuthorAssignments,
   RevisionAuthorStyle,
   RevisionStyles,

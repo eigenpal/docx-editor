@@ -1,11 +1,11 @@
 // The facade's revision-colour state, extracted from `docx-editor.ts` (composition root,
 // at its line cap): the current option, and the resolved-roster cache behind
-// `getRevisionAuthors`.
+// `getReviewAuthors`.
 
 import {
   revisionAuthorStylesOf,
-  revisionAuthorsOf,
-  type RevisionAuthor,
+  reviewAuthorsOf,
+  type ReviewAuthorInfo,
   type RevisionAuthorStyle,
   type RevisionStyles,
 } from '../output/revision-presentation.ts';
@@ -18,8 +18,8 @@ export interface RevisionStyleState {
   /** The colours a (re)mounting surface opens with — the latest, not construction-time. */
   current(): RevisionStyles | undefined;
   set(colors: RevisionStyles | undefined): void;
-  /** The resolved roster for a surface's author→slot map. See `getRevisionAuthors`. */
-  authorsFor(slots: ReadonlyMap<string, number>): readonly RevisionAuthor[];
+  /** The resolved roster for a surface's author→slot map. See `getReviewAuthors`. */
+  authorsFor(slots: ReadonlyMap<string, number>): readonly ReviewAuthorInfo[];
   /** The style declared for one author, whether or not the DOCUMENT carries them. */
   styleFor(author: string): RevisionAuthorStyle | undefined;
 }
@@ -37,7 +37,7 @@ export function createRevisionStyleState(initial: RevisionStyles | undefined): R
   let cache: {
     slots: ReadonlyMap<string, number>;
     colors: RevisionStyles | undefined;
-    value: readonly RevisionAuthor[];
+    value: readonly ReviewAuthorInfo[];
   } | null = null;
   // Normalised declarations, cached on the option's identity. Independent of the document:
   // a style declared for someone who only COMMENTED still resolves, which is what lets the
@@ -53,7 +53,7 @@ export function createRevisionStyleState(initial: RevisionStyles | undefined): R
     },
     authorsFor: (slots) => {
       if (cache && cache.slots === slots && cache.colors === colors) return cache.value;
-      const value = revisionAuthorsOf(slots, colors);
+      const value = reviewAuthorsOf(slots, colors);
       cache = { slots, colors, value };
       return value;
     },

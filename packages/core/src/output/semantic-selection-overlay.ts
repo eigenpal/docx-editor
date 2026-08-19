@@ -9,7 +9,7 @@
 // the page painter: geometry in, elements out, nothing measured back.
 
 import type { SemanticLayout } from '../layout/semantic-records.ts';
-import type { RevisionAuthor } from './revision-presentation.ts';
+import type { ReviewAuthorInfo } from './revision-presentation.ts';
 
 /** A rectangle in page-content coordinates, on a named page. */
 export interface OverlayRect {
@@ -35,10 +35,10 @@ export interface OverlayRect {
    * band's DEFAULT colour does not change with the author (Word keeps every comment yellow);
    * this only makes the author reachable from CSS.
    *
-   * The SAME resolved author `getRevisionAuthors` hands back, rather than a shape of this
+   * The SAME resolved author `getReviewAuthors` hands back, rather than a shape of this
    * layer's own: one person is one object everywhere the review surface describes them.
    */
-  readonly reviewAuthor?: RevisionAuthor;
+  readonly reviewAuthor?: ReviewAuthorInfo;
 }
 
 /**

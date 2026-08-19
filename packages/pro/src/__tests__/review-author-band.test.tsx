@@ -149,7 +149,7 @@ describe('the comment band carries its author', () => {
 
   test('a comment-only author takes a NEW slot rather than the first author’s', async () => {
     const { view, editor } = await mount();
-    const roster = new Map(editor.getRevisionAuthors().map((it) => [it.author, it.slot]));
+    const roster = new Map(editor.getReviewAuthors().map((it) => [it.author, it.slot]));
     // The revision author keeps slot 0 — the painter has already written that number into the
     // page, so a commenter appearing first in the queue must not push her off it.
     expect(roster.get('Ada Lovelace')).toBe(0);

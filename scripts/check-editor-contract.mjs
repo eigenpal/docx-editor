@@ -14,7 +14,7 @@ const vueSource = readFileSync(resolve(root, 'packages/vue/src/types.ts'), 'utf8
 const VUE_ONLY_PROPS = new Set([
   // Per-author revision styling. React expresses it DECLARATIVELY —
   // `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared
-  // instance API (`setRevisionStyles`, `getRevisionAuthors`) — so it deliberately has no
+  // instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no
   // React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is
   // one implementation either way. Mirrored in scripts/parity/parity.contract.json.
   'revisionStyles',

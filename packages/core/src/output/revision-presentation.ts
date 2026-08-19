@@ -92,7 +92,7 @@ export type RevisionStyles = 'kind' | 'author' | RevisionAuthorAssignments;
  *
  * @public
  */
-export interface RevisionAuthor {
+export interface ReviewAuthorInfo {
   /** The `w:author` string, exactly as the file carries it. */
   readonly author: string;
   /** The ramp slot, by order of first appearance in the document. */
@@ -109,7 +109,7 @@ const STYLE_KEYS = ['color', 'background', 'className', 'avatarUrl'] as const;
  * Schemes an avatar may load over. An allowlist, matching the package's `sanitizeHref`
  * policy rather than restating a denylist: the value is host-configured, but a config that
  * travelled through storage or `JSON.parse` is one typo away from a live scheme, and the
- * normalised value is PUBLIC — hosts render it themselves from `RevisionAuthor.style`.
+ * normalised value is PUBLIC — hosts render it themselves from `ReviewAuthorInfo.style`.
  */
 const AVATAR_SCHEMES = new Set(['http', 'https', 'data', 'blob']);
 const SCHEME_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
@@ -195,14 +195,14 @@ export function revisionAuthorStylesOf(
 
 /**
  * The full resolved roster: every author in the document, in slot order, with the colour
- * and style they resolve to under `option`. This is what `getRevisionAuthors` returns and
+ * and style they resolve to under `option`. This is what `getReviewAuthors` returns and
  * what the review chrome styles its cards from — one derivation, shared, so the document
  * and the cards cannot disagree about who draws in what.
  */
-export function revisionAuthorsOf(
+export function reviewAuthorsOf(
   authors: ReadonlyMap<string, number>,
   option: RevisionStyles | undefined
-): readonly RevisionAuthor[] {
+): readonly ReviewAuthorInfo[] {
   const styles = revisionAuthorStylesOf(option);
   return [...authors].map(([author, slot]) => {
     const style = styles.get(author);
@@ -413,7 +413,7 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
 
 /**
  * The author→slot map per layout. ONE cache for the whole engine: the painter resolves it
- * for colouring and the surface answers `getRevisionAuthors` from it, and before this they
+ * for colouring and the surface answers `getReviewAuthors` from it, and before this they
  * each walked the document independently — twice per keystroke for a host with the review
  * rail mounted, for a map that is identical both times.
  */
