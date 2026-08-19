@@ -116,4 +116,101 @@ describe('two paragraphs of images on one line', () => {
     }
     expect(shape).toEqual(['advance', 'AAA', 'advance', 'BBB']);
   });
+
+  test('a second-half drawing between the halves is not ALSO painted as a gap', () => {
+    // The second half's image advance separates "AAA " from "BBB" geometrically, and its
+    // spacer is flushed exactly there. An offset-only occupies-gap test missed it (offset 0
+    // sits numerically below the first half's ranges), so the same advance was painted
+    // twice: once as the spacer and once as a justify-style gap on the boundary.
+    const layout = layoutMerged();
+    const fragment = paragraphFragmentsOf(layout.pages[0]!)[0]!;
+    const line = fragment.lines[0]!;
+    // The records state the trap: the boundary gap between the halves IS the image advance.
+    const first = line.spans[0]!;
+    const second = line.spans[1]!;
+    expect(second.box.x - (first.box.x + first.box.width)).toBeGreaterThan(0.25);
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, {
+      scale: 1,
+      imageUrlPort: urlPort,
+      ariaHidden: false,
+    });
+    const painted = [
+      ...container
+        .querySelector<HTMLElement>('.docx-line')!
+        .querySelectorAll<HTMLElement>('.layout-run'),
+    ];
+    expect(painted.map((span) => span.textContent)).toEqual(['AAA ', 'BBB']);
+    // Only the spacer carries the advance — no stretch, no margin.
+    expect(painted[0]!.style.wordSpacing).toBe('');
+    expect(painted[1]!.style.marginLeft).toBe('');
+  });
+
+  test('a second-half drawing cannot zero a first-half justify gap it does not occupy', () => {
+    // Both halves count offsets from zero, so the second half's drawing offset can fall
+    // numerically inside a first-half span hole (here: a proposed deletion). Matching the
+    // offset without the paragraph zeroed the first half's justify gap, and every span
+    // after it painted a step too far left.
+    const tail = Array.from({ length: 18 }, (_, index) => `w${index}`).join(' ');
+    const xml =
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+      `xmlns:pic="${PIC}" xmlns:r="${R}"><w:body>` +
+      '<w:p><w:pPr><w:jc w:val="both"/><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
+      '<w:r><w:t xml:space="preserve">aa </w:t></w:r>' +
+      '<w:del w:id="2" w:author="A"><w:r><w:delText>DDD</w:delText></w:r></w:del>' +
+      '<w:r><w:t xml:space="preserve">cc </w:t></w:r></w:p>' +
+      '<w:p><w:pPr><w:jc w:val="both"/></w:pPr>' +
+      '<w:r><w:t xml:space="preserve">wxyz</w:t></w:r>' +
+      `${picture}` +
+      `<w:r><w:t xml:space="preserve"> ${tail}</w:t></w:r></w:p>` +
+      '</w:body></w:document>';
+    const result = readOoxmlPart(xml, {
+      name: OWNER,
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const layout = layoutSemanticDocument(result.part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      displayMode: 'proposed',
+      geometry: { width: 220, height: 400, margin: { top: 10, right: 10, bottom: 10, left: 10 } },
+      inlineDrawingLayout: {
+        ownerPartName: OWNER,
+        project: (node) =>
+          projectDrawing(node, { ownerPartName: OWNER, limits: DEFAULT_DRAWING_PROJECTION_LIMITS }),
+        resourceOf: () => READY,
+      },
+    });
+    const fragment = paragraphFragmentsOf(layout.pages[0]!)[0]!;
+    const line = fragment.lines[0]!;
+    expect(fragment.lines.length).toBeGreaterThan(1);
+    // The trap, stated as records: the first-half hole spans the deletion, and the
+    // second-half drawing's offset falls numerically inside it.
+    const aa = line.spans[0]!;
+    const cc = line.spans[1]!;
+    expect(aa.text).toBe('aa ');
+    expect(cc.text).toBe('cc ');
+    expect(cc.range.start).toBeGreaterThan(aa.range.end);
+    const drawing = (line.drawings ?? []).find((d) => d.paragraphId !== aa.range.paragraphId)!;
+    expect(drawing).toBeDefined();
+    expect(drawing.start).toBeGreaterThanOrEqual(aa.range.end);
+    expect(drawing.start).toBeLessThan(cc.range.start);
+    // The join line is justified, so a real gap sits between the first half's words.
+    const gap = cc.box.x - (aa.box.x + aa.box.width);
+    expect(gap).toBeGreaterThan(0.25);
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, {
+      scale: 1,
+      imageUrlPort: urlPort,
+      ariaHidden: false,
+    });
+    const painted = [
+      ...container
+        .querySelector<HTMLElement>('.docx-line')!
+        .querySelectorAll<HTMLElement>('.layout-run'),
+    ];
+    expect(painted[0]!.textContent).toBe('aa ');
+    // The gap survives: the first half's stretch carries it, drawing or no drawing.
+    expect(Number.parseFloat(painted[0]!.style.wordSpacing)).toBeCloseTo(gap, 5);
+  });
 });
