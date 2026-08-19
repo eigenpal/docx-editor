@@ -4774,21 +4774,22 @@ a.docx-hyperlink:focus-visible {
 
 /* Room for the review pane. The page centres inside the scroller's padding box, so
  * reserving the rail's width here shifts the sheet left by half of it and the document and
- * its cards read as one centred pair. Closed, only the marker strip is reserved.
+ * its cards read as one centred pair.
  *
- * The open reservation is a MEASUREMENT, not a constant: `DocxEditor.Viewport` publishes
- * `--docx-review-gutter` from the viewport's width and the page's rendered width, so on a
- * host too narrow for the page and the full column the gutter narrows to what is left
- * after the sheet keeps a little clearance (never below the marker strip) instead of
- * shoving the sheet against the left edge.
- * The 316px fallback is the full column — a 300px card column plus its 16px gutter — and
- * stands only while nothing has measured. */
+ * The reservation is a MEASUREMENT, not a constant: `DocxEditor.Viewport` publishes
+ * `--docx-review-gutter` (this edge) and `--docx-review-gutter-start` (mirrored onto the
+ * inline start, composed into the navigation rule below) from the viewport's width and the
+ * page's entitled width. A viewport with room for both keeps the full column; one without
+ * gets the marker strip on BOTH edges, so the sheet sits centred instead of parked beside
+ * a mostly-empty band. The fallbacks — the full column while open, the strip while
+ * closed — are what stood before the measurement existed, so an unmeasured host paints as
+ * it always did. */
 .docx-editor__scroll-container[data-review-pane='open'] {
   padding-right: var(--docx-review-gutter, 316px);
 }
 
 .docx-editor__scroll-container[data-review-pane='closed'] {
-  padding-right: 44px;
+  padding-right: var(--docx-review-gutter, 44px);
 }
 
 /* The review rail (`DocxEditor.Review` / the Vue equivalent): one card per pending decision,
@@ -4919,7 +4920,12 @@ a.docx-hyperlink:focus-visible {
  * as scrollbar-gutter above. */
 .docx-editor .docx-editor__scroll-container,
 .docx-editor.docx-editor__scroll-container {
-  padding-inline-start: var(--docx-nav-shift, 0px);
+  /* Two reservations compose on this edge: the navigation pane's displacement, and the
+   * review gutter's mirrored strip (`--docx-review-gutter-start`, 0 whenever the full
+   * column stands on the right). One declaration, because `padding-inline-start` and
+   * `padding-left` are the same slot in LTR and a second rule would just lose the
+   * specificity fight. */
+  padding-inline-start: calc(var(--docx-nav-shift, 0px) + var(--docx-review-gutter-start, 0px));
   transition: padding-inline-start 0.2s ease;
 }
 

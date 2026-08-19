@@ -49,8 +49,9 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   const paneOpen = useEditorState(selectPaneOpen);
   // How wide that gutter may actually be. A fixed reservation shoved the sheet against the
   // viewport's left edge on narrow hosts, with a mostly-empty band standing where the page
-  // should be; the measured value narrows to the leftover width instead (never below the
-  // marker strip), and the stylesheet consumes it through `--docx-review-gutter`.
+  // should be; the measured pair keeps the full column only while the viewport affords it
+  // and mirrors the marker strip onto both edges otherwise, so the sheet stays centred.
+  // The stylesheet consumes it through `--docx-review-gutter`/`--docx-review-gutter-start`.
   const reviewGutter = useReviewGutter();
   const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
@@ -100,7 +101,12 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
         {
           ...style,
           ['--docx-nav-shift' as string]: `${shift}px`,
-          ...(reserve ? { ['--docx-review-gutter' as string]: `${reviewGutter}px` } : {}),
+          ...(reserve
+            ? {
+                ['--docx-review-gutter' as string]: `${reviewGutter.inlineEnd}px`,
+                ['--docx-review-gutter-start' as string]: `${reviewGutter.inlineStart}px`,
+              }
+            : {}),
         } as CSSProperties
       }
     >

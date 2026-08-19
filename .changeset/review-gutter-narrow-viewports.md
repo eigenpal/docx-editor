@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': patch
 ---
 
-The review rail's gutter now narrows on viewports too small for the page and the full card column, so the document stays centered instead of pinned against the left edge.
+The review rail reserves its card column only while the viewport has room for it beside the page; on narrower viewports the marker strip mirrors onto both edges so the document stays centered.

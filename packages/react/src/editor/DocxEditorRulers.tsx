@@ -212,10 +212,12 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
     <div
       className="docx-ruler-frame"
       style={{
-        paddingInlineStart: shift,
+        // The review gutter's inline-start half composes with the navigation shift, the
+        // same way the scroll container adds the two into one `padding-inline-start`.
+        paddingInlineStart: shift + reserved.inlineStart,
         // PHYSICAL right, like the pane it mirrors: the review rail is anchored
         // `right: 0` and pads the scroller's `padding-right`, whatever the direction.
-        paddingRight: reserved,
+        paddingRight: reserved.inlineEnd,
       }}
     >
       <HorizontalRuler
@@ -275,7 +277,9 @@ export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactEleme
   // a zero width that means "unmeasured", not "no room".
   if (viewportWidth !== null && viewportWidth > 0 && pageSetup) {
     const pageWidthPx = twipsToPixels(pageSetup.pageWidthTwips) * zoom;
-    if (pageWidthPx > viewportWidth - shift - reserved) return null;
+    if (pageWidthPx > viewportWidth - shift - reserved.inlineStart - reserved.inlineEnd) {
+      return null;
+    }
   }
   return (
     <VerticalRuler
