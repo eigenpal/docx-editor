@@ -12,12 +12,12 @@ export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
 // @public
 export interface OverlayRect {
-    readonly author?: ReviewRectAuthor;
     readonly className?: string;
     // (undocumented)
     readonly height: number;
     // (undocumented)
     readonly pageIndex: number;
+    readonly reviewAuthor?: RevisionAuthor;
     // (undocumented)
     readonly width: number;
     // (undocumented)
@@ -60,15 +60,6 @@ export function paintSelectionOverlay(layer: HTMLElement, layout: SemanticLayout
 
 // @public
 export function paintSemanticLayout(container: HTMLElement, layout: SemanticLayout, options?: PaintOptions): void;
-
-// @public
-export interface ReviewRectAuthor {
-    readonly color: string;
-    // (undocumented)
-    readonly name: string;
-    // (undocumented)
-    readonly slot: number;
-}
 
 // @public
 export interface RevisionAuthor {

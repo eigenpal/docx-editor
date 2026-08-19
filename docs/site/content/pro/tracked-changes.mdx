@@ -362,10 +362,11 @@ Declaring a style for them works the same way:
 
 ### Per-author hooks in the document
 
-The painted text carries the same pair of hooks as the cards. Every revision span has
-`data-revision-author`, and it also has `data-revision-author-slot` — the same number the
-matching card carries — unless you mounted `ColorByChangeType` with no author
-declarations. Use them for anything the declaration's typed fields do not cover:
+The painted text carries the same pair of hooks as the cards, under a name of its own.
+Every revision span has `data-revision-author`, and it also has
+`data-revision-author-slot` — the same number the matching card carries — unless you
+mounted `ColorByChangeType` with no author declarations. Use them for anything the
+declaration's typed fields do not cover:
 
 ```css
 /* One author, by name. The value matches `w:author` exactly. */
@@ -384,6 +385,17 @@ The ink color and the underline or strikethrough are painted as inline styles, s
 stylesheet rule does not move them: set those with `color` on the declaration, or restyle
 the ramp tokens. Keep these rules metric-safe, because the engine measures the text it
 paints.
+
+Two attribute names cover the whole surface, and which one you write depends on what you
+are selecting:
+
+| Element                                                                        | Attributes                                          |
+| ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| A tracked-change span in the text                                              | `data-revision-author`, `data-revision-author-slot` |
+| Everything else with an author — cards, balloons, markers, and highlight bands | `data-author`, `data-author-slot`                   |
+
+The slot number is the same in both, so `--doc-review-author` resolves to one color for one
+person wherever they appear.
 
 ### Tint commented text by author
 

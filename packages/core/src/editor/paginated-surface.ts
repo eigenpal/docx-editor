@@ -73,6 +73,7 @@ import {
   authorSlotsOf,
   revisionAuthorsOf,
   reviewAuthorSlotsOf,
+  type RevisionAuthor,
 } from '../output/revision-presentation.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -654,7 +655,7 @@ export function mountPaginatedSurface(
     items: readonly ReviewItem[] | null;
     styles: typeof revisionStyles;
     value: ReadonlyMap<string, number>;
-    colors: ReadonlyMap<string, string>;
+    resolved: ReadonlyMap<string, RevisionAuthor>;
   } | null = null;
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
@@ -2782,7 +2783,7 @@ export function mountPaginatedSurface(
    */
   function reviewAuthorState(): {
     value: ReadonlyMap<string, number>;
-    colors: ReadonlyMap<string, string>;
+    resolved: ReadonlyMap<string, RevisionAuthor>;
   } {
     const items = session.reviewItems();
     const prior = authorRoster;
@@ -2806,13 +2807,14 @@ export function mountPaginatedSurface(
       previous.size === next.size &&
       [...next].every(([author, slot]) => previous.get(author) === slot);
     const value = unchanged ? previous : next;
-    // The colours move when the roster does OR when the host redeclares, and the band layer
-    // keys its reuse on this map's identity — so hand back the same one when neither moved.
-    const colors =
+    // The resolution moves when the roster does OR when the host redeclares, and the band
+    // layer keys its reuse on this map's identity — so hand back the same one when neither
+    // moved.
+    const resolved =
       prior !== null && unchanged && prior.styles === revisionStyles
-        ? prior.colors
-        : new Map(revisionAuthorsOf(value, revisionStyles).map((it) => [it.author, it.color]));
-    authorRoster = { layout: currentLayout, items, styles: revisionStyles, value, colors };
+        ? prior.resolved
+        : new Map(revisionAuthorsOf(value, revisionStyles).map((it) => [it.author, it]));
+    authorRoster = { layout: currentLayout, items, styles: revisionStyles, value, resolved };
     return authorRoster;
   }
 
@@ -2861,7 +2863,7 @@ export function mountPaginatedSurface(
 
   let commentHighlightLayout: SemanticLayout | null = null;
   let commentHighlightActiveKey: string | null | undefined;
-  let commentHighlightAuthors: ReadonlyMap<string, string> | null = null;
+  let commentHighlightAuthors: ReadonlyMap<string, RevisionAuthor> | null = null;
 
   function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();
@@ -2875,7 +2877,7 @@ export function mountPaginatedSurface(
       !force &&
       commentHighlightLayout === currentLayout &&
       commentHighlightActiveKey === activeKey &&
-      commentHighlightAuthors === roster.colors
+      commentHighlightAuthors === roster.resolved
     ) {
       return;
     }
@@ -2891,14 +2893,8 @@ export function mountPaginatedSurface(
       // covering several sites, so the author comes from the decision, as the class does.
       const item = byKey.get(rect.key.split(RANGE_SUFFIX)[0]!);
       const name = item ? reviewItemAuthor(item) : '';
-      const slot = name === '' ? undefined : roster.value.get(name);
-      bands.push({
-        ...rect,
-        className,
-        ...(name !== '' && slot !== undefined
-          ? { author: { name, slot, color: roster.colors.get(name) ?? '' } }
-          : {}),
-      });
+      const reviewAuthor = name === '' ? undefined : roster.resolved.get(name);
+      bands.push({ ...rect, className, ...(reviewAuthor ? { reviewAuthor } : {}) });
     }
     paintSelectionOverlay(commentLayer, currentLayout, bands, {
       scale,
@@ -2906,7 +2902,7 @@ export function mountPaginatedSurface(
     });
     commentHighlightLayout = currentLayout;
     commentHighlightActiveKey = activeKey;
-    commentHighlightAuthors = roster.colors;
+    commentHighlightAuthors = roster.resolved;
   }
 
   /** Draw the selected cells, or clear the layer when nothing is selected that way. */

@@ -9,6 +9,7 @@
 // the page painter: geometry in, elements out, nothing measured back.
 
 import type { SemanticLayout } from '../layout/semantic-records.ts';
+import type { RevisionAuthor } from './revision-presentation.ts';
 
 /** A rectangle in page-content coordinates, on a named page. */
 export interface OverlayRect {
@@ -33,16 +34,11 @@ export interface OverlayRect {
    * reviewer writes one selector that reaches both the card and the text it annotates. The
    * band's DEFAULT colour does not change with the author (Word keeps every comment yellow);
    * this only makes the author reachable from CSS.
+   *
+   * The SAME resolved author `getRevisionAuthors` hands back, rather than a shape of this
+   * layer's own: one person is one object everywhere the review surface describes them.
    */
-  readonly author?: ReviewRectAuthor;
-}
-
-/** The author hooks one overlay rectangle carries. See {@link OverlayRect.author}. */
-export interface ReviewRectAuthor {
-  readonly name: string;
-  readonly slot: number;
-  /** Resolved colour — a host declaration when there is one, otherwise the ramp slot. */
-  readonly color: string;
+  readonly reviewAuthor?: RevisionAuthor;
 }
 
 /**
@@ -104,10 +100,10 @@ export function paintSelectionOverlay(
     // Author hooks, when the rect carries them. `setAttribute`/`dataset` with the raw value —
     // never interpolated into markup — because `w:author` is attacker-controlled; the colour
     // is engine-resolved or host-declared, and `setProperty` drops a value it cannot parse.
-    if (rect.author) {
-      element.dataset.author = rect.author.name;
-      element.dataset.authorSlot = String(rect.author.slot);
-      element.style.setProperty('--doc-review-author', rect.author.color);
+    if (rect.reviewAuthor) {
+      element.dataset.author = rect.reviewAuthor.author;
+      element.dataset.authorSlot = String(rect.reviewAuthor.slot);
+      element.style.setProperty('--doc-review-author', rect.reviewAuthor.color);
     }
     painted.push(element);
   }
