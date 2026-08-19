@@ -1313,7 +1313,9 @@ export const ContextMenuItem: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
-}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     label: {
         type: StringConstructor;
         required: true;
