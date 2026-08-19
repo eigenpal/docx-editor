@@ -45,7 +45,7 @@ const COMPACT_CARD_INSET = 12;
  * them. Rendering every card was the toggle's lag: two hundred cards' worth of DOM, plus a
  * `top` transition on each, in one frame.
  */
-const RAIL_OVERSCAN = 600;
+export const RAIL_OVERSCAN = 600;
 
 /** The one engine read the measurement needs. */
 interface RenderScaleSource {
@@ -71,12 +71,19 @@ interface RenderScaleSource {
  * anchor changes where its card belongs, and zoom changes every anchor at once. `mounted`
  * must be false while the rail element does not exist (document absent, `hidden`), so a
  * binding pass that ran against the null ref runs again once there is a rail to measure.
+ *
+ * `trackScroll` re-measures on the scroller's own scroll, rAF-coalesced. `top` and `left`
+ * never need it — the rect delta cancels the scroll term, so they are scroll-invariant —
+ * but `compactCardLeft` is genuinely scroll-VARIANT (the viewport's right edge moves
+ * through content space), and the compact rail is exactly the regime where the page can
+ * overflow horizontally. Off outside compact, so ordinary scrolling costs no rect reads.
  */
 export function useRailMetrics(
   editor: RenderScaleSource | null,
   railRef: React.RefObject<HTMLElement | null>,
   remeasure: unknown,
-  mounted: boolean
+  mounted: boolean,
+  trackScroll = false
 ): RailMetrics {
   const [metrics, setMetrics] = useState<RailMetrics>(INITIAL_METRICS);
   useEffect(() => {
@@ -122,8 +129,22 @@ export function useRailMetrics(
     const observer = new ResizeObserver(sync);
     if (parent) observer.observe(parent);
     if (surface) observer.observe(surface);
-    return () => observer.disconnect();
-  }, [editor, railRef, remeasure, mounted]);
+    if (!trackScroll || !parent) return () => observer.disconnect();
+    let frame = 0;
+    const onScroll = (): void => {
+      if (frame === 0)
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          sync();
+        });
+    };
+    parent.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      if (frame !== 0) cancelAnimationFrame(frame);
+      parent.removeEventListener('scroll', onScroll);
+      observer.disconnect();
+    };
+  }, [editor, railRef, remeasure, mounted, trackScroll]);
   return metrics;
 }
 

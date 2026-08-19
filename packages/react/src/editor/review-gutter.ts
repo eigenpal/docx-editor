@@ -30,7 +30,7 @@
 // "cramped". Two components deciding independently is how a ruler ends up an inch off
 // the page it is measuring, so they all read `useReviewGutter`.
 
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { ZOOM_MAX } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
@@ -171,8 +171,14 @@ export function useViewportClientWidth(): number | null {
 /**
  * The gutter the review rail reserves right now: nothing with no rail mounted, and the
  * measured `reviewGutter` pair otherwise. The one source for the scroll container's
- * paddings and both rulers. The result is reference-stable — the pure function answers
- * with one of three shared constants — so consumers may depend on it directly.
+ * paddings and both rulers.
+ *
+ * The result is reference-stable — the pure function answers with one of three shared
+ * constants — and the hook stores THAT, never the raw width: a resize sweeps through
+ * hundreds of widths that all resolve to the same constant, and holding the width as
+ * state re-rendered every consumer (the review rail among them) once per pixel. Storing
+ * the derived constant lets the state setter bail on identity, so consumers re-render
+ * only when the reservation actually flips.
  */
 export function useReviewGutter(): ReviewGutter {
   // The SNAPSHOT, not the review hook — this needs a boolean and the page's width, not
@@ -182,7 +188,7 @@ export function useReviewGutter(): ReviewGutter {
     selectGutterGeometry,
     sameGutterGeometry
   );
-  const viewportWidth = useViewportClientWidth();
+  const viewport = useNavigationViewportElement();
   // The snapshot reports `pageSetup` as null on some ticks even with a document loaded,
   // and a gutter derived from one of those would snap to the full column and back inside
   // one frame. The last width a document actually had is the honest answer for a tick
@@ -192,16 +198,32 @@ export function useReviewGutter(): ReviewGutter {
   const pageWidthTwips = pageSetup?.pageWidthTwips ?? lastPageWidthTwips.current;
 
   const mounted = (rail?.mounted ?? 0) > 0;
-  return useMemo(() => {
-    if (!mounted) return NO_GUTTER;
-    return reviewGutter({
-      open: reviewPaneOpen,
-      viewportWidth: viewportWidth ?? 0,
-      pageWidthPx:
-        pageWidthTwips === null || entitledZoom === null
-          ? 0
-          : twipsToPixels(pageWidthTwips) * entitledZoom,
-      docked: entitledZoom === null,
-    });
-  }, [mounted, reviewPaneOpen, viewportWidth, pageWidthTwips, entitledZoom]);
+  const compute = useCallback(
+    (width: number | null): ReviewGutter => {
+      if (!mounted) return NO_GUTTER;
+      return reviewGutter({
+        open: reviewPaneOpen,
+        viewportWidth: width ?? 0,
+        pageWidthPx:
+          pageWidthTwips === null || entitledZoom === null
+            ? 0
+            : twipsToPixels(pageWidthTwips) * entitledZoom,
+        docked: entitledZoom === null,
+      });
+    },
+    [mounted, reviewPaneOpen, pageWidthTwips, entitledZoom]
+  );
+
+  const [gutter, setGutter] = useState<ReviewGutter>(() =>
+    compute(viewport ? viewport.clientWidth : null)
+  );
+  useEffect(() => {
+    const sync = () => setGutter(compute(viewport ? viewport.clientWidth : null));
+    sync();
+    if (!viewport || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(sync);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [viewport, compute]);
+  return gutter;
 }

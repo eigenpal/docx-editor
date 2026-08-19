@@ -9,6 +9,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import type { ReviewPartProps } from './DocxEditorReview.tsx';
 import type { ReviewItemView } from './useReview.ts';
+import { COMPACT_CARD_WIDTH } from './use-rail-geometry.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => {
@@ -74,7 +75,11 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     return (
       <div
         className={`docx-review__slot${className ? ` ${className}` : ''}${left === null ? '' : ' docx-review__slot--compact'}`}
-        style={{ position: 'absolute', top, ...(left === null ? {} : { left, width: 300 }) }}
+        style={{
+          position: 'absolute',
+          top,
+          ...(left === null ? {} : { left, width: COMPACT_CARD_WIDTH }),
+        }}
         ref={(node) => {
           measure(node, deps.composeKey);
         }}

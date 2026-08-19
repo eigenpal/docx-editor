@@ -2637,9 +2637,14 @@ a.docx-hyperlink:focus-visible {
 /* The pane gutters reach the ruler as PADDING on its frame and the page as the scroller's
    padding. Both move by the same distance, so both have to move on the same curve —
    without this the sheet glided and the ruler above it snapped, and for the length of the
-   animation the ruler measured a page that was no longer under it. */
+   animation the ruler measured a page that was no longer under it.
+
+   The INLINE-START edge only, because that is the only edge the scroller animates: the
+   scroller's `padding-right` (the review column) deliberately snaps, so a ruler easing
+   its right padding for 0.2s measured a page that had already jumped. One edge per curve,
+   both elements on the same one. */
 .docx-ruler-frame {
-  transition: padding 0.2s ease;
+  transition: padding-inline-start 0.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4819,6 +4824,14 @@ a.docx-hyperlink:focus-visible {
  * has to separate it from the ink underneath. Its slot is positioned inline by the rail. */
 .docx-review__slot--compact .docx-review__card {
   box-shadow: var(--doc-shadow-lg);
+}
+
+/* The column's cards print BESIDE the sheet, which is harmless; the compact card floats
+ * OVER it, which would print on top of the document's own ink. Screen chrome only. */
+@media print {
+  .docx-review__slot--compact {
+    display: none !important;
+  }
 }
 
 /* The "comment on this" button. Pulled OUT of the card column, onto the page's own edge:

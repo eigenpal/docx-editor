@@ -64,7 +64,12 @@ import {
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition';
-import { COMPACT_CARD_WIDTH, useRailMetrics, useRailWindow } from './use-rail-geometry';
+import {
+  COMPACT_CARD_WIDTH,
+  RAIL_OVERSCAN,
+  useRailMetrics,
+  useRailWindow,
+} from './use-rail-geometry';
 import { useReviewSlotSizing } from './use-review-slot-sizing';
 import { useReview, type ReviewItemView } from './useReview';
 import {
@@ -496,7 +501,7 @@ function ReviewRoot({
 
   // Where the rail sits and which band of the scroller is on screen — the DOM-measurement
   // half of the rail, in `use-rail-geometry.ts`.
-  const metrics = useRailMetrics(editor, railRef, items, !documentAbsent && !hidden);
+  const metrics = useRailMetrics(editor, railRef, items, !documentAbsent && !hidden, compact);
   const window_ = useRailWindow(editor, railRef, !documentAbsent && !hidden);
 
   // Clicking the canvas AROUND the page closes the open item. The caret decides everything
@@ -619,10 +624,14 @@ function ReviewRoot({
     }
     return { stacked: positions, collapsedKeys: collapsed };
   }, [stackInput, estimatedHeights, gap, metrics.scale]);
+  // Compact takes the RAW anchor: the stacking run pushes the box below the estimated
+  // heights of cards that, compact, render as small markers — phantom content, so a box
+  // stacked below it floated far under the selection it is about.
   const composeTop =
     composeAnchorY === null
       ? null
-      : metrics.top + (stacked.get(COMPOSE_KEY) ?? composeAnchorY) * metrics.scale;
+      : metrics.top +
+        (compact ? composeAnchorY : (stacked.get(COMPOSE_KEY) ?? composeAnchorY)) * metrics.scale;
 
   const cardClassName = card?.className;
   // The facade's resolved roster (reference-stable, live through `setRevisionStyles`),
@@ -747,26 +756,49 @@ function ReviewRoot({
   const activeRoot = compact
     ? (roots.find((entry) => entry.key === review.activeKey) ?? null)
     : null;
+  // An active item whose page has produced no placement yet has no anchor; the card still
+  // has to appear (the click asked for it), so it takes the top of the visible band the
+  // way the expanded list keeps unplaced cards in the column.
+  const compactTop =
+    activeRoot === null
+      ? null
+      : activeRoot.anchorY !== null
+        ? metrics.top + activeRoot.anchorY * metrics.scale
+        : window_ !== null
+          ? window_.top + RAIL_OVERSCAN + 24
+          : null;
+  // The same card resolution as ReviewList: a host's `Card` part (or render prop) must
+  // reach the floating card too, or compact silently swaps in the packaged card the host
+  // replaced. With `preset={false}` and no Card part there is no card to float — the host
+  // opted out of packaged defaults. Under `asChild` the child is the rail ELEMENT, never
+  // a card template, so the packaged card stands there (as it does in that branch's list).
+  const cardTemplate = asChild ? null : rootChildren.rest;
+  const listParts =
+    typeof cardTemplate === 'function' ? null : partitionReviewChildren(cardTemplate, 'list');
+  const compactCardInner =
+    typeof cardTemplate === 'function' ? (
+      activeRoot && cardTemplate(activeRoot)
+    ) : listParts?.parts.Card && isValidElement<{ className?: string }>(listParts.parts.Card) ? (
+      cloneReviewCard(listParts.parts.Card, cardClassName)
+    ) : preset ? (
+      <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
+        {listParts?.rest}
+      </ReviewCard>
+    ) : null;
   const compactCard =
-    activeRoot && activeRoot.anchorY !== null && metrics.compactCardLeft !== null ? (
+    activeRoot && compactTop !== null && metrics.compactCardLeft !== null && compactCardInner ? (
       <ReviewItemContext.Provider value={activeRoot}>
         <div
           className="docx-review__slot docx-review__slot--compact"
           data-testid="review-compact-card"
           style={{
             position: 'absolute',
-            top: metrics.top + activeRoot.anchorY * metrics.scale,
+            top: compactTop,
             left: metrics.compactCardLeft,
             width: COMPACT_CARD_WIDTH,
           }}
         >
-          {typeof rootChildren.rest === 'function' ? (
-            rootChildren.rest(activeRoot)
-          ) : (
-            <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
-              {partitionReviewChildren(rootChildren.rest, 'list').rest}
-            </ReviewCard>
-          )}
+          {compactCardInner}
         </div>
       </ReviewItemContext.Provider>
     ) : null;
@@ -803,15 +835,25 @@ function ReviewRoot({
             children as React.ReactElement<{ children?: ReactNode }>,
             undefined,
             (children as React.ReactElement<{ children?: ReactNode }>).props.children,
+            // The same presentation switch as the packaged element: a compact rail is
+            // 32px wide (`:not([data-open])`), and mounting the full list inside it
+            // rendered every card squeezed to that width over the page.
             preset ? (
-              <ReviewList
-                stack={stack}
-                positions={stacked}
-                collapsed={collapsedKeys}
-                scale={metrics.scale}
-                offset={metrics.top}
-                window={window_}
-              />
+              expanded ? (
+                <ReviewList
+                  stack={stack}
+                  positions={stacked}
+                  collapsed={collapsedKeys}
+                  scale={metrics.scale}
+                  offset={metrics.top}
+                  window={window_}
+                />
+              ) : (
+                <>
+                  {markers}
+                  {compactCard}
+                </>
+              )
             ) : null,
             affordances
           )}
