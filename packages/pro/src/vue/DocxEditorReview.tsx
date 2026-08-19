@@ -174,7 +174,12 @@ const ReviewRoot = defineComponent({
     const railRef = shallowRef<HTMLElement | null>(null);
     const railRegistry = inject(
       ReviewRailContext,
-      shallowRef<ReviewRailRegistry>({ mounted: 0, register: () => () => {} })
+      shallowRef<ReviewRailRegistry>({
+        mounted: 0,
+        register: () => () => {},
+        registerCommentDraft: () => () => {},
+        requestCommentDraft: () => false,
+      })
     );
     const mounted = ref(false);
     let unregisterRail: (() => void) | undefined;
@@ -370,6 +375,17 @@ const ReviewRoot = defineComponent({
       draftAnchorY.value = anchorY ?? reviewHook.selectionAnchorY.value ?? 0;
       instance?.proxy?.$forceUpdate();
     };
+    let unregisterCommentDraft: (() => void) | undefined;
+    const syncCommentDraftRegistration = () => {
+      if (!mounted.value || props.hidden) {
+        unregisterCommentDraft?.();
+        unregisterCommentDraft = undefined;
+        return;
+      }
+      unregisterCommentDraft ??= railRegistry.value.registerCommentDraft(beginDraft);
+    };
+    onMounted(syncCommentDraftRegistration);
+    watch(() => props.hidden, syncCommentDraftRegistration);
     const endDraft = () => {
       releaseRetainedSelection();
       editorRef.value?.focus();
@@ -388,6 +404,8 @@ const ReviewRoot = defineComponent({
       mounted.value = false;
       unregisterRail?.();
       unregisterRail = undefined;
+      unregisterCommentDraft?.();
+      unregisterCommentDraft = undefined;
       releaseRetainedSelection();
     });
 

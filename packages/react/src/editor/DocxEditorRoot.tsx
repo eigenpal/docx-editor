@@ -311,12 +311,26 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // A rail registers itself here so the viewport only reserves a gutter when one is
   // actually composed in. See `ReviewRailContext`.
   const [rails, setRails] = useState(0);
+  const commentDraftHandlers = useRef<Array<() => void>>([]);
   const railRegistry = useMemo<ReviewRailRegistry>(
     () => ({
       mounted: rails,
       register: () => {
         setRails((count) => count + 1);
         return () => setRails((count) => Math.max(0, count - 1));
+      },
+      registerCommentDraft: (handler) => {
+        commentDraftHandlers.current.push(handler);
+        return () => {
+          const index = commentDraftHandlers.current.indexOf(handler);
+          if (index !== -1) commentDraftHandlers.current.splice(index, 1);
+        };
+      },
+      requestCommentDraft: () => {
+        const handler = commentDraftHandlers.current.at(-1);
+        if (!handler) return false;
+        handler();
+        return true;
       },
     }),
     [rails]

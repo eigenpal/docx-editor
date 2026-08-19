@@ -24,6 +24,8 @@ export function useEditorStateTick(): ShallowRef<number> {
 export interface ReviewRailRegistry {
   readonly mounted: number;
   readonly register: () => () => void;
+  readonly registerCommentDraft: (handler: () => void) => () => void;
+  readonly requestCommentDraft: () => boolean;
 }
 
 /** @public */
@@ -32,6 +34,11 @@ export const ReviewRailContext: InjectionKey<ShallowRef<ReviewRailRegistry>> =
 
 /** @internal */
 export function useReviewRailRegistry(): ShallowRef<ReviewRailRegistry> {
-  const fallback = shallowRef<ReviewRailRegistry>({ mounted: 0, register: () => () => {} });
+  const fallback = shallowRef<ReviewRailRegistry>({
+    mounted: 0,
+    register: () => () => {},
+    registerCommentDraft: () => () => {},
+    requestCommentDraft: () => false,
+  });
   return inject(ReviewRailContext, fallback);
 }

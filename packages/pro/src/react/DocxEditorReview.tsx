@@ -540,6 +540,10 @@ function ReviewRoot({
     setReviewPaneOpen(true);
     setDraftAnchorY(editor.getSelectionPlacement()?.anchorY ?? null);
   }, [editor, readOnly, setReviewPaneOpen]);
+  useEffect(() => {
+    if (hidden) return undefined;
+    return railRegistry?.registerCommentDraft(beginDraft);
+  }, [beginDraft, hidden, railRegistry]);
   const endDraft = useCallback(() => {
     editor?.releaseSelection();
     setDraftAnchorY(null);

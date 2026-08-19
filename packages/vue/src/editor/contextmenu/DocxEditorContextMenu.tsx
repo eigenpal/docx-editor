@@ -16,10 +16,15 @@ import {
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
-import { useDocxEditor, useEditorStateTick } from '../context';
+import { useDocxEditor, useEditorStateTick, useReviewRailRegistry } from '../context';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
-import { MenuContext, type MenuContextValue } from '../menu/menu-context';
+import {
+  MenuContext,
+  useMenuContext,
+  useMenuLabel,
+  type MenuContextValue,
+} from '../menu/menu-context';
 import { focusBy, focusEdge, panelItems } from '../menu/menu-keyboard';
 import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../menu/parts';
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
@@ -43,6 +48,7 @@ import {
   useTableContextMenuVisible,
 } from './parts';
 import { useScopeClassName } from '../scope-context';
+import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 
 const VIEWPORT_INSET = 8;
 
@@ -59,6 +65,37 @@ export interface DocxEditorContextMenuProps {
 type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => DocxEditorChildren }
   | { readonly kind: 'separator'; readonly id: string };
+
+const ContextMenuAddComment = defineComponent({
+  name: 'ContextMenuAddComment',
+  setup() {
+    const editorRef = useDocxEditor();
+    const rail = useReviewRailRegistry();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    return () => {
+      const editor = editorRef.value;
+      const gate = editor?.can({ type: 'toggleReviewPane' });
+      const disabled =
+        !gate?.ok || rail.value.mounted === 0 || editor?.getSelectionPlacement() === null;
+      const control = chromeControlForSlot('review.comments');
+      return (
+        <MenuRow
+          icon={chromeIcon(control?.paths) ?? undefined}
+          {...{ rowSlot: 'review.comments' }}
+          disabled={disabled}
+          title={gate && !gate.ok ? gate.reason : undefined}
+          selectHandler={() => {
+            if (!rail.value.requestCommentDraft()) return;
+            menu.value.setOpenMenu(null);
+          }}
+        >
+          {label('comments.addComment')}
+        </MenuRow>
+      );
+    };
+  },
+});
 
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
@@ -81,12 +118,7 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   {
     kind: 'row',
     id: 'review.comments',
-    render: () => (
-      <MenuItem
-        {...({ slot: 'review.comments' } as { slot: 'review.comments' })}
-        labelKey="comments.addComment"
-      />
-    ),
+    render: () => <ContextMenuAddComment />,
   },
 ];
 

@@ -114,9 +114,25 @@ export function useDocxEditorRootOwner(
   });
 
   const railCount = shallowRef(0);
+  const commentDraftHandlers: Array<() => void> = [];
+  const registerCommentDraft = (handler: () => void) => {
+    commentDraftHandlers.push(handler);
+    return () => {
+      const index = commentDraftHandlers.indexOf(handler);
+      if (index !== -1) commentDraftHandlers.splice(index, 1);
+    };
+  };
+  const requestCommentDraft = () => {
+    const handler = commentDraftHandlers.at(-1);
+    if (!handler) return false;
+    handler();
+    return true;
+  };
   const railRegistry = shallowRef<ReviewRailRegistry>({
     mounted: 0,
     register: () => () => {},
+    registerCommentDraft,
+    requestCommentDraft,
   });
   watch(
     railCount,
@@ -129,6 +145,8 @@ export function useDocxEditorRootOwner(
             railCount.value = Math.max(0, railCount.value - 1);
           };
         },
+        registerCommentDraft,
+        requestCommentDraft,
       };
     },
     { immediate: true }

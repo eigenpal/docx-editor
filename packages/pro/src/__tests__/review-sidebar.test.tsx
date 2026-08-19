@@ -16,7 +16,12 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { DocxEditorRoot, DocxEditorViewport, DocxEditorContent } from '@docx-editor.dev/react';
+import {
+  DocxEditorContextMenu,
+  DocxEditorRoot,
+  DocxEditorViewport,
+  DocxEditorContent,
+} from '@docx-editor.dev/react';
 import { DocxEditorReview, useReview } from '../react/index.ts';
 import { reviewModule } from '../index.ts';
 
@@ -91,6 +96,49 @@ afterEach(() => {
 });
 
 describe('the review sidebar', () => {
+  test('right-click Add a comment starts a draft instead of only toggling the pane', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorContextMenu t={(key) => key} />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const editor = instance!;
+    await act(async () => {
+      editor.surface!.selectAll();
+      editor.exec({ type: 'toggleReviewPane' });
+    });
+    expect(editor.isReviewPaneOpen()).toBe(false);
+
+    const surface = view.container.querySelector('.docx-paginated-surface');
+    if (!surface) throw new Error('no painted surface');
+    await act(async () => {
+      fireEvent.contextMenu(surface, { clientX: 100, clientY: 100, button: 2 });
+    });
+    const row = view.container.querySelector(
+      '[data-slot="review.comments"]'
+    ) as HTMLButtonElement | null;
+    expect(row).not.toBeNull();
+    expect(row?.getAttribute('aria-disabled')).not.toBe('true');
+    await act(async () => {
+      row?.click();
+    });
+
+    expect(editor.isReviewPaneOpen()).toBe(true);
+    expect(view.queryByRole('menu')).toBeNull();
+    expect(view.getByTestId('review-draft')).toBeDefined();
+  });
+
   test('opens when the add-comment affordance starts a draft', async () => {
     let instance: DocxEditorInstance | null = null;
     const view = render(

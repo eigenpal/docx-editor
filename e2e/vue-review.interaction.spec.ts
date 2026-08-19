@@ -51,6 +51,22 @@ test.describe('Vue review chrome', () => {
     await expect(page.getByRole('menuitem', { name: /Add a comment/i })).toBeVisible();
   });
 
+  test('right-click Add a comment opens a draft instead of only toggling the pane', async ({
+    page,
+  }) => {
+    await waitForEditor(page, CLEAN_URL);
+    const scroller = page.locator(SCROLLER);
+    await scroller.click();
+    await page.keyboard.press('Control+A');
+    await openContextMenu(page);
+    const addComment = page.getByRole('menuitem', { name: /Add a comment/i });
+    await expect(addComment).not.toHaveAttribute('aria-disabled', 'true');
+    await addComment.click();
+    await expect(page.locator('.docx-contextmenu')).toHaveCount(0);
+    await expect(page.locator('[data-testid="review-rail"]')).toHaveAttribute('data-open', '');
+    await expect(page.locator('[data-testid="review-draft"]')).toBeVisible();
+  });
+
   test('rulers match the page and Page Setup stays a dialog', async ({ page }) => {
     await waitForEditor(page, CLEAN_URL);
     const pageBox = await page.locator('.docx-page').first().boundingBox();

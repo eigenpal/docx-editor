@@ -38,6 +38,8 @@ export function useDocxEditor(): DocxEditorInstance | null {
 export interface ReviewRailRegistry {
   readonly mounted: number;
   readonly register: () => () => void;
+  readonly registerCommentDraft: (handler: () => void) => () => void;
+  readonly requestCommentDraft: () => boolean;
 }
 
 export const ReviewRailContext = createContext<ReviewRailRegistry | null>(null);
