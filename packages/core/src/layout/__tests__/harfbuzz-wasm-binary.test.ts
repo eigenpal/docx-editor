@@ -103,6 +103,55 @@ describe('harfBuzzWasmUnavailableDiagnostic', () => {
   });
 });
 
+describe('setHarfBuzzWasmUrl with two disagreeing callers before the first read', () => {
+  test('the conflict is said out loud and the later caller wins', () => {
+    // Silent last-write-wins hid a real integration bug: two modules configuring one host
+    // with different locations, and whichever loaded second decided the outcome.
+    setHarfBuzzWasmUrl('https://app.example/a/harfbuzz.wasm');
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      setHarfBuzzWasmUrl(SERVED_URL);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]?.[0])).toContain('later one wins');
+    } finally {
+      warn.mockRestore();
+    }
+    expect(resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL)).toBe(SERVED_URL);
+  });
+});
+
+describe('URL redaction in diagnostics', () => {
+  test('a signed URL loses its query string before reaching an error message', () => {
+    // Signed asset URLs carry their credential in the query, and diagnostics end up in
+    // logs and bug reports.
+    setHarfBuzzWasmUrl('https://cdn.example/assets/harfbuzz.wasm?token=SECRET123');
+    resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL);
+
+    const diagnostic = harfBuzzWasmUnavailableDiagnostic(new Error('404'));
+
+    expect(diagnostic).not.toContain('SECRET123');
+    expect(diagnostic).toContain('https://cdn.example/assets/harfbuzz.wasm');
+  });
+});
+
+describe('a Node runtime without process.getBuiltinModule', () => {
+  test('is told to upgrade Node, not to serve a WASM file', () => {
+    // The shim's throw is the marker. Serving a binary cannot fix a missing builtin, so
+    // the standard remedy would send that consumer chasing an asset problem they do not
+    // have.
+    const diagnostic = harfBuzzWasmUnavailableDiagnostic(
+      new Error(
+        "Aborted(Error: createRequire is unavailable: this build reaches Node's `module` " +
+          'through process.getBuiltinModule, which needs Node 20.16+ or 22.3+.)'
+      )
+    );
+
+    expect(diagnostic).toContain('Upgrade Node');
+    expect(diagnostic).toContain('does not apply');
+    expect(diagnostic).not.toContain('serve `@docx-editor.dev/core/harfbuzz.wasm` yourself');
+  });
+});
+
 describe('harfBuzzVersionMismatchDiagnostic', () => {
   test('a self-hosted copy is told which file went stale and what to do', () => {
     // The second step of the workflow the docs send esbuild/Bun consumers down: copy the

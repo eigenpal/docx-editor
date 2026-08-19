@@ -48,7 +48,11 @@ export default defineConfig({
       cssFileName: 'docx-editor-vue',
     },
     rollupOptions: {
-      external: (id) => id === 'vue' || id === 'emf-converter',
+      // harfbuzzjs must stay external HERE even though core's ESM build inlines it:
+      // this build inlines core from SOURCE and emits a CJS variant, and harfbuzzjs's
+      // entry is a top-level await, which CJS cannot carry. Removing this marker once
+      // as "dead config" broke the build outright.
+      external: (id) => id === 'vue' || id === 'harfbuzzjs' || id === 'emf-converter',
     },
     emptyOutDir: true,
   },

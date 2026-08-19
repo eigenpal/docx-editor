@@ -27,6 +27,23 @@ const wasmUrlSupported = (): boolean =>
 let overrideUrl: string | null = null;
 let readUrl: string | null = null;
 
+/**
+ * A URL safe to put in an error message or the console.
+ *
+ * Signed asset URLs carry their credential in the query string, and diagnostics end up in
+ * logs and bug reports. The path is what a reader needs to recognise the file; the query
+ * and fragment are dropped, with a marker so a redacted URL is not mistaken for the whole.
+ */
+function redact(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.search || parsed.hash ? `${parsed.origin}${parsed.pathname}…` : url;
+  } catch {
+    const cut = url.search(/[?#]/);
+    return cut === -1 ? url : `${url.slice(0, cut)}…`;
+  }
+}
+
 /** Absolute where possible, so two spellings of one location compare equal. */
 function normalize(url: string | URL): string {
   if (url instanceof URL) return url.href;
@@ -91,11 +108,20 @@ export function setHarfBuzzWasmUrl(url: string | URL): void {
     // second exception — the module cache pins the runtime either way, so the honest
     // answer is "noted, reload".
     console.warn(
-      `setHarfBuzzWasmUrl: the shaper already read its binary location from ${readUrl}, ` +
+      `setHarfBuzzWasmUrl: the shaper already read its binary location from ${redact(readUrl)}, ` +
         'so this call has no effect in the current session. Move the call before the first ' +
         'editor is created and reload the page.'
     );
     return;
+  }
+  if (overrideUrl !== null && overrideUrl !== next) {
+    // Two modules configuring one host with DIFFERENT locations is a programming error worth
+    // hearing about, but not worth crashing over: last write wins, said out loud, matching
+    // how the after-read case is handled.
+    console.warn(
+      `setHarfBuzzWasmUrl: replacing ${redact(overrideUrl)} with ${redact(next)}. ` +
+        'Two callers are configuring the shaper with different URLs; the later one wins.'
+    );
   }
   overrideUrl = next;
 }
@@ -120,7 +146,17 @@ export function resolveHarfBuzzWasmBinaryUrl(bundlerResolvedUrl: string): string
  */
 export function harfBuzzWasmUnavailableDiagnostic(cause: unknown): string {
   const detail = cause instanceof Error ? cause.message : String(cause);
-  const location = readUrl === null ? 'its bundled location' : readUrl;
+  // The one failure in this class that no URL can fix: the Node running this build predates
+  // `process.getBuiltinModule` (the shim's message is the marker). Advising that consumer to
+  // serve a WASM file would send them chasing an asset problem they do not have.
+  if (/process\.getBuiltinModule/.test(detail)) {
+    return (
+      'the text shaper cannot start on this Node version: the ESM build reaches Node ' +
+      'builtins through `process.getBuiltinModule`, added in Node 20.16 and 22.3. Upgrade ' +
+      `Node; \`setHarfBuzzWasmUrl\` does not apply here. (${detail})`
+    );
+  }
+  const location = readUrl === null ? 'its bundled location' : redact(readUrl);
   return (
     `the HarfBuzz WASM binary could not be loaded from ${location}. If this bundler does ` +
     'not emit `new URL(..., import.meta.url)` assets (esbuild, Bun, and library builds ' +
@@ -144,7 +180,7 @@ export function harfBuzzVersionMismatchDiagnostic(expected: string, loaded: stri
     return `${mismatch}. The bundled binary does not match this build of the engine.`;
   }
   return (
-    `${mismatch}. The copy served at ${overrideUrl} is from a different version of ` +
+    `${mismatch}. The copy served at ${redact(overrideUrl)} is from a different version of ` +
     '`@docx-editor.dev/core`. Re-copy `@docx-editor.dev/core/harfbuzz.wasm` from the ' +
     'installed package into your served assets, and reload the page.'
   );

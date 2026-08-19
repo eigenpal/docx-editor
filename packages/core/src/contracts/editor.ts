@@ -163,14 +163,8 @@ export interface FontConfiguration {
  *
  * Distinguished rather than collapsed because the responses differ: `overLimit` and `malformed`
  * are the caller's own bytes, while `forbidden` and `hashMismatch` mean the source was not what
- * it claimed and the load should not be retried.
- *
- * `wasmUnavailable` is the odd one out and the reason it is separate: every other code is a
- * DOCUMENT problem, reported per face, while that one means the text shaper's WASM never
- * loaded — unreachable, or the wrong version after a package upgrade left a self-hosted copy
- * behind — so nothing can be measured at all. It is a host deployment fault, and its
- * `diagnostic` carries the remedy, so a host wants to surface it as a setup error rather
- * than a font warning.
+ * it claimed and the load should not be retried. `wasmUnavailable` alone is a HOST fault — the
+ * shaper's WASM never loaded, `diagnostic` carries the remedy — surface it as a setup error.
  */
 export type EditorFontErrorCode =
   | 'initializationFailed'
