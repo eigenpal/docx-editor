@@ -8,8 +8,10 @@
 
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import {
+  harfBuzzUnsupportedRuntimeDiagnostic,
   harfBuzzVersionMismatchDiagnostic,
   harfBuzzWasmUnavailableDiagnostic,
+  isUnsupportedNodeRuntime,
   resetHarfBuzzWasmUrlForTests,
   resolveHarfBuzzWasmBinaryUrl,
   setHarfBuzzWasmUrl,
@@ -135,20 +137,50 @@ describe('URL redaction in diagnostics', () => {
 });
 
 describe('a Node runtime without process.getBuiltinModule', () => {
+  const shimAbort = new Error(
+    "Aborted(Error: createRequire is unavailable: this build reaches Node's `module` " +
+      'through process.getBuiltinModule, which needs Node 20.16+ or 22.3+.)'
+  );
+
+  test('is recognised by the shim marker, and nothing else is', () => {
+    // Serving a binary cannot fix a missing builtin, so this failure gets its own
+    // `unsupportedRuntime` code — a host branching on `wasmUnavailable` must not
+    // prescribe a WASM fix for a Node-version problem.
+    expect(isUnsupportedNodeRuntime(shimAbort)).toBe(true);
+    expect(isUnsupportedNodeRuntime(new Error('404 not found'))).toBe(false);
+    expect(isUnsupportedNodeRuntime('not an error')).toBe(false);
+  });
+
   test('is told to upgrade Node, not to serve a WASM file', () => {
-    // The shim's throw is the marker. Serving a binary cannot fix a missing builtin, so
-    // the standard remedy would send that consumer chasing an asset problem they do not
-    // have.
-    const diagnostic = harfBuzzWasmUnavailableDiagnostic(
-      new Error(
-        "Aborted(Error: createRequire is unavailable: this build reaches Node's `module` " +
-          'through process.getBuiltinModule, which needs Node 20.16+ or 22.3+.)'
-      )
-    );
+    const diagnostic = harfBuzzUnsupportedRuntimeDiagnostic(shimAbort);
 
     expect(diagnostic).toContain('Upgrade Node');
     expect(diagnostic).toContain('does not apply');
     expect(diagnostic).not.toContain('serve `@docx-editor.dev/core/harfbuzz.wasm` yourself');
+  });
+});
+
+describe('URL redaction of credentials', () => {
+  test('userinfo is stripped even with no query or fragment', () => {
+    // `user:password@host` is a credential without a `?` for the query check to catch.
+    setHarfBuzzWasmUrl('https://user:hunter2@cdn.example/assets/harfbuzz.wasm');
+    resolveHarfBuzzWasmBinaryUrl(BUNDLER_URL);
+
+    const diagnostic = harfBuzzWasmUnavailableDiagnostic(new Error('404'));
+
+    expect(diagnostic).not.toContain('hunter2');
+    expect(diagnostic).toContain('cdn.example');
+  });
+
+  test('a signed URL inside the cause message is redacted too', () => {
+    // The cause is written by whoever threw — a fetch error can embed the full URL it
+    // tried, which would put back exactly what redacting our own fields took out.
+    const diagnostic = harfBuzzWasmUnavailableDiagnostic(
+      new Error('fetch of https://cdn.example/harfbuzz.wasm?sig=SECRET456 failed')
+    );
+
+    expect(diagnostic).not.toContain('SECRET456');
+    expect(diagnostic).toContain('https://cdn.example/harfbuzz.wasm');
   });
 });
 

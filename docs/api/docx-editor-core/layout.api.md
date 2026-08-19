@@ -918,7 +918,7 @@ export class HarfBuzzShapingError extends Error {
 }
 
 // @public
-export type HarfBuzzShapingErrorCode = 'notInitialized' | 'wasmUnavailable' | 'fontOverLimit' | 'malformedFont' | 'textOverLimit' | 'codepointsOverLimit' | 'glyphOverLimit' | 'outlineOverLimit' | 'shapedRunOverLimit' | 'unsupportedVariationAxes' | 'unsupportedFallback' | 'unsupportedColorFont' | 'unsupportedNormalization' | 'invalidBidiLevel' | 'shapingLibraryMismatch' | 'disposed';
+export type HarfBuzzShapingErrorCode = 'notInitialized' | 'wasmUnavailable' | 'unsupportedRuntime' | 'fontOverLimit' | 'malformedFont' | 'textOverLimit' | 'codepointsOverLimit' | 'glyphOverLimit' | 'outlineOverLimit' | 'shapedRunOverLimit' | 'unsupportedVariationAxes' | 'unsupportedFallback' | 'unsupportedColorFont' | 'unsupportedNormalization' | 'invalidBidiLevel' | 'shapingLibraryMismatch' | 'disposed';
 
 // @public
 export interface HarfBuzzTextShaper extends TextShaper {

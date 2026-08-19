@@ -180,6 +180,20 @@ test('a stale self-hosted binary reports as the same host-deployment fault', () 
   expect(surfaced.diagnostic).toContain('Re-copy');
 });
 
+test('an unsupported Node runtime is NOT labeled wasmUnavailable', () => {
+  // A host branching on `wasmUnavailable` shows the serve-the-binary remedy. On a Node
+  // that predates `process.getBuiltinModule` no URL helps, so that failure keeps the
+  // generic code and carries the upgrade advice in `diagnostic` instead.
+  const surfaced = toEditorFontError(
+    new HarfBuzzShapingError('unsupportedRuntime', {
+      diagnostic: 'upgrade Node; `setHarfBuzzWasmUrl` does not apply here',
+    })
+  );
+
+  expect(surfaced.code).toBe('initializationFailed');
+  expect(surfaced.diagnostic).toContain('upgrade Node');
+});
+
 test('shaping failures that are not the shaper keep reporting as initializationFailed', () => {
   // The new branch must not relabel the resource-limit codes, which are document faults
   // and were already mapped this way.

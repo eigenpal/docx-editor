@@ -86,6 +86,7 @@ import {
   HARD_MAX_AGGREGATE_FONT_BYTES,
   HARD_MAX_FONT_BYTES,
   HARFBUZZ_SHAPING_LIBRARY,
+  HarfBuzzShapingError,
   fontRequestKey,
   createShapedMeasurer,
   resolveDefaultSurfaceMeasurer,
@@ -676,7 +677,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // UI does not need library noise it cannot switch off. Before this was fixed the same
     // misconfiguration failed the BUILD, so a green build with a silent console would be a
     // strictly worse trade (#282).
-    if (error.code === 'wasmUnavailable' && !config.onFontError && handlers.error.size === 0) {
+    const shaperNeverLoaded =
+      error.code === 'wasmUnavailable' ||
+      (error.cause instanceof HarfBuzzShapingError && error.cause.code === 'unsupportedRuntime');
+    if (shaperNeverLoaded && !config.onFontError && handlers.error.size === 0) {
       warnFontFailureOnce(error);
     }
     // A host handler that throws must not abort font resolution — reporting a dropped

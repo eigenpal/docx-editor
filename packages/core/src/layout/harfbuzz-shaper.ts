@@ -22,8 +22,10 @@ import {
   type VersionedShapingLibrary,
 } from './shaped-run.ts';
 import {
+  harfBuzzUnsupportedRuntimeDiagnostic,
   harfBuzzVersionMismatchDiagnostic,
   harfBuzzWasmUnavailableDiagnostic,
+  isUnsupportedNodeRuntime,
 } from './harfbuzz-wasm-binary.ts';
 
 type HarfBuzzModule = typeof import('harfbuzzjs');
@@ -77,6 +79,15 @@ export function initializeHarfBuzz(): Promise<void> {
       // under a CSP without `wasm-unsafe-eval`. Matching phrases meant the two most likely
       // server and enterprise failures fell through to a raw abort with no remedy attached.
       if (error instanceof HarfBuzzShapingError) throw error;
+      // Except the one failure no URL fixes: a Node that predates `process.getBuiltinModule`.
+      // Its own code keeps hosts branching on `wasmUnavailable` from prescribing a WASM fix
+      // for a runtime problem.
+      if (isUnsupportedNodeRuntime(error)) {
+        throw new HarfBuzzShapingError('unsupportedRuntime', {
+          diagnostic: harfBuzzUnsupportedRuntimeDiagnostic(error),
+          cause: error,
+        });
+      }
       throw new HarfBuzzShapingError('wasmUnavailable', {
         diagnostic: harfBuzzWasmUnavailableDiagnostic(error),
         cause: error,
@@ -109,6 +120,7 @@ function requireHarfBuzz(): HarfBuzzModule {
 export type HarfBuzzShapingErrorCode =
   | 'notInitialized'
   | 'wasmUnavailable'
+  | 'unsupportedRuntime'
   | 'fontOverLimit'
   | 'malformedFont'
   | 'textOverLimit'

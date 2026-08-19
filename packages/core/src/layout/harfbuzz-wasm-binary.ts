@@ -37,11 +37,30 @@ let readUrl: string | null = null;
 function redact(url: string): string {
   try {
     const parsed = new URL(url);
-    return parsed.search || parsed.hash ? `${parsed.origin}${parsed.pathname}…` : url;
+    const carriesSecret =
+      parsed.username !== '' ||
+      parsed.password !== '' ||
+      parsed.search !== '' ||
+      parsed.hash !== '';
+    if (!carriesSecret) return url;
+    // Rebuilt rather than `origin`, which is the string "null" for non-special schemes,
+    // and which would silently keep `user:password@` in the userinfo case.
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}…`;
   } catch {
     const cut = url.search(/[?#]/);
     return cut === -1 ? url : `${url.slice(0, cut)}…`;
   }
+}
+
+/**
+ * `redact` applied to every URL inside free text.
+ *
+ * The `cause` message appended to a diagnostic is written by whoever threw — a fetch error
+ * or an Emscripten abort can embed the full URL it tried, signature and all, which would
+ * put back exactly what redacting our own fields took out.
+ */
+function redactUrlsIn(text: string): string {
+  return text.replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"')]+/gi, (match) => redact(match));
 }
 
 /** Absolute where possible, so two spellings of one location compare equal. */
@@ -140,22 +159,34 @@ export function resolveHarfBuzzWasmBinaryUrl(bundlerResolvedUrl: string): string
 }
 
 /**
+ * Whether a load failure is the Node runtime itself, not the binary.
+ *
+ * The shim's throw is the marker: a Node that predates `process.getBuiltinModule` cannot
+ * reach the builtin the inlined runtime needs. No URL fixes that, so it must not classify
+ * as `wasmUnavailable` — a host branching on that code would suggest serving a WASM file
+ * to someone whose problem is their Node version.
+ */
+export function isUnsupportedNodeRuntime(cause: unknown): boolean {
+  return cause instanceof Error && /process\.getBuiltinModule/.test(cause.message);
+}
+
+/** The remedy text for {@link isUnsupportedNodeRuntime}: upgrade Node, nothing else. */
+export function harfBuzzUnsupportedRuntimeDiagnostic(cause: unknown): string {
+  const detail = redactUrlsIn(cause instanceof Error ? cause.message : String(cause));
+  return (
+    'the text shaper cannot start on this Node version: the ESM build reaches Node ' +
+    'builtins through `process.getBuiltinModule`, added in Node 20.16 and 22.3. Upgrade ' +
+    `Node; \`setHarfBuzzWasmUrl\` does not apply here. (${detail})`
+  );
+}
+
+/**
  * The remedy text for a runtime that could not load its binary.
  *
  * Lives here, beside the API it names, so the advice and the setter cannot drift apart.
  */
 export function harfBuzzWasmUnavailableDiagnostic(cause: unknown): string {
-  const detail = cause instanceof Error ? cause.message : String(cause);
-  // The one failure in this class that no URL can fix: the Node running this build predates
-  // `process.getBuiltinModule` (the shim's message is the marker). Advising that consumer to
-  // serve a WASM file would send them chasing an asset problem they do not have.
-  if (/process\.getBuiltinModule/.test(detail)) {
-    return (
-      'the text shaper cannot start on this Node version: the ESM build reaches Node ' +
-      'builtins through `process.getBuiltinModule`, added in Node 20.16 and 22.3. Upgrade ' +
-      `Node; \`setHarfBuzzWasmUrl\` does not apply here. (${detail})`
-    );
-  }
+  const detail = redactUrlsIn(cause instanceof Error ? cause.message : String(cause));
   const location = readUrl === null ? 'its bundled location' : redact(readUrl);
   return (
     `the HarfBuzz WASM binary could not be loaded from ${location}. If this bundler does ` +
