@@ -106,6 +106,18 @@ export interface ReviewAuthorInfo {
 const STYLE_KEYS = ['color', 'background', 'className', 'avatarUrl'] as const;
 
 /**
+ * The subset of {@link STYLE_KEYS} that reaches PAINTED DOM, and so the only fields the
+ * paint-reuse key may hash.
+ *
+ * `avatarUrl` is deliberately absent. It is read by the review card and by nothing the
+ * painter emits, so hashing it made an avatar arriving late — a host resolving its team
+ * roster over the network, then redeclaring — move the context key and drop every retained
+ * page. Measured at 228ms and 0 of 41 pages retained for a change that alters no painted
+ * pixel; an identical redeclaration kept all 41 at 0.1ms.
+ */
+const PAINTED_STYLE_KEYS = ['color', 'background', 'className'] as const;
+
+/**
  * Schemes an avatar may load over. An allowlist, matching the package's `sanitizeHref`
  * policy rather than restating a denylist: the value is host-configured, but a config that
  * travelled through storage or `JSON.parse` is one typo away from a live scheme, and the
@@ -273,7 +285,7 @@ function computeContextKey(
     // UNCAPPED. These are host-supplied and bounded by the host, and two long class lists
     // that differ only near the end have to produce different keys or the pages carrying
     // the old classes are reused verbatim.
-    for (const field of STYLE_KEYS) hash = hashText(hash, style[field] ?? '', Infinity);
+    for (const field of PAINTED_STYLE_KEYS) hash = hashText(hash, style[field] ?? '', Infinity);
   }
   return `${authorSlots.size}.${styles.size}.${(hash >>> 0).toString(36)}`;
 }
@@ -374,7 +386,12 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
   const found: string[] = [];
   const seen = new Set<string>();
   const see = (author: string): void => {
-    if (seen.has(author)) return;
+    // A MISSING `w:author` is not a person. `@w:author` is required by the schema and a
+    // malformed file can still omit it, and recording `''` made the blank a roster entry that
+    // took slot 0 — pushing the first real reviewer off the colour Word gives them, and
+    // putting an empty, colour-consuming chip in any legend built from the roster. The review
+    // queue's own walk already skips it, so recording it here made the two disagree.
+    if (author === '' || seen.has(author)) return;
     seen.add(author);
     found.push(author);
   };

@@ -1400,6 +1400,19 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
               className="docx-review__card"
               data-testid="review-balloon-card"
               data-kind={fallbackKind}
+              {...(anchor.author
+                ? {
+                    'data-author': anchor.author,
+                    'data-author-slot': authorSlot(
+                      authorInfo.get(anchor.author),
+                      authorSlots.get(anchor.author) ?? 0
+                    ),
+                  }
+                : {})}
+              style={authorCardStyle(
+                authorInfo.get(anchor.author),
+                authorSlots.get(anchor.author) ?? 0
+              )}
             >
               <div className="docx-review__head">
                 <span className="docx-review__avatar" aria-hidden="true">

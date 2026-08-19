@@ -9,7 +9,7 @@
 // the page painter: geometry in, elements out, nothing measured back.
 
 import type { SemanticLayout } from '../layout/semantic-records.ts';
-import type { ReviewAuthorInfo } from './revision-presentation.ts';
+import { REVIEW_AUTHOR_SLOTS, type ReviewAuthorInfo } from './revision-presentation.ts';
 
 /** A rectangle in page-content coordinates, on a named page. */
 export interface OverlayRect {
@@ -102,7 +102,11 @@ export function paintSelectionOverlay(
     // is engine-resolved or host-declared, and `setProperty` drops a value it cannot parse.
     if (rect.reviewAuthor) {
       element.dataset.author = rect.reviewAuthor.author;
-      element.dataset.authorSlot = String(rect.reviewAuthor.slot);
+      // WRAPPED to the ramp width, as the card and the painted span both wrap it. The roster
+      // slot is a raw index, so the ninth author is slot 8 — writing that here made the band
+      // say `8` while the card beside it said `0`, and a rule keyed on the slot covered one
+      // of them.
+      element.dataset.authorSlot = String(rect.reviewAuthor.slot % REVIEW_AUTHOR_SLOTS);
       element.style.setProperty('--doc-review-author', rect.reviewAuthor.color);
     }
     painted.push(element);

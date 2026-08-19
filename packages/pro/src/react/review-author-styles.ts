@@ -19,10 +19,9 @@ import type { ReviewItemView } from './useReview';
 export const AUTHOR_SLOTS = 8;
 
 /**
- * The accent this author's chrome keys on: their resolved document colour from the facade
- * roster — the same derivation the painted text colours by — with the rail's own item-order
- * slot standing in for an author the roster does not carry (a comment-only author has no
- * revision in the layout).
+ * The accent this author's chrome keys on: their resolved colour from the facade roster —
+ * the same derivation the painted text and the highlight bands colour by — with the rail's
+ * own item-order slot standing in only for an author the roster has not published yet.
  *
  * The accent is the ONLY styling the packaged card takes from a declaration. Card DESIGN
  * belongs to composition — a custom card over `useReviewAuthor`, or CSS on the
@@ -42,22 +41,23 @@ export function authorCardStyle(
 /**
  * The slot a surface should draw this author in.
  *
- * The FACADE's slot when the document carries the author, so a card and the painted text
- * agree — they are the same number the painter writes as `data-revision-author-slot`. The
- * rail's own item-order slot stands in only for an author the document has no revision by
- * (a comment-only reviewer), whom the painter never numbers at all.
+ * The FACADE's slot whenever the roster carries the author — which is every author of a
+ * tracked change OR a comment — so the card, the painted text and the highlight band all
+ * agree. That is the same number the painter writes as `data-revision-author-slot`. The
+ * rail's own item-order slot stands in only for an author the roster has not published yet.
  */
 export function authorSlot(info: ReviewAuthorInfo | undefined, fallbackSlot: number): number {
   return (info?.slot ?? fallbackSlot) % AUTHOR_SLOTS;
 }
 
 /**
- * The rail's author lookup: the document's roster, plus an entry for every review item
- * author the roster does not carry.
+ * The rail's author lookup: the engine's roster, plus an entry for anyone it does not carry.
  *
- * COMMENT-ONLY AUTHORS are the reason for the second half. The roster reads the DOCUMENT,
- * so someone who commented but proposed no tracked change is not in it — and their card
- * would ignore the style declared for them, avatar included.
+ * The roster covers comment authors as well as revision authors, so the second half is a
+ * FALLBACK rather than the normal path — it stands in for an author the rail can see and the
+ * engine cannot, which is a card the rail is drawing from queue state the surface has not
+ * published yet (a comment composed this render). Without it that card would ignore the
+ * style declared for its author, avatar included.
  *
  * Synthesised entries are held ACROSS recomputes: this memo re-runs whenever the review
  * queue moves, and minting a fresh object each time would hand a consumer using

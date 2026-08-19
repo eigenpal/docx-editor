@@ -1231,7 +1231,7 @@ export const PX_PER_CM = PX_PER_INCH / 2.54;
 export const PX_PER_INCH = 96;
 
 // @public
-export interface RevisionAuthor {
+export interface ReviewAuthorInfo {
     readonly author: string;
     readonly color: string;
     readonly slot: number;

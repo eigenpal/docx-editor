@@ -351,7 +351,7 @@ This works for **comment authors too**. Review covers comments and tracked chang
 together, so one person draws in one color across both. A reviewer who left comments but
 proposed no tracked changes still gets a slot: `useReviewAuthors()` lists them after the
 authors the document's tracked changes introduce, and their card, avatar, and comment
-highlight all use it.
+highlight all carry it.
 
 Declaring a style for them works the same way:
 
@@ -394,8 +394,12 @@ are selecting:
 | A tracked-change span in the text                                              | `data-revision-author`, `data-revision-author-slot` |
 | Everything else with an author — cards, balloons, markers, and highlight bands | `data-author`, `data-author-slot`                   |
 
-The slot number is the same in both, so `--doc-review-author` resolves to one color for one
-person wherever they appear.
+The slot number is the same in both, so one person is one slot everywhere they appear.
+
+The two families differ in what else they give you. Cards, balloons, markers, and bands also
+carry `--doc-review-author`, holding that author's resolved color, so a rule on them can
+paint with it. A painted span does not: the engine writes the author's color into the span's
+inline `color`, so use `currentColor` there, or read the ramp token for the slot directly.
 
 ### Tint commented text by author
 
@@ -407,9 +411,10 @@ in the same yellow, and eight highlighter colors on one page read as eight meani
 than eight people. To opt in, write the rule yourself:
 
 ```css
-/* Every comment, in its author's color. */
+/* Every comment, in its author's color. The fallback keeps a band that has no author
+   (a custom node, or a comment the file left unattributed) visible. */
 .docx-editor .docx-comment-band {
-  background: color-mix(in srgb, var(--doc-review-author) 22%, transparent);
+  background: color-mix(in srgb, var(--doc-review-author, var(--doc-comment-bg)) 22%, transparent);
 }
 
 /* Or one reviewer only. */
@@ -421,15 +426,22 @@ than eight people. To opt in, write the rule yourself:
 Because the band and the card read the same variable, a reviewer's comment highlight and
 their card match without you repeating the color.
 
-The band multiplies into the page, so author colors here are the light-theme values. The
-dark theme inverts the page beneath the band, which lifts the result for you. A color
-picked for a dark background is inverted a second time and comes out wrong.
+The band is chrome, not page content, so the dark theme's page filter never reaches it.
+Nothing corrects a color you set here. `--doc-review-author` holds the light-theme value in
+both themes, so if you tint by author, give the rule its own dark value:
+
+```css
+.docx-editor.dark .docx-comment-band {
+  background: color-mix(in srgb, var(--doc-review-author) 34%, transparent);
+}
+```
 
 ### Per-author card design
 
 Cards are styled by composition, not by configuration. The packaged card already follows
-the author system on its own: its accent, avatar disc, and gutter marker take the author's
-resolved color, and `avatarUrl` fills the avatar. Past that, style them with the
+the author system on its own: its leading edge and avatar disc take the author's resolved
+color, and `avatarUrl` fills the avatar. The collapsed gutter marker stays neutral, and
+carries the author hooks for you to color if you want it to. Past that, style them with the
 `data-author` hooks shown earlier, or replace them outright.
 
 The `List` render callback receives each item with its `author`, so a particular author can

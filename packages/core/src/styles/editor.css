@@ -98,6 +98,10 @@
 
   /* Inline comment/annotation marks. Resting highlights stay quiet on the
     * document canvas; focused sidebar items get the stronger active treatment. */
+  /* The open review card's wash. OPAQUE, and stated per theme rather than mixed from
+     `--doc-primary-light`: that token is translucent under `.dark`, so mixing it produced a
+     card the page showed through. A card is chrome and sits on its own ground. */
+  --doc-review-card-active-bg: color-mix(in srgb, #e8f0fe 45%, #fff);
   --doc-comment-bg: rgba(255, 212, 0, 0.12);
   --doc-comment-border: rgba(245, 174, 0, 0.45);
   --doc-comment-active-bg: rgba(255, 212, 0, 0.35);
@@ -324,6 +328,8 @@
   --doc-on-primary: #1f1f1f; /* text/icon on a filled primary surface */
   --doc-toggle-active-bg: var(--doc-primary-light);
   --doc-toggle-active-fg: var(--doc-primary);
+  /* Mixed from the OPAQUE accent, not from the translucent `--doc-primary-light` above. */
+  --doc-review-card-active-bg: color-mix(in srgb, #4e9dff 12%, var(--doc-surface, #1b1d22));
   --doc-comment-bg: rgba(253, 214, 99, 0.16);
   --doc-comment-border: rgba(253, 214, 99, 0.5);
   --doc-comment-active-bg: rgba(253, 214, 99, 0.32);
@@ -5303,7 +5309,7 @@ a.docx-hyperlink:focus-visible {
   border-bottom-color: var(--doc-border-strong, #c8ccd2);
   /* The faintest wash of the chrome's own accent, the same one the toolbar uses for a
      pressed control, so "open" reads as selection rather than as a fourth author colour. */
-  background: color-mix(in srgb, var(--doc-primary-light, #e8f0fe) 45%, var(--doc-surface, #fff));
+  background: var(--doc-review-card-active-bg);
 }
 
 .docx-review__card[data-resolved] {
@@ -5608,9 +5614,12 @@ a.docx-hyperlink:focus-visible {
  *     background: color-mix(in srgb, var(--doc-review-author) 22%, transparent);
  *   }
  *
- * The band multiplies into the page, so its colours are authored for LIGHT paper — the sheet
- * beneath is what the dark theme inverts, and a value lifted for dark here would be inverted
- * a second time. `--doc-review-author` is the light ramp value for that reason. */
+ * The band is CHROME, not page content: this layer is a sibling of the pages, so the page's
+ * inverting filter never reaches it. It composites over the already-inverted sheet, and the
+ * blend mode flips from `multiply` to `screen` under `.dark` for that reason. A colour used
+ * here therefore needs its own dark value, the way `--doc-comment-bg` has one — nothing
+ * corrects it downstream. `--doc-review-author` carries the light ramp value in both themes,
+ * so a rule that tints by author should lift it under `.docx-editor.dark` itself. */
 
 /* Tracked changes carry a band always, in the change's OWN colour, so it never contradicts
  * the decoration it sits behind — green where text is arriving, red where it is leaving. A
