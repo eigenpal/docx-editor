@@ -5,7 +5,8 @@ category: 'Vue'
 order: 39
 ---
 
-Each example uses the current root exports only.
+Import `@docx-editor.dev/vue/styles.css` once in your application entry before
+you use these examples.
 
 ## Load DOCX bytes
 
@@ -18,7 +19,7 @@ const doc = ref<Uint8Array>();
 
 onMounted(() => {
   void fetch('/template.docx')
-    .then((r) => r.arrayBuffer())
+    .then((response) => response.arrayBuffer())
     .then((buffer) => {
       doc.value = new Uint8Array(buffer);
     });
@@ -54,24 +55,89 @@ async function save() {
 
 ## Compose custom chrome
 
+Create a button that reads the editor context:
+
 ```vue
 <script setup lang="ts">
-import { DocxEditor, useEditorCommand } from '@docx-editor.dev/vue';
+import { useEditorCommand } from '@docx-editor.dev/vue';
 
 const bold = useEditorCommand('text.bold');
 </script>
 
 <template>
+  <button
+    @mousedown.prevent
+    :disabled="!bold.isEnabled"
+    :aria-pressed="bold.isActive"
+    :title="bold.disabledReason ?? 'Bold'"
+    @click="bold.execute()"
+  >
+    Bold
+  </button>
+</template>
+```
+
+Then place the button and editor parts under the root:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import BoldButton from './BoldButton.vue';
+</script>
+
+<template>
   <DocxEditor.Root :document="bytes">
     <DocxEditor.Toolbar>
-      <button @mousedown.prevent :disabled="!bold.isEnabled" @click="bold.execute()">Bold</button>
+      <BoldButton />
     </DocxEditor.Toolbar>
     <DocxEditor.Viewport>
+      <DocxEditor.Navigation />
       <DocxEditor.Content />
+      <DocxEditor.HyperLink />
+      <DocxEditor.ContextMenu />
     </DocxEditor.Viewport>
   </DocxEditor.Root>
 </template>
 ```
+
+`DocxEditor.Navigation` shares the viewport with the document.
+`DocxEditor.HyperLink` and `DocxEditor.ContextMenu` provide overlay chrome.
+
+## Automate an open editor
+
+Render this component anywhere below `DocxEditor.Root`:
+
+```vue
+<script setup lang="ts">
+import { useDocxEditor } from '@docx-editor.dev/vue';
+import { DocxEditor as AutomationEditor } from '@docx-editor.dev/editor-api/browser';
+
+const editor = useDocxEditor();
+
+async function inspectFirstParagraph() {
+  if (!editor.value) return;
+  const runtime = AutomationEditor.createBrowser(editor.value);
+
+  try {
+    await runtime.run(async (context) => {
+      const first = context.document.body.paragraphs.getFirst();
+      first.load('text');
+      await context.sync();
+      console.log(first.text);
+    });
+  } finally {
+    runtime.dispose();
+  }
+}
+</script>
+
+<template>
+  <button :disabled="!editor" @click="inspectFirstParagraph">Inspect first paragraph</button>
+</template>
+```
+
+Install `@docx-editor.dev/editor-api` before you use this example. The runtime
+uses the editor that `DocxEditor.Root` created.
 
 ## Fetch bytes and fonts together
 
@@ -85,7 +151,9 @@ import {
 } from '@docx-editor.dev/vue';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
-const { document, fonts, error } = useDocxSource('/sample.docx', { fonts: defaultFonts });
+const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
+  fonts: defaultFonts,
+});
 </script>
 
 <template>
@@ -95,17 +163,23 @@ const { document, fonts, error } = useDocxSource('/sample.docx', { fonts: defaul
     </DocxEditorViewport>
   </DocxEditorRoot>
   <p v-else-if="error">{{ error.message }}</p>
+  <p v-else-if="isLoading" aria-live="polite">Loading document</p>
 </template>
 ```
 
 ## Live demo
 
-The [`examples/vue`](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) app is a parity witness for the React Vite demo: composition-layer chrome, menu overrides, rulers, navigation, and published-package build mode. Run it with `bun run dev:vue`.
+The
+[`examples/vue` application](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
+shows composition chrome, menu overrides, rulers, navigation, and package
+build mode. Run it with `bun run dev:vue`.
 
-The [parity deployment](/) serves both adapters from `examples/parity/dist` under `/react/` and `/vue/`.
+The [adapter parity demo](/) serves React and Vue builds from
+`examples/parity/dist`.
 
 ## Next steps
 
-- [Composition](/docs/2.x/vue/composition)
-- [Composables](/docs/2.x/vue/composables)
-- [Full API reference](/docs/2.x/api/vue)
+- [Vue composition](/docs/2.x/vue/composition): arrange editor parts.
+- [Vue composables](/docs/2.x/vue/composables): build reactive controls.
+- [Toolbar guide](/docs/2.x/guides/toolbar): find command slot IDs.
+- [Editing API](/docs/2.x/editor-api): automate the open document.

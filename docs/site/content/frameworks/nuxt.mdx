@@ -1,0 +1,108 @@
+---
+title: 'Nuxt'
+description: 'Set up the Vue DOCX editor in Nuxt with a client-only component, the editor stylesheet, and Vite dependency optimization.'
+category: 'Frameworks'
+seoTitle: 'Nuxt DOCX editor setup'
+---
+
+The editor measures text in the browser.
+Keep its package import and render work in a client-only component.
+
+## Install
+
+Install the published Vue adapter and its engine peer.
+
+```bash
+npm install @docx-editor.dev/vue @docx-editor.dev/core
+```
+
+## Configure Nuxt
+
+Load the editor stylesheet once.
+Prebundle the adapter and engine for the Vite development server.
+
+```ts
+// nuxt.config.ts
+export default defineNuxtConfig({
+  css: ['@docx-editor.dev/vue/styles.css'],
+  vite: {
+    optimizeDeps: {
+      include: ['@docx-editor.dev/core', '@docx-editor.dev/vue'],
+    },
+  },
+});
+```
+
+## Add a client-only component
+
+Use the `.client.vue` suffix.
+Nuxt excludes this component from server-side rendering (SSR).
+
+```vue
+<!-- components/DocumentEditor.client.vue -->
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+</script>
+
+<template>
+  <div class="editor-host">
+    <DocxEditor document="blank" />
+  </div>
+</template>
+
+<style scoped>
+.editor-host {
+  height: 100vh;
+}
+</style>
+```
+
+Use the component from a page or layout.
+Nuxt auto-imports components from the `components` directory.
+
+```vue
+<!-- pages/index.vue -->
+<template>
+  <DocumentEditor />
+</template>
+```
+
+The server output contains a placeholder for `DocumentEditor`.
+Nuxt mounts the editor in the browser.
+The editor fills its parent, so the parent needs a measured height.
+
+## Nuxt module status
+
+The repository contains `@docx-editor.dev/nuxt` source and a Nuxt example.
+The package has `"private": true`, so the repository does not publish it to npm.
+Use the Vue adapter setup on this page in an external application.
+
+The workspace module provides these behaviors:
+
+- It registers `<DocxEditor>` as a client-only component.
+- It injects the core editor stylesheet by default.
+- It auto-imports the Vue composables.
+- It supports a component prefix and optional stylesheet injection.
+
+Do not depend on these module behaviors until the package becomes publishable.
+
+## Run the repository example
+
+The Nuxt example uses the private module through the monorepo workspace.
+It runs against the Nuxt version in the workspace.
+
+```bash
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
+bun install
+bun run build:packages:vue
+bun run dev:nuxt
+```
+
+Open `http://localhost:3002`.
+
+## Next steps
+
+- [Vue adapter](/docs/2.x/vue)
+- [Vue props](/docs/2.x/vue/props)
+- [Nuxt example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt)

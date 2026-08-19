@@ -1,0 +1,122 @@
+---
+title: 'Vite with Vue'
+description: 'Set up a Vue 3 DOCX editor with Vite. Add the stylesheet, open a file, and save the edited document.'
+category: 'Frameworks'
+seoTitle: 'Vite Vue DOCX editor setup'
+---
+
+Vite runs this Vue app in the browser.
+You do not need a server-side rendering (SSR) boundary.
+
+## Install
+
+```bash
+npm install @docx-editor.dev/vue @docx-editor.dev/core
+```
+
+## Add the editor
+
+Import the editor stylesheet in `src/main.ts`.
+
+```ts
+// src/main.ts
+import { createApp } from 'vue';
+import '@docx-editor.dev/vue/styles.css';
+import App from './App.vue';
+
+createApp(App).mount('#app');
+```
+
+Add the open, edit, and save flow to `src/App.vue`.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+
+const editorRef = ref<DocxEditorRef | null>(null);
+const documentBytes = ref<ArrayBuffer>();
+const fileName = ref('document.docx');
+
+async function openDocument(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  documentBytes.value = await file.arrayBuffer();
+  fileName.value = file.name;
+}
+
+async function saveDocument() {
+  const bytes = await editorRef.value?.save();
+  if (!bytes) return;
+
+  const type = ['application/vnd.openxmlformats-officedocument', 'wordprocessingml.document'].join(
+    '.'
+  );
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName.value;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+
+<template>
+  <div class="app">
+    <div class="actions">
+      <label>
+        Open DOCX
+        <input type="file" accept=".docx" @change="openDocument" />
+      </label>
+      <button type="button" @click="saveDocument">Save DOCX</button>
+    </div>
+    <div class="editor-host">
+      <DocxEditor ref="editorRef" :document="documentBytes ?? 'blank'" />
+    </div>
+  </div>
+</template>
+
+<style>
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+}
+</style>
+```
+
+The stylesheet includes the editor chrome and document surface.
+The editor fills its parent, so `.editor-host` needs a measured height.
+
+## Run the repository example
+
+The repository example aliases workspace package source.
+You do not need to build the packages first.
+
+```bash
+git clone https://github.com/eigenpal/docx-editor.git
+cd docx-editor
+bun install
+bun run dev:vue
+```
+
+Open `http://localhost:5174`.
+
+## Next steps
+
+- [Loading and saving](/docs/2.x/guides/loading-and-saving)
+- [Vue composition](/docs/2.x/vue/composition)
+- [Vue example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)

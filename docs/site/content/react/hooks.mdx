@@ -1,17 +1,20 @@
 ---
 title: 'Hooks'
-description: 'The React API the packaged chrome is built on: subscribe to editor state, run commands, read the document outline, search, and drive page setup.'
+description: 'Use React hooks to read editor state, run commands, search documents, and configure pages.'
 category: 'React'
 order: 33
 ---
 
-Every hook here must be called inside `<DocxEditor.Root>` (or inside `<DocxEditor>`, which renders one). They read the editor off context.
+Call these hooks inside `<DocxEditor.Root>`.
+You can also call them inside `<DocxEditor>`, which renders that root.
+The hooks read the editor from React context.
 
-These are the same hooks the packaged toolbar, menu, and navigation pane use. There is no private API behind them.
+The packaged toolbar, menu, and navigation pane use the same hooks.
 
-## useEditorCommand
+## `useEditorCommand`
 
-Most chrome is built on this one. Give it a slot id and get back a button's worth of state:
+Pass a chrome slot ID to `useEditorCommand`.
+The hook returns the state and action for a control:
 
 ```tsx
 import { useEditorCommand } from '@docx-editor.dev/react';
@@ -33,24 +36,27 @@ function BoldButton() {
 }
 ```
 
-| Field            | Type             | Meaning                                                   |
-| ---------------- | ---------------- | --------------------------------------------------------- |
-| `execute()`      | `() => boolean`  | Run it. Returns whether it applied.                       |
-| `isActive`       | `boolean`        | The command's state at the caret (bold on, list applied). |
-| `isEnabled`      | `boolean`        | Whether it can run right now.                             |
-| `disabledReason` | `string \| null` | Why not, when it can't. Show it; don't invent your own.   |
+| Field            | Type             | Description                                      |
+| ---------------- | ---------------- | ------------------------------------------------ |
+| `execute()`      | `() => boolean`  | Runs the command and reports whether it applied. |
+| `isActive`       | `boolean`        | Reports the command state at the caret.          |
+| `isEnabled`      | `boolean`        | Reports whether the command can run.             |
+| `disabledReason` | `string \| null` | Explains why the command cannot run.             |
 
-Enabled state has exactly one source. A control that hardcodes `disabled` will drift from the engine.
+Use `isEnabled` as the enabled-state source.
+Use `disabledReason` when you explain a disabled control.
 
-It also takes a full `EditorCommand` object when there is no slot for what you want:
+Pass an `EditorCommand` when no chrome slot matches your action:
 
 ```tsx
 const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
 ```
 
-## useEditorState
+## `useEditorState`
 
-Subscribe to a slice of the editor snapshot. The selector runs on every tick; the component re-renders only when the slice changes:
+Use `useEditorState` to subscribe to part of the editor snapshot.
+The hook runs the selector for each state update.
+It renders your component only when the selected value changes:
 
 ```tsx
 import { useEditorState } from '@docx-editor.dev/react';
@@ -70,7 +76,7 @@ function SaveButton() {
 }
 ```
 
-Pass a comparator as the second argument when the slice is an object:
+Pass a comparison function as the second argument for object values:
 
 ```tsx
 const formatting = useEditorState(
@@ -79,11 +85,30 @@ const formatting = useEditorState(
 );
 ```
 
-Select narrowly. A page-number selector should not re-render when someone toggles bold. Useful snapshot fields include `page`, `selection`, `selectionCollapsed`, `formatting`, `table`, `image`, `editable`, `isLoading`, `isOpening`, `parseError`, `editingMode`, `canUndo` / `canRedo`, `pageSetup`, `fontSubstitutions`, `hasReviewContent`, and `lastRejection`.
+Select only the state that your component needs.
+A page indicator does not need to render after a bold-state change.
 
-## useDocxEditor
+Useful fields include:
 
-The editor instance itself, or `null` before content mounts. The escape hatch for anything the other hooks don't cover:
+- `page`
+- `selection` and `selectionCollapsed`
+- `formatting`
+- `table` and `image`
+- `editable`
+- `isLoading` and `isOpening`
+- `parseError`
+- `editingMode`
+- `canUndo` and `canRedo`
+- `pageSetup`
+- `fontSubstitutions`
+- `hasReviewContent`
+- `lastRejection`
+
+## `useDocxEditor`
+
+`useDocxEditor` returns the editor instance.
+It returns `null` before the content mounts.
+Use the instance for actions and one-time reads:
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
@@ -104,11 +129,12 @@ function SaveButton() {
 }
 ```
 
-Reading state through `editor.snapshot()` in render will not re-render your component when the document changes. That is what `useEditorState` is for. Use the instance for actions and one-shot reads.
+Calling `editor.snapshot()` during render does not subscribe your component.
+Use `useEditorState` for reactive state.
 
-## useEditorEvent
+## `useEditorEvent`
 
-Subscribe to an editor event for the life of the component:
+Use `useEditorEvent` to subscribe for the component's lifetime:
 
 ```tsx
 import { useEditorEvent } from '@docx-editor.dev/react';
@@ -117,9 +143,10 @@ useEditorEvent('selectionChange', () => setPanelOpen(false));
 useEditorEvent('change', (change) => void autosave(change.revision));
 ```
 
-## useFontFamily
+## `useFontFamily`
 
-Backs the font picker. The same shape as any value control: current value, options, setter, enabled flag.
+`useFontFamily` provides font-picker state.
+It returns the current value, options, setter, and enabled state:
 
 ```tsx
 import { useFontFamily } from '@docx-editor.dev/react';
@@ -143,11 +170,12 @@ function FontPicker() {
 }
 ```
 
-`useParagraphStyle` has the same shape for the style list.
+`useParagraphStyle` returns the same shape for paragraph styles.
 
-## usePageSetup
+## `usePageSetup`
 
-Read and change margins, orientation, and paper size for the current section:
+Use `usePageSetup` to read and change the current section.
+The hook supports margins, orientation, and paper size:
 
 ```tsx
 import { usePageSetup } from '@docx-editor.dev/react';
@@ -167,9 +195,10 @@ function OrientationToggle() {
 }
 ```
 
-## useDocumentOutline
+## `useDocumentOutline`
 
-Headings in document order, plus a jump. This is the whole navigation pane:
+`useDocumentOutline` returns headings in document order.
+It also provides an action that moves to a heading:
 
 ```tsx
 import { useDocumentOutline } from '@docx-editor.dev/react';
@@ -195,11 +224,15 @@ function Outline() {
 }
 ```
 
-Each item is `{ heading, depth }`: `heading` is `{ text, level, blockId }` and `depth` is the indent relative to the shallowest heading present, so a document whose top sections are Heading 2 still left-aligns at the base. `headings` gives you the flat list without the indent math.
+Each item has the shape `{ heading, depth }`.
+`heading` has the shape `{ text, level, blockId }`.
+`depth` measures indentation from the shallowest heading in the document.
+This calculation aligns a top-level Heading 2 with the base.
+Use `headings` when you need the flat list without calculated indentation.
 
-## useDocumentSearch
+## `useDocumentSearch`
 
-Debounced find, with match navigation:
+`useDocumentSearch` provides delayed search and match navigation:
 
 ```tsx
 import { useDocumentSearch } from '@docx-editor.dev/react';
@@ -209,9 +242,11 @@ function Find() {
 
   return (
     <>
-      <input value={search.query} onChange={(e) => search.setQuery(e.target.value)} />
+      <input value={search.query} onChange={(event) => search.setQuery(event.target.value)} />
       <span>
-        {search.matches.length === 0 ? 0 : search.activeIndex + 1} / {search.matches.length}
+        {search.matches.length === 0 ? 0 : search.activeIndex + 1}
+        {' / '}
+        {search.matches.length}
         {search.truncated && '+'}
       </span>
       <button onClick={search.previous}>Prev</button>
@@ -221,43 +256,50 @@ function Find() {
 }
 ```
 
-`matchCase` / `setMatchCase` and `wholeWord` / `setWholeWord` are on the same object.
+The result also includes these pairs:
+
+- `matchCase` and `setMatchCase`
+- `wholeWord` and `setWholeWord`
 
 ## Other hooks
 
-| Hook                              | Returns                                                                                                                                                                                                  |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`, with cancellation.                                                                                                                                 |
-| `useEditorValueCommand(slotId)`   | Value-taking commands: `'image.wrap'`, `'image.altText'`.                                                                                                                                                |
-| `useParagraphIndent()`            | Current indents plus an `apply` for ruler-style editing.                                                                                                                                                 |
-| `useHyperlinkPopup()`             | State behind the link popover, for a custom panel.                                                                                                                                                       |
-| `useContentControl()`             | The content-control inspector: locks, value writes, form fill.                                                                                                                                           |
-| `useHeaderFooterState()`          | Which header/footer scope is being edited, or `null`.                                                                                                                                                    |
-| `useNoteScopeState()`             | The same for footnotes and endnotes.                                                                                                                                                                     |
-| `useContextMenuTarget()`          | The element the last right-click landed on.                                                                                                                                                              |
-| `useNavigationPane(options?)`     | Open state and width for the navigation pane.                                                                                                                                                            |
-| `useTranslation()`                | `{ t }` bound to the active locale catalog.                                                                                                                                                              |
-| `useChromeTranslate(overrides?)`  | Catalog-backed label resolver for chrome `t` props; an overrides `Map` is consulted first.                                                                                                               |
-| `useFonts(source, ...fragments)`  | Builds a `FontResolver` from a source plus fragments. See [Fonts](/docs/2.x/guides/fonts).                                                                                                               |
-| `useNotePropertiesState()`        | Footnote and endnote numbering properties for the current scope.                                                                                                                                         |
-| `useEditorSnapshot(editor)`       | Revision counter for an editor, for your own `useSyncExternalStore`.                                                                                                                                     |
-| `useNavigationShift()`            | Horizontal offset the open navigation pane pushes the page by.                                                                                                                                           |
-| `useTableBorderTargetLabel()`     | Label for the active table border target, for a custom border control.                                                                                                                                   |
-| `useReviewAuthors()`              | Every review author the current view draws — tracked-change authors first, comment-only authors after — with the color and style each resolves to. See [Tracked changes](/docs/2.x/pro/tracked-changes). |
-| `useEditorCaret()`                | Caret as `{ paragraphId, offset }` for write APIs that take an `at` position.                                                                                                                            |
-| `useZoom()`                       | Read and set zoom from custom chrome.                                                                                                                                                                    |
-| `useToolbarContext()`             | Toolbar compound context for custom slot parts.                                                                                                                                                          |
-| `useToolbarLabel()`               | Resolved label for the active toolbar scope.                                                                                                                                                             |
-| `useToolbarLabelFor(slotId)`      | Label resolver for one slot id.                                                                                                                                                                          |
-| `useScopeClassName()`             | Scoped class prefix for chrome under a custom root.                                                                                                                                                      |
-| `useScopedChromeAnchor()`         | Anchor metadata for scoped overlay chrome.                                                                                                                                                               |
+| Hook                              | Return value                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`. It supports cancellation.                   |
+| `useEditorValueCommand(slotId)`   | Provides state for value commands such as `'image.wrap'` and `'image.altText'`.                   |
+| `useParagraphIndent()`            | Provides current indents and an `apply` action.                                                   |
+| `useHyperlinkPopup()`             | Provides state for a custom hyperlink panel.                                                      |
+| `useContentControl()`             | Provides content-control locks, value writes, and form-fill state.                                |
+| `useHeaderFooterState()`          | Returns the active header or footer scope, or `null`.                                             |
+| `useNoteScopeState()`             | Returns the active footnote or endnote scope.                                                     |
+| `useContextMenuTarget()`          | Returns the element that received the last context-menu action.                                   |
+| `useNavigationPane(options?)`     | Provides navigation-pane open state and width.                                                    |
+| `useTranslation()`                | Returns `{ t }` for the active locale catalog.                                                    |
+| `useChromeTranslate(overrides?)`  | Returns a catalog resolver that checks an override `Map` first.                                   |
+| `useFonts(source, ...fragments)`  | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts).                    |
+| `useNotePropertiesState()`        | Provides note-numbering properties for the current scope.                                         |
+| `useEditorSnapshot(editor)`       | Returns a revision counter for `useSyncExternalStore`.                                            |
+| `useNavigationShift()`            | Returns the horizontal offset for an open navigation pane.                                        |
+| `useTableBorderTargetLabel()`     | Returns the active table-border target label.                                                     |
+| `useReviewAuthors()`              | Returns tracked-change authors, then comment-only authors. Each item includes its resolved style. |
+| `useEditorCaret()`                | Returns `{ paragraphId, offset }` for APIs that accept an `at` position.                          |
+| `useZoom()`                       | Reads and sets zoom from custom chrome.                                                           |
+| `useToolbarContext()`             | Returns toolbar compound context for custom slot parts.                                           |
+| `useToolbarLabel()`               | Returns the active toolbar-scope label.                                                           |
+| `useToolbarLabelFor(slotId)`      | Resolves the label for one slot ID.                                                               |
+| `useScopeClassName()`             | Returns the scoped chrome class prefix.                                                           |
+| `useScopedChromeAnchor()`         | Returns anchor metadata for scoped overlay chrome.                                                |
 
-`useContentControlInstance()` and `useHyperlinkPopupInstance()` are the context-free variants of `useContentControl()` and `useHyperlinkPopup()`, for a control mounted outside the part that owns the state.
+Use `useContentControlInstance()` outside the owning content-control part.
+Use `useHyperlinkPopupInstance()` outside the owning hyperlink part.
+These hooks provide context-free variants of the corresponding hooks.
 
-Review hooks (`useReview`, `useReviewOf`, `useReviewItem`, `useReviewAuthor`) ship in [`@docx-editor.dev/pro/react`](/docs/2.x/pro). The Vue twin lives in [`@docx-editor.dev/pro/vue`](/docs/2.x/pro).
+[`@docx-editor.dev/pro/react`](/docs/2.x/pro) provides `useReview`,
+`useReviewOf`, `useReviewItem`, and `useReviewAuthor`.
+[`@docx-editor.dev/pro/vue`](/docs/2.x/pro) provides the Vue equivalents.
 
 ## Next steps
 
-- [Composition](/docs/2.x/react/composition): the primitives these hooks live inside
-- [Toolbar](/docs/2.x/guides/toolbar): every slot id `useEditorCommand` accepts
-- [Full API reference](/docs/2.x/api/react)
+- [React composition](/docs/2.x/react/composition)
+- [Toolbar slots](/docs/2.x/guides/toolbar)
+- [React API reference](/docs/2.x/api/react)

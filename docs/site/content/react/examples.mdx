@@ -1,13 +1,15 @@
 ---
 title: 'React examples'
-description: 'Concrete patterns for the current React root surface: mount bytes, save through the ref, compose custom chrome, and automate an open editor.'
+description: 'Load, save, compose, and automate documents with the React adapter.'
 category: 'React'
 order: 34
 ---
 
-Each example uses the current root exports only.
+These examples import public APIs from package roots.
 
 ## Load DOCX bytes
+
+This component fetches a DOCX file and passes its bytes to the editor:
 
 ```tsx
 import { useEffect, useState } from 'react';
@@ -18,11 +20,13 @@ export function Editor({ url }: { url: string }) {
 
   useEffect(() => {
     let cancelled = false;
+
     fetch(url)
-      .then((r) => r.arrayBuffer())
+      .then((response) => response.arrayBuffer())
       .then((buffer) => {
         if (!cancelled) setDoc(new Uint8Array(buffer));
       });
+
     return () => {
       cancelled = true;
     };
@@ -33,6 +37,8 @@ export function Editor({ url }: { url: string }) {
 ```
 
 ## Save through the ref
+
+This component calls `DocxEditorRef.save()` and uploads the result:
 
 ```tsx
 import { useRef } from 'react';
@@ -58,6 +64,9 @@ export function SaveButton({ bytes }: { bytes: Uint8Array }) {
 
 ## Compose custom chrome
 
+This example replaces the packaged frame with composition primitives.
+The custom **Bold** button gets its state from `useEditorCommand`:
+
 ```tsx
 import { DocxEditor, useEditorCommand } from '@docx-editor.dev/react';
 
@@ -65,7 +74,8 @@ function BoldButton() {
   const bold = useEditorCommand('text.bold');
   return (
     <button
-      onMouseDown={(e) => e.preventDefault()} // chrome must not steal the caret
+      // Prevent toolbar actions from moving the document caret.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={() => bold.execute()}
       disabled={!bold.isEnabled}
     >
@@ -93,16 +103,20 @@ export function CustomChrome({ bytes }: { bytes: Uint8Array }) {
 
 ## Automate an open editor
 
+This component uses the Editing API to read the first paragraph.
+It disposes the browser runtime after the operation:
+
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
-import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+import { DocxEditor as BrowserDocxEditor } from '@docx-editor.dev/editor-api/browser';
 
 export function AutomateButton() {
   const editor = useDocxEditor();
 
   async function run() {
     if (!editor) return;
-    const runtime = DocxEditor.createBrowser(editor);
+    const runtime = BrowserDocxEditor.createBrowser(editor);
+
     try {
       await runtime.run(async (context) => {
         const first = context.document.body.paragraphs.getFirst();
@@ -121,6 +135,6 @@ export function AutomateButton() {
 ## Next steps
 
 - [React package overview](/docs/2.x/react)
-- [Props reference](/docs/2.x/react/props)
+- [React props](/docs/2.x/react/props)
 - [Toolbar guide](/docs/2.x/guides/toolbar)
-- [Editing API](/docs/2.x/editor-api)
+- [Editing API documentation](/docs/2.x/editor-api)

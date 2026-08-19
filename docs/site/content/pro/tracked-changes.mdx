@@ -1,17 +1,47 @@
 ---
 title: 'Tracked changes'
-description: 'Suggesting mode records every edit as a Word revision. Render them, accept and reject them, from the packaged review sidebar or from your own UI.'
+description: 'Use suggesting mode to record Word revisions. Render, accept, or reject them with the packaged review sidebar or your own UI.'
 category: 'Pro'
 order: 61
 ---
 
-In suggesting mode every edit becomes a revision instead of a direct change. Insertions render underlined, deletions struck through, and each revision carries its author and timestamp. Revisions serialize to Word's native `w:ins` / `w:del` markup, so a document reviewed here and one reviewed in Word are interchangeable.
+In suggesting mode, the editor records each edit as a revision. It underlines insertions and strikes through deletions.
 
-Requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+Each revision includes its author and timestamp. The editor serializes revisions as Word `w:ins` and `w:del` markup.
+
+You can review the saved document in this editor or Microsoft Word.
+
+This feature requires the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
 ## Turn on suggesting
 
-Editing mode is engine state, not a mount-time prop. Move it with the `setEditingMode` command:
+Editing mode is engine state. Use the `setEditingMode` command to change it after mount.
+
+### Vue
+
+This Vue component switches between editing and suggesting modes:
+
+```vue
+<script setup lang="ts">
+import { useEditorCommand, useEditorState } from '@docx-editor.dev/vue';
+
+const mode = useEditorState((state) => state.editingMode);
+const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
+const edit = useEditorCommand({ type: 'setEditingMode', mode: 'editing' });
+</script>
+
+<template>
+  <button type="button" @click="mode === 'suggesting' ? edit.execute() : suggest.execute()">
+    {{ mode === 'suggesting' ? 'Suggesting' : 'Editing' }}
+  </button>
+</template>
+```
+
+Save this component as `SuggestToggle.vue`. Mount it as a child of `DocxEditorRoot`.
+
+### React
+
+This React example adds the same control to a review editor:
 
 ```tsx
 import { DocxEditor, useEditorCommand, useEditorState } from '@docx-editor.dev/react';
@@ -45,61 +75,80 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`DocumentEditingMode` is `'editing' | 'suggesting' | 'viewing'`. The packaged toolbar already ships this control as the `review.editingMode` slot, so `<DocxEditor.Toolbar />` gives you the same thing without writing the toggle.
+`DocumentEditingMode` is `'editing' | 'suggesting' | 'viewing'`.
 
-On Vue, import `DocxEditorReview` from `@docx-editor.dev/pro/vue` and mount it inside `DocxEditorViewport` beside `DocxEditorContent`. The composable surface matches React: `useReview()`, `useReviewOf(editorRef, query)`, and `useReviewItem()`.
+The packaged toolbar provides this control in the `review.editingMode` slot. `<DocxEditor.Toolbar />` adds the control without a custom toggle.
+
+Import the Vue review rail and composables from `@docx-editor.dev/pro/vue`. Vue composables return computed refs.
 
 ## Choose the opening mode
 
-The `mode` prop decides how a document opens, matching the toolbar's pill: `'edit'`, `'suggesting'`, or `'view'`.
+The `mode` prop sets the opening mode. Its values match the toolbar control: `'edit'`, `'suggesting'`, or `'view'`.
+
+This Vue example sets `mode` on `DocxEditorRoot`:
+
+```vue
+<DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin" mode="suggesting">
+  <!-- Editor parts -->
+</DocxEditorRoot>
+```
+
+This React example sets `mode` on `DocxEditor.Root`:
 
 ```tsx
 <DocxEditor.Root document={bytes} author="Jess Lin" mode="suggesting">
 ```
 
-A document can also ask for tracked changes itself: Word writes `w:trackRevisions` into `word/settings.xml` when its author turns the feature on. If you omit `mode` on `DocxEditor.Root`, the editor honors that request and opens the document in suggesting mode. Following the request needs the same two things as `mode="suggesting"`: a review module and an `author`.
+Microsoft Word writes `w:trackRevisions` to `word/settings.xml` when an author turns on tracked changes.
 
-An explicit `mode` wins over that request. With `'edit'` or `'suggesting'`, the reader still switches modes from the toolbar; with `'view'`, the editor stays read-only. One exception: a document whose enforced protection permits editing only as tracked changes still opens in suggesting mode.
+If you omit `mode`, the editor honors this setting and opens in suggesting mode. This behavior requires a review module and an `author`.
+
+An explicit `mode` overrides the document setting. The toolbar can switch between `'edit'` and `'suggesting'`.
+
+The `'view'` mode keeps the editor read-only. Enforced protection overrides this rule when the document permits only tracked changes.
 
 The `<DocxEditor>` component defaults `mode` to `'edit'`, so the packaged editor opens every document ready to type.
 
 ## What gets tracked
 
-The revision model covers more than inline text:
+The revision model covers these changes:
 
-- **Text** insertions and deletions, including replacements: one card, the way Word presents it.
-- **Paragraph structure**: inserted and deleted paragraph marks, paragraph property changes. A
-  changed mark shows as a colored pilcrow with a change bar in the margin, wherever the
-  paragraph is, table cells included. One mark can hold two decisions at once — one author
-  inserted the break, the next proposed removing it — and both are offered.
-- **Tables**: row and cell insert and delete, plus row, cell, and table property changes.
-- **Formatting**: run and paragraph property changes, as their own cards.
+- **Text:** The editor tracks insertions, deletions, and replacements. A replacement uses one card, as in Word.
+- **Paragraph structure:** The editor tracks inserted and deleted paragraph marks, plus paragraph property changes.
+- **Tables:** The editor tracks row and cell insertion or deletion. It also tracks row, cell, and table property changes.
+- **Formatting:** The editor gives run and paragraph property changes separate cards.
 
-All of these round-trip as real OOXML revisions, not editor-private state.
+A changed paragraph mark appears as a colored pilcrow with a margin change bar. This behavior also applies inside table cells.
 
-Attribution is drawn in **All Markup** only, as Word draws it. The resolved views answer what
-the document would be once every decision is taken, so they show no colors, no pilcrows, and no
-change bars. They also merge: a paragraph whose mark a change deleted runs into the next one in
-**No Markup**, the way accepting that change leaves it.
+A paragraph mark can contain two decisions. For example, one author can insert a break before another author proposes its removal.
+
+The editor presents both decisions. It saves all supported changes as OOXML revisions.
+
+The editor shows attribution only in **All Markup**, consistent with Word.
+
+Resolved views show the result after all decisions. They omit review colors, pilcrows, and change bars.
+
+Resolved views also merge paragraphs when a revision deletes the paragraph mark. **No Markup** then matches the result of accepting that change.
 
 ## Color review content by author
 
-Every reviewer gets their own color. A paragraph three people edited reads as three
-people, the way Word shows it — you don't configure anything to get this.
+The editor assigns a color to each reviewer. A paragraph with changes from three reviewers shows three author colors.
 
-Color says who made a change. The decoration says what the change was: insertions stay
-underlined, deletions stay struck through, whatever the colors are.
+You do not need to configure this behavior. Color identifies the author.
 
-Each author takes a color from the `--doc-review-author-0` … `--doc-review-author-7`
-ramp, assigned in order of first appearance in the document. Past eight authors the ramp
-repeats. The review sidebar uses the same colors. Each card carries its author's color on its
-leading edge and in the avatar disc, so you can pair a card with the text it annotates at
-a glance.
+Decoration identifies the change type. Insertions remain underlined, and deletions remain struck through.
+
+Each author receives a color from `--doc-review-author-0` through `--doc-review-author-7`.
+
+The editor assigns slots by each author's first appearance. The ramp repeats after eight authors.
+
+The review sidebar uses the same colors. Each card uses its author color on the leading edge and avatar disc.
 
 ### Restyle the ramp
 
-To change the palette everyone draws from, restate the slots under `.docx-editor`. This
-moves the painted document and the review cards together:
+Override the slots under `.docx-editor` to change the shared palette.
+
+This example changes two author colors for the painted document and review cards:
 
 ```css
 .docx-editor {
@@ -108,16 +157,48 @@ moves the painted document and the review cards together:
 }
 ```
 
-One ramp covers both themes. Author the slots for a light page. Dark mode renders the
-document through an inverting filter, which corrects them for you, and the review cards
-lift them on their own.
+One ramp supports both themes. Define the slots for a light page.
 
-The packaged stylesheet declares the ramp on `.docx-editor`, so load your sheet after
-`editor.css` or use a more specific selector.
+Dark mode applies an inverting filter to the document. The review cards adjust their colors separately.
 
-### The declarative syntax
+The packaged stylesheet declares the ramp on `.docx-editor`. Load your stylesheet after `editor.css`, or use a more specific selector.
 
-To go further than the ramp, mount declarations. There is no styling prop:
+### Use declarative styles
+
+Mount style declarations for more control. Vue exports `DocxEditorAuthorStyle` and `DocxEditorColorByChangeType` from `@docx-editor.dev/vue`.
+
+This Vue example assigns an author style and colors other changes by type:
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+} from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
+    <DocxEditorAuthorStyle author="Jess Lin" color="#7c3aed" avatar-url="/avatars/jess.png" />
+    <DocxEditorColorByChangeType />
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+React exposes the same declarations as `DocxEditor.AuthorStyle` and `DocxEditor.ColorByChangeType`.
+
+This React example assigns one author color:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -134,31 +215,31 @@ const MODULES = [reviewModule()];
 </DocxEditor.Root>;
 ```
 
-`AuthorStyle` and `ColorByChangeType` render no DOM. They declare presentation, and the
-engine follows:
+The author-style and change-type components do not render Document Object Model (DOM) elements.
 
-- **Mounting** applies the declaration. Declarations present when the editor is created
-  reach it before the first paint, so the document opens already styled.
-- **Changing a prop** re-applies it live. The pages repaint without a remount, so the
-  caret, the selection, and the undo history survive.
-- **Unmounting** removes it. The author returns to their ramp color.
+They declare presentation for the engine:
 
-Because they are components, styling follows your state the way the rest of your UI does:
-render one conditionally, map over a config, or drive one from a color picker. Place them
-anywhere inside `DocxEditor.Root` — they find the editor through context.
+- **Mount:** The engine applies the declaration. A declaration present during creation applies before the first paint.
+- **Prop change:** The engine reapplies the declaration and repaints pages without a remount. The caret, selection, and undo history remain.
+- **Unmount:** The engine removes the declaration. The author returns to the ramp color.
 
-Pick one lane. In React, declare. Calling `setRevisionStyles` yourself while declarations
-are mounted overwrites what they composed, and they don't reassert until one of them mounts,
-unmounts, or changes a prop — so the imperative value stays until something moves. Drive the
-declarations from state instead.
+You can render declarations conditionally, map them from configuration, or control them with a color picker.
 
-The engine paints the page, not React, which is why this is the one part of the editor you
-declare rather than render. Everything here is presentation: none of it is written into
-the file.
+Place declarations anywhere inside `DocxEditor.Root`. They access the editor through context.
+
+Use either declarations or `setRevisionStyles` as the source of style state.
+
+Calling `setRevisionStyles` while declarations are mounted replaces their combined value. The declarations reapply after a mount, unmount, or prop change.
+
+The imperative value remains until one of these changes occurs. Control the declarations from state to prevent conflicting updates.
+
+The engine paints these styles on the page. These presentation settings do not change the document file.
 
 ### Map your own authors to colors
 
-When you know the reviewers up front, map your config to declarations:
+If you know the reviewers, map your configuration to declarations.
+
+This React example creates declarations from an author-color map:
 
 ```tsx
 const AUTHOR_COLORS: Record<string, string> = {
@@ -175,11 +256,13 @@ const AUTHOR_COLORS: Record<string, string> = {
 </DocxEditor.Root>;
 ```
 
-`author` matches the document's `w:author` string exactly. A name your document does not
-carry costs nothing, so one shared config can serve every document your app opens. Authors
-you don't name keep their ramp color.
+`author` must match the document's `w:author` string.
 
-Each declaration accepts more than a color:
+A declaration for an absent author has no effect. You can use one shared configuration for multiple documents.
+
+Authors without declarations keep their ramp colors.
+
+Each declaration accepts more than a color. This example sets all supported presentation fields:
 
 ```tsx
 <DocxEditor.AuthorStyle
@@ -191,16 +274,17 @@ Each declaration accepts more than a color:
 />
 ```
 
-`spanClassName` is the escape hatch for painted text: any rule your CSS system can
-express, per author. The name says what it styles. The declaration renders no element of its
-own, so the classes land on the author's painted spans rather than on a wrapper. Keep those rules metric-safe. Outlines, shadows, and background accents are
-fine. A class that changes font size, weight, or family drifts the page away from the
-layout the engine measured.
+Use `spanClassName` to apply per-author CSS to painted text.
+
+The declaration renders no wrapper. The engine adds the classes to the author's painted spans.
+
+Keep these rules metric-safe. You can use outlines, shadows, and background accents.
+
+Do not change font size, weight, or family. These changes make painted text differ from the measured layout.
 
 ### Color by change type instead
 
-To color by what happened rather than by whom — insertions green, deletions red — mount
-`ColorByChangeType`:
+Mount `ColorByChangeType` to color insertions green and deletions red:
 
 ```tsx
 <DocxEditor.Root document={bytes} modules={MODULES}>
@@ -209,9 +293,9 @@ To color by what happened rather than by whom — insertions green, deletions re
 </DocxEditor.Root>
 ```
 
-Composed with `AuthorStyle`, it also expresses "highlight these reviewers, leave everyone
-else green and red". The authors you name keep their own color; the rest take the change
-colors:
+You can combine `ColorByChangeType` with `AuthorStyle`.
+
+Named authors keep their declared colors. Other authors use the change-type colors:
 
 ```tsx
 <DocxEditor.AuthorStyle author="AI Assistant" color="#b91c1c" />
@@ -220,25 +304,59 @@ colors:
 
 ### Discover the authors in a document
 
-The reviewers depend on the file, so a legend cannot be written in advance — it reads
-them. `useReviewAuthors()` returns every author the review surface draws, in slot order,
-with the color and style each one resolves to. It re-renders when a document loads and when
-the styling changes.
+Use the document's author list to build a legend.
 
-The list covers both halves of review. Authors of tracked changes come first, numbered by
-where their first change appears. Authors who only left comments follow, so they get a
-color of their own instead of sharing the first author's. A resolved view hides the
-revisions it has resolved away, so an author whose only change is hidden there is listed
-only if they also commented.
+`useReviewAuthors()` returns each displayed review author in slot order. Each entry includes its resolved color and style.
 
-`color` is the color the review chrome draws that author in. It follows a declaration when
-there is one, and the author's ramp slot otherwise. Under `ColorByChangeType` the painted
-text switches to the insertion and deletion colors while the cards keep these accents, so a
-legend built from the roster describes the sidebar rather than the page.
+The list updates when a document loads or review styling changes.
 
-An unstyled author's `color` is a `var(--doc-review-author-N)` reference, and the editor
-declares that ramp on the `docx-editor` class. So a legend needs that class on it or on one
-of its ancestors, or the swatches resolve to nothing:
+Vue exports `useReviewAuthors` from `@docx-editor.dev/vue`. It returns a shallow ref.
+
+This Vue example renders an author legend:
+
+```vue
+<script setup lang="ts">
+import { useReviewAuthors } from '@docx-editor.dev/vue';
+
+const authors = useReviewAuthors();
+</script>
+
+<template>
+  <ul class="docx-editor">
+    <li v-for="entry in authors" :key="entry.author">
+      <span
+        aria-hidden="true"
+        :style="{ background: entry.color, display: 'inline-block', height: '10px', width: '10px' }"
+      />
+      {{ entry.author }}
+    </li>
+  </ul>
+</template>
+```
+
+Call `useReviewAuthors()` in a component under `DocxEditorRoot`.
+
+The list covers tracked changes and comments.
+
+Authors of tracked changes appear first. Their order follows the first appearance of each change.
+
+Authors who only added comments follow. Each comment-only author receives a separate color.
+
+A resolved view hides resolved revisions. It omits authors whose only changes are hidden, unless those authors also commented.
+
+`color` is the author color used by review chrome.
+
+It uses a declaration when available. Otherwise, it uses the author's ramp slot.
+
+With `ColorByChangeType`, painted text uses insertion and deletion colors. Cards keep their author accents.
+
+Therefore, a legend from this list describes the sidebar colors, not the page colors.
+
+An unstyled author's `color` is a `var(--doc-review-author-N)` reference.
+
+The editor declares the ramp on `.docx-editor`. Add this class to the legend or an ancestor so the swatches resolve.
+
+React returns the author list directly. This example renders the same legend:
 
 ```tsx
 import { useReviewAuthors } from '@docx-editor.dev/react';
@@ -261,8 +379,9 @@ function ReviewerLegend() {
 }
 ```
 
-Combine the two for a color picker: hold the picks in state and render them as
-declarations.
+Store selected colors in state and render them as declarations.
+
+This React example combines the author list with color inputs:
 
 ```tsx
 import { useState } from 'react';
@@ -293,16 +412,17 @@ function ReviewerColors() {
 }
 ```
 
-Two related reads. `useReview().items` carries an `author` on every card, including people
-who only left comments. `getReviewAuthors()` on the editor instance is the same read
-without React.
+`useReview().items` includes an `author` on every card. This list includes authors who only added comments.
 
-Outside React there are no declarations to mount, so a headless or Vue host configures the
-same thing directly: pass `revisionStyles` when the editor is created, and call
-`setRevisionStyles` to change it afterwards.
+Call `getReviewAuthors()` on the editor instance to get the author list without an adapter.
 
-Both take a `RevisionStyles` value, which is `'author'` (the default), `'kind'`, or an
-object naming the authors you want to style:
+A headless host can pass `revisionStyles` during editor creation. It can call `setRevisionStyles` to update styles later.
+
+Vue and React hosts can also call this method when they do not mount declarations.
+
+Both APIs accept a `RevisionStyles` value. Use `'author'`, the default, `'kind'`, or an object with named author styles.
+
+This example uses change-type colors for other authors:
 
 ```ts
 editor.setRevisionStyles({
@@ -315,41 +435,39 @@ editor.setRevisionStyles({
 });
 ```
 
-A value is a color string or the same fields `AuthorStyle` takes. Setting `others` to
-`'kind'` is the imperative equivalent of mounting `ColorByChangeType` beside your
-declarations.
+An author value can be a color string or the fields accepted by `AuthorStyle`.
+
+Setting `others` to `'kind'` matches mounting `ColorByChangeType` with your declarations.
 
 ### Add custom avatars
 
-A review card shows the author's initials in a colored disc. Give an author an
-`avatarUrl` and the packaged card renders that image in the disc instead:
+A review card shows the author's initials in a colored disc.
+
+Set `avatarUrl` to show an image in the disc:
 
 ```tsx
 <DocxEditor.AuthorStyle author="Jess Lin" avatarUrl="https://example.com/avatars/jess.png" />
 ```
 
-The image covers the disc and inherits its round shape. The author's color still paints
-the disc underneath, so it shows while the image loads and stays visible if the image
-fails. Authors with no `avatarUrl` keep their initials, so you can supply pictures for the
-people you have them for and leave the rest.
+The image covers the disc and uses its round shape. The author color remains under the image.
 
-An avatar on its own changes nothing in the painted document. Only `color` moves an
-author's ink, so you can give someone a picture without recoloring their text.
+The color appears while the image loads or if loading fails. Authors without `avatarUrl` keep their initials.
 
-Point `avatarUrl` at a host you control, or at a `data:` or `blob:` URL you already hold.
-The browser fetches it when the card renders, and the packaged card requests it with
-`referrerPolicy="no-referrer"`.
+An avatar does not change the painted document. Only `color` changes an author's document ink.
 
-The editor never loads an image address that came out of the document. It also drops an
-address it cannot load safely, such as a script scheme or a protocol-relative host, when it
-reads the declaration. The initials stand in, and `useReviewAuthor` reports no avatar.
+Use a host you control for `avatarUrl`. You can also use a `data:` or `blob:` URL that your application already holds.
 
-Declarations match on the author's name as the document spells it, which is a value the
-document's sender controls. A file can therefore name its author after one of yours and
-inherit that person's color and picture. Treat the styling as a reading aid, not as proof
-of identity.
+The browser fetches the image when the card renders. The packaged card uses `referrerPolicy="no-referrer"`.
 
-To resize or reshape the disc, style the packaged class:
+The editor does not load image addresses from the document. It rejects unsafe declaration URLs, including script schemes and protocol-relative hosts.
+
+The card uses initials after rejection. `useReviewAuthor` then reports no avatar.
+
+Declarations match the exact author name in the document. The document sender controls this value.
+
+A document can use a known author's name and receive that author's color and image. Do not use review styling as identity proof.
+
+Style the packaged class to resize or reshape the disc:
 
 ```css
 .docx-editor .docx-review__avatar {
@@ -359,22 +477,33 @@ To resize or reshape the disc, style the packaged class:
 }
 ```
 
-Inside a custom card, read the avatar from `useReviewAuthor` and render your own image —
-see [Per-author card design](#per-author-card-design).
+In a custom card, read the avatar from `useReviewAuthor` and render your own image.
+
+For an example, see [Per-author card design](#per-author-card-design).
 
 ### Per-author CSS hooks
 
-Everything the editor draws with an author on it carries the same pair of attributes:
-tracked-change spans, paragraph-mark pilcrows, comment highlight bands, review cards, hover
-balloons, and gutter markers.
+The editor adds author attributes to these elements:
 
-- `data-review-author` — the author's name, exactly as the document spells it.
-- `data-review-author-slot` — their ramp slot, `0` to `7`, for styling by position when you
-  don't know the names in advance. Past eight authors the ramp repeats, so `slot` on a
-  roster entry is an unbounded rank and the attribute is that rank wrapped. Building a
-  selector from `useReviewAuthors()` needs the same wrap: `` `[data-review-author-slot='${slot % 8}']` ``.
+- Tracked-change spans
+- Paragraph-mark pilcrows
+- Comment highlight bands
+- Review cards
+- Hover balloons
+- Gutter markers
 
-The slot is the same number for the same person everywhere, so one reviewer is one selector:
+Each element has these attributes:
+
+- `data-review-author`: The exact author name from the document.
+- `data-review-author-slot`: The author's ramp slot from `0` through `7`.
+
+Use the slot attribute when you do not know author names. The ramp repeats after eight authors.
+
+The `slot` value from the author list is an unbounded rank. The DOM attribute wraps that rank to the ramp.
+
+Build selectors from `useReviewAuthors()` with the same calculation: `` `[data-review-author-slot='${slot % 8}']` ``.
+
+One author uses the same wrapped slot across all elements. This CSS example styles an author by name or slot:
 
 ```css
 /* Their changes in the text and their cards in the sidebar, together. */
@@ -389,7 +518,7 @@ The slot is the same number for the same person everywhere, so one reviewer is o
 }
 ```
 
-Narrow the selector when you want one surface rather than all of them:
+Narrow the selector to style one review surface:
 
 ```css
 /* Cards only. Their leading edge is already the author's color. */
@@ -399,27 +528,27 @@ Narrow the selector when you want one surface rather than all of them:
 }
 ```
 
-How you reach the color depends on which surface you're styling. Cards, balloons, markers,
-and bands carry `--doc-review-author-current`, a custom property holding that author's
-resolved color, so a rule on them can paint with it. A painted span doesn't carry it: the
-engine writes the author's color into the span's inline `color`, so use `currentColor`
-there, or read the ramp token for the slot.
+Cards, balloons, markers, and bands define `--doc-review-author-current`.
 
-Two things a stylesheet rule can't move on a painted span, because the engine writes them
-inline: the ink color, and the underline or strikethrough. Set those with `color` on the
-declaration, or by restyling the ramp. Keep span rules metric-safe, because the engine
-measures the text it paints.
+This custom property contains the resolved author color. Use it to color these elements.
 
-Spans carry `data-review-author-slot` only when the editor is coloring by author. Mounting
-`ColorByChangeType` with no author declarations leaves the name attribute and drops the
-slot.
+Painted spans do not define this property. The engine writes the author color to their inline `color`.
 
-This all works for comment authors too. Review covers comments and tracked changes
-together, so one person draws in one color across both. A reviewer who left comments but
-proposed no tracked changes still gets a slot, and `useReviewAuthors()` lists them after the
-authors that tracked changes introduce.
+Use `currentColor` for painted spans, or read the slot's ramp token.
 
-Declaring a style for them works the same way:
+CSS rules cannot override the inline ink color or text decoration on a painted span.
+
+Set ink color through a declaration or by changing the ramp. Keep span rules metric-safe because the engine measures painted text.
+
+Spans have `data-review-author-slot` only when the editor colors changes by author.
+
+`ColorByChangeType` without author declarations keeps the name attribute and removes the slot attribute.
+
+These rules also apply to comment authors. One author uses one color across comments and tracked changes.
+
+A comment-only author receives a slot. `useReviewAuthors()` lists comment-only authors after tracked-change authors.
+
+This declaration styles a comment-only author:
 
 ```tsx
 // Sam only comments. Their cards still get this color and picture.
@@ -428,12 +557,11 @@ Declaring a style for them works the same way:
 
 ### Tint commented text by author
 
-Commented text gets a highlight band over it, and the band carries the same three hooks as
-the card: `data-review-author`, `data-review-author-slot`, and `--doc-review-author-current`.
+Commented text has a highlight band. The band has `data-review-author`, `data-review-author-slot`, and `--doc-review-author-current`.
 
-The band's color does not change with the author on its own. Word highlights every comment
-in the same yellow, and eight highlighter colors on one page read as eight meanings rather
-than eight people. To opt in, write the rule yourself:
+By default, the band color does not change by author. Word uses the same yellow highlight for all comments.
+
+Add a CSS rule to use author colors:
 
 ```css
 /* Every comment, in its author's color. The fallback keeps a band that has no author
@@ -452,12 +580,11 @@ than eight people. To opt in, write the rule yourself:
 }
 ```
 
-Because the band and the card read the same variable, a reviewer's comment highlight and
-their card match without you repeating the color.
+The band and card read the same variable. Their colors match without duplicate color values.
 
-The band is chrome, not page content, so the dark theme's page filter never reaches it.
-Nothing corrects a color you set here. `--doc-review-author-current` holds the light-theme value in
-both themes, so if you tint by author, give the rule its own dark value:
+The band is chrome, not page content. The dark theme's page filter does not affect it.
+
+`--doc-review-author-current` contains the light-theme value in both themes. Define a dark-theme value when you tint bands by author:
 
 ```css
 .docx-editor.dark .docx-comment-band {
@@ -467,14 +594,17 @@ both themes, so if you tint by author, give the rule its own dark value:
 
 ### Per-author card design
 
-Cards are styled by composition, not by configuration. The packaged card already follows
-the author system on its own: its leading edge and avatar disc take the author's resolved
-color, and `avatarUrl` fills the avatar. The collapsed gutter marker stays neutral, and
-carries the author hooks for you to color if you want it to. Past that, style them with the
-`data-review-author` hooks shown earlier, or replace them outright.
+Use composition to change card design.
 
-The `List` render callback receives each item with its `author`, so a particular author can
-get an entirely different card component:
+The packaged card uses the resolved author color for its leading edge and avatar disc. `avatarUrl` provides the avatar image.
+
+The collapsed gutter marker remains neutral. It includes author hooks for optional color styling.
+
+Use `data-review-author` hooks for more changes, or replace the card.
+
+The `List` render callback receives each item and its `author`.
+
+This example selects a card component by author:
 
 ```tsx
 <DocxEditorReview>
@@ -486,11 +616,13 @@ get an entirely different card component:
 </DocxEditorReview>
 ```
 
-A custom card links back to the author styling system through `useReviewAuthor`. It
-returns the resolved color, ramp slot, and declared style for one author — the same
-answers the painted text draws with, so your card and the document agree. It covers
-comment authors as well, and it is live: change a declaration and the card re-renders
-with it.
+Use `useReviewAuthor` to connect a custom card to author styling.
+
+It returns one author's resolved color, ramp slot, and declared style. These values match the painted text.
+
+The hook supports comment authors. A declaration change updates the card.
+
+This React example renders a custom card with the resolved author style:
 
 ```tsx
 import { DocxEditorReview, useReviewAuthor, type ReviewItemView } from '@docx-editor.dev/pro/react';
@@ -510,7 +642,9 @@ function MyCard({ item }: { item: ReviewItemView }) {
 </DocxEditorReview>;
 ```
 
-The Vue composable accepts a ref or getter and returns a computed ref:
+The Vue composable accepts a ref or getter and returns a computed ref.
+
+This Vue example reads the current card author's style:
 
 ```vue
 <script setup lang="ts">
@@ -527,14 +661,56 @@ const author = useReviewAuthor(() => props.item.author);
 </template>
 ```
 
-See [Composition](/docs/2.x/react/composition) for the card parts the packaged design is
-made of.
+For the editor composition model, see [Vue composition](/docs/2.x/vue/composition) or [React composition](/docs/2.x/react/composition).
 
 ## The review sidebar
 
-`<DocxEditorReview />` renders one card per pending decision beside the page, anchored at the change. Place it inside the viewport so it scrolls with the document rather than chasing it.
+`<DocxEditorReview />` renders one card for each pending decision. It anchors each card beside its change.
 
-Each card is a compound you can take apart:
+Place it inside the viewport so the rail scrolls with the document.
+
+You can compose each card from review parts.
+
+### Vue
+
+This Vue example lists all review rail parts:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorReview } from '@docx-editor.dev/pro/vue';
+</script>
+
+<template>
+  <DocxEditorReview>
+    <DocxEditorReview.List>
+      <DocxEditorReview.Card>
+        <DocxEditorReview.Avatar />
+        <DocxEditorReview.Author />
+        <DocxEditorReview.Time />
+        <DocxEditorReview.Summary />
+        <DocxEditorReview.Accept />
+        <DocxEditorReview.Reject />
+        <DocxEditorReview.Resolve />
+        <DocxEditorReview.Reopen />
+        <DocxEditorReview.Delete />
+        <DocxEditorReview.Replies />
+        <DocxEditorReview.Reply />
+      </DocxEditorReview.Card>
+      <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
+    </DocxEditorReview.List>
+    <DocxEditorReview.Markers />
+    <DocxEditorReview.AddComment />
+    <DocxEditorReview.Draft />
+    <DocxEditorReview.Balloon />
+  </DocxEditorReview>
+</template>
+```
+
+Use the `#item="{ item }"` slot on `DocxEditorReview.List` to render a custom Vue card.
+
+### React
+
+This React example composes a review card:
 
 ```tsx
 <DocxEditorReview>
@@ -555,11 +731,27 @@ Each card is a compound you can take apart:
 </DocxEditorReview>
 ```
 
-`Markers` renders one gutter marker per top-level item while the pane is closed. Clicking a marker opens the pane on that item. `Balloon` is the decision popover for a format or structural change. `AddComment` and `Draft` provide comment authoring.
+`Markers` renders one gutter marker for each top-level item while the pane is closed.
 
-Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept`, `Reject`, `Delete`, `Reply`) also take `icon`.
+Selecting a marker opens the pane at that item. `Balloon` shows the decision popover for a formatting or structural change.
 
-`Markers` accepts an `icon` function because one component draws every gutter marker. Return a node for an item to replace its packaged glyph, or return `null` or `undefined` to keep that glyph. The packaged glyph reflects the item kind, including a custom node's `reviewCard` icon when provided.
+`AddComment` and `Draft` provide comment authoring.
+
+Review rail parts support Vue and React.
+
+Custom-node chrome supports React only. `@docx-editor.dev/pro/vue` does not export custom-node chrome.
+
+Every part accepts `className`, `asChild`, and `hidden`.
+
+The `Accept`, `Reject`, `Delete`, and `Reply` action parts also accept `icon`.
+
+`Markers` accepts an `icon` function because one component draws all gutter markers.
+
+Return a node to replace an item's packaged glyph. Return `null` or `undefined` to keep the packaged glyph.
+
+The packaged glyph identifies the item kind. It uses a custom node's `reviewCard` icon when provided.
+
+This React example selects marker icons by item kind:
 
 ```tsx
 <DocxEditorReview>
@@ -569,37 +761,55 @@ Every part takes `className`, `asChild`, and `hidden`. The action parts (`Accept
 </DocxEditorReview>
 ```
 
-An override inherits the rail's scale, offset, and visible window, so pass only the props you want to change.
+An override inherits the rail's scale, offset, and visible window. Pass only the props that you want to change.
 
-`Delete` is the destructive one, and it is on both kinds of card: on a comment it deletes the thread, and on a tracked change it discards the suggestion. `Replies` draws a Delete control per reply as well, so a single answer can be taken back without deleting the conversation it belongs to. Delete is absent on a card with nothing to discard.
+`Delete` removes content from both card types.
 
-The stylesheet reveals it on hover of the one node it deletes, and on keyboard focus. A rail where every card offers to throw a remark away invites clicking one by mistake, and a reply that lit up its parent's control at the same time is how a reader deletes the wrong one. Restyle it like any other part; if you want it always visible, `visibility: visible` on `[data-testid='review-delete']` is the whole override.
+On a comment card, it deletes the thread. On a tracked-change card, it discards the suggestion.
 
-## Choosing what the sidebar shows
+`Replies` renders one Delete control for each reply. This control removes the reply without deleting its thread.
 
-The props on `DocxEditorReview` decide which decisions appear and how they stack:
+Cards with nothing to discard do not show Delete.
 
-| Prop         | Default | What it does                                                                                           |
-| ------------ | ------- | ------------------------------------------------------------------------------------------------------ |
-| `filter`     | none    | Show a subset. `(item) => item.kind === 'comment'` puts comments in one rail and revisions in another. |
-| `structural` | `false` | Show "changed the document structure" cards.                                                           |
-| `formatting` | `false` | Show "changed text formatting" cards.                                                                  |
-| `stack`      | `true`  | Push overlapping cards down instead of letting them collide.                                           |
-| `gap`        | `8`     | Pixels between stacked cards. The only source of vertical spacing.                                     |
-| `furniture`  | none    | Host content above the cards: filters, a legend, a summary.                                            |
-| `preset`     | `true`  | `false` mounts the rail and its context only, so you lay the cards out yourself.                       |
+The stylesheet shows Delete when its target has hover or keyboard focus. This behavior reduces accidental deletion.
 
-`structural` and `formatting` default to off because a heavily revised document mints one card per site, and together they crowd out the decisions a reviewer reads in order. Those revisions stay marked in the page, and clicking one opens its balloon.
+You can style Delete like other parts. Set `visibility: visible` on `[data-testid='review-delete']` to keep it visible.
+
+## Choose sidebar content
+
+Use these `DocxEditorReview` props to control content and stacking:
+
+- `filter`, default none: Shows a subset. Use `(item) => item.kind === 'comment'` to separate comments and revisions.
+- `structural`, default `false`: Shows cards for document structure changes.
+- `formatting`, default `false`: Shows cards for text formatting changes.
+- `stack`, default `true`: Moves overlapping cards down to prevent collisions.
+- `gap`, default `8`: Sets the pixel gap between stacked cards. It is the only source of vertical spacing.
+- `furniture`, default none: Adds host content before cards, such as filters, a legend, or a summary.
+- `preset`, default `true`: Set `false` to mount only the rail and its context. You then position cards.
+
+`structural` and `formatting` default to `false`. A document with many revisions can create one card for each change location.
+
+These revisions remain marked on the page. Selecting one opens its balloon.
+
+This React example shows only comments and adds custom furniture:
 
 ```tsx
 <DocxEditorReview filter={(item) => item.kind === 'comment'} gap={12} furniture={<MyFilters />} />
 ```
 
-With `preset={false}` you keep the subscription and the anchoring and render the cards yourself. `useStackedReviewPositions(items, heights, { gap, scale })` is the packaged stacking math if you want the same behavior. Pass `scale`, the editor's render scale from `editor.getRenderScale()`. Card heights are CSS pixels and anchors are document points, so leaving it at its `1` default spaces the run by roughly a third too much.
+With `preset={false}`, you keep subscriptions and anchors while rendering cards.
+
+Use `useStackedReviewPositions(items, heights, { gap, scale })` for the packaged stacking calculation.
+
+Pass the editor render scale from `editor.getRenderScale()` as `scale`.
+
+Card heights use CSS pixels, while anchors use document points. The default scale of `1` makes spacing about one-third too large.
 
 ## Host content inside a card
 
-`useReviewItem()` reads the card a child is rendered inside, so you can add a row to some cards and not others:
+`useReviewItem()` reads the parent card's item.
+
+This React example adds a link only to revision cards:
 
 ```tsx
 import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
@@ -617,7 +827,54 @@ function AuditLink() {
 
 ## useReview
 
-The sidebar is one rendering of this hook. Take the hook for your own list, your own card layout, or avatars from your own directory:
+The review rail renders data from this composable or hook. Use it to build your own list or card layout.
+
+### Vue
+
+This Vue example renders review items and revision actions:
+
+```vue
+<script setup lang="ts">
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+const review = useReview();
+</script>
+
+<template>
+  <ul v-if="review.ready.value">
+    <li
+      v-for="item in review.items.value"
+      :key="item.key"
+      :data-active="item.key === review.activeKey.value || undefined"
+    >
+      <button type="button" @click="review.setActive(item.key)">
+        {{ item.text }}
+      </button>
+      <span>{{ item.author }}</span>
+      <button
+        v-if="item.kind === 'revision' && !item.readOnly"
+        type="button"
+        @click="review.accept(item)"
+      >
+        Accept
+      </button>
+      <button
+        v-if="item.kind === 'revision' && !item.readOnly"
+        type="button"
+        @click="review.reject(item)"
+      >
+        Reject
+      </button>
+    </li>
+  </ul>
+</template>
+```
+
+Render `item.text` with interpolation. The text comes from the file.
+
+### React
+
+This React example renders the same review data:
 
 ```tsx
 import { useReview } from '@docx-editor.dev/pro/react';
@@ -646,45 +903,95 @@ function ChangeList() {
 }
 ```
 
-| Member                            | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `items`                           | Every pending decision selected by the query, in reading order.                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `activeKey` / `setActive`         | Which item is open — the one `setActive` opened, or else the one the caret is in. Setting puts the caret at the start of the item's range and scrolls to it, entering or leaving a header/footer story as the item requires. Nothing is selected. The open item draws its own highlight, and `item.ranges` (revisions) or `item.range` (comments) is where to read what the card is about. Returns whether it landed; see `activatable`. Takes `{ reveal }` to choose where it lands. |
-| `accept(item)` / `reject(item)`   | Resolve a revision. Returns whether it landed; false on an item whose `readOnly` is true, and on a document open for viewing.                                                                                                                                                                                                                                                                                                                                                         |
-| `resolve(item)` / `reopen(item)`  | Resolve or reopen a comment thread. Repeating its current state succeeds without a write.                                                                                                                                                                                                                                                                                                                                                                                             |
-| `commentResolutionDisabledReason` | The engine refusal that disables both comment-resolution actions, or `null`.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `reply(item, text, author?)`      | Reply to a change. Returns whether it landed.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `remove(item)`                    | Delete a comment thread, or discard a suggestion. Returns whether it landed.                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `comment(text, author?)`          | Comment on the current selection. Returns whether it landed.                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `selectionAnchorY`                | Where a comment on the selection would sit, or `null`.                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `paneOpen` / `setPaneOpen`        | The same toggle the toolbar's comments button runs.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `ready`                           | False while no document is loaded.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+The review API provides these members:
 
-Each item carries `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, `readOnly`, `activatable`, `anchorY`, `pageIndex`, and `isActive`. Revision items add `kind: 'revision'`, a `revisionKind`, and `replacedText` for replacements, so a card can say _Replaced "x" with "y"_.
+- `items`: Contains each pending decision selected by the query in reading order.
+- `activeKey` and `setActive`: Read or set the open item.
+- `accept(item)` and `reject(item)`: Resolve a revision and return whether the write succeeded.
+- `resolve(item)` and `reopen(item)`: Change comment thread state.
+- `commentResolutionDisabledReason`: Contains the engine refusal for comment-resolution actions, or `null`.
+- `reply(item, text, author?)`: Adds a reply and returns whether the write succeeded.
+- `remove(item)`: Deletes a comment thread or discards a suggestion. It returns whether the write succeeded.
+- `comment(text, author?)`: Comments on the current selection and returns whether the write succeeded.
+- `selectionAnchorY`: Contains the proposed comment position, or `null`.
+- `paneOpen` and `setPaneOpen`: Read or change the same state as the toolbar comments control.
+- `ready`: Is `false` while no document is loaded.
 
-`replyIds` is on revisions too, not only comments. OOXML gives `w:ins` and `w:del` no body, so replying to a tracked change writes a comment over that change's range. The reply belongs inside the change's card, and the comment carries `parentRevisionId` naming it. A surface listing top-level cards must skip a comment with either `parentId` or `parentRevisionId`, or it will draw the reply twice.
+`setActive` opens the requested item or the item that contains the caret.
 
-Two things the hook gives you that you should not recompute. Items come from the document tree rather than from what is currently painted. A queue derived from the page would empty by half when the reader scrolls. And each item's `anchorY` comes from layout records rather than measured DOM, which would leave the sidebar a repaint behind the document and break outright during pagination.
+It puts the caret at the start of the item range and scrolls to it. It opens or closes header and footer stories as required.
 
-`readOnly` marks a decision the engine cannot resolve structurally. Do not offer Accept and Reject on those: a card offering a button the engine will refuse is worse than one that explains why it cannot.
+It does not select content. The open item renders its own highlight.
 
-In viewing mode, the packaged Accept, Reject, Delete, Resolve, and Reopen controls remain visible
-but disabled. Comment resolution uses the engine's `the document is open for viewing` reason
-verbatim; the decision stays available to inspect and activate without presenting a live control
-whose write the engine will refuse.
+Read `item.ranges` for revision ranges. Read `item.range` for a comment range.
 
-`useReviewOf(editor, query)` applies the same behavior to an editor you already hold. Filtering and activation follow these rules:
+`setActive` returns whether it moved the caret. Check `activatable`, and pass `{ reveal }` to control scrolling.
 
-1. `excludeRevisionKinds` removes those revision kinds from the hook's `items`. `placement: false` keeps the same metadata and sets `anchorY` and `pageIndex` to `null`.
-2. A query filters returned data only. It does not change what caret-driven activation may open.
-3. A custom rail that hides revision kinds must also call `editor.setReviewActivationExclusions([...])`. `DocxEditorReview` sets these exclusions from its `structural` and `formatting` props and clears them when it unmounts.
-4. Engine activation exclusions do not remove entries from an unfiltered queue. Those entries remain in `items` with `activatable: false`.
-5. `activatable` is also false when an item has no resolvable range. `setActive` returns `false` without moving the caret when activation is excluded or no range exists. It can also return `false` when the item's story cannot open.
+`accept` and `reject` return `false` for a `readOnly` item or a document in viewing mode.
+
+Repeating the current comment state through `resolve` or `reopen` succeeds without a write.
+
+Each item contains `key`, `id`, `author`, `initials`, `date`, `text`, `replyIds`, and `readOnly`.
+
+It also contains `activatable`, `anchorY`, `pageIndex`, and `isActive`.
+
+Revision items add `kind: 'revision'`, `revisionKind`, and `replacedText` for replacements. A card can use these fields to show _Replaced "x" with "y"_.
+
+Revision items also contain `replyIds`. OOXML gives `w:ins` and `w:del` no body.
+
+A reply to a tracked change creates a comment over the revision range. The comment uses `parentRevisionId` to identify the revision.
+
+Show that reply inside the revision card. A top-level list must omit comments with `parentId` or `parentRevisionId` to prevent duplicates.
+
+Use the hook's items and anchors instead of recalculating them.
+
+Items come from the document tree, not visible painted content. A visible-page queue would lose items during scrolling.
+
+Each `anchorY` comes from layout records, not measured DOM. DOM measurements can lag one paint behind and fail during pagination.
+
+`readOnly` identifies a decision that the engine cannot resolve structurally. Do not show **Accept** or **Reject** for these items.
+
+In viewing mode, packaged **Accept**, **Reject**, **Delete**, **Resolve**, and **Reopen** controls remain visible but disabled.
+
+Comment actions use the engine reason `the document is open for viewing`. Users can still inspect and activate the decision.
+
+`useReviewOf(editor, query)` applies the same behavior to an existing editor.
+
+This Vue example passes an editor ref and a reactive query:
+
+```vue
+<script setup lang="ts">
+import { useDocxEditor } from '@docx-editor.dev/vue';
+import { useReviewOf } from '@docx-editor.dev/pro/vue';
+
+const editorRef = useDocxEditor();
+const review = useReviewOf(editorRef, () => ({
+  excludeRevisionKinds: ['format', 'structural'],
+}));
+</script>
+
+<template>
+  <span>{{ review.items.value.length }} text changes</span>
+</template>
+```
+
+Filtering and activation use these rules:
+
+1. `excludeRevisionKinds` removes those revision kinds from `items`.
+2. `placement: false` keeps item metadata and sets `anchorY` and `pageIndex` to `null`.
+3. A query filters returned data. It does not limit caret-driven activation.
+4. A custom rail that hides revision kinds must call `editor.setReviewActivationExclusions([...])`.
+5. `DocxEditorReview` sets exclusions from `structural` and `formatting`. It clears them on unmount.
+6. Activation exclusions do not remove entries from an unfiltered queue. These entries remain in `items` with `activatable: false`.
+7. An item without a resolvable range also has `activatable: false`.
+8. `setActive` returns `false` without moving the caret when activation is excluded or no range exists.
+9. `setActive` can also return `false` when the item's story cannot open.
 
 ### Where an activated item lands
 
-`setActive` centers an item it has to scroll to, and leaves one that is already on screen alone.
-Pass `reveal` to choose something else:
+`setActive` centers an item when scrolling is required. It does not move an item that is already visible.
+
+Pass `reveal` to select another behavior:
 
 ```tsx
 setActive(item.key, { reveal: 'start' }); // near the top, the way a jump to a heading reads
@@ -692,14 +999,17 @@ setActive(item.key, { reveal: 'nearest' }); // the minimum scroll, so it lands a
 setActive(item.key, { reveal: false }); // open it, but leave the viewport alone
 ```
 
-`reveal: false` is for a host whose own list already drives the scroll, so the engine is not
-competing with it for the viewport. It governs the item: activating a change in a header, a footer
-or a note still opens that story and brings its band into view, because a story the reader cannot
-see is one they cannot read the change in.
+Use `reveal: false` when your list controls viewport scrolling.
+
+This option controls item scrolling. Activating a header, footer, or note change still opens that story and shows its band.
 
 ## Accept or reject in bulk
 
-There is no accept-all command; resolve the queue through the same per-item calls the cards use. Each accept resolves every site carrying that revision's `(id, author, date)` triple in one transaction and one undo step, so a tracked row insertion never ends up half-resolved:
+The API does not provide an accept-all command. Resolve the queue with the same per-item calls used by cards.
+
+Each call resolves every location with the revision's `(id, author, date)` tuple. It uses one transaction and one undo step.
+
+Therefore, a tracked row insertion cannot become partly resolved. This React example accepts each actionable item:
 
 ```tsx
 function AcceptAll() {
@@ -716,22 +1026,27 @@ function AcceptAll() {
 
 ## Detecting review content without the module
 
-`hasReviewContent` on the snapshot reports whether a document carries revisions or comment anchors, and it works with no review module registered. That is the signal for telling a reader "this document has tracked changes" before you load the pro surface:
+The snapshot's `hasReviewContent` reports whether a document contains revisions or comment anchors.
+
+It works without a registered review module. Use it to report review content before loading the Pro interface:
 
 ```tsx
 const hasReview = useEditorState((s) => s.hasReviewContent ?? false);
 ```
 
-Without a review module the editor renders revisions in their final state and offers no review UI, but it still saves them back untouched.
+Without a review module, the editor renders revisions in their final state and provides no review interface.
 
-## Interop with Word
+It still saves the revisions without changes.
 
-- Saving writes standard `w:ins` and `w:del`. Word lists them in its Review pane with the same author and date, and Word's Accept/Reject resolves them.
-- Opening a document containing Word revisions renders them inline and in the sidebar. Nothing is flattened on load.
-- Revisions in headers, footers, footnotes, and endnotes are tracked and reviewable in their own scope.
+## Work with Word
+
+- Saving writes standard `w:ins` and `w:del`. Word shows the same author and date. Its **Accept** and **Reject** actions resolve them.
+- Opening a document with Word revisions renders them inline and in the sidebar. The editor does not flatten them during load.
+- The editor tracks and reviews header, footer, footnote, and endnote revisions in their own scopes.
 
 ## Next steps
 
-- [Comments](/docs/2.x/pro/comments): discussion threads alongside revisions
-- [Custom nodes](/docs/2.x/pro/custom-nodes)
-- [Hooks](/docs/2.x/react/hooks): `useEditorCommand` and `useEditorState`
+- [Comments](/docs/2.x/pro/comments): Add discussion threads beside revisions.
+- [Vue composition](/docs/2.x/vue/composition): Arrange Vue editor and review parts.
+- [React composition](/docs/2.x/react/composition): Arrange React editor and review parts.
+- [Custom nodes](/docs/2.x/pro/custom-nodes): Add React-only custom-node chrome.

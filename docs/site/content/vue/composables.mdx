@@ -5,13 +5,15 @@ category: 'Vue'
 order: 38
 ---
 
-Every composable here must be called inside `DocxEditorRoot` (or inside `<DocxEditor>`, which renders one). They read the editor off context.
+Call each composable during `setup()` inside `DocxEditor.Root`. The packaged
+`<DocxEditor>` also renders this root.
 
-These are the same composables the packaged toolbar, menu, and navigation pane use. There is no private API behind them.
+These composables use Vue refs and computed refs. Vue unwraps those values in
+templates. Use `.value` when you read them in script code.
 
 ## useEditorCommand
 
-Most chrome is built on this one. Give it a slot id and get back a button's worth of state:
+Pass a chrome slot ID to get its action and reactive command state:
 
 ```vue
 <script setup lang="ts">
@@ -33,22 +35,30 @@ const bold = useEditorCommand('text.bold');
 </template>
 ```
 
-| Field            | Type             | Meaning                                                   |
-| ---------------- | ---------------- | --------------------------------------------------------- |
-| `execute()`      | `() => boolean`  | Run it. Returns whether it applied.                       |
-| `isActive`       | `boolean`        | The command's state at the caret (bold on, list applied). |
-| `isEnabled`      | `boolean`        | Whether it can run right now.                             |
-| `disabledReason` | `string \| null` | Why not, when it can't. Show it; don't invent your own.   |
+`execute()` returns `true` when the editor applies the command. `isActive`,
+`isEnabled`, and `disabledReason` are computed refs. The template unwraps them.
+Use `bold.isEnabled.value` in script code.
 
-It also takes a full `EditorCommand` object when there is no slot for what you want:
+The engine is the only source for enabled state. Show `disabledReason` when a
+control cannot run.
+
+You can also pass a reactive slot ID or an `EditorCommand`:
 
 ```ts
-const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
+import { computed } from 'vue';
+import { useEditorCommand } from '@docx-editor.dev/vue';
+
+const mode = computed(() => ({
+  type: 'setEditingMode' as const,
+  mode: 'suggesting' as const,
+}));
+const suggest = useEditorCommand(mode);
 ```
 
 ## useEditorState
 
-Subscribe to a slice of the editor snapshot. The selector runs on every tick; the component re-renders only when the slice changes:
+Subscribe to one slice of the editor snapshot. The composable returns a
+read-only shallow ref.
 
 ```vue
 <script setup lang="ts">
@@ -64,11 +74,32 @@ const dirty = useEditorState((s) => s.canUndo ?? false);
 </template>
 ```
 
-Pass a comparator as the second argument when the slice is an object. Select narrowly so a page-number read does not re-render on a bold toggle.
+The selector runs after editor updates. The ref changes only when the selected
+value changes.
+
+Pass a comparator when you select an object:
+
+```ts
+import { useEditorState } from '@docx-editor.dev/vue';
+
+const formatting = useEditorState(
+  (snapshot) => snapshot.formatting,
+  (left, right) => left?.bold === right?.bold && left?.italic === right?.italic
+);
+```
+
+Select the smallest useful value. A page selector then stays stable when the
+user changes bold formatting.
+
+Useful snapshot fields include `page`, `selection`, `selectionCollapsed`,
+`formatting`, `table`, `image`, `editable`, `isLoading`, `isOpening`,
+`parseError`, `editingMode`, `canUndo`, `canRedo`, `pageSetup`,
+`fontSubstitutions`, `hasReviewContent`, and `lastRejection`.
 
 ## useDocxEditor
 
-The editor instance itself, or `null` before content mounts. The escape hatch for anything the other composables don't cover:
+This composable returns a shallow ref to the editor instance. Its value is
+`null` before the content mounts.
 
 ```vue
 <script setup lang="ts">
@@ -83,32 +114,40 @@ async function save() {
 </script>
 ```
 
-Reading state through `editor.snapshot()` in render will not re-render your component when the document changes. That is what `useEditorState` is for.
+Use the instance for actions and one-time reads. A direct `snapshot()` call
+does not create a Vue subscription. Use `useEditorState` for reactive state.
 
 ## useEditorEvent
 
-Subscribe to an editor event for the life of the component:
+Subscribe to an editor event for the component lifetime:
 
 ```ts
-useEditorEvent('selectionChange', () => (panelOpen.value = false));
-useEditorEvent('change', (change) => void autosave(change.revision));
+import { useEditorEvent } from '@docx-editor.dev/vue';
+
+useEditorEvent('selectionChange', () => {
+  panelOpen.value = false;
+});
+useEditorEvent('change', (change) => {
+  void autosave(change.revision);
+});
 ```
 
 ## useEditorCaret
 
-Where the caret is, as a paragraph and an offset — the shape the write APIs take as their `at`. The value is reference-stable, so capturing it in a menu handler is safe.
+Returns the caret as `{ paragraphId, offset }`. Write APIs accept this shape as
+their `at` value.
 
 ## useEditorSnapshot
 
-Revision counter for an editor, for your own external-store wiring.
+Returns a revision ref for an editor. Use it for custom external-store wiring.
 
 ## useZoom
 
-Read and set zoom from chrome. Pairs with the toolbar zoom controls.
+Returns the current zoom and controls that change it.
 
 ## useFontFamily
 
-Backs the font picker. The same shape as any value control: current value, options, setter, enabled flag.
+Returns the current family, available families, setter, and enabled state:
 
 ```vue
 <script setup lang="ts">
@@ -123,49 +162,127 @@ const font = useFontFamily();
     :disabled="!font.isEnabled"
     @change="font.setValue(($event.target as HTMLSelectElement).value)"
   >
-    <option v-for="family in font.options" :key="family" :value="family">{{ family }}</option>
+    <option v-for="family in font.options" :key="family" :value="family">
+      {{ family }}
+    </option>
   </select>
 </template>
 ```
 
-`useParagraphStyle` has the same shape for the style list.
+`useParagraphStyle` provides the same pattern for paragraph styles.
 
 ## usePageSetup
 
-Read and change margins, orientation, and paper size for the current section:
+Read and change page size, margins, orientation, and scope:
 
-```ts
-const { pageSetup, apply, isEnabled } = usePageSetup();
-apply({ orientation: pageSetup?.orientation === 'landscape' ? 'portrait' : 'landscape' });
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { usePageSetup } from '@docx-editor.dev/vue';
+
+const page = usePageSetup();
+const landscape = computed(() => page.pageSetup.value?.orientation === 'landscape');
+
+function toggleOrientation() {
+  page.apply({
+    orientation: landscape.value ? 'portrait' : 'landscape',
+    scope: 'section',
+  });
+}
+</script>
+
+<template>
+  <button :disabled="!page.isEnabled" @click="toggleOrientation">
+    {{ landscape ? 'Use portrait' : 'Use landscape' }}
+  </button>
+</template>
 ```
+
+`apply()` returns `true` when the editor applies the update. Sizes and margins
+use twips. Set `scope` to `'section'` or `'document'`.
 
 ## useParagraphIndent
 
-Current indents plus an `apply` for ruler-style editing.
+Returns current paragraph indents and an `apply()` action for ruler controls.
 
 ## useDocumentOutline
 
-Headings in document order, plus a jump. This is the whole navigation pane:
+Read headings in document order and move the selection to a heading:
 
-```ts
-const { items, selectedBlockId, goTo, isEmpty } = useDocumentOutline();
+```vue
+<script setup lang="ts">
+import { useDocumentOutline } from '@docx-editor.dev/vue';
+
+const outline = useDocumentOutline();
+</script>
+
+<template>
+  <p v-if="outline.isEmpty">No headings</p>
+  <ul v-else>
+    <li
+      v-for="{ heading, depth } in outline.items"
+      :key="heading.blockId"
+      :style="{ paddingInlineStart: `${depth * 12}px` }"
+    >
+      <button
+        :aria-current="heading.blockId === outline.selectedBlockId ? 'location' : undefined"
+        @click="outline.goTo(heading.blockId)"
+      >
+        {{ heading.text }}
+      </button>
+    </li>
+  </ul>
+</template>
 ```
+
+Each item has `{ heading, depth }`. A heading has `text`, `level`, and
+`blockId`. `depth` starts at zero for the shallowest heading in the document.
+Use `headings` when you do not need the calculated depth.
 
 ## useDocumentSearch
 
-Debounced find, with match navigation. `matchCase` / `setMatchCase` and `wholeWord` / `setWholeWord` are on the same object.
+Search the document and move between matches:
+
+```vue
+<script setup lang="ts">
+import { useDocumentSearch } from '@docx-editor.dev/vue';
+
+const search = useDocumentSearch();
+</script>
+
+<template>
+  <label>
+    Find
+    <input
+      :value="search.query"
+      @input="search.setQuery(($event.target as HTMLInputElement).value)"
+    />
+  </label>
+  <span aria-live="polite">
+    {{ search.matches.length === 0 ? 0 : search.activeIndex + 1 }}
+    / {{ search.matches.length }}{{ search.truncated ? '+' : '' }}
+  </span>
+  <button :disabled="search.matches.length === 0" @click="search.previous">Previous</button>
+  <button :disabled="search.matches.length === 0" @click="search.next">Next</button>
+</template>
+```
+
+The composable waits 150 milliseconds before it searches. `isPending` reports
+that delay. It also provides `goTo`, `clear`, `matchCase`, `setMatchCase`,
+`wholeWord`, and `setWholeWord`. `truncated` becomes true at the 2,000-match
+limit.
 
 ## useNavigationPane
 
-Open state and width for the navigation pane.
+Returns the navigation pane state, width, active tab, and setters.
 
 ## useNavigationShift
 
-Horizontal offset the open navigation pane pushes the page by.
+Returns the horizontal page offset caused by the open navigation pane.
 
 ## useDocxSource
 
-Fetches bytes and fonts for a URL, `File`, or `Blob`, with cancellation:
+Fetch bytes and fonts from a URL, `File`, or `Blob`:
 
 ```ts
 const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
@@ -175,61 +292,101 @@ const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
 
 ## useFonts
 
-Builds a `FontResolver` from a source plus fragments. See [Fonts](/docs/2.x/guides/fonts).
+Builds a `FontResolver` from a source and configuration fragments. See the
+[font guide](/docs/2.x/guides/fonts).
 
 ## useHyperlinkPopup and useHyperlinkPopupInstance
 
-State behind the link popover, for a custom panel. `useHyperlinkPopupInstance` is the context-free variant for a control mounted outside the part that owns the state.
+Returns the link popover state and actions. Use
+`useHyperlinkPopupInstance` outside the component that owns the popover
+context.
 
 ## useContentControl and useContentControlInstance
 
-The content-control inspector: locks, value writes, form fill. `useContentControlInstance` is the context-free variant.
+Returns content-control locks, value actions, and form-fill state. Use
+`useContentControlInstance` outside the component that owns this context.
 
 ## useHeaderFooterState
 
-Which header/footer scope is being edited, or `null`.
+Returns the active header or footer scope, or `null`.
 
 ## useNoteScopeState and useNotePropertiesState
 
-Footnote and endnote scope and numbering properties for the current scope.
+Return the active note scope and its numbering properties.
 
 ## useContextMenuTarget
 
-The element the last right-click landed on.
+Returns the element that received the last context-menu action.
 
 ## useEditorValueCommand
 
-Value-taking commands: `'image.wrap'`, `'image.altText'`.
+Returns state and actions for value commands such as `'image.wrap'` and
+`'image.altText'`.
 
 ## useTableBorderTargetLabel
 
-Label for the active table border target, for a custom border control.
+Returns the label for the active table border target.
 
 ## useTranslation and useChromeTranslate
 
-`useTranslation` returns `{ t }` bound to the active locale catalog. `useChromeTranslate(overrides?)` is the catalog-backed label resolver for chrome `t` props; an overrides `Map` is consulted first.
+`useTranslation` returns `{ t }` for the active locale. `useChromeTranslate`
+resolves labels for chrome `t` props. Pass a `Map` to override selected labels.
 
 ## Toolbar helpers
 
-| Composable              | Returns                                             |
-| ----------------------- | --------------------------------------------------- |
-| `useToolbarContext`     | Toolbar compound context for custom slot parts.     |
-| `useToolbarLabel`       | Resolved label for the active toolbar scope.        |
-| `useToolbarLabelFor`    | Label resolver for one slot id.                     |
-| `useScopeClassName`     | Scoped class prefix for chrome under a custom root. |
-| `useScopedChromeAnchor` | Anchor metadata for scoped overlay chrome.          |
+`useToolbarContext` returns the toolbar compound context.
+`useToolbarLabel` returns the active scope label. `useToolbarLabelFor` resolves
+a label for one slot ID. `useScopeClassName` returns the chrome class prefix.
+`useScopedChromeAnchor` returns anchor data for overlay chrome.
 
-`useReviewAuthors()` returns a reactive list of review authors and their resolved styles.
-Use it with `DocxEditor.AuthorStyle` or `DocxEditor.ColorByChangeType`.
+## Review author styles
 
-Review composables (`useReview`, `useReviewOf`, `useReviewItem`, `useReviewAuthor`, and
-`useStackedReviewPositions`) ship in
-[`@docx-editor.dev/pro/vue`](/docs/2.x/pro). The package also exports the
-`DocxEditorReview` compound. Mount the rail inside `DocxEditorViewport` beside
-`DocxEditorContent`.
+`useReviewAuthors` returns a shallow ref with each review author's `author`,
+`slot`, `color`, and resolved `style`. Tracked-change authors come first.
+Comment-only authors follow them.
+
+Declare styles inside `DocxEditor.Root`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useReviewAuthors } from '@docx-editor.dev/vue';
+
+const authors = useReviewAuthors();
+</script>
+
+<template>
+  <DocxEditor.AuthorStyle
+    author="Ada"
+    color="var(--doc-review-author-1)"
+    avatar-url="/avatars/ada.png"
+  />
+  <p>{{ authors.length }} review authors</p>
+</template>
+```
+
+Use `DocxEditor.ColorByChangeType` to color insertions and deletions by change
+type. These components change presentation only. They do not change the DOCX
+author data.
+
+## Pro Vue composables
+
+Install `@docx-editor.dev/pro` and import these APIs from
+`@docx-editor.dev/pro/vue`:
+
+- `useReview()` returns items, active state, review actions, pane state, and
+  readiness.
+- `useReviewOf(editorRef, query?)` binds the same state to an explicit editor
+  ref.
+- `useReviewItem()` returns the item for the active review card context.
+- `useReviewAuthor(author)` returns the resolved author style in a review rail.
+- `useStackedReviewPositions(items, heights, options?)` calculates card
+  positions without overlap.
+
+The package also exports `DocxEditorReview`. Mount it inside
+`DocxEditor.Viewport`, beside `DocxEditor.Content`.
 
 ## Next steps
 
-- [Composition](/docs/2.x/vue/composition): the primitives these composables live inside
-- [Toolbar](/docs/2.x/guides/toolbar): every slot id `useEditorCommand` accepts
-- [Full API reference](/docs/2.x/api/vue)
+- [Vue composition](/docs/2.x/vue/composition): place custom controls.
+- [Toolbar guide](/docs/2.x/guides/toolbar): find command slot IDs.
+- [Vue API reference](/docs/2.x/api/vue): inspect all composable types.

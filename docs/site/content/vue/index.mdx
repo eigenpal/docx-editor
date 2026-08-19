@@ -10,10 +10,24 @@ order: 35
 ## Install
 
 ```bash
-npm install @docx-editor.dev/vue @docx-editor.dev/core
+npm install @docx-editor.dev/vue @docx-editor.dev/core vue
 ```
 
-The adapter holds the engine as a peer, so install both. Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes, comments, and custom nodes, or [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the document from code.
+`@docx-editor.dev/core` and Vue 3 are peer dependencies. Install both beside the
+adapter. The adapter includes `@docx-editor.dev/i18n`.
+
+Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes and comments.
+Add [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the open
+document.
+
+Import the editor stylesheet once from your application entry:
+
+```ts
+import '@docx-editor.dev/vue/styles.css';
+```
+
+The stylesheet contains the editor chrome and layout classes. Your application
+must load it before you mount an editor.
 
 ## Quickstart
 
@@ -27,79 +41,96 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 </template>
 ```
 
-`<DocxEditor>` is the full packaged editor: title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and the painted editable document. The editor has nothing to SSR. On Nuxt, render it inside `<ClientOnly>` or load it with `defineAsyncComponent`.
+`<DocxEditor>` is the full packaged editor. It includes the title bar, menu,
+toolbar, navigation pane, hyperlink popover, context menu, and editable
+document.
+
+The editor has no server-rendered output. On Nuxt, render it inside
+`<ClientOnly>`. You can also load it with `defineAsyncComponent`.
 
 <DemoPlayground />
 
 ## Root surface
 
-- `DocxEditor`: the one-line host plus compound statics like `DocxEditor.Root`, `DocxEditor.Viewport`, `DocxEditor.Content`, `DocxEditor.Toolbar`, `DocxEditor.Menu`, `DocxEditor.Navigation`, `DocxEditor.HyperLink`, and `DocxEditorContextMenu`
-- composables from the same root: `useDocxEditor`, `useEditorState`, `useEditorCommand`, `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, `useFontFamily`
-- shared top-level pieces: `DocxEditorRoot`, `DocxEditorViewport`, `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`, `DocxEditorNavigation`, `DocxEditorPageSetupDialog`
+- `DocxEditor`: the packaged host and compound components.
+- Composables: `useDocxEditor`, `useEditorState`, `useEditorCommand`,
+  `useEditorEvent`, `usePageSetup`, `useParagraphIndent`, and `useFontFamily`.
+- Top-level components: `DocxEditorRoot`, `DocxEditorViewport`,
+  `DocxEditorContent`, `DocxEditorToolbar`, `DocxEditorMenu`,
+  `DocxEditorNavigation`, and `DocxEditorPageSetupDialog`.
 
-The review module and sidebar are licensed surfaces in [`@docx-editor.dev/pro`](/docs/2.x/pro). Import the Vue compound from `@docx-editor.dev/pro/vue`.
+The compound includes `DocxEditor.Root`, `DocxEditor.Viewport`,
+`DocxEditor.Content`, `DocxEditor.Toolbar`, `DocxEditor.Menu`,
+`DocxEditor.Navigation`, `DocxEditor.HyperLink`, and
+`DocxEditor.ContextMenu`.
 
-There is one export path. Components, composables, and the engine helpers all live on the package root. There are no `/ui`, `/composables`, or `/dialogs` subpaths.
+The review module and sidebar require a Pro license. Import the Vue review
+compound and composables from `@docx-editor.dev/pro/vue`.
+
+Components, composables, and engine helpers use the package root. The package
+does not provide `/ui`, `/composables`, or `/dialogs` subpaths. The stylesheet
+is the only separate export.
 
 ## Composition primitives
 
-When the packaged chrome is not enough, drop to the same primitives the sugar component uses internally:
+Use the composition primitives when you need custom chrome:
 
 ```vue
 <script setup lang="ts">
-import {
-  DocxEditorRoot,
-  DocxEditorViewport,
-  DocxEditorContent,
-  DocxEditorToolbar,
-} from '@docx-editor.dev/vue';
-</script>
-
-<template>
-  <DocxEditorRoot :document="bytes">
-    <DocxEditorToolbar />
-    <DocxEditorViewport>
-      <DocxEditorContent />
-    </DocxEditorViewport>
-  </DocxEditorRoot>
-</template>
-```
-
-## Toolbar
-
-The main chrome compound is exported from the package root as `DocxEditorToolbar`, and attached to the host as `DocxEditor.Toolbar`:
-
-```vue
-<script setup lang="ts">
-import { DocxEditor, useEditorCommand } from '@docx-editor.dev/vue';
-
-const bold = useEditorCommand('text.bold');
+import { DocxEditor } from '@docx-editor.dev/vue';
 </script>
 
 <template>
   <DocxEditor.Root :document="bytes">
-    <DocxEditor.Toolbar>
-      <button
-        @mousedown.prevent
-        :disabled="!bold.isEnabled"
-        :data-active="bold.isActive || undefined"
-        @click="bold.execute()"
-      >
-        Bold
-      </button>
-    </DocxEditor.Toolbar>
+    <DocxEditor.Toolbar />
     <DocxEditor.Viewport>
+      <DocxEditor.Navigation />
       <DocxEditor.Content />
+      <DocxEditor.HyperLink />
+      <DocxEditor.ContextMenu />
     </DocxEditor.Viewport>
   </DocxEditor.Root>
 </template>
 ```
 
-The lower-level composables (`useEditorCommand`, `useEditorState`, `useFontFamily`) also come from the root package.
+Keep `DocxEditor.Content` inside `DocxEditor.Viewport`. Place navigation and
+overlay chrome beside the content.
+
+## Toolbar
+
+The package exports the toolbar as `DocxEditorToolbar`. The host also exposes
+it as `DocxEditor.Toolbar`:
+
+```vue
+<script setup lang="ts">
+import { useEditorCommand } from '@docx-editor.dev/vue';
+
+const bold = useEditorCommand('text.bold');
+</script>
+
+<template>
+  <button
+    @mousedown.prevent
+    :disabled="!bold.isEnabled"
+    :data-active="bold.isActive || undefined"
+    :title="bold.disabledReason ?? 'Bold'"
+    @click="bold.execute()"
+  >
+    Bold
+  </button>
+</template>
+```
+
+Render this button as a descendant of `DocxEditor.Root`, such as inside
+`DocxEditor.Toolbar`.
+
+Use `@mousedown.prevent` on custom chrome buttons. This keeps the document
+caret in place.
 
 ## Editing API
 
-Drive the open document from code with the Office.js-compatible `@docx-editor.dev/editor-api/browser`, which takes the editor instance this adapter created:
+Use `@docx-editor.dev/editor-api/browser` to automate the open document. Pass
+the editor instance that the Vue adapter creates:
 
 ```ts
 import { useDocxEditor } from '@docx-editor.dev/vue';
@@ -109,12 +140,12 @@ const editor = useDocxEditor(); // null until the content is mounted
 const runtime = DocxEditor.createBrowser(editor.value!);
 ```
 
-The object model and its rules are in [Editing API](/docs/2.x/editor-api).
+For object model details, see [Editing API](/docs/2.x/editor-api).
 
 ## Next steps
 
-- [Composition](/docs/2.x/vue/composition): replace the packaged chrome with your own
-- [Composables](/docs/2.x/vue/composables): the API every packaged control is built on
-- [Props](/docs/2.x/vue/props): `<DocxEditor>` and the imperative ref
-- [Examples](/docs/2.x/vue/examples)
-- [Full API reference](/docs/2.x/api/vue)
+- [Vue composition](/docs/2.x/vue/composition): replace the packaged chrome.
+- [Vue composables](/docs/2.x/vue/composables): build reactive controls.
+- [Vue props](/docs/2.x/vue/props): configure `<DocxEditor>` and its ref.
+- [Vue examples](/docs/2.x/vue/examples): use complete integration patterns.
+- [Vue API reference](/docs/2.x/api/vue): inspect all public exports.

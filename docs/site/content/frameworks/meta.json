@@ -1,4 +1,4 @@
 {
   "title": "Frameworks",
-  "pages": ["nextjs", "vite", "remix", "astro"]
+  "pages": ["nextjs", "vite", "vite-vue", "nuxt", "remix", "astro"]
 }

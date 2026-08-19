@@ -1,29 +1,73 @@
 ---
 title: '@docx-editor.dev/pro'
-description: 'Tracked changes, comments, and custom nodes for the React DOCX editor. Register a module on the editor root, then take the hook or the packaged sidebar.'
+description: 'Add tracked changes and comments to Vue or React. Register the review module, then use the packaged rail or review composables.'
 category: 'Pro'
 order: 60
 ---
 
 <PackageStats name="@docx-editor.dev/pro" />
 
-`@docx-editor.dev/pro` adds three capabilities to the React editor:
+`@docx-editor.dev/pro` adds these review capabilities to the Vue and React editors:
 
-- **[Tracked changes](/docs/2.x/pro/tracked-changes)**: suggesting mode, markup rendering, accept and reject.
-- **[Comments](/docs/2.x/pro/comments)**: threads anchored to a range, with replies.
-- **[Custom nodes](/docs/2.x/pro/custom-nodes)**: your own inline node types, stored as Word content controls.
+- [**Tracked changes**](/docs/2.x/pro/tracked-changes): Use suggesting mode, render markup, and accept or reject changes.
+- [**Comments**](/docs/2.x/pro/comments): Add threads and replies to a text range.
+- [**Custom nodes**](/docs/2.x/pro/custom-nodes): Store your inline node types as Word content controls.
+
+Custom-node chrome supports React only. `@docx-editor.dev/pro/vue` does not export custom-node chrome.
 
 ## Install
 
+Install the Pro package with the Vue adapter and core engine:
+
 ```bash
-npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
+npm install @docx-editor.dev/vue @docx-editor.dev/core @docx-editor.dev/pro
 ```
 
-The framework-neutral entry is `@docx-editor.dev/pro`; React chrome lives at `@docx-editor.dev/pro/react`.
+For React, replace `@docx-editor.dev/vue` with `@docx-editor.dev/react`.
+
+Import the Vue review rail from `@docx-editor.dev/pro/vue`.
+
+Import the React review rail from `@docx-editor.dev/pro/react`.
 
 ## Register a module
 
-Capabilities are modules you pass to the editor root. Module registration happens at construction, like `mode`. The editor reads the array when it is created and when `document`, `fonts`, `translate`, or `imageDecodePort` identity changes. Build the array outside the component or memoize it so the first mount sees the modules you intend.
+Pass review capabilities to the editor root through `modules`.
+
+The editor registers modules during creation. Keep the module array stable across renders.
+
+### Vue
+
+This Vue example registers `reviewModule` and adds the review rail:
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorToolbar,
+  DocxEditorViewport,
+} from '@docx-editor.dev/vue';
+import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
+    <DocxEditorToolbar />
+    <DocxEditorViewport>
+      <DocxEditorContent />
+      <DocxEditorReview />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+### React
+
+This React example registers `reviewModule` and adds the review rail:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -46,23 +90,59 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`modules` is also a prop on the packaged `<DocxEditor modules={MODULES} />`.
+The packaged `DocxEditor` component also accepts `modules` in each adapter.
 
-Without a review module the editor still opens a document containing revisions and comments and still saves them back untouched. It renders revisions in their final state and offers no review UI. Registering the module is what makes them visible and actionable.
+Without a review module, the editor still opens documents that contain revisions and comments.
+
+The editor saves that review content without changes. It renders revisions in their final state and provides no review interface.
+
+Register the module to show review content and provide review actions.
 
 ## Author attribution
 
-Comments and tracked changes are authored, and OOXML requires an author on both. `author` on the root supplies it ambiently, the way Word takes it from the signed-in user:
+Comments and tracked changes require an author. Office Open XML (OOXML) requires this value.
+
+Set `author` on the root.
+
+This Vue example sets the root prop:
+
+```vue
+<DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
+  <!-- Editor parts -->
+</DocxEditorRoot>
+```
+
+This React example sets the same prop:
 
 ```tsx
 <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
 ```
 
-Write calls report whether they landed rather than throwing, so a reply written with no author available returns `false` instead of silently producing an invalid document.
+Write calls return whether the editor applied the change. They do not throw for an unavailable author.
 
-## Chrome or hooks
+For example, a reply without an author returns `false`. The editor does not create an invalid document.
 
-Everything the packaged sidebar renders is reachable from `useReview()`. Use the sidebar for Word-like cards out of the box, or the hook to render your own markup. React imports `@docx-editor.dev/pro/react`; Vue imports `@docx-editor.dev/pro/vue`.
+## Choose the review rail or composables
+
+`useReview()` provides all capabilities in the packaged review rail. Use the rail, or render your own interface.
+
+Vue composables return computed refs. This example shows the number of pending items:
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+const review = useReview();
+const pending = computed(() => review.items.value.length);
+</script>
+
+<template>
+  <span v-if="review.ready.value">{{ pending }} pending</span>
+</template>
+```
+
+React hooks return values directly. This example shows the same count:
 
 ```tsx
 import { useReview } from '@docx-editor.dev/pro/react';
@@ -74,20 +154,32 @@ function ChangeCount() {
 }
 ```
 
-See [Tracked changes](/docs/2.x/pro/tracked-changes) for the full hook surface.
+For the complete composable API, see [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+To arrange editor parts, see [Vue composition](/docs/2.x/vue/composition) or [React composition](/docs/2.x/react/composition).
 
 ## Licensing
 
-`@docx-editor.dev/pro` is licensed under the EigenPal Pro Evaluation License 1.0: free for internal, non-production evaluation, with production use requiring a commercial agreement. Contact [licensing@eigenpal.com](mailto:licensing@eigenpal.com).
+The EigenPal Pro Evaluation License 1.0 covers `@docx-editor.dev/pro`.
 
-Both module factories accept an optional `licenseKey`. Construction never validates the key and never touches the network:
+You can use the package without charge for internal, non-production evaluation. Production use requires a commercial agreement.
+
+Contact [EigenPal licensing](mailto:licensing@eigenpal.com) for a commercial agreement.
+
+Both module factories accept an optional `licenseKey`.
+
+Module construction does not validate the key or access the network. This example passes a key to `reviewModule`:
 
 ```ts
 const MODULES = [reviewModule({ licenseKey: process.env.NEXT_PUBLIC_DOCX_LICENSE })];
 ```
 
+For a Vue application, read the key from your build tool instead of `process.env`.
+
 ## Next steps
 
-- [Tracked changes](/docs/2.x/pro/tracked-changes)
-- [Comments](/docs/2.x/pro/comments)
-- [Custom nodes](/docs/2.x/pro/custom-nodes)
+- [Tracked changes](/docs/2.x/pro/tracked-changes): Configure suggesting mode and the review interface.
+- [Comments](/docs/2.x/pro/comments): Add, reply to, resolve, and reopen comment threads.
+- [Custom nodes](/docs/2.x/pro/custom-nodes): Add React-only custom-node chrome.
+- [Vue composition](/docs/2.x/vue/composition): Arrange Vue editor parts.
+- [React composition](/docs/2.x/react/composition): Arrange React editor parts.

@@ -1,19 +1,27 @@
 ---
 title: 'Installation'
-description: 'Install the DOCX editor in React, Next.js, Vite, Remix, or Astro. Covers the stylesheet import, the client-only SSR boundary, fonts, and which package to pick.'
+description: 'Install the DOCX editor in React or Vue. Add the stylesheet and set a client-only boundary for server-rendered apps.'
 category: 'Getting Started'
 order: 2
 ---
 
-**Requirements:** React `^18 || ^19`.
+Use one of these supported framework versions:
+
+- React `^18 || ^19`
+- Vue `^3.3`
 
 ## Pick a package
 
-The adapter holds the engine as a peer, so install both. The string catalog comes with the adapter.
+Each adapter declares the engine as a peer dependency. Install the engine and one adapter.
+
+Use these commands to install the packages that your app needs:
 
 ```bash
-# React adapter: the editor, plus the engine it holds as a peer
+# React
 npm install @docx-editor.dev/react @docx-editor.dev/core
+
+# Vue
+npm install @docx-editor.dev/vue @docx-editor.dev/core
 
 # Tracked changes, comments, custom nodes
 # Commercially licensed: free to evaluate, production use needs an agreement
@@ -27,9 +35,9 @@ npm install @docx-editor.dev/editor-api
 npm install @docx-editor.dev/fonts
 ```
 
-## Mount it
+## Mount with React
 
-Import the component and the stylesheet once. `document` takes an `ArrayBuffer`, a `Uint8Array`, a `DocumentHandle`, or `'blank'` for an empty document. Omitting it means no document at all. The editor shows its loading screen, and every control stays disabled until you supply bytes.
+Import the component and stylesheet once.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -44,38 +52,95 @@ export default function App() {
 }
 ```
 
-Two details to get right:
+## Mount with Vue
 
-- Without the stylesheet the editor works but the chrome renders unstyled. The shipped CSS is
-  precompiled and scoped to `.docx-editor`, so the host app does not need Tailwind.
-- `<DocxEditor>` fills its parent. In a parent with no height it collapses and nothing appears.
+Import the Vue component and stylesheet once.
 
-## SSR frameworks
+This example creates an empty document:
 
-The editor measures text in the DOM at mount, so it must render client-side. Client-rendered apps (Vite) need nothing special; SSR frameworks need one client-only boundary. Each guide is a complete walkthrough backed by a runnable example:
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
+</script>
+
+<template>
+  <div class="editor-host">
+    <DocxEditor document="blank" />
+  </div>
+</template>
+
+<style>
+.editor-host {
+  height: 100vh;
+}
+</style>
+```
+
+The Vue stylesheet imports the core stylesheet that React uses.
+Your app does not need Tailwind or an icon font.
+
+`document` accepts an `ArrayBuffer`, `Uint8Array`, `DocumentHandle`, or `'blank'`.
+Use `'blank'` for an empty document.
+If you omit `document`, the editor waits for document bytes.
+
+Meet these layout requirements in both adapters:
+
+- Import the stylesheet to style the editor controls.
+- You do not need Tailwind because the precompiled CSS uses the `.docx-editor` scope.
+- Give the parent element a height because `<DocxEditor>` fills its parent.
+- A parent without a height collapses, so the editor does not appear.
+
+## Use server-rendered frameworks
+
+The editor uses the Document Object Model (DOM) to measure text when it mounts.
+You must render the editor on the client.
+Vite apps need no extra boundary.
+Server-side rendering (SSR) frameworks need a client-only boundary.
+
+Use the guide for your framework:
 
 <Cards>
   <Card
     href="/docs/2.x/frameworks/nextjs"
     title="Next.js"
-    description="dynamic() with ssr: false; fixes 'window is not defined'."
+    description="Use dynamic() with ssr: false to prevent 'window is not defined'."
   />
   <Card
     href="/docs/2.x/frameworks/vite"
     title="Vite"
-    description="Client-rendered React setup with no SSR boundary."
+    description="Set up a client-rendered React app without an SSR boundary."
   />
-  <Card href="/docs/2.x/frameworks/remix" title="Remix" description="Mount check + React.lazy." />
+  <Card
+    href="/docs/2.x/frameworks/vite-vue"
+    title="Vite with Vue"
+    description="Set up a client-rendered Vue app with the Vue stylesheet."
+  />
+  <Card
+    href="/docs/2.x/frameworks/nuxt"
+    title="Nuxt"
+    description="Set up the Vue adapter with a client-only component."
+  />
+  <Card
+    href="/docs/2.x/frameworks/remix"
+    title="Remix"
+    description="Use a mount check and React.lazy."
+  />
   <Card
     href="/docs/2.x/frameworks/astro"
     title="Astro"
-    description="React island with client:only."
+    description="Use a React island with client:only."
   />
 </Cards>
 
 ## Fonts
 
-The editor measures with real font bytes so line wrap and page breaks match Word. Embedded fonts in the document wire in automatically. For documents that reference Word's defaults without embedding them, `@docx-editor.dev/fonts` supplies metric-compatible substitutes:
+The editor uses font bytes to measure line wraps and page breaks.
+It loads embedded document fonts without configuration.
+Some documents reference Word default fonts without embedding them.
+For these documents, `@docx-editor.dev/fonts` supplies metric-compatible substitutes.
+
+Use this example to load the substitute fonts:
 
 ```tsx
 import { loadDefaultFonts } from '@docx-editor.dev/fonts';
@@ -85,15 +150,19 @@ const fonts = await loadDefaultFonts();
 <DocxEditor document={bytes} fonts={fonts} />;
 ```
 
-See [Fonts and measurement](/docs/2.x/guides/fonts) for how the sources compose.
+For information about font source order, see [Fonts and measurement](/docs/2.x/guides/fonts).
 
-## Headless
+## Edit documents without a browser
 
-To read, edit, and write a `.docx` headlessly, on a server, in a worker, or in a script, use [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). It opens bytes, edits them through an Office.js-compatible batching object model, and saves them back.
+Use [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to edit a `.docx` without a browser.
+You can use it on a server, in a worker, or in a script.
+The package opens document bytes and uses an Office.js-compatible batching object model.
+It saves your changes as document bytes.
 
 ## Next steps
 
-- [Quickstart](/docs/2.x/quickstart): load, edit, and save a `.docx`
-- [Composition](/docs/2.x/react/composition): build your own chrome
-- [Word fidelity](/docs/2.x/word-fidelity): feature support and round-trip behavior
-- [Props](/docs/2.x/react/props) and the [API reference](/docs/2.x/api/react)
+- Follow the [quickstart](/docs/2.x/quickstart) to load, edit, and save a `.docx`.
+- Read [React composition](/docs/2.x/react/composition) to build custom editor controls.
+- Read [Vue composition](/docs/2.x/vue/composition) to compose the editor with Vue components.
+- Review [Word fidelity](/docs/2.x/word-fidelity) for feature support and round-trip behavior.
+- Review [React props](/docs/2.x/react/props) and the [React API reference](/docs/2.x/api/react).
