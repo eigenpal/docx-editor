@@ -588,8 +588,10 @@ export interface Editor {
     relayout(options?: {
         sync?: boolean;
     }): void;
+    releaseSelection(): void;
     replyToReviewItem(key: string, text: string, author?: string): ExecResult;
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
+    retainSelection(): void;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;

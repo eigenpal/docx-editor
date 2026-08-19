@@ -15,6 +15,11 @@ import { useEditorCommand } from '../src/editor/useEditorCommand';
 import { useEditorEvent } from '../src/editor/useEditorEvent';
 import { useEditorCaret } from '../src/editor/useEditorCaret';
 import { docxEditorFacadeListenerCount } from '../src/editor/DocxEditorRoot';
+import {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+} from '../src/editor/DocxEditorAuthorStyle';
+import { useReviewAuthors } from '../src/editor/useReviewAuthors';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -39,6 +44,11 @@ function docx(body: string): Uint8Array {
 }
 
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
+const TRACKED_SOURCE = docx(
+  '<w:p><w:r><w:t xml:space="preserve">base </w:t></w:r>' +
+    '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-01T00:00:00Z">' +
+    '<w:r><w:t>added</w:t></w:r></w:ins></w:p>'
+);
 const selectPage = (snapshot: EditorSnapshot) => snapshot.page;
 
 async function flush(): Promise<void> {
@@ -448,6 +458,82 @@ describe('useEditorCaret', () => {
       expect(positions.some((pos) => pos !== null)).toBe(true);
     } finally {
       app.unmount();
+    }
+  });
+});
+
+describe('declarative revision styles', () => {
+  function mountTracked(declaration: ReturnType<typeof h>, probe?: ReturnType<typeof h>) {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: TRACKED_SOURCE },
+          {
+            default: () => [
+              declaration,
+              h(DocxEditorViewport, null, {
+                default: () => [probe, h(DocxEditorContent)].filter(Boolean),
+              }),
+            ],
+          }
+        ),
+    });
+    return { app, container };
+  }
+
+  test('AuthorStyle and ColorByChangeType match the React declarations', async () => {
+    const author = mountTracked(
+      h(DocxEditorAuthorStyle, {
+        author: 'Ada Lovelace',
+        color: 'var(--brand-ada)',
+      })
+    );
+    try {
+      author.app.mount(author.container);
+      await flush();
+      expect(author.container.querySelector<HTMLElement>('.docx-revision')?.style.color).toBe(
+        'var(--brand-ada)'
+      );
+    } finally {
+      author.app.unmount();
+    }
+
+    const kind = mountTracked(h(DocxEditorColorByChangeType));
+    try {
+      kind.app.mount(kind.container);
+      await flush();
+      expect(kind.container.querySelector<HTMLElement>('.docx-revision')?.style.color).toBe(
+        'var(--doc-revision-insertion)'
+      );
+    } finally {
+      kind.app.unmount();
+    }
+  });
+
+  test('useReviewAuthors returns the live author roster', async () => {
+    const Probe = defineComponent({
+      setup() {
+        const authors = useReviewAuthors();
+        return () =>
+          h(
+            'div',
+            { 'data-testid': 'review-authors' },
+            authors.value.map((entry) => `${entry.author}:${entry.color}`).join('|')
+          );
+      },
+    });
+    const view = mountTracked(h('span'), h(Probe));
+    try {
+      view.app.mount(view.container);
+      await flush();
+      expect(view.container.querySelector('[data-testid="review-authors"]')?.textContent).toBe(
+        'Ada Lovelace:var(--doc-review-author-0)'
+      );
+    } finally {
+      view.app.unmount();
     }
   });
 });

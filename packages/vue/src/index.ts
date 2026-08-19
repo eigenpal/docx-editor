@@ -24,6 +24,12 @@ export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEdi
 
 export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
 export { useEditorState, editorStateActiveSubscriptionCount } from './editor/useEditorState';
+export { useReviewAuthors } from './editor/useReviewAuthors';
+export {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+  type DocxEditorAuthorStyleProps,
+} from './editor/DocxEditorAuthorStyle';
 export { useScopeClassName } from './editor/scope-context';
 export { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 
@@ -364,6 +370,8 @@ export {
 } from './rulerTicks';
 
 export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
+export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 
 export type {
   Editor,
@@ -373,4 +381,10 @@ export type {
   EditorScope,
   PageSetup,
 } from '@docx-editor.dev/core/contracts/editor';
+export type {
+  ReviewAuthorInfo,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from '@docx-editor.dev/core/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';

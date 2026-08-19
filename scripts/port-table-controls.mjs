@@ -11,9 +11,6 @@ const outPath = path.join('packages/vue/src/editor/toolbar/TableControls.tsx');
 
 let s = fs.readFileSync(reactPath, 'utf8');
 
-s = s.replace(/className/g, 'className');
-s = s.replace(/\bclassName\b/g, 'className'); // keep className prop name in Vue ports
-
 // React types -> Vue
 s = s.replace(/ReactNode/g, 'VNode');
 s = s.replace(/React\.ReactElement/g, 'VNode');

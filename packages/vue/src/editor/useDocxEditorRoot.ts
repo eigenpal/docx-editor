@@ -41,6 +41,10 @@ import {
 import { deferredTick } from './deferred-notifier';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { createNavigationLayoutStore, navigationLayoutKey } from './navigation/navigation-layout';
+import {
+  createRevisionStyleRegistry,
+  RevisionStyleRegistryContext,
+} from './revision-style-registry';
 
 /** @public */
 export interface DocxEditorRootProps {
@@ -102,6 +106,8 @@ export function useDocxEditorRootOwner(
   provide(editorStateTickKey, tick);
   provide(navigationLayoutKey, createNavigationLayoutStore());
   provide(docxEditorRootOwnerKey, true);
+  const revisionStyleRegistry = createRevisionStyleRegistry();
+  provide(RevisionStyleRegistryContext, revisionStyleRegistry);
 
   const { t: catalogT, catalogue } = useTranslation();
   const translateResolver = computed(() => {
@@ -161,6 +167,7 @@ export function useDocxEditorRootOwner(
     for (const off of cleanups.splice(0)) off();
     const instance = editorRef.value;
     if (instance) {
+      revisionStyleRegistry.connect(null);
       instance.destroy();
       editorRef.value = null;
     }
@@ -192,6 +199,9 @@ export function useDocxEditorRootOwner(
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate: translateResolver.value,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
+      ...(revisionStyleRegistry.current() !== undefined
+        ? { revisionStyles: revisionStyleRegistry.current() }
+        : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
       ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
       ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
@@ -211,6 +221,7 @@ export function useDocxEditorRootOwner(
     );
     cleanups.push(instance.on('selectionChange', notify));
     cleanups.push(instance.on('error', notify));
+    revisionStyleRegistry.connect(instance);
     editorRef.value = instance;
   };
 

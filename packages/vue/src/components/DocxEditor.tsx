@@ -32,6 +32,10 @@ import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
 import { DocxEditorContextMenu, ContextMenu } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
+import {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+} from '../editor/DocxEditorAuthorStyle';
 import { ScopedByAncestorContext } from '../editor/scope-context';
 import { useDocxEditor } from '../editor/context';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
@@ -157,6 +161,8 @@ export interface DocxEditorNamespace {
   readonly HyperLink: typeof DocxEditorHyperLink;
   readonly ContextMenu: typeof ContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
+  readonly AuthorStyle: typeof DocxEditorAuthorStyle;
+  readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
 }
 
 const docxEditorFrameProps = {
@@ -518,6 +524,8 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenu,
   ContentControl: DocxEditorContentControl,
+  AuthorStyle: DocxEditorAuthorStyle,
+  ColorByChangeType: DocxEditorColorByChangeType,
 }) as unknown as DocxEditorNamespace;
 
 export default DocxEditor;

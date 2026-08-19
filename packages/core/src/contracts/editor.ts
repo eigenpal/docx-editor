@@ -761,24 +761,16 @@ export interface Editor {
   // Re-exposing any of it here is a small wiring job on the day a host actually needs it.
 
   /** Page boxes in stack coordinates, each with the text area the engine laid out.
-   *  `contentBox` is the page inset by the section margin — rulers draw margin zones from
-   *  it instead of assuming a default. The engine's margin is uniform on all four sides
-   *  today, so this must not be presented as per-side fidelity it does not have.
-   *
-   *  Empty before the first layout, which is the honest answer rather than a guessed page. */
+   * `contentBox` is the page inset by the section margin. Rulers use it for margin zones.
+   * The engine's margin is uniform, so do not present this as per-side fidelity.
+   * Empty before the first layout, which is the honest answer rather than a guessed page. */
   getPageGeometry(): readonly { index: number; box: Rect; contentBox: Rect }[];
-
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;
   focus(scope?: EditorScope): InteractionOutcome<void>;
-  /**
-   * Pin the current selection so chrome that takes focus does not collapse it.
-   *
-   * A compose box or hyperlink dialog keeps the highlighted range visible while its field
-   * has focus. Safe when detached: no-op, never throws.
-   */
+  /** Pin the selection while chrome has focus. Safe when detached. */
   retainSelection(): void;
-  /** Release a pin installed by {@link retainSelection}. Safe when detached: no-op. */
+  /** Release a pin installed by {@link retainSelection}. Safe when detached. */
   releaseSelection(): void;
   destroy(): void;
 

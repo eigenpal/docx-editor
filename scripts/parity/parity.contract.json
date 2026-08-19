@@ -40,8 +40,7 @@
       "className": "class"
     },
     "vueExclusive": {
-      "class": "Vue sugar host declares `class` on DocxEditorProps; React names the same surface `className`.",
-      "revisionStyles": "Per-author revision styling. React expresses it DECLARATIVELY — `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is one implementation either way."
+      "class": "Vue sugar host declares `class` on DocxEditorProps; React names the same surface `className`."
     }
   },
   "composableParity": {

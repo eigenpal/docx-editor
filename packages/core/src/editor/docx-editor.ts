@@ -2551,15 +2551,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       void options?.sync;
       surface?.layout();
     },
-
-    retainSelection() {
-      surface?.retainSelection();
-    },
-
-    releaseSelection() {
-      surface?.releaseSelection();
-    },
-
+    retainSelection: () => surface?.retainSelection(),
+    releaseSelection: () => surface?.releaseSelection(),
     focus(scope?: EditorScope) {
       // Same yield-window rule as `exec`: focusing the just-loaded document mounts it.
       openScheduler.flush();

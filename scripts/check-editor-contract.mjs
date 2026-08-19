@@ -12,21 +12,14 @@ const reactSource = readFileSync(resolve(root, 'packages/react/src/types.ts'), '
 const vueSource = readFileSync(resolve(root, 'packages/vue/src/types.ts'), 'utf8');
 
 const VUE_ONLY_PROPS = new Set([
-  // Per-author revision styling. React expresses it DECLARATIVELY —
-  // `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared
-  // instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no
-  // React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is
-  // one implementation either way. Mirrored in scripts/parity/parity.contract.json.
-  'revisionStyles',
   // Vue sugar host declares `class`; React names the same surface `className`.
   'class',
 ]);
 
-// React props with no Vue PROP counterpart — each an idiomatic framework
-// divergence, not a missing feature. Vue exposes the same capability another
-// way, so these are declared divergences rather than gaps to close. The same
-// set is recorded in scripts/parity/parity.contract.json.
-const REACT_PROPS_NOT_YET_IN_VUE = new Set([
+// React props with framework-native Vue equivalents. check-parity-contract.mjs
+// verifies each callback against an emit, each render prop against a slot, and
+// className against class. This set does not exclude a capability from parity.
+const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   // Vue applies `class` as a declared prop; React names it `className`.
   'className',
   // Vue exposes these as EMITS (`@ready`, `@change`, `@fontError`), which never
@@ -71,10 +64,10 @@ const vueProps = extractPropKeys(vueSource, 'DocxEditorProps');
 
 const undocumentedMissing = [...reactProps]
   .filter((key) => !vueProps.has(key))
-  .filter((key) => !REACT_PROPS_NOT_YET_IN_VUE.has(key))
+  .filter((key) => !REACT_FRAMEWORK_EQUIVALENTS.has(key))
   .sort();
 
-const staleMissingAllowlist = [...REACT_PROPS_NOT_YET_IN_VUE]
+const staleFrameworkEquivalents = [...REACT_FRAMEWORK_EQUIVALENTS]
   .filter((key) => vueProps.has(key))
   .sort();
 
@@ -85,7 +78,7 @@ const undocumentedVueOnly = [...vueProps]
 
 if (
   undocumentedMissing.length > 0 ||
-  staleMissingAllowlist.length > 0 ||
+  staleFrameworkEquivalents.length > 0 ||
   undocumentedVueOnly.length > 0
 ) {
   console.error('DocxEditor public prop contract drift detected.');
@@ -93,9 +86,9 @@ if (
     console.error(`\nReact props missing from Vue without an explicit staged divergence:`);
     for (const key of undocumentedMissing) console.error(`  - ${key}`);
   }
-  if (staleMissingAllowlist.length > 0) {
-    console.error(`\nProps now present in Vue but still listed as missing:`);
-    for (const key of staleMissingAllowlist) console.error(`  - ${key}`);
+  if (staleFrameworkEquivalents.length > 0) {
+    console.error(`\nProps now present in Vue but still mapped to framework equivalents:`);
+    for (const key of staleFrameworkEquivalents) console.error(`  - ${key}`);
   }
   if (undocumentedVueOnly.length > 0) {
     console.error(`\nVue-only props without an explicit divergence:`);
@@ -106,5 +99,5 @@ if (
 
 console.log(
   `✓ DocxEditor prop contract: ${vueProps.size} Vue props checked, ` +
-    `${REACT_PROPS_NOT_YET_IN_VUE.size} staged React props remain explicit divergences`
+    `${REACT_FRAMEWORK_EQUIVALENTS.size} React props have checked Vue framework equivalents`
 );

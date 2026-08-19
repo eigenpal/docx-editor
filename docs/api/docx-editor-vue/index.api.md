@@ -70,6 +70,10 @@ import { PropType } from 'vue';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
 import { Ref } from 'vue';
+import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
+import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
+import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
+import { RevisionStyles } from '@docx-editor.dev/core/editor';
 import { RulerIndent } from '@docx-editor.dev/core/editor';
 import { rulerPageBox } from '@docx-editor.dev/core/editor';
 import { RulerTick } from '@docx-editor.dev/core/editor';
@@ -1717,6 +1721,32 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
 
 export { createFontSource }
 
+// @public @deprecated (undocumented)
+export const DocumentName: vue.DefineComponent<vue.ExtractPropTypes<{
+    value: {
+        type: StringConstructor;
+        default: string;
+    };
+    onChange: {
+        type: PropType<(value: string) => void>;
+        default: undefined;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    value: {
+        type: StringConstructor;
+        default: string;
+    };
+    onChange: {
+        type: PropType<(value: string) => void>;
+        default: undefined;
+    };
+}>> & Readonly<{}>, {
+    value: string;
+    onChange: (value: string) => void;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 // @public (undocumented)
 export const DocumentOutline: vue.DefineComponent<vue.ExtractPropTypes<{
     headings: {
@@ -1781,8 +1811,24 @@ export { DocxDocument }
 // @public (undocumented)
 export const DocxEditor: DocxEditorNamespace;
 
+// @public (undocumented)
+export const DocxEditorAuthorStyle: {
+    new (): {
+        $props: DocxEditorAuthorStyleProps;
+    };
+};
+
+// @public (undocumented)
+export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
+    // (undocumented)
+    author: string;
+}
+
 // @public
 export type DocxEditorChildren = VNode;
+
+// @public (undocumented)
+export const DocxEditorColorByChangeType: vue.DefineComponent<{}, () => null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -2295,6 +2341,10 @@ export interface DocxEditorNamespace {
     // (undocumented)
     (props: DocxEditorProps): VNode;
     // (undocumented)
+    readonly AuthorStyle: typeof DocxEditorAuthorStyle;
+    // (undocumented)
+    readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+    // (undocumented)
     readonly Content: typeof DocxEditorContent;
     // (undocumented)
     readonly ContentControl: typeof DocxEditorContentControl;
@@ -2701,6 +2751,9 @@ export interface DocxEditorRulerProps {
     // (undocumented)
     unit?: 'inch' | 'cm';
 }
+
+// @public @deprecated (undocumented)
+export const DocxEditorShell: DocxEditorNamespace;
 
 // @public (undocumented)
 export const DocxEditorToolbar: DocxEditorToolbarNamespace;
@@ -3459,6 +3512,11 @@ export interface LocaleProviderProps {
     i18n?: Translations;
 }
 
+// @public @deprecated (undocumented)
+export const Logo: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 export { MAX_RESOLVER_FAMILIES }
 
 // @public
@@ -3471,6 +3529,9 @@ export interface MenuActionProps {
     // (undocumented)
     hidden?: boolean;
 }
+
+// @public @deprecated (undocumented)
+export const MenuBar: DocxEditorMenuNamespace;
 
 // @public
 export interface MenuGroupProps {
@@ -4249,6 +4310,8 @@ export { PX_PER_CM }
 
 export { PX_PER_INCH }
 
+export { ReviewAuthorInfo }
+
 // @public (undocumented)
 export const ReviewRailContext: InjectionKey<ShallowRef<ReviewRailRegistry>>;
 
@@ -4263,6 +4326,12 @@ export interface ReviewRailRegistry {
     // (undocumented)
     readonly requestCommentDraft: () => boolean;
 }
+
+export { RevisionAuthorAssignments }
+
+export { RevisionAuthorStyle }
+
+export { RevisionStyles }
 
 // @public (undocumented)
 export const RULER_WIDTH = 20;
@@ -4399,6 +4468,16 @@ export interface TableChromePartProps {
     // (undocumented)
     hidden?: boolean;
 }
+
+// @public @deprecated (undocumented)
+export const TitleBar: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public @deprecated (undocumented)
+export const TitleBarRight: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public @deprecated (undocumented)
 export const Toolbar: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -5062,6 +5141,9 @@ export interface UseParagraphStyleResult {
     // (undocumented)
     readonly value: ComputedRef<string | null>;
 }
+
+// @public (undocumented)
+export function useReviewAuthors(): Readonly<ShallowRef<readonly ReviewAuthorInfo[]>>;
 
 // @public (undocumented)
 export function useScopeClassName(): '' | 'docx-editor ';
