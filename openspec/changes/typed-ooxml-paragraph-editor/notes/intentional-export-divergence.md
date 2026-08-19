@@ -62,6 +62,16 @@ exemptions go when it lands.
   or a comment. The engine half (`getReviewAuthors`/`setRevisionStyles` on the instance) is
   shared, so a Vue host reaches the capability through the facade today; the Vue twin is a
   composable, with the rest of that layer.
+- `useReviewGutter` — the paddings the Viewport reserves for the review rail (the full
+  column, or the mirrored marker strip on a viewport too narrow for it). A hook over the
+  React layout store, so it belongs to the provider layer Vue has no twin of; the Vue
+  viewport does not reserve a review gutter at all yet.
+- `ReviewGutter` — that hook's return shape.
+- `reviewGutter` — the reservation rule as a pure function, for hosts and tests.
+- `ReviewGutterInput` — that function's input shape.
+- `REVIEW_PANE_GUTTER` — the full column's reservation width, exported so a custom rail
+  can tell which presentation the reservation can hold.
+- `REVIEW_MARKERS_GUTTER` — the marker strip's reservation width, same purpose.
 - `DocxEditorColorByChangeType` — declarative opt-out from by-author revision colouring
   (render-nothing component over the shared `setRevisionStyles`). Vue reaches the
   capability through its `revisionStyles` prop and the facade; a declarative twin lands

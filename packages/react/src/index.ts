@@ -52,6 +52,16 @@ export {
 // or any external chrome — composes with: the rail registry the Viewport and rulers
 // reserve gutter space through, the in-tree Slot, and the locale binding.
 export { ReviewRailContext, type ReviewRailRegistry } from './editor/context';
+// The gutter the Viewport reserves for that rail — the pane composes with it to pick a
+// presentation the reservation can actually hold (the full column, or the compact strip).
+export {
+  REVIEW_MARKERS_GUTTER,
+  REVIEW_PANE_GUTTER,
+  reviewGutter,
+  useReviewGutter,
+  type ReviewGutter,
+  type ReviewGutterInput,
+} from './editor/review-gutter';
 export { Slot, type SlotProps } from './editor/toolbar/Slot';
 export { LocaleProvider, useTranslation } from './i18n';
 export { useChromeTranslate, type ChromeTranslate } from './i18n';

@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/react': patch
+'@docx-editor.dev/react': minor
 ---
 
-The review rail reserves its card column only while the viewport has room for it beside the page; on narrower viewports the marker strip mirrors onto both edges so the document stays centered.
+The review rail adapts to the viewport: the full card column is reserved only while there is room for it beside the page, and narrower viewports get a centered document with a compact rail — markers in a mirrored strip, with the active card floating fully visible inside the viewport's edge. Custom chrome can read the reservation through the new `useReviewGutter` hook.

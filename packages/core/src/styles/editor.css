@@ -4813,6 +4813,14 @@ a.docx-hyperlink:focus-visible {
   width: 32px;
 }
 
+/* Compact rail (`data-compact`: the pane is open but the viewport reserved only the
+ * mirrored marker strip). The strip shows the markers, and the ONE active card floats at
+ * column width, pinned inside the viewport's right edge — over the page, where a shadow
+ * has to separate it from the ink underneath. Its slot is positioned inline by the rail. */
+.docx-review__slot--compact .docx-review__card {
+  box-shadow: var(--doc-shadow-lg);
+}
+
 /* The "comment on this" button. Pulled OUT of the card column, onto the page's own edge:
    the column is where comments live, and a button standing in it lands on whichever card
    already annotates the text being re-selected. On the edge there is nothing to collide

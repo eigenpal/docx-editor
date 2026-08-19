@@ -52,16 +52,19 @@ import type {
 } from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
+  REVIEW_PANE_GUTTER,
   ReviewRailContext,
   Slot,
   useDocxEditor,
   useEditorState,
   useReviewAuthors,
+  useReviewGutter,
   useTranslation,
   type ReviewAuthorInfo,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition';
+import { COMPACT_CARD_WIDTH, useRailMetrics, useRailWindow } from './use-rail-geometry';
 import { useReviewSlotSizing } from './use-review-slot-sizing';
 import { useReview, type ReviewItemView } from './useReview';
 import {
@@ -161,33 +164,8 @@ interface ReviewRailValue {
   readonly endDraft: () => void;
 }
 
-/** Where the rail is, in the coordinates of its positioning container. */
-interface RailMetrics {
-  /** Layout points to CSS pixels, from the engine. */
-  readonly scale: number;
-  /** The painted surface's own top offset, so chrome above the pages does not shift cards. */
-  readonly top: number;
-  /** Left edge, one gutter right of the sheet; null until there is a surface to measure. */
-  readonly left: number | null;
-}
-
-const INITIAL_METRICS: RailMetrics = { scale: 96 / 72, top: 0, left: null };
-
-/** Space between the page edge and the cards. */
-const RAIL_GUTTER = 16;
-
 /** The compose affordance's place in the stacking run. Not a review item; never rendered. */
 const COMPOSE_KEY = '\u0000compose';
-
-/**
- * How far outside the visible scroll window a card still mounts, in pixels.
- *
- * Enough that a normal scroll or a pane toggle never shows an empty gutter, small enough
- * that a document with two hundred comments mounts a handful of cards rather than all of
- * them. Rendering every card was the toggle's lag: two hundred cards' worth of DOM, plus a
- * `top` transition on each, in one frame.
- */
-const RAIL_OVERSCAN = 600;
 
 /** What an unmeasured, uncollapsed card reserves in the stacking run, in CSS px. */
 const DEFAULT_CARD_HEIGHT = 72;
@@ -459,6 +437,17 @@ function ReviewRoot({
   // The pane's open state is the ENGINE's, not this component's: the toolbar toggles it and
   // the viewport shifts the page for it, so a flag kept here would be a third opinion.
   const open = review.paneOpen;
+  // How much room the viewport actually reserved for that open pane. On a viewport too
+  // narrow for the full column, `DocxEditor.Viewport` mirrors the marker strip onto both
+  // edges instead — and a card drawn where the column would have been is cut off at the
+  // viewport's edge. So the rail follows the reservation: COMPACT means the pane is open
+  // but only the strip exists, and the rail presents markers with the one ACTIVE card
+  // floating pinned inside the viewport instead of the full column of cards. `inlineEnd`
+  // is 0 for one render while this rail's own registration is still in flight; that frame
+  // keeps the expanded presentation rather than flashing markers.
+  const gutter = useReviewGutter();
+  const compact = open && gutter.inlineEnd > 0 && gutter.inlineEnd < REVIEW_PANE_GUTTER;
+  const expanded = open && !compact;
 
   const items = useMemo(() => {
     return filter ? review.items.filter((entry) => filter(entry)) : review.items;
@@ -505,57 +494,10 @@ function ReviewRoot({
   // deliberate: dropping it would collapse the run and jump every card on screen.
   const observeSlot = useReviewSlotSizing(measure);
 
-  // Where the rail sits, measured from the PAINTED SURFACE rather than from the viewport.
-  //
-  // Both halves matter. Vertically, the surface's own offset inside the scroll container is
-  // whatever chrome the host put above the pages — without it every card is drawn that far
-  // too high. Horizontally, the page is centred in a viewport that is usually much wider, so
-  // a rail pinned to the right edge floats away from the page it annotates; it belongs one
-  // gutter to the right of the sheet, and it moves with the sheet when the window resizes or
-  // the zoom changes.
-  //
-  // Client rects, not `offsetLeft`/`offsetTop`: those are relative to each element's own
-  // `offsetParent`, and a host that positions its page wrapper makes the surface report
-  // `offsetLeft: 0` — landing the rail a page-width left, on top of the document. `scrollTop`
-  // and `clientTop` put the rects back into the same space the offsets used to describe.
-  const [metrics, setMetrics] = useState<RailMetrics>(INITIAL_METRICS);
-  useEffect(() => {
-    const rail = railRef.current;
-    if (!editor || !rail) return undefined;
-    const parent = rail.offsetParent as HTMLElement | null;
-    const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
-    const sync = (): void => {
-      setMetrics((previous) => {
-        const box = surface && parent ? surface.getBoundingClientRect() : null;
-        const frame = box && parent ? parent.getBoundingClientRect() : null;
-        const next: RailMetrics = {
-          // The engine's own points-to-pixels factor, zoom included. Deriving it here from
-          // `getZoom()` alone dropped the 96/72 and put every card at three quarters height.
-          scale: editor.getRenderScale(),
-          top:
-            box && frame && parent ? box.top - frame.top - parent.clientTop + parent.scrollTop : 0,
-          left:
-            box && frame && parent
-              ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
-              : null,
-        };
-        return previous.scale === next.scale &&
-          previous.top === next.top &&
-          previous.left === next.left
-          ? previous
-          : next;
-      });
-    };
-    sync();
-    const observer = new ResizeObserver(sync);
-    if (parent) observer.observe(parent);
-    if (surface) observer.observe(surface);
-    return () => observer.disconnect();
-    // Re-measured whenever the queue could have moved: a new page above an anchor changes
-    // where its card belongs, and zoom changes every anchor at once. `documentAbsent` and
-    // `hidden` because the rail element does not exist while either holds, and a binding
-    // pass that ran against the null ref must run again once there is a rail to measure.
-  }, [editor, items, documentAbsent, hidden]);
+  // Where the rail sits and which band of the scroller is on screen — the DOM-measurement
+  // half of the rail, in `use-rail-geometry.ts`.
+  const metrics = useRailMetrics(editor, railRef, items, !documentAbsent && !hidden);
+  const window_ = useRailWindow(editor, railRef, !documentAbsent && !hidden);
 
   // Clicking the canvas AROUND the page closes the open item. The caret decides everything
   // else, but a click on the grey moves no caret, so nothing else would ever put a card away.
@@ -577,51 +519,6 @@ function ReviewRoot({
     // bubbling listener never sees a click that lands on the pages layer.
     document.addEventListener('mousedown', onMouseDown, true);
     return () => document.removeEventListener('mousedown', onMouseDown, true);
-    // `documentAbsent` and `hidden` for the same reason as the metrics effect: no rail element
-    // exists while either holds.
-  }, [editor, documentAbsent, hidden]);
-
-  // The visible band of the scroller, in the rail's own coordinates. Passive listener,
-  // coalesced into a frame: the handler runs on every wheel tick and must do nothing but
-  // record two numbers.
-  const [window_, setWindow] = useState<{ top: number; bottom: number } | null>(null);
-  useEffect(() => {
-    const rail = railRef.current;
-    const scroller = rail?.offsetParent as HTMLElement | null;
-    if (!scroller) return undefined;
-    let frame = 0;
-    const sync = (): void => {
-      frame = 0;
-      setWindow((previous) => {
-        const top = scroller.scrollTop - RAIL_OVERSCAN;
-        const bottom = scroller.scrollTop + scroller.clientHeight + RAIL_OVERSCAN;
-        return previous && previous.top === top && previous.bottom === bottom
-          ? previous
-          : { top, bottom };
-      });
-    };
-    // While the reader scrolls, the slots' `top` transition is suppressed (a DOM attribute
-    // so no React work happens at scroll frequency). Restacks DURING a scroll come from
-    // cards entering the window and correcting an estimated height to a measured one; each
-    // correction shifts every card below it, and ANIMATING those shifts while the page
-    // itself moves read as a second, faster scroll layered over the document.
-    let settle = 0;
-    const onScroll = (): void => {
-      if (frame === 0) frame = requestAnimationFrame(sync);
-      rail?.setAttribute('data-scrolling', '');
-      window.clearTimeout(settle);
-      settle = window.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
-    };
-    sync();
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    const observer = new ResizeObserver(onScroll);
-    observer.observe(scroller);
-    return () => {
-      if (frame !== 0) cancelAnimationFrame(frame);
-      window.clearTimeout(settle);
-      scroller.removeEventListener('scroll', onScroll);
-      observer.disconnect();
-    };
     // `documentAbsent` and `hidden` for the same reason as the metrics effect: no rail element
     // exists while either holds.
   }, [editor, documentAbsent, hidden]);
@@ -769,7 +666,10 @@ function ReviewRoot({
     className: `docx-review${className ? ` ${className}` : ''}`,
     'data-testid': 'review-rail',
     'data-count': items.length,
-    'data-open': open ? '' : undefined,
+    // The COLUMN presentation, not the engine's pane state: compact keeps the strip
+    // styling (`:not([data-open])` is the 32px gutter) while the pane itself stays open.
+    'data-open': expanded ? '' : undefined,
+    'data-compact': compact ? '' : undefined,
     role: 'complementary' as const,
     'aria-label': t('review.ariaLabel'),
     onMouseDown: guardMousedown,
@@ -816,7 +716,12 @@ function ReviewRoot({
         : null}
       {!open || draftAnchorY === null || composeTop === null || (!preset && !('Draft' in rootParts))
         ? null
-        : takeRoot('Draft', <ReviewDraft top={composeTop} />)}
+        : // Compact: the compose box floats where the compact card does — at column width
+          // inside the viewport's edge — because a 300px card in the 32px strip is cut.
+          takeRoot(
+            'Draft',
+            <ReviewDraft top={composeTop} left={compact ? metrics.compactCardLeft : null} />
+          )}
       {/* Mounted open OR closed: the balloon is how a reader inspects a change whose rail
           card is filtered away, and a closed pane filters ALL of them away. */}
       {preset || 'Balloon' in rootParts ? takeRoot('Balloon', <ReviewBalloon />) : null}
@@ -836,22 +741,55 @@ function ReviewRoot({
     </ReviewList>
   );
   const markers = <ReviewMarkers scale={metrics.scale} offset={metrics.top} window={window_} />;
+  // Compact: the strip shows the markers, and only the ACTIVE decision gets a card —
+  // floated at column width, pinned just inside the viewport's right edge, over the page.
+  // The full run of cards has nowhere honest to be at this width; one at a time does.
+  const activeRoot = compact
+    ? (roots.find((entry) => entry.key === review.activeKey) ?? null)
+    : null;
+  const compactCard =
+    activeRoot && activeRoot.anchorY !== null && metrics.compactCardLeft !== null ? (
+      <ReviewItemContext.Provider value={activeRoot}>
+        <div
+          className="docx-review__slot docx-review__slot--compact"
+          data-testid="review-compact-card"
+          style={{
+            position: 'absolute',
+            top: metrics.top + activeRoot.anchorY * metrics.scale,
+            left: metrics.compactCardLeft,
+            width: COMPACT_CARD_WIDTH,
+          }}
+        >
+          {typeof rootChildren.rest === 'function' ? (
+            rootChildren.rest(activeRoot)
+          ) : (
+            <ReviewCard {...(cardClassName ? { className: cardClassName } : {})}>
+              {partitionReviewChildren(rootChildren.rest, 'list').rest}
+            </ReviewCard>
+          )}
+        </div>
+      </ReviewItemContext.Provider>
+    ) : null;
   // `preset={false}` supplies no defaults, but an explicit compound part still inherits the
   // geometry only the root can calculate. Unrecognized host nodes remain verbatim.
-  const body = open
-    ? preset || 'List' in rootParts
-      ? takeRoot('List', list)
-      : typeof rootChildren.rest === 'function'
-        ? null
-        : rootChildren.rest
-    : preset || 'Markers' in rootParts
-      ? // Closed, the rail keeps its anchors and drops everything else: a small marker per item
-        // in the margin, which is how a reader sees there is something to read without giving up
-        // the width. Clicking one opens the pane on that item.
-        takeRoot('Markers', markers)
-      : typeof rootChildren.rest === 'function'
-        ? null
-        : rootChildren.rest;
+  const body = expanded ? (
+    preset || 'List' in rootParts ? (
+      takeRoot('List', list)
+    ) : typeof rootChildren.rest === 'function' ? null : (
+      rootChildren.rest
+    )
+  ) : preset || 'Markers' in rootParts ? (
+    // Closed or compact, the rail keeps its anchors and drops everything else: a small
+    // marker per item in the margin, which is how a reader sees there is something to
+    // read without giving up the width. Clicking one opens the pane on that item —
+    // and, compact, floats that item's card.
+    <>
+      {takeRoot('Markers', markers)}
+      {compactCard}
+    </>
+  ) : typeof rootChildren.rest === 'function' ? null : (
+    rootChildren.rest
+  );
 
   return (
     <ReviewContext.Provider value={value}>
@@ -880,7 +818,7 @@ function ReviewRoot({
         </Slot>
       ) : (
         <aside {...shared}>
-          {open && furniture !== undefined ? (
+          {expanded && furniture !== undefined ? (
             <div className="docx-review__furniture" data-testid="review-furniture">
               {furniture}
             </div>
