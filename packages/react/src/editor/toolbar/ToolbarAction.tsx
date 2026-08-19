@@ -42,8 +42,6 @@ export interface ToolbarActionProps {
   /** Merge the behavior onto the single child element instead of rendering a `<button>`. */
   asChild?: boolean;
   className?: string;
-  /** Vue parity — use `className` in React. */
-  class?: string;
   children?: DocxEditorChildren;
 }
 

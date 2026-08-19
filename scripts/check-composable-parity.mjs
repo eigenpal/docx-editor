@@ -80,10 +80,14 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats) {
     issues.push(`INTERFACE '${name}' missing from Vue snapshot`);
     return;
   }
+  const comparedVueFields = new Set(vueFields);
+  if (reactFields.has('className')) comparedVueFields.delete('class');
   for (const k of reactFields) {
-    if (!vueFields.has(k)) issues.push(`INTERFACE '${name}': member '${k}' missing from Vue`);
+    if (!comparedVueFields.has(k)) {
+      issues.push(`INTERFACE '${name}': member '${k}' missing from Vue`);
+    }
   }
-  for (const k of vueFields) {
+  for (const k of comparedVueFields) {
     if (!reactFields.has(k)) issues.push(`INTERFACE '${name}': member '${k}' missing from React`);
   }
 
@@ -224,7 +228,7 @@ function main() {
   console.log(`  interfaces checked:   ${interfaceCount}`);
   console.log(`  member types checked: ${memberTypeChecks}`);
   console.log(`  type aliases checked: ${aliasChecks}`);
-  console.log('  normalizations:       Ref unwrap, MaybeRefOrGetter param');
+  console.log('  normalizations:       Ref unwrap, MaybeRefOrGetter param, Vue class alias');
   console.log(
     `  slot-form aliases:    ${slotFormAliasNames.length > 0 ? slotFormAliasNames.join(', ') : '(none)'} (${slotFormAliasChecks} reconciled)`
   );
@@ -287,6 +291,24 @@ export interface Editor {}
   let { issues } = runComposableParityCheck({ reactSnap: base, vueSnap: okVue });
   if (issues.length !== 0) {
     console.error('Self-test FAIL: normalized match should pass');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  const classAliasVue = okVue.replace(
+    'export interface SampleProps {',
+    'export interface SampleProps {\n    readonly class?: string;\n    readonly className?: string;'
+  );
+  const classAliasReact = base.replace(
+    'export interface SampleProps {',
+    'export interface SampleProps {\n    readonly className?: string;'
+  );
+  ({ issues } = runComposableParityCheck({
+    reactSnap: classAliasReact,
+    vueSnap: classAliasVue,
+  }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: Vue class alias should normalize');
     for (const i of issues) console.error(`  - ${i}`);
     process.exit(1);
   }

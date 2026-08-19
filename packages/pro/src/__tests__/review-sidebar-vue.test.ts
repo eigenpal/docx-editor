@@ -8,8 +8,9 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createSSRApp, defineComponent, h, nextTick } from 'vue';
+import { createApp, createSSRApp, defineComponent, h, nextTick, shallowRef } from 'vue';
 import { renderToString } from 'vue/server-renderer';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   COMMENTED_SOURCE,
   FORMAT_AND_INSERT,
@@ -28,7 +29,8 @@ import { reviewModule } from '../index.ts';
 import { flush as flushMount, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { useReviewStableId } from '../vue/stable-id.ts';
 import { DocxEditorAuthorStyle } from '../../../vue/src/editor/DocxEditorAuthorStyle.ts';
-import type { ReviewItemView } from '../vue/useReview.ts';
+import { useReviewRailRegistry } from '../../../vue/src/editor/context.ts';
+import { useReviewOf, type ReviewItemView } from '../vue/useReview.ts';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -176,6 +178,34 @@ describe('DocxEditorReview (Vue)', () => {
       expect(editor.isReviewPaneOpen()).toBe(true);
       expect(mounted.container.querySelector('[data-testid="review-draft"]')).toBeTruthy();
       assertNoRefOwnerWarnings(mounted.warnings);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('refuses a comment draft for a collapsed caret', async () => {
+    let requestDraft = () => false;
+    const DraftRequester = defineComponent({
+      setup() {
+        const rail = useReviewRailRegistry();
+        requestDraft = () => rail.value.requestCommentDraft();
+        return () => null;
+      },
+    });
+    const mounted = mountEditorTree(
+      () => h(DraftRequester),
+      SOURCE,
+      () => [h(DocxEditorReview)],
+      [reviewModule()]
+    );
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('.docx-page') !== null);
+      mounted.editor().surface!.focus();
+      expect(mounted.editor().snapshot().selectionCollapsed).toBe(true);
+      expect(requestDraft()).toBe(true);
+      await flush();
+      expect(mounted.container.querySelector('[data-testid="review-draft"]')).toBeNull();
     } finally {
       mounted.unmount();
     }
@@ -341,6 +371,38 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
+  test('stops observing a card slot when the card unmounts', async () => {
+    const original = globalThis.ResizeObserver;
+    const observed: Element[] = [];
+    const unobserved: Element[] = [];
+    class ProbeResizeObserver {
+      constructor(_callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        observed.push(target);
+      }
+      unobserve(target: Element) {
+        unobserved.push(target);
+      }
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = ProbeResizeObserver as unknown as typeof ResizeObserver;
+    const mounted = mountReview(TRACKED);
+    try {
+      await flush();
+      const slot = observed.find((node) => node.classList.contains('docx-review__slot'));
+      expect(slot).toBeDefined();
+      (
+        mounted.container.querySelector('[data-testid="review-delete"]') as HTMLButtonElement
+      ).click();
+      await waitFor(() => mounted.editor().getReviewItems().length === 0);
+      await waitFor(() => unobserved.includes(slot!));
+      expect(unobserved.includes(slot!)).toBe(true);
+    } finally {
+      mounted.unmount();
+      globalThis.ResizeObserver = original;
+    }
+  });
+
   test('default rail hides structural cards', async () => {
     const structural = docx(
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
@@ -352,6 +414,36 @@ describe('DocxEditorReview (Vue)', () => {
       await flush();
       const cards = [...mounted.container.querySelectorAll('[data-testid="review-card"]')];
       expect(cards.every((card) => card.getAttribute('data-kind') !== 'structural')).toBe(true);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('matches a structural balloon by the painted review author', async () => {
+    const structural = docx(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:ins w:id="1" w:author="Ada"/></w:trPr>' +
+        '<w:tc><w:p><w:r><w:t>first</w:t></w:r></w:p></w:tc></w:tr>' +
+        '<w:tr><w:trPr><w:ins w:id="1" w:author="Grace"/></w:trPr>' +
+        '<w:tc><w:p><w:r><w:t>second</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+    );
+    const mounted = mountReview(structural);
+    try {
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelectorAll('.docx-table-row--revision').length === 2
+      );
+      const rows = mounted.container.querySelectorAll<HTMLElement>('.docx-table-row--revision');
+      expect(rows[1]!.dataset.reviewAuthor).toBe('Grace');
+      rows[1]!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
+      );
+      const balloon = mounted.container.querySelector(
+        '[data-testid="review-balloon-card"]'
+      ) as HTMLElement;
+      expect(balloon.dataset.reviewAuthor).toBe('Grace');
     } finally {
       mounted.unmount();
     }
@@ -497,6 +589,58 @@ describe('DocxEditorReview (Vue)', () => {
       expect(mounted.container.querySelector('[data-testid="review-draft"]')).toBeNull();
     } finally {
       mounted.unmount();
+    }
+  });
+});
+
+describe('useReviewOf (Vue)', () => {
+  test('registers one listener set and skips unchanged review revisions', async () => {
+    const listeners = new Map<string, Set<() => void>>();
+    let revision = 1;
+    let itemReads = 0;
+    const editor = {
+      getReviewRevision: () => revision,
+      getEditingMode: () => 'editing',
+      getReviewItems: () => {
+        itemReads++;
+        return [];
+      },
+      on: (event: string, listener: () => void) => {
+        const eventListeners = listeners.get(event) ?? new Set<() => void>();
+        eventListeners.add(listener);
+        listeners.set(event, eventListeners);
+        return () => eventListeners.delete(listener);
+      },
+    } as unknown as DocxEditorInstance;
+    const editorRef = shallowRef<DocxEditorInstance | null>(editor);
+    const Probe = defineComponent({
+      setup() {
+        const review = useReviewOf(editorRef);
+        return () => h('div', { 'data-count': review.items.value.length });
+      },
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp(Probe);
+    app.mount(container);
+    try {
+      expect(
+        ['change', 'selectionChange', 'error'].map((event) => listeners.get(event)?.size ?? 0)
+      ).toEqual([1, 1, 1]);
+      const initialReads = itemReads;
+      listeners.get('change')?.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await nextTick();
+      expect(itemReads).toBe(initialReads);
+
+      revision++;
+      listeners.get('selectionChange')?.forEach((listener) => listener());
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await nextTick();
+      expect(itemReads).toBe(initialReads + 1);
+    } finally {
+      app.unmount();
+      container.remove();
     }
   });
 });

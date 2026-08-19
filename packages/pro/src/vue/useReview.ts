@@ -23,6 +23,10 @@ function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T |
   return source as T;
 }
 
+function reviewRevisionKey(editor: DocxEditorInstance): string {
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}`;
+}
+
 /** @public */
 export type ReviewItemView = ReviewItemPlacement;
 
@@ -85,36 +89,48 @@ function useReviewOfInternal(
   query?: MaybeRefOrGetter<ReviewItemQuery | undefined>,
   renderRevision?: EditorRenderRevision
 ): UseReviewReturn {
-  const version = shallowRef(0);
+  const ownedRevision = renderRevision ? null : shallowRef<unknown>('none');
   const touch = () => {
-    void version.value;
-    void renderRevision?.value;
+    void (renderRevision ?? ownedRevision)?.value;
   };
 
-  watch(
-    () => editorRef.value,
-    (editor, _prev, onCleanup) => {
-      if (!editor) {
-        version.value = 0;
-        return;
-      }
-      let disposed = false;
-      const notify = () => {
-        if (!disposed) version.value++;
-      };
-      version.value++;
-      const offDocument = editor.on('change', notify);
-      const offSelection = editor.on('selectionChange', notify);
-      const offError = editor.on('error', notify);
-      onCleanup(() => {
-        disposed = true;
-        offDocument();
-        offSelection();
-        offError();
-      });
-    },
-    { immediate: true, flush: 'sync' }
-  );
+  if (!renderRevision) {
+    watch(
+      () => editorRef.value,
+      (editor, _prev, onCleanup) => {
+        if (!editor) {
+          ownedRevision!.value = 'none';
+          return;
+        }
+        let key = reviewRevisionKey(editor);
+        ownedRevision!.value = key;
+        let disposed = false;
+        let scheduled: ReturnType<typeof setTimeout> | null = null;
+        const notify = () => {
+          if (disposed || scheduled !== null) return;
+          scheduled = setTimeout(() => {
+            scheduled = null;
+            if (disposed) return;
+            const next = reviewRevisionKey(editor);
+            if (next === key) return;
+            key = next;
+            ownedRevision!.value = next;
+          }, 0);
+        };
+        const offDocument = editor.on('change', notify);
+        const offSelection = editor.on('selectionChange', notify);
+        const offError = editor.on('error', notify);
+        onCleanup(() => {
+          disposed = true;
+          if (scheduled !== null) clearTimeout(scheduled);
+          offDocument();
+          offSelection();
+          offError();
+        });
+      },
+      { immediate: true, flush: 'sync' }
+    );
+  }
 
   const items = computed((): readonly ReviewItemView[] => {
     touch();

@@ -365,7 +365,6 @@ export interface DocxEditorContentControlNamespace {
 export interface DocxEditorContentProps {
     // (undocumented)
     children?: DocxEditorChildren;
-    class?: string;
     className?: string;
 }
 
@@ -920,7 +919,6 @@ export function DocxEditorViewport(input: DocxEditorViewportProps): react.JSX.El
 export interface DocxEditorViewportProps {
     // (undocumented)
     children?: DocxEditorChildren;
-    class?: string;
     className?: string;
     // (undocumented)
     style?: CSSProperties;
@@ -1700,7 +1698,8 @@ export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSX
 export interface SlotProps extends HTMLAttributes<HTMLElement> {
     // (undocumented)
     children?: DocxEditorChildren;
-    class?: string;
+    // (undocumented)
+    className?: string;
     ref?: Ref<unknown>;
     // (undocumented)
     style?: CSSProperties;
@@ -1784,7 +1783,6 @@ export interface ToolbarActionProps {
     asChild?: boolean;
     // (undocumented)
     children?: DocxEditorChildren;
-    class?: string;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -1812,7 +1810,6 @@ export interface ToolbarButtonProps {
     asChild?: boolean;
     // (undocumented)
     children?: DocxEditorChildren;
-    class?: string;
     // (undocumented)
     className?: string;
     hidden?: boolean;
@@ -1928,7 +1925,6 @@ export interface ToolbarProps {
 
 // @public
 export interface ToolbarSeparatorProps {
-    class?: string;
     // (undocumented)
     className?: string;
 }
@@ -1943,7 +1939,6 @@ export interface ToolbarSlotPartComponent {
 
 // @public
 export interface ToolbarSlotPartProps {
-    class?: string;
     // (undocumented)
     className?: string;
     hidden?: boolean;

@@ -106,8 +106,8 @@ export const DocxEditorReview: {
         }>[];
         formatting: boolean;
         asChild: boolean;
-        preset: boolean;
         gap: number;
+        preset: boolean;
         card: {
             className?: string;
         };
@@ -175,8 +175,8 @@ export const DocxEditorReview: {
         }>[];
         formatting: boolean;
         asChild: boolean;
-        preset: boolean;
         gap: number;
+        preset: boolean;
         card: {
             className?: string;
         };
@@ -241,8 +241,8 @@ export const DocxEditorReview: {
     }>[];
     formatting: boolean;
     asChild: boolean;
-    preset: boolean;
     gap: number;
+    preset: boolean;
     card: {
         className?: string;
     };
@@ -623,6 +623,10 @@ export const DocxEditorReview: {
             type: NumberConstructor;
             default: number;
         };
+        left: {
+            type: PropType<number | null>;
+            default: null;
+        };
         className: StringConstructor;
         hidden: BooleanConstructor;
     }>, () => VNode<vue.RendererNode, vue.RendererElement, {
@@ -632,9 +636,14 @@ export const DocxEditorReview: {
             type: NumberConstructor;
             default: number;
         };
+        left: {
+            type: PropType<number | null>;
+            default: null;
+        };
         className: StringConstructor;
         hidden: BooleanConstructor;
     }>> & Readonly<{}>, {
+        left: number | null;
         top: number;
         hidden: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;

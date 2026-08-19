@@ -295,6 +295,7 @@ export const ReviewBalloon = markPart(
     name: 'ReviewBalloon',
     props: { className: String, hidden: Boolean },
     setup(props) {
+      const instance = getCurrentInstance();
       const rail = useRail();
       const t = useReviewLabel();
       const anchor = ref<BalloonAnchor | null>(null);
@@ -321,7 +322,7 @@ export const ReviewBalloon = markPart(
           const end = Number(element.dataset.end);
           anchor.value = {
             revisionId: element.dataset.revisionId!,
-            author: element.dataset.revisionAuthor ?? '',
+            author: element.dataset.reviewAuthor ?? '',
             ...(element.dataset.revisionDate !== undefined
               ? { date: element.dataset.revisionDate }
               : {}),
@@ -339,6 +340,7 @@ export const ReviewBalloon = markPart(
             bottom: rect.bottom - railRect.top,
             above: rect.bottom + 220 > viewportBottom,
           };
+          instance?.proxy?.$forceUpdate();
         };
 
         const onDown = (event: Event): void => {
@@ -353,7 +355,10 @@ export const ReviewBalloon = markPart(
               return;
             }
           }
-          if (openRef.value) anchor.value = null;
+          if (openRef.value) {
+            anchor.value = null;
+            instance?.proxy?.$forceUpdate();
+          }
         };
 
         scroller.addEventListener('pointerdown', onDown, true);

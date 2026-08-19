@@ -5,8 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
-import { Slot, useTranslation, useDocxEditor } from '@docx-editor.dev/vue';
-import { useEditorRenderRevision } from './useEditorRenderRevision.ts';
+import { Slot, useTranslation } from '@docx-editor.dev/vue';
 import { ACCEPT_ICON, DELETE_ICON, REJECT_ICON, icon } from './review-icons.tsx';
 import { revisionLabelKey } from './review-labels.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
@@ -354,28 +353,13 @@ export const ReviewReplies = markPart(
     setup(props) {
       const rail = useRail();
       const entryRef = useReviewItem();
-      const editorRef = useDocxEditor();
-      const editorRevision = useEditorRenderRevision();
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry || entry.kind === 'custom') return null;
-        void editorRevision.value;
-        const editor = editorRef.value;
-        const catalog = editor?.getReviewItems() ?? rail.value.allItems;
-        const live =
-          catalog.find((item) => item.id === entry.id) ?? rail.value.byId.get(entry.id) ?? entry;
-        const fromIds = live.replyIds
-          .map((id) => catalog.find((item) => item.id === id))
+        const live = rail.value.byId.get(entry.id) ?? entry;
+        const replies = live.replyIds
+          .map((id) => rail.value.byId.get(id))
           .filter((reply): reply is NonNullable<typeof reply> => reply !== undefined);
-        const replies =
-          fromIds.length > 0
-            ? fromIds
-            : catalog.filter(
-                (item) =>
-                  item.kind === 'comment' &&
-                  'parentRevisionId' in item &&
-                  item.parentRevisionId === live.id
-              );
         if (replies.length === 0) return null;
         return (
           <ol class={`docx-review__replies${props.className ? ` ${props.className}` : ''}`}>

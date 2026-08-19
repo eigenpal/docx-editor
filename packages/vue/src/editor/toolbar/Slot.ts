@@ -16,6 +16,15 @@ import { cn } from '../../lib/utils';
 
 type AnyProps = Record<string, unknown>;
 
+function normalizeClassName(props: AnyProps): AnyProps {
+  const { className, ...rest } = props;
+  if (typeof className !== 'string') return rest;
+  return {
+    ...rest,
+    class: cn(typeof rest.class === 'string' ? rest.class : '', className),
+  };
+}
+
 function composeHandlers(childHandler: unknown, slotHandler: unknown): unknown {
   if (typeof slotHandler !== 'function') return childHandler;
   if (typeof childHandler !== 'function') return slotHandler;
@@ -48,6 +57,7 @@ function mergeSlotProps(slotProps: AnyProps, childProps: AnyProps): AnyProps {
 /** @public */
 export interface SlotProps {
   class?: string;
+  className?: string;
   style?: CSSProperties;
   children?: DocxEditorChildren;
   ref?: unknown;
@@ -77,7 +87,10 @@ export const Slot = defineComponent({
       if (children.length !== 1) return null;
       const child = children[0] as VNode;
       if (!child || typeof child !== 'object') return null;
-      const merged = mergeSlotProps(attrs as AnyProps, (child.props ?? {}) as AnyProps);
+      const merged = mergeSlotProps(
+        normalizeClassName(attrs as AnyProps),
+        normalizeClassName((child.props ?? {}) as AnyProps)
+      );
       return cloneVNode(
         child,
         {

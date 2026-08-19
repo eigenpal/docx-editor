@@ -44,8 +44,7 @@ export interface SlotProps extends HTMLAttributes<HTMLElement> {
   children?: DocxEditorChildren;
   /** Fanned out alongside the child's own ref. */
   ref?: Ref<unknown>;
-  /** Vue parity — use `className` in React. */
-  class?: string;
+  className?: string;
   style?: CSSProperties;
 }
 

@@ -4404,6 +4404,8 @@ export interface SlotProps {
     // (undocumented)
     class?: string;
     // (undocumented)
+    className?: string;
+    // (undocumented)
     ref?: unknown;
     // (undocumented)
     style?: CSSProperties;

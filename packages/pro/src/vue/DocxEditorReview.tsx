@@ -20,6 +20,8 @@ import {
   ref,
   shallowRef,
   watch,
+  watchEffect,
+  type ComputedRef,
   type PropType,
   type VNode,
   type VNodeArrayChildren,
@@ -37,7 +39,7 @@ import {
   type ReviewRailRegistry,
 } from '@docx-editor.dev/vue';
 import { useReviewWithRevision, type ReviewItemView, type UseReviewReturn } from './useReview.ts';
-import { provideEditorRenderRevision } from './useEditorRenderRevision.ts';
+import { provideEditorRenderRevision, useEditorRenderRevision } from './useEditorRenderRevision.ts';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
   COLLAPSE_DISPLACEMENT_PX,
@@ -154,7 +156,7 @@ const ReviewRoot = defineComponent({
     const editorRef = useDocxEditor();
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const readOnly = useEditorState(selectDocumentReadOnly);
-    const editorSnapshot = useEditorState((snapshot) => snapshot);
+    const editorRevision = useEditorRenderRevision();
 
     const excludeRevisionKinds = computed((): readonly ReviewRevisionKind[] | undefined => {
       const excluded: ReviewRevisionKind[] = [];
@@ -178,7 +180,7 @@ const ReviewRoot = defineComponent({
       editorRef.value?.setReviewActivationExclusions(null);
     });
 
-    const editorRevision = provideEditorRenderRevision(editorSnapshot);
+    provideEditorRenderRevision(editorRevision);
     const allReview = useReviewWithRevision(NO_PLACEMENT_REVIEW_QUERY, editorRevision);
     const reviewHook = useReviewWithRevision(() => railQuery.value, editorRevision);
     const { t: bundled } = useTranslation();
@@ -440,15 +442,15 @@ const ReviewRoot = defineComponent({
     const beginDraft = () => {
       const editor = editorRef.value;
       if (!editor || readOnly.value) return;
-      const anchorY =
-        editor.getSelectionPlacement()?.anchorY ?? reviewHook.selectionAnchorY.value ?? null;
+      const anchorY = editor.getSelectionPlacement()?.anchorY ?? null;
+      if (anchorY === null) return;
       if (selectionRetainer.value && selectionRetainer.value !== editor) {
         selectionRetainer.value.releaseSelection();
       }
       editor.retainSelection();
       selectionRetainer.value = editor;
       reviewHook.setPaneOpen(true);
-      draftAnchorY.value = anchorY ?? reviewHook.selectionAnchorY.value ?? 0;
+      draftAnchorY.value = anchorY;
       instance?.proxy?.$forceUpdate();
     };
     let unregisterCommentDraft: (() => void) | undefined;
@@ -559,7 +561,7 @@ const ReviewRoot = defineComponent({
       return buildReviewActions(reviewHook, items.value);
     });
 
-    const railValue = computed<ReviewRailValue>(() => ({
+    const currentRailValue = (): ReviewRailValue => ({
       t: props.t,
       cardClassName: props.card?.className,
       readOnly: readOnly.value,
@@ -572,9 +574,21 @@ const ReviewRoot = defineComponent({
       measure: observeSlot,
       beginDraft,
       endDraft,
-    }));
+    });
+    const railValue = shallowRef<ReviewRailValue>(currentRailValue());
+    watchEffect(() => {
+      railValue.value = currentRailValue();
+    });
+    watch(
+      () => editorRevision.value,
+      () => {
+        railValue.value = currentRailValue();
+        instance?.proxy?.$forceUpdate();
+      },
+      { flush: 'sync' }
+    );
 
-    provide(ReviewContextKey, railValue);
+    provide(ReviewContextKey, railValue as unknown as ComputedRef<ReviewRailValue>);
 
     return () => {
       if (props.hidden || documentAbsent.value) return null;

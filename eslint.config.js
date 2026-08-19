@@ -170,7 +170,7 @@ export default [
     },
   },
   {
-    files: ['packages/pro/src/__tests__/**/*.{ts,tsx}'],
+    files: ['packages/pro/src/__tests__/**/*vue*.{ts,tsx}'],
     rules: {
       'react-hooks/rules-of-hooks': 'off',
       'react-hooks/exhaustive-deps': 'off',

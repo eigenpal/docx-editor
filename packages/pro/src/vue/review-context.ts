@@ -10,9 +10,12 @@ import {
   getCurrentInstance,
   h,
   inject,
+  onBeforeUnmount,
   onMounted,
   provide,
+  shallowRef,
   toValue,
+  watchEffect,
   type ComputedRef,
   type CSSProperties,
   type InjectionKey,
@@ -118,6 +121,17 @@ export function useReviewLabel(): (key: TranslationKey) => string {
   return (key: TranslationKey) => rail.value.t?.(key) ?? t(key);
 }
 
+function reviewItemRenderKey(item: ReviewItemView): string {
+  return [
+    item.key,
+    item.isActive ? 'active' : 'idle',
+    item.readOnly ? 'readonly' : 'editable',
+    item.kind === 'comment' && item.resolved ? 'resolved' : 'open',
+    item.text,
+    ...item.replyIds,
+  ].join('\u0000');
+}
+
 /** Provides review-item context and owns the slot wrapper ref in the same render owner. @internal */
 export const ReviewItemScope = defineComponent({
   name: 'ReviewItemScope',
@@ -131,24 +145,29 @@ export const ReviewItemScope = defineComponent({
   },
   setup(props, { slots }) {
     const rail = useRail();
-    const item = computed(() => {
+    const item = shallowRef<ReviewItemView>(props.entry);
+    watchEffect(() => {
       const live = rail.value.byId.get(props.entry.id) ?? props.entry;
-      return {
+      item.value = {
         ...live,
         replyIds: [...live.replyIds],
       };
     });
-    provide(ReviewItemContextKey, item);
+    provide(ReviewItemContextKey, item as unknown as ComputedRef<ReviewItemView | null>);
     onMounted(() => {
       const el = getCurrentInstance()?.proxy?.$el;
       if (props.measureKey && el instanceof HTMLElement) {
         rail.value.measure(el, props.measureKey);
       }
     });
+    onBeforeUnmount(() => {
+      if (props.measureKey) rail.value.measure(null, props.measureKey);
+    });
     return () =>
       h(
         'div',
         {
+          key: reviewItemRenderKey(item.value),
           class: `docx-review__slot${props.className ? ` ${props.className}` : ''}`,
           ...(props.testId ? { 'data-testid': props.testId } : {}),
           style: props.style,
@@ -167,14 +186,15 @@ export const ReviewReplyScope = defineComponent({
   },
   setup(props, { slots }) {
     const rail = useRail();
-    const item = computed(() => {
+    const item = shallowRef<ReviewItemView>(props.entry);
+    watchEffect(() => {
       const live = rail.value.byId.get(props.entry.id) ?? props.entry;
-      return {
+      item.value = {
         ...live,
         replyIds: [...live.replyIds],
       };
     });
-    provide(ReviewItemContextKey, item);
+    provide(ReviewItemContextKey, item as unknown as ComputedRef<ReviewItemView | null>);
     return () => slots.default?.() as VNode | VNode[] | null;
   },
 });
