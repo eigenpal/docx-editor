@@ -30,6 +30,57 @@ function nearestOnLine<T extends VerticalCaretStop>(
   return best;
 }
 
+/**
+ * The stop nearest a position that NO stop owns, in the same paragraph, or null.
+ *
+ * A gesture can leave the caret at such an offset — a drag or shift-click endpoint resolves
+ * to the character the browser saw, and the interior of deleted content is deliberately not
+ * a caret stop. Refusing to move from there made every arrow a dead press. Ties go to the
+ * earlier stop, matching the "before the region" answer a step-over gives.
+ */
+export function nearestStop<T extends VerticalCaretStop>(
+  stops: readonly T[],
+  position: VerticalCaretStop['position']
+): T | null {
+  let best: T | null = null;
+  for (const stop of stops) {
+    if (stop.position.paragraphId !== position.paragraphId) continue;
+    if (
+      !best ||
+      Math.abs(stop.position.offset - position.offset) <
+        Math.abs(best.position.offset - position.offset)
+    ) {
+      best = stop;
+    }
+  }
+  return best;
+}
+
+/**
+ * The first stop past an unowned position in the direction of travel, or null.
+ *
+ * For horizontal motion the resolution IS the move: from inside a deleted region, Right goes
+ * to the stop just past it and Left to the one just before, exactly where a step-over from
+ * the boundary would have landed.
+ */
+export function stopInDirection<T extends VerticalCaretStop>(
+  stops: readonly T[],
+  position: VerticalCaretStop['position'],
+  direction: -1 | 1
+): T | null {
+  let best: T | null = null;
+  for (const stop of stops) {
+    if (stop.position.paragraphId !== position.paragraphId) continue;
+    const offset = stop.position.offset;
+    if (direction === 1) {
+      if (offset > position.offset && (!best || offset < best.position.offset)) best = stop;
+    } else if (offset < position.offset && (!best || offset > best.position.offset)) {
+      best = stop;
+    }
+  }
+  return best;
+}
+
 /** Home/End within the active paragraph's current visual line. */
 export function moveToLineEdge<T extends VerticalCaretStop>(
   position: VerticalCaretStop['position'],
@@ -37,8 +88,10 @@ export function moveToLineEdge<T extends VerticalCaretStop>(
   indexed: IndexedCaretStops<T>
 ): VerticalCaretStop['position'] | null {
   const stopIndex = indexed.index.get(position.paragraphId)?.get(position.offset);
-  if (stopIndex === undefined) return null;
-  const lineId = indexed.stops[stopIndex]!.lineId;
+  const stop =
+    stopIndex === undefined ? nearestStop(indexed.stops, position) : indexed.stops[stopIndex]!;
+  if (!stop) return null;
+  const lineId = stop.lineId;
   const onLine = indexed.stops.filter((stop) => stop.lineId === lineId);
   return (direction === -1 ? onLine[0] : onLine[onLine.length - 1])?.position ?? null;
 }
@@ -53,10 +106,15 @@ export function moveHorizontalCaret<T extends VerticalCaretStop>(
 ): { position: VerticalCaretStop['position']; desiredX: null } | null {
   const current = stopsForParagraph(position.paragraphId);
   const stopIndex = current.index.get(position.paragraphId)?.get(position.offset);
-  if (stopIndex === undefined) return null;
-  const localTarget = stopIndex + direction;
-  if (localTarget >= 0 && localTarget < current.stops.length) {
-    return { position: current.stops[localTarget]!.position, desiredX: null };
+  if (stopIndex === undefined) {
+    const resolved = stopInDirection(current.stops, position, direction);
+    if (resolved) return { position: resolved.position, desiredX: null };
+    // Past every stop of this paragraph in that direction: the neighbour, like an edge step.
+  } else {
+    const localTarget = stopIndex + direction;
+    if (localTarget >= 0 && localTarget < current.stops.length) {
+      return { position: current.stops[localTarget]!.position, desiredX: null };
+    }
   }
   const neighbourId = order[paragraphIndex + direction];
   if (!neighbourId) return { position, desiredX: null };
@@ -88,8 +146,9 @@ export function moveVerticalCaret<T extends VerticalCaretStop>(
 ): { position: VerticalCaretStop['position']; desiredX: number } | null {
   const current = stopsForParagraph(position.paragraphId);
   const stopIndex = current.index.get(position.paragraphId)?.get(position.offset);
-  if (stopIndex === undefined) return null;
-  const currentStop = current.stops[stopIndex]!;
+  const currentStop =
+    stopIndex === undefined ? nearestStop(current.stops, position) : current.stops[stopIndex]!;
+  if (!currentStop) return null;
   const targetX = desiredX ?? currentStop.x;
   const currentLines = lineIdsOf(current.stops);
   const currentLineIndex = currentLines.indexOf(currentStop.lineId);

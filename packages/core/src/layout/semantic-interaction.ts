@@ -33,11 +33,20 @@ import {
   moveToDocumentEdge,
   moveToLineEdge,
   moveVerticalCaret,
+  nearestStop,
+  stopInDirection,
 } from './semantic-caret-navigation.ts';
+import {
+  insideDeletedContent,
+  paragraphDeletedRanges,
+  paragraphLinesIndex,
+  skipDeletedRegion,
+} from './paragraph-lines.ts';
 import { wordBoundary } from './semantic-word-navigation.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 export { wordBoundary } from './semantic-word-navigation.ts';
+export { snapCaretOutOfDeletion } from './paragraph-lines.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -78,79 +87,6 @@ export interface SelectionRect {
 }
 
 /**
- * Lines grouped by the paragraph they render, with the page each sits on.
- *
- * Memoized PER LAYOUT — a published layout is immutable, so the grouping is computed once
- * per revision instead of once per read. The reads this serves — caret geometry, span
- * lookup for a selection, text reconstruction — are all "the lines of ONE paragraph", and
- * answering them by scanning every line of every page made each one O(document); the
- * toolbar asks after every commit, so the scans multiplied per keystroke.
- */
-interface PlacedLine {
-  readonly line: LineRecord;
-  readonly pageIndex: number;
-}
-
-const paragraphLinesCache = new WeakMap<SemanticLayout, Map<string, PlacedLine[]>>();
-
-function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedLine[]> {
-  const cached = paragraphLinesCache.get(layout);
-  if (cached) return cached;
-  const index = new Map<string, PlacedLine[]>();
-  /**
-   * Under every paragraph the line carries, not just the one it names.
-   *
-   * A merged line belongs to two paragraphs, and a caret walking either of them has to find
-   * it. An ordinary line has one segment and lands in exactly the one bucket it always did.
-   */
-  const indexLine = (line: LineRecord, pageIndex: number): void => {
-    for (const segment of lineSegments(line)) {
-      const placed = { line, pageIndex };
-      const entry = index.get(segment.paragraphId);
-      if (entry) entry.push(placed);
-      else index.set(segment.paragraphId, [placed]);
-    }
-  };
-  const indexFragments = (
-    fragments: readonly import('./semantic-records.ts').BlockFragmentRecord[],
-    pageIndex: number
-  ): void => {
-    const visit = (
-      blocks: readonly import('./semantic-records.ts').BlockFragmentRecord[]
-    ): void => {
-      for (const block of blocks) {
-        if (block.kind === 'paragraph') {
-          for (const line of block.lines) indexLine(line, pageIndex);
-          continue;
-        }
-        for (const row of block.rows) {
-          if (row.isHeaderRepeat) continue;
-          for (const cell of row.cells) visit(cell.blocks);
-        }
-      }
-    };
-    visit(fragments);
-  };
-  for (const page of layout.pages) {
-    // Body first — primary story for caret stops built elsewhere via paragraphFragmentsOf.
-    for (const fragment of paragraphFragmentsOf(page)) {
-      for (const line of fragment.lines) indexLine(line, page.index);
-    }
-    // Furniture paragraphs share this index so formatting / paragraphTextFromLayout can
-    // resolve an open header/footer selection. documentOrder and caretStops stay body-only.
-    if (page.header) indexFragments(page.header.fragments, page.index);
-    if (page.footer) indexFragments(page.footer.fragments, page.index);
-    // Note stories (footnotes/endnotes) — same formatting lane as furniture; not body order.
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      for (const note of area.notes) indexFragments(note.fragments, page.index);
-    }
-  }
-  paragraphLinesCache.set(layout, index);
-  return index;
-}
-
-/**
  * Whether a LATER line of the same paragraph starts at this offset, and so owns it.
  *
  * Asked across the whole paragraph rather than the current fragment: a paragraph split by a
@@ -183,22 +119,6 @@ function laterLineWithDrawingAt(
     if (line.drawings?.some((drawing) => drawing.start === offset)) return line;
   }
   return null;
-}
-
-/**
- * True when this offset sits strictly INSIDE deleted content on the line.
- *
- * The boundaries are kept: the position immediately before a deletion and the one immediately
- * after it are both real places to put a caret, and dropping them would make the deletion
- * unreachable — including for the accept or reject that resolves it.
- */
-function insideDeletedContent(line: LineRecord, offset: number): boolean {
-  const ranges = line.deletedRanges;
-  if (ranges === undefined) return false;
-  for (const range of ranges) {
-    if (offset > range.start && offset < range.end) return true;
-  }
-  return false;
 }
 
 /**
@@ -261,6 +181,9 @@ function pushSegmentCaretStops(
   measurer?: TextMeasurer
 ): void {
   const mixed = lineSegments(line).length > 1;
+  // Paragraph-wide, not this line's own slices: a deletion that wraps is clipped per line,
+  // and its wrap boundaries must not read as region edges (see paragraphDeletedRanges).
+  const deleted = paragraphDeletedRanges(layout, segment.paragraphId);
   for (let offset = segment.start; offset <= segment.end; offset += 1) {
     // A line ENDED BY A HARD BREAK does not own the position after it — the line the
     // break opened does, and `caretAt` places the caret there. Emitting it here too
@@ -292,7 +215,7 @@ function pushSegmentCaretStops(
     // Deleted content is skipped for the same reason and by the same lane: `moveCaret` reads
     // this list and nothing else, so arrow keys, word jumps, page jumps and Home/End all
     // inherit "step over a deletion, never into it" from one place.
-    if (insideDeletedContent(line, offset)) continue;
+    if (insideDeletedContent(deleted, offset)) continue;
     stops.push({
       position: { paragraphId: segment.paragraphId, offset },
       x: xWithinLine(line, offset, measurer, segment),
@@ -680,9 +603,15 @@ export function moveCaret(
   }
   if (!options.stops && (command === 'wordLeft' || command === 'wordRight')) {
     const direction = command === 'wordLeft' ? -1 : 1;
-    const target = wordBoundary(
-      paragraphTextFromLayout(layout, position.paragraphId),
-      position.offset,
+    // The paragraph text includes deleted characters — they occupy model offsets in every
+    // mode — so a word boundary can land inside a deletion. Skip to its edge instead.
+    const target = skipDeletedRegion(
+      paragraphDeletedRanges(layout, position.paragraphId),
+      wordBoundary(
+        paragraphTextFromLayout(layout, position.paragraphId),
+        position.offset,
+        direction
+      ),
       direction
     );
     return target === position.offset
@@ -723,11 +652,25 @@ export function moveCaret(
   }
   const stops = options.stops ? [...options.stops] : caretStops(layout, options.measurer);
   if (stops.length === 0) return null;
-  const index = stops.findIndex(
+  let index = stops.findIndex(
     (stop) =>
       stop.position.paragraphId === position.paragraphId && stop.position.offset === position.offset
   );
-  if (index === -1) return null;
+  if (index === -1) {
+    // NO stop owns this position — a gesture endpoint left inside deleted content, whose
+    // interior is deliberately not navigable. Refusing made every key from there a dead
+    // press. For horizontal motion the nearest stop in the direction of travel IS the move;
+    // everything else proceeds from the nearest stop of the same paragraph.
+    if (command === 'left' || command === 'right') {
+      const resolved =
+        stopInDirection(stops, position, command === 'left' ? -1 : 1) ??
+        nearestStop(stops, position);
+      return resolved ? { position: resolved.position, desiredX: null } : null;
+    }
+    const resolved = nearestStop(stops, position);
+    if (!resolved) return null;
+    index = stops.indexOf(resolved);
+  }
   const current = stops[index]!;
 
   switch (command) {
@@ -751,7 +694,11 @@ export function moveCaret(
     case 'wordRight': {
       const text = paragraphTextFromLayout(layout, position.paragraphId);
       const direction = command === 'wordLeft' ? -1 : 1;
-      const target = wordBoundary(text, position.offset, direction);
+      const target = skipDeletedRegion(
+        paragraphDeletedRanges(layout, position.paragraphId),
+        wordBoundary(text, position.offset, direction),
+        direction
+      );
       // Already at the paragraph edge: step into the neighbouring paragraph the way a plain
       // arrow would, so the key is never a dead press at a boundary.
       if (target === position.offset) {

@@ -517,6 +517,7 @@ export {
   hitTestSemantic,
   moveCaret,
   paragraphTextFromLayout,
+  snapCaretOutOfDeletion,
   keyedRangeRects,
   selectionRects,
   spansInSelection,

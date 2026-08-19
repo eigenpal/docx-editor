@@ -2863,6 +2863,9 @@ export function shownMarkRevision(revisions: readonly RevisionAttribution[]): Re
 export const SINGLE_LINE_SPACING: ParagraphLineSpacing;
 
 // @public
+export function snapCaretOutOfDeletion(layout: SemanticLayout, position: SemanticPosition): SemanticPosition;
+
+// @public
 export interface SourceRange {
     // (undocumented)
     readonly end: number;

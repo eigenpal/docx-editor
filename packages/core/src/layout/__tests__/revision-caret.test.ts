@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { caretStops, moveCaret } from '../semantic-interaction.ts';
+import { caretStops, moveCaret, snapCaretOutOfDeletion } from '../semantic-interaction.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
@@ -91,5 +91,84 @@ describe('the caret does not enter deleted content', () => {
   test('two adjacent deletions are stepped over as one region', () => {
     const body = `<w:p>${run('A')}${del('1', delRun('BC'))}${del('2', delRun('DE'))}${run('F')}</w:p>`;
     expect(offsets(body)).toEqual([0, 1, 5, 6]);
+  });
+});
+
+describe('a caret left inside a deletion is not a dead end', () => {
+  // A gesture can still RESOLVE to an interior offset — the browser reports the struck
+  // character a click or drag endpoint landed on. The surface snaps a collapsed caret out
+  // (`snapCaretOutOfDeletion`), and navigation resolves rather than refusing, so neither
+  // lane depends on the other having run.
+  const layout = layoutSemanticDocument(load(MIXED), 1, { measurer });
+  const paragraphId = caretStops(layout)[0]!.position.paragraphId;
+
+  test('arrow right resolves to the stop past the deletion', () => {
+    expect(moveCaret(layout, { paragraphId, offset: 3 }, 'right')?.position.offset).toBe(5);
+  });
+
+  test('arrow left resolves to the stop before it', () => {
+    expect(moveCaret(layout, { paragraphId, offset: 4 }, 'left')?.position.offset).toBe(2);
+  });
+
+  test('the snap moves an interior caret to the start of the deleted region', () => {
+    expect(snapCaretOutOfDeletion(layout, { paragraphId, offset: 3 })).toEqual({
+      paragraphId,
+      offset: 2,
+    });
+  });
+
+  test('the snap leaves boundaries and live text where they are', () => {
+    for (const offset of [0, 2, 5, 7]) {
+      expect(snapCaretOutOfDeletion(layout, { paragraphId, offset }).offset).toBe(offset);
+    }
+  });
+
+  test('a deletion that wraps across lines is ONE region, not one per line', () => {
+    // `LineRecord.deletedRanges` is clipped per line, so a wrapping deletion publishes one
+    // slice per line and every wrap boundary looks like a range edge. Read per line, those
+    // false edges were caret stops in the middle of struck text — and a keystroke there
+    // landed inside the `w:del`.
+    const long = 'word '.repeat(40).trimEnd(); // 199 chars, wraps at the fixed 6pt advance
+    const body = `<w:p>${run('AB ')}${del('1', delRun(long))}${run('YZ')}</w:p>`;
+    const wrapped = layoutSemanticDocument(load(body), 1, { measurer });
+    const id = caretStops(wrapped)[0]!.position.paragraphId;
+    const all = caretStops(wrapped).map((stop) => stop.position.offset);
+    expect(all.filter((offset) => offset > 3 && offset < 3 + long.length)).toEqual([]);
+    expect(moveCaret(wrapped, { paragraphId: id, offset: 3 }, 'right')?.position.offset).toBe(
+      3 + long.length
+    );
+    expect(snapCaretOutOfDeletion(wrapped, { paragraphId: id, offset: 100 })).toEqual({
+      paragraphId: id,
+      offset: 3,
+    });
+  });
+
+  test('word navigation steps over a deletion instead of targeting its interior', () => {
+    // The word walk reads the paragraph text, which includes deleted characters, so a word
+    // boundary can land inside a deletion — where the surface's collapsed-caret snap would
+    // bounce it straight back: a permanently dead key.
+    const body = `<w:p>${run('AB ')}${del('1', delRun('CD EF '))}${run('GH')}</w:p>`;
+    const words = layoutSemanticDocument(load(body), 1, { measurer });
+    const id = caretStops(words)[0]!.position.paragraphId;
+    expect(moveCaret(words, { paragraphId: id, offset: 3 }, 'wordRight')?.position.offset).toBe(9);
+    expect(moveCaret(words, { paragraphId: id, offset: 9 }, 'wordLeft')?.position.offset).toBe(3);
+  });
+
+  test('nested revisions form one region for both the walk and the snap', () => {
+    // `w:ins` wrapping `w:del` twice over, the shape a second reviewer striking a first
+    // reviewer's insertions writes: AB + ins(del CD) + ins(del EF) + GH, deleted 2..6.
+    const nested =
+      `<w:p>${run('AB')}${ins('1', del('2', delRun('CD')))}` +
+      `${ins('3', del('4', delRun('EF')))}${run('GH')}</w:p>`;
+    const nestedLayout = layoutSemanticDocument(load(nested), 1, { measurer });
+    const id = caretStops(nestedLayout)[0]!.position.paragraphId;
+    expect(offsets(nested)).toEqual([0, 1, 2, 6, 7, 8]);
+    expect(moveCaret(nestedLayout, { paragraphId: id, offset: 4 }, 'right')?.position.offset).toBe(
+      6
+    );
+    expect(moveCaret(nestedLayout, { paragraphId: id, offset: 4 }, 'left')?.position.offset).toBe(
+      2
+    );
+    expect(snapCaretOutOfDeletion(nestedLayout, { paragraphId: id, offset: 4 }).offset).toBe(2);
   });
 });
