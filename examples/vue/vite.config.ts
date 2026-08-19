@@ -65,12 +65,7 @@ export default defineConfig({
   root: __dirname,
   resolve: {
     alias: usePublished
-      ? [
-          {
-            find: /^@docx-editor\.dev\/vue$/,
-            replacement: path.join(monorepoRoot, 'packages/vue/dist/index.js'),
-          },
-        ]
+      ? []
       : [
           {
             find: '@docx-editor.dev/vue/styles.css',

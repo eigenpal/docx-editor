@@ -1,5 +1,6 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
+import { mergeHostClass } from '../../lib/mergeHostClass';
 import { Slot } from './Slot';
 import { guardToolbarMousedown } from './ToolbarButton';
 
@@ -28,13 +29,14 @@ export const ToolbarAction = defineComponent({
     disabledReason: { type: String, default: undefined },
     asChild: { type: Boolean, default: undefined },
     class: { type: String, default: undefined },
+    className: { type: String, default: undefined },
   },
   emits: ['select'],
   setup(props, { emit, slots }) {
     return () => {
       const shared = {
         type: 'button',
-        class: `docx-toolbar__button${props.class ? ` ${props.class}` : ''}`,
+        class: mergeHostClass('docx-toolbar__button', props.class, props.className),
         disabled: props.disabled,
         ...(props.active ? { 'data-active': '' } : {}),
         ...(props.disabled ? { 'data-disabled': '' } : {}),

@@ -61,6 +61,8 @@ import { LoadFontsResult } from '@docx-editor.dev/core/editor';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 import { LocaleStrings } from '@docx-editor.dev/i18n';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
+import { MaybeRef } from 'vue';
+import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
@@ -1788,6 +1790,10 @@ export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
@@ -1795,8 +1801,13 @@ export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
 }>> & Readonly<{}>, {
     class: string;
+    className: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -2362,7 +2373,9 @@ export const DocxEditorNotesChrome: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
-}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
         type: StringConstructor;
         default: undefined;
@@ -2618,10 +2631,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     onReady?: ((_editor: Editor) => any) | undefined;
     onFontError?: ((_error: unknown) => any) | undefined;
 }>, {
+    document: DocumentSource;
     locale: string;
     zoom: number;
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
-    document: DocumentSource;
     author: string;
     mode: "suggesting" | "edit" | "view";
     imageDecodePort: ImageDecodePort;
@@ -2841,6 +2854,10 @@ export const DocxEditorViewport: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
     style: {
         type: PropType<CSSProperties>;
         default: undefined;
@@ -2852,6 +2869,10 @@ export const DocxEditorViewport: vue.DefineComponent<vue.ExtractPropTypes<{
         type: StringConstructor;
         default: undefined;
     };
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
     style: {
         type: PropType<CSSProperties>;
         default: undefined;
@@ -2859,6 +2880,7 @@ export const DocxEditorViewport: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     style: CSSProperties;
     class: string;
+    className: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -4495,7 +4517,7 @@ export { ToolbarCommandState }
 export { toolbarCommandState }
 
 // @public (undocumented)
-export const ToolbarContext: InjectionKey<ToolbarContextValue>;
+export const ToolbarContext: InjectionKey<MaybeRef<ToolbarContextValue>>;
 
 // @public (undocumented)
 export interface ToolbarContextValue {
@@ -4943,7 +4965,7 @@ export interface UseHyperlinkPopupResult {
 }
 
 // @public (undocumented)
-export function useNavigationPane(options?: UseNavigationPaneOptions): UseNavigationPaneResult;
+export function useNavigationPane(options?: MaybeRefOrGetter_2<UseNavigationPaneOptions>): UseNavigationPaneResult;
 
 // @public (undocumented)
 export interface UseNavigationPaneOptions {
@@ -4968,7 +4990,7 @@ export interface UseNavigationPaneResult {
     // (undocumented)
     readonly open: ComputedRef<boolean>;
     // (undocumented)
-    readonly paneWidth: number;
+    readonly paneWidth: ComputedRef<number>;
     // (undocumented)
     readonly setOpen: (open: boolean) => void;
     // (undocumented)
@@ -5043,7 +5065,7 @@ export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTM
 export function useTableBorderTargetLabel(): ComputedRef<string>;
 
 // @public (undocumented)
-export function useToolbarContext(): ToolbarContextValue;
+export function useToolbarContext(): ComputedRef<ToolbarContextValue>;
 
 // @public (undocumented)
 export function useToolbarLabel(): (key: string) => string;
@@ -5090,8 +5112,8 @@ export interface UseZoomResult {
     readonly zoomOut: () => void;
 }
 
-// @public
-export const VERSION = "0.0.2";
+// @public (undocumented)
+export const VERSION: string;
 
 // @public (undocumented)
 export const VerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{

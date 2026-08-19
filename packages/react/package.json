@@ -10,10 +10,12 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
-    }
+    },
+    "./styles.css": "./src/styles/editor.css"
   },
   "files": [
     "dist",
+    "src/styles",
     "!dist/metafile-*.json",
     "THIRD_PARTY_NOTICES.md"
   ],

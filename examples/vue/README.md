@@ -20,7 +20,7 @@ Or from this directory: `bun run dev`.
 | File             | What it does                                            |
 | ---------------- | ------------------------------------------------------- |
 | `src/App.vue`    | The editor: open `.docx`, edit, agent panel             |
-| `src/main.ts`    | Vue app root + `@docx-editor.dev/vue/styles.css`        |
+| `src/main.ts`    | Vue app root; demo chrome in `styles.css`               |
 | `index.html`     | Page shell, icons, and share tags                       |
 | `vite.config.ts` | Aliases `@docx-editor.dev/*` to workspace source in dev |
 
@@ -36,12 +36,12 @@ const doc = createEmptyDocument();
 </script>
 
 <template>
-  <DocxEditor :document="doc" :show-toolbar="true" />
+  <DocxEditor :document="doc" />
 </template>
 ```
 
-To open a real file, read it as an `ArrayBuffer` and pass it as
-`:document-buffer` instead of `:document`.
+To open a real file, read it as an `ArrayBuffer` or `Uint8Array` and pass it as
+`:document`.
 
 ## Use it in your own Vue app
 
@@ -53,4 +53,4 @@ Unlike the React adapter, the Vue adapter ships a stylesheet you must import
 once: `@docx-editor.dev/vue/styles.css`. Toolbar icons are bundled as inline
 SVG, so there is no icon font to load.
 
-Docs: https://www.docx-editor.dev/docs/1.x/vue
+Docs: https://www.docx-editor.dev/docs/2.x/vue

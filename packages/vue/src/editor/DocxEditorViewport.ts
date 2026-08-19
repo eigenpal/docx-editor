@@ -15,6 +15,7 @@ import { useEditorState } from './useEditorState';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
+import { mergeHostClass } from '../lib/mergeHostClass';
 import type { DocxEditorChildren } from '../docx-editor-children';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
@@ -33,6 +34,7 @@ export const DocxEditorViewport = defineComponent({
   name: 'DocxEditorViewport',
   props: {
     class: { type: String, default: undefined },
+    className: { type: String, default: undefined },
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
@@ -82,12 +84,11 @@ export const DocxEditorViewport = defineComponent({
         },
         'data-testid': 'docx-editor-scroll',
         onKeydownCapture: onKeyDownCapture,
-        class: [
+        class: mergeHostClass(
           `${scopeClassName}docx-editor-one-surface docx-editor-one-surface__viewport docx-editor__scroll-container`,
           props.class,
-        ]
-          .filter(Boolean)
-          .join(' '),
+          props.className
+        ),
         style: props.style,
       };
       if (reserve.value) attrs['data-review-pane'] = paneOpen.value ? 'open' : 'closed';

@@ -12,6 +12,7 @@ import {
 } from 'vue';
 import { commandForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
+import { useStableDocxId } from '../../lib/stable-id';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { MORE_ATTRIBUTE } from './useToolbarOverflow';
@@ -114,7 +115,7 @@ export const ToolbarOverflow = defineComponent({
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const panelRef = ref<HTMLDivElement | null>(null);
     const focusOnOpen = ref(false);
-    const panelId = `toolbar-overflow-${Math.random().toString(36).slice(2)}`;
+    const panelId = useStableDocxId('toolbar-overflow');
     const text = label('formattingBar.more');
 
     const close = (focusTrigger: boolean) => {

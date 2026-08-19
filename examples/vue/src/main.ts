@@ -1,5 +1,5 @@
 import './styles.css';
-import { createApp } from 'vue';
+import { createApp, h } from 'vue';
 import PreviewBanner from '../../shared/PreviewBanner.vue';
 
 const params = new URLSearchParams(location.search);
@@ -11,15 +11,13 @@ const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAU
 void (async () => {
   const ComposedEditorDemo = (await import('./ComposedEditorDemo.vue')).default;
   createApp({
-    components: { PreviewBanner, ComposedEditorDemo },
-    template: `
-      <div style="display: flex; flex-direction: column; height: 100vh">
-        <PreviewBanner />
-        <ComposedEditorDemo :fixture-url="fixtureUrl" />
-      </div>
-    `,
     setup() {
-      return { fixtureUrl: `${base}${documentName}` };
+      const fixtureUrl = `${base}${documentName}`;
+      return () =>
+        h('div', { style: 'display: flex; flex-direction: column; height: 100vh' }, [
+          h(PreviewBanner),
+          h(ComposedEditorDemo, { fixtureUrl }),
+        ]);
     },
   }).mount('#app');
 })();

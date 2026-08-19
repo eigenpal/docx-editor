@@ -5,6 +5,7 @@ import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel } from './menu-context';
+import { useStableDocxId } from '../../lib/stable-id';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { MenuItem } from './parts';
 
@@ -45,7 +46,7 @@ export const MenuSubmenu = defineComponent({
     const open = ref(false);
     const parentRef = ref<HTMLButtonElement | null>(null);
     const panelRef = ref<HTMLDivElement | null>(null);
-    const panelId = `docx-${Math.random().toString(36).slice(2, 9)}`;
+    const panelId = useStableDocxId('menu-flyout');
     const box = ref<{ left: number; top: number } | null>(null);
 
     watch(

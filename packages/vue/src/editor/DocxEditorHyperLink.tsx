@@ -10,6 +10,7 @@ import {
 } from 'vue';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { flattenChildren } from '../lib/flattenChildren';
+import { useStableDocxId } from '../lib/stable-id';
 import { useTranslation } from '../i18n';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 import { isFieldLink, useHyperlinkPopup } from './useHyperlinkPopup';
@@ -230,8 +231,8 @@ const HyperLinkFields = defineComponent({
     const popup = useHyperlinkPopup();
     const { t } = useTranslation();
     const urlRef = ref<HTMLInputElement | null>(null);
-    const textId = `docx-${Math.random().toString(36).slice(2, 9)}`;
-    const urlId = `docx-${Math.random().toString(36).slice(2, 9)}`;
+    const textId = useStableDocxId('hyperlink-text');
+    const urlId = useStableDocxId('hyperlink-url');
 
     watch(
       () => popup.state.value.mode,

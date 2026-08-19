@@ -1,6 +1,7 @@
 import { computed, defineComponent, h, isVNode, ref, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { flattenChildren } from '../../lib/flattenChildren';
+import { useStableDocxId } from '../../lib/stable-id';
 import { docxSlotOf, mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import {
   CHROME_MENUS,
@@ -102,7 +103,7 @@ export const MenuRow = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
-    const reasonId = `docx-${Math.random().toString(36).slice(2, 9)}`;
+    const reasonId = useStableDocxId('menu-reason');
     // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
     // order and stops firing pointer events, so its `title` never renders and a screen
     // reader walking the menu skips the row entirely — which is the whole "present and
@@ -622,7 +623,7 @@ export const Menu = defineComponent({
   setup(props, { slots }) {
     const menuContext = useMenuContext();
     const label = useMenuLabel();
-    const panelId = `docx-${Math.random().toString(36).slice(2, 9)}`;
+    const panelId = useStableDocxId('menu-panel');
     const triggerRef = ref<HTMLButtonElement | null>(null);
     const panelRef = ref<HTMLDivElement | null>(null);
     const openedByKey = ref(false);

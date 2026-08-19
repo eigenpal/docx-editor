@@ -1,7 +1,7 @@
 /* Import editor styles.
-   In standalone usage: @import '@docx-editor.dev/core/styles/editor.css';
-   The demo imports the canonical core chrome stylesheet from source. */
-@import '../../../packages/core/src/styles/editor.css';
+   Published/demo builds resolve `@docx-editor.dev/vue/styles.css` through node_modules.
+   Dev aliases in vite.config.ts map the same import to the adapter source file. */
+@import '@docx-editor.dev/vue/styles.css';
 
 @tailwind base;
 @tailwind components;

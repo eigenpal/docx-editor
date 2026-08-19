@@ -2,18 +2,20 @@
   "name": "@docx-editor.dev/vue",
   "version": "2.5.0",
   "description": "Vue 3 DOCX editor adapter for the @docx-editor.dev editor contract.",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    }
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./styles.css": "./src/styles/editor.css"
   },
   "files": [
     "dist",
+    "src/styles",
     "!dist/metafile-*.json",
     "THIRD_PARTY_NOTICES.md"
   ],

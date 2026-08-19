@@ -1,5 +1,6 @@
 import { defineComponent, ref, watch, type CSSProperties, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../docx-editor-children';
+import { useStableDocxId } from '../lib/stable-id';
 import { useTranslation } from '../i18n';
 import { useContentControl, type ContentControlInspectorState } from './useContentControl';
 import { Slot } from './toolbar/Slot';
@@ -329,7 +330,7 @@ const ContentControlRoot = defineComponent({
   setup(props, { slots }) {
     const chrome = useContentControl();
     const panelRef = ref<HTMLDivElement | null>(null);
-    const titleId = `docx-${Math.random().toString(36).slice(2, 9)}`;
+    const titleId = useStableDocxId('content-control-title');
     const { t } = useTranslation();
 
     watch(

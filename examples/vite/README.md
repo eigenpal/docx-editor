@@ -16,16 +16,16 @@ Or from this directory: `bun run dev`.
 
 ## Files
 
-| File                        | What it does                                                    |
-| --------------------------- | --------------------------------------------------------------- |
-| `src/main.tsx`              | React root; mounts the one editor                                 |
-| `src/ComposedEditorDemo.tsx`| The editor: composition API, custom header, library toolbar       |
-| `src/ThemeToggle.tsx`       | Light/dark switch used by the demo header                         |
-| `src/demoButtons.ts`        | Inline button styles for the demo header                          |
-| `src/styles.css`            | Demo-only chrome styles (the library ships its own)               |
-| `src/test-harness/`         | Playwright-only tree-binding harness (`?treeFirst=1`), not a surface |
-| `index.html`                | Page shell, icons, and share tags                                 |
-| `vite.config.ts`            | Aliases `@docx-editor.dev/*` to workspace source in dev           |
+| File                         | What it does                                                         |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `src/main.tsx`               | React root; mounts the one editor                                    |
+| `src/ComposedEditorDemo.tsx` | The editor: composition API, custom header, library toolbar          |
+| `src/ThemeToggle.tsx`        | Light/dark switch used by the demo header                            |
+| `src/demoButtons.ts`         | Inline button styles for the demo header                             |
+| `src/styles.css`             | Demo-only chrome styles (the library ships its own)                  |
+| `src/test-harness/`          | Playwright-only tree-binding harness (`?treeFirst=1`), not a surface |
+| `index.html`                 | Page shell, icons, and share tags                                    |
+| `vite.config.ts`             | Aliases `@docx-editor.dev/*` to workspace source in dev              |
 
 The default document is served from `e2e/fixtures/` by a vite plugin, so the demo and
 the e2e suite read the same bytes. `?fixture=<name>.docx` loads any `.docx` in `public/`
@@ -94,4 +94,4 @@ npm install @docx-editor.dev/react
 
 Toolbar icons are bundled as inline SVG, so there is no icon font to load.
 
-Docs: https://www.docx-editor.dev/docs/1.x/react
+Docs: https://www.docx-editor.dev/docs/2.x/react

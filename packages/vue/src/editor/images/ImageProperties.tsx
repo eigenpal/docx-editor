@@ -1,4 +1,4 @@
-import { computed, defineComponent, ref, watch, type PropType } from 'vue';
+import { computed, defineComponent, nextTick, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { refAsRefObject, type RefObject } from '../../docx-editor-ref-object';
 // Image properties dialog — one atomic `setImageProperties` on Apply.
@@ -13,6 +13,7 @@ import {
   validateDrawingPositionInput,
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
+import { useStableDocxId } from '../../lib/stable-id';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
@@ -212,9 +213,9 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
     const editorRef = useDocxEditor();
     const { t } = useTranslation();
     const image = useEditorState(selectImage);
-    const titleId = `docx-${Math.random().toString(36).slice(2, 9)}`;
-    const wrapSelectId = `docx-${Math.random().toString(36).slice(2, 9)}`;
-    const hyperlinkInputId = `docx-${Math.random().toString(36).slice(2, 9)}`;
+    const titleId = useStableDocxId('image-prop-title');
+    const wrapSelectId = useStableDocxId('image-prop-wrap');
+    const hyperlinkInputId = useStableDocxId('image-prop-hyperlink');
     const dialogRef = ref<HTMLDivElement | null>(null);
     const targetRef = ref<SelectedImageState | null>(null);
     const selectionRef = ref<{ paragraphId: string; offset: number } | null>(null);
@@ -275,11 +276,17 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
     };
 
     watch(
-      () => props.open,
-      (isOpen, _, onCleanup) => {
-        if (!isOpen) return;
-        const dialog = dialogRef.value;
-        if (!dialog) return;
+      () => [props.open, dialogRef.value] as const,
+      async ([isOpen, dialog], _, onCleanup) => {
+        if (!isOpen || !dialog) return;
+        let disposed = false;
+        let onKeyDown: ((event: KeyboardEvent) => void) | null = null;
+        onCleanup(() => {
+          disposed = true;
+          if (onKeyDown) document.removeEventListener('keydown', onKeyDown);
+        });
+        await nextTick();
+        if (disposed || !props.open || dialogRef.value !== dialog) return;
         const focusables = dialogFocusables(dialog);
         const initial =
           focusables.find(
@@ -288,7 +295,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
           focusables.find((element) => !element.hasAttribute('disabled')) ??
           dialog;
         initial.focus();
-        const onKeyDown = (event: KeyboardEvent): void => {
+        onKeyDown = (event: KeyboardEvent): void => {
           if (event.key === 'Escape') {
             event.preventDefault();
             dismiss();
@@ -307,7 +314,6 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
           items[nextIndex]?.focus();
         };
         document.addEventListener('keydown', onKeyDown);
-        onCleanup(() => document.removeEventListener('keydown', onKeyDown));
       },
       { flush: 'post' }
     );

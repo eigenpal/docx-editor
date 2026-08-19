@@ -6,7 +6,7 @@ export const CitationData = z.object({
   locator: z.string(),
   authors: z.array(z.string()).max(64),
   year: z.number().int().gte(0).lte(3000),
-  url: z.url().optional(),
+  url: z.string().url().optional(),
 });
 
 export type CitationData = z.infer<typeof CitationData>;

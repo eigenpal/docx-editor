@@ -1,8 +1,9 @@
-import { defineComponent, h, inject, type PropType, type VNode } from 'vue';
+import { defineComponent, h, type PropType, type VNode } from 'vue';
 import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
+import { useDocxEditor, useEditorStateTick } from '../context';
 import { useHyperlinkPopup } from '../useHyperlinkPopup';
-import { ToolbarContext, useToolbarLabel } from './toolbar-context';
+import { mergeHostClass } from '../../lib/mergeHostClass';
+import { useToolbarContext, useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 import {
   ToolbarButton,
@@ -37,6 +38,7 @@ function definePart(slot: ChromeSlotId) {
     name: `ToolbarPart_${slot.replace(/\./g, '_')}`,
     props: {
       class: { type: String, default: undefined },
+      className: { type: String, default: undefined },
       hidden: { type: Boolean, default: undefined },
       asChild: { type: Boolean, default: undefined },
       icon: { type: Object as PropType<VNode>, default: undefined },
@@ -74,16 +76,19 @@ export const ToolbarLink = defineComponent({
   name: 'ToolbarLink',
   props: {
     class: { type: String, default: undefined },
+    className: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
     asChild: { type: Boolean, default: undefined },
     icon: { type: Object as PropType<VNode>, default: undefined },
   },
   setup(props, { slots }) {
     const editorRef = useDocxEditor();
+    const stateTick = useEditorStateTick();
     const { openAtCaret } = useHyperlinkPopup();
     const label = useToolbarLabel();
     return () => {
       if (props.hidden) return null;
+      void stateTick.value;
       const probe = chromeProbeForSlot('text.link');
       const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
       const isEnabled = allowed?.ok === true;
@@ -91,7 +96,7 @@ export const ToolbarLink = defineComponent({
       const control = chromeControlForSlot('text.link');
       const text = label(control?.labelKey ?? 'text.link');
       const shared = {
-        class: `docx-toolbar__button${props.class ? ` ${props.class}` : ''}`,
+        class: mergeHostClass('docx-toolbar__button', props.class, props.className),
         'data-slot': 'text.link',
         disabled: !isEnabled,
         ...(!isEnabled ? { 'data-disabled': '' } : {}),
@@ -113,29 +118,30 @@ export const ToolbarSave = defineComponent({
   name: 'ToolbarSave',
   props: {
     class: { type: String, default: undefined },
+    className: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
     const editorRef = useDocxEditor();
-    const ctx = inject(ToolbarContext, { t: undefined, onSave: undefined });
+    const ctx = useToolbarContext();
     const label = useToolbarLabel();
     return () => {
       if (props.hidden) return null;
       const control = chromeControlForSlot('file.save');
       const text = label(control?.labelKey ?? 'file.save');
-      const disabled = !editorRef.value || !ctx.onSave;
+      const disabled = !editorRef.value || !ctx.value.onSave;
       return h(
         'button',
         {
           type: 'button',
-          class: `docx-toolbar__button${props.class ? ` ${props.class}` : ''}`,
+          class: mergeHostClass('docx-toolbar__button', props.class, props.className),
           'data-slot': 'file.save',
           disabled,
           ...(disabled ? { 'data-disabled': '' } : {}),
           'aria-label': text,
           title: text,
           onMousedown: guardToolbarMousedown,
-          onClick: () => ctx.onSave?.(),
+          onClick: () => ctx.value.onSave?.(),
         },
         [chromeIcon(control?.paths)]
       );
@@ -153,13 +159,16 @@ export interface ToolbarSeparatorProps {
 /** @public */
 export const ToolbarSeparator = defineComponent({
   name: 'ToolbarSeparator',
-  props: { class: { type: String, default: undefined } },
+  props: {
+    class: { type: String, default: undefined },
+    className: { type: String, default: undefined },
+  },
   setup(props) {
     return () =>
       h('div', {
         role: 'separator',
         'aria-orientation': 'vertical',
-        class: `docx-toolbar__separator${props.class ? ` ${props.class}` : ''}`,
+        class: mergeHostClass('docx-toolbar__separator', props.class, props.className),
       });
   },
 });

@@ -60,10 +60,12 @@ export function useDocxSource(
       () => toValue(reactiveOptions).fonts,
       (fontsSource) => {
         if (fontsSource === undefined) {
+          fonts.value = undefined;
           fontsSettled.value = true;
           return;
         }
         let live = true;
+        fonts.value = undefined;
         fontsSettled.value = false;
         void (async () => {
           try {
@@ -105,6 +107,7 @@ export function useDocxSource(
 
         let live = true;
         const controller = new AbortController();
+        bytes.value = undefined;
         documentLoading.value = true;
         error.value = null;
         void (async () => {
@@ -125,6 +128,7 @@ export function useDocxSource(
           } catch (cause) {
             if (!live || generation !== fetchGeneration) return;
             if (cause instanceof Error && cause.name === 'AbortError') return;
+            bytes.value = undefined;
             error.value = cause instanceof Error ? cause : new Error('could not open the document');
             documentLoading.value = false;
           }

@@ -12,22 +12,22 @@ enabled state are the library's — and none of them had to be reimplemented to 
 
 ## What each file demonstrates
 
-| File | Customization point |
-| --- | --- |
-| `IglooEditor.tsx` | The composition root: `Root` / `Viewport` / `Content` / `Loading`, the workspace row a floating navigation pane anchors to, and where host art goes relative to the page |
-| `IglooToolbar.tsx` | `Toolbar preset={false}` — a hand-ordered bar, every packaged part re-iconed, the Editing/Suggesting/Viewing pill, and two `Toolbar.Action`s of the demo's own on their own plate |
-| `IglooContextMenu.tsx` | `ContextMenu` — packaged rows re-iconed, one removed, a chrome slot pulled in, host rows, two submenus, and the PRO custom-node section |
-| `IglooMenu.tsx` | `Menu` — the registry's menus re-iconed in place, one row appended to Insert, a whole menu the library has never heard of, and Help replaced |
-| `IglooReview.tsx` | The PRO review rail, re-cut: `furniture`, part overrides, a replaced card body, and an appended element of the demo's own |
-| `specimens.ts` | `defineCustomNode` — two document nodes the library has never heard of, with recognition, chip colour and rail cards |
-| `useSpecimens.tsx` | The write side: `insertCustomNode` / `updateCustomNode`, the caret capture, and one owner for the dialog, the popover and the notice |
-| `SpecimenDialog.tsx` | Authoring a node: collect attrs, then one call. The whole form is the host's |
-| `SpecimenPopover.tsx` | What a chip click opens, anchored on the activation's own rect |
-| `useFrost.ts` | One host action shared by the toolbar, the menu and the context menu, gated on `Editor.can` |
-| `labels.ts` | A `t` catalogue: the same override path a real locale takes |
-| `igloo.css` | The theme. Almost entirely `--doc-*` token overrides |
-| `icons/` | The demo's own glyphs — `Frost.tsx` is the shared SVG frame, `toolbar.tsx`, `menu.tsx` and `review.tsx` the three sets |
-| `art/` | `IceSea`, `Iceberg`, `Blizzard`, the two specimen glyphs, and their shared seeded RNG. The library knows nothing about any of it |
+| File                   | Customization point                                                                                                                                                               |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IglooEditor.tsx`      | The composition root: `Root` / `Viewport` / `Content` / `Loading`, the workspace row a floating navigation pane anchors to, and where host art goes relative to the page          |
+| `IglooToolbar.tsx`     | `Toolbar preset={false}` — a hand-ordered bar, every packaged part re-iconed, the Editing/Suggesting/Viewing pill, and two `Toolbar.Action`s of the demo's own on their own plate |
+| `IglooContextMenu.tsx` | `ContextMenu` — packaged rows re-iconed, one removed, a chrome slot pulled in, host rows, two submenus, and the PRO custom-node section                                           |
+| `IglooMenu.tsx`        | `Menu` — the registry's menus re-iconed in place, one row appended to Insert, a whole menu the library has never heard of, and Help replaced                                      |
+| `IglooReview.tsx`      | The PRO review rail, re-cut: `furniture`, part overrides, a replaced card body, and an appended element of the demo's own                                                         |
+| `specimens.ts`         | `defineCustomNode` — two document nodes the library has never heard of, with recognition, chip colour and rail cards                                                              |
+| `useSpecimens.tsx`     | The write side: `insertCustomNode` / `updateCustomNode`, the caret capture, and one owner for the dialog, the popover and the notice                                              |
+| `SpecimenDialog.tsx`   | Authoring a node: collect attrs, then one call. The whole form is the host's                                                                                                      |
+| `SpecimenPopover.tsx`  | What a chip click opens, anchored on the activation's own rect                                                                                                                    |
+| `useFrost.ts`          | One host action shared by the toolbar, the menu and the context menu, gated on `Editor.can`                                                                                       |
+| `labels.ts`            | A `t` catalogue: the same override path a real locale takes                                                                                                                       |
+| `igloo.css`            | The theme. Almost entirely `--doc-*` token overrides                                                                                                                              |
+| `icons/`               | The demo's own glyphs — `Frost.tsx` is the shared SVG frame, `toolbar.tsx`, `menu.tsx` and `review.tsx` the three sets                                                            |
+| `art/`                 | `IceSea`, `Iceberg`, `Blizzard`, the two specimen glyphs, and their shared seeded RNG. The library knows nothing about any of it                                                  |
 
 Everything at the top level is the API demonstration; `icons/` and `art/` are the theme's own
 decoration, kept apart so the composition reads without them.
@@ -73,14 +73,14 @@ of this is mine?", so origin decides placement:
   renamed them to Expedition, Sculpt, Deposit and Survival guide, and it was a mistake twice
   over: a menu bar is navigation, and those four names are the one part of an editor a user
   arrives already knowing — and with every trigger renamed, the product's own menu was just a
-  fifth invented word in a row of invented words. Rows *inside* a menu are fair game, and
+  fifth invented word in a row of invented words. Rows _inside_ a menu are fair game, and
   `labels.ts` renames plenty; by then the user has already found the menu they wanted.
 - **A capability the editor already has goes where a Word user expects it**, under a themed
   name. A page break is an ordinary insert, so `Split the floe` sits at the bottom of
   **Insert** — appended to the registry's rows, not replacing them (`preset` defaults to
   `true`, which is what appends).
 - **What the product added lives in its own menu**, `Custom Actions`, under a `Custom
-  elements` heading. It holds the two custom node types and nothing else; the host actions
+elements` heading. It holds the two custom node types and nothing else; the host actions
   that drive real engine commands sit below a separator, under their own heading.
 - **The right-click menu keeps two submenus** rather than one mixed list — engine inserts in
   `Carve…`, custom nodes in `Custom elements…`.
@@ -104,7 +104,7 @@ with the label as its content — Word and the free tier open both as plain text
 lost either way.
 
 From that one registration the library supplies the chip tint, the click dispatch, the
-context-menu Edit/Remove section, and a rail card per node. What each node *means* is the
+context-menu Edit/Remove section, and a rail card per node. What each node _means_ is the
 demo's:
 
 - an **iceberg** shows its tip in the paragraph; clicking it surfaces what is under the
@@ -197,7 +197,7 @@ Two settings live in the project rather than the file, and it does not build wit
   `../../examples/vite/public/sample.docx` and emits it into the bundle.
 - **Production Branch: `docx-editor-v2`.** This directory does not exist on `main`.
 
-`build:packages:demo` runs first because only `react`, `i18n` and the `core/*` subpaths are
+`build:packages:demo` runs first because only `react`, `vue`, `i18n` and the `core/*` subpaths are
 aliased to source. `pro` and `fonts` resolve through node_modules to their `dist/`, which a
 clean clone does not have. The install step clears `node_modules` for the reason the root
 `vercel.json` does: the build cache and a symlinked workspace disagree.

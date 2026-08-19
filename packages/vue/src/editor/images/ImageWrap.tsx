@@ -1,6 +1,7 @@
 import { computed, defineComponent, ref, watch, type VNode } from 'vue';
 import type { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { useTranslation, type TranslationKey } from '../../i18n';
+import { useStableDocxId } from '../../lib/stable-id';
 import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
@@ -44,7 +45,7 @@ export const ImageWrap = defineComponent({
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
     const triggerRef = ref<HTMLButtonElement | null>(null);
-    const menuId = `image-wrap-${Math.random().toString(36).slice(2)}`;
+    const menuId = useStableDocxId('image-wrap');
 
     const current = computed(
       () => WRAP_OPTIONS.find((option) => option.value === command.value.value) ?? WRAP_OPTIONS[0]!

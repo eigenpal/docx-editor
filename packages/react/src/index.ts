@@ -9,7 +9,7 @@
  * @public
  */
 
-export const VERSION = '0.0.2';
+export { VERSION } from './version';
 
 export type { MaybeRefOrGetter } from './maybe-ref-or-getter';
 export type { DocxEditorChildren } from './docx-editor-children';

@@ -19,7 +19,7 @@ import { docxSlotOf, unwrapFragment } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useEditorState } from '../useEditorState';
 import { useScopeClassName } from '../scope-context';
-import { ToolbarContext, useToolbarLabelFor, type ToolbarTranslate } from './toolbar-context';
+import { ToolbarContext, useToolbarLabel, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 import {
   ToolbarOverflow,
@@ -282,8 +282,11 @@ const DocxEditorToolbarRoot = defineComponent({
   },
   setup(props, { slots }) {
     const scopeClassName = useScopeClassName();
-    provide(ToolbarContext, { t: props.t, onSave: props.onSave });
-    const label = useToolbarLabelFor(props.t);
+    provide(
+      ToolbarContext,
+      computed(() => ({ t: props.t, onSave: props.onSave }))
+    );
+    const label = useToolbarLabel();
     const image = useEditorState(selectToolbarImage);
     const defaultGroups = computed(() => buildDefaultGroups(image.value));
     const defaultSlots = computed(

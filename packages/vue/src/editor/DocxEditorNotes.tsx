@@ -1,4 +1,4 @@
-import { computed, defineComponent, ref, watch, type CSSProperties, type PropType } from 'vue';
+import { computed, defineComponent, h, ref, watch, type CSSProperties, type PropType } from 'vue';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { Z_INDEX } from '../styles/zIndex';
@@ -377,6 +377,10 @@ export const DocxEditorNotesChrome = defineComponent({
     const menu = ref<{ scopeId: string; x: number; y: number } | null>(null);
     const propsOpen = ref(false);
     const hideTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+    const chromeRootRef = ref<HTMLDivElement | null>(null);
+
+    const eventRootForEditor = (): HTMLElement | null =>
+      chromeRootRef.value?.closest<HTMLElement>('.docx-editor') ?? null;
 
     const findActiveNoteArea = (viewport: HTMLElement) => {
       const scope = noteScope.value;
@@ -399,10 +403,10 @@ export const DocxEditorNotesChrome = defineComponent({
     };
 
     watch(
-      editorRef,
-      (editor, _, onCleanup) => {
+      [editorRef, chromeRootRef],
+      ([editor], _, onCleanup) => {
         if (!editor) return;
-        const root = document.querySelector('.docx-pages');
+        const root = eventRootForEditor();
         if (!root) return;
 
         const onClick = (event: Event) => {
@@ -545,14 +549,19 @@ export const DocxEditorNotesChrome = defineComponent({
           })
         : null;
 
-      return (
-        <div
-          class={props.className}
-          data-docx-notes-chrome=""
-          data-testid="docx-notes-chrome"
-          aria-hidden={noteScope.value ? undefined : true}
-        >
-          {noteScope.value && parsedActive ? (
+      return h(
+        'div',
+        {
+          ref: (element: unknown) => {
+            chromeRootRef.value = element instanceof HTMLDivElement ? element : null;
+          },
+          class: props.className,
+          'data-docx-notes-chrome': '',
+          'data-testid': 'docx-notes-chrome',
+          'aria-hidden': noteScope.value ? undefined : true,
+        },
+        [
+          noteScope.value && parsedActive ? (
             <div
               ref={anchor.ref as never}
               class="docx-context-bar docx-notes-chrome__banner"
@@ -572,15 +581,15 @@ export const DocxEditorNotesChrome = defineComponent({
                 }}
               />
             </div>
-          ) : null}
+          ) : null,
 
-          {preview.value ? (
+          preview.value ? (
             <div role="tooltip" data-testid="docx-notes-preview" style={previewStyle.value}>
               {preview.value.text}
             </div>
-          ) : null}
+          ) : null,
 
-          {menu.value && menuParsed.value ? (
+          menu.value && menuParsed.value ? (
             <div
               role="menu"
               data-testid="docx-notes-menu"
@@ -635,9 +644,9 @@ export const DocxEditorNotesChrome = defineComponent({
                 {t('dialogs.footnoteProperties.title')}
               </button>
             </div>
-          ) : null}
+          ) : null,
 
-          {propsOpen.value ? (
+          propsOpen.value ? (
             <NotePropertiesDialog
               onClose={() => {
                 propsOpen.value = false;
@@ -647,8 +656,8 @@ export const DocxEditorNotesChrome = defineComponent({
                 propsOpen.value = false;
               }}
             />
-          ) : null}
-        </div>
+          ) : null,
+        ]
       );
     };
   },

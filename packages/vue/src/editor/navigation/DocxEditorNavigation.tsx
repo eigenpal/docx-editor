@@ -10,11 +10,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { useScopeClassName } from '../scope-context';
 import { NavigationContext, type NavigationContextValue } from './navigation-context';
-import {
-  NAVIGATION_PANE_INSET,
-  NAVIGATION_PANE_WIDTH,
-  navigationPaneReservation,
-} from './navigation-geometry';
+import { NAVIGATION_PANE_INSET, navigationPaneReservation } from './navigation-geometry';
 import { useDocumentOutline } from './useDocumentOutline';
 import { useDocumentSearch } from './useDocumentSearch';
 import { useNavigationPane, type UseNavigationPaneOptions } from './useNavigationPane';
@@ -62,14 +58,25 @@ const DocxEditorNavigationImpl = defineComponent({
     paneWidth: { type: Number, default: undefined },
     defaultOpen: { type: Boolean, default: undefined },
     defaultTab: { type: String as PropType<'headings' | 'find'>, default: undefined },
+    open: { type: Boolean, default: undefined },
+    tab: { type: String as PropType<'headings' | 'find'>, default: undefined },
+    onOpenChange: { type: Function as PropType<(open: boolean) => void>, default: undefined },
+    onTabChange: {
+      type: Function as PropType<(tab: 'headings' | 'find') => void>,
+      default: undefined,
+    },
   },
   setup(props, { slots }) {
     const scope = useScopeClassName();
-    const paneOptions = {
+    const paneOptions = (): UseNavigationPaneOptions => ({
       ...(props.paneWidth !== undefined ? { paneWidth: props.paneWidth } : {}),
       ...(props.defaultOpen !== undefined ? { defaultOpen: props.defaultOpen } : {}),
       ...(props.defaultTab !== undefined ? { defaultTab: props.defaultTab } : {}),
-    };
+      ...(props.open !== undefined ? { open: props.open } : {}),
+      ...(props.tab !== undefined ? { tab: props.tab } : {}),
+      ...(props.onOpenChange ? { onOpenChange: props.onOpenChange } : {}),
+      ...(props.onTabChange ? { onTabChange: props.onTabChange } : {}),
+    });
     const pane = useNavigationPane(paneOptions);
     const outline = useDocumentOutline();
     const search = useDocumentSearch();
@@ -84,16 +91,16 @@ const DocxEditorNavigationImpl = defineComponent({
           catalogT(key as TranslationKey, params)),
     }));
     provide(NavigationContext, value as unknown as NavigationContextValue);
-    const width = props.paneWidth ?? NAVIGATION_PANE_WIDTH;
+    const width = computed(() => pane.paneWidth.value);
 
     return () => (
       <div
         class={`${scope}docx-nav${pane.open.value ? ' docx-nav--open' : ''}${props.className ? ` ${props.className}` : ''}`}
         data-open={pane.open.value ? 'true' : 'false'}
         style={{
-          '--docx-nav-width': `${width}px`,
+          '--docx-nav-width': `${width.value}px`,
           '--docx-nav-inset': `${NAVIGATION_PANE_INSET}px`,
-          '--docx-nav-reservation': `${navigationPaneReservation(width)}px`,
+          '--docx-nav-reservation': `${navigationPaneReservation(width.value)}px`,
           ...props.style,
         }}
       >

@@ -7,6 +7,7 @@ import {
   type ChromeControl,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
+import { mergeHostClass } from '../../lib/mergeHostClass';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
@@ -57,6 +58,7 @@ export const ToolbarButton = defineComponent({
     icon: { type: Object as PropType<VNode>, default: undefined },
     asChild: { type: Boolean, default: undefined },
     class: { type: String, default: undefined },
+    className: { type: String, default: undefined },
     hidden: { type: Boolean, default: undefined },
   },
   setup(props, { slots }) {
@@ -73,7 +75,7 @@ export const ToolbarButton = defineComponent({
         onMousedown: guardToolbarMousedown,
         disabled: !command.isEnabled.value,
         'data-slot': props.slot,
-        class: `docx-toolbar__button${props.class ? ` ${props.class}` : ''}`,
+        class: mergeHostClass('docx-toolbar__button', props.class, props.className),
         ...(command.isActive.value ? { 'data-active': '' } : {}),
         ...(!command.isEnabled.value ? { 'data-disabled': '' } : {}),
         ...(isToggle ? { 'aria-pressed': command.isActive.value } : {}),

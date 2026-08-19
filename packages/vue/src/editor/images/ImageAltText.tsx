@@ -1,5 +1,6 @@
 import { defineComponent, ref, watch, type VNode } from 'vue';
 import { useTranslation } from '../../i18n';
+import { useStableDocxId } from '../../lib/stable-id';
 import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from '../toolbar/ToolbarButton';
@@ -28,7 +29,7 @@ export const ImageAltText = defineComponent({
     const draft = ref('');
     const rootRef = ref<HTMLDivElement | null>(null);
     const triggerRef = ref<HTMLButtonElement | null>(null);
-    const panelId = `image-alt-${Math.random().toString(36).slice(2)}`;
+    const panelId = useStableDocxId('image-alt');
 
     watch([open, () => command.value.value], ([isOpen, value]) => {
       if (isOpen) draft.value = value ?? '';

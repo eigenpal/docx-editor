@@ -1,4 +1,12 @@
-import { computed, ref, shallowRef, watch, type ComputedRef } from 'vue';
+import {
+  computed,
+  ref,
+  shallowRef,
+  toValue,
+  watch,
+  type ComputedRef,
+  type MaybeRefOrGetter,
+} from 'vue';
 import { scopeDispose } from '../scope-dispose';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
 import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
@@ -62,34 +70,47 @@ export interface UseNavigationPaneResult {
   readonly toggle: () => void;
   readonly tab: ComputedRef<NavigationTab>;
   readonly setTab: (tab: NavigationTab) => void;
-  readonly paneWidth: number;
+  readonly paneWidth: ComputedRef<number>;
   readonly shift: ComputedRef<number>;
 }
 
 /** @public */
-export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNavigationPaneResult {
-  const {
-    defaultOpen = false,
-    defaultTab = 'headings',
-    paneWidth = NAVIGATION_PANE_WIDTH,
-  } = options;
+export function useNavigationPane(
+  options: MaybeRefOrGetter<UseNavigationPaneOptions> = {}
+): UseNavigationPaneResult {
+  const liveOptions = computed(() => toValue(options));
+  const uncontrolledOpen = ref(liveOptions.value.defaultOpen ?? false);
+  const uncontrolledTab = ref<NavigationTab>(liveOptions.value.defaultTab ?? 'headings');
 
-  const uncontrolledOpen = ref(defaultOpen);
-  const uncontrolledTab = ref<NavigationTab>(defaultTab);
-  const openVal = computed(() => options.open ?? uncontrolledOpen.value);
-  const tabVal = computed(() => options.tab ?? uncontrolledTab.value);
+  watch(
+    () => liveOptions.value.defaultOpen,
+    (next) => {
+      if (next !== undefined) uncontrolledOpen.value = next;
+    },
+    { immediate: true }
+  );
+  watch(
+    () => liveOptions.value.defaultTab,
+    (next) => {
+      if (next !== undefined) uncontrolledTab.value = next;
+    },
+    { immediate: true }
+  );
 
-  const isOpenControlled = options.open !== undefined;
-  const isTabControlled = options.tab !== undefined;
+  const openVal = computed(() => liveOptions.value.open ?? uncontrolledOpen.value);
+  const tabVal = computed(() => liveOptions.value.tab ?? uncontrolledTab.value);
+  const isOpenControlled = computed(() => liveOptions.value.open !== undefined);
+  const isTabControlled = computed(() => liveOptions.value.tab !== undefined);
+  const paneWidthVal = computed(() => liveOptions.value.paneWidth ?? NAVIGATION_PANE_WIDTH);
 
   const setOpen = (next: boolean) => {
-    if (!isOpenControlled) uncontrolledOpen.value = next;
-    options.onOpenChange?.(next);
+    if (!isOpenControlled.value) uncontrolledOpen.value = next;
+    liveOptions.value.onOpenChange?.(next);
   };
   const toggle = () => setOpen(!openVal.value);
   const setTab = (next: NavigationTab) => {
-    if (!isTabControlled) uncontrolledTab.value = next;
-    options.onTabChange?.(next);
+    if (!isTabControlled.value) uncontrolledTab.value = next;
+    liveOptions.value.onTabChange?.(next);
   };
 
   const store = useNavigationLayoutStore();
@@ -140,7 +161,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     return navigationShift({
       viewportWidth: viewportWidth.value,
       pageWidthPx: twipsToPixels(pageWidthTwips) * geometry.value.zoom,
-      reservation: navigationPaneReservation(paneWidth),
+      reservation: navigationPaneReservation(paneWidthVal.value),
       inlineEndReservation: inlineEndReservation.value,
       docked: geometry.value.fitting,
     });
@@ -164,7 +185,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     toggle,
     tab: tabVal,
     setTab,
-    paneWidth,
+    paneWidth: paneWidthVal,
     shift,
   };
 }
