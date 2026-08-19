@@ -399,7 +399,7 @@ export const CUSTOM_NODE_IDENTITY_PATTERN = /^[A-Za-z0-9_.-]+$/;
  * It is written inside single quotes inside a double-quoted attribute (`xmlns:ns0='…'`), so
  * neither quote has a representation there, and the rest are what XML cannot carry at all.
  */
- 
+
 const UNWRITABLE_IN_XPATH = /['"<>&]|[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
 function isAuthorableNamespace(value: string): boolean {
