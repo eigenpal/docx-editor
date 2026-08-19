@@ -98,6 +98,10 @@
 
   /* Inline comment/annotation marks. Resting highlights stay quiet on the
     * document canvas; focused sidebar items get the stronger active treatment. */
+  /* The comment half of the highlight layer described beside the revision tokens below:
+     `-bg` and `-border` are the band every comment wears, and the `-active-` pair is the
+     one the reader has open. Comments carry no wash on the run itself, so unlike a tracked
+     change their pending state lives here. */
   --doc-comment-bg: rgba(255, 212, 0, 0.12);
   --doc-comment-border: rgba(245, 174, 0, 0.45);
   --doc-comment-active-bg: rgba(255, 212, 0, 0.35);
@@ -135,12 +139,29 @@
   --doc-revision-deletion: #c62828;
   --doc-revision-insertion-tint: rgba(46, 125, 50, 0.09);
   --doc-revision-deletion-tint: rgba(198, 40, 40, 0.09);
-  /* The OPEN change. Deeper than the pending tint above, and for the same reason the
-     comment bands deepen: opening a card no longer selects the text, so this band is the
-     only thing on the page saying which change the card is about. At the pending 0.09 it
-     was a wash over an already-washed run — a difference a reader had to hunt for. */
-  --doc-revision-insertion-active-tint: rgba(46, 125, 50, 0.24);
-  --doc-revision-deletion-active-tint: rgba(198, 40, 40, 0.24);
+  /* THE HIGHLIGHT LAYER, which reads the same for tracked changes and for comments:
+     `-bg` is the band's fill and `-border` the rule under it, and an `-active-` pair is
+     the same two for the one the reader has open. The comment family is below.
+
+     Only the OPEN state is a token here. A pending change already carries its colour on
+     the run itself (the `-wash` pair below), so its band is transparent by design —
+     painting both doubled the colour wherever the band happened to reach. A comment has
+     no run wash, so its pending state lives on the band and does take a token.
+
+     Deeper than the wash for the same reason the comment bands deepen: opening a card
+     does not select the text, so this band is the only thing on the page saying which
+     change the card is about. */
+  --doc-revision-insertion-active-bg: rgba(46, 125, 50, 0.24);
+  --doc-revision-insertion-active-border: var(--doc-revision-insertion);
+  --doc-revision-deletion-active-bg: rgba(198, 40, 40, 0.24);
+  --doc-revision-deletion-active-border: var(--doc-revision-deletion);
+  /* A format or structural change decorates no characters, so it takes a neutral fill
+     rather than one claiming text was added or removed. */
+  --doc-revision-other-active-bg: color-mix(
+    in srgb,
+    var(--doc-text-muted, #8a8f98) 14%,
+    transparent
+  );
   /* The wash a PENDING change wears. The painter puts this on the run itself, so it covers
      tracked text anywhere in the document rather than only where the band layer reaches; the
      band adds the full tint on top for the one the caret is in, and the two multiply into a
@@ -5571,13 +5592,13 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-revision-band--insert.docx-revision-band--active {
-  background: var(--doc-revision-insertion-active-tint);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-insertion);
+  background: var(--doc-revision-insertion-active-bg);
+  box-shadow: inset 0 -1px 0 var(--doc-revision-insertion-active-border);
 }
 
 .docx-revision-band--delete.docx-revision-band--active {
-  background: var(--doc-revision-deletion-active-tint);
-  box-shadow: inset 0 -1px 0 var(--doc-revision-deletion);
+  background: var(--doc-revision-deletion-active-bg);
+  box-shadow: inset 0 -1px 0 var(--doc-revision-deletion-active-border);
 }
 
 /* A formatting or structural change decorates no characters of its own, so it gets the
@@ -5588,7 +5609,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-revision-band--other.docx-revision-band--active {
-  background: color-mix(in srgb, var(--doc-text-muted, #8a8f98) 14%, transparent);
+  background: var(--doc-revision-other-active-bg);
 }
 
 /* Dark paper inverts the arithmetic: multiplying a tint into a dark sheet drives it to
