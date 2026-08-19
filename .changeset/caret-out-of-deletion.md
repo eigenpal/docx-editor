@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-A click on tracked-deleted text no longer strands the caret: it snaps to the edge of the deletion, so arrow keys keep working and typed text can never land inside deleted content.
+The caret now moves freely through tracked-deleted text, one character at a time, as Word does. Text typed with the caret inside a deletion lands beside the deletion instead of corrupting it.

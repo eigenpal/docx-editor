@@ -40,13 +40,12 @@ import {
   insideDeletedContent,
   paragraphDeletedRanges,
   paragraphLinesIndex,
-  skipDeletedRegion,
 } from './paragraph-lines.ts';
 import { wordBoundary } from './semantic-word-navigation.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 
 export { wordBoundary } from './semantic-word-navigation.ts';
-export { snapCaretOutOfDeletion } from './paragraph-lines.ts';
+export { positionPastDeletion } from './paragraph-lines.ts';
 
 /** A caret position in the model. */
 export interface SemanticPosition {
@@ -184,6 +183,9 @@ function pushSegmentCaretStops(
   // Paragraph-wide, not this line's own slices: a deletion that wraps is clipped per line,
   // and its wrap boundaries must not read as region edges (see paragraphDeletedRanges).
   const deleted = paragraphDeletedRanges(layout, segment.paragraphId);
+  /** Whether some painted span covers this offset — the glyphs the caret would sit between. */
+  const painted = (offset: number): boolean =>
+    segment.spans.some((span) => span.range.start <= offset && offset <= span.range.end);
   for (let offset = segment.start; offset <= segment.end; offset += 1) {
     // A line ENDED BY A HARD BREAK does not own the position after it — the line the
     // break opened does, and `caretAt` places the caret there. Emitting it here too
@@ -212,10 +214,13 @@ function pushSegmentCaretStops(
       }
     }
     if (isNonNavigableInterior(line, offset, segment)) continue;
-    // Deleted content is skipped for the same reason and by the same lane: `moveCaret` reads
-    // this list and nothing else, so arrow keys, word jumps, page jumps and Home/End all
-    // inherit "step over a deletion, never into it" from one place.
-    if (insideDeletedContent(deleted, offset)) continue;
+    // VISIBLE deleted content is fully navigable — Word lets the caret rest between struck
+    // characters, and the tracked lane already accepts inserts there (`tree-op-tracked.ts`).
+    // What is skipped is a deleted offset the display mode resolved AWAY: in the proposed
+    // result those characters paint no span at all, and an offset-by-offset walk would stop
+    // at invisible positions. Derived from the spans rather than from the mode, so the rule
+    // holds in any mode that suppresses them.
+    if (insideDeletedContent(deleted, offset) && !painted(offset)) continue;
     stops.push({
       position: { paragraphId: segment.paragraphId, offset },
       x: xWithinLine(line, offset, measurer, segment),
@@ -603,15 +608,9 @@ export function moveCaret(
   }
   if (!options.stops && (command === 'wordLeft' || command === 'wordRight')) {
     const direction = command === 'wordLeft' ? -1 : 1;
-    // The paragraph text includes deleted characters — they occupy model offsets in every
-    // mode — so a word boundary can land inside a deletion. Skip to its edge instead.
-    const target = skipDeletedRegion(
-      paragraphDeletedRanges(layout, position.paragraphId),
-      wordBoundary(
-        paragraphTextFromLayout(layout, position.paragraphId),
-        position.offset,
-        direction
-      ),
+    const target = wordBoundary(
+      paragraphTextFromLayout(layout, position.paragraphId),
+      position.offset,
       direction
     );
     return target === position.offset
@@ -694,11 +693,7 @@ export function moveCaret(
     case 'wordRight': {
       const text = paragraphTextFromLayout(layout, position.paragraphId);
       const direction = command === 'wordLeft' ? -1 : 1;
-      const target = skipDeletedRegion(
-        paragraphDeletedRanges(layout, position.paragraphId),
-        wordBoundary(text, position.offset, direction),
-        direction
-      );
+      const target = wordBoundary(text, position.offset, direction);
       // Already at the paragraph edge: step into the neighbouring paragraph the way a plain
       // arrow would, so the key is never a dead press at a boundary.
       if (target === position.offset) {

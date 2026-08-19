@@ -508,6 +508,19 @@ function applyInsertContent(
     if (!textNode) return { ok: false, reason: 'tree-invariant', detail: 'orphan text value' };
     const run = findNode(part, segment.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+    // INSIDE struck text: the caret may rest there, but new content goes BESIDE the deletion,
+    // never into it — the same rule the tracked lane states (`tree-op-tracked.ts`). Split in
+    // place, the new nodes serialized as `w:t` under a wrapper that requires `w:delText`, and
+    // an accept of that unrelated deletion took the typed words with it.
+    if (textNode.kind === 'deletedText') {
+      const relocated = insertBesideDeletion(part, paragraph, run, nodes, 'after', {
+        nextId,
+        effect,
+        control,
+        options,
+      });
+      if (relocated) return relocated;
+    }
     const kind = textNode.kind === 'deletedText' ? 'deletedText' : 'text';
     const head = textElement(nextId, value.slice(0, local), kind);
     const tail = textElement(nextId, value.slice(local), kind);
@@ -583,6 +596,16 @@ function applyInsertContent(
   ) {
     const run = findNode(part, before.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+    // The end boundary of a deletion: the left run's characters are struck, and joining it
+    // would put the new text inside the `w:del`. Beside it instead — same rule as the
+    // interior case above.
+    const relocated = insertBesideDeletion(part, paragraph, run, nodes, 'after', {
+      nextId,
+      effect,
+      control,
+      options,
+    });
+    if (relocated) return relocated;
     const index = run.children.findIndex((child) => contains(child, before.node.id));
     inserted = fromEdit(
       insertChildren(
@@ -599,6 +622,15 @@ function applyInsertContent(
   if (after) {
     const run = findNode(part, after.runId);
     if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+    // The START boundary of a deletion, reached when nothing to the left takes the text:
+    // the new content goes before the wrapper, never into the struck run's head.
+    const relocated = insertBesideDeletion(part, paragraph, run, nodes, 'before', {
+      nextId,
+      effect,
+      control,
+      options,
+    });
+    if (relocated) return relocated;
     const index = run.children.findIndex((child) => contains(child, after.node.id));
     inserted = fromEdit(
       insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
@@ -659,6 +691,63 @@ function applyInsertContent(
     effect
   );
   return finishContentEdit(inserted, control, options);
+}
+
+/**
+ * Insert content BESIDE the deletion a run belongs to, or null when the run is not deleted.
+ *
+ * New content must never land inside a `w:del`/`w:moveFrom`: it would serialize as `w:t`
+ * under a wrapper that requires `w:delText` (§17.3.3.7), and an accept of that unrelated
+ * deletion would take the typed words with it. Placed beside the OUTERMOST enclosing
+ * revision wrapper: for `w:ins` wrapping `w:del`, landing between the two would put the
+ * words inside someone else's insertion, where rejecting their proposal deletes yours. The
+ * struck run's own `w:rPr` carries over, so the text keeps the formatting the caret showed.
+ */
+function insertBesideDeletion(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  run: OoxmlNode,
+  nodes: readonly OoxmlNode[],
+  side: 'before' | 'after',
+  context: {
+    readonly nextId: () => string;
+    readonly effect: TreeOpEffect;
+    readonly control: OoxmlNode | null;
+    readonly options?: EditOptions;
+  }
+): TreeOpResult | null {
+  let wrapper: OoxmlNode | null = null;
+  let deleted = false;
+  for (
+    let ancestor = parentOf(part, run.id);
+    ancestor && ancestor.id !== paragraph.id;
+    ancestor = parentOf(part, ancestor.id)
+  ) {
+    if (!isContentRevisionKind(ancestor.kind)) continue;
+    wrapper = ancestor;
+    if (ancestor.kind === 'revisionDelete' || ancestor.kind === 'revisionMoveFrom') {
+      deleted = true;
+    }
+  }
+  if (!deleted || !wrapper) return null;
+  const holder = parentOf(part, wrapper.id);
+  if (!holder) return { ok: false, reason: 'tree-invariant' };
+  const at = holder.children.findIndex((child) => child.id === wrapper.id);
+  if (at < 0) return { ok: false, reason: 'tree-invariant' };
+  const properties = (run.kind === 'textValue' ? [] : run.children)
+    .filter((child) => isRunPropertiesNode(child))
+    .map((child) => cloneWithNewIds(child, context.nextId));
+  const inserted = fromEdit(
+    insertChildren(
+      part,
+      holder.id,
+      side === 'after' ? at + 1 : at,
+      [runElement(context.nextId, [...properties, ...nodes])],
+      deferOptions(context.options, context.control)
+    ),
+    context.effect
+  );
+  return finishContentEdit(inserted, context.control, context.options);
 }
 
 /** Defer validation when a temporary unwrap still has to run in this op. */

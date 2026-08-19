@@ -47,7 +47,7 @@ import {
   paragraphsInCells,
   resolveNumberingLevel,
   paragraphTextFromLayout,
-  snapCaretOutOfDeletion,
+  positionPastDeletion,
   withNumberingStyleLinks,
   wordBoundary,
   type CellSelection,
@@ -2290,23 +2290,7 @@ export function mountPaginatedSurface(
     return true;
   }
 
-  /**
-   * A collapsed caret never rests strictly inside deleted content.
-   *
-   * A click on struck text resolves to the character under the pointer — an offset no caret
-   * stop owns. Installed as-is, that caret was dead to every arrow key and, worse, the next
-   * keystroke inserted INSIDE the deletion. Ranges pass through untouched: a drag may cover
-   * deleted text, and a review activation selects exactly the revision's own range.
-   */
-  function snapCollapsedOutOfDeletion(next: SemanticSelection): SemanticSelection {
-    const { anchor, head } = next;
-    if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return next;
-    const snapped = snapCaretOutOfDeletion(currentLayout, head);
-    return snapped.offset === head.offset ? next : { anchor: snapped, head: snapped };
-  }
-
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
-    next = snapCollapsedOutOfDeletion(next);
     // Buffered typing lands at the OLD caret before a MOVE takes effect —
     // typing then clicking must not teleport the typed text to the click. A
     // same-position set (the selection mirror re-adopting the caret it painted,
@@ -2398,7 +2382,6 @@ export function mountPaginatedSurface(
     // The raw take-up, without the mirror or the report `setSelection` performs: the render
     // this runs inside is about to do both.
     adoptSelection: (next) => {
-      next = snapCollapsedOutOfDeletion(next);
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
@@ -4392,7 +4375,11 @@ export function mountPaginatedSurface(
       selection.anchor.paragraphId === selection.head.paragraphId &&
       selection.anchor.offset === selection.head.offset
     ) {
-      return { ops: [], collapseTo: selection.head };
+      // The caret may rest anywhere in struck text — Word's rule — but new content must
+      // never land INSIDE the `w:del`, so an insert aimed at an interior offset relocates
+      // past the deletion. The store enforces the same rule; adjusting here as well lands
+      // the post-edit caret beside the typed text instead of back among the struck words.
+      return { ops: [], collapseTo: positionPastDeletion(currentLayout, selection.head) };
     }
     const { from, to } = orderedRange();
     return planRangeDeletion(

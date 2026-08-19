@@ -86,10 +86,9 @@ export function paragraphLinesIndex(layout: SemanticLayout): Map<string, PlacedL
  * A paragraph's deleted model ranges, coalesced across every line that carries them.
  *
  * `LineRecord.deletedRanges` is CLIPPED to each line, so a deletion that wraps publishes one
- * slice per line and every wrap boundary looks like a range edge. Read per line, those false
- * edges became caret stops in the middle of struck text — navigable, and worse, typable:
- * a keystroke there landed inside the `w:del`. Merging adjacent and overlapping slices
- * restores the deletion's true extent, so only its real boundaries survive as caret targets.
+ * slice per line and every wrap boundary looks like a range edge. Merging adjacent and
+ * overlapping slices restores the deletion's true extent, so an insertion aimed inside the
+ * region relocates past ALL of it rather than to the nearest wrap boundary.
  *
  * Memoized per layout: a published layout is immutable, and the stop builder asks once per
  * line of the paragraph.
@@ -150,45 +149,25 @@ export function insideDeletedContent(
 }
 
 /**
- * A word-boundary target that landed inside deleted content resolves to the region's edge in
- * the direction of travel — the same "step over, never into" answer the stop list gives a
- * plain arrow. Left as-is, the word walk handed back an interior offset and the surface's
- * collapsed-caret snap bounced it straight back to where it started: a permanently dead key.
- */
-export function skipDeletedRegion(
-  ranges: readonly { start: number; end: number }[],
-  offset: number,
-  direction: -1 | 1
-): number {
-  for (const range of ranges) {
-    if (offset > range.start && offset < range.end) {
-      return direction === 1 ? range.end : range.start;
-    }
-  }
-  return offset;
-}
-
-/**
- * Where a collapsed caret may actually rest: never strictly inside deleted content.
+ * Where an INSERT aimed at this position actually lands: past any deletion it sits inside.
  *
- * A gesture can resolve to such an offset — the browser reports the struck character a click
- * landed on — but no caret stop owns it. A caret adopted there is a dead one: every arrow
- * asks the stop list where it is and gets no answer, and an edit committed there writes
- * characters INSIDE the deletion, text that exists in neither the original nor the proposal.
- * Snapped to the START of the deleted region, which is a real stop, and which
- * keeps a click anywhere on struck text activating the deletion's own review card (a range
- * grips its start boundary as firmly as its interior — see review-support's `rangeGrip`).
+ * The caret may rest anywhere in struck text — Word's rule, and the tracked lane's
+ * (`tree-op-tracked.ts`): all-markup shows the words, so the reader can put the caret
+ * between two of them. What may NOT happen is new content landing inside the `w:del`,
+ * where it would serialize as `w:t` under a wrapper that requires `w:delText` and be taken
+ * down by an accept of someone else's deletion. A deletion stays contiguous, so the words
+ * go after it — the order a replacement reads in.
  *
  * RANGE endpoints are not this function's business: a drag may legitimately cover deleted
- * text, so callers snap only collapsed selections.
+ * text, so callers adjust only collapsed insertion points.
  */
-export function snapCaretOutOfDeletion(
+export function positionPastDeletion(
   layout: SemanticLayout,
   position: SemanticPosition
 ): SemanticPosition {
   for (const range of paragraphDeletedRanges(layout, position.paragraphId)) {
     if (position.offset > range.start && position.offset < range.end) {
-      return { paragraphId: position.paragraphId, offset: range.start };
+      return { paragraphId: position.paragraphId, offset: range.end };
     }
   }
   return position;

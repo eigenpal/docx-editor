@@ -1951,6 +1951,9 @@ export interface PlacedCell {
 }
 
 // @public
+export function positionPastDeletion(layout: SemanticLayout, position: SemanticPosition): SemanticPosition;
+
+// @public
 export interface PreferredWidth {
     // (undocumented)
     readonly type: PreferredWidthType;
@@ -2861,9 +2864,6 @@ export function shownMarkRevision(revisions: readonly RevisionAttribution[]): Re
 
 // @public
 export const SINGLE_LINE_SPACING: ParagraphLineSpacing;
-
-// @public
-export function snapCaretOutOfDeletion(layout: SemanticLayout, position: SemanticPosition): SemanticPosition;
 
 // @public
 export interface SourceRange {
