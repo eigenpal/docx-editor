@@ -56,12 +56,20 @@ import {
   Slot,
   useDocxEditor,
   useEditorState,
+  useReviewAuthors,
   useTranslation,
+  type ReviewAuthorInfo,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition';
 import { useReviewSlotSizing } from './use-review-slot-sizing';
 import { useReview, type ReviewItemView } from './useReview';
+import {
+  authorAccent,
+  authorCardStyle,
+  authorSlot,
+  useReviewAuthorInfo,
+} from './review-author-styles';
 
 /**
  * True while the editor has NO painted document: still loading one, the one it was handed
@@ -92,6 +100,35 @@ export function useReviewItem(): ReviewItemView | null {
   return useContext(ReviewItemContext);
 }
 
+/**
+ * The resolved presentation of one author — colour, ramp slot, and any declared style —
+ * or `undefined` when no argument is given, or when the author is in neither the
+ * document's roster nor the review queue.
+ *
+ * COMMENT AUTHORS INCLUDED. The document's revision roster does not carry someone who only
+ * left comments, so this resolves their declaration directly; their card draws in the
+ * colour the host declared, exactly as a reviewer's does.
+ *
+ * The link between a CUSTOM card and the author styling system: a `List` render callback
+ * or card child reads the item's author here and draws with the same colours the painted
+ * document and the packaged cards use. Live: a `setRevisionStyles` call re-renders the
+ * rail, and this answer with it. Works anywhere under `DocxEditorReview`.
+ *
+ * ```tsx
+ * function MyCard({ item }: { item: ReviewItemView }) {
+ *   const author = useReviewAuthor(item.author);
+ *   return <div style={{ borderColor: author?.color }}>…</div>;
+ * }
+ * <DocxEditorReview.List>{(item) => <MyCard item={item} />}</DocxEditorReview.List>;
+ * ```
+ *
+ * @public
+ */
+export function useReviewAuthor(author: string | undefined): ReviewAuthorInfo | undefined {
+  const { authorInfo } = useRail();
+  return author === undefined ? undefined : authorInfo.get(author);
+}
+
 interface ReviewRailValue {
   /** The host's label resolver, when it passed one. Parts read through {@link useReviewLabel}. */
   readonly t: ToolbarTranslate | undefined;
@@ -108,6 +145,12 @@ interface ReviewRailValue {
   readonly allItems: readonly ReviewItemView[];
   /** Author colour slot per author, by order of first appearance — Word's own rule. */
   readonly authorSlots: ReadonlyMap<string, number>;
+  /**
+   * The FACADE's resolved roster: the same derivation the painted document colours by, so
+   * a card and its text cannot disagree about who draws in what — and the carrier of any
+   * host-supplied per-author style (colour, wash, class names, avatar).
+   */
+  readonly authorInfo: ReadonlyMap<string, ReviewAuthorInfo>;
   /** Comment items by id, so a card can render its replies without walking the list. */
   readonly byId: ReadonlyMap<string, ReviewItemView>;
   /** Report a slot element so the rail can keep its measured height current. */
@@ -145,9 +188,6 @@ const COMPOSE_KEY = '\u0000compose';
  * `top` transition on each, in one frame.
  */
 const RAIL_OVERSCAN = 600;
-
-/** How many author slots the token ramp defines; past it, colours repeat. */
-const AUTHOR_SLOTS = 8;
 
 /** What an unmeasured, uncollapsed card reserves in the stacking run, in CSS px. */
 const DEFAULT_CARD_HEIGHT = 72;
@@ -255,6 +295,7 @@ const INERT_RAIL: ReviewRailValue = {
   },
   allItems: [],
   authorSlots: new Map(),
+  authorInfo: new Map(),
   byId: new Map(),
   measure: () => {},
   beginDraft: () => {},
@@ -687,6 +728,10 @@ function ReviewRoot({
       : metrics.top + (stacked.get(COMPOSE_KEY) ?? composeAnchorY) * metrics.scale;
 
   const cardClassName = card?.className;
+  // The facade's resolved roster (reference-stable, live through `setRevisionStyles`),
+  // keyed by author for the card parts.
+  const roster = useReviewAuthors();
+  const authorInfo = useReviewAuthorInfo(roster, items, authorSlots, editor);
   const value = useMemo<ReviewRailValue>(
     () => ({
       t: hostT,
@@ -695,6 +740,7 @@ function ReviewRoot({
       review: { ...review, items },
       allItems: allReview.items,
       authorSlots,
+      authorInfo,
       byId,
       measure: observeSlot,
       beginDraft,
@@ -708,6 +754,7 @@ function ReviewRoot({
       allReview.items,
       items,
       authorSlots,
+      authorInfo,
       byId,
       observeSlot,
       beginDraft,
@@ -973,7 +1020,7 @@ function ReviewMarkers({
   hidden,
   icon: iconOverride,
 }: ReviewMarkersProps) {
-  const { review } = useRail();
+  const { review, authorSlots, authorInfo } = useRail();
   const t = useReviewLabel();
   // Markers stack the way the cards do: each sits at its own anchor, or just below the
   // previous marker when the anchors are closer than a marker is tall. Raw anchors put
@@ -1007,7 +1054,31 @@ function ReviewMarkers({
             className="docx-review__marker"
             data-testid="review-marker"
             data-kind={entry.kind === 'revision' ? entry.revisionKind : entry.kind}
-            style={{ position: 'absolute', top }}
+            // Per-author CSS hooks, mirroring the painted document's
+            // `data-review-author`/`data-review-author-slot`. A custom card has no author.
+            {...(entry.author
+              ? {
+                  'data-review-author': entry.author,
+                  'data-review-author-slot': authorSlot(
+                    authorInfo.get(entry.author),
+                    authorSlots.get(entry.author) ?? 0
+                  ),
+                }
+              : {})}
+            style={{
+              position: 'absolute',
+              top,
+              // The accent rides along so a host rule can colour the marker per author.
+              // The accent only — a card background has no business on a gutter glyph.
+              ...(entry.author
+                ? ({
+                    '--doc-review-author-current': authorAccent(
+                      authorInfo.get(entry.author),
+                      authorSlots.get(entry.author) ?? 0
+                    ),
+                  } as CSSProperties)
+                : {}),
+            }}
             // A custom card has no author; leading its tooltip with ": " read as a glitch.
             title={entry.author ? `${entry.author}: ${entry.text}` : entry.text}
             // The author and the words, not a generic "show pane" — with the label the same
@@ -1113,7 +1184,7 @@ interface BalloonAnchor {
  * @public
  */
 function ReviewBalloon({ className, hidden }: ReviewPartProps) {
-  const { review, allItems, authorSlots } = useRail();
+  const { review, allItems, authorSlots, authorInfo } = useRail();
   const t = useReviewLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
@@ -1138,7 +1209,7 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       const end = Number(element.dataset.end);
       setAnchor({
         revisionId: element.dataset.revisionId!,
-        author: element.dataset.revisionAuthor ?? '',
+        author: element.dataset.reviewAuthor ?? '',
         ...(element.dataset.revisionDate !== undefined
           ? { date: element.dataset.revisionDate }
           : {}),
@@ -1297,11 +1368,22 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
                 className="docx-review__card"
                 data-testid="review-balloon-card"
                 data-kind={served.revisionKind ?? 'revision'}
-                style={
-                  {
-                    '--doc-review-author': `var(--doc-review-author-${(authorSlots.get(served.author) ?? 0) % AUTHOR_SLOTS})`,
-                  } as CSSProperties
-                }
+                // Gated, as the card and the fallback balloon are: an anonymous change would
+                // otherwise carry `data-review-author=""` and match a host's `[data-review-author]`.
+                {...(served.author
+                  ? {
+                      'data-review-author': served.author,
+                      'data-review-author-slot': authorSlot(
+                        authorInfo.get(served.author),
+                        authorSlots.get(served.author) ?? 0
+                      ),
+                    }
+                  : {})}
+                style={authorCardStyle(
+                  served.author,
+                  authorInfo.get(served.author),
+                  authorSlots.get(served.author) ?? 0
+                )}
                 onClick={() => review.setActive(served.key)}
               >
                 <div className="docx-review__head">
@@ -1325,6 +1407,20 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
               className="docx-review__card"
               data-testid="review-balloon-card"
               data-kind={fallbackKind}
+              {...(anchor.author
+                ? {
+                    'data-review-author': anchor.author,
+                    'data-review-author-slot': authorSlot(
+                      authorInfo.get(anchor.author),
+                      authorSlots.get(anchor.author) ?? 0
+                    ),
+                  }
+                : {})}
+              style={authorCardStyle(
+                anchor.author,
+                authorInfo.get(anchor.author),
+                authorSlots.get(anchor.author) ?? 0
+              )}
             >
               <div className="docx-review__head">
                 <span className="docx-review__avatar" aria-hidden="true">
@@ -1397,7 +1493,7 @@ ReviewEmpty.docxReviewPart = 'Empty' as const;
  * @public
  */
 function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
-  const { review, authorSlots } = useRail();
+  const { review, authorSlots, authorInfo } = useRail();
   const entry = useContext(ReviewItemContext);
   const cardId = useId();
   if (hidden || !entry) return null;
@@ -1408,6 +1504,15 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     'data-testid': 'review-card',
     'aria-labelledby': `${cardId}-author ${cardId}-summary`,
     'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
+    // Per-author CSS hooks, mirroring the painted document's `data-review-author` /
+    // `data-review-author-slot`: `[data-review-author='Name']` restyles one reviewer's cards,
+    // `[data-review-author-slot='2']` does it without knowing the name.
+    ...(entry.author
+      ? {
+          'data-review-author': entry.author,
+          'data-review-author-slot': authorSlot(authorInfo.get(entry.author), slot),
+        }
+      : {}),
     // Which custom node, not just that it is one: every custom card is `data-kind="custom"`,
     // so a theme could otherwise never tell a citation card from a clause card.
     ...(entry.kind === 'custom' && entry.item.kind === 'custom'
@@ -1416,10 +1521,9 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     ...(entry.isActive ? { 'data-active': '' } : {}),
     ...(entry.kind === 'comment' && entry.resolved ? { 'data-resolved': '' } : {}),
     // The author colour is a CSS variable rather than a class, so a host restyling the card
-    // keeps the per-author identity without re-deriving the slot order.
-    style: {
-      '--doc-review-author': `var(--doc-review-author-${slot % AUTHOR_SLOTS})`,
-    } as CSSProperties,
+    // keeps the per-author identity without re-deriving the slot order. It is the ONLY
+    // styling the packaged card takes from a declaration.
+    style: authorCardStyle(entry.author, authorInfo.get(entry.author), slot),
     tabIndex: 0,
     // `button`, not `group`: it has one action and assistive tech has to announce it. A
     // `group` with no accessible name is commonly dropped from the tree entirely.
@@ -1565,6 +1669,7 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
 
 /** The author's initials, in their colour. @public */
 function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps) {
+  const { authorInfo } = useRail();
   const entry = useContext(ReviewItemContext);
   if (hidden || !entry) return null;
   // Nothing to show is not an empty disc: a custom node's card has no author. Children win,
@@ -1576,7 +1681,27 @@ function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps)
     'aria-hidden': true,
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
-  return <span {...shared}>{children ?? entry.initials}</span>;
+  // A host-supplied image replaces the initials; the disc (and its author-coloured
+  // background, visible until the image loads) stays.
+  // Already sanitised where the style was normalised, so every consumer of the roster —
+  // this card and a host rendering its own — gets the same guarantee.
+  const avatarUrl = authorInfo.get(entry.author)?.style?.avatarUrl;
+  const face =
+    children ??
+    (avatarUrl ? (
+      // `no-referrer`: a card renders as soon as it scrolls into view, so an avatar on a
+      // third-party host would otherwise beacon the document's page URL on every render.
+      <img
+        className="docx-review__avatar-img"
+        src={avatarUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+      />
+    ) : undefined) ??
+    entry.initials;
+  return <span {...shared}>{face}</span>;
 }
 ReviewAvatar.docxReviewPart = 'Avatar' as const;
 

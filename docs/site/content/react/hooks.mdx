@@ -225,28 +225,29 @@ function Find() {
 
 ## Other hooks
 
-| Hook                              | Returns                                                                                    |
-| --------------------------------- | ------------------------------------------------------------------------------------------ |
-| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`, with cancellation.                   |
-| `useEditorValueCommand(slotId)`   | Value-taking commands: `'image.wrap'`, `'image.altText'`.                                  |
-| `useParagraphIndent()`            | Current indents plus an `apply` for ruler-style editing.                                   |
-| `useHyperlinkPopup()`             | State behind the link popover, for a custom panel.                                         |
-| `useContentControl()`             | The content-control inspector: locks, value writes, form fill.                             |
-| `useHeaderFooterState()`          | Which header/footer scope is being edited, or `null`.                                      |
-| `useNoteScopeState()`             | The same for footnotes and endnotes.                                                       |
-| `useContextMenuTarget()`          | The element the last right-click landed on.                                                |
-| `useNavigationPane(options?)`     | Open state and width for the navigation pane.                                              |
-| `useTranslation()`                | `{ t }` bound to the active locale catalog.                                                |
-| `useChromeTranslate(overrides?)`  | Catalog-backed label resolver for chrome `t` props; an overrides `Map` is consulted first. |
-| `useFonts(source, ...fragments)`  | Builds a `FontResolver` from a source plus fragments. See [Fonts](/docs/2.x/guides/fonts). |
-| `useNotePropertiesState()`        | Footnote and endnote numbering properties for the current scope.                           |
-| `useEditorSnapshot(editor)`       | Revision counter for an editor, for your own `useSyncExternalStore`.                       |
-| `useNavigationShift()`            | Horizontal offset the open navigation pane pushes the page by.                             |
-| `useTableBorderTargetLabel()`     | Label for the active table border target, for a custom border control.                     |
+| Hook                              | Returns                                                                                                                                                                                                  |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `useDocxSource(source, options?)` | Fetches bytes and fonts for a URL, `File`, or `Blob`, with cancellation.                                                                                                                                 |
+| `useEditorValueCommand(slotId)`   | Value-taking commands: `'image.wrap'`, `'image.altText'`.                                                                                                                                                |
+| `useParagraphIndent()`            | Current indents plus an `apply` for ruler-style editing.                                                                                                                                                 |
+| `useHyperlinkPopup()`             | State behind the link popover, for a custom panel.                                                                                                                                                       |
+| `useContentControl()`             | The content-control inspector: locks, value writes, form fill.                                                                                                                                           |
+| `useHeaderFooterState()`          | Which header/footer scope is being edited, or `null`.                                                                                                                                                    |
+| `useNoteScopeState()`             | The same for footnotes and endnotes.                                                                                                                                                                     |
+| `useContextMenuTarget()`          | The element the last right-click landed on.                                                                                                                                                              |
+| `useNavigationPane(options?)`     | Open state and width for the navigation pane.                                                                                                                                                            |
+| `useTranslation()`                | `{ t }` bound to the active locale catalog.                                                                                                                                                              |
+| `useChromeTranslate(overrides?)`  | Catalog-backed label resolver for chrome `t` props; an overrides `Map` is consulted first.                                                                                                               |
+| `useFonts(source, ...fragments)`  | Builds a `FontResolver` from a source plus fragments. See [Fonts](/docs/2.x/guides/fonts).                                                                                                               |
+| `useNotePropertiesState()`        | Footnote and endnote numbering properties for the current scope.                                                                                                                                         |
+| `useEditorSnapshot(editor)`       | Revision counter for an editor, for your own `useSyncExternalStore`.                                                                                                                                     |
+| `useNavigationShift()`            | Horizontal offset the open navigation pane pushes the page by.                                                                                                                                           |
+| `useTableBorderTargetLabel()`     | Label for the active table border target, for a custom border control.                                                                                                                                   |
+| `useReviewAuthors()`              | Every review author the current view draws — tracked-change authors first, comment-only authors after — with the color and style each resolves to. See [Tracked changes](/docs/2.x/pro/tracked-changes). |
 
 `useContentControlInstance()` and `useHyperlinkPopupInstance()` are the context-free variants of `useContentControl()` and `useHyperlinkPopup()`, for a control mounted outside the part that owns the state.
 
-Review hooks (`useReview`, `useReviewOf`, `useReviewItem`) ship in [`@docx-editor.dev/pro/react`](/docs/2.x/pro).
+Review hooks (`useReview`, `useReviewOf`, `useReviewItem`, `useReviewAuthor`) ship in [`@docx-editor.dev/pro/react`](/docs/2.x/pro).
 
 ## Next steps
 

@@ -98,6 +98,10 @@
 
   /* Inline comment/annotation marks. Resting highlights stay quiet on the
     * document canvas; focused sidebar items get the stronger active treatment. */
+  /* The open review card's wash. OPAQUE, and stated per theme rather than mixed from
+     `--doc-primary-light`: that token is translucent under `.dark`, so mixing it produced a
+     card the page showed through. A card is chrome and sits on its own ground. */
+  --doc-review-card-active-bg: color-mix(in srgb, #e8f0fe 45%, #fff);
   /* The comment half of the highlight layer described beside the revision tokens below:
      `-bg` and `-border` are the band every comment wears, and the `-active-` pair is the
      one the reader has open. Comments carry no wash on the run itself, so unlike a tracked
@@ -351,19 +355,19 @@
   --doc-on-primary: #1f1f1f; /* text/icon on a filled primary surface */
   --doc-toggle-active-bg: var(--doc-primary-light);
   --doc-toggle-active-fg: var(--doc-primary);
+  /* Mixed from the OPAQUE accent, not from the translucent `--doc-primary-light` above. */
+  --doc-review-card-active-bg: color-mix(in srgb, #4e9dff 12%, var(--doc-surface, #1b1d22));
   --doc-comment-bg: rgba(253, 214, 99, 0.16);
   --doc-comment-border: rgba(253, 214, 99, 0.5);
   --doc-comment-active-bg: rgba(253, 214, 99, 0.32);
   --doc-comment-active-border: rgba(253, 214, 99, 0.95);
-  /* Dark mode: the same ramp, lifted so it reads on a dark page. */
-  --doc-review-author-0: #ff8a80;
-  --doc-review-author-1: #82b1ff;
-  --doc-review-author-2: #d7a3ff;
-  --doc-review-author-3: #7fe3c5;
-  --doc-review-author-4: #ffd180;
-  --doc-review-author-5: #ff9e80;
-  --doc-review-author-6: #b0bec5;
-  --doc-review-author-7: #ce93d8;
+  /* NOT the author ramp. It used to be lifted here, back when only the review cards read
+     it — but the ramp now colours the painted DOCUMENT too, and the dark page is rendered
+     through `invert(1) hue-rotate(180deg)` (see `.docx-page-content` below). A colour
+     consumed inside that filter must be authored for the LIGHT page or it is corrected
+     twice: the lifted `#ff8a80` inverted to `#b54a41` on a `#333` page, 2.4:1 and below
+     AA. The same reason `--doc-revision-insertion` / `-deletion` are not overridden here.
+     The CARDS sit outside the filter and lift the accent themselves, further down. */
   --doc-revision-format: #9fb3bf;
   --doc-review-change-bar: #9e9e9e;
   --doc-text: #e8e8e8; /* primary text */
@@ -5264,6 +5268,34 @@ a.docx-hyperlink:focus-visible {
   display: none;
 }
 
+/* THE CHROME'S READING OF AN AUTHOR'S COLOUR.
+   The review surface sets `--doc-review-author-current` inline on each card, balloon and marker,
+   from the same ramp the painted document draws that author in. These two derive from it,
+   and they are declared on the elements themselves because a custom property that
+   references `--doc-review-author-current` has to be computed where that property is actually set —
+   an ancestor rule would resolve the fallback and inherit it down.
+   Light: the page and the chrome agree on the value. Dark: the PAGE is rendered through an
+   inverting filter and the chrome is not, so only the chrome lifts. */
+.docx-review__card,
+.docx-review__marker {
+  --doc-review-author-ink: var(--doc-review-author-current, #c0392b);
+  --doc-review-author-disc: color-mix(
+    in srgb,
+    var(--doc-review-author-current, #c0392b) 82%,
+    white
+  );
+}
+
+.docx-editor.dark .docx-review__card,
+.docx-editor.dark .docx-review__marker {
+  --doc-review-author-ink: color-mix(in srgb, var(--doc-review-author-current, #c0392b) 55%, white);
+  --doc-review-author-disc: color-mix(
+    in srgb,
+    var(--doc-review-author-current, #c0392b) 62%,
+    white
+  );
+}
+
 .docx-review__card {
   display: flex;
   flex-direction: column;
@@ -5274,6 +5306,13 @@ a.docx-hyperlink:focus-visible {
   margin: 0 12px 0 0;
   padding: 12px 14px;
   border: 1px solid var(--doc-border, #e3e5e8);
+  /* WHOSE CARD THIS IS, at a glance. The document colours each author's changes, so the
+     card that annotates them carries the same colour on its leading edge — the eye pairs
+     the two without reading either. An edge rather than a wash: the card is chrome and its
+     text has to keep full contrast, and eight tinted slabs down a rail read as warnings.
+     `--doc-review-author-current` is set per card by the review surface; `--doc-review-author-ink`
+     is the chrome-side reading of it, lifted under `.dark` (see below). */
+  border-left: 3px solid var(--doc-review-author-ink, var(--doc-border, #e3e5e8));
   /* The card is CHROME, so it is themed; the document canvas beside it never is. */
   border-radius: 12px;
   background: var(--doc-surface, #fff);
@@ -5297,7 +5336,15 @@ a.docx-hyperlink:focus-visible {
    the rail read as eight competing highlights. */
 .docx-review__card[data-active] {
   box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
-  border-color: var(--doc-border-strong, #c8ccd2);
+  /* THREE SIDES, not `border-color`. The leading edge carries the author's colour, and the
+     shorthand overwrote it — the open card was the one place a reader could not tell whose
+     change they were deciding on. */
+  border-top-color: var(--doc-border-strong, #c8ccd2);
+  border-right-color: var(--doc-border-strong, #c8ccd2);
+  border-bottom-color: var(--doc-border-strong, #c8ccd2);
+  /* The faintest wash of the chrome's own accent, the same one the toolbar uses for a
+     pressed control, so "open" reads as selection rather than as a fourth author colour. */
+  background: var(--doc-review-card-active-bg);
 }
 
 .docx-review__card[data-resolved] {
@@ -5320,11 +5367,23 @@ a.docx-hyperlink:focus-visible {
   border-radius: 50%;
   /* Softened against white: the ramp is chosen to stay legible as TEXT on the page, and the
      same values as a 30px filled disc read as eight warning lights down the margin. */
-  background: color-mix(in srgb, var(--doc-review-author, #c0392b) 82%, white);
+  background: var(--doc-review-author-disc, #c0392b);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  /* An avatar image must not spill past the disc while it loads or if it fails. */
+  overflow: hidden;
+}
+
+/* A host-supplied avatar image (`RevisionAuthorStyle.avatarUrl`) fills the disc; the
+   author-coloured background above shows through until it loads. */
+.docx-review__avatar-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
 }
 
 .docx-review__meta {
@@ -5575,6 +5634,27 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-comment-active-bg);
   box-shadow: inset 0 -1px 0 var(--doc-comment-active-border);
 }
+
+/* WHOSE COMMENT THIS IS, for CSS only.
+ *
+ * Every band carries `data-review-author`, `data-review-author-slot` and `--doc-review-author-current` — the same
+ * three hooks the review card carries, so one selector restyles a reviewer's card and the text
+ * it annotates together. Nothing here paints them: Word keeps every comment the same yellow,
+ * and eight highlighter colours down a page reads as eight meanings rather than eight people.
+ * The author is a HANDLE, not a default.
+ *
+ * To tint by author, a host writes the one rule this deliberately does not:
+ *
+ *   .docx-editor .docx-comment-band {
+ *     background: color-mix(in srgb, var(--doc-review-author-current) 22%, transparent);
+ *   }
+ *
+ * The band is CHROME, not page content: this layer is a sibling of the pages, so the page's
+ * inverting filter never reaches it. It composites over the already-inverted sheet, and the
+ * blend mode flips from `multiply` to `screen` under `.dark` for that reason. A colour used
+ * here therefore needs its own dark value, the way `--doc-comment-bg` has one — nothing
+ * corrects it downstream. `--doc-review-author-current` carries the light ramp value in both themes,
+ * so a rule that tints by author should lift it under `.docx-editor.dark` itself. */
 
 /* Tracked changes carry a band always, in the change's OWN colour, so it never contradicts
  * the decoration it sits behind — green where text is arriving, red where it is leaving. A

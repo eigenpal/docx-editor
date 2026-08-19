@@ -33,6 +33,11 @@ import { useDocxEditor } from '../src/editor/context.ts';
 import { useEditorState } from '../src/editor/useEditorState.ts';
 import { useEditorCommand, type EditorCommandState } from '../src/editor/useEditorCommand.ts';
 import { useEditorEvent } from '../src/editor/useEditorEvent.ts';
+import { useReviewAuthors } from '../src/editor/useReviewAuthors.ts';
+import {
+  DocxEditorColorByChangeType,
+  DocxEditorAuthorStyle,
+} from '../src/editor/DocxEditorAuthorStyle.tsx';
 import type { DocxEditorRef } from '../src/types.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -324,5 +329,179 @@ describe('the sugar <DocxEditor> (namespace + ref parity)', () => {
       handle.focus();
     });
     expect(handle.getDocumentHandle()).not.toBeNull();
+  });
+});
+
+describe('declarative revision styles', () => {
+  const TRACKED = docx(
+    '<w:p><w:r><w:t xml:space="preserve">base </w:t></w:r>' +
+      '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-01T00:00:00Z">' +
+      '<w:r><w:t>added</w:t></w:r></w:ins></w:p>'
+  );
+  const ink = (view: { container: HTMLElement }) =>
+    view.container.querySelector<HTMLElement>('.docx-revision')?.style.color;
+
+  test("AuthorStyle overrides one author; unmounting returns them to the ramp", async () => {
+    const view = render(
+      <DocxEditorRoot document={TRACKED}>
+        <DocxEditorAuthorStyle author="Ada Lovelace" color="var(--brand-ada)" />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    // Declared at mount, so it reached the engine as construction config: the FIRST paint
+    // is already styled, with no pass in the kind colours.
+    expect(ink(view)).toBe('var(--brand-ada)');
+    await act(async () => {
+      view.rerender(
+        <DocxEditorRoot document={TRACKED}>
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+        </DocxEditorRoot>
+      );
+    });
+    // Later changes are coalesced into one write at the end of the effect flush, so this
+    // lands a microtask after the unmount rather than synchronously with it.
+    expect(ink(view)).toBe('var(--doc-review-author-0)');
+  });
+
+  test('a changed colour is one repaint, with no pass through the kind colours', async () => {
+    const seen: string[] = [];
+    const view = render(
+      <DocxEditorRoot document={TRACKED}>
+        <DocxEditorAuthorStyle author="Ada Lovelace" color="var(--brand-one)" />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    // React runs a changed declaration as cleanup-then-effect. Unbatched, the cleanup would
+    // take the document to the kind colours and the effect would bring it back — two full
+    // repaints and a visible flash for every step of a colour-picker drag.
+    await act(async () => {
+      view.rerender(
+        <DocxEditorRoot document={TRACKED}>
+          <DocxEditorAuthorStyle author="Ada Lovelace" color="var(--brand-two)" />
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+        </DocxEditorRoot>
+      );
+      seen.push(ink(view) ?? '');
+    });
+    expect(seen).toEqual(['var(--brand-one)']);
+    expect(ink(view)).toBe('var(--brand-two)');
+  });
+
+  test('by default an author takes the ramp, with no declaration at all', () => {
+    const view = render(
+      <DocxEditorRoot document={TRACKED}>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(ink(view)).toBe('var(--doc-review-author-0)');
+  });
+
+  test('ColorByChangeType opts out to the kind colours while mounted', () => {
+    const view = render(
+      <DocxEditorRoot document={TRACKED}>
+        <DocxEditorColorByChangeType />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(ink(view)).toBe('var(--doc-revision-insertion)');
+  });
+});
+
+describe('useReviewAuthors', () => {
+  const TRACKED_SOURCE = docx(
+    '<w:p><w:r><w:t xml:space="preserve">base </w:t></w:r>' +
+      '<w:ins w:id="1" w:author="Ada Lovelace" w:date="2026-01-01T00:00:00Z">' +
+      '<w:r><w:t>added</w:t></w:r></w:ins></w:p>'
+  );
+
+  test('lists the loaded document’s authors and follows setRevisionStyles live', async () => {
+    let instance: DocxEditorInstance | null = null;
+    function Legend() {
+      const authors = useReviewAuthors();
+      return (
+        <div data-testid="legend">
+          {authors.map((entry) => `${entry.author}:${entry.color}`).join('|')}
+        </div>
+      );
+    }
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED_SOURCE}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <Legend />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    // Discovery: the authors come from the FILE, so the legend could not have been
+    // configured — it reads them.
+    expect(view.getByTestId('legend').textContent).toBe('Ada Lovelace:var(--doc-review-author-0)');
+    // Live: a colour picker's write re-renders the legend without any remount.
+    await act(async () => {
+      instance!.setRevisionStyles({ authors: { 'Ada Lovelace': '#7c3aed' } });
+    });
+    expect(view.getByTestId('legend').textContent).toBe('Ada Lovelace:#7c3aed');
+  });
+});
+
+describe('the opening mode through the composable Root', () => {
+  // The engine's mode semantics are pinned in core; what THESE tests pin is the ADAPTER:
+  // the Root forwards an explicit `mode` (and forwards nothing when the prop is omitted,
+  // which is what lets the document decide), and the sugar keeps its opinionated default.
+  test("mode='view' reaches the facade: read-only, and every write is refused", () => {
+    let instance: Editor | null = null;
+    render(
+      <DocxEditorRoot
+        document={SOURCE}
+        mode="view"
+        onReady={(editor) => {
+          instance = editor;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(instance!.getEditingMode()).toBe('viewing');
+    expect(instance!.snapshot().editable).toBe(false);
+    expect(instance!.exec({ type: 'insertText', text: 'X' }).ok).toBe(false);
+  });
+
+  test('omitted on the Root, a document that asks for nothing opens editing; the sugar defaults to edit', () => {
+    let composed: Editor | null = null;
+    render(
+      <DocxEditorRoot
+        document={SOURCE}
+        onReady={(editor) => {
+          composed = editor;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(composed!.getEditingMode()).toBe('editing');
+
+    const ref = createRef<DocxEditorRef>();
+    render(<DocxEditor ref={ref} document={SOURCE} />);
+    expect(ref.current!.getEditor()!.getEditingMode()).toBe('editing');
   });
 });

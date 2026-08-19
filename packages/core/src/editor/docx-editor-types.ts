@@ -13,6 +13,11 @@ import type {
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
+import type {
+  ReviewAuthorInfo,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from '../output/revision-presentation.ts';
 import type { FontConfigurationFragment, FontResolver } from './font-composition.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
@@ -84,6 +89,25 @@ export interface DocxEditorConfig {
    *   suggesting, everything else in editing.
    */
   mode?: 'edit' | 'view' | 'suggesting';
+  /**
+   * How painted tracked changes are coloured. Presentation only — nothing is serialised.
+   *
+   * - `'author'` (the DEFAULT) — every change takes its author's colour from the
+   *   `--doc-review-author-N` ramp, by order of first appearance, as Word does. Restyle a
+   *   slot under `.docx-editor` to change the ramp.
+   * - `'kind'` — insertions green, deletions red, so "added" and "removed" are what a
+   *   glance tells apart, whoever proposed them.
+   * - {@link RevisionAuthorAssignments} — style the named authors; `others` decides
+   *   whether the rest take the ramp (the default) or the kind colours.
+   *
+   * The opening value. In React this is authored declaratively — `DocxEditor.ColorByChangeType`
+   * and `DocxEditor.AuthorStyle` compose and apply it, seeding this config for the first
+   * paint — so React hosts never pass it by hand; it is the entry for headless hosts. Read
+   * the document's resolved roster with `getReviewAuthors`. Applies wherever revision
+   * markup paints: the full all-markup view needs a review module registered; without one
+   * the proposed view still marks surviving insertions.
+   */
+  revisionStyles?: RevisionStyles;
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**
@@ -176,6 +200,51 @@ export interface DocxEditorInstance extends Editor {
    * `stateVersion()`.
    */
   fontMeasurement(): FontMeasurementState;
+  /**
+   * Every author the review surface DRAWS, in Word's slot order, with the colour the review
+   * chrome draws them in. The discovery surface a legend or colour picker builds on —
+   * authors depend on the loaded file, so they cannot be known at configuration time.
+   *
+   * The colour is the author's, not the document's: under `'kind'` the painted text goes to
+   * the insertion/deletion colours while the cards keep these accents, so a legend built
+   * from this describes the rail rather than the page.
+   *
+   * BOTH HALVES OF REVIEW. Authors of tracked changes come first, numbered by where their
+   * first change appears; authors who only commented follow. One person therefore draws in
+   * one colour across their comments and their edits, which is what a reader assumes the
+   * moment they learn the pairing on either. The order puts commenters last so that adding
+   * a comment can never renumber a tracked change the painter has already drawn.
+   *
+   * Read of the rendered projection, not of the package: a resolved view hides the
+   * revisions it has resolved away, so an author whose only change is hidden there is
+   * listed only if they also commented. Empty while detached. Reference-stable between
+   * changes, so it is safe as a dependency; changes bump `stateVersion()`.
+   */
+  getReviewAuthors(): readonly ReviewAuthorInfo[];
+  /**
+   * The style declared for one author, whether or not the SURFACE has published them yet —
+   * so review chrome can draw a card the rail is holding before the roster catches up.
+   *
+   * {@link DocxEditorInstance.getReviewAuthors} answers for every author of a tracked
+   * change or a comment, so this is a narrow fallback rather than the way to reach a
+   * commenter.
+   *
+   * @internal The seam `@docx-editor.dev/pro`'s review rail resolves those authors
+   * through. A consumer reads `useReviewAuthor` (pro) or `useReviewAuthors` (react)
+   * instead; nothing here answers a question those two do not.
+   */
+  getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
+  /**
+   * Replace how tracked changes are coloured, live. Paint-level: pages repaint without a
+   * layout pass, and the caret, selection and undo history stay where they are. Pass
+   * `'author'` to restore the default, or `'kind'` to opt out to the green/red
+   * rendering. Survives a document reload.
+   *
+   * The imperative PRIMITIVE beneath React's declarative lane: `DocxEditor.ColorByChangeType`
+   * and `DocxEditor.AuthorStyle` drive this seam, and React hosts declare those instead
+   * of calling it. Call it directly from headless and non-React hosts.
+   */
+  setRevisionStyles(styles: RevisionStyles): void;
   /**
    * Mount into `el`. If the instance holds pending document bytes (created without a
    * container, or previously detached), they mount now — under the shaped measurer when

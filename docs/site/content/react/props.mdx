@@ -20,6 +20,8 @@ Use `document` for the current document source and `fonts` for measurement fidel
 | `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | The mode the editor opens in. Defaults to `'edit'`, so a document that carries `w:trackRevisions` still opens ready to type. Remount to change it. |
 | `zoom`     | `number`                                                         | Mount-time zoom value.                                                                                                                             |
 
+Tracked changes are colored per author by default. To override an author's color or opt out, mount the declarative `<DocxEditor.AuthorStyle />` and `<DocxEditor.ColorByChangeType />` components as children — there is no prop for it. See [Tracked changes](/docs/2.x/pro/tracked-changes).
+
 ```tsx
 const bytes = new Uint8Array(await fetch('/template.docx').then((r) => r.arrayBuffer()));
 

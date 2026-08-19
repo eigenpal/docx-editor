@@ -13,7 +13,11 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
-import { authorSlotsOf, revisionPresentationOf } from '../revision-presentation.ts';
+import {
+  authorSlotsOf,
+  revisionPresentationOf,
+  type RevisionStyles,
+} from '../revision-presentation.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -34,10 +38,14 @@ const ins = (id: string, inner: string, author = 'QA') =>
 const del = (id: string, inner: string, author = 'Dev') =>
   `<w:del w:id="${id}" w:author="${author}" w:date="2026-03-26T11:00:00Z">${inner}</w:del>`;
 
-function paint(body: string): HTMLElement {
+function paint(body: string, revisionStyles?: RevisionStyles): HTMLElement {
   const layout = layoutSemanticDocument(load(body), 1, { measurer });
   const container = document.createElement('div');
-  paintSemanticLayout(container, layout, { scale: 1, ariaHidden: false });
+  paintSemanticLayout(container, layout, {
+    scale: 1,
+    ariaHidden: false,
+    ...(revisionStyles !== undefined ? { revisionStyles } : {}),
+  });
   return container;
 }
 
@@ -54,7 +62,8 @@ describe('the reader can see which text is tracked', () => {
     expect(span.textContent).toBe('added');
     expect(span.style.textDecorationLine).toBe('underline');
     expect(span.style.textDecorationStyle).toBe('dashed');
-    expect(span.style.color).toBe('var(--doc-revision-insertion)');
+    // Coloured by AUTHOR by default, as Word does — the decoration is what says "added".
+    expect(span.style.color).toBe('var(--doc-review-author-0)');
   });
 
   test('a deletion is struck through', () => {
@@ -83,10 +92,10 @@ describe('the reader can see which text is tracked', () => {
     expect(spans.map((span) => span.dataset.revisionKind)).toEqual(['moveFrom', 'moveTo']);
   });
 
-  test('an insertion and a deletion are the two colours a reader tells apart', () => {
-    // Kind, not author: scanning a page, "added" versus "removed" is the distinction that has
-    // to survive a glance. Who made the change is the review card's question.
-    const root = paint(`<w:p>${ins('1', run('added'))}${del('2', delRun('gone'))}</w:p>`);
+  test('opting out of author colours leaves the two a reader tells apart', () => {
+    // `'kind'` is the opt-out: scanning a page, "added" versus "removed" becomes the
+    // distinction that survives a glance, whoever proposed either.
+    const root = paint(`<w:p>${ins('1', run('added'))}${del('2', delRun('gone'))}</w:p>`, 'kind');
     const spans = trackedSpans(root);
     expect(spans.map((span) => span.style.color)).toEqual([
       'var(--doc-revision-insertion)',
@@ -138,8 +147,230 @@ describe('the reader can see which text is tracked', () => {
     const root = paint(`<w:p>${ins('7', run('added'), 'QA Reviewer')}</w:p>`);
     const span = trackedSpans(root)[0]!;
     expect(span.dataset.revisionId).toBe('7');
-    expect(span.dataset.revisionAuthor).toBe('QA Reviewer');
+    expect(span.dataset.reviewAuthor).toBe('QA Reviewer');
     expect(span.dataset.revisionDate).toBe('2026-03-26T11:00:00Z');
+  });
+});
+
+describe('colouring by author', () => {
+  test("'author' draws each change in its author's slot; the decoration still says the kind", () => {
+    const root = paint(
+      `<w:p>${ins('1', run('added'), 'Ada')}${del('2', delRun('gone'), 'Grace')}</w:p>`,
+      'author'
+    );
+    const spans = trackedSpans(root);
+    expect(spans.map((span) => span.style.color)).toEqual([
+      'var(--doc-review-author-0)',
+      'var(--doc-review-author-1)',
+    ]);
+    // The colour answers "whose"; added-versus-removed still reads from the decoration.
+    expect(spans.map((span) => span.style.textDecorationLine)).toEqual([
+      'underline',
+      'line-through',
+    ]);
+    expect(spans.map((span) => span.style.textDecorationColor)).toEqual([
+      'var(--doc-review-author-0)',
+      'var(--doc-review-author-1)',
+    ]);
+    // The wash keeps the kind pair: the ink answers "whose", the wash keeps the change
+    // findable when scanning.
+    expect(spans[0]!.style.backgroundColor).toBe('var(--doc-revision-insertion-wash)');
+    // The slot rides as a CSS hook, so `[data-review-author-slot='0']` restyles one
+    // reviewer's changes beyond the colour.
+    expect(spans.map((span) => span.dataset.reviewAuthorSlot)).toEqual(['0', '1']);
+  });
+
+  test('the slot hook is absent under kind colouring', () => {
+    // Emitted always, a new author appearing would repaint every page in every scheme —
+    // the slot map is in the paint-reuse key only under author colouring.
+    const root = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`, 'kind');
+    expect(trackedSpans(root)[0]!.dataset.reviewAuthorSlot).toBeUndefined();
+  });
+
+  test('assignments are SELECTIVE: a styled author takes their colour, the rest keep the kind colours', () => {
+    // "Highlight one reviewer, leave everyone else green/red" — the whole point of the
+    // default `others: 'kind'`.
+    const root = paint(
+      `<w:p>${ins('1', run('added'), 'Ada')}${ins('2', run('more'), 'Grace')}</w:p>`,
+      { others: 'kind', authors: { Ada: 'var(--brand-ada)' } }
+    );
+    const spans = trackedSpans(root);
+    expect(spans.map((span) => span.style.color)).toEqual([
+      'var(--brand-ada)',
+      'var(--doc-revision-insertion)',
+    ]);
+  });
+
+  test('by default the unstyled rest stay on the ramp, not the kind colours', () => {
+    const root = paint(
+      `<w:p>${ins('1', run('added'), 'Ada')}${ins('2', run('more'), 'Grace')}</w:p>`,
+      { authors: { Ada: 'var(--brand-ada)' } }
+    );
+    const spans = trackedSpans(root);
+    expect(spans.map((span) => span.style.color)).toEqual([
+      'var(--brand-ada)',
+      'var(--doc-review-author-1)',
+    ]);
+  });
+
+  test('the innermost author owns the colour of a nested change', () => {
+    const root = paint(`<w:p>${ins('1', del('2', delRun('x'), 'Bea'), 'Ada')}</w:p>`, 'author');
+    const span = trackedSpans(root)[0]!;
+    // Ada appears first in the stack, Bea second — but the pending decision is Bea's.
+    expect(span.style.color).toBe('var(--doc-review-author-1)');
+    expect(span.style.textDecorationLine).toBe('line-through');
+  });
+
+  test('a deleted paragraph mark follows its author too', () => {
+    const root = paint(
+      `<w:p><w:pPr><w:rPr><w:del w:id="9" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
+        `${run('merges forward')}</w:p>`,
+      'author'
+    );
+    const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
+    expect(glyph.style.color).toBe('var(--doc-review-author-0)');
+    expect(glyph.style.textDecorationLine).toBe('line-through');
+    expect(glyph.dataset.reviewAuthorSlot).toBe('0');
+  });
+
+  test('switching the scheme repaints pages whose own records did not change', () => {
+    // The paint-reuse key must carry the scheme and the author→slot map: a page record that
+    // is identical across two paints is otherwise reused verbatim, in the old colours.
+    const layout = layoutSemanticDocument(load(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`), 1, {
+      measurer,
+    });
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1, ariaHidden: false, revisionStyles: 'kind' });
+    expect(container.querySelector<HTMLElement>('.docx-revision')!.style.color).toBe(
+      'var(--doc-revision-insertion)'
+    );
+    paintSemanticLayout(container, layout, {
+      scale: 1,
+      ariaHidden: false,
+      revisionStyles: 'author',
+    });
+    expect(container.querySelector<HTMLElement>('.docx-revision')!.style.color).toBe(
+      'var(--doc-review-author-0)'
+    );
+  });
+
+  test("a style object can restyle one author's ink and wash; the rest keep their defaults", () => {
+    const root = paint(
+      `<w:p>${ins('1', run('added'), 'Ada')}${ins('2', run('more'), 'Grace')}</w:p>`,
+      { authors: { Ada: { color: 'var(--brand-ada)', background: 'var(--brand-ada-wash)' } } }
+    );
+    const spans = trackedSpans(root);
+    expect(spans.map((span) => span.style.color)).toEqual([
+      'var(--brand-ada)',
+      'var(--doc-review-author-1)',
+    ]);
+    expect(spans.map((span) => span.style.backgroundColor)).toEqual([
+      'var(--brand-ada-wash)',
+      'var(--doc-revision-insertion-wash)',
+    ]);
+  });
+
+  test("host class names land on one author's spans, split on whitespace", () => {
+    const root = paint(
+      `<w:p>${ins('1', run('added'), 'Ada')}${ins('2', run('more'), 'Grace')}</w:p>`,
+      { authors: { Ada: { spanClassName: 'agent-edit  ring' } } }
+    );
+    const spans = trackedSpans(root);
+    expect(spans[0]!.classList.contains('agent-edit')).toBe(true);
+    expect(spans[0]!.classList.contains('ring')).toBe(true);
+    expect(spans[1]!.classList.contains('agent-edit')).toBe(false);
+  });
+
+  test('a declaration that names no colour leaves the ink alone', () => {
+    // "Give this reviewer an avatar" must not recolour their text. Only `color` moves the
+    // ink; the other fields say nothing about it. Pinned against `others: 'kind'`, which
+    // is where the wrong answer was visible.
+    const avatarOnly = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`, {
+      others: 'kind',
+      authors: { Ada: { avatarUrl: '/ada.png' } },
+    });
+    expect(trackedSpans(avatarOnly)[0]!.style.color).toBe('var(--doc-revision-insertion)');
+
+    const classOnly = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`, {
+      others: 'kind',
+      authors: { Ada: { spanClassName: 'agent-edit' } },
+    });
+    const span = trackedSpans(classOnly)[0]!;
+    expect(span.style.color).toBe('var(--doc-revision-insertion)');
+    // …but the class still lands, which is the whole point of declaring it.
+    expect(span.classList.contains('agent-edit')).toBe(true);
+  });
+
+  test('an author whose only change is a paragraph mark gets their own slot, not slot 0', () => {
+    // The roster reads every list a revision can appear in. Missing one does not leave its
+    // author uncoloured — it silently hands them the first author's colour. A paragraph
+    // mark is the case with no span of its own to be found through.
+    const marks = authorSlotsOf(
+      layoutSemanticDocument(
+        load(
+          `<w:p>${ins('1', run('body'), 'Ada')}</w:p>` +
+            `<w:p><w:pPr><w:rPr><w:del w:id="9" w:author="Bea" w:date="D"/></w:rPr></w:pPr>` +
+            `${run('merges')}</w:p>`
+        ),
+        1,
+        { measurer }
+      )
+    );
+    expect(marks.get('Ada')).toBe(0);
+    expect(marks.get('Bea')).toBe(1);
+  });
+
+  test('slots follow reading order: a paragraph mark comes after the text beside it', () => {
+    // The pilcrow paints at the END of the last line, so the author who only pressed Enter
+    // is met AFTER the author of the words. Reading the mark first gave them the lower
+    // slot, shifting everyone's colour and the roster a legend is built from.
+    const slots = authorSlotsOf(
+      layoutSemanticDocument(
+        load(
+          `<w:p><w:pPr><w:rPr><w:ins w:id="9" w:author="Bea" w:date="D"/></w:rPr></w:pPr>` +
+            `${ins('1', run('added'), 'Ada')}</w:p>`
+        ),
+        1,
+        { measurer }
+      )
+    );
+    expect(slots.get('Ada')).toBe(0);
+    expect(slots.get('Bea')).toBe(1);
+  });
+
+  test('a format revision carries its author hooks and honours a declared colour', () => {
+    const body =
+      '<w:p><w:r><w:rPr><w:rPrChange w:id="5" w:author="Zed" w:date="D"><w:rPr/>' +
+      '</w:rPrChange></w:rPr><w:t>restyled</w:t></w:r></w:p>';
+    const root = paint(body, {
+      authors: { Zed: { color: 'var(--brand-zed)', spanClassName: 'z' } },
+    });
+    const span = root.querySelector<HTMLElement>('.docx-revision-format')!;
+    expect(span.dataset.reviewAuthor).toBe('Zed');
+    // Format revisions are the largest tracked population in a heavily restyled document;
+    // a host rule scoped to the author has to reach them too.
+    expect(span.dataset.reviewAuthorSlot).toBe('0');
+    expect(span.classList.contains('z')).toBe(true);
+    expect(span.style.color).toBe('var(--brand-zed)');
+  });
+
+  test("an unstyled author's pilcrow stays kind-coloured under selective assignments", () => {
+    const root = paint(
+      `<w:p><w:pPr><w:rPr><w:del w:id="9" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
+        `${run('merges forward')}</w:p>`,
+      { others: 'kind', authors: { Ada: 'var(--brand-ada)' } }
+    );
+    const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
+    expect(glyph.style.color).toBe('var(--doc-revision-deletion)');
+  });
+
+  test("'author' is the default and an explicit 'author' matches it", () => {
+    const implicitDefault = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`);
+    const explicit = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`, 'author');
+    expect(implicitDefault.querySelector<HTMLElement>('.docx-revision')!.style.color).toBe(
+      trackedSpans(explicit)[0]!.style.color
+    );
+    expect(trackedSpans(explicit)[0]!.style.color).toBe('var(--doc-review-author-0)');
   });
 });
 
@@ -188,11 +419,13 @@ describe('changes that decorate no characters', () => {
   const mark = (kind: 'ins' | 'del', text: string) =>
     `<w:p><w:pPr><w:rPr><w:${kind} w:id="9" w:author="QA" w:date="D"/></w:rPr></w:pPr>` +
     `${run(text)}</w:p>`;
+  /** These pin the KIND colours a pilcrow takes, so they opt out of author colouring. */
+  const paintKind = (body: string) => paint(body, 'kind');
 
   test('a deleted paragraph mark draws a struck pilcrow', () => {
     // The change is to the paragraph BREAK, so no character carries it. Without the glyph a
     // reader has no way to see that this paragraph is being merged into the next one.
-    const root = paint(mark('del', 'merges forward'));
+    const root = paintKind(mark('del', 'merges forward'));
     const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
     expect(glyph.textContent).toBe('¶');
     expect(glyph.style.textDecorationLine).toBe('line-through');
@@ -200,7 +433,7 @@ describe('changes that decorate no characters', () => {
   });
 
   test('an inserted paragraph mark draws one in the insertion colour', () => {
-    const root = paint(mark('ins', 'splits here'));
+    const root = paintKind(mark('ins', 'splits here'));
     const glyph = root.querySelector<HTMLElement>('.docx-revision-pmark')!;
     expect(glyph.style.color).toBe('var(--doc-revision-insertion)');
     expect(glyph.style.textDecorationLine).toBe('');
@@ -225,7 +458,7 @@ describe('changes that decorate no characters', () => {
     const glyphs = root.querySelectorAll<HTMLElement>('.docx-revision-pmark');
     expect(glyphs).toHaveLength(1);
     expect(glyphs[0]!.dataset.revisionKind).toBe('delete');
-    expect(glyphs[0]!.dataset.revisionAuthor).toBe('B');
+    expect(glyphs[0]!.dataset.reviewAuthor).toBe('B');
     expect(glyphs[0]!.dataset.revisionIds).toBe('7 8');
   });
 
@@ -233,7 +466,7 @@ describe('changes that decorate no characters', () => {
     // `w:moveFrom` on the mark says this copy of the break goes away when the move is
     // accepted. The change bar already counts `moveFrom` as a removal, so a glyph that drew
     // it in the insertion colour put a blue pilcrow beside a red rule.
-    const root = paint(
+    const root = paintKind(
       '<w:p><w:pPr><w:rPr><w:moveFrom w:id="4" w:author="A"/></w:rPr></w:pPr>' +
         `${run('moved away')}</w:p>`
     );
@@ -249,7 +482,7 @@ describe('changes that decorate no characters', () => {
     // The bar is the only signal a reader scanning the margin has. Built from spans alone, a
     // paragraph whose sole change is its own break — a split or a merge, the most ordinary
     // tracked edit there is — announced itself with a coloured ¶ and nothing else.
-    const root = paint(mark('del', 'merges forward'));
+    const root = paintKind(mark('del', 'merges forward'));
     const bars = root.querySelectorAll<HTMLElement>('.docx-change-bar');
     expect(bars).toHaveLength(1);
     expect(bars[0]!.className).toContain('docx-change-bar-deletion');
@@ -277,7 +510,7 @@ describe('changes that decorate no characters', () => {
     expect(span.style.textDecorationLine).toBe('');
     expect(span.style.backgroundColor).toBe('');
     expect(span.dataset.revisionKind).toBe('format');
-    expect(span.dataset.revisionAuthor).toBe('QA');
+    expect(span.dataset.reviewAuthor).toBe('QA');
   });
 });
 

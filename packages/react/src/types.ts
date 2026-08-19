@@ -31,6 +31,13 @@ export type {
 
 export type EditorMode = 'edit' | 'view' | 'suggesting';
 
+export type {
+  ReviewAuthorInfo,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from '@docx-editor.dev/core/editor';
+
 /**
  * Props for the React `DocxEditor`. The adapter is a thin renderer over the
  * `Editor` contract; it holds no editing-engine state of its own and never

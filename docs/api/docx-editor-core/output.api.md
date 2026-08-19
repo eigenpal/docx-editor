@@ -17,6 +17,7 @@ export interface OverlayRect {
     readonly height: number;
     // (undocumented)
     readonly pageIndex: number;
+    readonly reviewAuthor?: ReviewAuthorInfo;
     // (undocumented)
     readonly width: number;
     // (undocumented)
@@ -49,6 +50,7 @@ export interface PaintOptions {
     readonly imageUrlPort?: PaintImageUrlPort;
     readonly materialize?: ReadonlySet<number>;
     readonly readOnlyParagraphIds?: ReadonlySet<string>;
+    readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly shadeFormFields?: boolean;
 }
@@ -58,6 +60,32 @@ export function paintSelectionOverlay(layer: HTMLElement, layout: SemanticLayout
 
 // @public
 export function paintSemanticLayout(container: HTMLElement, layout: SemanticLayout, options?: PaintOptions): void;
+
+// @public
+export interface ReviewAuthorInfo {
+    readonly author: string;
+    readonly color: string;
+    readonly slot: number;
+    readonly style?: RevisionAuthorStyle;
+}
+
+// @public
+export interface RevisionAuthorAssignments {
+    // (undocumented)
+    readonly authors: Readonly<Record<string, string | RevisionAuthorStyle>>;
+    readonly others?: 'kind' | 'author';
+}
+
+// @public
+export interface RevisionAuthorStyle {
+    avatarUrl?: string;
+    background?: string;
+    color?: string;
+    spanClassName?: string;
+}
+
+// @public
+export type RevisionStyles = 'kind' | 'author' | RevisionAuthorAssignments;
 
 // @public
 export interface SelectionOverlayOptions {

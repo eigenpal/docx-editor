@@ -295,6 +295,7 @@ export interface DocxEditorProps {
     mode?: EditorMode;
     modules?: readonly EditorModule[];
     onFontError?: (error: EditorFontError) => void;
+    revisionStyles?: RevisionStyles;
     // (undocumented)
     zoom?: number;
 }
@@ -1228,6 +1229,32 @@ export const PX_PER_CM = PX_PER_INCH / 2.54;
 
 // @public
 export const PX_PER_INCH = 96;
+
+// @public
+export interface ReviewAuthorInfo {
+    readonly author: string;
+    readonly color: string;
+    readonly slot: number;
+    readonly style?: RevisionAuthorStyle;
+}
+
+// @public
+export interface RevisionAuthorAssignments {
+    // (undocumented)
+    readonly authors: Readonly<Record<string, string | RevisionAuthorStyle>>;
+    readonly others?: 'kind' | 'author';
+}
+
+// @public
+export interface RevisionAuthorStyle {
+    avatarUrl?: string;
+    background?: string;
+    color?: string;
+    spanClassName?: string;
+}
+
+// @public
+export type RevisionStyles = 'kind' | 'author' | RevisionAuthorAssignments;
 
 // @public
 export const RULER_WIDTH = 20;

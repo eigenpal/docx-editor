@@ -780,6 +780,7 @@ export interface DocxEditorConfig {
     modules?: readonly EditorModule[];
     // (undocumented)
     onFontError?: (error: EditorFontError) => void;
+    revisionStyles?: RevisionStyles;
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     translate?: (key: string, params?: Record<string, string | number>) => string;
     zoom?: number;
@@ -791,8 +792,12 @@ export interface DocxEditorInstance extends Editor {
     attach(el: HTMLElement): void;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
+    getReviewAuthors(): readonly ReviewAuthorInfo[];
+    // @internal
+    getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setRevisionStyles(styles: RevisionStyles): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;
 }
@@ -1335,6 +1340,7 @@ export interface PaginatedSurface {
     // (undocumented)
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
     revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
+    revisionAuthors(): ReadonlyMap<string, number>;
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
@@ -1372,6 +1378,7 @@ export interface PaginatedSurface {
         readonly mergeAttributes?: boolean;
     }): void;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind_2[] | null): void;
+    setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     setSectionProperties(update: {
         readonly pageWidthTwips?: number;
@@ -1417,6 +1424,7 @@ export interface PaginatedSurfaceOptions {
     readonly producer?: string;
     readonly reviewModel?: ReviewModuleContribution;
     readonly revisionDisplayMode?: RevisionDisplayMode;
+    readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     readonly tocLabels?: {
@@ -1510,6 +1518,14 @@ export function resolveThemeColorHex(color: Extract<ColorValue, {
 export function resolveZoomMode(mode: ZoomMode | 'auto'): ZoomMode | null;
 
 // @public
+export interface ReviewAuthorInfo {
+    readonly author: string;
+    readonly color: string;
+    readonly slot: number;
+    readonly style?: RevisionAuthorStyle;
+}
+
+// @public
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
@@ -1531,6 +1547,24 @@ export interface ReviewModuleContribution {
     readonly displayModes: readonly RevisionDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
+
+// @public
+export interface RevisionAuthorAssignments {
+    // (undocumented)
+    readonly authors: Readonly<Record<string, string | RevisionAuthorStyle>>;
+    readonly others?: 'kind' | 'author';
+}
+
+// @public
+export interface RevisionAuthorStyle {
+    avatarUrl?: string;
+    background?: string;
+    color?: string;
+    spanClassName?: string;
+}
+
+// @public
+export type RevisionStyles = 'kind' | 'author' | RevisionAuthorAssignments;
 
 // @public
 export interface RulerDragOptions {

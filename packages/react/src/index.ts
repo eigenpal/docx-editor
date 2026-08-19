@@ -177,6 +177,12 @@ export {
   type ContentControlProps,
 } from './editor/DocxEditorContentControl';
 export { useEditorState } from './editor/useEditorState';
+export { useReviewAuthors } from './editor/useReviewAuthors';
+export {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+  type DocxEditorAuthorStyleProps,
+} from './editor/DocxEditorAuthorStyle';
 export { useZoom, type UseZoomResult } from './editor/useZoom';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';
 export { useEditorCommand, type EditorCommandState } from './editor/useEditorCommand';
@@ -299,6 +305,10 @@ export type {
   DocxEditorProps,
   DocxEditorRef,
   EditorMode,
+  ReviewAuthorInfo,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionStyles,
   EditorFontErrorCode,
   FontConfiguration,
   FontFaceRequest,

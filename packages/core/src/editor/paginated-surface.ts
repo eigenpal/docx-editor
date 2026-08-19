@@ -67,6 +67,14 @@ import {
   paintSemanticLayout,
   type OverlayRect,
 } from '@docx-editor.dev/core/output';
+// By module path: the roster walk is an engine internal, not part of the output barrel's
+// public surface. See the note there.
+import {
+  authorSlotsOf,
+  reviewAuthorsOf,
+  reviewAuthorSlotsOf,
+  type ReviewAuthorInfo,
+} from '../output/revision-presentation.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,
@@ -634,6 +642,21 @@ export function mountPaginatedSurface(
   };
 
   let currentLayout = layoutOnce();
+  // Presentation state, not document state: replaceable live through `setRevisionStyles`,
+  // because a colour change must never cost the reader their undo history to a remount.
+  // Declared before the first paint can run — `render` reads it.
+  let revisionStyles = options.revisionStyles;
+  // One roster per layout instance, so `revisionAuthors()` is cheap to poll and callers can
+  // key their own caches on the returned map's identity. Keyed on the review queue too: a
+  // COMMENT-ONLY author is in the roster and in no layout record, so a queue that moved
+  // without the layout moving still has to be re-read.
+  let authorRoster: {
+    layout: typeof currentLayout | null;
+    items: readonly ReviewItem[] | null;
+    styles: typeof revisionStyles;
+    value: ReadonlyMap<string, number>;
+    resolved: ReadonlyMap<string, ReviewAuthorInfo>;
+  } | null = null;
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
   const format = createSurfaceFormat({
@@ -887,6 +910,13 @@ export function mountPaginatedSurface(
     },
     currentRevision: () => session.packageRevision(),
     publish: (layout) => {
+      // Release the previous layout BEFORE the new one replaces it: the roster cache held
+      // it by strong reference, and a 200-page graph kept alive beside the live one is tens
+      // of megabytes of retained records. `layout: null` means "recompute on the next read"
+      // while keeping the map itself, which that read compares against to decide whether
+      // the author set actually moved.
+      // The review queue is released with it, for the same reason and by the same rule.
+      if (authorRoster !== null) authorRoster = { ...authorRoster, layout: null, items: null };
       currentLayout = layout;
       // Repaint from HERE, so a commit that never went through this surface — undo, or
       // another editor sharing the store — still reaches the screen. Otherwise the painted
@@ -1890,6 +1920,7 @@ export function mountPaginatedSurface(
       ariaHidden: false,
       drawingStrings,
       ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+      ...(revisionStyles !== undefined ? { revisionStyles } : {}),
       shadeFormFields: shadeFormFields(),
       ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
       ...(activeHf
@@ -2754,6 +2785,59 @@ export function mountPaginatedSurface(
     return dismissedReviewKeys.has(reviewItemKey(root)) ? null : root;
   }
 
+  /** Whose review item this is. A custom node's card belongs to no person. */
+  function reviewItemAuthor(item: ReviewItem): string {
+    if (item.kind === 'comment') return item.comment.author;
+    if (item.kind === 'revision') return item.author;
+    return '';
+  }
+
+  /**
+   * The review roster: author → slot, and author → resolved colour.
+   *
+   * ONE derivation for the whole review surface. The card in the rail and the band over the
+   * text both read it, so the two cannot disagree about who draws in what — which is the
+   * entire point of colouring by author, and the first thing a reader notices when it breaks.
+   *
+   * Recomputed only when the layout, the review queue, or the host's declarations move.
+   */
+  function reviewAuthorState(): {
+    value: ReadonlyMap<string, number>;
+    resolved: ReadonlyMap<string, ReviewAuthorInfo>;
+  } {
+    const items = session.reviewItems();
+    const prior = authorRoster;
+    if (prior !== null && prior.layout === currentLayout && prior.items === items) {
+      if (prior.styles === revisionStyles) return prior;
+    }
+    const next = reviewAuthorSlotsOf(
+      authorSlotsOf(currentLayout),
+      (function* authors() {
+        for (const item of items) yield reviewItemAuthor(item);
+      })()
+    );
+    // IDENTITY IS THE CONTRACT. A layout is replaced on every commit, but the author
+    // set almost never changes with it — typing inside a tracked change introduces
+    // nobody. Handing back the previous map when the content matches is what lets a
+    // `useSyncExternalStore` consumer bail out instead of re-rendering the review rail
+    // on every keystroke.
+    const previous = prior?.value;
+    const unchanged =
+      previous !== undefined &&
+      previous.size === next.size &&
+      [...next].every(([author, slot]) => previous.get(author) === slot);
+    const value = unchanged ? previous : next;
+    // The resolution moves when the roster does OR when the host redeclares, and the band
+    // layer keys its reuse on this map's identity — so hand back the same one when neither
+    // moved.
+    const resolved =
+      prior !== null && unchanged && prior.styles === revisionStyles
+        ? prior.resolved
+        : new Map(reviewAuthorsOf(value, revisionStyles).map((it) => [it.author, it]));
+    authorRoster = { layout: currentLayout, items, styles: revisionStyles, value, resolved };
+    return authorRoster;
+  }
+
   /** The class a band draws in, or null when this range should not be drawn at all. */
   function bandClassFor(
     key: string,
@@ -2799,14 +2883,21 @@ export function mountPaginatedSurface(
 
   let commentHighlightLayout: SemanticLayout | null = null;
   let commentHighlightActiveKey: string | null | undefined;
+  let commentHighlightAuthors: ReadonlyMap<string, ReviewAuthorInfo> | null = null;
 
   function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();
     const activeKey = active ? reviewItemKey(active) : null;
+    // The roster is part of what these bands DRAW, so it belongs in what decides they can be
+    // left alone. A full `render` forces this layer anyway, which is how a live colour change
+    // reaches it today — but the unforced callers below (activation, exclusions) would happily
+    // reuse bands resolved against a roster that had moved underneath them.
+    const roster = reviewAuthorState();
     if (
       !force &&
       commentHighlightLayout === currentLayout &&
-      commentHighlightActiveKey === activeKey
+      commentHighlightActiveKey === activeKey &&
+      commentHighlightAuthors === roster.resolved
     ) {
       return;
     }
@@ -2817,7 +2908,13 @@ export function mountPaginatedSurface(
     const bands: OverlayRect[] = [];
     for (const rect of commentRects()) {
       const className = bandClassFor(rect.key, active, byKey);
-      if (className) bands.push({ ...rect, className });
+      if (!className) continue;
+      // WHOSE band, for CSS to key on. The rect's key is suffixed per range for a revision
+      // covering several sites, so the author comes from the decision, as the class does.
+      const item = byKey.get(rect.key.split(RANGE_SUFFIX)[0]!);
+      const name = item ? reviewItemAuthor(item) : '';
+      const reviewAuthor = name === '' ? undefined : roster.resolved.get(name);
+      bands.push({ ...rect, className, ...(reviewAuthor ? { reviewAuthor } : {}) });
     }
     paintSelectionOverlay(commentLayer, currentLayout, bands, {
       scale,
@@ -2825,6 +2922,7 @@ export function mountPaginatedSurface(
     });
     commentHighlightLayout = currentLayout;
     commentHighlightActiveKey = activeKey;
+    commentHighlightAuthors = roster.resolved;
   }
 
   /** Draw the selected cells, or clear the layer when nothing is selected that way. */
@@ -3828,6 +3926,20 @@ export function mountPaginatedSurface(
       // "the document is open for viewing" over a document that had just become editable.
       lastRejection = null;
       options.onChange?.(currentState());
+    },
+
+    revisionAuthors: () => reviewAuthorState().value,
+    setRevisionStyles: (colors) => {
+      if (colors === revisionStyles) return;
+      revisionStyles = colors;
+      // BEFORE the repaint, as `rematerialize` does: `render` adopts a pending DOM gesture,
+      // which moves the selection without passing `setSelection`'s buffer guard. A style
+      // change can land mid-typing-burst — a colour picker is a live control — and buffered
+      // characters are still destined for the old selection.
+      flushTypeBuffer();
+      // Paint-level only: the reuse key moves with the resolved styles, so the pages
+      // repaint in the new colours without a layout pass.
+      render(false);
     },
 
     setReviewActivationExclusions(kinds) {

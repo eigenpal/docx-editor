@@ -44,6 +44,11 @@ import {
   NavigationLayoutContext,
   createNavigationLayoutStore,
 } from './navigation/navigation-layout';
+import {
+  RevisionStyleRegistryContext,
+  createRevisionStyleRegistry,
+  type RevisionStyleRegistry,
+} from './revision-style-registry';
 
 /**
  * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `author`,
@@ -164,11 +169,27 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
 
   const [editor, setEditor] = useState<DocxEditorInstance | null>(null);
 
+  // The channel `<DocxEditor.ColorByChangeType>` / `<DocxEditor.AuthorStyle>` declare through.
+  // A store: declarations register from anywhere in the subtree, and identity must hold
+  // across renders. Created before the instance effect below, which seeds construction
+  // config from it.
+  //
+  // A REF, not `useMemo`: the instance-creation effect depends on this identity, and React
+  // is permitted to discard a memo — which would tear the editor down and take the reader's
+  // edits, caret and undo history with it. A ref is a guarantee.
+  const registryRef = useRef<RevisionStyleRegistry | null>(null);
+  registryRef.current ??= createRevisionStyleRegistry();
+  const revisionStyleRegistry = registryRef.current;
+
   // One instance per document/fonts identity, and per effect run: `destroy()` is
   // terminal, so a StrictMode re-run must build anew rather than resurrect.
   useEffect(() => {
     const p = propsRef.current;
     const translate = p.translate ?? defaultTranslate;
+    // Declarations mounted in this same commit registered BEFORE this effect (child
+    // effects run bottom-up), so they reach the engine as construction config and the
+    // FIRST paint is already styled — no kind-coloured frame.
+    const declaredStyles = revisionStyleRegistry.current();
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
@@ -176,6 +197,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
+      ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
       ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
       ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
@@ -191,7 +213,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, defaultTranslate, imageDecodePort]);
+  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
@@ -285,18 +307,26 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // its identity must not change, or the two consumers resubscribe on every render.
   const navigationLayout = useMemo(createNavigationLayoutStore, []);
 
+  // Connected AFTER the instance is published, for live updates from later declarations.
+  useEffect(() => {
+    revisionStyleRegistry.connect(editor);
+    return () => revisionStyleRegistry.connect(null);
+  }, [revisionStyleRegistry, editor]);
+
   return (
     <ReviewRailContext.Provider value={railRegistry}>
       <DocxEditorContext.Provider value={editor}>
         <NavigationLayoutContext.Provider value={navigationLayout}>
-          {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
-              popover panel — which are siblings, not ancestor and descendant — see the same
-              open/closed state and only one of them registers with the engine's gestures. */}
-          <HyperlinkPopupProvider>
-            <ContentControlProvider>
-              <ImageInsertProvider>{children}</ImageInsertProvider>
-            </ContentControlProvider>
-          </HyperlinkPopupProvider>
+          <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
+            {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+                popover panel — which are siblings, not ancestor and descendant — see the same
+                open/closed state and only one of them registers with the engine's gestures. */}
+            <HyperlinkPopupProvider>
+              <ContentControlProvider>
+                <ImageInsertProvider>{children}</ImageInsertProvider>
+              </ContentControlProvider>
+            </HyperlinkPopupProvider>
+          </RevisionStyleRegistryContext.Provider>
         </NavigationLayoutContext.Provider>
       </DocxEditorContext.Provider>
     </ReviewRailContext.Provider>

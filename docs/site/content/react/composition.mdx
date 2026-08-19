@@ -39,6 +39,28 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 
 Everything else (toolbar, menu, rulers, navigation pane, link popover, context menu) is optional and can be placed anywhere inside `Root`.
 
+### Root props
+
+Creation parameters are sampled when the instance is created. Changing the identity of `document`, `fonts`, or `imageDecodePort` remounts the editor, as does switching the locale catalog. Later `zoom` and `zoomMode` changes apply live through the facade, so edits, the caret, and the undo history survive them.
+
+| Prop                    | Type                                                             | Description                                                                                                                                                             |
+| ----------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `document`              | `DocumentSource`                                                 | DOCX bytes or an existing `DocumentHandle`. Identity change remounts.                                                                                                   |
+| `fonts`                 | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes for Word-accurate wrap and pagination, or a resolver called per load.                                                                                        |
+| `author`                | `string`                                                         | Ambient author for comments and tracked edits. Required for suggesting.                                                                                                 |
+| `locale`                | `string`                                                         | Locale passed to the underlying editor instance.                                                                                                                        |
+| `mode`                  | `'edit' \| 'view' \| 'suggesting'`                               | The opening mode. Unlike `<DocxEditor>`, `Root` has no default: when you omit it, the document decides, so a file carrying `w:trackRevisions` opens in suggesting mode. |
+| `modules`               | `EditorModule[]`                                                 | Capability modules, registered at construction. Keep the array identity stable.                                                                                         |
+| `zoom` / `zoomMode`     | `number` / `ZoomMode \| 'auto'`                                  | The display scale and where it comes from. `'auto'` fits the page width.                                                                                                |
+| `onReady`               | `(editor: Editor) => void`                                       | Fired once per instance, after any `Content` in the same commit has attached.                                                                                           |
+| `onChange`              | `(change: DocumentChange) => void`                               | Fired after document mutations; carries revision + identity deltas, not bytes.                                                                                          |
+| `onFontError`           | `(error: EditorFontError) => void`                               | Reports typed font-resolution failures.                                                                                                                                 |
+| `translate`             | `(key, params?) => string`                                       | Resolver for painted-surface labels; defaults to the active locale catalog.                                                                                             |
+| `tableInteractionLabel` | `(key) => string`                                                | Labels for table insertion furniture on the painted surface.                                                                                                            |
+| `imageDecodePort`       | `ImageDecodePort`                                                | Overrides raster decode for image insertion in tests or custom hosts.                                                                                                   |
+
+For more information, see the [full API reference](/docs/2.x/api/react).
+
 ## Customization ladder
 
 Start at the top and go down only as far as you need:
@@ -344,6 +366,7 @@ It reads and writes through the same engine command as `usePageSetup()`, so a di
 The smaller parts place individually; a part you do not mount has no UI:
 
 - `DocxEditor.PageNumber`: the "page n of m" indicator that appears while the document scrolls and fades after.
+- `DocxEditor.AuthorStyle` and `DocxEditor.ColorByChangeType`: render-nothing declarations that give one author a specific look, or color tracked changes by change type instead of by author. See [Tracked changes](/docs/2.x/pro/tracked-changes).
 - `DocxEditor.FontNotice`: a dismissible notice listing the fonts the document asked for that were substituted.
 - `DocxEditor.DocumentOutline`: the headings list on its own, outside the navigation pane. Clicking a heading moves the caret and scrolls it into view.
 - `DocxEditor.HeaderFooterChrome`: the header/footer editing overlay: region label, inheritance warning, field inserts, and the options menu.

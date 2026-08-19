@@ -13,6 +13,7 @@ import type {
   EditorModule,
   FontConfigurationFragment,
   FontResolver,
+  RevisionStyles,
 } from '@docx-editor.dev/core/editor';
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
@@ -24,6 +25,13 @@ export type {
 } from '@docx-editor.dev/core/contracts/editor';
 
 export type EditorMode = 'edit' | 'view' | 'suggesting';
+
+export type {
+  ReviewAuthorInfo,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from '@docx-editor.dev/core/editor';
 
 /**
  * Props for the Vue `DocxEditor`. The adapter is a thin renderer over the
@@ -47,6 +55,18 @@ export interface DocxEditorProps {
    * remount to change.
    */
   mode?: EditorMode;
+  /**
+   * How painted tracked changes are coloured — the opening value; replace it live with
+   * `editor.setRevisionStyles` on the instance, and read the document's resolved roster
+   * with `editor.getReviewAuthors`.
+   *
+   * `'author'` (the default) colours every change by who proposed it, through the
+   * `--doc-review-author-N` ramp, as Word does; `'kind'` opts out and colours by what
+   * happened; `RevisionAuthorAssignments` styles the named authors, with `others`
+   * deciding whether the rest take the ramp or the kind colours. The full all-markup view
+   * needs a review module registered.
+   */
+  revisionStyles?: RevisionStyles;
   zoom?: number;
   locale?: string;
   author?: string;

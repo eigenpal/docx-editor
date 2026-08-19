@@ -9,6 +9,7 @@
 // the page painter: geometry in, elements out, nothing measured back.
 
 import type { SemanticLayout } from '../layout/semantic-records.ts';
+import { REVIEW_AUTHOR_SLOTS, type ReviewAuthorInfo } from './revision-presentation.ts';
 
 /** A rectangle in page-content coordinates, on a named page. */
 export interface OverlayRect {
@@ -25,6 +26,19 @@ export interface OverlayRect {
    * sheets over the pages just to vary a colour.
    */
   readonly className?: string;
+  /**
+   * WHOSE band this is, as CSS hooks on the rectangle: `data-review-author`, `data-review-author-slot`, and
+   * `--doc-review-author-current` set to the colour that author resolves to.
+   *
+   * The same three the review card carries, and deliberately so — a host restyling one
+   * reviewer writes one selector that reaches both the card and the text it annotates. The
+   * band's DEFAULT colour does not change with the author (Word keeps every comment yellow);
+   * this only makes the author reachable from CSS.
+   *
+   * The SAME resolved author `getReviewAuthors` hands back, rather than a shape of this
+   * layer's own: one person is one object everywhere the review surface describes them.
+   */
+  readonly reviewAuthor?: ReviewAuthorInfo;
 }
 
 /**
@@ -83,6 +97,18 @@ export function paintSelectionOverlay(
     element.style.top = `${(page.contentBox.y + rect.y) * scale}px`;
     element.style.width = `${rect.width * scale}px`;
     element.style.height = `${rect.height * scale}px`;
+    // Author hooks, when the rect carries them. `setAttribute`/`dataset` with the raw value —
+    // never interpolated into markup — because `w:author` is attacker-controlled; the colour
+    // is engine-resolved or host-declared, and `setProperty` drops a value it cannot parse.
+    if (rect.reviewAuthor) {
+      element.dataset.reviewAuthor = rect.reviewAuthor.author;
+      // WRAPPED to the ramp width, as the card and the painted span both wrap it. The roster
+      // slot is a raw index, so the ninth author is slot 8 — writing that here made the band
+      // say `8` while the card beside it said `0`, and a rule keyed on the slot covered one
+      // of them.
+      element.dataset.reviewAuthorSlot = String(rect.reviewAuthor.slot % REVIEW_AUTHOR_SLOTS);
+      element.style.setProperty('--doc-review-author-current', rect.reviewAuthor.color);
+    }
     painted.push(element);
   }
   layer.replaceChildren(...painted);

@@ -2,7 +2,16 @@
   "version": 1,
   "comment": "Paired DocxEditorProps / DocxEditorRef members across the React and Vue adapters. Rewritten for the GREENFIELD adapters: the previous contract enumerated the pre-rebuild surface (documentBuffer, commentsSidebarOpen, externalPlugins, showRuler, print, scrollToCommentId, ...), none of which either adapter exports since the strip at 701c1a9f, so every entry reported as missing from BOTH sides and the gate measured nothing.",
   "props": {
-    "paired": ["author", "document", "fonts", "locale", "mode", "modules", "onFontError", "zoom"],
+    "paired": [
+      "author",
+      "document",
+      "fonts",
+      "locale",
+      "mode",
+      "modules",
+      "onFontError",
+      "zoom"
+    ],
     "deferredInVue": {
       "className": "React takes an explicit className prop. Vue applies `class` as a native fallthrough attribute, so it is not a declared prop \u2014 the capability exists on both, the declaration only on React.",
       "onChange": "React takes a callback prop. Vue exposes the same signal as a `change` EMIT, which is the idiomatic Vue form and does not appear in DocxEditorProps.",
@@ -22,7 +31,9 @@
       "zoomMode": "Where the display scale comes from \u2014 a fixed number, or a fit the engine keeps tracking. The CAPABILITY is not deferred at all: the fit runs in the engine, `'auto'` is `createDocxEditor`'s default, and `Editor.getZoomMode`/`setZoomMode` plus `snapshot().zoomMode` are contract members Vue already reaches, so a Vue host gets fit-to-viewport zoom today and can change it through the facade. What is deferred is the declared PROP, with the rest of the Vue prop surface.",
       "rulers": "React's packaged frame mounts the rulers and takes a boolean to drop them. The Vue host has no ruler slot yet, so there is nothing to toggle; the prop lands there with the ruler chrome."
     },
-    "vueExclusive": {}
+    "vueExclusive": {
+      "revisionStyles": "Per-author revision styling. React expresses it DECLARATIVELY — `DocxEditor.ColorByChangeType` / `DocxEditor.AuthorStyle` components over the shared instance API (`setRevisionStyles`, `getReviewAuthors`) — so it deliberately has no React prop. Vue has no declarative twin yet and keeps the prop; the ENGINE half is one implementation either way."
+    }
   },
   "ref": {
     "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters \u2014 every member is declared directly on each side, so nothing is inherited and pairedViaInheritance is empty. Vue used to declare it as `type DocxEditorRef = EditorRefLike & { ... }`; it is now a plain interface matching React, which is stricter parity, not looser.",

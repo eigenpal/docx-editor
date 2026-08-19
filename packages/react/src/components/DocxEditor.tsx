@@ -5,6 +5,10 @@ import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../l
 import { useDocxEditor } from '../editor/context';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
 import { DocxEditorLoading } from '../editor/DocxEditorLoading';
+import {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+} from '../editor/DocxEditorAuthorStyle';
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { useDocxEditorRefApi } from './DocxEditor/hooks/useDocxEditorRefApi';
@@ -459,6 +463,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Menu: typeof DocxEditorMenu;
   /** Conditional loading screen: renders while there is no document to paint. */
   readonly Loading: typeof DocxEditorLoading;
+  readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+  readonly AuthorStyle: typeof DocxEditorAuthorStyle;
   /** Context-fed horizontal ruler with draggable margins (props-driven export stays). */
   readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
   /** Context-fed vertical ruler with draggable margins (props-driven export stays). */
@@ -507,6 +513,8 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Toolbar: DocxEditorToolbar,
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
+  ColorByChangeType: DocxEditorColorByChangeType,
+  AuthorStyle: DocxEditorAuthorStyle,
   HorizontalRuler: DocxEditorHorizontalRuler,
   VerticalRuler: DocxEditorVerticalRuler,
   DocumentOutline: DocxEditorDocumentOutline,

@@ -20,6 +20,16 @@ export {
   type FieldShadingMode,
   type PaintOptions,
 } from './semantic-paint.ts';
+// TYPES ONLY. The derivations behind them (`authorSlotsOf`, `reviewAuthorsOf`, the ramp
+// constant) are engine internals reached through `getReviewAuthors` on the editor; a
+// `@public` symbol is a breaking change to withdraw, so they stay off the barrel and the
+// two in-package callers import them by module path.
+export type {
+  ReviewAuthorInfo,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from './revision-presentation.ts';
 export {
   paintSelectionOverlay,
   type OverlayRect,
