@@ -5594,6 +5594,24 @@ a.docx-hyperlink:focus-visible {
   box-shadow: inset 0 -1px 0 var(--doc-comment-active-border);
 }
 
+/* WHOSE COMMENT THIS IS, for CSS only.
+ *
+ * Every band carries `data-author`, `data-author-slot` and `--doc-review-author` — the same
+ * three hooks the review card carries, so one selector restyles a reviewer's card and the text
+ * it annotates together. Nothing here paints them: Word keeps every comment the same yellow,
+ * and eight highlighter colours down a page reads as eight meanings rather than eight people.
+ * The author is a HANDLE, not a default.
+ *
+ * To tint by author, a host writes the one rule this deliberately does not:
+ *
+ *   .docx-editor .docx-comment-band {
+ *     background: color-mix(in srgb, var(--doc-review-author) 22%, transparent);
+ *   }
+ *
+ * The band multiplies into the page, so its colours are authored for LIGHT paper — the sheet
+ * beneath is what the dark theme inverts, and a value lifted for dark here would be inverted
+ * a second time. `--doc-review-author` is the light ramp value for that reason. */
+
 /* Tracked changes carry a band always, in the change's OWN colour, so it never contradicts
  * the decoration it sits behind — green where text is arriving, red where it is leaving. A
  * replacement gets both, red over the struck half and green over what replaced it.

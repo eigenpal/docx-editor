@@ -200,16 +200,21 @@ export interface DocxEditorInstance extends Editor {
    */
   fontMeasurement(): FontMeasurementState;
   /**
-   * Every author with a revision the current view RENDERS, in Word's slot order, with the
-   * colour and style each resolves to under the current
-   * {@link DocxEditorConfig.revisionStyles}. The discovery surface a legend or colour
-   * picker builds on — authors depend on the loaded file, so they cannot be known at
-   * configuration time.
+   * Every author the review surface DRAWS, in Word's slot order, with the colour and style
+   * each resolves to under the current {@link DocxEditorConfig.revisionStyles}. The
+   * discovery surface a legend or colour picker builds on — authors depend on the loaded
+   * file, so they cannot be known at configuration time.
+   *
+   * BOTH HALVES OF REVIEW. Authors of tracked changes come first, numbered by where their
+   * first change appears; authors who only commented follow. One person therefore draws in
+   * one colour across their comments and their edits, which is what a reader assumes the
+   * moment they learn the pairing on either. The order puts commenters last so that adding
+   * a comment can never renumber a tracked change the painter has already drawn.
    *
    * Read of the rendered projection, not of the package: a resolved view hides the
-   * revisions it has resolved away, so an author whose only change is hidden there is not
-   * listed. Empty while detached. Reference-stable between changes, so it is safe as a
-   * dependency; changes bump `stateVersion()`.
+   * revisions it has resolved away, so an author whose only change is hidden there is
+   * listed only if they also commented. Empty while detached. Reference-stable between
+   * changes, so it is safe as a dependency; changes bump `stateVersion()`.
    */
   getRevisionAuthors(): readonly RevisionAuthor[];
   /**

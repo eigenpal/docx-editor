@@ -211,10 +211,15 @@ colors:
 ### Discover the authors in a document
 
 The reviewers depend on the file, so a legend cannot be written in advance — it reads
-them. `useRevisionAuthors()` returns every author whose revision the current view renders,
-in slot order, with the color and style each one resolves to. It re-renders when a document
-loads and when the styling changes. A resolved view hides the revisions it has resolved
-away, so an author whose only change is hidden there is not listed.
+them. `useRevisionAuthors()` returns every author the review surface draws, in slot order,
+with the color and style each one resolves to. It re-renders when a document loads and when
+the styling changes.
+
+The list covers both halves of review. Authors of tracked changes come first, numbered by
+where their first change appears. Authors who only left comments follow, so they get a
+color of their own instead of sharing the first author's. A resolved view hides the
+revisions it has resolved away, so an author whose only change is hidden there is listed
+only if they also commented.
 
 ```tsx
 import { useRevisionAuthors } from '@docx-editor.dev/react';
@@ -342,10 +347,13 @@ So restyling one reviewer's cards is a CSS rule:
 }
 ```
 
-This works for **comment authors too**, including reviewers who left comments but proposed
-no tracked changes. They are not part of the document's revision roster, so
-`useRevisionAuthors()` does not list them — but a declaration for them still colors their
-cards and shows their avatar:
+This works for **comment authors too**. Review covers comments and tracked changes
+together, so one person draws in one color across both. A reviewer who left comments but
+proposed no tracked changes still gets a slot: `useRevisionAuthors()` lists them after the
+authors the document's tracked changes introduce, and their card, avatar, and comment
+highlight all use it.
+
+Declaring a style for them works the same way:
 
 ```tsx
 // Sam only comments. Their cards still get this color and picture.
@@ -376,6 +384,34 @@ The ink color and the underline or strikethrough are painted as inline styles, s
 stylesheet rule does not move them: set those with `color` on the declaration, or restyle
 the ramp tokens. Keep these rules metric-safe, because the engine measures the text it
 paints.
+
+### Tint commented text by author
+
+Commented text gets a highlight band over it, and the band carries the same three hooks as
+the card: `data-author`, `data-author-slot`, and `--doc-review-author`.
+
+The band's color does not change with the author on its own. Word highlights every comment
+in the same yellow, and eight highlighter colors on one page read as eight meanings rather
+than eight people. To opt in, write the rule yourself:
+
+```css
+/* Every comment, in its author's color. */
+.docx-editor .docx-comment-band {
+  background: color-mix(in srgb, var(--doc-review-author) 22%, transparent);
+}
+
+/* Or one reviewer only. */
+.docx-editor .docx-comment-band[data-author='Sam Reyes'] {
+  box-shadow: inset 0 -2px 0 var(--doc-review-author);
+}
+```
+
+Because the band and the card read the same variable, a reviewer's comment highlight and
+their card match without you repeating the color.
+
+The band multiplies into the page, so author colors here are the light-theme values. The
+dark theme inverts the page beneath the band, which lifts the result for you. A color
+picked for a dark background is inverted a second time and comes out wrong.
 
 ### Per-author card design
 

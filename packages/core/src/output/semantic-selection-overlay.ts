@@ -25,6 +25,24 @@ export interface OverlayRect {
    * sheets over the pages just to vary a colour.
    */
   readonly className?: string;
+  /**
+   * WHOSE band this is, as CSS hooks on the rectangle: `data-author`, `data-author-slot`, and
+   * `--doc-review-author` set to the colour that author resolves to.
+   *
+   * The same three the review card carries, and deliberately so — a host restyling one
+   * reviewer writes one selector that reaches both the card and the text it annotates. The
+   * band's DEFAULT colour does not change with the author (Word keeps every comment yellow);
+   * this only makes the author reachable from CSS.
+   */
+  readonly author?: ReviewRectAuthor;
+}
+
+/** The author hooks one overlay rectangle carries. See {@link OverlayRect.author}. */
+export interface ReviewRectAuthor {
+  readonly name: string;
+  readonly slot: number;
+  /** Resolved colour — a host declaration when there is one, otherwise the ramp slot. */
+  readonly color: string;
 }
 
 /**
@@ -83,6 +101,14 @@ export function paintSelectionOverlay(
     element.style.top = `${(page.contentBox.y + rect.y) * scale}px`;
     element.style.width = `${rect.width * scale}px`;
     element.style.height = `${rect.height * scale}px`;
+    // Author hooks, when the rect carries them. `setAttribute`/`dataset` with the raw value —
+    // never interpolated into markup — because `w:author` is attacker-controlled; the colour
+    // is engine-resolved or host-declared, and `setProperty` drops a value it cannot parse.
+    if (rect.author) {
+      element.dataset.author = rect.author.name;
+      element.dataset.authorSlot = String(rect.author.slot);
+      element.style.setProperty('--doc-review-author', rect.author.color);
+    }
     painted.push(element);
   }
   layer.replaceChildren(...painted);

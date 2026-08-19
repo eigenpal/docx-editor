@@ -33,5 +33,6 @@ export type {
 export {
   paintSelectionOverlay,
   type OverlayRect,
+  type ReviewRectAuthor,
   type SelectionOverlayOptions,
 } from './semantic-selection-overlay.ts';

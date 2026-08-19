@@ -470,6 +470,35 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
 }
 
 /**
+ * The REVIEW roster's slot map: every author {@link authorSlotsOf} numbered, then every other
+ * author who owns a review item, appended in queue order.
+ *
+ * Review is comments AND tracked changes, so one person has to draw in one colour across both
+ * — the card annotating their comment and the card annotating their edit are the same person's
+ * card, and a reader who learns the pairing on one must not have to relearn it on the other.
+ *
+ * Document authors KEEP the number the layout walk gave them. The painter has already written
+ * that number into the page as `data-revision-author-slot`, so renumbering here to make room
+ * for a commenter would recolour tracked text that nobody touched. A comment-only author has
+ * no painted revision to collide with, so they take the next free slot instead.
+ *
+ * Returns `documentSlots` ITSELF when there is nothing to add, so a caller keying a cache on
+ * the map's identity — the review rail does — sees no change on a document of pure revisions.
+ */
+export function reviewAuthorSlotsOf(
+  documentSlots: ReadonlyMap<string, number>,
+  reviewAuthors: Iterable<string>
+): ReadonlyMap<string, number> {
+  let combined: Map<string, number> | null = null;
+  for (const author of reviewAuthors) {
+    if (author === '' || documentSlots.has(author)) continue;
+    if (combined === null) combined = new Map(documentSlots);
+    if (!combined.has(author)) combined.set(author, combined.size);
+  }
+  return combined ?? documentSlots;
+}
+
+/**
  * The presentation for a span's revision stack, or null when the text is untracked.
  *
  * The INNERMOST attribution names the colour and the decoration, because it is the pending
