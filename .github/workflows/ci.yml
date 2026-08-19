@@ -139,6 +139,21 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
+      # Sizes of the exact artifacts `npm publish` ships (`npm pack --dry-run`
+      # per published package). Uploaded as an artifact: main-branch runs are
+      # the baseline the `package-size` job below diffs PRs against.
+      - name: Package size report
+        run: bun run check:package-size --out package-sizes.json
+
+      # `overwrite` because artifact names are unique per RUN, not per attempt:
+      # without it, "Re-run all jobs" 409s here and fails the build job.
+      - name: Upload package size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-sizes
+          path: package-sizes.json
+          overwrite: true
+
       - name: API report check
         run: bun run api:check
 
@@ -184,3 +199,82 @@ jobs:
         # the docs site prerenders it. Same reasoning as the step above: catch
         # it on the PR, not in `docx-editor-page`'s build.
         run: bun run check:docs-mdx
+
+  # Diffs the PR's published-package sizes against the latest successful main
+  # run and keeps ONE sticky PR comment up to date. Fails on huge tarball
+  # growth (thresholds in scripts/check-package-size.mjs) unless the PR
+  # carries the `size-increase-expected` label. Separate from `build` so that
+  # job keeps its read-only token; only this one gets `pull-requests: write`.
+  package-size:
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: build
+    permissions:
+      contents: read
+      actions: read # download the baseline artifact from a main run
+      pull-requests: write # sticky size comment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Download current size report
+        uses: actions/download-artifact@v4
+        with:
+          name: package-sizes
+
+      # Baseline = the `package-sizes` artifact from the newest successful
+      # push run on main. Missing baseline (first run, expired artifact) is
+      # not an error: the compare degrades to a report without deltas.
+      - name: Download baseline size report from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # `|| true` so a transient API error degrades to no-baseline instead
+          # of failing the job (the shell runs with -e).
+          run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs[0].id // empty' || true)
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n package-sizes -D baseline \
+              || echo "Run $run_id has no package-sizes artifact yet; reporting without deltas."
+          else
+            echo "No successful main run found; reporting without deltas."
+          fi
+
+      # The allow-label is read LIVE from the API, not from
+      # `github.event.pull_request.labels`: a re-run reuses the frozen event
+      # payload, so a label added after the gate failed would be invisible and
+      # "label + re-run" could never pass. An API blip leaves `allow` empty,
+      # which only makes the gate strict, never lax.
+      - name: Compare against baseline (gate)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          allow=""
+          if gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" --jq '.[].name' \
+            | grep -qx 'size-increase-expected'; then
+            allow=1
+          fi
+          PACKAGE_SIZE_ALLOW_GROWTH="$allow" node scripts/check-package-size.mjs \
+            --compare package-sizes.json \
+            --baseline baseline/package-sizes.json --comment size-comment.md
+
+      # `always()` so the comment still lands when the gate above fails — the
+      # comment is where the failure explains itself. Fork PRs get a read-only
+      # token and are skipped; they still see the table in the job summary.
+      - name: Post sticky PR comment
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Author-filtered so a user comment that starts with the marker can
+          # never be adopted (and overwritten) as the bot's sticky comment.
+          comment_id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- package-size-report -->"))][0].id // empty')
+          if [ -n "$comment_id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -F body=@size-comment.md
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@size-comment.md
+          fi
