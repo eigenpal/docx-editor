@@ -55,6 +55,8 @@ describe('DocxEditorViewport review rail', () => {
     const scroller = view.container.querySelector('[data-testid="docx-editor-scroll"]');
     expect(scroller).not.toBeNull();
     expect(scroller!.hasAttribute('data-review-pane')).toBe(false);
+    expect((scroller as HTMLElement).style.getPropertyValue('--docx-review-gutter')).toBe('');
+    expect((scroller as HTMLElement).style.getPropertyValue('--docx-review-gutter-start')).toBe('');
     view.unmount();
   });
 
@@ -72,6 +74,8 @@ describe('DocxEditorViewport review rail', () => {
     const shift = scroller.style.getPropertyValue('--docx-nav-shift');
     expect(shift).not.toBe('');
     expect(Number.parseFloat(shift)).toBeGreaterThanOrEqual(0);
+    expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
+    expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
     view.unmount();
   });
 
