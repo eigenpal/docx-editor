@@ -31,9 +31,7 @@ import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/re
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
-// import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
-import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { DEMO_BUTTON, DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
@@ -437,7 +435,6 @@ function EditorChrome({
         <div className="demo-header__left">
           <BrandLogo />
           {showAdapterSwitcher ? <AdapterSwitcher current="react" /> : null}
-          <ExampleSwitcher current="Vite" />
         </div>
 
         {/* Title with the LIBRARY menu bar beneath, Docs-style.

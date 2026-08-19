@@ -4,7 +4,6 @@
       <div class="demo-header__left">
         <BrandLogo />
         <AdapterSwitcher v-if="showAdapterSwitcher" current="vue" />
-        <ExampleSwitcher current="Vue" />
       </div>
 
       <div class="demo-header__title-block">
@@ -133,7 +132,6 @@ import {
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { saveForExport } from '@docx-editor.dev/pro';
 import BrandLogo from '../../shared/BrandLogo.vue';
-import ExampleSwitcher from '../../shared/ExampleSwitcher.vue';
 import AdapterSwitcher from './AdapterSwitcher.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import FontPreviewItems from './FontPreviewItems.vue';
