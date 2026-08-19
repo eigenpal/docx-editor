@@ -30,17 +30,13 @@ describe('the packaged frame', () => {
     const { container } = render(<DocxEditor />);
     // The ruler paints nothing without a page, so assert the ROW is reserved
     // rather than the ticks: that is the part a host cannot place itself.
-    const rows = [...container.querySelectorAll('div')].filter(
-      (el) => el.style.minHeight === '34px' && el.style.justifyContent === 'center'
-    );
+    const rows = container.querySelectorAll('[data-testid="docx-editor-ruler-row"]');
     expect(rows.length).toBe(1);
   });
 
   test('rulers={false} removes it', () => {
     const { container } = render(<DocxEditor rulers={false} />);
-    const rows = [...container.querySelectorAll('div')].filter(
-      (el) => el.style.minHeight === '34px' && el.style.justifyContent === 'center'
-    );
+    const rows = container.querySelectorAll('[data-testid="docx-editor-ruler-row"]');
     expect(rows.length).toBe(0);
   });
 

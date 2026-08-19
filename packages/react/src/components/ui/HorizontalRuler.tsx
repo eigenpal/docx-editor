@@ -320,6 +320,16 @@ export function HorizontalRuler({
         userSelect: 'none',
         touchAction: 'none',
         cursor: dragging ? 'ew-resize' : 'default',
+        // The clamp-safe default for every host row, block or flex. Auto margins centre
+        // the ruler in a wide row and resolve to ZERO when the ruler outgrows it, pinning
+        // it to the start edge — the same degradation as the page stack's
+        // `margin-inline: auto` (see `.docx-editor-one-surface__pages`). A row that
+        // centres with `justify-content: center` instead overflows an oversized ruler on
+        // BOTH sides, clipping its left inches while the page stays pinned left; and a
+        // flex row lets the box collapse without `flexShrink: 0`, since every child is
+        // absolutely positioned. Both sit BEFORE the spread so a host can override.
+        flexShrink: 0,
+        marginInline: 'auto',
         ...style,
       }}
       // A GROUP, not a slider: it contains sliders. It carried `aria-valuemin`/`max` with

@@ -2402,16 +2402,22 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* Sticky horizontal ruler: scrolls horizontally with the document, stays put
- * vertically, and never covers the page content. */
+ * vertically, and never covers the page content. Centred by auto margins on the
+ * child, not justify-content, so an oversized ruler clamps to the start edge
+ * like the page instead of overflowing both sides on narrow hosts. */
 .docx-editor-shell__ruler-h {
   position: sticky;
   top: 0;
   z-index: 2;
   flex: none;
   display: flex;
-  justify-content: center;
   padding: 4px 20px;
   background: var(--doc-bg);
+}
+
+.docx-editor-shell__ruler-h > * {
+  flex-shrink: 0;
+  margin-inline: auto;
 }
 
 .docx-editor-shell__canvas {
@@ -2597,16 +2603,16 @@ a.docx-hyperlink:focus-visible {
   height: 22px;
 }
 
-/* The review pane's gutter reaches the ruler as a right MARGIN and the page as the scroller's
-   right PADDING. Both move by the same distance, so both have to move on the same curve —
-   without this the sheet glided left and the ruler above it snapped, and for the length of the
+/* The pane gutters reach the ruler as PADDING on its frame and the page as the scroller's
+   padding. Both move by the same distance, so both have to move on the same curve —
+   without this the sheet glided and the ruler above it snapped, and for the length of the
    animation the ruler measured a page that was no longer under it. */
-.docx-horizontal-ruler {
-  transition: margin 0.2s ease;
+.docx-ruler-frame {
+  transition: padding 0.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .docx-horizontal-ruler {
+  .docx-ruler-frame {
     transition: none;
   }
 }

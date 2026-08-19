@@ -58,10 +58,8 @@ describe('the packaged frame chrome band', () => {
 
   test('the ruler row stays outside the band, on the workspace', () => {
     const { container } = render(<DocxEditor />);
-    const rulerRow = [...container.querySelectorAll('div')].find(
-      (el) => el.style.minHeight === '34px' && el.style.justifyContent === 'center'
-    );
-    expect(rulerRow).toBeDefined();
+    const rulerRow = container.querySelector<HTMLElement>('[data-testid="docx-editor-ruler-row"]');
+    expect(rulerRow).not.toBeNull();
     expect(band(container)!.contains(rulerRow!)).toBe(false);
     expect(rulerRow!.style.backgroundColor).toBe('var(--doc-bg)');
   });

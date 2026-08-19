@@ -300,7 +300,9 @@ export function PaginatedDocxEditorShell({
         style={{ flex: 1, minHeight: 0, overflow: 'auto', background: 'var(--doc-bg)' }}
       >
         {rulerPageSetup ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}>
+          // A block row, not flex justify-center: the ruler centres itself clamp-safely
+          // (see HorizontalRuler's base style), so it degrades like the page on narrow hosts.
+          <div style={{ padding: '4px 0' }}>
             <HorizontalRuler pageSetup={rulerPageSetup} zoom={zoom} />
           </div>
         ) : null}

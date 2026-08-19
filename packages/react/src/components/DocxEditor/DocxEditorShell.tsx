@@ -171,10 +171,14 @@ export function DocxEditorShell({
                       the doc. paddingRight biases the centered ruler so it
                       tracks the page when the comments sidebar shifts the
                       page left. Outline doesn't bias; the page stays centered
-                      until minLayoutWidth forces horizontal scroll. */}
+                      until minLayoutWidth forces horizontal scroll. No
+                      justify-center: the ruler centers itself clamp-safely
+                      (see HorizontalRuler's base style), so if it outgrows
+                      minLayoutWidth it pins to the start edge like the page
+                      instead of pushing its left inches out of reach. */}
                     {showRuler && (
                       <div
-                        className="flex justify-center py-1 flex-shrink-0 bg-doc-bg"
+                        className="flex py-1 flex-shrink-0 bg-doc-bg"
                         style={{
                           position: 'sticky',
                           top: 0,

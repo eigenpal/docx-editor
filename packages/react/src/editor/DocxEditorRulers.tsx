@@ -198,41 +198,46 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
   const scrollLeft = useViewportScrollLeft();
   if (documentAbsent) return null;
   return (
-    <HorizontalRuler
-      pageSetup={previewed(pageSetup, pending)}
-      zoom={zoom}
-      editable={isEnabled}
-      onLeftMarginChange={preview('left')}
-      onRightMarginChange={preview('right')}
-      onMarginDragEnd={commit}
-      showIndentHandles={indentDrag.indent !== null}
-      indent={indentDrag.indent}
-      indentEditable={indentDrag.isEnabled}
-      onIndentChange={indentDrag.preview}
-      onIndentDragEnd={indentDrag.commit}
-      unit={props.unit ?? 'inch'}
-      className={props.className ?? ''}
+    // The wrapper carries the pane geometry as PADDING so the ruler's own margins stay
+    // `auto` (the primitive's clamp-safe centring — see `HorizontalRuler`): the navigation
+    // pane displaces the page from the left, the review pane reserves a gutter on the
+    // right, and padding an edge by S moves the centred ruler by S/2 — the same halves
+    // the viewport's own padding moves the centred page by. The class carries the glide
+    // (and its reduced-motion opt-out) so the ruler moves with the page rather than snaps.
+    <div
+      className="docx-ruler-frame"
       style={{
-        // A ruler always represents the full page width. In a narrow host its surrounding
-        // row overflows; shrinking the ruler would move its ticks off the document.
-        flexShrink: 0,
-        marginRight: reserved,
-        ...props.style,
-        // The ruler is centred by its host row, so the same rule applies as to the page:
-        // a left offset of S moves a centred box by S/2. Feeding the ruler the SAME px the
-        // viewport pads by keeps the two in lockstep at every window width.
-        marginInlineStart: shift,
-        // `margin`, not one edge: the review pane moves the other side, and animating only
-        // `margin-inline-start` left the ruler snapping while the page glided.
-        transition: 'margin 0.2s ease',
-        // The ruler lives above the scroller, so mirror its horizontal movement explicitly.
-        transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft}px)`,
-        // Navigation is below this row and cannot physically cover the ruler. Clip the
-        // scrolled portion at the same boundary so ticks never show above the pane.
-        clipPath:
-          shift > 0 && scrollLeft > 0 ? `inset(0 0 0 ${scrollLeft}px)` : props.style?.clipPath,
+        paddingInlineStart: shift,
+        // PHYSICAL right, like the pane it mirrors: the review rail is anchored
+        // `right: 0` and pads the scroller's `padding-right`, whatever the direction.
+        paddingRight: reserved,
       }}
-    />
+    >
+      <HorizontalRuler
+        pageSetup={previewed(pageSetup, pending)}
+        zoom={zoom}
+        editable={isEnabled}
+        onLeftMarginChange={preview('left')}
+        onRightMarginChange={preview('right')}
+        onMarginDragEnd={commit}
+        showIndentHandles={indentDrag.indent !== null}
+        indent={indentDrag.indent}
+        indentEditable={indentDrag.isEnabled}
+        onIndentChange={indentDrag.preview}
+        onIndentDragEnd={indentDrag.commit}
+        unit={props.unit ?? 'inch'}
+        className={props.className ?? ''}
+        style={{
+          ...props.style,
+          // The ruler lives above the scroller, so mirror its horizontal movement explicitly.
+          transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft}px)`,
+          // Navigation is below this row and cannot physically cover the ruler. Clip the
+          // scrolled portion at the same boundary so ticks never show above the pane.
+          clipPath:
+            shift > 0 && scrollLeft > 0 ? `inset(0 0 0 ${scrollLeft}px)` : props.style?.clipPath,
+        }}
+      />
+    </div>
   );
 }
 

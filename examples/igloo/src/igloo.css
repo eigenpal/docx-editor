@@ -258,12 +258,10 @@
   color: #10788f;
 }
 
-/* The ruler sizes ITSELF to the page width and follows an open navigation pane on its own,
- * so this row only has to centre it over the page column. Without the centring the ruler
- * sits at the row's left edge and its inch marks line up with nothing. */
+/* The ruler sizes ITSELF to the page width, centres itself over the page column, and
+ * follows an open navigation pane on its own — this row is a plain block so those auto
+ * margins can clamp to the start edge on narrow hosts, exactly as the page does. */
 .igloo-rulerbar {
-  display: flex;
-  justify-content: center;
   overflow: hidden;
   padding: 4px 20px 2px;
   border-bottom-color: rgba(255, 255, 255, 0.3);

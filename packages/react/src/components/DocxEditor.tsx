@@ -97,14 +97,22 @@ const WORKSPACE_STYLE: CSSProperties = {
  * `min-height` holds the row open before a document is loaded — the ruler draws
  * nothing without a page, and letting the row collapse made the page stack jump
  * when the ticks appeared.
+ *
+ * A block, NOT a flex row with `justify-content: center`: the ruler part centres
+ * itself clamp-safely (see `HorizontalRuler`'s base style), so on narrow screens
+ * it pins to the start edge like the page instead of overflowing both sides and
+ * losing its left inches to `overflow: hidden`.
+ *
+ * `scrollbar-gutter` mirrors the scroll container below, which reserves the same
+ * symmetric gutter — without it, on classic-scrollbar platforms the clamped page
+ * pins a gutter-width right of the clamped ruler.
  */
 const RULER_ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'center',
   flex: 'none',
   minHeight: 34,
   padding: '6px 0 2px',
   overflow: 'hidden',
+  scrollbarGutter: 'stable both-edges',
   backgroundColor: 'var(--doc-bg)',
 };
 
@@ -361,7 +369,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
           ticks drift off the page they measure. It has to sit ABOVE the
           scroller, which is a slot only this component can offer. */}
         {rulers ? (
-          <div style={RULER_ROW_STYLE}>
+          <div style={RULER_ROW_STYLE} data-testid="docx-editor-ruler-row">
             <DocxEditorHorizontalRuler />
           </div>
         ) : null}
