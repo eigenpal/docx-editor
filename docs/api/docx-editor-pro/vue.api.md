@@ -6,9 +6,11 @@
 
 import { ComputedRef } from 'vue';
 import { MaybeRefOrGetter } from '@docx-editor.dev/vue';
+import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
 import { Node as Node_2 } from 'prosemirror-model';
 import { PropType } from 'vue';
 import { Ref } from 'vue';
+import { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import { VNode } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
@@ -701,6 +703,9 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 
 // @public (undocumented)
 export function useReview(query?: MaybeRefOrGetter<ReviewItemQuery | undefined>): UseReviewReturn;
+
+// @public
+export function useReviewAuthor(author: MaybeRefOrGetter_2<string | undefined>): ComputedRef<ReviewAuthorInfo | undefined>;
 
 // @public (undocumented)
 export function useReviewItem(): ComputedRef<ReviewItemView | null>;

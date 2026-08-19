@@ -25,7 +25,10 @@ describe('props-driven primitives', () => {
     });
     app.mount(container);
     await nextTick();
-    expect(container.querySelector('.docx-horizontal-ruler')).not.toBeNull();
+    const ruler = container.querySelector<HTMLElement>('.docx-horizontal-ruler');
+    expect(ruler).not.toBeNull();
+    expect(ruler?.style.marginInline).toBe('auto');
+    expect(ruler?.style.flexShrink).toBe('0');
     app.unmount();
   });
 

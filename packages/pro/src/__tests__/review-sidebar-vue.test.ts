@@ -23,15 +23,116 @@ import {
   waitFor,
 } from './review-vue-harness.ts';
 import { DocxEditorReview } from '../vue/DocxEditorReview.tsx';
+import { useReviewAuthor } from '../vue/index.ts';
 import { reviewModule } from '../index.ts';
 import { flush as flushMount, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { useReviewStableId } from '../vue/stable-id.ts';
+import { DocxEditorAuthorStyle } from '../../../vue/src/editor/DocxEditorAuthorStyle.ts';
+import type { ReviewItemView } from '../vue/useReview.ts';
 
 afterEach(() => {
   document.body.innerHTML = '';
 });
 
 describe('DocxEditorReview (Vue)', () => {
+  test('uses the default author ramp without declarations', async () => {
+    const mounted = mountReview(TRACKED);
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('[data-testid="review-card"]') !== null);
+      const card = mounted.container.querySelector('[data-testid="review-card"]') as HTMLElement;
+      expect(card.dataset.reviewAuthorSlot).toBe('0');
+      expect(card.style.getPropertyValue('--doc-review-author-current')).toBe(
+        'var(--doc-review-author-0)'
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('exposes resolved author styles to custom Vue cards', async () => {
+    const AuthorProbe = defineComponent({
+      props: { author: { type: String, required: true } },
+      setup(props) {
+        const author = useReviewAuthor(() => props.author);
+        return () =>
+          h('span', {
+            'data-testid': 'review-author-probe',
+            'data-color': author.value?.color,
+          });
+      },
+    });
+    const mounted = mountEditorTree(
+      () => [
+        h(DocxEditorAuthorStyle, {
+          author: 'Ada Lovelace',
+          color: '#7c3aed',
+        }),
+      ],
+      TRACKED,
+      () => [
+        h(DocxEditorReview, null, {
+          default: () => [
+            h(DocxEditorReview.List, null, {
+              item: ({ item }: { item: ReviewItemView }) => h(AuthorProbe, { author: item.author }),
+            }),
+          ],
+        }),
+      ],
+      [reviewModule()]
+    );
+    try {
+      await flushMount();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-author-probe"]') !== null
+      );
+      expect(
+        mounted.container
+          .querySelector('[data-testid="review-author-probe"]')
+          ?.getAttribute('data-color')
+      ).toBe('#7c3aed');
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('uses the resolved author color and avatar from Vue declarations', async () => {
+    const mounted = mountEditorTree(
+      () => [
+        h(DocxEditorAuthorStyle, {
+          author: 'Ada Lovelace',
+          color: '#7c3aed',
+          avatarUrl: 'https://example.com/ada.png',
+        }),
+      ],
+      TRACKED,
+      () => [h(DocxEditorReview)],
+      [reviewModule()]
+    );
+    try {
+      await flushMount();
+      await waitFor(() => mounted.container.querySelector('[data-testid="review-card"]') !== null);
+      const card = mounted.container.querySelector('[data-testid="review-card"]') as HTMLElement;
+      expect(card.dataset.reviewAuthor).toBe('Ada Lovelace');
+      expect(card.style.getPropertyValue('--doc-review-author-current')).toBe('#7c3aed');
+      const avatar = card.querySelector<HTMLImageElement>('.docx-review__avatar-img');
+      expect(avatar?.src).toBe('https://example.com/ada.png');
+      expect(avatar?.referrerPolicy).toBe('no-referrer');
+      mounted.editor().exec({ type: 'toggleReviewPane' });
+      await flushMount();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-marker"]') !== null
+      );
+      const marker = mounted.container.querySelector(
+        '[data-testid="review-marker"]'
+      ) as HTMLElement;
+      expect(marker.dataset.reviewAuthor).toBe('Ada Lovelace');
+      expect(marker.style.getPropertyValue('--doc-review-author-current')).toBe('#7c3aed');
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('emits no ref-owner warnings while the rail is active', async () => {
     const mounted = mountReview(TRACKED);
     try {

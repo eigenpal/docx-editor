@@ -20,7 +20,6 @@ import {
 import { Slot } from '@docx-editor.dev/vue';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
-  AUTHOR_SLOTS,
   MARKER_STEP,
   REVIEW_DATE_FORMAT,
   guardMousedown,
@@ -43,6 +42,7 @@ import {
 } from './review-card-parts.tsx';
 import { ADD_COMMENT_ICON, icon, markerIconPath } from './review-icons.tsx';
 import { revisionLabelKey } from './review-labels.ts';
+import { authorAccent, authorCardStyle, authorSlot } from './review-author-styles.ts';
 
 /** @public */
 export const ReviewList = markPart(
@@ -164,7 +164,7 @@ export const ReviewMarkers = markPart(
 
       return () => {
         if (props.hidden) return null;
-        const { review } = rail.value;
+        const { review, authorSlots, authorInfo } = rail.value;
         const { roots, stackedTops } = stacked.value;
         return (
           <div class={`docx-review__markers${props.className ? ` ${props.className}` : ''}`}>
@@ -181,7 +181,27 @@ export const ReviewMarkers = markPart(
                   class="docx-review__marker"
                   data-testid="review-marker"
                   data-kind={entry.kind === 'revision' ? entry.revisionKind : entry.kind}
-                  style={{ position: 'absolute', top: `${top}px` }}
+                  {...(entry.author
+                    ? {
+                        'data-review-author': entry.author,
+                        'data-review-author-slot': authorSlot(
+                          authorInfo.get(entry.author),
+                          authorSlots.get(entry.author) ?? 0
+                        ),
+                      }
+                    : {})}
+                  style={{
+                    position: 'absolute',
+                    top: `${top}px`,
+                    ...(entry.author
+                      ? ({
+                          '--doc-review-author-current': authorAccent(
+                            authorInfo.get(entry.author),
+                            authorSlots.get(entry.author) ?? 0
+                          ),
+                        } as CSSProperties)
+                      : {}),
+                  }}
                   title={entry.author ? `${entry.author}: ${entry.text}` : entry.text}
                   aria-label={`${t('review.showPane')}: ${entry.author ? `${entry.author}. ` : ''}${entry.text}`}
                   onMousedown={guardMousedown}
@@ -416,7 +436,7 @@ export const ReviewBalloon = markPart(
 
       return () => {
         if (props.hidden) return null;
-        const { review, authorSlots } = rail.value;
+        const { review, authorSlots, authorInfo } = rail.value;
         const current = anchor.value;
         const fallbackKind =
           current?.kind === 'format' ? ('format' as const) : ('structural' as const);
@@ -445,9 +465,20 @@ export const ReviewBalloon = markPart(
                           class: 'docx-review__card',
                           'data-testid': 'review-balloon-card',
                           'data-kind': matched.revisionKind ?? 'revision',
-                          style: {
-                            '--doc-review-author': `var(--doc-review-author-${(authorSlots.get(matched.author) ?? 0) % AUTHOR_SLOTS})`,
-                          },
+                          ...(matched.author
+                            ? {
+                                'data-review-author': matched.author,
+                                'data-review-author-slot': authorSlot(
+                                  authorInfo.get(matched.author),
+                                  authorSlots.get(matched.author) ?? 0
+                                ),
+                              }
+                            : {}),
+                          style: authorCardStyle(
+                            matched.author,
+                            authorInfo.get(matched.author),
+                            authorSlots.get(matched.author) ?? 0
+                          ),
                           onClick: () => review.setActive(matched.key),
                         },
                         [
@@ -474,6 +505,20 @@ export const ReviewBalloon = markPart(
                         class: 'docx-review__card',
                         'data-testid': 'review-balloon-card',
                         'data-kind': fallbackKind,
+                        ...(current.author
+                          ? {
+                              'data-review-author': current.author,
+                              'data-review-author-slot': authorSlot(
+                                authorInfo.get(current.author),
+                                authorSlots.get(current.author) ?? 0
+                              ),
+                            }
+                          : {}),
+                        style: authorCardStyle(
+                          current.author,
+                          authorInfo.get(current.author),
+                          authorSlots.get(current.author) ?? 0
+                        ),
                       },
                       [
                         h('div', { class: 'docx-review__head' }, [

@@ -12,12 +12,15 @@ import {
   inject,
   onMounted,
   provide,
+  toValue,
   type ComputedRef,
   type CSSProperties,
   type InjectionKey,
   type PropType,
   type VNode,
+  type MaybeRefOrGetter,
 } from 'vue';
+import type { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '@docx-editor.dev/vue';
 import type { ReviewActions } from './review-types.ts';
@@ -32,6 +35,7 @@ export interface ReviewRailValue {
   readonly review: ReviewActions;
   readonly allItems: readonly ReviewItemView[];
   readonly authorSlots: ReadonlyMap<string, number>;
+  readonly authorInfo: ReadonlyMap<string, ReviewAuthorInfo>;
   readonly byId: ReadonlyMap<string, ReviewItemView>;
   readonly measure: (node: HTMLElement | null, key: string) => void;
   readonly beginDraft: () => void;
@@ -68,6 +72,7 @@ const INERT_RAIL: ReviewRailValue = {
   review: INERT_REVIEW,
   allItems: [],
   authorSlots: new Map(),
+  authorInfo: new Map(),
   byId: new Map(),
   measure: () => {},
   beginDraft: () => {},
@@ -87,6 +92,23 @@ const fallbackItem = computed((): ReviewItemView | null => null);
 /** @public */
 export function useReviewItem(): ComputedRef<ReviewItemView | null> {
   return inject(ReviewItemContextKey, fallbackItem);
+}
+
+/**
+ * Returns the resolved color, slot, and declared style for one review author.
+ *
+ * The result updates when the author or revision style declarations change.
+ *
+ * @public
+ */
+export function useReviewAuthor(
+  author: MaybeRefOrGetter<string | undefined>
+): ComputedRef<ReviewAuthorInfo | undefined> {
+  const rail = useRail();
+  return computed(() => {
+    const name = toValue(author);
+    return name === undefined ? undefined : rail.value.authorInfo.get(name);
+  });
 }
 
 /** @internal */

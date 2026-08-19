@@ -318,6 +318,8 @@ export const HorizontalRuler = defineComponent({
             userSelect: 'none',
             touchAction: 'none',
             cursor: dragging.value ? 'ew-resize' : 'default',
+            flexShrink: 0,
+            marginInline: 'auto',
             ...(props.style ?? {}),
           }}
           // A GROUP, not a slider: it contains sliders. It carried `aria-valuemin`/`max` with

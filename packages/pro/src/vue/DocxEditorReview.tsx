@@ -24,12 +24,13 @@ import {
   type VNode,
   type VNodeArrayChildren,
 } from 'vue';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import type { DocxEditorInstance, ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import type { ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
 import {
   ReviewRailContext,
   useDocxEditor,
   useEditorState,
+  useReviewAuthors,
   useTranslation,
   type ReviewRailRegistry,
 } from '@docx-editor.dev/vue';
@@ -55,6 +56,7 @@ import {
 import { ReviewContextKey, useReviewItem, type ReviewRailValue } from './review-context.ts';
 import type { ReviewActions } from './review-types.ts';
 import { useReviewSlotSizing } from './use-review-slot-sizing.ts';
+import { resolveReviewAuthorInfo } from './review-author-styles.ts';
 import {
   ReviewAccept,
   ReviewAuthor,
@@ -212,6 +214,17 @@ const ReviewRoot = defineComponent({
       }
       return slotsMap;
     });
+    const roster = useReviewAuthors();
+    const syntheticAuthors = new Map<string, ReviewAuthorInfo>();
+    const authorInfo = computed(() =>
+      resolveReviewAuthorInfo(
+        roster.value,
+        items.value,
+        authorSlots.value,
+        editorRef.value,
+        syntheticAuthors
+      )
+    );
 
     const byId = computed(() => {
       const map = new Map<string, ReviewItemView>();
@@ -488,6 +501,7 @@ const ReviewRoot = defineComponent({
       review: reviewActions.value,
       allItems: allReview.items.value,
       authorSlots: authorSlots.value,
+      authorInfo: authorInfo.value,
       byId: byId.value,
       measure: observeSlot,
       beginDraft,

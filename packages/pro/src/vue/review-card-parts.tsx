@@ -13,7 +13,6 @@ import { ReviewActionSlot } from './review-action-slot.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import {
-  AUTHOR_SLOTS,
   COMPOSE_KEY,
   REVIEW_DATE_FORMAT,
   guardMousedown,
@@ -23,6 +22,7 @@ import {
 import { ReviewReplyScope, useRail, useReviewItem, useReviewLabel } from './review-context.ts';
 import { useReviewStableId } from './stable-id.ts';
 import type { ReviewItemView } from './useReview.ts';
+import { authorCardStyle, authorSlot } from './review-author-styles.ts';
 
 const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useRail,
@@ -68,6 +68,7 @@ export const ReviewAvatar = markPart(
     props: { className: String, hidden: Boolean, asChild: Boolean },
     setup(props, { slots }) {
       const entryRef = useReviewItem();
+      const rail = useRail();
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
@@ -79,7 +80,21 @@ export const ReviewAvatar = markPart(
           'aria-hidden': true,
         };
         if (props.asChild) return <Slot {...shared}>{custom}</Slot>;
-        return <span {...shared}>{custom ?? entry.initials}</span>;
+        const avatarUrl = rail.value.authorInfo.get(entry.author)?.style?.avatarUrl;
+        const face =
+          custom ??
+          (avatarUrl ? (
+            <img
+              class="docx-review__avatar-img"
+              src={avatarUrl}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+            />
+          ) : undefined) ??
+          entry.initials;
+        return <span {...shared}>{face}</span>;
       };
     },
   }),
@@ -473,21 +488,25 @@ export const ReviewCard = markPart(
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
-        const { review, authorSlots } = rail.value;
+        const { review, authorSlots, authorInfo } = rail.value;
         const slot = authorSlots.get(entry.author) ?? 0;
         const shared = {
           class: `docx-review__card${props.className ? ` ${props.className}` : ''}`,
           'data-testid': 'review-card',
           'aria-labelledby': `${cardId}-author ${cardId}-summary`,
           'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
+          ...(entry.author
+            ? {
+                'data-review-author': entry.author,
+                'data-review-author-slot': authorSlot(authorInfo.get(entry.author), slot),
+              }
+            : {}),
           ...(entry.kind === 'custom' && entry.item.kind === 'custom'
             ? { 'data-node-name': entry.item.name }
             : {}),
           ...(entry.isActive ? { 'data-active': '' } : {}),
           ...(entry.kind === 'comment' && entry.resolved ? { 'data-resolved': '' } : {}),
-          style: {
-            '--doc-review-author': `var(--doc-review-author-${slot % AUTHOR_SLOTS})`,
-          },
+          style: authorCardStyle(entry.author, authorInfo.get(entry.author), slot),
           tabIndex: 0,
           role: 'button' as const,
           id: cardId,

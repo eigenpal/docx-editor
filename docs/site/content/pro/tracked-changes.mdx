@@ -510,6 +510,23 @@ function MyCard({ item }: { item: ReviewItemView }) {
 </DocxEditorReview>;
 ```
 
+The Vue composable accepts a ref or getter and returns a computed ref:
+
+```vue
+<script setup lang="ts">
+import { useReviewAuthor, type ReviewItemView } from '@docx-editor.dev/pro/vue';
+
+const props = defineProps<{ item: ReviewItemView }>();
+const author = useReviewAuthor(() => props.item.author);
+</script>
+
+<template>
+  <div class="my-card" :style="{ borderColor: author?.color }">
+    {{ item.author }}: {{ item.text }}
+  </div>
+</template>
+```
+
 See [Composition](/docs/2.x/react/composition) for the card parts the packaged design is
 made of.
 

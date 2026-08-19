@@ -20,6 +20,32 @@ afterEach(() => {
 });
 
 describe('DocxEditor sugar host', () => {
+  test('clamps rulers with the page on narrow viewports', async () => {
+    const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 400,
+    });
+    try {
+      const view = await mountSugarAsync({});
+      await view.flush();
+      const row = view.container.querySelector<HTMLElement>(
+        '[data-testid="docx-editor-ruler-row"]'
+      );
+      const horizontal = view.container.querySelector<HTMLElement>('.docx-horizontal-ruler');
+      expect(row?.style.display).toBe('');
+      expect(horizontal?.style.marginInline).toBe('auto');
+      expect(view.container.querySelector('.docx-vertical-ruler')).toBeNull();
+      view.unmount();
+    } finally {
+      if (widthDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', widthDescriptor);
+      } else {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      }
+    }
+  });
+
   test('document-only mount renders full packaged chrome', async () => {
     const view = await mountSugarAsync({});
     await view.flush();

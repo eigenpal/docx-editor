@@ -68,12 +68,11 @@ const WORKSPACE_STYLE: CSSProperties = {
 };
 
 const RULER_ROW_STYLE: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'center',
   flex: 'none',
   minHeight: '34px',
   padding: '6px 0 2px',
   overflow: 'hidden',
+  scrollbarGutter: 'stable both-edges',
   backgroundColor: 'var(--doc-bg)',
 };
 
@@ -379,7 +378,9 @@ const DocxEditorFrame = defineComponent({
                 h('div', { style: TOOLBAR_ROW_STYLE }, [h(DocxEditorToolbar, { t: translate })]),
               ]),
               rulers.value
-                ? h('div', { style: RULER_ROW_STYLE }, [h(DocxEditorHorizontalRuler)])
+                ? h('div', { style: RULER_ROW_STYLE, 'data-testid': 'docx-editor-ruler-row' }, [
+                    h(DocxEditorHorizontalRuler),
+                  ])
                 : null,
               h(DocxEditorFontNotice, { t: translate }),
               h('div', { style: WORKSPACE_STYLE }, [

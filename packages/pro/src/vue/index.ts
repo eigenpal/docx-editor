@@ -26,6 +26,7 @@ export {
   type ReviewPartProps,
   type ReviewProps,
 } from './DocxEditorReview.tsx';
+export { useReviewAuthor } from './review-context.ts';
 export {
   useReview,
   useReviewOf,

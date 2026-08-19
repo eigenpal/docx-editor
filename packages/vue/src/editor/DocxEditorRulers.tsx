@@ -18,6 +18,7 @@ import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
 import { useNavigationShift, useNavigationViewportElement } from './navigation/navigation-layout';
+import { formatPx, twipsToPixels } from '../lib/units';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
 
@@ -122,6 +123,30 @@ function useReviewGutter(): ComputedRef<number> {
   });
 }
 
+function useViewportClientWidth(): ComputedRef<number | null> {
+  const viewport = useNavigationViewportElement();
+  const width = ref<number | null>(null);
+  watch(
+    viewport,
+    (element, _, onCleanup) => {
+      if (!element) {
+        width.value = null;
+        return;
+      }
+      const sync = () => {
+        width.value = element.clientWidth;
+      };
+      sync();
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(sync);
+      observer.observe(element);
+      onCleanup(() => observer.disconnect());
+    },
+    { flush: 'post', immediate: true }
+  );
+  return computed(() => width.value);
+}
+
 /** @public */
 export const DocxEditorHorizontalRuler = defineComponent({
   name: 'DocxEditorHorizontalRuler',
@@ -160,33 +185,37 @@ export const DocxEditorHorizontalRuler = defineComponent({
     return () => {
       if (documentAbsent.value) return null;
       return (
-        <HorizontalRuler
-          pageSetup={previewed(pageSetup.value, marginDrag.pending.value)}
-          zoom={zoom.value}
-          editable={isEnabled.value}
-          onLeftMarginChange={marginDrag.preview('left')}
-          onRightMarginChange={marginDrag.preview('right')}
-          onMarginDragEnd={marginDrag.commit}
-          showIndentHandles={indentDrag.indent.value !== null}
-          indent={indentDrag.indent.value}
-          indentEditable={indentDrag.isEnabled.value}
-          onIndentChange={indentDrag.preview}
-          onIndentDragEnd={indentDrag.commit}
-          unit={props.unit ?? 'inch'}
-          className={props.className ?? ''}
+        <div
+          class="docx-ruler-frame"
           style={{
-            flexShrink: 0,
-            marginRight: `${reserved.value}px`,
-            ...props.style,
-            marginInlineStart: `${shift.value}px`,
-            transition: 'margin 0.2s ease',
-            transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft.value}px)`,
-            clipPath:
-              shift.value > 0 && scrollLeft.value > 0
-                ? `inset(0 0 0 ${scrollLeft.value}px)`
-                : props.style?.clipPath,
+            paddingInlineStart: formatPx(shift.value),
+            paddingRight: formatPx(reserved.value),
           }}
-        />
+        >
+          <HorizontalRuler
+            pageSetup={previewed(pageSetup.value, marginDrag.pending.value)}
+            zoom={zoom.value}
+            editable={isEnabled.value}
+            onLeftMarginChange={marginDrag.preview('left')}
+            onRightMarginChange={marginDrag.preview('right')}
+            onMarginDragEnd={marginDrag.commit}
+            showIndentHandles={indentDrag.indent.value !== null}
+            indent={indentDrag.indent.value}
+            indentEditable={indentDrag.isEnabled.value}
+            onIndentChange={indentDrag.preview}
+            onIndentDragEnd={indentDrag.commit}
+            unit={props.unit ?? 'inch'}
+            className={props.className ?? ''}
+            style={{
+              ...props.style,
+              transform: `${props.style?.transform ? `${props.style.transform} ` : ''}translateX(${-scrollLeft.value}px)`,
+              clipPath:
+                shift.value > 0 && scrollLeft.value > 0
+                  ? `inset(0 0 0 ${scrollLeft.value}px)`
+                  : props.style?.clipPath,
+            }}
+          />
+        </div>
       );
     };
   },
@@ -205,9 +234,16 @@ export const DocxEditorVerticalRuler = defineComponent({
     const { pageSetup, isEnabled } = usePageSetup();
     const zoom = useEditorState(selectZoom);
     const marginDrag = useMarginDrag();
+    const shift = useNavigationShift();
+    const reserved = useReviewGutter();
+    const viewportWidth = useViewportClientWidth();
 
     return () => {
       if (documentAbsent.value) return null;
+      if (viewportWidth.value !== null && viewportWidth.value > 0 && pageSetup.value) {
+        const pageWidthPx = twipsToPixels(pageSetup.value.pageWidthTwips) * zoom.value;
+        if (pageWidthPx > viewportWidth.value - shift.value - reserved.value) return null;
+      }
       return (
         <VerticalRuler
           pageSetup={previewed(pageSetup.value, marginDrag.pending.value)}
