@@ -61,7 +61,12 @@ export const MaterialSymbol = defineComponent({
           'span',
           {
             class: props.className,
-            style: { fontSize: props.size, width: props.size, height: props.size, ...props.style },
+            style: {
+              fontSize: `${props.size}px`,
+              width: `${props.size}px`,
+              height: `${props.size}px`,
+              ...props.style,
+            },
           },
           props.name
         );

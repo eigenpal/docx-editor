@@ -67,7 +67,7 @@ const RULER_ROW_STYLE: CSSProperties = {
   display: 'flex',
   justifyContent: 'center',
   flex: 'none',
-  minHeight: 34,
+  minHeight: '34px',
   padding: '6px 0 2px',
   overflow: 'hidden',
   backgroundColor: 'var(--doc-bg)',
@@ -75,7 +75,7 @@ const RULER_ROW_STYLE: CSSProperties = {
 
 const VERTICAL_RULER_STYLE: CSSProperties = {
   position: 'absolute',
-  top: 40,
+  top: '40px',
   left: 0,
   zIndex: 10,
   pointerEvents: 'none',
@@ -88,7 +88,7 @@ const CHROME_BAND_STYLE: CSSProperties = {
   position: 'relative',
   zIndex: 30,
   backgroundColor: 'var(--doc-surface)',
-  borderBottomWidth: 1,
+  borderBottomWidth: '1px',
   borderBottomStyle: 'solid',
   borderBottomColor: 'var(--doc-border)',
   boxShadow: '0 1px 3px var(--doc-shadow-subtle)',
@@ -101,7 +101,7 @@ const TOOLBAR_ROW_STYLE: CSSProperties = {
 const TITLE_BAR_STYLE: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 8,
+  gap: '8px',
   padding: '8px 12px 0',
   color: 'var(--doc-text)',
 };
@@ -111,7 +111,7 @@ const TITLE_BLOCK_STYLE: CSSProperties = {
   flexDirection: 'column',
   flex: 1,
   minWidth: 0,
-  gap: 2,
+  gap: '2px',
 };
 
 const TITLE_INPUT_STYLE: CSSProperties = {
@@ -121,7 +121,7 @@ const TITLE_INPUT_STYLE: CSSProperties = {
   color: 'inherit',
   backgroundColor: 'transparent',
   border: '1px solid transparent',
-  borderRadius: 4,
+  borderRadius: '4px',
   padding: '2px 6px',
 };
 

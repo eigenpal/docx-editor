@@ -45,26 +45,26 @@ const REMOVE_ICON =
 const panelStyle: CSSProperties = {
   position: 'absolute',
   zIndex: 20,
-  minWidth: 240,
-  maxWidth: 320,
-  top: 12,
-  right: 12,
-  padding: 12,
-  borderRadius: 8,
+  minWidth: '240px',
+  maxWidth: '320px',
+  top: '12px',
+  right: '12px',
+  padding: '12px',
+  borderRadius: '8px',
   border: '1px solid var(--doc-border)',
   backgroundColor: 'var(--doc-surface)',
   boxShadow: '0 4px 16px var(--doc-shadow)',
   color: 'var(--doc-text)',
-  fontSize: 13,
+  fontSize: '13px',
   display: 'flex',
   flexDirection: 'column',
-  gap: 10,
+  gap: '10px',
 };
 
 const rowStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
-  gap: 12,
+  gap: '12px',
   alignItems: 'baseline',
 };
 
@@ -82,22 +82,22 @@ const headerStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: 8,
+  gap: '8px',
   fontWeight: 600,
 };
 
 const actionsStyle: CSSProperties = {
   display: 'flex',
-  gap: 8,
-  marginTop: 4,
+  gap: '8px',
+  marginTop: '4px',
 };
 
 const buttonStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 6,
+  gap: '6px',
   padding: '4px 10px',
-  borderRadius: 4,
+  borderRadius: '4px',
   border: '1px solid var(--doc-border)',
   backgroundColor: 'var(--doc-bg)',
   color: 'var(--doc-text)',
@@ -184,7 +184,7 @@ const ContentControlHeader = defineComponent({
             title={t('common.close')}
             style={{
               ...buttonStyle,
-              padding: 4,
+              padding: '4px',
               border: 'none',
               background: 'transparent',
             }}
@@ -251,7 +251,7 @@ const ContentControlFields = defineComponent({
         current.bound ? (
           <p
             data-testid="content-control-inspector-bound-note"
-            style={{ margin: 0, color: 'var(--doc-text-muted)', fontSize: 12 }}
+            style={{ margin: 0, color: 'var(--doc-text-muted)', fontSize: '12px' }}
           >
             {t('contentControl.inspectorPanel.boundNote')}
           </p>
@@ -259,7 +259,7 @@ const ContentControlFields = defineComponent({
         current.locked ? (
           <p
             data-testid="content-control-inspector-locked-note"
-            style={{ margin: 0, color: 'var(--doc-text-muted)', fontSize: 12 }}
+            style={{ margin: 0, color: 'var(--doc-text-muted)', fontSize: '12px' }}
             aria-live="polite"
           >
             {t('contentControl.inspectorPanel.lockedNote')}
@@ -269,7 +269,7 @@ const ContentControlFields = defineComponent({
       const shared = {
         class: props.className ?? undefined,
         'data-testid': 'content-control-inspector-fields',
-        style: { display: 'flex', flexDirection: 'column' as const, gap: 8 },
+        style: { display: 'flex', flexDirection: 'column' as const, gap: '8px' },
       };
       if (props.asChild) return <Slot {...shared}>{fields}</Slot>;
       return <div {...shared}>{fields}</div>;

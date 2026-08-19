@@ -122,7 +122,7 @@ const ParagraphStyleContent = defineComponent({
           left: 0,
           zIndex: 30,
           minWidth: '100%',
-          maxHeight: 300,
+          maxHeight: '300px',
           overflowY: 'auto' as const,
         },
       };

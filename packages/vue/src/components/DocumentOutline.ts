@@ -104,7 +104,7 @@ export const DocumentOutline = defineComponent({
                 {
                   style: {
                     fontWeight: 400,
-                    fontSize: 14,
+                    fontSize: '14px',
                     color: 'var(--doc-text)',
                     letterSpacing: '0.01em',
                   },
@@ -123,7 +123,7 @@ export const DocumentOutline = defineComponent({
                     style: {
                       padding: '8px 16px',
                       color: 'var(--doc-text-subtle)',
-                      fontSize: 13,
+                      fontSize: '13px',
                       lineHeight: '20px',
                     },
                   },
@@ -150,7 +150,7 @@ export const DocumentOutline = defineComponent({
                             border: 'none',
                             cursor: 'pointer',
                             padding: '5px 8px',
-                            fontSize: 13,
+                            fontSize: '13px',
                             fontWeight: 400,
                             color: 'var(--doc-text)',
                             lineHeight: '18px',

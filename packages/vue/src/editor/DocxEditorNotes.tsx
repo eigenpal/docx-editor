@@ -1,6 +1,7 @@
 import { computed, defineComponent, h, ref, watch, type CSSProperties, type PropType } from 'vue';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
+import { formatPx } from '../lib/units';
 import { Z_INDEX } from '../styles/zIndex';
 import { useDocxEditor } from './context';
 import { guardToolbarMousedown } from './toolbar/ToolbarButton';
@@ -519,10 +520,10 @@ export const DocxEditorNotesChrome = defineComponent({
 
     const previewStyle = computed<CSSProperties>(() => ({
       position: 'fixed',
-      left: preview.value?.x ?? 0,
-      top: preview.value?.y ?? 0,
+      left: formatPx(preview.value?.x ?? 0),
+      top: formatPx(preview.value?.y ?? 0),
       zIndex: Z_INDEX.popover,
-      maxWidth: 280,
+      maxWidth: '280px',
       maxHeight: '40vh',
       overflowY: 'auto',
       padding: '8px 10px',
@@ -530,7 +531,7 @@ export const DocxEditorNotesChrome = defineComponent({
       color: 'var(--doc-popover-fg, #111)',
       border: '1px solid var(--doc-border, #ddd)',
       boxShadow: 'var(--doc-shadow, 0 4px 16px rgba(0,0,0,.12))',
-      fontSize: 12,
+      fontSize: '12px',
       lineHeight: 1.4,
       pointerEvents: 'none',
     }));
@@ -595,14 +596,14 @@ export const DocxEditorNotesChrome = defineComponent({
               data-testid="docx-notes-menu"
               style={{
                 position: 'fixed',
-                left: menu.value.x,
-                top: menu.value.y,
+                left: formatPx(menu.value.x),
+                top: formatPx(menu.value.y),
                 zIndex: Z_INDEX.popover,
-                minWidth: 160,
+                minWidth: '160px',
                 background: 'var(--doc-popover-bg, #fff)',
                 border: '1px solid var(--doc-border, #ddd)',
                 boxShadow: 'var(--doc-shadow, 0 4px 16px rgba(0,0,0,.12))',
-                padding: 4,
+                padding: '4px',
               }}
               onMousedown={guardToolbarMousedown}
             >

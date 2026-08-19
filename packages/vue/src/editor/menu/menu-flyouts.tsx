@@ -6,6 +6,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel } from './menu-context';
 import { useStableDocxId } from '../../lib/stable-id';
+import { formatPx } from '../../lib/units';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { MenuItem } from './parts';
 
@@ -140,7 +141,11 @@ export const MenuSubmenu = defineComponent({
               aria-label={text}
               style={
                 box.value
-                  ? { position: 'fixed', left: box.value.left, top: box.value.top }
+                  ? {
+                      position: 'fixed',
+                      left: formatPx(box.value.left),
+                      top: formatPx(box.value.top),
+                    }
                   : { position: 'fixed', visibility: 'hidden' }
               }
               onKeydown={(event) => {

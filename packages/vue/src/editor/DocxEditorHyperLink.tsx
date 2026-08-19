@@ -11,6 +11,7 @@ import {
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { flattenChildren } from '../lib/flattenChildren';
 import { useStableDocxId } from '../lib/stable-id';
+import { formatPx } from '../lib/units';
 import { useTranslation } from '../i18n';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 import { isFieldLink, useHyperlinkPopup } from './useHyperlinkPopup';
@@ -467,7 +468,10 @@ const HyperLinkRoot = defineComponent({
         }
         const { left, top } = absolutePointInScroller(container, anchor.left, anchor.top);
         const maxLeft = Math.max(0, container.scrollWidth - panel.offsetWidth);
-        placement.value = { left: Math.max(0, Math.min(left, maxLeft)), top };
+        placement.value = {
+          left: formatPx(Math.max(0, Math.min(left, maxLeft))),
+          top: formatPx(top),
+        };
       },
       { flush: 'post' }
     );
