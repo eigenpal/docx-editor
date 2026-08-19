@@ -273,12 +273,12 @@ describe('colouring by author', () => {
   test("host class names land on one author's spans, split on whitespace", () => {
     const root = paint(
       `<w:p>${ins('1', run('added'), 'Ada')}${ins('2', run('more'), 'Grace')}</w:p>`,
-      { authors: { Ada: { className: 'legal-edit  ring' } } }
+      { authors: { Ada: { className: 'agent-edit  ring' } } }
     );
     const spans = trackedSpans(root);
-    expect(spans[0]!.classList.contains('legal-edit')).toBe(true);
+    expect(spans[0]!.classList.contains('agent-edit')).toBe(true);
     expect(spans[0]!.classList.contains('ring')).toBe(true);
-    expect(spans[1]!.classList.contains('legal-edit')).toBe(false);
+    expect(spans[1]!.classList.contains('agent-edit')).toBe(false);
   });
 
   test('a declaration that names no colour leaves the ink alone', () => {
@@ -293,12 +293,12 @@ describe('colouring by author', () => {
 
     const classOnly = paint(`<w:p>${ins('1', run('added'), 'Ada')}</w:p>`, {
       others: 'kind',
-      authors: { Ada: { className: 'legal-edit' } },
+      authors: { Ada: { className: 'agent-edit' } },
     });
     const span = trackedSpans(classOnly)[0]!;
     expect(span.style.color).toBe('var(--doc-revision-insertion)');
     // …but the class still lands, which is the whole point of declaring it.
-    expect(span.classList.contains('legal-edit')).toBe(true);
+    expect(span.classList.contains('agent-edit')).toBe(true);
   });
 
   test('an author whose only change is a paragraph mark gets their own slot, not slot 0', () => {

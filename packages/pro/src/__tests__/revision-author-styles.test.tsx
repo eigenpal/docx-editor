@@ -181,11 +181,11 @@ describe('revisionStyles reaches the painted document', () => {
   });
 
   test("host class names land on the author's document spans", () => {
-    const view = mount({ authors: { 'Ada Lovelace': { className: 'legal-edit' } } });
+    const view = mount({ authors: { 'Ada Lovelace': { className: 'agent-edit' } } });
     const ada = view.container.querySelector<HTMLElement>(
       '.docx-revision-insert[data-revision-author="Ada Lovelace"]'
     );
-    expect(ada?.classList.contains('legal-edit')).toBe(true);
+    expect(ada?.classList.contains('agent-edit')).toBe(true);
     // Card design is composition's job: restyle cards through the `data-author` hooks or a
     // custom card, never through the record.
     const [adaCard] = view.getAllByTestId('review-card');

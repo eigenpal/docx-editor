@@ -106,9 +106,10 @@ moves the painted document and the review cards together:
 }
 ```
 
-The packaged stylesheet defines the light ramp on `.docx-editor` and the dark one on
-`.docx-editor.dark`, so restate the slots for both, or use a selector at least as specific
-as the one you are replacing.
+One ramp covers both themes. Author the slots for a light page: dark mode renders the
+document through an inverting filter, so the page corrects them for you, and the review
+cards lift them on their own. The packaged stylesheet declares the ramp on `.docx-editor`,
+so load your sheet after `editor.css` or use a more specific selector.
 
 ### The declarative syntax
 
@@ -154,7 +155,7 @@ When you know the reviewers up front, map your config to declarations:
 const AUTHOR_COLORS: Record<string, string> = {
   'Jess Lin': '#7c3aed',
   'Sam Reyes': '#0e7490',
-  'Legal Bot': '#b91c1c',
+  'AI Assistant': '#b91c1c',
 };
 
 <DocxEditor.Root document={bytes} modules={MODULES}>
@@ -203,7 +204,7 @@ else green and red". The authors you name keep their own color; the rest take th
 colors:
 
 ```tsx
-<DocxEditor.AuthorStyle author="Legal Bot" color="#b91c1c" />
+<DocxEditor.AuthorStyle author="AI Assistant" color="#b91c1c" />
 <DocxEditor.ColorByChangeType />
 ```
 
@@ -325,7 +326,7 @@ So restyling one reviewer's cards is a CSS rule:
 
 ```css
 /* Every card from one reviewer. The leading edge is already their color. */
-.docx-review__card[data-author='Legal Bot'] {
+.docx-review__card[data-author='AI Assistant'] {
   background: #fef2f2;
   font-weight: 600;
 }
@@ -351,8 +352,7 @@ cards and shows their avatar:
 The painted text carries the same pair of hooks as the cards. Every revision span has
 `data-revision-author`, and it also has `data-revision-author-slot` — the same number the
 matching card carries — unless you mounted `ColorByChangeType` with no author
-declarations.
-Use them for anything the declaration's typed fields do not cover:
+declarations. Use them for anything the declaration's typed fields do not cover:
 
 ```css
 /* One author, by name. The value matches `w:author` exactly. */
@@ -385,7 +385,9 @@ get an entirely different card component:
 ```tsx
 <DocxEditorReview>
   <DocxEditorReview.List>
-    {(item) => (item.author === 'Legal Bot' ? <LegalCard item={item} /> : <MyCard item={item} />)}
+    {(item) =>
+      item.author === 'AI Assistant' ? <AgentCard item={item} /> : <MyCard item={item} />
+    }
   </DocxEditorReview.List>
 </DocxEditorReview>
 ```
