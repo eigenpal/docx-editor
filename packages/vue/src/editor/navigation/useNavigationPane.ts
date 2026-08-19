@@ -119,6 +119,7 @@ export function useNavigationPane(
   const geometry = useEditorState(selectPaneGeometry, samePageGeometry);
   const viewportWidth = ref(0);
   const inlineEndReservation = ref(0);
+  const inlineStartReservation = ref(0);
 
   scopeDispose(
     watch(
@@ -128,12 +129,16 @@ export function useNavigationPane(
         if (!el) {
           viewportWidth.value = 0;
           inlineEndReservation.value = 0;
+          inlineStartReservation.value = 0;
           return;
         }
         const measure = () => {
           viewportWidth.value = el.clientWidth;
-          const padding = Number.parseFloat(getComputedStyle(el).paddingInlineEnd);
+          const style = getComputedStyle(el);
+          const padding = Number.parseFloat(style.paddingInlineEnd);
           inlineEndReservation.value = Number.isFinite(padding) ? padding : 0;
+          const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
+          inlineStartReservation.value = Number.isFinite(strip) ? strip : 0;
         };
         measure();
         if (typeof ResizeObserver === 'undefined') return;
@@ -163,6 +168,7 @@ export function useNavigationPane(
       pageWidthPx: twipsToPixels(pageWidthTwips) * geometry.value.zoom,
       reservation: navigationPaneReservation(paneWidthVal.value),
       inlineEndReservation: inlineEndReservation.value,
+      inlineStartReservation: inlineStartReservation.value,
       docked: geometry.value.fitting,
     });
   });
@@ -178,6 +184,17 @@ export function useNavigationPane(
     )
   );
   scopeDispose(() => store?.setShift(0));
+
+  scopeDispose(
+    watch(
+      [() => store, openVal, paneWidthVal],
+      () => {
+        store?.setReservation(openVal.value ? navigationPaneReservation(paneWidthVal.value) : 0);
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
+  scopeDispose(() => store?.setReservation(0));
 
   return {
     open: openVal,

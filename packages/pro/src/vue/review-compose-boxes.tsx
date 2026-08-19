@@ -4,14 +4,22 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import { defineComponent, getCurrentInstance, h, onMounted, ref, type ComputedRef } from 'vue';
+import {
+  defineComponent,
+  getCurrentInstance,
+  h,
+  onMounted,
+  ref,
+  type ComputedRef,
+  type PropType,
+} from 'vue';
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import type { ReviewRailValue } from './review-context.ts';
 import type { ReviewItemView } from './useReview.ts';
 import { useReviewStableId } from './stable-id.ts';
 import { useEditorRenderRevision } from './useEditorRenderRevision.ts';
-import { COMPOSE_KEY, guardMousedown, markPart } from './review-shared.ts';
+import { COMPACT_CARD_WIDTH, COMPOSE_KEY, guardMousedown, markPart } from './review-shared.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => ComputedRef<ReviewRailValue>;
@@ -26,6 +34,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       name: 'ReviewDraft',
       props: {
         top: { type: Number, default: 0 },
+        left: { type: Number as PropType<number | null>, default: null },
         className: String,
         hidden: Boolean,
       },
@@ -66,8 +75,14 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           return h(
             'div',
             {
-              class: `docx-review__slot${props.className ? ` ${props.className}` : ''}`,
-              style: { position: 'absolute', top: `${props.top}px` },
+              class: `docx-review__slot${props.left === null ? '' : ' docx-review__slot--compact'}${props.className ? ` ${props.className}` : ''}`,
+              style: {
+                position: 'absolute',
+                top: `${props.top}px`,
+                ...(props.left === null
+                  ? {}
+                  : { left: `${props.left}px`, width: `${COMPACT_CARD_WIDTH}px` }),
+              },
             },
             [
               h(

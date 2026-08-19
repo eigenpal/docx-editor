@@ -40,6 +40,8 @@ export interface NavigationShiftInput {
   readonly reservation: number;
   /** Padding already reserved at the inline end, for example by the review rail. */
   readonly inlineEndReservation?: number;
+  /** Padding already reserved at the inline start besides this shift. */
+  readonly inlineStartReservation?: number;
   /**
    * Whether the page's WIDTH follows the padding right now.
    *
@@ -72,30 +74,24 @@ export function navigationShift({
   pageWidthPx,
   reservation,
   inlineEndReservation = 0,
+  inlineStartReservation = 0,
   docked = false,
 }: NavigationShiftInput): number {
   if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 0;
   if (!Number.isFinite(pageWidthPx) || pageWidthPx <= 0) return 0;
   if (!Number.isFinite(reservation) || reservation <= 0) return 0;
   if (!Number.isFinite(inlineEndReservation) || inlineEndReservation < 0) return 0;
+  if (!Number.isFinite(inlineStartReservation) || inlineStartReservation < 0) return 0;
 
   // A review rail (or other inline-end chrome) reduces the box in which the page centres.
   // Ignoring it makes the left gutter look wider than it is, so navigation can cover the
   // page instead of pushing the combined layout into horizontal overflow.
   const gutter = (viewportWidth - inlineEndReservation - pageWidthPx) / 2;
-  // Already room to the left of the page: the pane overlays empty space, the page holds
-  // still. This is the common case on any reasonably wide window, and it is the whole
-  // point of computing a shift instead of hard-coding one.
-  if (gutter >= reservation) return 0;
-
-  // Still centred: padding P moves the page by P/2, so twice the deficit lands it exactly
-  // on the reservation. Valid while the padded box is still at least a page wide, which
-  // is the same condition as `reservation <= 2 * gutter` — and only while the page's width
-  // is independent of the padding, which a fit mode is exactly the case where it is not.
-  if (!docked && reservation <= 2 * gutter) return Math.ceil(2 * (reservation - gutter));
-
-  // The padded box is narrower than the page: `margin-inline: auto` resolves to zero, the
-  // page pins to the padding edge, and the padding IS the offset. Horizontal scrolling
-  // appears here, which is correct — there is genuinely not enough room for both.
-  return Math.ceil(reservation);
+  const total =
+    gutter >= reservation
+      ? 0
+      : !docked && reservation <= 2 * gutter
+        ? 2 * (reservation - gutter)
+        : reservation;
+  return Math.ceil(Math.max(0, total - inlineStartReservation));
 }

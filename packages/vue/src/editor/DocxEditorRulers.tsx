@@ -1,7 +1,6 @@
 import {
   computed,
   defineComponent,
-  inject,
   ref,
   watch,
   type ComputedRef,
@@ -12,12 +11,13 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import type { RulerIndent } from '@docx-editor.dev/core/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
-import { ReviewRailContext, useDocxEditor } from './context';
+import { useDocxEditor } from './context';
 import { selectDocumentAbsent } from './document-presence';
 import { useEditorState } from './useEditorState';
 import { usePageSetup } from './usePageSetup';
 import { useParagraphIndent } from './useParagraphIndent';
 import { useNavigationShift, useNavigationViewportElement } from './navigation/navigation-layout';
+import { useReviewGutter, useViewportClientWidth } from './review-gutter';
 import { formatPx, twipsToPixels } from '../lib/units';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
@@ -110,43 +110,6 @@ function selectionKey(editor: ReturnType<typeof useDocxEditor>['value']): string
   return selection ? JSON.stringify(selection) : '';
 }
 
-const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
-const REVIEW_PANE_GUTTER = 316;
-const REVIEW_MARKERS_GUTTER = 44;
-
-function useReviewGutter(): ComputedRef<number> {
-  const paneOpen = useEditorState(selectPaneOpen);
-  const rail = inject(ReviewRailContext, null);
-  return computed(() => {
-    if ((rail?.value.mounted ?? 0) === 0) return 0;
-    return paneOpen.value ? REVIEW_PANE_GUTTER : REVIEW_MARKERS_GUTTER;
-  });
-}
-
-function useViewportClientWidth(): ComputedRef<number | null> {
-  const viewport = useNavigationViewportElement();
-  const width = ref<number | null>(null);
-  watch(
-    viewport,
-    (element, _, onCleanup) => {
-      if (!element) {
-        width.value = null;
-        return;
-      }
-      const sync = () => {
-        width.value = element.clientWidth;
-      };
-      sync();
-      if (typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(sync);
-      observer.observe(element);
-      onCleanup(() => observer.disconnect());
-    },
-    { flush: 'post', immediate: true }
-  );
-  return computed(() => width.value);
-}
-
 /** @public */
 export const DocxEditorHorizontalRuler = defineComponent({
   name: 'DocxEditorHorizontalRuler',
@@ -188,8 +151,8 @@ export const DocxEditorHorizontalRuler = defineComponent({
         <div
           class="docx-ruler-frame"
           style={{
-            paddingInlineStart: formatPx(shift.value),
-            paddingRight: formatPx(reserved.value),
+            paddingInlineStart: formatPx(shift.value + reserved.value.inlineStart),
+            paddingRight: formatPx(reserved.value.inlineEnd),
           }}
         >
           <HorizontalRuler
@@ -242,7 +205,12 @@ export const DocxEditorVerticalRuler = defineComponent({
       if (documentAbsent.value) return null;
       if (viewportWidth.value !== null && viewportWidth.value > 0 && pageSetup.value) {
         const pageWidthPx = twipsToPixels(pageSetup.value.pageWidthTwips) * zoom.value;
-        if (pageWidthPx > viewportWidth.value - shift.value - reserved.value) return null;
+        if (
+          pageWidthPx >
+          viewportWidth.value - shift.value - reserved.value.inlineStart - reserved.value.inlineEnd
+        ) {
+          return null;
+        }
       }
       return (
         <VerticalRuler

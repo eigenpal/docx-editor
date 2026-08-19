@@ -23,6 +23,14 @@ export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxE
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
 
 export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
+export {
+  REVIEW_MARKERS_GUTTER,
+  REVIEW_PANE_GUTTER,
+  reviewGutter,
+  useReviewGutter,
+  type ReviewGutter,
+  type ReviewGutterInput,
+} from './editor/review-gutter';
 export { useEditorState, editorStateActiveSubscriptionCount } from './editor/useEditorState';
 export { useReviewAuthors } from './editor/useReviewAuthors';
 export {

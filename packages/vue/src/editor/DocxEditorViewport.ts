@@ -15,6 +15,7 @@ import { useEditorState } from './useEditorState';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
+import { useReviewGutter } from './review-gutter';
 import { mergeHostClass } from '../lib/mergeHostClass';
 import type { DocxEditorChildren } from '../docx-editor-children';
 
@@ -45,6 +46,7 @@ export const DocxEditorViewport = defineComponent({
     const fitting = useEditorState(selectZoomFitting);
     const rail = useReviewRailRegistry();
     const reserve = computed(() => (rail.value.mounted ?? 0) > 0);
+    const reviewGutter = useReviewGutter();
     const navShift = useNavigationShift();
     const layoutStore = useNavigationLayoutStore();
     let viewportEl: HTMLElement | null = null;
@@ -88,7 +90,16 @@ export const DocxEditorViewport = defineComponent({
           props.class,
           props.className
         ),
-        style: props.style,
+        style: {
+          ...props.style,
+          '--docx-nav-shift': `${navShift.value}px`,
+          ...(reserve.value
+            ? {
+                '--docx-review-gutter': `${reviewGutter.value.inlineEnd}px`,
+                '--docx-review-gutter-start': `${reviewGutter.value.inlineStart}px`,
+              }
+            : {}),
+        } as CSSProperties,
       };
       if (reserve.value) attrs['data-review-pane'] = paneOpen.value ? 'open' : 'closed';
       if (fitting.value) attrs['data-zoom-fit'] = '';

@@ -31,15 +31,19 @@ import {
   useDocxEditor,
   useEditorState,
   useReviewAuthors,
+  useReviewGutter,
   useTranslation,
+  REVIEW_PANE_GUTTER,
   type ReviewRailRegistry,
 } from '@docx-editor.dev/vue';
 import { useReviewWithRevision, type ReviewItemView, type UseReviewReturn } from './useReview.ts';
 import { provideEditorRenderRevision } from './useEditorRenderRevision.ts';
-import { partitionReviewChildren } from './review-composition.ts';
+import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
   COLLAPSE_DISPLACEMENT_PX,
   COLLAPSED_CARD_HEIGHT,
+  COMPACT_CARD_INSET,
+  COMPACT_CARD_WIDTH,
   COMPOSE_KEY,
   DEFAULT_CARD_HEIGHT,
   INITIAL_METRICS,
@@ -53,7 +57,12 @@ import {
   selectDocumentReadOnly,
   type RailMetrics,
 } from './review-shared.ts';
-import { ReviewContextKey, useReviewItem, type ReviewRailValue } from './review-context.ts';
+import {
+  ReviewContextKey,
+  ReviewItemScope,
+  useReviewItem,
+  type ReviewRailValue,
+} from './review-context.ts';
 import type { ReviewActions } from './review-types.ts';
 import { useReviewSlotSizing } from './use-review-slot-sizing.ts';
 import { resolveReviewAuthorInfo } from './review-author-styles.ts';
@@ -89,9 +98,12 @@ function takeRoot(key: string, fallback: VNode, parts: Record<string, VNode>): V
 
 const ReviewDraftMount = defineComponent({
   name: 'ReviewDraftMount',
-  props: { top: { type: Number, required: true } },
+  props: {
+    top: { type: Number, required: true },
+    left: { type: Number as PropType<number | null>, default: null },
+  },
   setup(props) {
-    return () => h(ReviewDraft, { top: props.top });
+    return () => h(ReviewDraft, { top: props.top, left: props.left });
   },
 });
 
@@ -200,6 +212,15 @@ const ReviewRoot = defineComponent({
     watch(() => props.hidden, syncRailRegistration);
 
     const open = computed(() => reviewHook.paneOpen.value);
+    const gutter = useReviewGutter();
+    const measuredGutterEnd = ref<number | null>(null);
+    const compact = computed(
+      () =>
+        open.value &&
+        (measuredGutterEnd.value ?? gutter.value.inlineEnd) > 0 &&
+        (measuredGutterEnd.value ?? gutter.value.inlineEnd) < REVIEW_PANE_GUTTER
+    );
+    const expanded = computed(() => open.value && !compact.value);
 
     const items = computed(() =>
       props.filter
@@ -245,7 +266,7 @@ const ReviewRoot = defineComponent({
     const metrics = ref<RailMetrics>(INITIAL_METRICS);
     let metricsCleanup: (() => void) | undefined;
     watch(
-      [editorRef, items, documentAbsent, () => props.hidden, railRef],
+      [editorRef, items, documentAbsent, () => props.hidden, railRef, compact],
       () => {
         metricsCleanup?.();
         metricsCleanup = undefined;
@@ -255,24 +276,42 @@ const ReviewRoot = defineComponent({
         const parent = rail.offsetParent as HTMLElement | null;
         const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
         const sync = (): void => {
+          if (parent) {
+            const reserved = Number.parseFloat(
+              getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
+            );
+            measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;
+          } else {
+            measuredGutterEnd.value = null;
+          }
           const box = surface && parent ? surface.getBoundingClientRect() : null;
           const frame = box && parent ? parent.getBoundingClientRect() : null;
+          const left =
+            box && frame && parent
+              ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
+              : null;
           const next: RailMetrics = {
             scale: editor.getRenderScale(),
             top:
               box && frame && parent
                 ? box.top - frame.top - parent.clientTop + parent.scrollTop
                 : 0,
-            left:
-              box && frame && parent
-                ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
-                : null,
+            left,
+            compactCardLeft:
+              left === null || !parent
+                ? null
+                : parent.scrollLeft +
+                  parent.clientWidth -
+                  left -
+                  COMPACT_CARD_WIDTH -
+                  COMPACT_CARD_INSET,
           };
           const previous = metrics.value;
           if (
             previous.scale !== next.scale ||
             previous.top !== next.top ||
-            previous.left !== next.left
+            previous.left !== next.left ||
+            previous.compactCardLeft !== next.compactCardLeft
           ) {
             metrics.value = next;
           }
@@ -281,7 +320,31 @@ const ReviewRoot = defineComponent({
         const observer = new ResizeObserver(sync);
         if (parent) observer.observe(parent);
         if (surface) observer.observe(surface);
-        metricsCleanup = () => observer.disconnect();
+        const mutationObserver =
+          parent && typeof MutationObserver !== 'undefined' ? new MutationObserver(sync) : null;
+        mutationObserver?.observe(parent!, { attributes: true, attributeFilter: ['style'] });
+        if (!compact.value || !parent) {
+          metricsCleanup = () => {
+            mutationObserver?.disconnect();
+            observer.disconnect();
+          };
+          return;
+        }
+        let frameId = 0;
+        const onScroll = () => {
+          if (frameId !== 0) return;
+          frameId = requestAnimationFrame(() => {
+            frameId = 0;
+            sync();
+          });
+        };
+        parent.addEventListener('scroll', onScroll, { passive: true });
+        metricsCleanup = () => {
+          if (frameId !== 0) cancelAnimationFrame(frameId);
+          parent.removeEventListener('scroll', onScroll);
+          mutationObserver?.disconnect();
+          observer.disconnect();
+        };
       },
       { flush: 'post' }
     );
@@ -481,7 +544,10 @@ const ReviewRoot = defineComponent({
       if (composeAnchorY.value === null) return null;
       return (
         metrics.value.top +
-        (stackedLayout.value.stacked.get(COMPOSE_KEY) ?? composeAnchorY.value) * metrics.value.scale
+        (compact.value
+          ? composeAnchorY.value
+          : (stackedLayout.value.stacked.get(COMPOSE_KEY) ?? composeAnchorY.value)) *
+          metrics.value.scale
       );
     });
 
@@ -533,7 +599,8 @@ const ReviewRoot = defineComponent({
         class: `docx-review${props.className ? ` ${props.className}` : ''}`,
         'data-testid': 'review-rail',
         'data-count': items.value.length,
-        'data-open': open.value ? '' : undefined,
+        'data-open': expanded.value ? '' : undefined,
+        'data-compact': compact.value ? '' : undefined,
         role: 'complementary' as const,
         'aria-label': label('review.ariaLabel'),
         onMousedown: guardMousedown,
@@ -562,31 +629,73 @@ const ReviewRoot = defineComponent({
         window: scrollWindow.value,
       };
 
-      const body = open.value
+      const markers = h(ReviewMarkers, {
+        scale: metrics.value.scale,
+        offset: metrics.value.top,
+        window: scrollWindow.value,
+      });
+      const activeRoot = compact.value
+        ? (roots.value.find((entry) => entry.key === reviewHook.activeKey.value) ?? null)
+        : null;
+      const compactTop =
+        activeRoot === null
+          ? null
+          : activeRoot.anchorY !== null
+            ? metrics.value.top + activeRoot.anchorY * metrics.value.scale
+            : scrollWindow.value !== null
+              ? scrollWindow.value.top + RAIL_OVERSCAN + 24
+              : null;
+      const listParts = partitionReviewChildren(rootRest, 'list');
+      const compactCardInner =
+        activeRoot && slots.item
+          ? slots.item({ item: activeRoot })
+          : listParts.parts.Card
+            ? cloneReviewCard(listParts.parts.Card, props.card?.className)
+            : props.preset
+              ? h(
+                  ReviewCard,
+                  props.card?.className ? { className: props.card.className } : {},
+                  () => listParts.rest
+                )
+              : null;
+      const compactCard =
+        activeRoot &&
+        compactTop !== null &&
+        metrics.value.compactCardLeft !== null &&
+        compactCardInner
+          ? h(
+              ReviewItemScope,
+              {
+                entry: activeRoot,
+                className: 'docx-review__slot--compact',
+                testId: 'review-compact-card',
+                style: {
+                  position: 'absolute',
+                  top: `${compactTop}px`,
+                  left: `${metrics.value.compactCardLeft}px`,
+                  width: `${COMPACT_CARD_WIDTH}px`,
+                },
+              },
+              () => compactCardInner
+            )
+          : null;
+
+      const body = expanded.value
         ? props.preset || 'List' in rootParts
           ? takeRoot(
               'List',
-              h(
-                ReviewList,
-                listProps,
-                rootRest !== undefined && rootRest !== null ? () => rootRest : undefined
-              ),
+              h(ReviewList, listProps, {
+                ...(rootRest.length > 0 ? { default: () => rootRest } : {}),
+                ...(slots.item ? { item: slots.item } : {}),
+              }),
               rootParts
             )
           : rootRest
         : props.preset || 'Markers' in rootParts
-          ? takeRoot(
-              'Markers',
-              h(ReviewMarkers, {
-                scale: metrics.value.scale,
-                offset: metrics.value.top,
-                window: scrollWindow.value,
-              }),
-              rootParts
-            )
+          ? [takeRoot('Markers', markers, rootParts), compactCard]
           : rootRest;
       const content = [
-        open.value && props.furniture !== undefined
+        expanded.value && props.furniture !== undefined
           ? h('div', { class: 'docx-review__furniture', 'data-testid': 'review-furniture' }, [
               props.furniture,
             ])
@@ -606,9 +715,19 @@ const ReviewRoot = defineComponent({
           : []),
         ...(draftAnchorY.value === null ||
         composeTop.value === null ||
+        !open.value ||
         (!props.preset && !('Draft' in rootParts))
           ? []
-          : [takeRoot('Draft', h(ReviewDraftMount, { top: composeTop.value ?? 0 }), rootParts)]),
+          : [
+              takeRoot(
+                'Draft',
+                h(ReviewDraftMount, {
+                  top: composeTop.value ?? 0,
+                  left: compact.value ? metrics.value.compactCardLeft : null,
+                }),
+                rootParts
+              ),
+            ]),
         ...(props.preset || 'Balloon' in rootParts
           ? [takeRoot('Balloon', h(ReviewBalloon), rootParts)]
           : []),

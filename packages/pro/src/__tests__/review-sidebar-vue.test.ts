@@ -223,6 +223,71 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
+  test('uses markers and one floating active card on a narrow viewport', async () => {
+    const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    const offsetDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetParent');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 1000,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+      configurable: true,
+      get() {
+        return this.parentElement;
+      },
+    });
+    const mounted = mountReview(COMMENTED_SOURCE);
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('.docx-page') !== null);
+      mounted.editor().setZoom(1);
+      await flush();
+      await waitFor(
+        () =>
+          mounted.container
+            .querySelector('[data-testid="review-rail"]')
+            ?.hasAttribute('data-compact') === true
+      );
+      const rail = mounted.container.querySelector('[data-testid="review-rail"]') as HTMLElement;
+      const viewport = mounted.container.querySelector(
+        '.docx-editor__scroll-container'
+      ) as HTMLElement;
+      expect({
+        compact: rail.hasAttribute('data-compact'),
+        open: rail.hasAttribute('data-open'),
+        start: viewport.style.getPropertyValue('--docx-review-gutter-start'),
+        end: viewport.style.getPropertyValue('--docx-review-gutter'),
+      }).toEqual({ compact: true, open: false, start: '44px', end: '44px' });
+      const marker = mounted.container.querySelector(
+        '[data-testid="review-marker"]'
+      ) as HTMLButtonElement;
+      expect(marker).toBeTruthy();
+      expect(mounted.container.querySelector('.docx-review__list')).toBeNull();
+      marker.click();
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-compact-card"]') !== null
+      );
+      const card = mounted.container.querySelector(
+        '[data-testid="review-compact-card"]'
+      ) as HTMLElement;
+      expect(card.style.width).toBe('300px');
+      expect(card.querySelector('[data-testid="review-card"]')).toBeTruthy();
+    } finally {
+      mounted.unmount();
+      if (widthDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', widthDescriptor);
+      } else {
+        delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+      }
+      if (offsetDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'offsetParent', offsetDescriptor);
+      } else {
+        delete (HTMLElement.prototype as { offsetParent?: Element | null }).offsetParent;
+      }
+    }
+  });
+
   test('submits a reply through ReviewReply and renders it with a delete control', async () => {
     const mounted = mountReview(TRACKED, {}, { author: 'Grace Hopper' });
     try {

@@ -125,6 +125,8 @@ export const ReviewItemScope = defineComponent({
     entry: { type: Object as PropType<ReviewItemView>, required: true },
     measureKey: String,
     collapsed: Boolean,
+    className: String,
+    testId: String,
     style: { type: Object as PropType<CSSProperties>, default: undefined },
   },
   setup(props, { slots }) {
@@ -147,7 +149,8 @@ export const ReviewItemScope = defineComponent({
       h(
         'div',
         {
-          class: 'docx-review__slot',
+          class: `docx-review__slot${props.className ? ` ${props.className}` : ''}`,
+          ...(props.testId ? { 'data-testid': props.testId } : {}),
           style: props.style,
           ...(props.collapsed ? { 'data-collapsed': '' } : {}),
         },

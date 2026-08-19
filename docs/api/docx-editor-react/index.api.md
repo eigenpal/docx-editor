@@ -56,6 +56,8 @@ import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
+import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
+import { LocaleStrings } from '@docx-editor.dev/i18n';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
@@ -88,6 +90,7 @@ import { TFunction } from '@docx-editor.dev/i18n';
 import { Theme } from '@docx-editor.dev/core/contracts/editor';
 import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
@@ -131,7 +134,7 @@ export const CONTENT_CONTROL_SLOTS: {
 // @public
 export interface ContentControlActionProps extends ContentControlPartProps {
     // (undocumented)
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
 }
 
 // @public
@@ -162,7 +165,7 @@ export interface ContentControlPartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -199,9 +202,20 @@ export interface ContextMenuCommandProps {
     // (undocumented)
     className?: string;
     hidden?: boolean;
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
     labelKey?: string;
     shortcutKey?: string;
+}
+
+// @public (undocumented)
+export interface ContextMenuContextValue {
+    readonly anchor: ContextMenuAnchor | null;
+    readonly clipboardRefusal: string | null;
+    readonly close: (restoreFocus?: boolean) => void;
+    // (undocumented)
+    readonly reportClipboardRefusal: (reason: string) => void;
+    readonly target: HTMLElement | null;
+    readonly tocId: string | null;
 }
 
 // @public
@@ -266,7 +280,7 @@ export interface ContextMenuItemProps {
     disabled?: boolean;
     disabledReason?: string;
     // (undocumented)
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
     label: string;
     // (undocumented)
     onSelect?: () => void;
@@ -283,6 +297,16 @@ export namespace ContextMenuPaste {
 }
 
 // @public
+export const ContextMenuRefreshToc: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuRefreshTocPageNumbers: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
 export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
@@ -294,8 +318,11 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
 
 export { createFontSource }
 
-// @public (undocumented)
+// @public @deprecated (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
+
+// @public (undocumented)
+export const DocumentOutline: react__default.NamedExoticComponent<DocumentOutlineProps>;
 
 export { DocxDocument }
 
@@ -309,6 +336,9 @@ export function DocxEditorAuthorStyle(props: DocxEditorAuthorStyleProps): null;
 export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
     author: string;
 }
+
+// @public
+export type DocxEditorChildren = ReactNode;
 
 // @public
 export function DocxEditorColorByChangeType(): null;
@@ -333,6 +363,9 @@ export interface DocxEditorContentControlNamespace {
 
 // @public
 export interface DocxEditorContentProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    class?: string;
     className?: string;
 }
 
@@ -386,7 +419,7 @@ export interface DocxEditorContextMenuNamespace {
 // @public
 export interface DocxEditorContextMenuProps {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     className?: string;
     disabled?: boolean;
     onOpenChange?: (open: boolean) => void;
@@ -463,7 +496,7 @@ export interface DocxEditorImagePropertiesDialogProps {
     // (undocumented)
     open: boolean;
     // (undocumented)
-    triggerRef?: React.RefObject<HTMLElement | null>;
+    triggerRef?: RefObject<HTMLElement | null>;
 }
 
 // @public
@@ -477,7 +510,7 @@ export interface DocxEditorLoadingComponent {
 
 // @public
 export interface DocxEditorLoadingProps {
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     className?: string;
     overlay?: boolean;
     style?: CSSProperties;
@@ -529,7 +562,7 @@ export interface DocxEditorMenuNamespace {
 // @public
 export interface DocxEditorMenuProps {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     className?: string;
     fileName?: string;
     onOpen?: () => void;
@@ -600,7 +633,7 @@ export interface DocxEditorNavigationNamespace {
 
 // @public
 export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -619,6 +652,15 @@ export interface DocxEditorNotesChromeProps {
 }
 
 // @public
+export function DocxEditorPageNumber(input: DocxEditorPageNumberProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorPageNumberProps {
+    className?: string;
+    style?: CSSProperties;
+}
+
+// @public
 export function DocxEditorPageSetupDialog(input: DocxEditorPageSetupDialogProps): ReactElement | null;
 
 // @public
@@ -633,7 +675,7 @@ export interface DocxEditorPageSetupDialogProps {
 export interface DocxEditorProps {
     // (undocumented)
     author?: string;
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     chrome?: boolean;
     // (undocumented)
     className?: string;
@@ -655,9 +697,9 @@ export interface DocxEditorProps {
     onReady?: (editor: Editor) => void;
     onSave?: () => void;
     onTitleChange?: (title: string) => void;
-    readonly renderTitleBarLeft?: () => ReactNode;
+    readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)
-    readonly renderTitleBarRight?: () => ReactNode;
+    readonly renderTitleBarRight?: () => DocxEditorChildren;
     rulers?: boolean;
     t?: (key: string, params?: Record<string, string | number>) => string;
     title?: string;
@@ -685,11 +727,21 @@ export interface DocxEditorRef {
 export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
 
 // @public
+export interface DocxEditorRootListeners {
+    // (undocumented)
+    onChange?: (change: DocumentChange) => void;
+    // (undocumented)
+    onFontError?: (error: EditorFontError) => void;
+    // (undocumented)
+    onReady?: (editor: Editor) => void;
+}
+
+// @public
 export interface DocxEditorRootProps {
     // (undocumented)
     author?: string;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
@@ -715,7 +767,7 @@ export interface DocxEditorRulerProps {
     unit?: 'inch' | 'cm';
 }
 
-// @public
+// @public @deprecated (undocumented)
 export function DocxEditorShell(input: {
     i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
     isDark?: boolean;
@@ -850,7 +902,7 @@ export interface DocxEditorToolbarNamespace {
 // @public
 export interface DocxEditorToolbarProps {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     className?: string;
     onSave?: () => void;
     overflow?: boolean;
@@ -867,7 +919,8 @@ export function DocxEditorViewport(input: DocxEditorViewportProps): react.JSX.El
 // @public
 export interface DocxEditorViewportProps {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
+    class?: string;
     className?: string;
     // (undocumented)
     style?: CSSProperties;
@@ -915,6 +968,9 @@ export { EditorScope }
 
 export { EditorSnapshot }
 
+// @internal
+export function editorStateActiveSubscriptionCount(): number;
+
 // @public
 export interface EditorValueCommandState<T extends string | number> {
     // (undocumented)
@@ -961,7 +1017,7 @@ export interface FontFamilyPartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
 }
@@ -1027,14 +1083,14 @@ export interface HorizontalRulerProps {
 
 // @public
 export interface HyperLinkActionProps extends HyperLinkPartProps {
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
 }
 
 // @public
 export interface HyperLinkPartProps {
     asChild?: boolean;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     hidden?: boolean;
@@ -1106,6 +1162,18 @@ export namespace ImagePropertiesTrigger {
 }
 
 // @public
+export interface ImagePropertiesTriggerProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+// @public
 export function ImageWrap(input: ImageWrapProps): react.JSX.Element | null;
 
 // @public (undocumented)
@@ -1126,19 +1194,35 @@ export interface IndentUpdate {
     readonly right?: number | null;
 }
 
+// @public
+export function isFieldLink(link: SurfaceHyperlink): boolean;
+
 export { loadFonts }
 
 export { LoadFontsRequest }
 
 export { LoadFontsResult }
 
+export { LOADING_SNAPSHOT }
+
 // @public (undocumented)
 export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 
 // @public (undocumented)
+export interface LocaleProviderProps {
+    // (undocumented)
+    children: DocxEditorChildren;
+    // (undocumented)
+    i18n?: Translations;
+}
+
+// @public @deprecated (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
 
 export { MAX_RESOLVER_FAMILIES }
+
+// @public
+export type MaybeRefOrGetter<T> = T;
 
 // @public
 export interface MenuActionProps {
@@ -1148,13 +1232,13 @@ export interface MenuActionProps {
     hidden?: boolean;
 }
 
-// @public (undocumented)
+// @public @deprecated (undocumented)
 export function MenuBar(): react__default.JSX.Element;
 
 // @public
 export interface MenuGroupProps {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -1186,11 +1270,11 @@ export interface MenuPartComponent {
 
 // @public
 export interface MenuProps {
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     hidden?: boolean;
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
     id: MenuId;
     label?: string;
     labelKey?: string;
@@ -1209,15 +1293,17 @@ export interface MenuReportIssueProps {
 export interface MenuRowProps {
     active?: boolean;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
     disabled?: boolean;
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
     // (undocumented)
     onSelect?: () => void;
+    rowSlot?: string;
     selected?: true;
+    selectHandler?: () => void;
     shortcut?: string;
     slot?: string;
     title?: string;
@@ -1232,7 +1318,7 @@ export interface MenuSeparatorProps {
 // @public (undocumented)
 export interface MenuSubmenuProps {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     labelKey: string;
@@ -1273,7 +1359,7 @@ export function navigationPaneReservation(paneWidth?: number): number;
 // @public
 export interface NavigationPartProps {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -1332,6 +1418,18 @@ export function normalizeImageBytes(bytes: Uint8Array): NormalizedImagePayload;
 // @public (undocumented)
 export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
 
+// @public (undocumented)
+export const OUTLINE_BUTTON_LEFT_OFFSET = 12;
+
+// @public (undocumented)
+export const OUTLINE_BUTTON_RESERVED_SPACE: number;
+
+// @public (undocumented)
+export const OUTLINE_LEFT_OFFSET = 12;
+
+// @public (undocumented)
+export const OUTLINE_RESERVED_SPACE: number;
+
 // @public
 export type OutlineHeading = ReturnType<Editor['getOutline']>[number];
 
@@ -1343,11 +1441,20 @@ export interface OutlineHeadingItem {
 }
 
 // @public
-export function PageIndicator(input: {
+export function PageIndicator(input: PageIndicatorProps): react.JSX.Element;
+
+// @public (undocumented)
+export interface PageIndicatorProps {
+    // (undocumented)
     currentPage: number;
+    // (undocumented)
     totalPages: number;
+    // (undocumented)
     visible: boolean;
-}): react.JSX.Element;
+}
+
+// @public
+export const PageNumberTranslationContext: react.Context<((key: string) => string) | null>;
 
 export { PageSetup }
 
@@ -1375,7 +1482,10 @@ export interface PageSetupUpdate {
 export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): react.JSX.Element;
 
 // @public
-interface PaginatedDocxEditorHandle {
+export type PaginatedDocxEditorExpose = PaginatedDocxEditorHandle;
+
+// @public
+export interface PaginatedDocxEditorHandle {
     // (undocumented)
     focus(): void;
     formatting(): SurfaceFormatting | null;
@@ -1398,8 +1508,6 @@ interface PaginatedDocxEditorHandle {
     // (undocumented)
     undo(): void;
 }
-export { PaginatedDocxEditorHandle as PaginatedDocxEditorExpose }
-export { PaginatedDocxEditorHandle }
 
 // @public (undocumented)
 export interface PaginatedDocxEditorProps {
@@ -1415,7 +1523,7 @@ export interface PaginatedDocxEditorProps {
     readonly source: Uint8Array;
 }
 
-// @public (undocumented)
+// @public @deprecated (undocumented)
 export function PaginatedDocxEditorShell(input: PaginatedDocxEditorShellProps): react.JSX.Element;
 
 // @public (undocumented)
@@ -1434,9 +1542,9 @@ export interface PaginatedDocxEditorShellProps {
     readonly onStateChange?: (state: PaginatedSurfaceState) => void;
     readonly onZoomChange?: (zoom: number) => void;
     readonly ref?: Ref<PaginatedDocxEditorHandle>;
-    readonly renderTitleBarLeft?: () => ReactNode;
+    readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)
-    readonly renderTitleBarRight?: () => ReactNode;
+    readonly renderTitleBarRight?: () => DocxEditorChildren;
     // (undocumented)
     readonly scale?: number;
     // (undocumented)
@@ -1482,7 +1590,7 @@ export interface ParagraphStylePartProps {
     // (undocumented)
     asChild?: boolean;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
 }
@@ -1490,6 +1598,21 @@ export interface ParagraphStylePartProps {
 // @public
 export interface ParagraphStyleProps extends ParagraphStylePartProps {
     hidden?: boolean;
+}
+
+// @public
+export function provideDocxEditor(): never;
+
+// @public
+export interface ProvideDocxEditorResult {
+    // (undocumented)
+    readonly DocxEditorRoot: typeof DocxEditorRoot;
+    // (undocumented)
+    readonly editorRef: ReturnType<typeof useDocxEditor>;
+    // (undocumented)
+    readonly rootListeners: DocxEditorRootListeners;
+    // (undocumented)
+    readonly rootProps: Omit<DocxEditorRootProps, keyof DocxEditorRootListeners>;
 }
 
 export { PX_PER_CM }
@@ -1533,6 +1656,10 @@ export interface ReviewRailRegistry {
     readonly mounted: number;
     // (undocumented)
     readonly register: () => () => void;
+    // (undocumented)
+    readonly registerCommentDraft: (handler: () => void) => () => void;
+    // (undocumented)
+    readonly requestCommentDraft: () => boolean;
 }
 
 export { RevisionAuthorAssignments }
@@ -1552,6 +1679,14 @@ export { RulerUnit }
 
 export { runToolbarCommand }
 
+// @public (undocumented)
+export interface ScopedChromeAnchor {
+    // (undocumented)
+    readonly ref: DocxEditorRefCallback<HTMLDivElement>;
+    // (undocumented)
+    readonly style: CSSProperties;
+}
+
 // @public
 export const SEARCH_DEBOUNCE_MS = 150;
 
@@ -1564,50 +1699,53 @@ export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSX
 // @public (undocumented)
 export interface SlotProps extends HTMLAttributes<HTMLElement> {
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
+    class?: string;
     ref?: Ref<unknown>;
+    // (undocumented)
+    style?: CSSProperties;
 }
 
 // @public
 export interface TableBorderColorNamespace extends TableChromePartComponent {
-    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     readonly docxSlot: 'table.borderColor';
-    readonly Item: (props: TableChromeItemProps) => ReactNode;
-    readonly Main: (props: TableChromePartProps) => ReactNode;
-    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public
 export interface TableBorderStyleNamespace extends TableChromePartComponent {
-    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     readonly docxSlot: 'table.borderStyle';
-    readonly Item: (props: TableChromeItemProps) => ReactNode;
-    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public
 export interface TableBorderTargetNamespace extends TableChromePartComponent {
-    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     readonly docxSlot: 'table.borderTarget';
-    readonly Item: (props: TableChromeItemProps) => ReactNode;
-    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public
 export interface TableBorderWidthNamespace extends TableChromePartComponent {
-    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     readonly docxSlot: 'table.borderWidth';
-    readonly Item: (props: TableChromeItemProps) => ReactNode;
-    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public
 export interface TableCellFillNamespace extends TableChromePartComponent {
-    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     readonly docxSlot: 'table.cellFill';
-    readonly Item: (props: TableChromeItemProps) => ReactNode;
-    readonly Main: (props: TableChromePartProps) => ReactNode;
-    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public
@@ -1617,27 +1755,27 @@ export interface TableChromeItemProps extends TableChromePartProps {
 
 // @public
 export interface TableChromePartComponent extends ToolbarSlotPartComponent {
-    readonly Content: (props: TableChromePartProps) => ReactNode;
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
     readonly docxSlot: TableChromeSlotId;
-    readonly Item: (props: TableChromeItemProps) => ReactNode;
-    readonly Trigger: (props: TableChromePartProps) => ReactNode;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
 }
 
 // @public
 export interface TableChromePartProps {
     asChild?: boolean;
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     className?: string;
     hidden?: boolean;
 }
 
-// @public
+// @public @deprecated (undocumented)
 export function TitleBar(input: TitleBarProps): react__default.JSX.Element;
 
-// @public (undocumented)
+// @public @deprecated (undocumented)
 export function TitleBarRight(input: TitleBarRightProps): react__default.JSX.Element;
 
-// @public
+// @public @deprecated (undocumented)
 export function Toolbar(explicitProps: ToolbarProps): react__default.JSX.Element;
 
 // @public
@@ -1645,13 +1783,14 @@ export interface ToolbarActionProps {
     active?: boolean;
     asChild?: boolean;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
+    class?: string;
     // (undocumented)
     className?: string;
     // (undocumented)
     disabled?: boolean;
     disabledReason?: string;
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
     label: string;
     // (undocumented)
     onSelect?: () => void;
@@ -1665,18 +1804,19 @@ export interface ToolbarAlignmentComponent {
     readonly docxSlot: 'alignment';
 }
 
-// @public
+// @public @deprecated (undocumented)
 export function ToolbarButton(input: ToolbarButtonProps_2): react__default.JSX.Element;
 
 // @public
 export interface ToolbarButtonProps {
     asChild?: boolean;
     // (undocumented)
-    children?: ReactNode;
+    children?: DocxEditorChildren;
+    class?: string;
     // (undocumented)
     className?: string;
     hidden?: boolean;
-    icon?: ReactNode;
+    icon?: DocxEditorChildren;
     slot: ChromeSlotId;
 }
 
@@ -1684,8 +1824,23 @@ export { ToolbarCommandState }
 
 export { toolbarCommandState }
 
-// @public
+// @public (undocumented)
+export const ToolbarContext: react.Context<ToolbarContextValue>;
+
+// @public (undocumented)
+export interface ToolbarContextValue {
+    readonly onSave: (() => void) | undefined;
+    // (undocumented)
+    readonly t: ToolbarTranslate | undefined;
+}
+
+// @public @deprecated (undocumented)
 export function ToolbarGroup(input: ToolbarGroupProps): react__default.JSX.Element;
+
+// @public (undocumented)
+export const ToolbarImageProperties: typeof ImagePropertiesTrigger & {
+    docxSlot: "image.properties";
+};
 
 // @public (undocumented)
 export interface ToolbarPartComponent {
@@ -1698,17 +1853,17 @@ export interface ToolbarPartComponent {
 // @public
 export type ToolbarPartProps = Omit<ToolbarButtonProps, 'slot'>;
 
-// @public
+// @public @deprecated
 export interface ToolbarProps {
     canRedo?: boolean;
     canUndo?: boolean;
-    children?: ReactNode;
+    children?: DocxEditorChildren;
     className?: string;
     currentFormatting?: SelectionFormatting;
     disabled?: boolean;
     documentFonts?: readonly FontOption[];
     documentStyles?: readonly DocumentStyleSummary[];
-    editorRef?: react__default.RefObject<HTMLElement>;
+    editorRef?: RefObject<HTMLElement>;
     enableShortcuts?: boolean;
     fontFamilies?: ReadonlyArray<string | FontOption>;
     imageContext?: {
@@ -1773,6 +1928,7 @@ export interface ToolbarProps {
 
 // @public
 export interface ToolbarSeparatorProps {
+    class?: string;
     // (undocumented)
     className?: string;
 }
@@ -1787,6 +1943,7 @@ export interface ToolbarSlotPartComponent {
 
 // @public
 export interface ToolbarSlotPartProps {
+    class?: string;
     // (undocumented)
     className?: string;
     hidden?: boolean;
@@ -1794,6 +1951,8 @@ export interface ToolbarSlotPartProps {
 
 // @public
 export type ToolbarTranslate = (key: string) => string;
+
+export { TranslationKey }
 
 // @public
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
@@ -2042,11 +2201,27 @@ export function useReviewAuthors(): readonly ReviewAuthorInfo[];
 export function useReviewGutter(): ReviewGutter;
 
 // @public
+export function useScopeClassName(): '' | 'docx-editor ';
+
+// @public
+export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: AnchorPlacement): ScopedChromeAnchor;
+
+// @public
 export function useTableBorderTargetLabel(): string;
+
+// @public
+export function useToolbarContext(): ToolbarContextValue;
+
+// @public
+export function useToolbarLabel(): (key: string) => string;
+
+// @public
+export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: string) => string;
 
 // @public (undocumented)
 export function useTranslation(): {
     t: TFunction;
+    catalogue: LocaleStrings;
 };
 
 // @public
@@ -2074,8 +2249,8 @@ export interface UseZoomResult {
     readonly zoomOut: () => void;
 }
 
-// @public
-export const VERSION = "0.0.2";
+// @public (undocumented)
+export const VERSION: string;
 
 // @public (undocumented)
 export function VerticalRuler(input: VerticalRulerProps): react__default.ReactElement;
