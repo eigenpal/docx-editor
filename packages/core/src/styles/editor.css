@@ -5295,7 +5295,15 @@ a.docx-hyperlink:focus-visible {
    the rail read as eight competing highlights. */
 .docx-review__card[data-active] {
   box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
-  border-color: var(--doc-border-strong, #c8ccd2);
+  /* THREE SIDES, not `border-color`. The leading edge carries the author's colour, and the
+     shorthand overwrote it — the open card was the one place a reader could not tell whose
+     change they were deciding on. */
+  border-top-color: var(--doc-border-strong, #c8ccd2);
+  border-right-color: var(--doc-border-strong, #c8ccd2);
+  border-bottom-color: var(--doc-border-strong, #c8ccd2);
+  /* The faintest wash of the chrome's own accent, the same one the toolbar uses for a
+     pressed control, so "open" reads as selection rather than as a fourth author colour. */
+  background: color-mix(in srgb, var(--doc-primary-light, #e8f0fe) 45%, var(--doc-surface, #fff));
 }
 
 .docx-review__card[data-resolved] {
