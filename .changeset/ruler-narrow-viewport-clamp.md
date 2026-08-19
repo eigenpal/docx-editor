@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': patch
 ---
 
-Fix the horizontal ruler drifting off the page on narrow viewports: the ruler now clamps to the page's left edge instead of overflowing on both sides.
+Fix ruler behavior on narrow viewports: the horizontal ruler now clamps to the page's left edge instead of overflowing on both sides, and the vertical ruler hides while the page is wider than the viewport instead of scrolling out of view.

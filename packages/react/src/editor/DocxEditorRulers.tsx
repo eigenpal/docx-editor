@@ -16,6 +16,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import type { RulerIndent } from '@docx-editor.dev/core/editor';
 import { HorizontalRuler, type RulerPageSetup } from '../components/ui/HorizontalRuler';
 import { VerticalRuler } from '../components/ui/VerticalRuler';
+import { twipsToPixels } from '../lib/units';
 import { ReviewRailContext, useDocxEditor } from './context';
 // A ruler MEASURES the page, and while the document is absent there is no page — the
 // primitive fell back to drawing default Letter ticks over a document that was not
@@ -153,6 +154,31 @@ function useIndentDrag(): IndentDrag {
   );
 }
 
+/**
+ * The scroll container's client width, kept live by a ResizeObserver.
+ *
+ * `null` while no viewport is registered — a bare composition without
+ * `DocxEditor.Viewport` gets no measurement and must not act on one.
+ */
+function useViewportClientWidth(): number | null {
+  const viewport = useNavigationViewportElement();
+  const [width, setWidth] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!viewport) {
+      setWidth(null);
+      return undefined;
+    }
+    const sync = () => setWidth(viewport.clientWidth);
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [viewport]);
+
+  return width;
+}
+
 /** Horizontal viewport movement shared by the painted page and the ruler above it. */
 function useViewportScrollLeft(): number {
   const viewport = useNavigationViewportElement();
@@ -269,7 +295,11 @@ const REVIEW_MARKERS_GUTTER = 44;
  * when the engine supports page-setup writes, committing one undoable step on release.
  *
  * Renders nothing while the editor holds no document — see
- * {@link selectDocumentAbsent}.
+ * {@link selectDocumentAbsent} — and nothing while the page is wider than the
+ * viewport: the ruler rides the scroller at content x=0, so a horizontal scroll
+ * would carry it out of view, and pinning it instead would paint ticks over page
+ * text. Word's web peers drop it on cramped viewports; so does this part, and it
+ * returns as soon as the page fits again.
  *
  * @public
  */
@@ -278,7 +308,18 @@ export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactEleme
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
+  // The same reservations the scroller pads by: what is left after them is the room the
+  // page actually has, so ruler and page agree about "cramped" at every pane state.
+  const shift = useNavigationShift();
+  const reserved = useReviewGutter();
+  const viewportWidth = useViewportClientWidth();
   if (documentAbsent) return null;
+  // `> 0` guards unlaid-out environments (a hidden host, DOM test doubles), which report
+  // a zero width that means "unmeasured", not "no room".
+  if (viewportWidth !== null && viewportWidth > 0 && pageSetup) {
+    const pageWidthPx = twipsToPixels(pageSetup.pageWidthTwips) * zoom;
+    if (pageWidthPx > viewportWidth - shift - reserved) return null;
+  }
   return (
     <VerticalRuler
       pageSetup={previewed(pageSetup, pending)}
