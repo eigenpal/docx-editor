@@ -831,7 +831,7 @@ function applyRevisionPresentation(
     element.classList.add('docx-revision', `docx-revision-${attribution.kind}`);
     element.dataset.revisionKind = attribution.kind;
     element.dataset.revisionId = attribution.id;
-    element.dataset.reviewAuthor = attribution.author;
+    if (attribution.author !== '') element.dataset.reviewAuthor = attribution.author;
     if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
     // The author's ramp slot, as a CSS hook: `[data-review-author-slot='2']` restyles one
     // reviewer's changes without the host knowing the name. Only under author colouring,
@@ -899,7 +899,7 @@ function applyRevisionPresentation(
   element.classList.add('docx-revision', 'docx-revision-format');
   element.dataset.revisionKind = 'format';
   element.dataset.revisionId = format!.id;
-  element.dataset.reviewAuthor = format!.author;
+  if (format!.author !== '') element.dataset.reviewAuthor = format!.author;
   if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
   // A format revision has an AUTHOR like any other, so the per-author hooks belong here
   // too — a host rule scoped to a reviewer's slot or class would otherwise skip what can be
@@ -914,6 +914,12 @@ function applyRevisionPresentation(
     const tokens = colors.classTokens.get(format!.author);
     if (tokens) for (let i = 0; i < tokens.length; i += 1) element.classList.add(tokens[i]!);
     if (formatStyle?.color !== undefined) element.style.color = formatStyle.color;
+    // The wash too, as the span branch applies it. Declaring `background` for an author and
+    // seeing it on their insertions but not on their property changes is not a rule anyone
+    // could infer.
+    if (formatStyle?.background !== undefined) {
+      element.style.backgroundColor = formatStyle.background;
+    }
   }
 }
 
@@ -946,7 +952,7 @@ function paintParagraphMark(
   glyph.contentEditable = 'false';
   glyph.dataset.revisionKind = shown.kind;
   glyph.dataset.revisionId = shown.id;
-  glyph.dataset.reviewAuthor = shown.author;
+  if (shown.author !== '') glyph.dataset.reviewAuthor = shown.author;
   // Always, not only for a pair: a consumer reading `data-revision-ids` should not have to
   // fall back to `data-revision-id` for the ordinary case. Kinds ride alongside, because the
   // ids alone cannot say which decision each one is.

@@ -164,9 +164,14 @@ describe('the comment band carries its author', () => {
     const band = view.container.querySelector<HTMLElement>(
       '.docx-comment-band[data-review-author]'
     );
-    // Nothing inline paints the band. A host opting in writes the rule; the engine does not.
-    expect(band!.style.background).toBe('');
-    expect(band!.style.backgroundColor).toBe('');
+    // Geometry aside, the band's ONLY inline property is the author variable. An engine that
+    // started tinting by author would write a paint property here beside it; the opt-in this
+    // documents is a stylesheet rule, which writes nothing inline at all.
+    const GEOMETRY = new Set(['position', 'left', 'top', 'width', 'height']);
+    const inline = Array.from({ length: band!.style.length }, (_, i) => band!.style.item(i));
+    expect(inline.filter((name) => !GEOMETRY.has(name))).toEqual(['--doc-review-author-current']);
+    // And the class stays the shared one: no per-author class the engine invented.
+    expect(band!.className).toBe('docx-comment-band');
   });
 
   test('a host declaration reaches the band, not only the card', async () => {

@@ -40,6 +40,12 @@ export interface RevisionStyleRegistry {
 export function createRevisionStyleRegistry(): RevisionStyleRegistry {
   const schemes = new Set<symbol>();
   const entries = new Map<symbol, { author: string; style: RevisionAuthorStyle }>();
+  // MOUNT ORDER, held apart from the Map. React runs a CHANGED declaration as
+  // cleanup-then-effect, so `unregister` + `register` would move that entry to the end of a
+  // Map and promote it above a later duplicate — editing the first of two declarations for
+  // one author flipped which one won. An id keeps the rank it was first given.
+  const ranks = new Map<symbol, number>();
+  let nextRank = 0;
   let editor: DocxEditorInstance | null = null;
   let overriding = false;
 
@@ -50,8 +56,9 @@ export function createRevisionStyleRegistry(): RevisionStyleRegistry {
     // also carries file-derived names elsewhere — a null prototype keeps a name like
     // `__proto__` an ordinary key instead of a silent no-op.
     const authors: Record<string, RevisionAuthorStyle> = Object.create(null);
-    // Later mounts win: the Map iterates in registration order.
-    for (const { author, style } of entries.values()) authors[author] = style;
+    // Later mounts win, by first-registration rank rather than by Map order — see `ranks`.
+    const ordered = [...entries].sort((a, b) => (ranks.get(a[0]) ?? 0) - (ranks.get(b[0]) ?? 0));
+    for (const [, { author, style }] of ordered) authors[author] = style;
     // Authors without a declaration take the ramp — the engine's default — unless a
     // `<ColorByChangeType>` is mounted to put them back on the kind colours, which is how
     // "highlight these reviewers, leave everyone else green and red" is composed.
@@ -69,7 +76,7 @@ export function createRevisionStyleRegistry(): RevisionStyleRegistry {
     const authors = Object.entries(styles.authors)
       .map(([author, style]) => `${author}\u0000${JSON.stringify(style)}`)
       .sort();
-    return `${styles.others ?? 'kind'}${authors.join('')}`;
+    return `${styles.others ?? 'kind'}\u0001${authors.join('\u0001')}`;
   }
 
   function flush(): void {
@@ -118,6 +125,7 @@ export function createRevisionStyleRegistry(): RevisionStyleRegistry {
       apply();
     },
     register(id, author, style) {
+      if (!ranks.has(id)) ranks.set(id, nextRank++);
       entries.set(id, { author, style });
       apply();
     },

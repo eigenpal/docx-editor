@@ -31,10 +31,19 @@ export function authorAccent(info: ReviewAuthorInfo | undefined, fallbackSlot: n
   return info?.color ?? `var(--doc-review-author-${fallbackSlot % AUTHOR_SLOTS})`;
 }
 
+/**
+ * The card's author variable, or nothing for a card that has no author.
+ *
+ * A custom-node card belongs to no person, and giving it slot 0's colour drew it in the
+ * FIRST reviewer's ink — beside `data-review-author` attributes correctly left off, which
+ * made the leading edge say something the attributes denied.
+ */
 export function authorCardStyle(
+  author: string | undefined,
   info: ReviewAuthorInfo | undefined,
   fallbackSlot: number
 ): CSSProperties {
+  if (!author) return {};
   return { '--doc-review-author-current': authorAccent(info, fallbackSlot) } as CSSProperties;
 }
 

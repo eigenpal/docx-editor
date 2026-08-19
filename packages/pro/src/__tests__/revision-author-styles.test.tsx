@@ -229,9 +229,9 @@ describe('revisionStyles reaches the painted document', () => {
   });
 
   test('a COMMENT-only author still gets their declared colour and avatar', async () => {
-    // The roster reads the document's REVISIONS, so an author who only commented is not in
-    // it. Their card must still honour the style declared for them, or "style this
-    // reviewer" silently does nothing for the reviewers who only leave comments.
+    // The roster covers comment authors as well as revision authors, so this rides the
+    // ordinary path rather than the rail's fallback. What it pins is the outcome either way:
+    // "style this reviewer" must not silently do nothing for someone who only comments.
     let instance: DocxEditorInstance | null = null;
     const view = render(
       <DocxEditorRoot

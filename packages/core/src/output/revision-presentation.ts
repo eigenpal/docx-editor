@@ -95,9 +95,22 @@ export type RevisionStyles = 'kind' | 'author' | RevisionAuthorAssignments;
 export interface ReviewAuthorInfo {
   /** The `w:author` string, exactly as the file carries it. */
   readonly author: string;
-  /** The ramp slot, by order of first appearance in the document. */
+  /**
+   * Rank by order of first appearance — an UNBOUNDED index, not a ramp slot.
+   *
+   * The ramp defines {@link REVIEW_AUTHOR_SLOTS} colours and every DOM hook wraps into it,
+   * so the ninth author ranks 8 here and carries `data-review-author-slot="0"`. Building a
+   * selector from this value needs the same wrap: `slot % 8`.
+   */
   readonly slot: number;
-  /** Resolved ink colour: the host's, or the slot's `--doc-review-author-N` reference. */
+  /**
+   * The colour this author is DRAWN IN by the review chrome — their declared colour, or
+   * their ramp slot's token.
+   *
+   * Not necessarily what the document paints. `'kind'`, and `others: 'kind'` for an author
+   * with no declaration, colour the painted text by insertion/deletion instead, while the
+   * cards keep the per-author accent this reports.
+   */
   readonly color: string;
   /** The host-supplied style, normalised; absent when the author rides the ramp. */
   readonly style?: RevisionAuthorStyle;
@@ -410,9 +423,11 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
         for (const property of span.props) {
           if (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') continue;
           const author = property.attributes?.author;
-          // `formatRevisionOf` defaults a missing `@w:author` to the empty string, and
-          // paint looks the slot up by that same key — so record it, or the span lands on
-          // slot 0 and wears the first author's colour.
+          // `formatRevisionOf` defaults a missing `@w:author` to the empty string, which
+          // `see` then drops: an anonymous change is not a person and must not take a ramp
+          // slot from one. It paints in slot 0's colour as any unknown author does — the
+          // alternative, a roster entry with no name in it, is worse everywhere the roster
+          // is read.
           see(author ?? '');
           break;
         }

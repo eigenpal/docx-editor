@@ -200,10 +200,13 @@ export interface DocxEditorInstance extends Editor {
    */
   fontMeasurement(): FontMeasurementState;
   /**
-   * Every author the review surface DRAWS, in Word's slot order, with the colour and style
-   * each resolves to under the current {@link DocxEditorConfig.revisionStyles}. The
-   * discovery surface a legend or colour picker builds on — authors depend on the loaded
-   * file, so they cannot be known at configuration time.
+   * Every author the review surface DRAWS, in Word's slot order, with the colour the review
+   * chrome draws them in. The discovery surface a legend or colour picker builds on —
+   * authors depend on the loaded file, so they cannot be known at configuration time.
+   *
+   * The colour is the author's, not the document's: under `'kind'` the painted text goes to
+   * the insertion/deletion colours while the cards keep these accents, so a legend built
+   * from this describes the rail rather than the page.
    *
    * BOTH HALVES OF REVIEW. Authors of tracked changes come first, numbered by where their
    * first change appears; authors who only commented follow. One person therefore draws in
@@ -218,9 +221,12 @@ export interface DocxEditorInstance extends Editor {
    */
   getReviewAuthors(): readonly ReviewAuthorInfo[];
   /**
-   * The style declared for one author, whether or not the DOCUMENT carries a revision by
-   * them — so review chrome can draw a COMMENT-only author's card in their colour, which
-   * {@link DocxEditorInstance.getReviewAuthors} (a read of the document) cannot answer.
+   * The style declared for one author, whether or not the SURFACE has published them yet —
+   * so review chrome can draw a card the rail is holding before the roster catches up.
+   *
+   * {@link DocxEditorInstance.getReviewAuthors} answers for every author of a tracked
+   * change or a comment, so this is a narrow fallback rather than the way to reach a
+   * commenter.
    *
    * @internal The seam `@docx-editor.dev/pro`'s review rail resolves those authors
    * through. A consumer reads `useReviewAuthor` (pro) or `useReviewAuthors` (react)

@@ -14,11 +14,15 @@ const EMPTY: readonly ReviewAuthorInfo[] = [];
 const NOOP_UNSUBSCRIBE = () => {};
 
 /**
- * Every author whose revision the CURRENT VIEW renders, in Word's slot order, with the
- * colour and style each resolves to. `[]` before an editor or document exists.
+ * Every author the review surface DRAWS, in Word's slot order, with the colour and style
+ * each resolves to. `[]` before an editor or document exists.
+ *
+ * Both halves of review: authors of tracked changes first, numbered by where their first
+ * change appears, then authors who only commented. One person is one colour across the two.
  *
  * A read of the rendered projection, not of the package: a resolved view hides the
- * revisions it has resolved away, so an author whose only change is hidden is not listed.
+ * revisions it has resolved away, so an author whose only change is hidden there is listed
+ * only if they also commented.
  *
  * The array is reference-stable between changes (the facade caches per layout and colour
  * state), so it is safe as a dependency and under `useSyncExternalStore`.

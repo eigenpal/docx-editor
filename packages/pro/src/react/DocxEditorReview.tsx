@@ -1368,12 +1368,19 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
                 className="docx-review__card"
                 data-testid="review-balloon-card"
                 data-kind={served.revisionKind ?? 'revision'}
-                data-review-author={served.author}
-                data-review-author-slot={authorSlot(
-                  authorInfo.get(served.author),
-                  authorSlots.get(served.author) ?? 0
-                )}
+                // Gated, as the card and the fallback balloon are: an anonymous change would
+                // otherwise carry `data-review-author=""` and match a host's `[data-review-author]`.
+                {...(served.author
+                  ? {
+                      'data-review-author': served.author,
+                      'data-review-author-slot': authorSlot(
+                        authorInfo.get(served.author),
+                        authorSlots.get(served.author) ?? 0
+                      ),
+                    }
+                  : {})}
                 style={authorCardStyle(
+                  served.author,
                   authorInfo.get(served.author),
                   authorSlots.get(served.author) ?? 0
                 )}
@@ -1410,6 +1417,7 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
                   }
                 : {})}
               style={authorCardStyle(
+                anchor.author,
                 authorInfo.get(anchor.author),
                 authorSlots.get(anchor.author) ?? 0
               )}
@@ -1515,7 +1523,7 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     // The author colour is a CSS variable rather than a class, so a host restyling the card
     // keeps the per-author identity without re-deriving the slot order. It is the ONLY
     // styling the packaged card takes from a declaration.
-    style: authorCardStyle(authorInfo.get(entry.author), slot),
+    style: authorCardStyle(entry.author, authorInfo.get(entry.author), slot),
     tabIndex: 0,
     // `button`, not `group`: it has one action and assistive tech has to announce it. A
     // `group` with no accessible name is commonly dropped from the tree entirely.
