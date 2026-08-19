@@ -793,6 +793,7 @@ export interface DocxEditorInstance extends Editor {
     detach(): void;
     fontMeasurement(): FontMeasurementState;
     getRevisionAuthors(): readonly RevisionAuthor[];
+    // @internal
     getRevisionAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;

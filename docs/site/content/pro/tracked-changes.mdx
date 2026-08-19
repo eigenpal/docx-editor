@@ -269,7 +269,12 @@ function ReviewerColors() {
 
 Two related reads. `useReview().items` carries an `author` on every card, including people
 who only left comments. `getRevisionAuthors()` on the editor instance is the same read
-without React, for a headless host.
+without React.
+
+Outside React there are no declarations to mount, so a headless or Vue host configures the
+same thing directly: pass `revisionStyles` when the editor is created, and call
+`setRevisionStyles` to change it afterwards. Both take the shapes described above — a
+scheme, or per-author assignments.
 
 ### Add custom avatars
 

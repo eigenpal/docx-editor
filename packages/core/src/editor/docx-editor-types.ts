@@ -216,6 +216,10 @@ export interface DocxEditorInstance extends Editor {
    * The style declared for one author, whether or not the DOCUMENT carries a revision by
    * them — so review chrome can draw a COMMENT-only author's card in their colour, which
    * {@link DocxEditorInstance.getRevisionAuthors} (a read of the document) cannot answer.
+   *
+   * @internal The seam `@docx-editor.dev/pro`'s review rail resolves those authors
+   * through. A consumer reads `useReviewAuthor` (pro) or `useRevisionAuthors` (react)
+   * instead; nothing here answers a question those two do not.
    */
   getRevisionAuthorStyle(author: string): RevisionAuthorStyle | undefined;
   /**
