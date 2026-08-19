@@ -269,7 +269,7 @@ function buildMenuCompound(slot: TableChromeSlotId, classBase: string, defaultLa
       const ctx = inject(CtxKey)!;
       const label = useToolbarLabel();
       const panelRef = ref<HTMLDivElement | null>(null);
-      useTableMenuKeyboard(ctx.open && ctx.enabled, ctx.setOpen, panelRef, ctx.triggerRef);
+      useTableMenuKeyboard(() => ctx.open && ctx.enabled, ctx.setOpen, panelRef, ctx.triggerRef);
       return () => {
         if (!ctx.open || !ctx.enabled) return null;
         const control = chromeControlForSlot(slot);
@@ -685,7 +685,7 @@ function buildColorSplitCompound(
       const ctx = inject(CtxKey)!;
       const label = useToolbarLabel();
       const dialogRef = ref<HTMLDivElement | null>(null);
-      useTableDialogKeyboard(ctx.open && ctx.enabled, ctx.setOpen, dialogRef, ctx.triggerRef);
+      useTableDialogKeyboard(() => ctx.open && ctx.enabled, ctx.setOpen, dialogRef, ctx.triggerRef);
       return () => {
         if (!ctx.open || !ctx.enabled) return null;
         const text = label(defaultLabelKey);

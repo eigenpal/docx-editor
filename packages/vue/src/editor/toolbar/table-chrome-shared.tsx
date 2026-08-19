@@ -1,4 +1,4 @@
-import { h, watch, type Ref, type VNode } from 'vue';
+import { h, toValue, watch, type MaybeRefOrGetter, type Ref, type VNode } from 'vue';
 import { editorScopeFor } from '../editor-scope';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -68,13 +68,13 @@ const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"], [role="me
 
 /** Keyboard contract for role=menu popups: arrows, Home/End, Enter/Space, Escape. */
 export function useTableMenuKeyboard(
-  open: boolean,
+  open: MaybeRefOrGetter<boolean>,
   setOpen: (open: boolean) => void,
   panelRef: Ref<HTMLElement | null>,
   triggerRef: Ref<HTMLElement | null>
 ): void {
   watch(
-    () => open,
+    () => toValue(open),
     (isOpen, _, onCleanup) => {
       if (!isOpen) return;
       const panel = panelRef.value;
@@ -135,19 +135,20 @@ export function useTableMenuKeyboard(
 
       panel.addEventListener('keydown', onKeyDown);
       onCleanup(() => panel.removeEventListener('keydown', onKeyDown));
-    }
+    },
+    { flush: 'post' }
   );
 }
 
 /** Escape closes a role=dialog popup and restores trigger focus; Enter/Space activate focused swatches. */
 export function useTableDialogKeyboard(
-  open: boolean,
+  open: MaybeRefOrGetter<boolean>,
   setOpen: (open: boolean) => void,
   dialogRef: Ref<HTMLElement | null>,
   triggerRef: Ref<HTMLElement | null>
 ): void {
   watch(
-    () => open,
+    () => toValue(open),
     (isOpen, _, onCleanup) => {
       if (!isOpen) return;
       const dialog = dialogRef.value;
@@ -181,6 +182,7 @@ export function useTableDialogKeyboard(
       };
       dialog.addEventListener('keydown', onKeyDown);
       onCleanup(() => dialog.removeEventListener('keydown', onKeyDown));
-    }
+    },
+    { flush: 'post' }
   );
 }

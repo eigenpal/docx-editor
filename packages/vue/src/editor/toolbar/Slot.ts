@@ -1,4 +1,15 @@
-import { cloneVNode, defineComponent, mergeProps, type VNode } from 'vue';
+import {
+  cloneVNode,
+  defineComponent,
+  getCurrentInstance,
+  isRef,
+  mergeProps,
+  onBeforeUnmount,
+  onMounted,
+  onUpdated,
+  type ComponentPublicInstance,
+  type VNode,
+} from 'vue';
 import type { CSSProperties } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { cn } from '../../lib/utils';
@@ -47,12 +58,37 @@ export const Slot = defineComponent({
   name: 'DocxSlot',
   inheritAttrs: false,
   setup(_, { attrs, slots }) {
+    const instance = getCurrentInstance();
+    let renderedElement: Element | null = null;
+    const writeForwardedRef = (value: Element | null): void => {
+      const componentRef = instance?.vnode.ref;
+      const normalizedRef = Array.isArray(componentRef) ? componentRef[0] : componentRef;
+      const forwardedRef = normalizedRef?.r;
+      if (typeof forwardedRef === 'function') forwardedRef(value, {});
+      else if (isRef(forwardedRef)) forwardedRef.value = value;
+    };
+    const syncForwardedRef = () => writeForwardedRef(renderedElement);
+    onMounted(syncForwardedRef);
+    onUpdated(syncForwardedRef);
+    onBeforeUnmount(() => writeForwardedRef(null));
+
     return () => {
       const children = slots.default?.() ?? [];
       if (children.length !== 1) return null;
       const child = children[0] as VNode;
       if (!child || typeof child !== 'object') return null;
-      return cloneVNode(child, mergeSlotProps(attrs as AnyProps, (child.props ?? {}) as AnyProps));
+      const merged = mergeSlotProps(attrs as AnyProps, (child.props ?? {}) as AnyProps);
+      return cloneVNode(
+        child,
+        {
+          ...merged,
+          ref: (value: Element | ComponentPublicInstance | null) => {
+            renderedElement =
+              value instanceof Element ? value : value?.$el instanceof Element ? value.$el : null;
+          },
+        },
+        true
+      );
     };
   },
 });

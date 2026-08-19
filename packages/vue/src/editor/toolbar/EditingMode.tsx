@@ -72,12 +72,16 @@ export const ToolbarEditingMode = defineComponent({
     const rootRef = ref<HTMLDivElement | null>(null);
     const menuRef = ref<HTMLDivElement | null>(null);
 
-    watch(open, (isOpen) => {
-      if (!isOpen) return;
-      const items = menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
-      const checked = menuRef.value?.querySelector<HTMLButtonElement>('[aria-checked="true"]');
-      (checked ?? items?.[0] ?? undefined)?.focus();
-    });
+    watch(
+      open,
+      (isOpen) => {
+        if (!isOpen) return;
+        const items = menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
+        const checked = menuRef.value?.querySelector<HTMLButtonElement>('[aria-checked="true"]');
+        (checked ?? items?.[0] ?? undefined)?.focus();
+      },
+      { flush: 'post' }
+    );
 
     watch(open, (isOpen, _, onCleanup) => {
       if (!isOpen) return;

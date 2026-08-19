@@ -136,12 +136,16 @@ export const ToolbarOverflow = defineComponent({
       onCleanup(() => document.removeEventListener('mousedown', onPointerDown, true));
     });
 
-    watch(open, (isOpen) => {
-      if (!isOpen || !focusOnOpen.value) return;
-      focusOnOpen.value = false;
-      const panel = panelRef.value;
-      if (panel) focusFirstInteractive(panel);
-    });
+    watch(
+      open,
+      (isOpen) => {
+        if (!isOpen || !focusOnOpen.value) return;
+        focusOnOpen.value = false;
+        const panel = panelRef.value;
+        if (panel) focusFirstInteractive(panel);
+      },
+      { flush: 'post' }
+    );
 
     return () =>
       h(

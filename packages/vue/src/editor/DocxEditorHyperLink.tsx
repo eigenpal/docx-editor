@@ -1,6 +1,7 @@
 import {
   defineComponent,
   Fragment,
+  onMounted,
   ref,
   watch,
   type CSSProperties,
@@ -234,13 +235,17 @@ const HyperLinkFields = defineComponent({
     const urlRef = ref<HTMLInputElement | null>(null);
     const textId = useStableDocxId('hyperlink-text');
     const urlId = useStableDocxId('hyperlink-url');
+    const focusUrl = () => {
+      urlRef.value?.focus({ preventScroll: true });
+      urlRef.value?.select();
+    };
 
+    onMounted(focusUrl);
     watch(
       () => popup.state.value.mode,
       (mode) => {
         if (mode !== 'editing') return;
-        urlRef.value?.focus({ preventScroll: true });
-        urlRef.value?.select();
+        focusUrl();
       },
       { flush: 'post' }
     );
