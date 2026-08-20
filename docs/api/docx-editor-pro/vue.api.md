@@ -94,10 +94,10 @@ export const DocxEditorReview: {
     }>> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
-        structural: boolean;
         filter: (item: ReviewItemView) => boolean;
         hidden: boolean;
         t: (key: string, params?: Record<string, string | number>) => string;
+        structural: boolean;
         furniture: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }> | VNode<vue.RendererNode, vue.RendererElement, {
@@ -163,10 +163,10 @@ export const DocxEditorReview: {
     }>> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | null, {}, {}, {}, {
-        structural: boolean;
         filter: (item: ReviewItemView) => boolean;
         hidden: boolean;
         t: (key: string, params?: Record<string, string | number>) => string;
+        structural: boolean;
         furniture: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }> | VNode<vue.RendererNode, vue.RendererElement, {
@@ -229,10 +229,10 @@ export const DocxEditorReview: {
 }>> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
-    structural: boolean;
     filter: (item: ReviewItemView) => boolean;
     hidden: boolean;
     t: (key: string, params?: Record<string, string | number>) => string;
+    structural: boolean;
     furniture: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | VNode<vue.RendererNode, vue.RendererElement, {
@@ -337,7 +337,9 @@ export const DocxEditorReview: {
         className: StringConstructor;
         hidden: BooleanConstructor;
         asChild: BooleanConstructor;
-    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
         className: StringConstructor;
         hidden: BooleanConstructor;
         asChild: BooleanConstructor;
@@ -579,13 +581,13 @@ export const DocxEditorReview: {
     }>> & Readonly<{}>, {
         hidden: boolean;
         offset: number;
-        icon: VNode<vue.RendererNode, vue.RendererElement, {
-            [key: string]: any;
-        }> | ((item: ReviewItemView) => VNode | null | undefined);
         window: {
             top: number;
             bottom: number;
         } | null;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }> | ((item: ReviewItemView) => VNode | null | undefined);
         scale: number;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     AddComment: vue.DefineComponent<vue.ExtractPropTypes<{

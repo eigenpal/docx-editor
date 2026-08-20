@@ -790,6 +790,8 @@ export interface DocxEditorInstance extends Editor {
     attach(el: HTMLElement): void;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
+    // @internal
+    getConfiguredAuthor(): string | null;
     getReviewAuthors(): readonly ReviewAuthorInfo[];
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
