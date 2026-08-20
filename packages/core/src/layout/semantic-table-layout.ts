@@ -280,6 +280,11 @@ export interface TableFlowDeps {
   readonly pageExclusionZones?: () => readonly import('./drawing-exclusion.ts').ExclusionZone[];
   /** Document-order index for filtering wrap zones to earlier anchors only. */
   readonly paragraphOrderIndex?: (paragraphId: string) => number | undefined;
+  /**
+   * Reports every break-cache key a cell paragraph is cached under, so the host's
+   * cache retention can name a table's cell entries without laying the table out.
+   */
+  readonly onCellBreakKey?: (key: string) => void;
 }
 
 /**
@@ -637,6 +642,7 @@ function placeCellParagraph(
         : {}),
     ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
   });
+  if (deps.cache) deps.onCellBreakKey?.(key);
   const lines = breakParagraph(
     paragraph,
     paragraphId,

@@ -168,32 +168,53 @@ describe('the cache key covers every input that can change a break (task 9.2)', 
 });
 
 describe('the cache is bounded and self-pruning (task 9.2)', () => {
-  test('it evicts least-recently-used entries past its limit', () => {
+  test('it evicts least-recently-used entries from PAST generations over its limit', () => {
     const cache = createParagraphLayoutCache<string>({ maxEntries: 2 });
     cache.set('a', '1');
     cache.set('b', '2');
-    cache.get('a'); // 'a' is now the most recent, so 'b' is next to go
+    // A retain starts the next generation; 'a' and 'b' now belong to the previous one.
+    cache.retain(new Set<string>());
     cache.set('c', '3');
-    expect(cache.get('a')).toBe('1');
-    expect(cache.get('b')).toBeUndefined();
+    expect(cache.get('a')).toBeUndefined();
+    expect(cache.get('b')).toBe('2');
     expect(cache.get('c')).toBe('3');
   });
 
-  test('a deleted paragraph does not linger in the cache', () => {
+  test('the limit never evicts the current working set — a large document outgrows it', () => {
+    // Every entry belongs to the current generation while a pass is still running, so a
+    // document larger than the cap keeps all of its breaks: evicting them made every full
+    // pass on a large document re-measure the whole document.
+    const cache = createParagraphLayoutCache<string>({ maxEntries: 2 });
+    cache.set('a', '1');
+    cache.set('b', '2');
+    cache.set('c', '3');
+    expect(cache.get('a')).toBe('1');
+    expect(cache.get('b')).toBe('2');
+    expect(cache.get('c')).toBe('3');
+  });
+
+  test('a deleted paragraph ages out of the cache within the retention window', () => {
     const cache = createParagraphLayoutCache<never>();
     geometryOf(load(MANY), 1, cache);
     const full = cache.stats.size;
-    geometryOf(load(paragraph('only one left')), 2, cache);
+    // The drop is deliberately NOT immediate: keys a pass cannot enumerate up front
+    // (notes, textbox stories) live on the same grace period, and the retention sweep
+    // itself runs on a stride of passes. It is bounded, though — over enough passes the
+    // deleted paragraphs are gone.
+    for (let pass = 0; pass < 120; pass += 1) {
+      geometryOf(load(paragraph('only one left')), 2 + pass, cache);
+    }
     expect(cache.stats.size).toBeLessThan(full);
     expect(cache.stats.size).toBe(1);
   });
 
-  test('it never grows past its limit however many states are touched', () => {
+  test('it never grows unbounded however many stale states are touched', () => {
     const cache = createParagraphLayoutCache<never>({ maxEntries: 4 });
     for (let step = 0; step < 40; step += 1) {
       geometryOf(load(paragraph(`typing ${'x'.repeat(step)}`)), step + 1, cache);
     }
-    expect(cache.stats.size).toBeLessThanOrEqual(4);
+    // One live key per pass plus the bounded aging window; far below the 40 states touched.
+    expect(cache.stats.size).toBeLessThanOrEqual(10);
   });
 });
 

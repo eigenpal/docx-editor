@@ -84,6 +84,18 @@ export interface LayoutSession {
   keys: string[];
   /** Geometry and producer of the previous pass; a change to either forces a full pass. */
   context: string;
+  /**
+   * Whether the previous pass read page PARITY: even/odd header variants, or an anchored
+   * drawing positioned against an inside/outside frame or alignment.
+   *
+   * The document page index is not part of {@link context} — page numbers re-project at
+   * finalize and page shells renumber at remap — so parity is the only page-position input
+   * that can invalidate a section's layout. Tracked separately so the common document pays
+   * nothing for a start-index shift.
+   */
+  parityDependent: boolean;
+  /** Parity (0/1) of the document page index this session's layout started on. */
+  startPageParity: number;
   /** Line counter at the start of the previous pass, for translating reused section counts. */
   startLineCounter: number;
   /**
@@ -137,6 +149,8 @@ export function createLayoutSession(): LayoutSession {
     checkpoints: [],
     keys: [],
     context: '',
+    parityDependent: false,
+    startPageParity: 0,
     startLineCounter: 0,
     endLineCounter: 0,
     endCursorY: 0,

@@ -463,3 +463,37 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   // plain header is byte-for-byte what it was.
   return tokens.length === 0 ? '' : `!${tokens.join('!')}`;
 }
+
+/**
+ * The furniture slice of a section's layout-session context: distances and flags, then each
+ * variant's flow height, content key and drawing-resource token — everything a header or
+ * footer edit can move that the body flow would not otherwise notice.
+ */
+export function furnitureLayoutContext(
+  furniture:
+    | {
+        readonly titlePage?: boolean;
+        readonly evenAndOddHeaders?: boolean;
+        readonly headers: ReadonlyMap<string, HeaderFooterStoryLayout>;
+        readonly footers: ReadonlyMap<string, HeaderFooterStoryLayout>;
+      }
+    | undefined,
+  headerDistance: number,
+  footerDistance: number
+): string {
+  if (!furniture) return '';
+  const stories = (prefix: string, source: ReadonlyMap<string, HeaderFooterStoryLayout>) =>
+    [...source]
+      .map(
+        ([variant, story]) =>
+          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}${storyDrawingResourceToken(story)}`
+      )
+      .sort()
+      .join(',');
+  return (
+    `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
+    stories('h', furniture.headers) +
+    ';' +
+    stories('f', furniture.footers)
+  );
+}

@@ -86,3 +86,42 @@ export const PAGE_REUSE_GUARDS = {
 export function unguardedPageFields(page: PageRecord): readonly string[] {
   return Object.keys(page).filter((key) => !(key in PAGE_REUSE_GUARDS));
 }
+
+/** What decides whether a convergence tail may move whole sheets and still be reused. */
+export interface TailShiftInputs {
+  /** Completed pages now minus completed pages at the previous pass's matching checkpoint. */
+  readonly delta: number;
+  readonly titlePage: boolean;
+  readonly evenAndOddHeaders: boolean;
+  /** The session read page parity on an earlier pass (inside/outside anchors). */
+  readonly parityDependent: boolean;
+  /** This pass read page parity while placing the prefix. */
+  readonly usedPageParity: boolean;
+  /** Completed pages at the previous pass's matching checkpoint. */
+  readonly markPageCount: number;
+  /** Per-page-index footnote reserves are in play. */
+  readonly hasNoteReserves: boolean;
+  /** Per-page-index wrap exclusion zones are in play. */
+  readonly hasExclusionZones: boolean;
+}
+
+/**
+ * Whether a convergence tail whose in-page flow matches may be reused `delta` sheets away.
+ *
+ * `remapPage` renumbers a shell and moves its boxes but re-picks nothing, so the shift is
+ * refused when anything on the tail reads a page's absolute index: a title-page variant on
+ * a moving first page, page parity over an odd delta (even/odd headers, inside/outside
+ * anchors), per-page-index note reserves, or per-page-index wrap exclusion zones.
+ */
+export function convergenceTailShiftAllowed(inputs: TailShiftInputs): boolean {
+  if (inputs.delta === 0) return true;
+  const parityHolds =
+    inputs.delta % 2 === 0 ||
+    (!inputs.evenAndOddHeaders && !inputs.parityDependent && !inputs.usedPageParity);
+  return (
+    parityHolds &&
+    (!inputs.titlePage || inputs.markPageCount > 0) &&
+    !inputs.hasNoteReserves &&
+    !inputs.hasExclusionZones
+  );
+}

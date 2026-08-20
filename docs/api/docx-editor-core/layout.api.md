@@ -1177,9 +1177,11 @@ export interface LayoutSession {
     keys: string[];
     multi: MultiSectionLayoutState | null;
     notePageBottomReserves: ReadonlyMap<number, number> | null;
+    parityDependent: boolean;
     // @internal
     previous: SemanticLayout | null;
     startLineCounter: number;
+    startPageParity: number;
     // (undocumented)
     stats: LayoutSessionStats;
 }
@@ -2576,6 +2578,7 @@ export interface SemanticLayoutOptions {
     readonly producer?: string;
     readonly projectFieldLink?: FieldLinkProjector;
     readonly projectLink?: HyperlinkProjector;
+    readonly retainKeys?: Set<string> | false;
     readonly sectionColumns?: SectionColumns;
     readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
     readonly session?: LayoutSession;

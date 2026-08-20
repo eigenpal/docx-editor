@@ -31,6 +31,7 @@ import {
 import {
   createNodeIdAllocator,
   findNode,
+  parentNodeOf,
   replaceChildren,
   replaceNode,
   type EditOptions,
@@ -116,24 +117,26 @@ function promptFor(type: ContentControlKind): string {
  * carries no parent pointers and the walk is the same bounded one every other lane uses.
  */
 export function enclosingContentControls(part: OoxmlPart, nodeId: string): readonly OoxmlNode[] {
-  for (const entry of contentControlsIn(part.root)) {
-    if (entry.node.id === nodeId) return [...entry.ancestors, entry.node];
+  // Climbed through the part's id→parent index rather than re-walked from the root: this
+  // sits on every keystroke's validation path, and the walk it replaces visited the whole
+  // document per op. Semantics are unchanged: a text-value id encloses nothing, an element
+  // returns its control ancestors outermost first, and a control includes ITSELF only when
+  // the bounded control enumeration can see it (nesting and count limits).
+  const target = findNode(part, nodeId);
+  if (!target || target.kind === 'textValue') return [];
+  const ancestors: OoxmlNode[] = [];
+  let parent = parentNodeOf(part, nodeId);
+  while (parent) {
+    if (parent.kind === 'contentControl') ancestors.push(parent);
+    parent = parentNodeOf(part, parent.id);
   }
-  const chain: OoxmlNode[] = [];
-  const walk = (node: OoxmlNode, open: OoxmlNode[]): boolean => {
-    if (node.kind === 'textValue') return node.id === nodeId;
-    if (node.id === nodeId) {
-      chain.push(...open);
-      return true;
+  ancestors.reverse();
+  if (target.kind === 'contentControl') {
+    for (const entry of contentControlsIn(part.root)) {
+      if (entry.node.id === nodeId) return [...ancestors, target];
     }
-    for (const child of node.children) {
-      const nested = child.kind === 'contentControl' ? [...open, child] : open;
-      if (walk(child, nested)) return true;
-    }
-    return false;
-  };
-  walk(part.root, []);
-  return chain;
+  }
+  return ancestors;
 }
 
 /** The lock in force at a node: every enclosing control's, resolved conservatively. */
