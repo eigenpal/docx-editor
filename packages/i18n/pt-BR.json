@@ -644,5 +644,21 @@
     "relativeToHorizontal": "Em relação a (horizontal)",
     "relativeToVertical": "Em relação a (vertical)",
     "verticalOffset": "Deslocamento vertical"
+  },
+  "disabledReason": {
+    "commentSelection": null,
+    "drawingLocked": null,
+    "editorNotReady": null,
+    "imageSuggesting": null,
+    "invalidValue": null,
+    "mergeUnsupported": null,
+    "noContentControl": null,
+    "noDocument": null,
+    "noDrawing": null,
+    "notWired": null,
+    "splitUnsupported": null,
+    "trackedOnly": null,
+    "unavailable": null,
+    "viewing": null
   }
 }

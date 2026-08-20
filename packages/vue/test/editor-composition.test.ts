@@ -258,7 +258,9 @@ describe('useEditorCommand', () => {
       app.mount(container);
       await flush();
       expect(binding!.isEnabled.value).toBe(false);
-      expect(binding!.disabledReason.value).toBe('not wired to an editor command');
+      expect(binding!.disabledReason.value).toBe(
+        'This control is not connected to an editor command'
+      );
     } finally {
       app.unmount();
     }

@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { runToolbarCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';
@@ -69,6 +71,7 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
   const editor = useDocxEditor();
   const mode = useEditorState(selectMode);
   const label = useToolbarLabel();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -139,6 +142,7 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
 
   // ONE source for enabled state, the same one every other control uses.
   const state = toolbarCommandState(editor, 'review.editingMode');
+  const disabledReason = localizeDisabledReason(state.disabledReason, t);
 
   const current = useMemo(
     () => MODE_OPTIONS.find((option) => option.mode === mode) ?? MODE_OPTIONS[0]!,
@@ -164,7 +168,7 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
         aria-expanded={open}
         aria-label={label(control?.labelKey ?? 'editingMode.label')}
         disabled={!state.enabled}
-        {...(state.disabledReason ? { title: state.disabledReason } : {})}
+        {...(disabledReason ? { title: disabledReason } : {})}
         onMouseDown={guardToolbarMousedown}
         onClick={() => setOpen((previous) => !previous)}
       >

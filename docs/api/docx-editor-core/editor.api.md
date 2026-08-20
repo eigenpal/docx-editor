@@ -824,6 +824,9 @@ export interface DrawingPositionInput {
     readonly verticalEmu?: number;
 }
 
+// @internal
+export function editorCommandKey(command: EditorCommand): string;
+
 // @public
 export interface EditorModule {
     readonly customNodePayloadNamespaces?: readonly string[];
@@ -1331,14 +1334,14 @@ export interface PaginatedSurface {
     redo(): void;
     refreshTableInteractionLabels(): void;
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
-    releaseSelection(): void;
+    releaseSelection(pin: SelectionPin): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
         readonly expectedPackageRevision: number;
         readonly commitGuard?: () => boolean;
     }): Promise<ImageIntentResult>;
     retainedSelection(): SemanticSelection | null;
-    retainSelection(): void;
+    retainSelection(): SelectionPin;
     revealPage(pageIndex: number, options?: RevealOptions): boolean;
     // (undocumented)
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;

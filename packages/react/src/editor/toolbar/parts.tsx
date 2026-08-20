@@ -13,6 +13,8 @@
 
 import { useContext } from 'react';
 import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { ToolbarContext, useToolbarLabel } from './toolbar-context';
@@ -98,7 +100,8 @@ function ToolbarLinkImpl({ className, hidden, icon, asChild, children }: Toolbar
   const probe = chromeProbeForSlot('text.link');
   const allowed = editor && probe ? editor.can(probe) : null;
   const isEnabled = allowed?.ok === true;
-  const disabledReason = allowed && !allowed.ok ? allowed.reason : null;
+  const { t } = useTranslation();
+  const disabledReason = localizeDisabledReason(allowed && !allowed.ok ? allowed.reason : null, t);
   const label = useToolbarLabel();
   if (hidden) return null;
   const control = chromeControlForSlot('text.link');

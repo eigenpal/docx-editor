@@ -7,8 +7,7 @@ import { createDocxEditor } from '../docx-editor.ts';
 
 test('selection retention forwards to the surface and stays safe when detached', () => {
   const editor = createDocxEditor({ document: blankDocumentBytes() });
-  expect(() => editor.retainSelection()).not.toThrow();
-  expect(() => editor.releaseSelection()).not.toThrow();
+  expect(editor.retainSelection()).toBeNull();
 
   const container = document.createElement('div');
   editor.attach(container);
@@ -18,23 +17,23 @@ test('selection retention forwards to the surface and stays safe when detached',
   let released = false;
   editor.surface!.retainSelection = () => {
     retained = true;
-    retain.call(editor.surface);
+    return retain.call(editor.surface);
   };
-  editor.surface!.releaseSelection = () => {
+  editor.surface!.releaseSelection = (pin) => {
     released = true;
-    release.call(editor.surface);
+    release.call(editor.surface, pin);
   };
 
-  editor.retainSelection();
-  editor.releaseSelection();
+  const pin = editor.retainSelection();
+  expect(pin).not.toBeNull();
+  editor.releaseSelection(pin!);
   expect(retained).toBe(true);
   expect(released).toBe(true);
 
   editor.detach();
   retained = false;
   released = false;
-  editor.retainSelection();
-  editor.releaseSelection();
+  expect(editor.retainSelection()).toBeNull();
   expect(retained).toBe(false);
   expect(released).toBe(false);
   editor.destroy();

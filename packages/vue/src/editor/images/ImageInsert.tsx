@@ -1,5 +1,6 @@
 import { defineComponent, h, inject, provide, ref, type InjectionKey } from 'vue';
 import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useDocxEditor } from '../context';
@@ -133,7 +134,7 @@ export const ImageInsertProvider = defineComponent({
         return insertState.value.enabled;
       },
       get disabledReason() {
-        return insertState.value.disabledReason;
+        return localizeDisabledReason(insertState.value.disabledReason, t);
       },
       inputRef,
       onInputChange,

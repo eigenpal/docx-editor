@@ -34,6 +34,7 @@ import type {
   Rect,
   Revision,
   RunFormatting,
+  SelectionPin,
   ExecErrorCode,
   ExecResult,
   Unsubscribe,
@@ -53,7 +54,6 @@ import type {
 } from '../store/package/drawing-projection.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageResourceState, SupportedImageMime } from '../store/package/image-resources.ts';
-
 export type * from './types';
 export type * from './interaction';
 export type * from './editor-hf-notes.ts';
@@ -768,10 +768,10 @@ export interface Editor {
   /** Replaces the module-scope cache-invalidation calls adapters make today. */
   relayout(options?: { sync?: boolean }): void;
   focus(scope?: EditorScope): InteractionOutcome<void>;
-  /** Pin the selection while chrome has focus. Safe when detached. */
-  retainSelection(): void;
-  /** Release a pin installed by {@link retainSelection}. Safe when detached. */
-  releaseSelection(): void;
+  /** Pin the selection while chrome has focus. Returns null while detached. */
+  retainSelection(): SelectionPin | null;
+  /** Release only the pin installed by the matching {@link retainSelection} call. */
+  releaseSelection(pin: SelectionPin): void;
   destroy(): void;
 
   on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe;

@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
 import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { useDocxEditor } from '../context';
@@ -61,7 +62,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
     (a, b) => a.enabled === b.enabled && a.disabledReason === b.disabledReason
   );
   const isEnabled = insertState.enabled;
-  const disabledReason = insertState.disabledReason;
+  const disabledReason = localizeDisabledReason(insertState.disabledReason, t);
 
   const insertBytes = useCallback(
     async (bytes: Uint8Array) => {

@@ -1,7 +1,7 @@
-import { computed, inject, ref, watch, type ComputedRef, type InjectionKey } from 'vue';
+import { computed, inject, ref, shallowRef, watch, type ComputedRef, type InjectionKey } from 'vue';
 import { scopeDispose } from './scope-dispose';
 import type { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
-import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import type { Editor, EditorSnapshot, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
@@ -95,12 +95,22 @@ export function useHyperlinkPopup(): UseHyperlinkPopupResult {
 export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResult {
   const editorRef = useDocxEditor();
   const state = ref<HyperlinkPopupState>(CLOSED);
+  const selectionRetainer = shallowRef<{ editor: Editor; pin: SelectionPin } | null>(null);
   const snapshot = useEditorState(selectTick);
   const canEdit = computed(() =>
     editorRef.value ? editorRef.value.can({ type: 'insertText', text: '' }).ok : false
   );
 
+  const releaseSelectionPin = () => {
+    const retained = selectionRetainer.value;
+    if (!retained) return;
+    retained.editor.releaseSelection(retained.pin);
+    selectionRetainer.value = null;
+  };
+  scopeDispose(releaseSelectionPin);
+
   const open = (link?: SurfaceHyperlink | null, anchor?: HyperlinkPopupAnchor | null) => {
+    releaseSelectionPin();
     const editor = editorRef.value;
     state.value = {
       mode: link ? 'reading' : 'editing',
@@ -115,13 +125,14 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   };
 
   const close = () => {
-    editorRef.value?.releaseSelection();
+    releaseSelectionPin();
     state.value = CLOSED;
   };
 
   const openAtCaret = () => {
     const editor = editorRef.value;
     const anchor = caretViewportAnchor();
+    releaseSelectionPin();
     const link =
       editor?.surface?.hyperlinks.linkAtCaret() ??
       editor?.surface?.hyperlinks.fieldLinkAtCaret() ??
@@ -144,7 +155,8 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       return;
     }
     const selected = editor?.query({ type: 'selectedText' }) ?? '';
-    editor?.retainSelection();
+    const pin = editor?.retainSelection() ?? null;
+    if (editor && pin) selectionRetainer.value = { editor, pin };
     state.value = {
       mode: 'editing',
       link: null,

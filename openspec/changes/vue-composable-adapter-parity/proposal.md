@@ -137,8 +137,8 @@ one: the module auto-imports from the package root and points at
 ## Extended scope
 
 - `@docx-editor.dev/pro/vue` now supplies the `DocxEditorReview` rail and review composables.
-  The public `Editor.retainSelection()` and `Editor.releaseSelection()` methods let compose
-  fields preserve the selected range without using the surface escape hatch.
+  The public `Editor.retainSelection()` token and matching `Editor.releaseSelection(token)`
+  let compose fields preserve the selected range without releasing another chrome owner's pin.
 - `@docx-editor.dev/pro/vue` also supplies `CustomNodeChrome`,
   `CustomNodeContextMenu`, and the activation helpers. These match the React Pro
   chrome for custom-node color, click, hover, edit, and remove actions.

@@ -27,7 +27,7 @@ import {
   type VNodeArrayChildren,
 } from 'vue';
 import type { DocxEditorInstance, ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
-import type { ReviewRevisionKind } from '@docx-editor.dev/core/contracts/editor';
+import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import {
   ReviewRailContext,
   useDocxEditor,
@@ -421,11 +421,14 @@ const ReviewRoot = defineComponent({
     onUnmounted(() => scrollCleanup?.());
 
     const draftAnchorY = ref<number | null>(null);
-    const selectionRetainer = shallowRef<DocxEditorInstance | null>(null);
+    const selectionRetainer = shallowRef<{
+      editor: DocxEditorInstance;
+      pin: SelectionPin;
+    } | null>(null);
 
     const releaseRetainedSelection = () => {
-      selectionRetainer.value?.releaseSelection();
-      editorRef.value?.releaseSelection();
+      const retained = selectionRetainer.value;
+      if (retained) retained.editor.releaseSelection(retained.pin);
       selectionRetainer.value = null;
       draftAnchorY.value = null;
     };
@@ -433,7 +436,7 @@ const ReviewRoot = defineComponent({
     watch(
       () => editorRef.value,
       (editor, previous) => {
-        if (previous && previous !== editor && selectionRetainer.value === previous) {
+        if (previous && previous !== editor && selectionRetainer.value?.editor === previous) {
           releaseRetainedSelection();
         }
       }
@@ -444,11 +447,10 @@ const ReviewRoot = defineComponent({
       if (!editor || readOnly.value) return;
       const anchorY = editor.getSelectionPlacement()?.anchorY ?? null;
       if (anchorY === null) return;
-      if (selectionRetainer.value && selectionRetainer.value !== editor) {
-        selectionRetainer.value.releaseSelection();
-      }
-      editor.retainSelection();
-      selectionRetainer.value = editor;
+      releaseRetainedSelection();
+      const pin = editor.retainSelection();
+      if (!pin) return;
+      selectionRetainer.value = { editor, pin };
       reviewHook.setPaneOpen(true);
       draftAnchorY.value = anchorY;
       instance?.proxy?.$forceUpdate();
@@ -472,10 +474,7 @@ const ReviewRoot = defineComponent({
 
     watch(open, (paneOpen) => {
       if (paneOpen || draftAnchorY.value === null) return;
-      selectionRetainer.value?.releaseSelection();
-      editorRef.value?.releaseSelection();
-      selectionRetainer.value = null;
-      draftAnchorY.value = null;
+      releaseRetainedSelection();
     });
 
     onBeforeUnmount(() => {

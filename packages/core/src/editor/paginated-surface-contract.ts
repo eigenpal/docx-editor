@@ -7,7 +7,7 @@
 import type { IndentFormatting } from '../contracts/types.ts';
 import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
-import type { ViewScope } from '../contracts/editor.ts';
+import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
@@ -666,9 +666,9 @@ export interface PaginatedSurface {
    * which is what lets a host close its panel on "the user clicked somewhere else" without
    * every adapter reimplementing that comparison.
    */
-  retainSelection(): void;
-  /** Drop the pin and stop drawing it, whether or not the caret ever left. */
-  releaseSelection(): void;
+  retainSelection(): SelectionPin;
+  /** Drop one owned pin. Another owner's pin remains visible. */
+  releaseSelection(pin: SelectionPin): void;
   /** The pinned range, or null once it was released or escaped. */
   retainedSelection(): SemanticSelection | null;
   /**

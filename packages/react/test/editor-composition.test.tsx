@@ -234,7 +234,7 @@ describe('useEditorCommand', () => {
       </DocxEditorRoot>
     );
     expect(binding!.isEnabled).toBe(false);
-    expect(binding!.disabledReason).toBe('not wired to an editor command');
+    expect(binding!.disabledReason).toBe('This control is not connected to an editor command');
     expect(binding!.isActive).toBe(false);
     const before = instance!.surface!.session.bodyText();
     expect(() =>

@@ -1,6 +1,7 @@
 import { CHROME_GROUPS, chromeSlotId, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import type { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { createT, en, localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { zipSync, strToU8 } from 'fflate';
 import { stepZoomLevel } from '../../react/src/editor/zoom-levels.ts';
 
@@ -8,6 +9,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const translate = createT(en);
 
 export function differentialDocx(body: string): Uint8Array {
   return zipSync({
@@ -111,7 +113,10 @@ export const COMPOSABLE_PARITY_CASES: readonly ComposableParityCase[] = [
         if (binding.isActive !== engine.active) {
           throw new Error(`active mismatch for ${slot}`);
         }
-        if ((binding.disabledReason ?? null) !== (engine.disabledReason ?? null)) {
+        if (
+          (binding.disabledReason ?? null) !==
+          localizeDisabledReason(engine.disabledReason ?? null, translate)
+        ) {
           throw new Error(`disabledReason mismatch for ${slot}`);
         }
       },

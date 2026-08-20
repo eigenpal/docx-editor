@@ -2175,9 +2175,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (created === null) {
         return { ok: false, code: 'unsupported', reason: 'the comment could not be committed' };
       }
-      // The retained pin has done its job: the range is now a comment, and the comment's own
-      // band is what marks it from here.
-      surface.releaseSelection();
       return { ok: true, changed: true };
     },
 
@@ -2551,8 +2548,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       void options?.sync;
       surface?.layout();
     },
-    retainSelection: () => surface?.retainSelection(),
-    releaseSelection: () => surface?.releaseSelection(),
+    retainSelection: () => surface?.retainSelection() ?? null,
+    releaseSelection: (pin) => surface?.releaseSelection(pin),
     focus(scope?: EditorScope) {
       // Same yield-window rule as `exec`: focusing the just-loaded document mounts it.
       openScheduler.flush();

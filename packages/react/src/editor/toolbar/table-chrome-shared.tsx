@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 // Shared a11y and keyboard helpers for contextual table toolbar compounds.
 
 import { useEffect, useId, type RefObject } from 'react';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../../i18n';
 import { editorScopeFor } from '../editor-scope';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
 import { guardToolbarMousedown } from './ToolbarButton';
@@ -48,8 +50,10 @@ export function useTableChromeTriggerA11y({
   readonly shared: Record<string, unknown>;
   readonly reasonNode: ReactNode;
 } {
+  const { t } = useTranslation();
+  const localizedReason = localizeDisabledReason(disabledReason, t);
   const reasonId = useId();
-  const describe = !enabled && disabledReason ? reasonId : undefined;
+  const describe = !enabled && localizedReason ? reasonId : undefined;
   return {
     reasonId,
     shared: {
@@ -57,13 +61,13 @@ export function useTableChromeTriggerA11y({
       onMouseDown: guardToolbarMousedown,
       'aria-label': ariaLabel,
       ...(describe ? { 'aria-describedby': describe } : {}),
-      ...(disabledReason ? { title: disabledReason } : {}),
+      ...(localizedReason ? { title: localizedReason } : {}),
       ...(!enabled ? { 'data-disabled': '', 'aria-disabled': true } : {}),
     },
     reasonNode:
-      describe && disabledReason ? (
+      describe && localizedReason ? (
         <span id={reasonId} className="docx-editor-sr-only">
-          {disabledReason}
+          {localizedReason}
         </span>
       ) : null,
   };

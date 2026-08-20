@@ -90,7 +90,7 @@ import type {
   PaginatedSurfaceState,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
-import type { ExecResult } from '../contracts/editor.ts';
+import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
@@ -158,7 +158,6 @@ import { createImageOps } from './surface-image-ops.ts';
 import { createHeaderFooterScopeController } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
-import type { ViewScope } from '../contracts/editor.ts';
 
 export type {
   ContentControlOps,
@@ -383,6 +382,12 @@ export function mountPaginatedSurface(
    * the overlay draws, and how long the panel is entitled to stay open.
    */
   let retainedSelection: SemanticSelection | null = null;
+  const retainedSelections = new Map<SelectionPin, SemanticSelection>();
+
+  function restoreLatestRetainedSelection(): void {
+    retainedSelection = null;
+    for (const retained of retainedSelections.values()) retainedSelection = retained;
+  }
 
   /** Document-order comparison of two positions: negative, zero or positive. */
   function comparePositions(a: SemanticPosition, b: SemanticPosition): number {
@@ -403,6 +408,7 @@ export function mountPaginatedSurface(
     const { from, to } = orderedRangeOf(currentLayout, retainedSelection);
     const head = next.head;
     if (comparePositions(head, from) >= 0 && comparePositions(head, to) <= 0) return;
+    retainedSelections.clear();
     retainedSelection = null;
   }
 
@@ -3791,12 +3797,15 @@ export function mountPaginatedSurface(
           toc.resultParagraphIds.includes(paragraphId)
       ),
     retainSelection: () => {
+      const pin = Symbol('selection-pin');
+      retainedSelections.set(pin, selection);
       retainedSelection = selection;
       renderOverlay();
+      return pin;
     },
-    releaseSelection: () => {
-      if (!retainedSelection) return;
-      retainedSelection = null;
+    releaseSelection: (pin) => {
+      if (!retainedSelections.delete(pin)) return;
+      restoreLatestRetainedSelection();
       renderOverlay();
     },
     retainedSelection: () => retainedSelection,

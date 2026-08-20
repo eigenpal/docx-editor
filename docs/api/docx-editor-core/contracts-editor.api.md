@@ -588,10 +588,10 @@ export interface Editor {
     relayout(options?: {
         sync?: boolean;
     }): void;
-    releaseSelection(): void;
+    releaseSelection(pin: SelectionPin): void;
     replyToReviewItem(key: string, text: string, author?: string): ExecResult;
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
-    retainSelection(): void;
+    retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
     // (undocumented)
     scrollToBlock(blockId: string): boolean;
@@ -1718,6 +1718,9 @@ export interface SelectedImageState {
     // (undocumented)
     readonly wrap: ImageWrapTarget;
 }
+
+// @public
+export type SelectionPin = symbol;
 
 // @public
 export interface SemanticIdentity {

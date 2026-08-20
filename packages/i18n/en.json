@@ -7,6 +7,22 @@
     "comment": "Comment",
     "dismiss": "Dismiss"
   },
+  "disabledReason": {
+    "editorNotReady": "The editor is not ready",
+    "notWired": "This control is not connected to an editor command",
+    "viewing": "This document is open for viewing",
+    "trackedOnly": "This document permits edits only as tracked changes",
+    "noDocument": "No document is loaded",
+    "noContentControl": "No content control is selected",
+    "noDrawing": "No image is selected",
+    "drawingLocked": "This image is locked",
+    "commentSelection": "Select a range before adding a comment",
+    "mergeUnsupported": "Cell merge is not supported",
+    "splitUnsupported": "Cell split is not supported",
+    "imageSuggesting": "Image property edits are unavailable in suggesting mode",
+    "invalidValue": "This value is not valid for the command",
+    "unavailable": "This command is unavailable"
+  },
   "toolbar": {
     "ariaLabel": "Formatting toolbar",
     "file": "File",

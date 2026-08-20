@@ -1,6 +1,8 @@
 import { computed, defineComponent, ref, watch } from 'vue';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { runToolbarCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';
@@ -68,6 +70,7 @@ export const ToolbarEditingMode = defineComponent({
     const editorRef = useDocxEditor();
     const mode = useEditorState(selectMode);
     const label = useToolbarLabel();
+    const { t } = useTranslation();
     const open = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
     const menuRef = ref<HTMLDivElement | null>(null);
@@ -132,6 +135,7 @@ export const ToolbarEditingMode = defineComponent({
       if (props.hidden) return null;
       const control = chromeControlForSlot('review.editingMode');
       const state = toolbarCommandState(editorRef.value, 'review.editingMode');
+      const disabledReason = localizeDisabledReason(state.disabledReason, t);
       return (
         <div
           ref={rootRef}
@@ -147,7 +151,7 @@ export const ToolbarEditingMode = defineComponent({
             aria-expanded={open.value}
             aria-label={label(control?.labelKey ?? 'editingMode.label')}
             disabled={!state.enabled}
-            {...(state.disabledReason ? { title: state.disabledReason } : {})}
+            {...(disabledReason ? { title: disabledReason } : {})}
             onMousedown={guardToolbarMousedown}
             onClick={() => {
               open.value = !open.value;

@@ -344,6 +344,9 @@ export interface SectionProperties {
 }
 
 // @public
+export type SelectionPin = symbol;
+
+// @public
 export interface StyleDefinition {
     readonly basedOn?: string;
     // (undocumented)

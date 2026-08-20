@@ -1188,11 +1188,11 @@ describe('contextual table chrome (Task 10)', () => {
       '[data-slot="table.borderTarget"] button'
     ) as HTMLButtonElement;
     expect(trigger.getAttribute('aria-disabled')).toBe('true');
-    expect(trigger.title).toBe('the document is open for viewing');
+    expect(trigger.title).toBe('This document is open for viewing');
     const describedBy = trigger.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)?.textContent).toBe(
-      'the document is open for viewing'
+      'This document is open for viewing'
     );
   });
 
@@ -1367,7 +1367,7 @@ describe('enabled state is the engine answer, not a registry constant', () => {
     const controls = [...view.container.querySelectorAll('[data-slot]')];
     expect(controls.length).toBeGreaterThan(10);
     const dead = [...view.container.querySelectorAll('[title]')].filter(
-      (part) => part.getAttribute('title') === 'not wired to an editor command'
+      (part) => part.getAttribute('title') === 'This control is not connected to an editor command'
     );
     expect(dead.map((part) => part.closest('[data-slot]')?.getAttribute('data-slot'))).toEqual([]);
   });

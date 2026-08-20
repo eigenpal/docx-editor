@@ -49,6 +49,7 @@ import type {
   EditorSnapshot,
   ReviewItemQuery,
   ReviewRevisionKind,
+  SelectionPin,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
@@ -532,32 +533,48 @@ function ReviewRoot({
   // empty: an empty `w:comment` is a real comment in the file, and abandoning the box would
   // leave one behind for every time someone changed their mind.
   const [draftAnchorY, setDraftAnchorY] = useState<number | null>(null);
+  const selectionPinRef = useRef<{
+    editor: NonNullable<ReturnType<typeof useDocxEditor>>;
+    pin: SelectionPin;
+  } | null>(null);
+  const releaseSelectionPin = useCallback(() => {
+    const retained = selectionPinRef.current;
+    if (!retained) return;
+    retained.editor.releaseSelection(retained.pin);
+    selectionPinRef.current = null;
+  }, []);
   const beginDraft = useCallback(() => {
     if (!editor || readOnly) return;
+    const anchorY = editor.getSelectionPlacement()?.anchorY ?? null;
+    if (anchorY === null) return;
     // Pin the range before the compose box takes focus, or the browser drops the highlight
     // off the very words the comment is about.
-    editor.retainSelection();
+    releaseSelectionPin();
+    const pin = editor.retainSelection();
+    if (!pin) return;
+    selectionPinRef.current = { editor, pin };
     setReviewPaneOpen(true);
-    setDraftAnchorY(editor.getSelectionPlacement()?.anchorY ?? null);
-  }, [editor, readOnly, setReviewPaneOpen]);
+    setDraftAnchorY(anchorY);
+  }, [editor, readOnly, releaseSelectionPin, setReviewPaneOpen]);
   useEffect(() => {
     if (hidden) return undefined;
     return railRegistry?.registerCommentDraft(beginDraft);
   }, [beginDraft, hidden, railRegistry]);
   const endDraft = useCallback(() => {
-    editor?.releaseSelection();
+    releaseSelectionPin();
     setDraftAnchorY(null);
     // Back to the document. Closing the box unmounts it, and without this the user landed on
     // `<body>` with Tab restarting at the top of the page.
     editor?.focus();
-  }, [editor]);
+  }, [editor, releaseSelectionPin]);
+  useEffect(() => releaseSelectionPin, [releaseSelectionPin]);
   useEffect(() => {
     if (open || draftAnchorY === null) return;
     // Closing the pane abandons its uncommitted draft. Release the pinned range without
     // moving focus away from the toolbar control that closed it.
-    editor?.releaseSelection();
+    releaseSelectionPin();
     setDraftAnchorY(null);
-  }, [open, draftAnchorY, editor]);
+  }, [open, draftAnchorY, releaseSelectionPin]);
 
   // The compose CARD stacks with the cards, because it is one: rendered outside the run it
   // landed on top of the card the caret had just been sent to, and its anchor IS that

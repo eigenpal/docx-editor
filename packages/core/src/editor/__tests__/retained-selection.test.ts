@@ -209,8 +209,23 @@ describe('a retained selection stays lit while focus is elsewhere', () => {
   test('releasing explicitly drops the pin whether or not the caret ever left', () => {
     const mounted = mount();
     select(mounted, 0, 6, 13);
-    mounted.surface.retainSelection();
-    mounted.surface.releaseSelection();
+    const pin = mounted.surface.retainSelection();
+    mounted.surface.releaseSelection(pin);
+    expect(mounted.surface.retainedSelection()).toBeNull();
+    expect(retainedRects(mounted)).toBe(0);
+  });
+
+  test('releasing one owner keeps another owner pinned', () => {
+    const mounted = mount();
+    select(mounted, 0, 6, 13);
+    const commentPin = mounted.surface.retainSelection();
+    const hyperlinkPin = mounted.surface.retainSelection();
+
+    mounted.surface.releaseSelection(hyperlinkPin);
+    expect(mounted.surface.retainedSelection()).not.toBeNull();
+    expect(retainedRects(mounted)).toBeGreaterThan(0);
+
+    mounted.surface.releaseSelection(commentPin);
     expect(mounted.surface.retainedSelection()).toBeNull();
     expect(retainedRects(mounted)).toBe(0);
   });

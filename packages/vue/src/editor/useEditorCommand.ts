@@ -1,11 +1,14 @@
 import { computed, shallowRef, toValue, watch, type ComputedRef } from 'vue';
 import {
+  editorCommandKey,
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
+import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
@@ -31,16 +34,13 @@ function isSlot(target: ChromeSlotId | EditorCommand): target is ChromeSlotId {
   return typeof target === 'string';
 }
 
-function stableKey(command: EditorCommand): string {
-  return JSON.stringify(command, Object.keys(command).sort());
-}
-
 /** @public */
 export function useEditorCommand(
   target: MaybeRefOrGetter<ChromeSlotId | EditorCommand>
 ): EditorCommandState {
   const reactiveTarget = target;
   const editorRef = useDocxEditor();
+  const { t } = useTranslation();
   const latest = shallowRef(toValue(reactiveTarget));
 
   watch(
@@ -53,7 +53,7 @@ export function useEditorCommand(
 
   const key = computed(() => {
     const current = latest.value;
-    return isSlot(current) ? current : stableKey(current);
+    return isSlot(current) ? current : editorCommandKey(current);
   });
 
   const selectSlice = (_snapshot: unknown): CommandSlice => {
@@ -63,7 +63,7 @@ export function useEditorCommand(
       return {
         active: state.active,
         enabled: state.enabled,
-        disabledReason: state.disabledReason,
+        disabledReason: localizeDisabledReason(state.disabledReason, t),
       };
     }
     if (!editorRef.value) return { active: false, enabled: false, disabledReason: null };
@@ -71,7 +71,7 @@ export function useEditorCommand(
     return {
       active: editorRef.value.isActive(current),
       enabled: allowed.ok,
-      disabledReason: allowed.ok ? null : (allowed.reason ?? null),
+      disabledReason: allowed.ok ? null : localizeDisabledReason(allowed.reason ?? null, t),
     };
   };
 

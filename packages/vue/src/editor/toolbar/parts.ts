@@ -1,5 +1,7 @@
 import { defineComponent, h, type PropType, type VNode } from 'vue';
 import { chromeProbeForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../../i18n';
 import { useDocxEditor, useEditorStateTick } from '../context';
 import { useHyperlinkPopup } from '../useHyperlinkPopup';
 import { mergeHostClass } from '../../lib/mergeHostClass';
@@ -86,13 +88,17 @@ export const ToolbarLink = defineComponent({
     const stateTick = useEditorStateTick();
     const { openAtCaret } = useHyperlinkPopup();
     const label = useToolbarLabel();
+    const { t } = useTranslation();
     return () => {
       if (props.hidden) return null;
       void stateTick.value;
       const probe = chromeProbeForSlot('text.link');
       const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
       const isEnabled = allowed?.ok === true;
-      const disabledReason = allowed && !allowed.ok ? allowed.reason : null;
+      const disabledReason = localizeDisabledReason(
+        allowed && !allowed.ok ? allowed.reason : null,
+        t
+      );
       const control = chromeControlForSlot('text.link');
       const text = label(control?.labelKey ?? 'text.link');
       const shared = {

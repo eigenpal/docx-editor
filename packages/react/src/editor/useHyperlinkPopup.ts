@@ -25,7 +25,7 @@ import {
 import type { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
-import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import type { Editor, EditorSnapshot, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 
 /** Where the popover sits, in viewport coordinates. */
 export interface HyperlinkPopupAnchor {
@@ -194,6 +194,7 @@ export function useHyperlinkPopup(): UseHyperlinkPopupResult {
 export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResult {
   const editor = useDocxEditor();
   const [state, setState] = useState<HyperlinkPopupState>(CLOSED);
+  const selectionPinRef = useRef<{ editor: Editor; pin: SelectionPin } | null>(null);
   // The engine's gestures fire from listeners registered ONCE; reading the live state
   // through a ref keeps that registration off the render path, so opening the popover does
   // not tear down and rebind the surface's chrome handlers.
@@ -204,8 +205,16 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   const snapshot = useEditorState(selectTick);
   const canEdit = editor ? editor.can({ type: 'insertText', text: '' }).ok : false;
 
+  const releaseSelectionPin = useCallback(() => {
+    const retained = selectionPinRef.current;
+    if (!retained) return;
+    retained.editor.releaseSelection(retained.pin);
+    selectionPinRef.current = null;
+  }, []);
+
   const open = useCallback(
     (link?: SurfaceHyperlink | null, anchor?: HyperlinkPopupAnchor | null) => {
+      releaseSelectionPin();
       setState({
         // A link to read; nothing to read means the user is creating one.
         mode: link ? 'reading' : 'editing',
@@ -221,13 +230,15 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
         canEdit: editor ? editor.can({ type: 'insertText', text: '' }).ok : false,
       });
     },
-    [editor]
+    [editor, releaseSelectionPin]
   );
 
   const close = useCallback(() => {
-    editor?.releaseSelection();
+    releaseSelectionPin();
     setState(CLOSED);
-  }, [editor]);
+  }, [releaseSelectionPin]);
+
+  useEffect(() => releaseSelectionPin, [releaseSelectionPin]);
 
   /**
    * Open for the caret's own link, or for a new one — what Ctrl/Cmd+K and the toolbar
@@ -236,6 +247,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
    */
   const openAtCaret = useCallback(() => {
     const anchor = caretViewportAnchor();
+    releaseSelectionPin();
     const link =
       editor?.surface?.hyperlinks.linkAtCaret() ??
       editor?.surface?.hyperlinks.fieldLinkAtCaret() ??
@@ -266,7 +278,8 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     // browser's one selection into it, so without this the highlight the user is about to
     // turn into a link vanishes exactly when they need to see it. The engine draws it on its
     // own overlay and releases the pin when the caret leaves — which is what closes us below.
-    editor?.retainSelection();
+    const pin = editor?.retainSelection() ?? null;
+    if (editor && pin) selectionPinRef.current = { editor, pin };
     setState({
       mode: 'editing',
       link: null,
@@ -277,7 +290,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
       error: false,
       canEdit: editor ? editor.can({ type: 'insertText', text: '' }).ok : false,
     });
-  }, [editor, open]);
+  }, [editor, open, releaseSelectionPin]);
 
   // Register with the engine: a plain click on an external link opens the popover under it,
   // Ctrl/Cmd+K opens insert-or-edit. The cleanup restores whatever was registered before, so

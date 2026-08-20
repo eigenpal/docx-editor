@@ -5,6 +5,9 @@
  * `types-barrel.ts`. There is no `@docx-editor.dev/core/types` subpath.
  */
 
+/** Ownership token for one retained selection highlight. @public */
+export type SelectionPin = symbol;
+
 // ─── Addressing ──────────────────────────────────────────────────────────────
 
 /**

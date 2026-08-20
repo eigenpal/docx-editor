@@ -611,9 +611,9 @@ describe('DocxEditorReview (Vue)', () => {
       const editor = mounted.editor();
       let released = 0;
       const releaseSpy = editor.releaseSelection.bind(editor);
-      editor.releaseSelection = () => {
+      editor.releaseSelection = (pin) => {
         released++;
-        return releaseSpy();
+        return releaseSpy(pin);
       };
       editor.surface!.selectAll();
       editor.exec({ type: 'toggleReviewPane' });

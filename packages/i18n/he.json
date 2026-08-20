@@ -644,5 +644,21 @@
     "relativeToHorizontal": "ביחס ל (אופקי)",
     "relativeToVertical": "ביחס ל (אנכי)",
     "verticalOffset": "היסט אנכי"
+  },
+  "disabledReason": {
+    "commentSelection": null,
+    "drawingLocked": null,
+    "editorNotReady": null,
+    "imageSuggesting": null,
+    "invalidValue": null,
+    "mergeUnsupported": null,
+    "noContentControl": null,
+    "noDocument": null,
+    "noDrawing": null,
+    "notWired": null,
+    "splitUnsupported": null,
+    "trackedOnly": null,
+    "unavailable": null,
+    "viewing": null
   }
 }

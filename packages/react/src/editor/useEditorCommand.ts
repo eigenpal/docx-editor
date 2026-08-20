@@ -16,11 +16,14 @@
 
 import { useCallback, useMemo, useRef } from 'react';
 import {
+  editorCommandKey,
   runToolbarCommand,
   toolbarCommandState,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import { localizeDisabledReason } from '@docx-editor.dev/i18n';
+import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 
@@ -60,19 +63,6 @@ function isSlot(target: ChromeSlotId | EditorCommand): target is ChromeSlotId {
 }
 
 /**
- * A command's value identity, as a string a dependency array can compare.
- *
- * Keys are SORTED, so two spellings of the same command (`{ type, mark }` and
- * `{ mark, type }`) produce one key and do not churn the memo. Commands are small flat
- * objects of primitives; `insertImage`'s `data` is the one field that is not, and a
- * `Uint8Array` stringifies to its indices — verbose but stable and correct, and nobody
- * drives a live control off an image insert.
- */
-function stableKey(command: EditorCommand): string {
-  return JSON.stringify(command, Object.keys(command).sort());
-}
-
-/**
  * Bind a chrome slot (`'text.bold'`, `'history.undo'`, …) or a raw `EditorCommand`
  * (`{ type: 'selectAll' }`) to the editor. The result object is identity-stable while its
  * fields are unchanged, so it can sit in dependency arrays and `memo` props without churn.
@@ -81,6 +71,7 @@ function stableKey(command: EditorCommand): string {
  */
 export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState {
   const editor = useDocxEditor();
+  const { t } = useTranslation();
 
   // A COMMAND OBJECT IS REBUILT EVERY RENDER by most callers (`useEditorCommand({ type:
   // 'cut' })`), so keying the memos on its identity would resubscribe `useEditorState` on
@@ -93,7 +84,7 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
   // while `snapshot()` is version-cached, so a caller that switched payloads kept the OLD
   // answer until some unrelated engine event happened to bump the version. Worse, `execute`
   // reads the live target, so the button rendered one state and ran the other command.
-  const key = isSlot(target) ? target : stableKey(target);
+  const key = isSlot(target) ? target : editorCommandKey(target);
 
   // Read at call/derivation time rather than closed over, so the value is always the one
   // the caller last passed. Safe because `key` above changes whenever the value does, which
@@ -111,7 +102,7 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
         return {
           active: state.active,
           enabled: state.enabled,
-          disabledReason: state.disabledReason,
+          disabledReason: localizeDisabledReason(state.disabledReason, t),
         };
       }
       if (!editor) return { active: false, enabled: false, disabledReason: null };
@@ -119,11 +110,11 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
       return {
         active: editor.isActive(current),
         enabled: allowed.ok,
-        disabledReason: allowed.ok ? null : (allowed.reason ?? null),
+        disabledReason: allowed.ok ? null : localizeDisabledReason(allowed.reason ?? null, t),
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the target's identity-stable shape
-    [editor, key]
+    [editor, key, t]
   );
   const slice = useEditorState(selectSlice, commandSliceEqual);
 
