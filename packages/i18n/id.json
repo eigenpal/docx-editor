@@ -603,7 +603,8 @@
     "showPane": "Tampilkan komentar",
     "structural": "Struktur dokumen diubah",
     "deleteComment": "Hapus komentar",
-    "discardChange": "Buang perubahan"
+    "discardChange": "Buang perubahan",
+    "showResolvedComment": null
   },
   "imageAltText": {
     "description": "Deskripsi",

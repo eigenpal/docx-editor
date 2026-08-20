@@ -104,9 +104,16 @@ export interface TreeApplyResult {
 export type TreeBindingRejection = 'paragraph-count-unexplained' | 'paragraph-reordered' | 'unknown-paragraph-id' | 'unknown-content-moved' | 'unsupported-node' | 'split-not-clean' | 'join-not-clean';
 
 // @public
-export interface TreeDocxSession {
-    applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
+export interface TreeDocxSession extends TreeDocxSessionView {
     applyPmDoc(doc: Node_2): TreeApplyResult;
+    lastCommitWasStructural(): boolean;
+    projectDoc(): Node_2;
+    reconcile(previousDoc: Node_2): Node_2;
+}
+
+// @public
+export interface TreeDocxSessionView {
+    applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
     // (undocumented)
     beginComposition(scope?: StoryScope): void;
@@ -145,7 +152,6 @@ export interface TreeDocxSession {
     headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
     insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
-    lastCommitWasStructural(): boolean;
     nodeIdOf(paraId: string): string | null;
     numberingRoot(): OoxmlElement | null;
     packageRevision(): number;
@@ -155,8 +161,6 @@ export interface TreeDocxSession {
     paraIdOf(nodeId: string): string | null;
     part(): OoxmlPart;
     partFor(scope: StoryScope): OoxmlPart | null;
-    projectDoc(): Node_2;
-    reconcile(previousDoc: Node_2): Node_2;
     // (undocumented)
     redo(): SelectionMark | null;
     relationshipTarget(relationshipId: string, scope?: StoryScope): {

@@ -7,9 +7,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
+import type { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
 import type { ReviewPartProps } from './DocxEditorReview.tsx';
 import type { ReviewItemView } from './useReview.ts';
 import { COMPACT_CARD_WIDTH } from './use-rail-geometry.ts';
+import { authorCardStyle } from './review-author-styles.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => {
@@ -21,6 +23,9 @@ interface ComposePartDeps {
     readonly endDraft: () => void;
     readonly measure: (node: HTMLElement | null, key: string) => void;
     readonly readOnly: boolean;
+    readonly draftAuthor: string | null;
+    readonly draftAuthorInfo: ReviewAuthorInfo | undefined;
+    readonly draftAuthorSlot: number;
   };
   readonly useItem: () => ReviewItemView | null;
   readonly useLabel: () => (key: TranslationKey) => string;
@@ -45,7 +50,8 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
      */
     left?: number | null;
   }) {
-    const { review, endDraft, measure, readOnly } = deps.useRail();
+    const { review, endDraft, measure, readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } =
+      deps.useRail();
     const t = deps.useLabel();
     const [text, setText] = useState('');
     const [refused, setRefused] = useState(false);
@@ -84,7 +90,18 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           measure(node, deps.composeKey);
         }}
       >
-        <div className="docx-review__card" data-testid="review-draft" data-draft="">
+        <div
+          className="docx-review__card"
+          data-testid="review-draft"
+          data-draft=""
+          {...(draftAuthor
+            ? {
+                'data-review-author': draftAuthor,
+                'data-review-author-slot': draftAuthorSlot,
+              }
+            : {})}
+          style={authorCardStyle(draftAuthor ?? undefined, draftAuthorInfo, draftAuthorSlot)}
+        >
           <form
             className="docx-review__reply-box"
             onSubmit={(event) => {

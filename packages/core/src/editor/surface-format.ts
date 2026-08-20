@@ -5,7 +5,7 @@
 // covers a WHOLE paragraph also writes its mark, because that is what a list marker
 // inherits its face from.
 
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import {
   type SemanticLayout,
@@ -32,7 +32,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** What the composition root lends this lane. */
 export interface SurfaceFormatDeps {
-  readonly session: TreeDocxSession;
+  readonly session: TreeDocxSessionView;
   /** Active story for mutations — body or `{ kind: 'headerFooter', rId }`. */
   storyScope(): StoryScope;
   layout(): SemanticLayout;
@@ -83,9 +83,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const { session, commit, orderedRange, selectionMark, textOf } = deps;
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
   const applyOps = (
-    ops: Parameters<TreeDocxSession['applyTreeOps']>[0],
-    before?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    after?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+    ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
+    before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
+    after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
   ) => session.applyTreeOps(ops, before, after, deps.storyScope());
   const currentLayout = {
     get value(): SemanticLayout {

@@ -657,6 +657,7 @@
     "structural": "Changed the document structure",
     "replyRefused": "Could not post the reply",
     "showPane": "Show comments",
+    "showResolvedComment": "Show resolved comment",
     "replaced": "Replaced",
     "replacedWith": "with",
     "commentRefused": "Could not add the comment"

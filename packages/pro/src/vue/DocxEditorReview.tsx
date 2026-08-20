@@ -229,11 +229,14 @@ const ReviewRoot = defineComponent({
         ? reviewHook.items.value.filter((entry) => props.filter!(entry))
         : reviewHook.items.value
     );
-
+    const configuredAuthor = computed(() => editorRef.value?.getConfiguredAuthor() ?? null);
     const authorSlots = computed(() => {
       const slotsMap = new Map<string, number>();
       for (const entry of items.value) {
         if (entry.author && !slotsMap.has(entry.author)) slotsMap.set(entry.author, slotsMap.size);
+      }
+      if (configuredAuthor.value && !slotsMap.has(configuredAuthor.value)) {
+        slotsMap.set(configuredAuthor.value, slotsMap.size);
       }
       return slotsMap;
     });
@@ -560,20 +563,27 @@ const ReviewRoot = defineComponent({
       return buildReviewActions(reviewHook, items.value);
     });
 
-    const currentRailValue = (): ReviewRailValue => ({
-      t: props.t,
-      cardClassName: props.card?.className,
-      readOnly: readOnly.value,
-      composeTop: composeTop.value,
-      review: reviewActions.value,
-      allItems: allReview.items.value,
-      authorSlots: authorSlots.value,
-      authorInfo: authorInfo.value,
-      byId: byId.value,
-      measure: observeSlot,
-      beginDraft,
-      endDraft,
-    });
+    const currentRailValue = (): ReviewRailValue => {
+      const draftAuthor = configuredAuthor.value;
+      const draftAuthorSlot = draftAuthor ? (authorSlots.value.get(draftAuthor) ?? 0) : 0;
+      return {
+        t: props.t,
+        cardClassName: props.card?.className,
+        readOnly: readOnly.value,
+        composeTop: composeTop.value,
+        review: reviewActions.value,
+        allItems: allReview.items.value,
+        authorSlots: authorSlots.value,
+        authorInfo: authorInfo.value,
+        draftAuthor,
+        draftAuthorInfo: draftAuthor ? authorInfo.value.get(draftAuthor) : undefined,
+        draftAuthorSlot,
+        byId: byId.value,
+        measure: observeSlot,
+        beginDraft,
+        endDraft,
+      };
+    };
     const railValue = shallowRef<ReviewRailValue>(currentRailValue());
     watchEffect(() => {
       railValue.value = currentRailValue();

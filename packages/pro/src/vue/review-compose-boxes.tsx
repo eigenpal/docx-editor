@@ -21,6 +21,7 @@ import type { ReviewItemView } from './useReview.ts';
 import { useReviewStableId } from './stable-id.ts';
 import { useEditorRenderRevision } from './useEditorRenderRevision.ts';
 import { COMPACT_CARD_WIDTH, COMPOSE_KEY, guardMousedown, markPart } from './review-shared.ts';
+import { authorCardStyle } from './review-author-styles.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => ComputedRef<ReviewRailValue>;
@@ -77,7 +78,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
 
         return () => {
           if (props.hidden) return null;
-          const { readOnly } = rail.value;
+          const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = rail.value;
           return h(
             'div',
             {
@@ -93,7 +94,22 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
             [
               h(
                 'div',
-                { class: 'docx-review__card', 'data-testid': 'review-draft', 'data-draft': '' },
+                {
+                  class: 'docx-review__card',
+                  'data-testid': 'review-draft',
+                  'data-draft': '',
+                  ...(draftAuthor
+                    ? {
+                        'data-review-author': draftAuthor,
+                        'data-review-author-slot': draftAuthorSlot,
+                      }
+                    : {}),
+                  style: authorCardStyle(
+                    draftAuthor ?? undefined,
+                    draftAuthorInfo,
+                    draftAuthorSlot
+                  ),
+                },
                 [
                   h(
                     'form',

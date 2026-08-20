@@ -18,6 +18,7 @@ import { zipSync, strToU8 } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   DocxEditorContextMenu,
+  DocxEditorAuthorStyle,
   DocxEditorRoot,
   DocxEditorViewport,
   DocxEditorContent,
@@ -432,7 +433,16 @@ describe('the review sidebar', () => {
     });
     expect(commentOf(editor).resolved).toBe(true);
     expect(view.getByTestId('review-card').hasAttribute('data-resolved')).toBe(true);
+    expect(view.getByTestId('review-card').hasAttribute('data-resolved-miniature')).toBe(true);
+    expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(false);
     expect(view.queryByTestId('review-resolve')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(
+        view.getByTestId('review-card').querySelector('.docx-review__resolved-toggle')!
+      );
+    });
+    expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(true);
     expect(view.getByTestId('review-reopen')).toBeDefined();
 
     await act(async () => {
@@ -440,6 +450,35 @@ describe('the review sidebar', () => {
     });
     expect(commentOf(editor).resolved).toBe(false);
     expect(view.getByTestId('review-resolve')).toBeDefined();
+  });
+
+  test('draws a new comment draft in the configured author color', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        author="Demo Reviewer"
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorAuthorStyle author="Demo Reviewer" color="#b42318" />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    await act(async () => {
+      fireEvent.click(view.getByTestId('review-add-comment'));
+    });
+    const draft = view.getByTestId('review-draft');
+    expect(draft.dataset.reviewAuthor).toBe('Demo Reviewer');
+    expect(draft.style.getPropertyValue('--doc-review-author-current')).toBe('#b42318');
   });
 
   test('gives custom comment cards actions and the engine viewing refusal', async () => {

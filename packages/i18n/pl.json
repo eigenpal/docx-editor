@@ -603,7 +603,8 @@
     "showPane": "Pokaż komentarze",
     "structural": "Zmieniono strukturę dokumentu",
     "deleteComment": "Usuń komentarz",
-    "discardChange": "Odrzuć zmianę"
+    "discardChange": "Odrzuć zmianę",
+    "showResolvedComment": null
   },
   "imageAltText": {
     "description": "Opis",

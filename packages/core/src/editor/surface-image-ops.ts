@@ -3,7 +3,7 @@
 // Routes drawing tree ops and package image intents through the same applyOps / commit path
 // as keystrokes — viewing refusal, suggesting attribution, and layout/paint refresh.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import type { ImageDecodePort, SupportedImageMime } from '../store/package/image-resources.ts';
@@ -20,14 +20,14 @@ const SUGGESTING_IMAGE_REFUSAL = 'image property edits are not supported in sugg
 const TRACKED_DRAWING_DELETION = 'trackedDrawingDeletionUnsupported';
 
 export function createImageOps(deps: {
-  session: TreeDocxSession;
+  session: TreeDocxSessionView;
   applyOps: (
     ops: readonly DrawingTreeDocOp[],
     before?: { paragraphId: string; start: number; end: number } | null,
     after?: { paragraphId: string; start: number; end: number } | null
-  ) => ReturnType<TreeDocxSession['applyTreeOps']>;
+  ) => TreeApplyResult;
   commit: (
-    run: () => ReturnType<TreeDocxSession['applyTreeOps']> | boolean,
+    run: () => TreeApplyResult | boolean,
     selectionAfter?: () => SemanticSelection | null
   ) => void;
   storyScope: () => StoryScope;
@@ -37,9 +37,7 @@ export function createImageOps(deps: {
   trackedDate: () => string;
   decodePort: () => ImageDecodePort;
 }): {
-  applyDrawingOps: (
-    ops: readonly DrawingTreeDocOp[]
-  ) => ReturnType<TreeDocxSession['applyTreeOps']>;
+  applyDrawingOps: (ops: readonly DrawingTreeDocOp[]) => TreeApplyResult;
   applyImageProperties: (input: ApplyImagePropertiesInput) => ImageIntentResult;
   deleteImage: (drawingNodeId: string) => ImageIntentResult;
   insertImage: (input: Omit<InsertImageInput, 'decodePort'>) => Promise<ImageIntentResult>;
@@ -53,7 +51,7 @@ export function createImageOps(deps: {
     }
   ) => Promise<ImageIntentResult>;
 } {
-  function refuseViewing(): ReturnType<TreeDocxSession['applyTreeOps']> {
+  function refuseViewing(): TreeApplyResult {
     return {
       committed: false,
       rejected: true,
@@ -62,7 +60,7 @@ export function createImageOps(deps: {
     };
   }
 
-  function refuseSuggestingPropertyEdit(): ReturnType<TreeDocxSession['applyTreeOps']> {
+  function refuseSuggestingPropertyEdit(): TreeApplyResult {
     return {
       committed: false,
       rejected: true,

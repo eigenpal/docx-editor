@@ -4903,7 +4903,7 @@ a.docx-hyperlink:focus-visible {
 
 /* A card being composed reads as unfinished until it is committed. */
 .docx-review__card[data-draft] {
-  border-color: var(--doc-primary, #1a73e8);
+  border-color: var(--doc-review-author-ink, var(--doc-primary, #1a73e8));
 }
 
 /* The Word-style decision balloon: clicking a format or structural change in the page
@@ -5420,8 +5420,61 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-review-card-active-bg);
 }
 
-.docx-review__card[data-resolved] {
+.docx-review__card[data-resolved]:not([data-resolved-miniature]) {
   opacity: 0.55;
+}
+
+.docx-review__card[data-resolved-miniature]:not([open]) {
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  margin-left: auto;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border-color: var(--doc-success, #34a853);
+  border-left-color: var(--doc-success, #34a853);
+  border-radius: 50%;
+  background: var(--doc-success-bg, #e8f5e9);
+  color: var(--doc-success, #34a853);
+  font: inherit;
+  opacity: 1;
+}
+
+.docx-review__resolved-toggle {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  margin: -6px;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-end;
+  border-radius: 50%;
+  color: var(--doc-success, #34a853);
+  cursor: pointer;
+  list-style: none;
+}
+
+.docx-review__resolved-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.docx-review__card[data-resolved-miniature]:not([open]) .docx-review__resolved-toggle {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  align-self: center;
+}
+
+.docx-review__resolved-toggle:focus-visible {
+  outline: 2px solid var(--doc-success, #34a853);
+  outline-offset: 1px;
+}
+
+.docx-review__resolved-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .docx-review__head {
@@ -5626,6 +5679,10 @@ a.docx-hyperlink:focus-visible {
 .docx-review__input:focus-visible {
   outline: 2px solid var(--doc-focus-ring, #3b82f6);
   outline-offset: -1px;
+}
+
+.docx-review__card[data-draft] .docx-review__input:focus-visible {
+  outline-color: var(--doc-review-author-ink, var(--doc-focus-ring, #3b82f6));
 }
 
 /* A reply needs a visible way to send it. Enter posts too, but a field with no button is a

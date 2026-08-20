@@ -135,6 +135,34 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
+  test('draws a new comment draft in the configured author color', async () => {
+    const mounted = mountEditorTree(
+      () => [
+        h(DocxEditorAuthorStyle, {
+          author: 'Demo Reviewer',
+          color: '#b42318',
+        }),
+      ],
+      SOURCE,
+      () => [h(DocxEditorReview)],
+      [reviewModule()],
+      { author: 'Demo Reviewer' }
+    );
+    try {
+      await flushMount();
+      await selectAllWithPlacement(mounted.editor());
+      (
+        mounted.container.querySelector('[data-testid="review-add-comment"]') as HTMLButtonElement
+      ).click();
+      await flushMount();
+      const draft = mounted.container.querySelector('[data-testid="review-draft"]') as HTMLElement;
+      expect(draft.dataset.reviewAuthor).toBe('Demo Reviewer');
+      expect(draft.style.getPropertyValue('--doc-review-author-current')).toBe('#b42318');
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('emits no ref-owner warnings while the rail is active', async () => {
     const mounted = mountReview(TRACKED);
     try {
@@ -439,6 +467,74 @@ describe('DocxEditorReview (Vue)', () => {
     } finally {
       mounted.unmount();
       globalThis.ResizeObserver = original;
+    }
+  });
+
+  test('keeps one measured slot element across a card update', async () => {
+    const original = globalThis.ResizeObserver;
+    const observed: Element[] = [];
+    const unobserved: Element[] = [];
+    class ProbeResizeObserver {
+      constructor(_callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        observed.push(target);
+      }
+      unobserve(target: Element) {
+        unobserved.push(target);
+      }
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = ProbeResizeObserver as unknown as typeof ResizeObserver;
+    const mounted = mountReview(COMMENTED_SOURCE);
+    try {
+      await flush();
+      const initial = observed.find((node) => node.classList.contains('docx-review__slot'));
+      expect(initial).toBeDefined();
+      (
+        mounted.container.querySelector('[data-testid="review-resolve"]') as HTMLButtonElement
+      ).click();
+      await waitFor(
+        () =>
+          mounted.container
+            .querySelector('[data-testid="review-card"]')
+            ?.hasAttribute('data-resolved-miniature') === true
+      );
+      expect(mounted.container.querySelector('.docx-review__slot')).toBe(initial);
+      expect(unobserved.includes(initial!)).toBe(false);
+    } finally {
+      mounted.unmount();
+      globalThis.ResizeObserver = original;
+    }
+  });
+
+  test('collapses resolved comments to a green-tick miniature until clicked', async () => {
+    const mounted = mountReview(COMMENTED_SOURCE);
+    try {
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-resolve"]') !== null
+      );
+      (
+        mounted.container.querySelector('[data-testid="review-resolve"]') as HTMLButtonElement
+      ).click();
+      await waitFor(
+        () =>
+          mounted.container
+            .querySelector('[data-testid="review-card"]')
+            ?.hasAttribute('data-resolved-miniature') === true
+      );
+      const details = mounted.container.querySelector(
+        '[data-testid="review-card"]'
+      ) as HTMLDetailsElement;
+      expect(details.open).toBe(false);
+
+      (details.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(
+        new MouseEvent('click', { bubbles: true })
+      );
+      await waitFor(() => details.open);
+      expect(mounted.container.querySelector('[data-testid="review-reopen"]')).not.toBeNull();
+    } finally {
+      mounted.unmount();
     }
   });
 

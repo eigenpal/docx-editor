@@ -4,7 +4,7 @@
 // undo entry each). Entering a note scope rebinds StoryScope to notesPart + the
 // focused note identity via EditorScope { kind: 'note', id }.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import {
   segmentsOf,
@@ -62,14 +62,14 @@ export interface NoteOps {
 }
 
 export function createNoteOps(deps: {
-  session: TreeDocxSession;
+  session: TreeDocxSessionView;
   applyOps: (
     ops: readonly TreeDocOp[],
     before?: { paragraphId: string; start: number; end: number } | null,
     after?: { paragraphId: string; start: number; end: number } | null
-  ) => ReturnType<TreeDocxSession['applyTreeOps']>;
+  ) => TreeApplyResult;
   commit: (
-    run: () => ReturnType<TreeDocxSession['applyTreeOps']> | boolean,
+    run: () => TreeApplyResult | boolean,
     selectionAfter?: () => SemanticSelection | null
   ) => void;
   selection: () => SemanticSelection;
@@ -250,7 +250,7 @@ function firstEditableNoteOffset(paragraph: OoxmlParagraphNode): number {
 }
 
 function normalNoteIds(
-  pkg: ReturnType<TreeDocxSession['currentPackage']>,
+  pkg: ReturnType<TreeDocxSessionView['currentPackage']>,
   noteKind: NoteKind
 ): ReadonlySet<number> {
   const part = resolveNotesPart(pkg, noteKind);

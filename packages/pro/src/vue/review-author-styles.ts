@@ -37,18 +37,19 @@ export function resolveReviewAuthorInfo(
 ): ReadonlyMap<string, ReviewAuthorInfo> {
   const byAuthor = new Map<string, ReviewAuthorInfo>();
   for (const info of roster) byAuthor.set(info.author, info);
-  for (const entry of items) {
-    if (!entry.author || byAuthor.has(entry.author)) continue;
-    const slot = authorSlots.get(entry.author) ?? 0;
-    const style = editor?.getReviewAuthorStyle(entry.author);
+  const authors = [...items.map((entry) => entry.author), editor?.getConfiguredAuthor()];
+  for (const author of authors) {
+    if (!author || byAuthor.has(author)) continue;
+    const slot = authorSlots.get(author) ?? 0;
+    const style = editor?.getReviewAuthorStyle(author);
     const color = style?.color ?? `var(--doc-review-author-${slot % AUTHOR_SLOTS})`;
-    const cached = synthetic.get(entry.author);
+    const cached = synthetic.get(author);
     const resolved: ReviewAuthorInfo =
       cached?.slot === slot && cached.color === color && cached.style === style
         ? cached
-        : { author: entry.author, slot, color, ...(style ? { style } : {}) };
-    synthetic.set(entry.author, resolved);
-    byAuthor.set(entry.author, resolved);
+        : { author, slot, color, ...(style ? { style } : {}) };
+    synthetic.set(author, resolved);
+    byAuthor.set(author, resolved);
   }
   return byAuthor;
 }

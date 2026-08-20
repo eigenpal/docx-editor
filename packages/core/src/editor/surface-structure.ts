@@ -6,7 +6,7 @@
 // that read `numbering.xml` or `w:sectPr`, so they sit together rather than in the
 // composition root.
 
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
 import {
   documentOrder,
@@ -29,7 +29,7 @@ import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
 export interface SurfaceStructureDeps {
-  readonly session: TreeDocxSession;
+  readonly session: TreeDocxSessionView;
   /** Active story for content mutations — body or open furniture. */
   storyScope(): StoryScope;
   /** The CURRENT layout — read per call, never captured. */
@@ -159,11 +159,10 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   const deleteSelectionPlan = deps.deleteSelectionPlan;
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
   const applyOps = (
-    ops: Parameters<TreeDocxSession['applyTreeOps']>[0],
-    before?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    after?: Parameters<TreeDocxSession['applyTreeOps']>[2]
-  ): ReturnType<TreeDocxSession['applyTreeOps']> =>
-    session.applyTreeOps(ops, before, after, deps.storyScope());
+    ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
+    before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
+    after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
+  ): TreeApplyResult => session.applyTreeOps(ops, before, after, deps.storyScope());
   const orderOf = () => deps.paragraphOrder();
   const currentLayout = {
     get value(): SemanticLayout {

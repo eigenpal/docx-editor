@@ -31,7 +31,7 @@ import { createAutomationHost } from '../automation/host.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
-import type { TreeDocxSession } from '../binding/tree-session.ts';
+import type { TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 
 /**
@@ -77,11 +77,11 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
    */
   let base = 0;
   let seen = 0;
-  let session: TreeDocxSession | null = null;
+  let session: TreeDocxSessionView | null = null;
   let started = false;
   let released = false;
 
-  const sync = (): TreeDocxSession | null => {
+  const sync = (): TreeDocxSessionView | null => {
     // Released: report nothing and, crucially, move nothing. A disposed host that kept
     // re-adopting the editor's session would keep advancing the revision it no longer reads.
     if (released) return null;

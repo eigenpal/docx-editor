@@ -146,7 +146,7 @@ export interface TreeApplyResult {
  * Holds the whole package, not just the body — headers, footers, notes, comments and styles are
  * all reachable through it, and parts the engine does not model are preserved verbatim.
  */
-export interface TreeDocxSession {
+export interface TreeDocxSessionView {
   /** Whether the body holds at least one editable paragraph. */
   readonly editable: boolean;
   /** Canonical node ids of the body paragraphs, in order. */
@@ -182,20 +182,6 @@ export interface TreeDocxSession {
     selectionAfter?: SelectionMark | null,
     scope?: StoryScope
   ): TreeApplyResult;
-  /** Project the current BODY revision into a ProseMirror doc. */
-  projectDoc(): PMNode;
-  /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
-  reconcile(previousDoc: PMNode): PMNode;
-  /**
-   * Whether the last commit changed the BLOCK SEQUENCE (a split, join, insert or delete).
-   *
-   * A host needs this to decide whether the view must be re-projected at all: after a pure
-   * text edit the view already holds what the model holds, and re-projecting anyway both
-   * wastes work and races the next keystroke.
-   */
-  lastCommitWasStructural(): boolean;
-  /** Map an edited BODY doc to tree ops and commit them as ONE transaction. */
-  applyPmDoc(doc: PMNode): TreeApplyResult;
   /** Body text, paragraphs joined by newlines, read from the CANONICAL tree. */
   bodyText(): string;
   /** Text of a story scope, paragraphs joined by newlines. */
@@ -251,7 +237,7 @@ export interface TreeDocxSession {
   documentFonts(): readonly string[];
   /**
    * Whether the document puts any literal character on a page, over the same roots
-   * {@link TreeDocxSession.documentFonts} reads. Memoized per package revision.
+   * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.
    *
    * The font-substitution notice needs it: `documentFonts` reports what the document
    * DECLARES, and a brand-new document declares Word's Calibri default over a single
@@ -532,6 +518,28 @@ export interface TreeDocxSession {
     scope: StoryScope,
     input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+}
+
+/**
+ * Binding-only session methods that exchange ProseMirror projections.
+ *
+ * Editor surfaces expose {@link TreeDocxSessionView}. Only the binding lane sees this extension.
+ */
+export interface TreeDocxSession extends TreeDocxSessionView {
+  /** Project the current BODY revision into a ProseMirror doc. */
+  projectDoc(): PMNode;
+  /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
+  reconcile(previousDoc: PMNode): PMNode;
+  /**
+   * Whether the last commit changed the BLOCK SEQUENCE (a split, join, insert or delete).
+   *
+   * A host needs this to decide whether the view must be re-projected at all. After a pure
+   * text edit, the view already holds what the model holds. Re-projecting wastes work and
+   * races the next keystroke.
+   */
+  lastCommitWasStructural(): boolean;
+  /** Map an edited BODY doc to tree ops and commit them as one transaction. */
+  applyPmDoc(doc: PMNode): TreeApplyResult;
 }
 
 export type { DocumentStyleEntry } from './document-catalog.ts';

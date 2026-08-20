@@ -6,7 +6,7 @@
 // its session, measurer and cache; nothing here holds surface state beyond the per-part
 // story memo.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { resolveRelationship } from '@docx-editor.dev/core/store';
 import {
@@ -53,7 +53,7 @@ export interface FurnitureSource {
 }
 
 export function createFurnitureSource(env: {
-  readonly session: TreeDocxSession;
+  readonly session: TreeDocxSessionView;
   readonly measurer: TextMeasurer;
   readonly producer: string;
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
@@ -216,7 +216,7 @@ export function createFurnitureSource(env: {
   }
 
   function furnitureFromParts(
-    parts: ReturnType<TreeDocxSession['headerFooterPartsBySection']>[number] | undefined,
+    parts: ReturnType<TreeDocxSessionView['headerFooterPartsBySection']>[number] | undefined,
     sectionGeometry: ReturnType<typeof geometryOfSection>
   ): PageFurniture | undefined {
     if (!parts) return undefined;
@@ -256,7 +256,7 @@ const FOOTER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relati
 
 /** Map header/footer part names to the main-document relationship id that targets them. */
 function headerFooterRIdIndex(
-  pkg: ReturnType<TreeDocxSession['currentPackage']>
+  pkg: ReturnType<TreeDocxSessionView['currentPackage']>
 ): Map<string, string> {
   const index = new Map<string, string>();
   const relationships = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
@@ -283,7 +283,7 @@ function stampStoryRId(
 }
 
 /** Immutable-in-session style + numbering projections shared by body and furniture layout. */
-export function createSurfaceStyleDeps(session: TreeDocxSession): {
+export function createSurfaceStyleDeps(session: TreeDocxSessionView): {
   readonly styleCascade: StyleCascadeTable | undefined;
   /**
    * `w:settings/w:defaultTabStop` in points. Read once: the settings part is immutable
@@ -472,7 +472,7 @@ export function equalSurfaceExtents(a: SurfaceExtent, b: SurfaceExtent): boolean
  * layout then skips the notes path entirely (no reservation, no mark projection).
  */
 export function createNotesLayoutInput(env: {
-  readonly session: TreeDocxSession;
+  readonly session: TreeDocxSessionView;
   readonly measurer: TextMeasurer;
   readonly producer: string;
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];

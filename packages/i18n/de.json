@@ -603,7 +603,8 @@
     "showPane": "Kommentare anzeigen",
     "structural": "Dokumentstruktur geändert",
     "deleteComment": "Kommentar löschen",
-    "discardChange": "Änderung verwerfen"
+    "discardChange": "Änderung verwerfen",
+    "showResolvedComment": null
   },
   "imageAltText": {
     "description": "Beschreibung",

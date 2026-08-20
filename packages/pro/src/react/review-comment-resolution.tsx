@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import type { ComponentPropsWithoutRef, MouseEvent as ReactMouseEvent } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { ACCEPT_ICON, REOPEN_ICON, icon } from './review-icons.tsx';
 import type { ReviewActionProps } from './DocxEditorReview.tsx';
@@ -16,6 +16,22 @@ interface ResolutionPartDeps {
   readonly useItem: () => ReviewItemView | null;
   readonly useLabel: () => (key: TranslationKey) => string;
   readonly guardMousedown: (event: ReactMouseEvent) => void;
+}
+
+interface ResolvedCommentCardProps extends ComponentPropsWithoutRef<'details'> {
+  readonly label: string;
+}
+
+/** Native disclosure wrapper for a resolved comment's green-check miniature. */
+export function ResolvedCommentCard({ label, children, ...props }: ResolvedCommentCardProps) {
+  return (
+    <details {...props}>
+      <summary className="docx-review__resolved-toggle" aria-label={label}>
+        <span className="docx-review__resolved-tick">{icon(ACCEPT_ICON)}</span>
+      </summary>
+      {children}
+    </details>
+  );
 }
 
 /** Build the two comment-state parts against the rail's private contexts. */

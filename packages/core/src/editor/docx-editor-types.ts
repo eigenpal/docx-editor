@@ -222,6 +222,13 @@ export interface DocxEditorInstance extends Editor {
    */
   getReviewAuthors(): readonly ReviewAuthorInfo[];
   /**
+   * The configured author used when a comment or reply omits an explicit author.
+   *
+   * @internal Review compose chrome uses this to draw an unfinished comment in the same
+   * author colour it will receive after commit.
+   */
+  getConfiguredAuthor(): string | null;
+  /**
    * The style declared for one author, whether or not the SURFACE has published them yet —
    * so review chrome can draw a card the rail is holding before the roster catches up.
    *

@@ -469,15 +469,19 @@ export const ReviewCard = markPart(
       const rail = useRail();
       const entryRef = useReviewItem();
       const cardId = useReviewStableId('card');
+      const t = useReviewLabel();
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
         const { review, authorSlots, authorInfo } = rail.value;
         const slot = authorSlots.get(entry.author) ?? 0;
+        const resolvedCollapsible = !props.asChild && entry.kind === 'comment' && entry.resolved;
         const shared = {
           class: `docx-review__card${props.className ? ` ${props.className}` : ''}`,
           'data-testid': 'review-card',
-          'aria-labelledby': `${cardId}-author ${cardId}-summary`,
+          ...(!resolvedCollapsible
+            ? { 'aria-labelledby': `${cardId}-author ${cardId}-summary` }
+            : {}),
           'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
           ...(entry.author
             ? {
@@ -490,32 +494,51 @@ export const ReviewCard = markPart(
             : {}),
           ...(entry.isActive ? { 'data-active': '' } : {}),
           ...(entry.kind === 'comment' && entry.resolved ? { 'data-resolved': '' } : {}),
+          ...(resolvedCollapsible ? { 'data-resolved-miniature': '' } : {}),
           style: authorCardStyle(entry.author, authorInfo.get(entry.author), slot),
-          tabIndex: 0,
-          role: 'button' as const,
+          ...(!resolvedCollapsible ? { tabIndex: 0, role: 'button' as const } : {}),
           id: cardId,
-          onMousedown: (event: MouseEvent) => {
-            if ((event.target as HTMLElement | null)?.closest('[data-review-selectable]')) return;
-            (event.currentTarget as HTMLElement).focus({ preventScroll: true });
-          },
-          onClick: (event: MouseEvent) => {
-            if (
-              (event.target as HTMLElement | null)?.closest(
-                'button, input, textarea, .docx-review__reply-box, [data-review-selectable]'
-              )
-            ) {
-              return;
-            }
-            if (!entry.isActive) review.setActive(entry.key);
-          },
-          onKeydown: (event: KeyboardEvent) => {
-            if (event.target !== event.currentTarget) return;
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            review.setActive(entry.key);
-          },
+          ...(!resolvedCollapsible
+            ? {
+                onMousedown: (event: MouseEvent) => {
+                  if ((event.target as HTMLElement | null)?.closest('[data-review-selectable]')) {
+                    return;
+                  }
+                  (event.currentTarget as HTMLElement).focus({ preventScroll: true });
+                },
+                onClick: (event: MouseEvent) => {
+                  if (
+                    (event.target as HTMLElement | null)?.closest(
+                      'button, input, textarea, .docx-review__reply-box, [data-review-selectable]'
+                    )
+                  ) {
+                    return;
+                  }
+                  if (!entry.isActive) review.setActive(entry.key);
+                },
+                onKeydown: (event: KeyboardEvent) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  review.setActive(entry.key);
+                },
+              }
+            : {}),
         };
         if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
+        if (resolvedCollapsible) {
+          return h('details', shared, [
+            h(
+              'summary',
+              {
+                class: 'docx-review__resolved-toggle',
+                'aria-label': t('review.showResolvedComment'),
+              },
+              [h('span', { class: 'docx-review__resolved-tick' }, [icon(ACCEPT_ICON)])]
+            ),
+            h(ReviewCardPreset, null, { default: () => slots.default?.() }),
+          ]);
+        }
         return (
           <div {...shared}>{h(ReviewCardPreset, null, { default: () => slots.default?.() })}</div>
         );
