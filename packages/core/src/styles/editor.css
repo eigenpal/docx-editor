@@ -5745,12 +5745,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-review__input:focus-visible {
-  outline: 2px solid var(--doc-focus-ring, #3b82f6);
+  outline: 1px solid var(--doc-border-strong);
   outline-offset: -1px;
-}
-
-.docx-review__card[data-draft] .docx-review__input:focus-visible {
-  outline-color: var(--doc-review-author-ink, var(--doc-focus-ring, #3b82f6));
 }
 
 /* A reply needs a visible way to send it. Enter posts too, but a field with no button is a

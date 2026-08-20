@@ -201,7 +201,7 @@ between cards.
 
 - **WHEN** a reviewer starts a comment with a configured author and author style
 - **THEN** both adapters put that author and color on the draft card
-- **AND** the draft focus ring uses the same author color
+- **AND** the input uses a thin neutral border and focus ring
 
 #### Scenario: A resolved comment becomes a miniature
 
