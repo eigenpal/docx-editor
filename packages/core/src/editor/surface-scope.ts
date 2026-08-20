@@ -24,6 +24,7 @@ import type {
   TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import type { EditorScope, ViewScope } from '../contracts/editor.ts';
+import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
@@ -286,6 +287,19 @@ export function setHeaderFooterEditingChrome(
 ): void {
   container.classList.toggle('docx-paginated-surface--hf-editing', editing);
   pagesLayer.classList.toggle('docx-pages--hf-editing', editing);
+}
+
+/**
+ * Screen-only chrome for the editing mode.
+ *
+ * Viewing mode must show no WRITE affordance, and the blank header/footer band's
+ * "double-click to add" hover is one the painter cannot know about. The class has to be
+ * written on every mode change, not only on a repaint: `setEditingMode` moves the mode
+ * without moving the document, so a reader who switched to Viewing kept the invitation
+ * until some unrelated edit repainted the pages.
+ */
+export function setEditingModeChrome(container: HTMLElement, mode: SurfaceEditingMode): void {
+  container.classList.toggle('docx-paginated-surface--viewing', mode === 'view');
 }
 
 /** Move the caret within body stops or an open furniture/note story's stops. */

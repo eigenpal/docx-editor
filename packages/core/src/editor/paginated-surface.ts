@@ -150,6 +150,7 @@ import {
   noteCaretHost,
   pointerHeaderFooterState,
   scopedDocumentOrder,
+  setEditingModeChrome,
   setHeaderFooterEditingChrome,
   storyScopeOf,
 } from './surface-scope.ts';
@@ -220,6 +221,8 @@ export function mountPaginatedSurface(
       options.tableInteractionLabel ?? ((key: TableInteractionLabelKey) => defaultTableLabel(key)),
   };
   const VIEWING_REFUSAL = 'the document is open for viewing';
+  /** Document protection, as opposed to the reversible mode — the wording `gateCommand` uses. */
+  const READ_ONLY_REFUSAL = 'the document is read-only';
   const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
@@ -1059,6 +1062,7 @@ export function mountPaginatedSurface(
         readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
         readonly tocControlIds?: ReadonlySet<string>;
         readonly suppressedIds?: ReadonlySet<string>;
+        readonly readOnly?: boolean;
       }
     | undefined {
     const active = contentControlAtCaret();
@@ -1088,10 +1092,15 @@ export function mountPaginatedSurface(
     const additionalBoundaries = tocBoundaries
       .filter((entry) => entry.additional && !entry.empty)
       .map((entry) => entry.boundary);
+    // Read-only is a REASON to emit chrome, not a detail of it: with no chrome object the
+    // painter still paints every widget, and an unchecked checkbox on a viewing-mode
+    // document produced no other chrome to carry the flag.
+    const readOnly = contentControlRefusal() !== null;
     if (
       !showAllContentControls &&
       !activeIds &&
       !hoverIds &&
+      !readOnly &&
       checkedIds.size === 0 &&
       additionalBoundaries.length === 0 &&
       tocControlIds.size === 0
@@ -1099,6 +1108,7 @@ export function mountPaginatedSurface(
       return undefined;
     }
     return {
+      ...(readOnly ? { readOnly: true } : {}),
       ...(showAllContentControls ? { showAll: true } : {}),
       ...(activeIds ? { activeIds } : {}),
       ...(hoverIds ? { hoverIds } : {}),
@@ -1776,7 +1786,9 @@ export function mountPaginatedSurface(
       }
       let committed = false;
       commit(() => {
-        const result = session.applyTreeOps(
+        // `gatedSession`, not `session`: this lane wrote straight past the mode rules, so a
+        // checkbox in a document open for viewing still toggled and still committed.
+        const result = gatedSession.applyTreeOps(
           [{ op: 'setContentControlValue', controlId, value }],
           selectionMark()
         );
@@ -1800,7 +1812,7 @@ export function mountPaginatedSurface(
       }
       let committed = false;
       commit(() => {
-        const result = session.applyTreeOps(
+        const result = gatedSession.applyTreeOps(
           [{ op: 'removeContentControl', controlId: id }],
           selectionMark()
         );
@@ -1810,6 +1822,11 @@ export function mountPaginatedSurface(
       return committed;
     },
     disabledReason(controlId, action) {
+      // The MODE outranks every per-control property. Asked first because this one answer
+      // reaches everything: the painted widget disables itself on it, the pointer lane skips
+      // a widget carrying it, and the toolbar's remove row reports it.
+      const refusal = contentControlRefusal();
+      if (refusal !== null) return refusal;
       const record = contentControlsInLayout(currentLayout).find((c) => c.id === controlId);
       if (record) {
         return action === 'remove' ? removalLocked(record) : contentLockedOrBound(record);
@@ -1841,6 +1858,20 @@ export function mountPaginatedSurface(
       return null;
     },
   };
+
+  /**
+   * The pages layer's `contenteditable` / `aria-readonly`, from the host's wish AND the mode.
+   *
+   * These were two independent writes of one state, reconciled only by the facade calling
+   * both. A host driving `mountPaginatedSurface` itself and switching to viewing kept a
+   * writable pages layer — a blinking caret, an IME that opens on composition, and a screen
+   * reader told the document accepts input, on a document that refuses every write.
+   */
+  function applyEditableChrome(): void {
+    const editable = hostEditable && editingMode !== 'view';
+    pagesLayer.contentEditable = editable ? 'true' : 'false';
+    pagesLayer.setAttribute('aria-readonly', editable ? 'false' : 'true');
+  }
 
   function currentState(): PaginatedSurfaceState {
     return {
@@ -1943,7 +1974,7 @@ export function mountPaginatedSurface(
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
     // Viewing mode hides write affordances the painter cannot know about — today the
     // blank header/footer "double-click to add" band.
-    container.classList.toggle('docx-paginated-surface--viewing', editingMode === 'view');
+    setEditingModeChrome(container, editingMode);
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
@@ -2057,6 +2088,8 @@ export function mountPaginatedSurface(
   }
 
   let editingMode: SurfaceEditingMode = options.editingMode ?? 'edit';
+  /** The host's own `setEditable` wish, kept apart from the mode's — see `applyEditableChrome`. */
+  let hostEditable = true;
 
   /** The main story. Named once so the automation entry cannot drift from the session default. */
   const BODY_STORY: StoryScope = Object.freeze({ kind: 'body' as const });
@@ -2129,6 +2162,21 @@ export function mountPaginatedSurface(
       return 'suggesting needs an author before it can propose a change';
     }
     return null;
+  }
+
+  /**
+   * Why a content-control interaction is refused right now, or null.
+   *
+   * The widget is chrome the ENGINE paints, so the mode has to reach it here rather than at
+   * a host's discretion. No selection or op list to judge: a control write is aimed at a
+   * control id, so the TOC rules — which are about where the caret is — do not apply, and
+   * refusing a form field because the caret happens to sit in a table of contents would be
+   * an answer to a different question.
+   */
+  function contentControlRefusal(): string | null {
+    const refusal = writeRefusal(true, [], false);
+    if (refusal !== null) return refusal;
+    return session.editable ? null : READ_ONLY_REFUSAL;
   }
 
   /** Ops that change the DOCUMENT, as opposed to reading or resolving it. */
@@ -3766,8 +3814,8 @@ export function mountPaginatedSurface(
       // The DOM affordance, not the document's own editability: `session.editable` says
       // whether the FILE can be round-tripped, and this says whether the user may type into
       // it right now. Both have to be true for an edit to land.
-      pagesLayer.contentEditable = editable ? 'true' : 'false';
-      pagesLayer.setAttribute('aria-readonly', editable ? 'false' : 'true');
+      hostEditable = editable;
+      applyEditableChrome();
     },
 
     selectAll() {
@@ -3932,6 +3980,22 @@ export function mountPaginatedSurface(
       // not silently become a suggestion (or a viewing-mode refusal).
       flushTypeBuffer();
       editingMode = mode;
+      // Viewing has no furniture EDITING scope. Switching while a header was open left the
+      // body dimmed and inert under an active band and its whole options bar — a write UI
+      // over a document that now refuses writes. Exiting repaints, so this runs first.
+      if (mode === 'view') hfScope?.exitHeaderFooter();
+      // An open widget menu is a WRITE surface: a date picker left standing across the
+      // switch still offered a value the new mode refuses. Nothing else closes it.
+      removeExistingContentControlMenu();
+      applyEditableChrome();
+      // A mode change moves no content, so nothing else here repaints. The chrome class
+      // still has to follow immediately: without this the blank header/footer band kept
+      // inviting a double-click to add a story that viewing mode then refused.
+      setEditingModeChrome(container, editingMode);
+      // Painted chrome reads the mode too — content-control widgets disable themselves on
+      // it, and table furniture re-derives from it — so the pages have to be rebuilt even
+      // though not one character moved.
+      render(false);
       // The old refusal described the old mode. Left standing, a host rendering it showed
       // "the document is open for viewing" over a document that had just become editable.
       lastRejection = null;
@@ -4610,6 +4674,11 @@ export function mountPaginatedSurface(
           : null;
       },
       enterHeaderFooter: (info) => {
+        // Opening furniture is the door to a WRITE, and this lane never passes the facade —
+        // so it refuses in viewing exactly like `enterEmptyHeaderFooter` below, and like the
+        // `editHeaderFooter` command the facade classifies as mutating. Without it the hint
+        // was hidden and the scope was still one double-click away.
+        if (editingMode === 'view') return;
         // The pointer lane flips story scope too: land buffered typing first
         // (see setActiveScope).
         flushTypeBuffer();
@@ -4707,11 +4776,9 @@ export function mountPaginatedSurface(
   });
 
   render();
-  const originalSetEditingMode = surface.setEditingMode.bind(surface);
-  surface.setEditingMode = (mode) => {
-    originalSetEditingMode(mode);
-    tableInteraction.update();
-  };
+  // `setEditingMode` used to be wrapped here to append `tableInteraction.update()`, because
+  // the setter did not repaint. It does now, and `render` updates the table furniture — so
+  // the wrapper only hid the coupling from the setter that owns it.
   surface.setTableInteractionLabel = (resolver) => {
     tableLabelState.resolve = resolver;
     tableInteraction.refreshLabels();

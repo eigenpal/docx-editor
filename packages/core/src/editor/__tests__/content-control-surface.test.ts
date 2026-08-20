@@ -369,6 +369,75 @@ describe('content-control surface chrome', () => {
     expect(surface.session.bodyText()).toContain('O');
   });
 
+  test('viewing mode refuses every control write and disables the painted widget', () => {
+    // This lane called `session.applyTreeOps` directly rather than the gated session, so a
+    // checkbox on a document open for viewing still toggled and still committed. The widget
+    // is engine-painted, so the mode has to reach the DOM too — the pointer lane skips a
+    // widget carrying `data-disabled-reason`, which is what stops the click.
+    const body =
+      `<w:p>${sdt(
+        `<w14:checkbox><w14:checked w14:val="0"/>` +
+          `<w14:checkedState w14:val="2612" w14:font="MS Gothic"/>` +
+          `<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/></w14:checkbox>`,
+        `<w:r><w:t>x</w:t></w:r>`
+      )}</w:p>` + sdt(`<w:text/>`, p('O'));
+    const { surface, container } = mount(body);
+    const controls = surface.layout().contentControls ?? [];
+    const checkboxId = controls.find((c) => c.controlType === 'checkbox')!.id;
+    const openId = controls.find((c) => c.controlType !== 'checkbox')!.id;
+    const revision = surface.session.packageRevision();
+
+    surface.setEditingMode('view');
+
+    expect(surface.contentControls.disabledReason(checkboxId, 'edit')).toBe(
+      'the document is open for viewing'
+    );
+    expect(surface.contentControls.disabledReason(openId, 'remove')).toBe(
+      'the document is open for viewing'
+    );
+    expect(surface.contentControls.setValue(checkboxId, '1')).toBe(false);
+    expect(surface.contentControls.remove(openId)).toBe(false);
+    expect(surface.session.packageRevision()).toBe(revision);
+
+    const widget = container.querySelector<HTMLButtonElement>('[data-docx-cc-widget]');
+    expect(widget).not.toBeNull();
+    expect(widget!.disabled).toBe(true);
+    expect(widget!.dataset.disabledReason).toBe('readOnly');
+    expect(
+      container.querySelector('.docx-content-control-chrome')?.hasAttribute('data-read-only')
+    ).toBe(true);
+
+    // Reversible: the reader chose viewing and can choose again.
+    surface.setEditingMode('edit');
+    expect(surface.contentControls.disabledReason(openId, 'remove')).toBeNull();
+    const back = container.querySelector<HTMLButtonElement>('[data-docx-cc-widget]');
+    expect(back!.disabled).toBe(false);
+    expect(surface.contentControls.setValue(checkboxId, '1')).toBe(true);
+  });
+
+  test('viewing mode takes the pages layer out of contenteditable', () => {
+    // `setEditable` and `setEditingMode` were two independent writes of one state, kept in
+    // step only by the facade — so a host driving the surface itself kept a writable pages
+    // layer, a caret and an IME on a document that refuses every write.
+    const { surface, container } = mount(sdt(`<w:text/>`, p('O')));
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    expect(pages.contentEditable).toBe('true');
+
+    surface.setEditingMode('view');
+    expect(pages.contentEditable).toBe('false');
+    expect(pages.getAttribute('aria-readonly')).toBe('true');
+
+    surface.setEditingMode('edit');
+    expect(pages.contentEditable).toBe('true');
+    expect(pages.getAttribute('aria-readonly')).toBe('false');
+
+    // The host's own wish still outranks a non-viewing mode.
+    surface.setEditable(false);
+    expect(pages.contentEditable).toBe('false');
+    surface.setEditingMode('suggest');
+    expect(pages.contentEditable).toBe('false');
+  });
+
   test('foreign-namespace sdt is opaque to surface content-control ops', () => {
     const { surface } = mount(
       `<x:sdt xmlns:x="http://example.com/x"><x:sdtPr/><x:sdtContent>${p('foreign')}</x:sdtContent></x:sdt>` +

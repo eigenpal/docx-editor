@@ -27,8 +27,10 @@ import {
   ContextMenuItem,
   useContextMenuTarget,
   useDocxEditor,
+  useEditorState,
   useTranslation,
 } from '@docx-editor.dev/react';
+import type { EditorSnapshot } from '@docx-editor.dev/core';
 import {
   type ActivatedCustomNode,
   type CustomNodeDefinition,
@@ -39,6 +41,10 @@ import {
   resolveCustomNodeActivation,
   useCustomNodeDefinitions,
 } from './custom-node-activation.ts';
+
+/** Viewing refuses every node write, so neither row may be offered in it. */
+const selectDocumentReadOnly = (snapshot: EditorSnapshot): boolean =>
+  snapshot.editingMode === 'viewing';
 
 /**
  * Props for {@link CustomNodeContextMenu}: which definitions get menu sections, and which rows
@@ -99,6 +105,7 @@ export function CustomNodeContextMenu(props: CustomNodeContextMenuProps) {
     () => (resolved ? activatedCustomNodeOf(resolved, editor) : null),
     [resolved, editor]
   );
+  const readOnly = useEditorState(selectDocumentReadOnly);
   const card = useMemo(() => {
     if (!resolved?.definition.reviewCard || !node) return null;
     // `data` too: without it the info block silently rendered the no-payload branch of a hook
@@ -112,8 +119,11 @@ export function CustomNodeContextMenu(props: CustomNodeContextMenuProps) {
   if (!resolved || !node) return null;
   const { definition } = resolved;
   const label = definition.label ?? definition.name;
-  const editable = definition.onEdit !== undefined || onEditNode !== undefined;
-  const removable = remove && node.nodeId !== undefined && editor !== null;
+  // Both rows are WRITES — the edit hook opens a host dialog whose whole purpose is to
+  // change the node, and remove is refused by the engine. Offered enabled in viewing, the
+  // first one wrote through the host and the second closed the menu having done nothing.
+  const editable = !readOnly && (definition.onEdit !== undefined || onEditNode !== undefined);
+  const removable = !readOnly && remove && node.nodeId !== undefined && editor !== null;
   if (!card && !editable && !removable) return null;
   return (
     <>

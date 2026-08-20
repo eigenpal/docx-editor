@@ -139,6 +139,7 @@ import {
 import { setReviewCommentResolved } from './docx-editor-comment-resolution.ts';
 import {
   canContentControlCommand,
+  gateModeOf,
   contentControlAtOf,
   contentControlsOf,
   execContentControlCommand,
@@ -1886,7 +1887,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { ok: true, changed: false };
       }
       if (isContentControlEditorCommand(command)) {
-        const gated = canContentControlCommand(command, surface, mode, options);
+        // The LIVE mode, not the constructed one — see `gateModeOf`.
+        const gated = canContentControlCommand(command, surface, gateModeOf(editingMode), options);
         if (!gated.ok) return gated;
         return execContentControlCommand(surface!, command);
       }
@@ -1955,7 +1957,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { ok: true };
       }
       if (isContentControlEditorCommand(command)) {
-        return canContentControlCommand(command, surface, mode, options);
+        return canContentControlCommand(command, surface, gateModeOf(editingMode), options);
       }
       // Viewing refuses every EDIT, the same way `mode: 'view'` does at construction — but
       // reversibly, because the reader chose it and can choose again. Mutating only, so a

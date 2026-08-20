@@ -17,6 +17,7 @@ import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import type { OoxmlDrawingNode, OoxmlElement } from '../../store/package/ooxml-tree.ts';
 import { createInlineDrawingLayoutBundle } from '../../layout/inline-drawing-source.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -250,6 +251,32 @@ describe('docx-editor selected image context', () => {
     expect(editor.getSelectedImage()).toBe(first.image);
     const second = editor.snapshot();
     expect(second.image).toBe(first.image);
+  });
+
+  test('viewing mode takes the resize and move handles off the overlay target', async () => {
+    // The overlay's capability flags came from the drawing's own OOXML locks alone, so a
+    // reader in viewing got eight resize handles, a `move` cursor and a live drag preview —
+    // then watched it snap back when the write was refused. The target itself stays: the
+    // image is still selectable, copyable and describable in a document open for viewing.
+    const editor = mountEditor(inlinePictureDocument());
+    selectInlineDrawing(editor);
+    await settleDrawingResources(editor);
+    const editing = selectedDrawingOverlayTargetOf(editor.surface);
+    expect(editing).not.toBeNull();
+    expect(editing!.canResize).toBe(true);
+
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    const viewing = selectedDrawingOverlayTargetOf(editor.surface);
+    expect(viewing).not.toBeNull();
+    expect(viewing!.canResize).toBe(false);
+    expect(viewing!.canMove).toBe(false);
+
+    // Suggesting refuses every image property edit too, so it gets no handles either.
+    editor.exec({ type: 'setEditingMode', mode: 'suggesting' });
+    expect(selectedDrawingOverlayTargetOf(editor.surface)!.canResize).toBe(false);
+
+    editor.exec({ type: 'setEditingMode', mode: 'editing' });
+    expect(selectedDrawingOverlayTargetOf(editor.surface)!.canResize).toBe(true);
   });
 
   test('derives null for text caret and range selection', () => {

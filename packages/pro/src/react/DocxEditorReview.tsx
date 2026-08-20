@@ -567,9 +567,12 @@ function ReviewRoot({
     setDraftAnchorY(anchorY);
   }, [editor, readOnly, releaseSelectionPin, setReviewPaneOpen]);
   useEffect(() => {
-    if (hidden) return undefined;
+    // Not registered while READ-ONLY either: the registry's `requestCommentDraft` reports
+    // whether anything served the request, and a handler that accepts and then refuses made
+    // it answer yes to a draft that never opened.
+    if (hidden || readOnly) return undefined;
     return railRegistry?.registerCommentDraft(beginDraft);
-  }, [beginDraft, hidden, railRegistry]);
+  }, [beginDraft, hidden, readOnly, railRegistry]);
   const endDraft = useCallback(() => {
     releaseSelectionPin();
     setDraftAnchorY(null);

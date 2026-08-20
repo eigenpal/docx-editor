@@ -913,6 +913,22 @@ a.docx-hyperlink:focus-visible {
   opacity: 1;
 }
 
+/* A document nobody may write has nothing to fill in, so the pointer must not light a
+ * control as though it did. `data-active` and `data-boundary-visible` still show: those say
+ * WHERE a control is, which a reader may want. Only the hover invitation goes. The painter
+ * sets `data-read-only` from the same answer that disables the widget, so there is no second
+ * definition of what read-only means. */
+.docx-content-control-chrome[data-read-only]:hover .docx-content-control-boundary {
+  border-color: color-mix(in srgb, var(--doc-primary) 24%, var(--doc-page-bg-rendered));
+  background: color-mix(in srgb, var(--doc-primary) 3%, var(--doc-page-bg-rendered));
+  opacity: 0;
+}
+
+.docx-content-control-chrome[data-read-only][data-active] .docx-content-control-boundary,
+.docx-content-control-chrome[data-read-only][data-boundary-visible] .docx-content-control-boundary {
+  opacity: 1;
+}
+
 /*
  * Populated TOC: nothing at rest — no border, no background — and never sticky from the
  * caret or a click. The surface sets `data-hover` on the painted chrome while the pointer
@@ -968,6 +984,12 @@ a.docx-hyperlink:focus-visible {
 .docx-content-control-chrome:hover .docx-content-control-widget {
   background: color-mix(in srgb, var(--doc-primary) 15%, transparent);
   border-color: color-mix(in srgb, var(--doc-primary) 55%, transparent) !important;
+}
+
+/* Same rule for the widget: a disabled button that lights under the pointer reads as live. */
+.docx-content-control-chrome[data-read-only]:hover .docx-content-control-widget {
+  background: color-mix(in srgb, var(--doc-primary) 4%, var(--doc-page-bg-rendered));
+  border-color: color-mix(in srgb, var(--doc-primary) 28%, var(--doc-page-bg-rendered)) !important;
 }
 
 .docx-content-control-widget::after {
@@ -3274,22 +3296,36 @@ a.docx-hyperlink:focus-visible {
   margin-bottom: 4px;
 }
 
-/* No affordance while another furniture scope is open, in view mode, or in print. */
+/* No affordance while another furniture scope is open, in view mode, or in print.
+ * Each selector MIRRORS the qualifiers of the rule it cancels: the existing-band tint
+ * carries two `:not()`s and the footer hint carries an attribute selector, so a plainer
+ * selector here LOST the specificity race and left the invitation on screen. */
 .docx-pages--hf-editing .docx-hf--placeholder:hover,
 .docx-paginated-surface--viewing .docx-hf--placeholder:hover,
-.docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]):hover,
-.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]):hover {
+.docx-pages--hf-editing .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover,
+.docx-paginated-surface--viewing
+  .docx-hf:not([data-docx-hf-active]):not(.docx-hf--placeholder):hover {
   background: none;
 }
 
-.docx-pages--hf-editing .docx-hf--placeholder:hover::after,
-.docx-paginated-surface--viewing .docx-hf--placeholder:hover::after {
+/* The extra class here is STRUCTURE, not ballast: `docx-pages` is `docx-paginated-surface`'s
+ * own child and carries `docx-pages--hf-editing` itself, so the weight that beats the
+ * footer variant comes from a fact the painter cannot drift away from. */
+.docx-pages.docx-pages--hf-editing .docx-hf--placeholder:hover::after,
+.docx-paginated-surface--viewing .docx-pages .docx-hf--placeholder:hover::after {
   content: none;
 }
 
 .docx-pages--hf-editing .docx-hf-edit-hint,
 .docx-paginated-surface--viewing .docx-hf-edit-hint {
   display: none;
+}
+
+/* The last half of the affordance: an I-beam over a band nobody can enter reads as "put a
+ * caret here", which viewing refuses. Furniture text never maps to a model position anyway
+ * — see `dom-selection` — so the arrow is the honest cursor here. */
+.docx-paginated-surface--viewing .docx-hf:not([data-docx-hf-active]) {
+  cursor: default;
 }
 
 @media print {

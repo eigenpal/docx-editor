@@ -227,6 +227,32 @@ describe('headers and footers, read-only', () => {
     }
   });
 
+  test('viewing mode marks the surface so the blank-band affordance stays hidden', () => {
+    // The hover invitation is CSS keyed on this class, and a mode change repaints nothing —
+    // without the write here a reader who switched to Viewing kept being invited to add a
+    // header until some unrelated edit repainted the pages.
+    const { surface, container } = mount(docx({}));
+    expect(container.classList.contains('docx-paginated-surface--viewing')).toBe(false);
+
+    surface.setEditingMode('view');
+    expect(container.classList.contains('docx-paginated-surface--viewing')).toBe(true);
+
+    surface.setEditingMode('edit');
+    expect(container.classList.contains('docx-paginated-surface--viewing')).toBe(false);
+
+    surface.setEditingMode('suggest');
+    expect(container.classList.contains('docx-paginated-surface--viewing')).toBe(false);
+  });
+
+  // Already true before the class moved into a shared helper; pinned so the OPENING path
+  // cannot be lost when the mode-change path is the one being edited.
+  test('viewing mode opens with the affordance already hidden', () => {
+    const container = document.createElement('div');
+    const result = mountPaginatedSurface(container, docx({}), { scale: 1, editingMode: 'view' });
+    if (!result.ok) throw new Error(result.reason);
+    expect(container.classList.contains('docx-paginated-surface--viewing')).toBe(true);
+  });
+
   test('comprehensive fixture: HF right tabs reach the authored stop on the surface', () => {
     // Live-equivalent path: package → session → furniture layout → paint. Layout already
     // resolved the 9026-twip right stop; paint must reserve that advance or CONFIDENTIAL /

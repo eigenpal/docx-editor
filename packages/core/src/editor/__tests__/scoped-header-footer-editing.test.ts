@@ -749,6 +749,51 @@ describe('surface-root pointer delegation for HF / notes', () => {
     surface.destroy();
   });
 
+  test('viewing mode refuses the double press, and closes a band left open by a mode switch', () => {
+    // The hover invitation is hidden in viewing, but the SCOPE was still one double-click
+    // away: this lane never passes the facade, which classifies `editHeaderFooter` as
+    // mutating. An open band survived the switch too — a write UI over a read-only document.
+    const { surface, container } = mount(
+      docx({ header: p('H'), footer: p('FOOTER'), body: p('Body') })
+    );
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    stubPagesRect(pages);
+    pages.focus();
+
+    const page = surface.layout().pages[0]!;
+    const footer = page.footer!;
+    // Re-queried on every press: each repaint replaces the band, and a press dispatched on
+    // the detached node never reaches the root listener.
+    const pressTwice = (): void => {
+      for (let press = 0; press < 2; press += 1) {
+        const painted = container.querySelector('[data-docx-hf="footer"]') as HTMLElement;
+        pressAt(
+          pages,
+          painted,
+          footer.box.x + 4,
+          footer.box.y + Math.max(1, footer.box.height / 2)
+        );
+      }
+    };
+
+    // Left open in editing, then the mode moves under it.
+    pressTwice();
+    expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: footer.rId! });
+    surface.setEditingMode('view');
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(container.querySelector('[data-docx-hf-active]')).toBeNull();
+
+    // And it cannot be reopened from the surface.
+    pressTwice();
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+
+    // The blank band on the other page furniture stays refused too (already gated).
+    surface.setEditingMode('edit');
+    pressTwice();
+    expect(surface.activeScope()).toEqual({ kind: 'headerFooter', rId: footer.rId! });
+    surface.destroy();
+  });
+
   test('root listener: double press in the BLANK header margin creates the header and opens it', () => {
     const { surface, container } = mount(docx({ body: `${p('One')}${p('Two')}` }));
     const pages = container.querySelector<HTMLElement>('.docx-pages')!;

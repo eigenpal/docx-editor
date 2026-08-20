@@ -246,6 +246,15 @@ export interface PaintOptions {
     readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
     /** Control ids that represent TOC regions (hover-only chrome; never caret-sticky). */
     readonly tocControlIds?: ReadonlySet<string>;
+    /**
+     * No control may be written right now — viewing mode, or a protected document.
+     *
+     * The widget is a `<button>` the ENGINE paints, and a click on it commits a tree op, so
+     * an enabled-looking checkbox on a read-only document is not a cosmetic lie: it is the
+     * write itself. Disabling it here also stops the pointer lane, which already skips a
+     * widget carrying `data-disabled-reason`.
+     */
+    readonly readOnly?: boolean;
   };
   readonly drawingStrings?: DrawingPaintStrings;
   readonly imageUrlPort?: PaintImageUrlPort;
@@ -2456,7 +2465,8 @@ function paintContentControlChrome(
         hovered,
         showAll || active || (isToc && hovered),
         chrome?.checkedIds?.has(control.id),
-        isToc
+        isToc,
+        chrome?.readOnly === true
       )
     );
   }
@@ -2471,7 +2481,8 @@ function paintContentControlBoundary(
   hovered: boolean,
   boundaryVisible: boolean,
   checked: boolean | undefined,
-  isToc: boolean
+  isToc: boolean,
+  readOnly: boolean
 ): HTMLElement {
   const layer = document.createElement('div');
   layer.className = 'docx-content-control-chrome';
@@ -2482,6 +2493,9 @@ function paintContentControlBoundary(
   if (control.bound) layer.dataset.bound = '';
   if (control.placeholder) layer.dataset.placeholder = '';
   if (isToc) layer.dataset.docxToc = '';
+  // Lets the stylesheet drop the "fill me in" hover invite without a second source of truth
+  // for what read-only means.
+  if (readOnly) layer.dataset.readOnly = '';
   if (active) layer.dataset.active = '';
   if (hovered) layer.dataset.hover = '';
   if (boundaryVisible) layer.dataset.boundaryVisible = '';
@@ -2561,9 +2575,11 @@ function paintContentControlBoundary(
     }
     const contentLocked =
       control.effectiveLock === 'contentLocked' || control.effectiveLock === 'sdtContentLocked';
-    if (contentLocked || control.bound) {
+    // Mode first: a document nobody may write has no writable control in it, whatever the
+    // control's own lock says.
+    if (readOnly || contentLocked || control.bound) {
       widget.disabled = true;
-      widget.dataset.disabledReason = control.bound ? 'bound' : 'locked';
+      widget.dataset.disabledReason = readOnly ? 'readOnly' : control.bound ? 'bound' : 'locked';
       widget.setAttribute('aria-disabled', 'true');
     }
     widget.style.position = 'absolute';
@@ -2648,7 +2664,7 @@ export function paintSemanticLayout(
   // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
   // entering a TOC rebuild every page, which detached the node the gesture started on.
   const chromeKey = chrome
-    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}:${chrome.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : ''}:${chrome.suppressedIds ? [...chrome.suppressedIds].sort().join(',') : ''}`
+    ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}:${chrome.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : ''}:${chrome.suppressedIds ? [...chrome.suppressedIds].sort().join(',') : ''}:${chrome.readOnly === true ? 'ro' : ''}`
     : '';
   const drawingStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
   const urlRegistry =
