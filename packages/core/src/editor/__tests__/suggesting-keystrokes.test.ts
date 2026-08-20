@@ -99,6 +99,19 @@ function caretTo(surface: PaginatedSurface, index: number, offset: number): void
   });
 }
 
+function selectIn(surface: PaginatedSurface, index: number, start: number, end: number): void {
+  const paragraphId = surface.session.paragraphIds()[index]!;
+  surface.setSelection({
+    anchor: { paragraphId, offset: start },
+    head: { paragraphId, offset: end },
+  });
+}
+
+/** Type `text` one character at a time, the way a keyboard delivers it. */
+function typeEach(surface: PaginatedSurface, text: string): void {
+  for (const character of text) surface.type(character);
+}
+
 describe('Enter then type, in suggesting mode', () => {
   test('the character lands in the list item Enter just opened', () => {
     withSurface(listItem('Introduction') + listItem('Analysis'), (surface) => {
@@ -130,6 +143,47 @@ describe('Enter then type, in suggesting mode', () => {
       // `w:pPr` first (§17.3.1.26). The insertion landing ahead of it is markup the
       // paragraph invariant refuses, which is how the keystroke came to be dropped.
       expect(xml).toMatch(/<\/w:pPr><w:ins[^>]*><w:r><w:t[^>]*>Findings<\/w:t><\/w:r><\/w:ins>/);
+    });
+  });
+});
+
+// TYPING OVER YOUR OWN SUGGESTION.
+//
+// A tracked deletion does one of two things, and the replacement offset differs for each.
+// Somebody else's words are STRUCK: they stay, and the replacement goes after them. Your own
+// pending insertion is RETRACTED: the characters leave the paragraph, and aiming past them
+// aims past the end of it — which the store refuses, taking the whole transaction with it.
+// So every keystroke over your own suggestion did nothing, and the selection stayed.
+describe('typing over a pending suggestion', () => {
+  test('replaces your own insertion instead of being refused', () => {
+    withSurface(listItem('Introduction') + listItem('Analysis'), (surface) => {
+      caretTo(surface, 0, 'Introduction'.length);
+      surface.splitParagraph();
+      typeEach(surface, 'sda');
+      selectIn(surface, 1, 0, 3);
+      typeEach(surface, 'Hello');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Introduction', 'Hello', 'Analysis']);
+      // The caret follows the typing, so the NEXT character lands after it rather than in
+      // front of what was already typed.
+      expect(surface.state().selection.head.offset).toBe('Hello'.length);
+    });
+  });
+
+  test('keeps the struck half of a mixed range and lands after it', () => {
+    withSurface(listItem('Analysis'), (surface) => {
+      caretTo(surface, 0, 0);
+      typeEach(surface, 'New ');
+      // "New " is this author's own insertion; "Ana" is the file's own text.
+      selectIn(surface, 0, 0, 'New Ana'.length);
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      // The retracted half is gone, the struck half stays, and the replacement sits after it.
+      expect(paragraphTexts(surface)).toEqual(['AnaXlysis']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(/<w:del[^>]*><w:r><w:delText[^>]*>Ana<\/w:delText><\/w:r><\/w:del>/);
+      expect(xml).toMatch(/<w:ins[^>]*><w:r><w:t[^>]*>X<\/w:t><\/w:r><\/w:ins>/);
+      expect(xml).not.toMatch(/New/);
     });
   });
 });

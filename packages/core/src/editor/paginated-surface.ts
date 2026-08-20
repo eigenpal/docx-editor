@@ -24,6 +24,7 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import { retractedLengthOf } from '../store/store/tree-op-retraction.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
   createLayoutScheduler,
@@ -3447,9 +3448,17 @@ export function mountPaginatedSurface(
       // lets the pane fold them into one `Replaced "x" with "y"` card. Mid-sentence
       // replacements were showing as two unrelated decisions, and a reviewer could accept
       // one half.
+      //
+      // It keeps only the characters it STRIKES. Whatever of the range is this author's own
+      // pending insertion is RETRACTED instead — those characters leave the paragraph — so
+      // the offset past the selection is past the end of what the insert will find there.
+      // Typing over your own suggestion was refused as `offset-out-of-range`, and since a
+      // refusal takes the whole transaction, the keystroke did nothing at all.
       const struck = editingMode === 'suggest' ? orderedRange() : null;
       const insertAt =
-        struck && struck.to.paragraphId === start.paragraphId ? struck.to.offset : start.offset;
+        struck && struck.to.paragraphId === start.paragraphId
+          ? struck.to.offset - retractedByOwnInsertion(struck.from, struck.to)
+          : start.offset;
       const insertOps: TreeDocOp[] = [
         ...plan.ops,
         { op: 'insertText', paragraphId: start.paragraphId, offset: insertAt, text },
@@ -4487,6 +4496,25 @@ export function mountPaginatedSurface(
 
   function deleteSelectionOps(): readonly TreeDocOp[] {
     return deleteSelectionPlan().ops;
+  }
+
+  /**
+   * How many characters of `[from, to)` a suggesting-mode deletion takes OUT of the
+   * paragraph, rather than striking in place.
+   *
+   * Only ever this author's own pending insertion — everything else stays and keeps its
+   * offsets. Zero outside suggesting, across a paragraph boundary (the paragraphs are not
+   * joined, so nothing shifts within the first one), and with no author configured, which is
+   * the case where nothing is tracked at all.
+   */
+  function retractedByOwnInsertion(from: SemanticPosition, to: SemanticPosition): number {
+    const author = options.author?.trim();
+    if (editingMode !== 'suggest' || !author) return 0;
+    if (from.paragraphId !== to.paragraphId) return 0;
+    const part = session.partFor(storyScope()) ?? session.part();
+    const paragraph = findNode(part, to.paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph') return 0;
+    return retractedLengthOf(paragraph, from.offset, to.offset, author);
   }
 
   // Event wiring lives HERE rather than in each host, so React, Vue and a plain page get
