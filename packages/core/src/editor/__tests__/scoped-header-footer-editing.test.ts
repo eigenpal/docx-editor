@@ -783,8 +783,13 @@ describe('surface-root pointer delegation for HF / notes', () => {
     expect(surface.activeScope()).toEqual({ kind: 'body' });
     expect(container.querySelector('[data-docx-hf-active]')).toBeNull();
 
-    // And it cannot be reopened from the surface.
+    // And it cannot be reopened — by the pointer, by the surface's own method, or by
+    // `setActiveScope`. Gating the pointer alone left the other two opening the dimmed body
+    // and the whole header options bar over a document that refuses every write.
     pressTwice();
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+    expect(surface.enterHeaderFooter({ rId: footer.rId! })).toBe(false);
+    expect(surface.setActiveScope({ kind: 'headerFooter', rId: footer.rId! })).toBe(false);
     expect(surface.activeScope()).toEqual({ kind: 'body' });
 
     // The blank band on the other page furniture stays refused too (already gated).

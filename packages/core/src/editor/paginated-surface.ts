@@ -1786,11 +1786,18 @@ export function mountPaginatedSurface(
       }
       let committed = false;
       commit(() => {
-        // `gatedSession`, not `session`: this lane wrote straight past the mode rules, so a
-        // checkbox in a document open for viewing still toggled and still committed.
-        const result = gatedSession.applyTreeOps(
+        // `applyOps`, not `session.applyTreeOps`: this lane wrote straight past the mode
+        // rules, so a checkbox in a document open for viewing still toggled and committed.
+        // Explicitly the BODY story and no selection check, because a control op names the
+        // control it edits: the story the reader happens to have open, and where their caret
+        // sits, are answers to a different question — and `contentControlRefusal` above
+        // judges the write on exactly these terms.
+        const result = applyOps(
           [{ op: 'setContentControlValue', controlId, value }],
-          selectionMark()
+          selectionMark(),
+          undefined,
+          BODY_STORY,
+          false
         );
         committed = result.committed;
         return result;
@@ -1812,9 +1819,12 @@ export function mountPaginatedSurface(
       }
       let committed = false;
       commit(() => {
-        const result = gatedSession.applyTreeOps(
+        const result = applyOps(
           [{ op: 'removeContentControl', controlId: id }],
-          selectionMark()
+          selectionMark(),
+          undefined,
+          BODY_STORY,
+          false
         );
         committed = result.committed;
         return result;
@@ -2481,6 +2491,7 @@ export function mountPaginatedSurface(
     mirrorToDom: () => selectionSync.mirrorToDom(),
     notify: () => options.onChange?.(currentState()),
     materializedPages: () => materializedSet,
+    entryRefused: () => editingMode === 'view',
   });
 
   noteOps = createNoteOps({
@@ -3979,11 +3990,17 @@ export function mountPaginatedSurface(
       // Text typed under the OLD mode commits under it — a buffered edit must
       // not silently become a suggestion (or a viewing-mode refusal).
       flushTypeBuffer();
+      // A host wiring a mode control re-sends the value it already has — a controlled prop
+      // re-synced in an effect, a dropdown re-picking the current row. Repainting every
+      // materialized page for a mode that did not move is the cost `setRevisionStyles`
+      // guards against for the same reason. The notify below still runs: a caller asking
+      // for a mode is entitled to hear the state back.
+      const moved = editingMode !== mode;
       editingMode = mode;
       // Viewing has no furniture EDITING scope. Switching while a header was open left the
       // body dimmed and inert under an active band and its whole options bar — a write UI
       // over a document that now refuses writes. Exiting repaints, so this runs first.
-      if (mode === 'view') hfScope?.exitHeaderFooter();
+      if (moved && mode === 'view') hfScope?.exitHeaderFooter();
       // An open widget menu is a WRITE surface: a date picker left standing across the
       // switch still offered a value the new mode refuses. Nothing else closes it.
       removeExistingContentControlMenu();
@@ -3995,7 +4012,7 @@ export function mountPaginatedSurface(
       // Painted chrome reads the mode too — content-control widgets disable themselves on
       // it, and table furniture re-derives from it — so the pages have to be rebuilt even
       // though not one character moved.
-      render(false);
+      if (moved) render(false);
       // The old refusal described the old mode. Left standing, a host rendering it showed
       // "the document is open for viewing" over a document that had just become editable.
       lastRejection = null;
@@ -4674,11 +4691,8 @@ export function mountPaginatedSurface(
           : null;
       },
       enterHeaderFooter: (info) => {
-        // Opening furniture is the door to a WRITE, and this lane never passes the facade —
-        // so it refuses in viewing exactly like `enterEmptyHeaderFooter` below, and like the
-        // `editHeaderFooter` command the facade classifies as mutating. Without it the hint
-        // was hidden and the scope was still one double-click away.
-        if (editingMode === 'view') return;
+        // Viewing refuses this — in `createHeaderFooterScopeController`, which every entry
+        // lane goes through, not here where only the pointer would be covered.
         // The pointer lane flips story scope too: land buffered typing first
         // (see setActiveScope).
         flushTypeBuffer();
@@ -4776,6 +4790,10 @@ export function mountPaginatedSurface(
   });
 
   render();
+  // The pages layer is created `contenteditable` unconditionally, so a surface OPENED in
+  // viewing came up writable — a caret, an IME and a screen reader told the document takes
+  // input. `setEditingMode` was the only path that re-derived it; opening is the other one.
+  applyEditableChrome();
   // `setEditingMode` used to be wrapped here to append `tableInteraction.update()`, because
   // the setter did not repaint. It does now, and `render` updates the table furniture — so
   // the wrapper only hid the coupling from the setter that owns it.
