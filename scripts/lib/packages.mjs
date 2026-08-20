@@ -143,7 +143,6 @@ export const PACKAGES = [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
           'CustomNodeDefinition',
-          'DocxEditorInstance',
           'Editor',
           'EditorModule',
           'ReviewItemPlacement',

@@ -7,7 +7,6 @@
 import { ComputedRef } from 'vue';
 import { MaybeRefOrGetter } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from '@docx-editor.dev/vue';
-import { Node as Node_2 } from 'prosemirror-model';
 import { PropType } from 'vue';
 import { Ref } from 'vue';
 import { ReviewAuthorInfo } from '@docx-editor.dev/vue';
@@ -769,7 +768,7 @@ export function useReviewAuthor(author: MaybeRefOrGetter<string | undefined>): C
 export function useReviewItem(): ComputedRef<ReviewItemView | null>;
 
 // @public (undocumented)
-export function useReviewOf(editorRef: Ref<DocxEditorInstance | null>, query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;
+export function useReviewOf(editorRef: Ref<Editor | null>, query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;
 
 // @public (undocumented)
 export interface UseReviewReturn {

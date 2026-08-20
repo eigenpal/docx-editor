@@ -6,11 +6,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
 import type {
+  Editor,
   ReviewActivationOptions,
   ReviewItemPlacement,
   ReviewItemQuery,
 } from '@docx-editor.dev/core/contracts/editor';
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { useDocxEditor, type MaybeRefOrGetter } from '@docx-editor.dev/vue';
 import { useEditorRenderRevision, type EditorRenderRevision } from './useEditorRenderRevision.ts';
 
@@ -23,7 +23,7 @@ function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T |
   return source as T;
 }
 
-function reviewRevisionKey(editor: DocxEditorInstance): string {
+function reviewRevisionKey(editor: Editor): string {
   return `${editor.getReviewRevision()}:${editor.getEditingMode()}`;
 }
 
@@ -56,11 +56,7 @@ export interface UseReviewReturn {
 export function useReview(query?: MaybeRefOrGetter<ReviewItemQuery | undefined>): UseReviewReturn {
   const editorRef = useDocxEditor();
   const renderRevision = useEditorRenderRevision();
-  return useReviewOfInternal(
-    editorRef as unknown as Ref<DocxEditorInstance | null>,
-    query,
-    renderRevision
-  );
+  return useReviewOfInternal(editorRef as unknown as Ref<Editor | null>, query, renderRevision);
 }
 
 /** @internal */
@@ -69,23 +65,19 @@ export function useReviewWithRevision(
   renderRevision: EditorRenderRevision
 ): UseReviewReturn {
   const editorRef = useDocxEditor();
-  return useReviewOfInternal(
-    editorRef as unknown as Ref<DocxEditorInstance | null>,
-    query,
-    renderRevision
-  );
+  return useReviewOfInternal(editorRef as unknown as Ref<Editor | null>, query, renderRevision);
 }
 
 /** @public */
 export function useReviewOf(
-  editorRef: Ref<DocxEditorInstance | null>,
+  editorRef: Ref<Editor | null>,
   query?: MaybeRefOrGetter<ReviewItemQuery | undefined>
 ): UseReviewReturn {
   return useReviewOfInternal(editorRef, query);
 }
 
 function useReviewOfInternal(
-  editorRef: Ref<DocxEditorInstance | null>,
+  editorRef: Ref<Editor | null>,
   query?: MaybeRefOrGetter<ReviewItemQuery | undefined>,
   renderRevision?: EditorRenderRevision
 ): UseReviewReturn {
