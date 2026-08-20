@@ -1,5 +1,15 @@
 # @docx-editor.dev/vue
 
+## 2.6.0
+
+### Minor Changes
+
+- e9a35d0: The Vue adapter now ships composable parity with React, including full composition-layer chrome and documentation.
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.6.0
+
 ## 2.5.0
 
 ### Patch Changes

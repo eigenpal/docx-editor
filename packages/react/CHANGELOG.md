@@ -1,5 +1,16 @@
 # @eigenpal/docx-js-editor
 
+## 2.6.0
+
+### Minor Changes
+
+- 4789535: The review rail adapts to the viewport: the full card column is reserved only while there is room for it beside the page, and narrower viewports get a centered document with a compact rail — markers in a mirrored strip, with the active card floating fully visible inside the viewport's edge. Custom chrome can read the reservation through the new `useReviewGutter` hook.
+
+### Patch Changes
+
+- a69ea43: Fix ruler behavior on narrow viewports: the horizontal ruler now clamps to the page's left edge instead of overflowing on both sides, and the vertical ruler hides while the page is wider than the viewport instead of scrolling out of view.
+  - @docx-editor.dev/i18n@2.6.0
+
 ## 2.5.0
 
 ### Patch Changes

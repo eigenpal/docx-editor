@@ -1,5 +1,11 @@
 # @docx-editor.dev/pro
 
+## 2.6.0
+
+### Minor Changes
+
+- e9a35d0: Add `@docx-editor.dev/pro/vue` with the review rail, review composables, author styling, and custom-node chip and context-menu chrome.
+
 ## 2.5.0
 
 ### Patch Changes

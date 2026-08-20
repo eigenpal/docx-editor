@@ -1,5 +1,30 @@
 # @docx-editor.dev/core
 
+## 2.6.0
+
+### Minor Changes
+
+- 56bb68f: The font compatibility notice no longer reports a document that renders no text, or a family whose metric-compatible substitute is available on the platform.
+- 622c4f9: `document` and `load()` now accept `'blank'` for an empty document. Omitting `document` still means no document at all, which holds the editor on its loading screen with every control disabled. Fixes #275
+- c6529c8: ESM browser builds no longer fail with `Module not found: Can't resolve 'module'`, and the new `setHarfBuzzWasmUrl` points bundlers that emit no WASM asset (esbuild, Bun) at a self-hosted `harfbuzz.wasm`. Server-side shaping over ESM now needs Node 20.16 or 22.3 and later. Fixes #282
+- 0452f9c: Opening a review card no longer selects the change's text: the caret moves to the start of the range and the card's own highlight marks it, so the reader keeps whatever they had selected. Read `item.ranges` (revisions) or `item.range` (comments) for what a card is about, rather than the selection after `setActive`.
+- 0652ae4: Replace `PaginatedSurface.session` with the PM-free `TreeDocxSessionView` and remove unsupported projection methods from the public editor surface.
+- 9a64477: Tracked changes are now colored per author by default, the way Word shows them, and review cards carry each author's color. Mount `DocxEditor.AuthorStyle` to give a named author their own color, background, class names, or avatar, or `DocxEditor.ColorByChangeType` to keep the previous green-and-red rendering.
+
+  Comment authors share the same colors, and every element with an author — painted spans, comment highlights, cards, balloons, and markers — carries `data-review-author` and `data-review-author-slot`. This renames the painted span's `data-revision-author` and the `--doc-review-author` custom property, which is now `--doc-review-author-current`; update any CSS that used the old names. Read the roster with `useReviewAuthors()` or `editor.getReviewAuthors()`.
+
+- 008243e: Viewing mode no longer offers write affordances it refuses: the header and footer hover invitation, content-control widgets, image resize handles, and the custom-node and comment context-menu rows. Content-control edits are now refused in viewing instead of committing.
+
+### Patch Changes
+
+- 7e59774: The caret now moves freely through tracked-deleted text, one character at a time, as Word does. Text typed with the caret inside a deletion lands beside the deletion instead of corrupting it.
+- 3c80f4f: Fix inter-word gap painting on lines that merge two paragraphs in a resolved revision view: a drawing in one half no longer shifts or doubles gaps in the other half.
+- 3c80f4f: Fix the selection highlight in justified paragraphs: the band is now continuous across stretched inter-word spaces instead of breaking into one block per word. Underline and character shading also continue across those spaces, as Word draws them.
+- bc614bd: Anchored images in the document body now keep their place when a header or footer is taller than its margin. A page-relative image was pushed down the page by the header height, and a bottom-margin-relative one followed an oversized footer. Fixes #274.
+- 1ce2f55: Resolved comment miniatures now show a hover fill, and the reply field shows a focus outline.
+- 887f67f: Viewing mode refuses every path into header and footer editing, not only a double-click, and a document opened in viewing no longer comes up with an editable pages layer.
+  - @docx-editor.dev/i18n@2.6.0
+
 ## 2.5.0
 
 ### Minor Changes
