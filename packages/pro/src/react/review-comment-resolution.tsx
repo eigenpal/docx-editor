@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { ComponentPropsWithoutRef, MouseEvent as ReactMouseEvent } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
-import { ACCEPT_ICON, COMMENT_ICON, REOPEN_ICON, icon } from './review-icons.tsx';
+import { ACCEPT_ICON, COMMENT_OUTLINE_ICON, REOPEN_ICON, icon } from './review-icons.tsx';
 import type { ReviewActionProps } from './DocxEditorReview.tsx';
 import type { ReviewItemView, UseReviewReturn } from './useReview.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
@@ -28,7 +28,7 @@ export function ResolvedCommentCard({ label, children, ...props }: ResolvedComme
     <details {...props}>
       <summary className="docx-review__resolved-toggle" aria-label={label}>
         <span className="docx-review__resolved-icon">
-          <span className="docx-review__resolved-comment">{icon(COMMENT_ICON)}</span>
+          <span className="docx-review__resolved-comment">{icon(COMMENT_OUTLINE_ICON)}</span>
           <span className="docx-review__resolved-tick">{icon(ACCEPT_ICON)}</span>
         </span>
       </summary>

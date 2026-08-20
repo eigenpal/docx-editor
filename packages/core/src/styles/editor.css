@@ -5462,19 +5462,24 @@ a.docx-hyperlink:focus-visible {
 
 .docx-review__card[data-resolved-miniature]:not([open]) {
   box-sizing: border-box;
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   margin-left: auto;
   padding: 0;
   align-items: center;
   justify-content: center;
-  border-color: var(--doc-success, #34a853);
-  border-left-color: var(--doc-success, #34a853);
-  border-radius: 50%;
-  background: var(--doc-success-bg, #e8f5e9);
-  color: var(--doc-success, #34a853);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--doc-text-muted);
   font: inherit;
   opacity: 1;
+}
+
+.docx-review__card[data-resolved-miniature]:not([open]):hover {
+  background: var(--doc-surface-hover);
+  color: var(--doc-text);
 }
 
 .docx-review__resolved-toggle {
@@ -5496,14 +5501,15 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-review__card[data-resolved-miniature]:not([open]) .docx-review__resolved-toggle {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   margin: 0;
   align-self: center;
+  border-radius: 6px;
 }
 
 .docx-review__resolved-toggle:focus-visible {
-  outline: 2px solid var(--doc-success, #34a853);
+  outline: 2px solid var(--doc-focus-ring);
   outline-offset: 1px;
 }
 
@@ -5528,21 +5534,19 @@ a.docx-hyperlink:focus-visible {
 
 .docx-review__resolved-tick {
   position: absolute;
-  right: -1px;
-  bottom: 1px;
+  right: 2px;
+  bottom: 3px;
   display: inline-flex;
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: var(--doc-success);
-  color: var(--doc-surface);
+  color: var(--doc-success);
 }
 
 .docx-review__resolved-tick > svg {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 .docx-review__head {

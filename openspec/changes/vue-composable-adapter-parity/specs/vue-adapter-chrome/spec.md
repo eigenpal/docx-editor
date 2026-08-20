@@ -190,8 +190,9 @@ centre beside an empty column for every consumer that mounted no rail.
 ### Requirement: Review chrome SHALL keep author and resolution presentation in parity
 
 The React and Vue review rails SHALL draw a new comment draft with the configured author's
-resolved color. A resolved comment SHALL collapse to a comment icon with a green check miniature.
-Activating that miniature SHALL reveal the full thread and its reopen action.
+resolved color. A resolved comment SHALL collapse to an empty comment icon with a green check.
+The icon SHALL use the same presentation as a closed-rail comment marker. Activating that
+miniature SHALL reveal the full thread and its reopen action.
 
 Vue SHALL keep the measured slot element stable when an item updates. Its `ResizeObserver`
 SHALL continue to own that element, so stale replacement heights cannot add phantom space
@@ -206,7 +207,7 @@ between cards.
 #### Scenario: A resolved comment becomes a miniature
 
 - **WHEN** a reviewer resolves a comment
-- **THEN** its packaged card becomes a comment icon with a green check miniature
+- **THEN** its packaged card becomes an empty comment marker with a green check
 - **AND** clicking the miniature reveals the full resolved thread and its reopen action
 
 #### Scenario: A Vue card changes height
