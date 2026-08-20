@@ -278,7 +278,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * armed pointerdown/selectstart is that gesture; a queued selectionchange echo has none.
    */
   function isStaleMirroredCaret(): boolean {
-    if (!modelMoved || !lastMirroredSelection || userSelectionGesture) return false;
+    if (!modelMoved || userSelectionGesture) return false;
+    // NO BASELINE AT ALL means the last mirror was REFUSED — the position had no painted
+    // place to land, or this surface did not own the selection. The browser is then still
+    // showing something older than the model by construction, and nobody has gestured since.
+    // Reading it back is how a caret the DOM could not express became a caret at the
+    // paragraph start.
+    if (!lastMirroredSelection) return true;
     const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
     return reported !== null && selectionsEqual(reported, lastMirroredSelection);
   }
@@ -313,8 +319,22 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // that runs on every repaint. A rectangle of cells keeps the DOM deliberately collapsed,
       // so a scroll or an undo would "adopt" that collapse, leave the overlay painting four
       // cells, and turn the next Delete into a one-character edit inside one of them.
+      //
+      // A REPAINT MAY CARRY A GESTURE; IT MAY NEVER INVENT ONE. `modelMoved` is spent by the
+      // first repaint after a commit, and an edit can produce more than one — a settled image
+      // resource, a deferred publish, a scroll all repaint again while the caret this edit
+      // installed is still the newest thing anybody moved. Those later repaints used to read
+      // the browser's selection and take it, and the browser's answer after a page's DOM has
+      // been rebuilt under it is the paragraph start. So the first character typed at the end
+      // of a paragraph landed, the caret went home to offset 0, and every character after it
+      // was inserted in front of the one before: "Hello" arrived as "elloH".
+      //
+      // The provenance is the whole test. A gesture arms `userSelectionGesture` on
+      // pointerdown/selectstart before `selectionchange` is queued, which is exactly the
+      // window this reader exists to close; a browser fix-up after a repaint arms nothing.
       const holdOff = deps.holdsCellSelection?.() === true || deps.isGesturing?.() === true;
-      const adopted = modelMoved || holdOff ? false : adoptPendingDomSelection();
+      const adopted =
+        modelMoved || holdOff || !userSelectionGesture ? false : adoptPendingDomSelection();
       modelMoved = false;
       return adopted;
     },
@@ -343,11 +363,19 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       applyingSelection = true;
       const began = deps.now();
       const next = deps.domSelection?.() ?? deps.selection();
-      lastMirroredSelection = next;
       // This write is the new baseline. Matching DOM carets after it are echoes until the
       // user starts another selection gesture.
       userSelectionGesture = false;
-      applySelectionToDom(pagesLayer, next, document.getSelection());
+      const wrote = applySelectionToDom(pagesLayer, next, document.getSelection());
+      // A REFUSED write is not a baseline. `applySelectionToDom` answers false when either
+      // endpoint has no painted place to land — a caret in a paragraph that painted no spans,
+      // an offset no span covers, a page that is not built — and the browser then keeps
+      // showing the PREVIOUS selection. Recording it anyway told `isStaleMirroredCaret` that
+      // the DOM had been given this value, so the disagreement it exists to catch read as a
+      // fresh gesture, and the stale caret won the next echo. The model is still the newer of
+      // the two here, which is exactly what `modelMoved` says.
+      lastMirroredSelection = wrote ? next : null;
+      if (!wrote) modelMoved = true;
       deps.recordSelectionMs(deps.now() - began);
       // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
       // synchronously. Clearing it here would defeat the guard in every real browser while
@@ -372,6 +400,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // `adoptDomSelection` spends the one-shot once it sees a mapped caret, so a click on
       // the already-current caret cannot authorize a later stale echo.
       if (isStaleMirroredCaret()) return;
+      // A KEYSTROKE IS NOT A SELECTION GESTURE. This reader exists for one case — a click or
+      // a drag whose `selectionchange` is still queued when the next key arrives — and that
+      // case always arms the flag first. Without the check, every keystroke re-read a browser
+      // selection nobody had moved, so a caret the DOM had resolved onto a container after a
+      // repaint pulled the model to the paragraph start on key after key.
+      if (!userSelectionGesture) return;
       adoptDomSelection();
     },
 
