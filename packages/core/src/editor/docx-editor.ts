@@ -2185,6 +2185,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getEditingMode: () => editingMode,
     getReviewAuthors: () =>
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
+    getConfiguredAuthor: () => config.author?.trim() || null,
     getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);

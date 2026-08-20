@@ -1,6 +1,6 @@
 // Read-only note-property state for adapter chrome — no tree mutation.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { enumerateDocumentSections, paragraphSectionNode } from '../layout/section-properties.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import {
@@ -43,7 +43,7 @@ export type NotePropertiesStateSnapshot = {
 /** Hard cap for attacker-controlled note text exposed to hover chrome. */
 export const MAX_NOTE_PREVIEW_CHARS = 500;
 
-function paragraphSectionIndexOf(session: TreeDocxSession, paragraphId: string): number {
+function paragraphSectionIndexOf(session: TreeDocxSessionView, paragraphId: string): number {
   const part = session.part();
   const sections = enumerateDocumentSections(part);
   const blocks = storyBlocks(part);
@@ -77,7 +77,7 @@ function paragraphSectionIndexOf(session: TreeDocxSession, paragraphId: string):
 }
 
 function sectionSectPrNodes(
-  session: TreeDocxSession,
+  session: TreeDocxSessionView,
   sections: ReturnType<typeof enumerateDocumentSections>
 ): readonly (import('../store/package/ooxml-tree.ts').OoxmlElement | undefined)[] {
   const part = session.part();
@@ -128,7 +128,10 @@ export function notePropertiesStateOf(
   };
 }
 
-export function listNormalNoteIds(session: TreeDocxSession, noteKind: NoteKind): readonly number[] {
+export function listNormalNoteIds(
+  session: TreeDocxSessionView,
+  noteKind: NoteKind
+): readonly number[] {
   const part = resolveNotesPart(session.currentPackage(), noteKind);
   if (!part) return [];
   return notesOf(part.root)
@@ -138,7 +141,7 @@ export function listNormalNoteIds(session: TreeDocxSession, noteKind: NoteKind):
 }
 
 /** Plain text preview for a note scope id — safe for tooltip display. */
-export function notePreviewTextOf(session: TreeDocxSession, scopeId: string): string | null {
+export function notePreviewTextOf(session: TreeDocxSessionView, scopeId: string): string | null {
   const parsed = parseNoteScopeId(scopeId);
   if (!parsed) return null;
   const part = resolveNotesPart(session.currentPackage(), parsed.noteKind);

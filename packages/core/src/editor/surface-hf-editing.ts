@@ -3,7 +3,7 @@
 // Keeps the composition root under the max-lines budget while owning the furniture
 // scope transitions that bind EditorScope { kind: 'headerFooter', rId }.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type {
   SemanticLayout,
   SemanticPosition,
@@ -61,7 +61,7 @@ export interface HeaderFooterScopeController {
 }
 
 export function createHeaderFooterScopeController(deps: {
-  session: TreeDocxSession;
+  session: TreeDocxSessionView;
   layout(): SemanticLayout;
   selection(): SemanticSelection;
   setScopeSelection(next: SemanticSelection): void;
@@ -304,7 +304,7 @@ export type SurfaceLifecycleOp = Extract<
 >;
 
 function resolveFurnitureByRId(
-  session: TreeDocxSession,
+  session: TreeDocxSessionView,
   rId: string
 ): {
   readonly sectionIndex: number;

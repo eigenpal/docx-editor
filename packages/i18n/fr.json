@@ -603,7 +603,8 @@
     "showPane": "Afficher les commentaires",
     "structural": "Structure du document modifiée",
     "deleteComment": "Supprimer le commentaire",
-    "discardChange": "Ignorer la modification"
+    "discardChange": "Ignorer la modification",
+    "showResolvedComment": null
   },
   "imageAltText": {
     "description": "Description",

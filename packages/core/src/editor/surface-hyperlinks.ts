@@ -10,7 +10,7 @@
 // comes BACK — for the popover to show, for a click to open — is always the sanitized
 // projection layout already resolved, never the authored string.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import {
   hyperlinkTargetOf,
   type OoxmlNode,
@@ -230,7 +230,7 @@ export function fieldLinkAtomIdAtPosition(
 }
 
 export interface HyperlinkOpsDeps {
-  readonly session: TreeDocxSession;
+  readonly session: TreeDocxSessionView;
   /** The current layout projection, for resolving a field link at the caret. */
   readonly layout: () => SemanticLayout;
   /** Resolve a field-link id minted by the field-link registry back to its record. */
@@ -250,7 +250,7 @@ export interface HyperlinkOpsDeps {
   readonly selectionMark: () => { paragraphId: string; start: number; end: number } | null;
   readonly textOf: (paragraphId: string) => string;
   readonly commit: (
-    run: () => ReturnType<TreeDocxSession['applyTreeOps']> | boolean,
+    run: () => TreeApplyResult | boolean,
     selectionAfter?: () => SemanticSelection | null
   ) => void;
 }
@@ -299,9 +299,9 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
   const resolve = (relationshipId: string) =>
     deps.session.relationshipTarget(relationshipId, scope());
   const applyOps = (
-    ops: Parameters<TreeDocxSession['applyTreeOps']>[0],
-    before?: Parameters<TreeDocxSession['applyTreeOps']>[1],
-    after?: Parameters<TreeDocxSession['applyTreeOps']>[2]
+    ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
+    before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
+    after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
   ) => deps.session.applyTreeOps(ops, before, after, scope());
 
   const linksIn = (paragraphId: string): SurfaceHyperlink[] => {
@@ -490,7 +490,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
  * a document without it gets a working link with the surrounding appearance, which is
  * lossless and honest — rather than a reference to a style that does not exist.
  */
-function hyperlinkStyleId(session: TreeDocxSession): string | null {
+function hyperlinkStyleId(session: TreeDocxSessionView): string | null {
   for (const style of session.documentStyles()) {
     if (style.type !== 'character') continue;
     if (style.styleId.toLowerCase() === 'hyperlink') return style.styleId;

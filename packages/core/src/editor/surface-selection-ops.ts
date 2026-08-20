@@ -5,7 +5,7 @@
 // produces. No DOM and no session here: the surface closure passes in its current layout,
 // selection and part, so every function is a plain input-to-output computation.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
   parentNodeOf,
@@ -119,11 +119,11 @@ export function selectedTextIn(
  * atomic transaction: a paste over such a selection would silently do nothing at all.
  */
 export interface RangeDeletionPlan {
-  readonly ops: Parameters<TreeDocxSession['applyTreeOps']>[0];
+  readonly ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0];
   readonly collapseTo: SemanticPosition;
 }
 
-type TreeOp = Parameters<TreeDocxSession['applyTreeOps']>[0][number];
+type TreeOp = Parameters<TreeDocxSessionView['applyTreeOps']>[0][number];
 /** Store unwrap op — typed in the content-control lane; planned here, validated there. */
 type RemoveContentControlOp = { readonly op: 'removeContentControl'; readonly controlId: string };
 type PlannedOp = TreeOp | RemoveContentControlOp;

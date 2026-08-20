@@ -12,7 +12,7 @@
 // surface ends up feeling worse than a textarea. Layout still owns geometry: what comes back
 // from the DOM is which CHARACTERS were gestured over, never where they are.
 
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import {
@@ -26,7 +26,7 @@ import { collapsedAt } from './surface-selection-ops.ts';
 
 /** What the composition root lends this lane. */
 export interface SurfaceSelectionSyncDeps {
-  readonly session: TreeDocxSession;
+  readonly session: TreeDocxSessionView;
   /** Active story for IME commits and composition — body or open furniture. */
   storyScope(): import('@docx-editor.dev/core/store').StoryScope;
   /**

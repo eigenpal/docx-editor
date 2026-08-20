@@ -31,6 +31,7 @@ export {
   type OpenTreeSessionResult,
   type TreeApplyResult,
   type TreeDocxSession,
+  type TreeDocxSessionView,
   type TreeSessionRejection,
 } from './tree-session.ts';
 export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';

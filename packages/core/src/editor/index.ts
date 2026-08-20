@@ -15,6 +15,7 @@
 // Browser composition root: composes the typed OOXML tree session, layout pagination,
 // and the paginated surface into the PM-free Editor contract.
 
+export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 export {
   createLayoutShaping,
   disposeLayoutShaping,

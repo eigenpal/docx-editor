@@ -5,7 +5,7 @@
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { IndentFormatting } from '../contracts/types.ts';
-import type { TreeApplyResult, TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
@@ -351,12 +351,12 @@ export interface ContentControlSurfaceState {
  * `session` to apply ops directly bypasses the layout invalidation and the caret bookkeeping.
  */
 export interface PaginatedSurface {
-  readonly session: TreeDocxSession;
+  readonly session: TreeDocxSessionView;
   storyScope(): import('@docx-editor.dev/core/store').StoryScope;
   imageDecodePort(): import('../store/package/image-resources.ts').ImageDecodePort;
   applyDrawingOps(
     ops: readonly import('../store/store/tree-op-types.ts').DrawingTreeDocOp[]
-  ): ReturnType<TreeDocxSession['applyTreeOps']>;
+  ): TreeApplyResult;
   applyImageProperties(
     input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;

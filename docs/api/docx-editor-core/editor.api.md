@@ -4,8 +4,6 @@
 
 ```ts
 
-import { Node as Node_2 } from 'prosemirror-model';
-
 // @public
 export interface AnchorFrameOrigin {
     // (undocumented)
@@ -1214,7 +1212,7 @@ export interface PaginatedSurface {
     adjustIndent(direction: 'increase' | 'decrease'): boolean;
     applyAutomationOps(staged: (relate: (url: string) => string | null) => readonly TreeDocOp[] | null, scope?: StoryScope): TreeApplyResult;
     // (undocumented)
-    applyDrawingOps(ops: readonly DrawingTreeDocOp[]): ReturnType<TreeDocxSession['applyTreeOps']>;
+    applyDrawingOps(ops: readonly DrawingTreeDocOp[]): TreeApplyResult;
     applyHeaderFooterLifecycle(op: {
         readonly op: 'createHeaderFooter' | 'deleteHeaderFooter' | 'linkToPrevious' | 'unlinkFromPrevious' | 'setSectionFurnitureOptions';
         readonly sectionIndex?: number;
@@ -1352,7 +1350,7 @@ export interface PaginatedSurface {
     selectAll(): void;
     selectedText(): string;
     // (undocumented)
-    readonly session: TreeDocxSession;
+    readonly session: TreeDocxSessionView;
     setActiveScope(scope: ViewScope): boolean;
     setCellSelection(next: CellSelection | null): void;
     setEditable(editable: boolean): void;
@@ -1897,7 +1895,7 @@ export interface TableBorderStyleOption {
     readonly labelKey: string;
     readonly previewClass: string;
     // (undocumented)
-    readonly value: TableBorderStyle;
+    readonly value: TableBorderStyle_2;
 }
 
 // @public
@@ -1910,7 +1908,7 @@ export interface TableBorderTargetOption {
 }
 
 // @public
-export type TableBorderTargetValue = TableBorderEdgeTarget | 'none';
+export type TableBorderTargetValue = TableBorderEdgeTarget_2 | 'none';
 
 // @public
 export interface TableBorderWidthOption {
@@ -1923,7 +1921,7 @@ export interface TableBorderWidthOption {
 // @public
 export interface TableChromeDraft {
     // (undocumented)
-    readonly activeTarget: TableBorderEdgeTarget;
+    readonly activeTarget: TableBorderEdgeTarget_2;
     // (undocumented)
     readonly spec: TableBorderSpec;
 }
@@ -1932,7 +1930,7 @@ export interface TableChromeDraft {
 export function tableChromeIconPaths(name: keyof typeof GENERATED_ICON_PATHS): readonly string[];
 
 // @public
-export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget): string;
+export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget_2): string;
 
 // @public
 export interface TableChromePick {
@@ -1991,6 +1989,98 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 
 // @public
 export function toolbarCommandStates(editor: Editor | null, ids: readonly ChromeSlotId[]): readonly ToolbarCommandState[];
+
+// @public
+export interface TreeApplyResult {
+    // (undocumented)
+    readonly committed: boolean;
+    // (undocumented)
+    readonly opCount: number;
+    readonly reason?: TreeBindingRejection | StoryTargetRejection | string;
+    // (undocumented)
+    readonly rejected: boolean;
+}
+
+// @public
+export interface TreeDocxSessionView {
+    applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
+    applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
+    // (undocumented)
+    beginComposition(scope?: StoryScope): void;
+    bodyText(): string;
+    bookmarks(): BookmarkIndex;
+    // (undocumented)
+    canRedo(): boolean;
+    // (undocumented)
+    canUndo(): boolean;
+    currentPackage(): OoxmlPackage;
+    deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
+    deleteComments(comments: readonly {
+        readonly commentId: string;
+        readonly parentCommentId?: string;
+    }[], scope?: StoryScope, noteId?: number): boolean;
+    deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
+    documentFonts(): readonly string[];
+    documentOutline(): readonly DocumentOutlineEntry[];
+    documentProperties(): DocumentProperties;
+    documentStyles(): readonly DocumentStyleEntry[];
+    documentThemeColors(): readonly DocumentThemeColorEntry[];
+    documentThemeFonts(): DocumentThemeFonts;
+    readonly editable: boolean;
+    effectiveRunDefaults(paragraphId: string, runProperties?: readonly RunPropertyLike[]): StyleRunDefaults;
+    embeddedFonts(): readonly EmbeddedFont[];
+    // (undocumented)
+    endComposition(): void;
+    ensureHyperlinkRelationship(url: string, scope?: StoryScope): string | null;
+    // (undocumented)
+    ensureListDefinition(kind: ListKind): string | null;
+    ensureNumberingLevel(numId: string, level: number, kind: ListKind): boolean;
+    findText(query: string, options?: DocumentSearchOptions): DocumentSearchResult;
+    hasReviewContent(): boolean;
+    headerFooterParts(): HeaderFooterParts;
+    headerFooterPartsBySection(): readonly HeaderFooterParts[];
+    headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
+    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+    insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
+    nodeIdOf(paraId: string): string | null;
+    numberingRoot(): OoxmlElement | null;
+    packageRevision(): number;
+    paragraphAnchors(): ParagraphAnchorIndex;
+    paragraphIds(): string[];
+    paragraphIdsIn(scope?: StoryScope): string[];
+    paraIdOf(nodeId: string): string | null;
+    part(): OoxmlPart;
+    partFor(scope: StoryScope): OoxmlPart | null;
+    // (undocumented)
+    redo(): SelectionMark | null;
+    relationshipTarget(relationshipId: string, scope?: StoryScope): {
+        readonly target: string;
+        readonly external: boolean;
+    } | null;
+    removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
+    rendersText(): boolean;
+    replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
+    replyToComment(parentCommentId: string | null, anchor: {
+        paragraphId: string;
+        start: number;
+        end: number;
+        endParagraphId?: string;
+    }, text: string, author: string,
+    date?: string, scope?: StoryScope): string | null;
+    reviewItems(): readonly ReviewItem[];
+    revision(): number;
+    revisionFor(scope: StoryScope): number | null;
+    save(): Uint8Array;
+    setCommentResolved(commentId: string, resolved: boolean): boolean;
+    settingsRoot(): OoxmlElement | null;
+    storyText(scope: StoryScope): string | null;
+    stylesRoot(): OoxmlElement | null;
+    // (undocumented)
+    subscribe(onChange: (change: TreeModelChange) => void): () => void;
+    sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
+    trackingSettings(): DocumentTrackingSettings;
+    undo(): SelectionMark | null;
+}
 
 // @public
 export const TWIPS_PER_CM = 567;

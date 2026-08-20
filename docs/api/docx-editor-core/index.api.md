@@ -4,8 +4,6 @@
 
 ```ts
 
-import { Node as Node_2 } from 'prosemirror-model';
-
 // @public
 export interface ApplyResult {
     // (undocumented)

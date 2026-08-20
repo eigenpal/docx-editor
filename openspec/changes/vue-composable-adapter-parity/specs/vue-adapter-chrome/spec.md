@@ -187,6 +187,34 @@ centre beside an empty column for every consumer that mounted no rail.
 - **THEN** the props are merged onto that child, and a slot rendering zero or several roots
   renders nothing rather than guessing
 
+### Requirement: Review chrome SHALL keep author and resolution presentation in parity
+
+The React and Vue review rails SHALL draw a new comment draft with the configured author's
+resolved color. A resolved comment SHALL collapse to a green check miniature. Activating that
+miniature SHALL reveal the full thread and its reopen action.
+
+Vue SHALL keep the measured slot element stable when an item updates. Its `ResizeObserver`
+SHALL continue to own that element, so stale replacement heights cannot add phantom space
+between cards.
+
+#### Scenario: A draft uses the configured author color
+
+- **WHEN** a reviewer starts a comment with a configured author and author style
+- **THEN** both adapters put that author and color on the draft card
+- **AND** the draft focus ring uses the same author color
+
+#### Scenario: A resolved comment becomes a miniature
+
+- **WHEN** a reviewer resolves a comment
+- **THEN** its packaged card becomes a green check miniature
+- **AND** clicking the miniature reveals the full resolved thread and its reopen action
+
+#### Scenario: A Vue card changes height
+
+- **WHEN** a Vue review item changes active, resolved, text, or reply state
+- **THEN** the rail keeps the same observed slot element
+- **AND** its existing observer reports the updated height to the stacking pass
+
 ### Requirement: Pro custom-node chrome SHALL support Vue
 
 `@docx-editor.dev/pro/vue` SHALL export `CustomNodeChrome`,

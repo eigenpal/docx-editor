@@ -9,7 +9,7 @@ import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { readEditableTableTopology } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue } from '../store/store/tree-op-table-shared.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BlockFragmentRecord, TableFragmentRecord } from '../layout/semantic-records.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
@@ -64,7 +64,7 @@ export interface SurfaceTableInteractionHost {
   scale(): number;
   pageOffsetX(pageIndex: number): number;
   read(): SurfaceTableInteractionInput;
-  session(): TreeDocxSession;
+  session(): TreeDocxSessionView;
   applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
   label(key: TableInteractionLabelKey): string;
 }

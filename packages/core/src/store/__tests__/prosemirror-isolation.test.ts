@@ -13,13 +13,16 @@
 // So this scans for the IDENTIFIERS as well, across every lane that must stay PM-free.
 
 import { describe, expect, test } from 'bun:test';
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readFileSync, readdirSync, existsSync, lstatSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { existingLanePath, NESTED_LANE_DIRECTORIES, PACKAGES_ROOT } from './lane-paths.ts';
 
 const PACKAGES = PACKAGES_ROOT;
 const REPO = join(PACKAGES, '..');
+const API_ROOT = join(REPO, 'docs/api');
+const BINDING_API_REPORT = 'docs/api/docx-editor-core/binding.api.md';
+const SKIPPED_DIRECTORIES = new Set(['node_modules', 'dist']);
+const TEST_DIRECTORIES = new Set(['__tests__', 'test', 'tests']);
 
 /**
  * Lanes that must never see ProseMirror.
@@ -54,23 +57,47 @@ const PM_TOKENS: readonly { readonly pattern: RegExp; readonly why: string }[] =
   { pattern: /\bdocView\b/, why: 'ProseMirror document view' },
 ];
 
-function collectSources(root: string, depth = 0): string[] {
+const CONCRETE_SESSION_TOKENS: readonly RegExp[] = [
+  /\bTreeDocxSession\b/,
+  /\bOpenTreeSessionResult\s*\[\s*['"]session['"]\s*\]/,
+  /\bReturnType\s*<\s*typeof\s+openTreeSession\s*>\s*\[\s*['"]session['"]\s*\]/,
+];
+
+function collectFiles(
+  root: string,
+  matches: (file: string) => boolean,
+  skipDirectory: (name: string, depth: number) => boolean = () => false,
+  depth = 0
+): string[] {
   if (!existsSync(root)) return [];
   const out: string[] = [];
   for (const entry of readdirSync(root)) {
-    // `__tests__` now sits INSIDE a lane's source directory (task 10.2 moved the store
-    // lane's tests alongside it). These rules are about lane source, and a guard that
-    // scanned its own assertions would flag the strings it looks for.
-    if (entry === 'node_modules' || entry === 'dist') continue;
-    if (entry === '__tests__' || entry === 'test' || entry === 'tests') continue;
     const full = join(root, entry);
-    // Do not cross into a nested lane: `core/src` holds every moved lane as a subdirectory,
-    // so without this the contracts lane inherits the others' imports.
-    if (depth === 0 && NESTED_LANE_DIRECTORIES.has(entry) && !root.endsWith(`/${entry}`)) continue;
-    if (statSync(full).isDirectory()) out.push(...collectSources(full, depth + 1));
-    else if (/\.tsx?$/.test(full)) out.push(full);
+    const stat = lstatSync(full);
+    if (stat.isSymbolicLink()) continue;
+    if (stat.isDirectory()) {
+      if (SKIPPED_DIRECTORIES.has(entry) || skipDirectory(entry, depth)) continue;
+      out.push(...collectFiles(full, matches, skipDirectory, depth + 1));
+    } else if (matches(full)) {
+      out.push(full);
+    }
   }
   return out;
+}
+
+function collectSources(root: string, includeTests = false): string[] {
+  const contractsRoot = existingLanePath('core/src');
+  return collectFiles(
+    root,
+    (file) => /\.tsx?$/.test(file),
+    (entry, depth) =>
+      (!includeTests && TEST_DIRECTORIES.has(entry)) ||
+      (root === contractsRoot && depth === 0 && NESTED_LANE_DIRECTORIES.has(entry))
+  );
+}
+
+function repoPath(file: string): string {
+  return relative(REPO, file).replaceAll('\\', '/');
 }
 
 /**
@@ -124,6 +151,29 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
     }
   });
 
+  test('public API rollups expose ProseMirror only through the binding entry', () => {
+    const reports = collectFiles(API_ROOT, (file) => file.endsWith('.api.md'));
+    const offenders = reports
+      .filter((file) => repoPath(file) !== BINDING_API_REPORT)
+      .map((file) => ({ file: repoPath(file), found: violations(readFileSync(file, 'utf8')) }))
+      .filter(({ found }) => found.length > 0);
+    expect(offenders).toEqual([]);
+    expect(reports.length).toBeGreaterThan(1);
+    const bindingApi = reports.find((file) => repoPath(file) === BINDING_API_REPORT);
+    expect(bindingApi).toBeDefined();
+    expect(violations(readFileSync(bindingApi!, 'utf8'))).toContain('ProseMirror module specifier');
+  });
+
+  test('only the paginated surface names the concrete binding session', () => {
+    const owners = collectSources(existingLanePath('core/src/editor'), true)
+      .filter((file) => {
+        const source = stripComments(readFileSync(file, 'utf8'));
+        return CONCRETE_SESSION_TOKENS.some((pattern) => pattern.test(source));
+      })
+      .map((file) => relative(PACKAGES, file).replaceAll('\\', '/'));
+    expect(owners).toEqual(['core/src/editor/paginated-surface.ts']);
+  });
+
   test('semantic history reads the canonical tree, never the PM history plugin', () => {
     const file = existingLanePath('core/src/store/store/tree-store.ts');
     expect(violations(readFileSync(file, 'utf8'))).toEqual([]);
@@ -140,6 +190,13 @@ describe('ProseMirror stays inside the binding (tasks 6.5, 6.6)', () => {
       0
     );
     expect(violations('if (undoDepth(state) > 0) {}')).toEqual(['ProseMirror history plugin']);
+    for (const source of [
+      'const session: TreeDocxSession = get();',
+      "type Session = OpenTreeSessionResult['session'];",
+      "type Session = ReturnType<typeof openTreeSession>['session'];",
+    ]) {
+      expect(CONCRETE_SESSION_TOKENS.some((pattern) => pattern.test(source))).toBe(true);
+    }
     // ...and that a comment mentioning it is NOT a violation.
     expect(violations('// ProseMirror is deliberately absent here\nconst x = 1;')).toEqual([]);
 

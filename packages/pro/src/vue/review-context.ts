@@ -5,13 +5,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import {
+  Fragment,
   computed,
   defineComponent,
-  getCurrentInstance,
   h,
   inject,
   onBeforeUnmount,
-  onMounted,
   provide,
   shallowRef,
   toValue,
@@ -39,6 +38,9 @@ export interface ReviewRailValue {
   readonly allItems: readonly ReviewItemView[];
   readonly authorSlots: ReadonlyMap<string, number>;
   readonly authorInfo: ReadonlyMap<string, ReviewAuthorInfo>;
+  readonly draftAuthor: string | null;
+  readonly draftAuthorInfo: ReviewAuthorInfo | undefined;
+  readonly draftAuthorSlot: number;
   readonly byId: ReadonlyMap<string, ReviewItemView>;
   readonly measure: (node: HTMLElement | null, key: string) => void;
   readonly beginDraft: () => void;
@@ -76,6 +78,9 @@ const INERT_RAIL: ReviewRailValue = {
   allItems: [],
   authorSlots: new Map(),
   authorInfo: new Map(),
+  draftAuthor: null,
+  draftAuthorInfo: undefined,
+  draftAuthorSlot: 0,
   byId: new Map(),
   measure: () => {},
   beginDraft: () => {},
@@ -154,26 +159,39 @@ export const ReviewItemScope = defineComponent({
       };
     });
     provide(ReviewItemContextKey, item as unknown as ComputedRef<ReviewItemView | null>);
-    onMounted(() => {
-      const el = getCurrentInstance()?.proxy?.$el;
-      if (props.measureKey && el instanceof HTMLElement) {
-        rail.value.measure(el, props.measureKey);
-      }
-    });
+    let measuredNode: HTMLElement | null = null;
+    let measuredKey: string | null = null;
+    const bindMeasuredNode = (node: Element | null): void => {
+      const nextNode = node instanceof HTMLElement ? node : null;
+      const nextKey = nextNode && props.measureKey ? props.measureKey : null;
+      if (measuredNode === nextNode && measuredKey === nextKey) return;
+      if (measuredKey) rail.value.measure(null, measuredKey);
+      measuredNode = nextNode;
+      measuredKey = nextKey;
+      if (measuredNode && measuredKey) rail.value.measure(measuredNode, measuredKey);
+    };
     onBeforeUnmount(() => {
-      if (props.measureKey) rail.value.measure(null, props.measureKey);
+      bindMeasuredNode(null);
     });
     return () =>
       h(
         'div',
         {
-          key: reviewItemRenderKey(item.value),
+          onVnodeMounted: (vnode) => {
+            bindMeasuredNode(vnode.el instanceof Element ? vnode.el : null);
+          },
+          onVnodeUpdated: (vnode) => {
+            bindMeasuredNode(vnode.el instanceof Element ? vnode.el : null);
+          },
+          onVnodeBeforeUnmount: () => {
+            bindMeasuredNode(null);
+          },
           class: `docx-review__slot${props.className ? ` ${props.className}` : ''}`,
           ...(props.testId ? { 'data-testid': props.testId } : {}),
           style: props.style,
           ...(props.collapsed ? { 'data-collapsed': '' } : {}),
         },
-        slots.default?.()
+        [h(Fragment, { key: reviewItemRenderKey(item.value) }, slots.default?.())]
       );
   },
 });

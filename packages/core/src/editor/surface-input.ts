@@ -6,15 +6,13 @@
 // the little state it cannot own — so React, Vue and a plain page get identical behaviour
 // instead of three hand-written keymaps that drift.
 
-import type { TreeDocxSession } from '@docx-editor.dev/core/binding';
+import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core/layout';
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
 
 type SelectionMark = { paragraphId: string; start: number; end: number };
-type TreeApplyResult = ReturnType<TreeDocxSession['applyTreeOps']>;
-
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
   ArrowRight: 'right',
@@ -476,7 +474,7 @@ export function paragraphReplacePlan(
   paragraphId: string,
   modelText: string,
   painted: string
-): { ops: Parameters<TreeDocxSession['applyTreeOps']>[0][number][]; caret: number } | null {
+): { ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0][number][]; caret: number } | null {
   if (painted === modelText) return null;
 
   let prefix = 0;
@@ -496,7 +494,7 @@ export function paragraphReplacePlan(
     suffix += 1;
   }
   const inserted = painted.slice(prefix, painted.length - suffix);
-  const ops: Parameters<TreeDocxSession['applyTreeOps']>[0][number][] = [];
+  const ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0][number][] = [];
   if (modelText.length - suffix > prefix) {
     ops.push({ op: 'deleteText', paragraphId, start: prefix, end: modelText.length - suffix });
   }
@@ -516,7 +514,7 @@ export function createInsertPlainText(deps: {
   deleteSelectionOps: () => readonly TreeDocOp[];
   selectionMark: () => SelectionMark | null;
   storyScope: () => StoryScope;
-  session: TreeDocxSession;
+  session: TreeDocxSessionView;
   commit: (
     run: () => TreeApplyResult | boolean,
     selectionAfter?: () => SemanticSelection | null
