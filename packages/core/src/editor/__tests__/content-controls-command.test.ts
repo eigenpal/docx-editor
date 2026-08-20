@@ -179,6 +179,28 @@ describe('setContentControlValue command', () => {
     });
     expect(editor.exec(command)).toEqual(can);
   });
+
+  test('switching to viewing refuses setValue through can() and exec()', () => {
+    // The gate read `config.mode`, which is fixed for the life of the editor — so this
+    // branch, which sits ABOVE the viewing gate, answered the question the host asked at
+    // open time rather than the one the reader is asking now.
+    const editor = mount(sdt(`<w:alias w:val="field"/><w:text/>`, p('before')));
+    caretAt(editor.surface!, 0);
+    const command = { type: 'setContentControlValue' as const, value: 'after' };
+    expect(editor.can(command)).toEqual({ ok: true });
+
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    const revision = editor.surface!.session.packageRevision();
+    const refusal = editor.can(command);
+    expect(refusal.ok).toBe(false);
+    expect(editor.exec(command)).toEqual(refusal);
+    expect(editor.surface!.session.packageRevision()).toBe(revision);
+
+    // Reversible, like every other viewing refusal.
+    editor.exec({ type: 'setEditingMode', mode: 'editing' });
+    expect(editor.can(command)).toEqual({ ok: true });
+    expect(editor.exec(command).ok).toBe(true);
+  });
 });
 
 describe('removeContentControl command', () => {

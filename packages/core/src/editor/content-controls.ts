@@ -9,6 +9,7 @@
 import type {
   CanResult,
   DocTarget,
+  DocumentEditingMode,
   EditorScope,
   ExecErrorCode,
   ExecResult,
@@ -615,6 +616,22 @@ function gateContentControlCommand(
  * the store would apply for lock, binding, type, and value — so chrome/`Editor.can` never
  * claim a command is executable when `exec` would refuse it.
  */
+/**
+ * The reader's CURRENT mode, in the vocabulary a gate takes.
+ *
+ * `createDocxEditor`'s `mode` is the CONSTRUCTION value and is fixed for the life of the
+ * editor, so a gate given it answers the question the host asked at open time rather than
+ * the one the reader is asking now: a document switched to viewing kept a fully writable
+ * set of content-control commands, because this branch is dispatched above the facade's
+ * viewing gate and was the one lane that never re-read the mode.
+ *
+ * @internal
+ */
+export function gateModeOf(editingMode: DocumentEditingMode): 'edit' | 'view' | 'suggesting' {
+  if (editingMode === 'viewing') return 'view';
+  return editingMode === 'suggesting' ? 'suggesting' : 'edit';
+}
+
 export function canContentControlCommand(
   command: ContentControlEditorCommand,
   surface: PaginatedSurface | null,

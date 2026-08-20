@@ -1079,6 +1079,12 @@ export function selectedDrawingOverlayTargetOf(
   const projection = projectDrawingForRecord(surface, record);
   if (!projection || projection.locks.select) return null;
   const caps = overlayCapabilityFlags(record, projection);
+  // The MODE, on top of the drawing's own OOXML locks. Without it a viewing-mode reader got
+  // eight resize handles, a `move` cursor and a live drag preview that auto-scrolled the
+  // document — then snapped back when the write was refused. The selection ring stays: the
+  // image is still selectable, copyable and describable in a document open for viewing.
+  const writable = surface.editingMode() === 'edit' && surface.session.editable;
+  const gated = writable ? caps : { ...caps, canResize: false, canMove: false };
   const anchorFrameOrigin =
     record.kind === 'anchoredDrawing'
       ? Object.freeze({
@@ -1099,7 +1105,7 @@ export function selectedDrawingOverlayTargetOf(
     position: positionInputOf(projection),
     anchorFrameOrigin,
     transform: record.transform,
-    ...caps,
+    ...gated,
   });
 }
 

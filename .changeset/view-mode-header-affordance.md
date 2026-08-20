@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Viewing mode no longer shows the header and footer hover invitation. Switching to viewing hides the affordance right away, instead of waiting for the next repaint.
+Viewing mode no longer offers write affordances it refuses: the header and footer hover invitation, content-control widgets, image resize handles, and the custom-node and comment context-menu rows. Content-control edits are now refused in viewing instead of committing.

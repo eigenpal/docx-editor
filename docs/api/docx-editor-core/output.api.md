@@ -39,6 +39,7 @@ export interface PaintOptions {
         readonly checkedIds?: ReadonlySet<string>;
         readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
         readonly tocControlIds?: ReadonlySet<string>;
+        readonly readOnly?: boolean;
     };
     readonly defaultFontFamily?: string;
     // (undocumented)

@@ -31,6 +31,8 @@ import {
 import type { CSSProperties, ReactElement } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import { ReviewRailContext, useDocxEditor } from '../context';
+import { useEditorState } from '../useEditorState';
+import type { EditorSnapshot } from '@docx-editor.dev/core';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -89,6 +91,10 @@ export interface DocxEditorContextMenuProps {
   children?: DocxEditorChildren;
 }
 
+/** Viewing refuses every review write, comment authoring included. */
+const selectDocumentReadOnly = (snapshot: EditorSnapshot): boolean =>
+  snapshot.editingMode === 'viewing';
+
 /** The packaged set, in order. Separators are positional, so they are part of the list. */
 type DefaultEntry =
   | { readonly kind: 'row'; readonly id: string; readonly render: () => ReactElement }
@@ -100,8 +106,12 @@ function ContextMenuAddComment() {
   const menu = useMenuContext();
   const label = useMenuLabel();
   const gate = editor?.can({ type: 'toggleReviewPane' });
+  // `toggleReviewPane` is deliberately NON-mutating, so it stays `ok` in viewing — and this
+  // row, which writes a comment, rode on it and showed up fully enabled. It then closed the
+  // menu and wrote nothing, because the rail refuses a draft on a read-only document.
+  const readOnly = useEditorState(selectDocumentReadOnly);
   const disabled =
-    !gate?.ok || (rail?.mounted ?? 0) === 0 || editor?.getSelectionPlacement() === null;
+    !gate?.ok || readOnly || (rail?.mounted ?? 0) === 0 || editor?.getSelectionPlacement() === null;
   const control = chromeControlForSlot('review.comments');
   return (
     <MenuRow
