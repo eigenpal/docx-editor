@@ -6,49 +6,10 @@
  */
 import { defineNuxtModule, createResolver, addComponent, addImports } from '@nuxt/kit';
 import type { NuxtModule } from '@nuxt/schema';
+import { VUE_COMPOSABLES } from './vue-composables.generated';
 
 const PACKAGE_ROOT = '@docx-editor.dev/vue';
 const CORE_STYLES = '@docx-editor.dev/core/styles/editor.css';
-
-/** Public composables exported from the Vue adapter root. */
-const VUE_COMPOSABLES = [
-  'useChromeTranslate',
-  'useContentControl',
-  'useContentControlInstance',
-  'useContextMenuTarget',
-  'useDocxEditor',
-  'useDocxSource',
-  'useDocumentOutline',
-  'useDocumentSearch',
-  'useEditorCaret',
-  'useEditorCommand',
-  'useEditorEvent',
-  'useEditorSnapshot',
-  'useEditorState',
-  'useEditorValueCommand',
-  'useFontFamily',
-  'useFonts',
-  'useHeaderFooterState',
-  'useHyperlinkPopup',
-  'useHyperlinkPopupInstance',
-  'useNavigationPane',
-  'useNavigationShift',
-  'useNotePropertiesState',
-  'useNoteScopeState',
-  'usePageSetup',
-  'useParagraphIndent',
-  'useParagraphStyle',
-  'useReviewAuthors',
-  'useReviewGutter',
-  'useScopeClassName',
-  'useScopedChromeAnchor',
-  'useTableBorderTargetLabel',
-  'useToolbarContext',
-  'useToolbarLabel',
-  'useToolbarLabelFor',
-  'useTranslation',
-  'useZoom',
-] as const;
 
 /** @public */
 export interface ModuleOptions {
