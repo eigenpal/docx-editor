@@ -604,7 +604,8 @@
     "structural": "दस्तावेज़ संरचना बदली गई",
     "deleteComment": "टिप्पणी हटाएँ",
     "discardChange": "परिवर्तन छोड़ें",
-    "showResolvedComment": null
+    "showResolvedComment": null,
+    "resolved": null
   },
   "imageAltText": {
     "description": "विवरण",

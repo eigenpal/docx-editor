@@ -185,7 +185,9 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       if (landed) setDraft('');
     }, [entry, readOnly, draft, review]);
 
-    if (hidden || !entry || !entry.isActive) return null;
+    if (hidden || !entry || !entry.isActive || (entry.kind === 'comment' && entry.resolved)) {
+      return null;
+    }
     if (children) return <>{children}</>;
 
     return (

@@ -604,7 +604,8 @@
     "structural": "Zmieniono strukturę dokumentu",
     "deleteComment": "Usuń komentarz",
     "discardChange": "Odrzuć zmianę",
-    "showResolvedComment": null
+    "showResolvedComment": null,
+    "resolved": null
   },
   "imageAltText": {
     "description": "Opis",

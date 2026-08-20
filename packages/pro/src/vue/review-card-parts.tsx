@@ -484,15 +484,20 @@ export const ReviewCard = markPart(
       const entryRef = useReviewItem();
       const cardId = useReviewStableId('card');
       const t = useReviewLabel();
+      let resolvedDetailsNode: HTMLDetailsElement | null = null;
+      const bindResolvedDetails = (vnode: VNode) => {
+        resolvedDetailsNode =
+          vnode.el instanceof HTMLDetailsElement ? vnode.el : resolvedDetailsNode;
+      };
       const closeOnOutsidePointer = (event: PointerEvent) => {
-        const resolvedDetails = document.getElementById(cardId);
         if (
-          resolvedDetails instanceof HTMLDetailsElement &&
-          resolvedDetails.open &&
+          resolvedDetailsNode?.open &&
           event.target instanceof Node &&
-          !resolvedDetails.contains(event.target)
+          !resolvedDetailsNode.contains(event.target)
         ) {
-          resolvedDetails.open = false;
+          rail.value.setExpandedResolvedKey(null);
+          rail.value.review.setActive(null);
+          resolvedDetailsNode.open = false;
         }
       };
       onMounted(() => document.addEventListener('pointerdown', closeOnOutsidePointer, true));
@@ -502,7 +507,8 @@ export const ReviewCard = markPart(
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
-        const { review, authorSlots, authorInfo } = rail.value;
+        const { review, authorSlots, authorInfo, expandedResolvedKey, setExpandedResolvedKey } =
+          rail.value;
         const slot = authorSlots.get(entry.author) ?? 0;
         const resolvedCollapsible = !props.asChild && entry.kind === 'comment' && entry.resolved;
         const shared = {
@@ -556,17 +562,37 @@ export const ReviewCard = markPart(
         };
         if (props.asChild) return <Slot {...shared}>{slots.default?.()}</Slot>;
         if (resolvedCollapsible) {
-          return h('details', shared, [
-            h(
-              'summary',
-              {
-                class: 'docx-review__resolved-toggle',
-                'aria-label': t('review.showResolvedComment'),
+          return h(
+            'details',
+            {
+              ...shared,
+              open: expandedResolvedKey === entry.key,
+              onVnodeMounted: bindResolvedDetails,
+              onVnodeUpdated: bindResolvedDetails,
+              onVnodeBeforeUnmount: () => {
+                resolvedDetailsNode = null;
               },
-              [resolvedCommentIcon()]
-            ),
-            h(ReviewCardPreset, null, { default: () => slots.default?.() }),
-          ]);
+              onToggle: (event: Event) => {
+                const next = (event.currentTarget as HTMLDetailsElement).open;
+                setExpandedResolvedKey(next ? entry.key : null);
+                review.setActive(next ? entry.key : null);
+              },
+            },
+            [
+              h(
+                'summary',
+                {
+                  class: 'docx-review__resolved-toggle',
+                  'aria-label': t('review.showResolvedComment'),
+                },
+                [
+                  h('span', { class: 'docx-review__resolved-status' }, t('review.resolved')),
+                  resolvedCommentIcon(),
+                ]
+              ),
+              h(ReviewCardPreset, null, { default: () => slots.default?.() }),
+            ]
+          );
         }
         return (
           <div {...shared}>{h(ReviewCardPreset, null, { default: () => slots.default?.() })}</div>

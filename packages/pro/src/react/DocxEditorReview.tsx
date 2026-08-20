@@ -380,7 +380,12 @@ import {
   markerIconPath,
   resolvedCommentIcon,
 } from './review-icons.tsx';
-import { ResolvedCommentCard, createCommentResolutionParts } from './review-comment-resolution.tsx';
+import {
+  ResolvedCommentCard,
+  ResolvedDisclosureProvider,
+  createCommentResolutionParts,
+  useResolvedDisclosure,
+} from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { revisionLabelKey } from './review-labels.ts';
@@ -466,7 +471,6 @@ function ReviewRoot({
   const items = useMemo(() => {
     return filter ? review.items.filter((entry) => filter(entry)) : review.items;
   }, [review.items, filter]);
-
   // Word's rule: a colour per author by ORDER OF FIRST APPEARANCE. A hash of the name is
   // stable but collides, and two reviewers drawn in one colour tells the reader the wrong
   // thing about who proposed what.
@@ -867,52 +871,54 @@ function ReviewRoot({
   );
 
   return (
-    <ReviewContext.Provider value={value}>
-      {asChild && isValidElement(children) ? (
-        // The child becomes the rail ELEMENT and keeps its own children; the rail's content
-        // is appended after them. Two earlier shapes were wrong: rendering `children` alone
-        // mounted an empty element with no cards, and cloning it while ALSO passing it down
-        // as the card preset rendered the consumer's element once per card.
-        <Slot {...shared}>
-          {cloneElement(
-            children as React.ReactElement<{ children?: ReactNode }>,
-            undefined,
-            (children as React.ReactElement<{ children?: ReactNode }>).props.children,
-            // The same presentation switch as the packaged element: a compact rail is
-            // 32px wide (`:not([data-open])`), and mounting the full list inside it
-            // rendered every card squeezed to that width over the page.
-            preset ? (
-              expanded ? (
-                <ReviewList
-                  stack={stack}
-                  positions={stacked}
-                  collapsed={collapsedKeys}
-                  scale={metrics.scale}
-                  offset={metrics.top}
-                  window={window_}
-                />
-              ) : (
-                <>
-                  {markers}
-                  {compactCard}
-                </>
-              )
-            ) : null,
-            affordances
-          )}
-        </Slot>
-      ) : (
-        <aside {...shared}>
-          {expanded && furniture !== undefined ? (
-            <div className="docx-review__furniture" data-testid="review-furniture">
-              {furniture}
-            </div>
-          ) : null}
-          {body}
-          {affordances}
-        </aside>
-      )}
-    </ReviewContext.Provider>
+    <ResolvedDisclosureProvider items={items}>
+      <ReviewContext.Provider value={value}>
+        {asChild && isValidElement(children) ? (
+          // The child becomes the rail ELEMENT and keeps its own children; the rail's content
+          // is appended after them. Two earlier shapes were wrong: rendering `children` alone
+          // mounted an empty element with no cards, and cloning it while ALSO passing it down
+          // as the card preset rendered the consumer's element once per card.
+          <Slot {...shared}>
+            {cloneElement(
+              children as React.ReactElement<{ children?: ReactNode }>,
+              undefined,
+              (children as React.ReactElement<{ children?: ReactNode }>).props.children,
+              // The same presentation switch as the packaged element: a compact rail is
+              // 32px wide (`:not([data-open])`), and mounting the full list inside it
+              // rendered every card squeezed to that width over the page.
+              preset ? (
+                expanded ? (
+                  <ReviewList
+                    stack={stack}
+                    positions={stacked}
+                    collapsed={collapsedKeys}
+                    scale={metrics.scale}
+                    offset={metrics.top}
+                    window={window_}
+                  />
+                ) : (
+                  <>
+                    {markers}
+                    {compactCard}
+                  </>
+                )
+              ) : null,
+              affordances
+            )}
+          </Slot>
+        ) : (
+          <aside {...shared}>
+            {expanded && furniture !== undefined ? (
+              <div className="docx-review__furniture" data-testid="review-furniture">
+                {furniture}
+              </div>
+            ) : null}
+            {body}
+            {affordances}
+          </aside>
+        )}
+      </ReviewContext.Provider>
+    </ResolvedDisclosureProvider>
   );
 }
 
@@ -1044,12 +1050,8 @@ function ReviewMarkers({
   icon: iconOverride,
 }: ReviewMarkersProps) {
   const { review, authorSlots, authorInfo } = useRail();
+  const resolvedDisclosure = useResolvedDisclosure();
   const t = useReviewLabel();
-  // Markers stack the way the cards do: each sits at its own anchor, or just below the
-  // previous marker when the anchors are closer than a marker is tall. Raw anchors put
-  // every change on a dense line at the same `top`, and the rail drew them on top of each
-  // other. The cursor runs in CSS px, after scaling, because the marker's box does not
-  // zoom with the page.
   const { roots, stackedTops } = useMemo(() => {
     const present = idsOf(review.items);
     const entries = review.items.filter((entry) => !isThreadedReply(entry, present));
@@ -1077,8 +1079,6 @@ function ReviewMarkers({
             className="docx-review__marker"
             data-testid="review-marker"
             data-kind={entry.kind === 'revision' ? entry.revisionKind : entry.kind}
-            // Per-author CSS hooks, mirroring the painted document's
-            // `data-review-author`/`data-review-author-slot`. A custom card has no author.
             {...(entry.author
               ? {
                   'data-review-author': entry.author,
@@ -1091,8 +1091,6 @@ function ReviewMarkers({
             style={{
               position: 'absolute',
               top,
-              // The accent rides along so a host rule can colour the marker per author.
-              // The accent only — a card background has no business on a gutter glyph.
               ...(entry.author
                 ? ({
                     '--doc-review-author-current': authorAccent(
@@ -1102,16 +1100,11 @@ function ReviewMarkers({
                   } as CSSProperties)
                 : {}),
             }}
-            // A custom card has no author; leading its tooltip with ": " read as a glitch.
             title={entry.author ? `${entry.author}: ${entry.text}` : entry.text}
-            // The author and the words, not a generic "show pane" — with the label the same
-            // on every marker a screen reader heard N identical buttons and never learned
-            // who said what.
             aria-label={`${t('review.showPane')}: ${entry.author ? `${entry.author}. ` : ''}${entry.text}`}
             onMouseDown={guardMousedown}
             onClick={() => {
-              // Open the pane AND put the caret in this item's text, so the card the reader
-              // asked for is the one that unfolds.
+              if (entry.kind === 'comment' && entry.resolved) resolvedDisclosure.open(entry.key);
               review.setPaneOpen(true);
               review.setActive(entry.key);
             }}
@@ -1570,7 +1563,14 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
   if (asChild) return <Slot {...shared}>{children}</Slot>;
   if (resolvedCollapsible) {
     return (
-      <ResolvedCommentCard {...shared} label={t('review.showResolvedComment')}>
+      <ResolvedCommentCard
+        {...shared}
+        label={t('review.showResolvedComment')}
+        statusLabel={t('review.resolved')}
+        entryKey={entry.key}
+        onActivate={() => review.setActive(entry.key)}
+        onDeactivate={() => review.setActive(null)}
+      >
         <ReviewCardPreset>{children}</ReviewCardPreset>
       </ResolvedCommentCard>
     );

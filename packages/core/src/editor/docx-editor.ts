@@ -137,6 +137,7 @@ import {
   selectedTableOf,
 } from './docx-editor-derive.ts';
 import { setReviewCommentResolved } from './docx-editor-comment-resolution.ts';
+import { reviewReplyRefusal } from './review-reply.ts';
 import {
   canContentControlCommand,
   gateModeOf,
@@ -2417,14 +2418,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { ok: false, code: 'invalidArgs', reason: 'the item has no anchorable range' };
       }
       const writer = (author ?? config.author ?? '').trim();
-      if (writer.length === 0 || text.trim().length === 0) {
-        return { ok: false, code: 'invalidArgs', reason: 'a reply needs both an author and text' };
-      }
-      // A custom node's card is informational — a reply would write a comment nothing in
-      // the definition asked for, so it is refused rather than silently anchored.
-      if (item.kind === 'custom') {
-        return { ok: false, code: 'unsupported', reason: 'a custom node card takes no replies' };
-      }
+      const refusal = reviewReplyRefusal(item, text, writer);
+      if (refusal) return refusal;
       // Against a REVISION this is a comment over that revision's range: OOXML gives `w:ins`
       // and `w:del` no body and no thread, so there is nowhere else for the text to live.
       const parent = item.kind === 'comment' ? item.id : null;

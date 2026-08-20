@@ -229,6 +229,20 @@ const ReviewRoot = defineComponent({
         ? reviewHook.items.value.filter((entry) => props.filter!(entry))
         : reviewHook.items.value
     );
+    const expandedResolvedKey = ref<string | null>(null);
+    watch(
+      items,
+      (entries) => {
+        const key = expandedResolvedKey.value;
+        if (
+          key !== null &&
+          !entries.some((entry) => entry.key === key && entry.kind === 'comment' && entry.resolved)
+        ) {
+          expandedResolvedKey.value = null;
+        }
+      },
+      { flush: 'sync' }
+    );
     const configuredAuthor = computed(() => editorRef.value?.getConfiguredAuthor() ?? null);
     const authorSlots = computed(() => {
       const slotsMap = new Map<string, number>();
@@ -582,6 +596,10 @@ const ReviewRoot = defineComponent({
         measure: observeSlot,
         beginDraft,
         endDraft,
+        expandedResolvedKey: expandedResolvedKey.value,
+        setExpandedResolvedKey: (key) => {
+          expandedResolvedKey.value = key;
+        },
       };
     };
     const railValue = shallowRef<ReviewRailValue>(currentRailValue());

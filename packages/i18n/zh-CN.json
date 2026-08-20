@@ -604,7 +604,8 @@
     "structural": "已更改文档结构",
     "deleteComment": "删除批注",
     "discardChange": "放弃更改",
-    "showResolvedComment": null
+    "showResolvedComment": null,
+    "resolved": null
   },
   "imageAltText": {
     "description": "说明",

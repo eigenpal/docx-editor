@@ -604,7 +604,8 @@
     "structural": "מבנה המסמך שונה",
     "deleteComment": "מחק הערה",
     "discardChange": "בטל שינוי",
-    "showResolvedComment": null
+    "showResolvedComment": null,
+    "resolved": null
   },
   "imageAltText": {
     "description": "תיאור",

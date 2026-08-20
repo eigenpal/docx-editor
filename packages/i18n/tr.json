@@ -604,7 +604,8 @@
     "structural": "Belge yapısı değiştirildi",
     "deleteComment": "Açıklamayı sil",
     "discardChange": "Değişikliği at",
-    "showResolvedComment": null
+    "showResolvedComment": null,
+    "resolved": null
   },
   "imageAltText": {
     "description": "Açıklama",

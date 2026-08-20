@@ -2623,7 +2623,7 @@ export function mountPaginatedSurface(
     const ranges: KeyedRange[] = [];
     for (const item of session.reviewItems()) {
       if (item.kind === 'comment') {
-        if (item.range === null || item.resolved) continue;
+        if (item.range === null) continue;
         if (!onScreen(item.range.start.paragraphId, item.range.end.paragraphId)) continue;
         ranges.push({
           key: reviewItemKey(item),
@@ -2779,9 +2779,8 @@ export function mountPaginatedSurface(
     if (!same(selection.anchor, pin.anchor) || !same(selection.head, pin.head)) return null;
     const found = session.reviewItems().find((item) => reviewItemKey(item) === pin.key);
     if (!found) return null;
-    // The same exclusions the caret path applies. A pin must not open a card the reader
-    // resolved out from under it, nor one the host's rail does not draw.
-    if (found.kind === 'comment' && found.resolved) return null;
+    // Explicit activation can inspect a resolved comment. The caret path below still ignores
+    // resolved comments, so they never reopen from ordinary document navigation.
     if (
       found.kind === 'revision' &&
       reviewActivationExclusions !== null &&
@@ -2906,7 +2905,12 @@ export function mountPaginatedSurface(
     const decision = parts[0]!;
     const isActive = active !== null && decision === reviewItemKey(active);
     if (key.startsWith('comment-')) {
-      return isActive ? 'docx-comment-band docx-comment-band--active' : 'docx-comment-band';
+      const item = byKey.get(decision);
+      const resolved = item?.kind === 'comment' && item.resolved;
+      if (resolved && !isActive) return null;
+      return isActive
+        ? `docx-comment-band docx-comment-band--active${resolved ? ' docx-comment-band--resolved-active' : ''}`
+        : 'docx-comment-band';
     }
     // A custom node's band only while its card is open: the chip tint already marks the
     // node persistently, and the comment band is the right weight for "this is the one".

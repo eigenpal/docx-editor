@@ -45,6 +45,8 @@ export interface ReviewRailValue {
   readonly measure: (node: HTMLElement | null, key: string) => void;
   readonly beginDraft: () => void;
   readonly endDraft: () => void;
+  readonly expandedResolvedKey: string | null;
+  readonly setExpandedResolvedKey: (key: string | null) => void;
 }
 
 export const ReviewContextKey: InjectionKey<ComputedRef<ReviewRailValue>> = Symbol('ReviewContext');
@@ -85,6 +87,8 @@ const INERT_RAIL: ReviewRailValue = {
   measure: () => {},
   beginDraft: () => {},
   endDraft: () => {},
+  expandedResolvedKey: null,
+  setExpandedResolvedKey: () => {},
 };
 
 /** @internal */

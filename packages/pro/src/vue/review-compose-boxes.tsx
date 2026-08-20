@@ -229,7 +229,14 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         return () => {
           void editorRevision.value;
           const entry = entryRef.value;
-          if (props.hidden || !entry || !entry.isActive) return null;
+          if (
+            props.hidden ||
+            !entry ||
+            !entry.isActive ||
+            (entry.kind === 'comment' && entry.resolved)
+          ) {
+            return null;
+          }
           const { review, readOnly } = rail.value;
           const custom = slots.default?.();
           if (custom?.length) return custom;

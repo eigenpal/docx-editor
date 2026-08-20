@@ -470,31 +470,32 @@ describe('the review sidebar', () => {
       </DocxEditorRoot>
     );
     const editor = instance!;
+    const card = () => view.getByTestId('review-card') as HTMLDetailsElement;
+    const toggleResolved = () =>
+      act(() => fireEvent.click(card().querySelector('.docx-review__resolved-toggle')!));
     expect(view.getByTestId('review-resolve')).toBeDefined();
     expect(view.queryByTestId('review-reopen')).toBeNull();
-
     act(() => fireEvent.click(view.getByTestId('review-resolve')));
     expect(commentOf(editor).resolved).toBe(true);
-    expect(view.getByTestId('review-card').hasAttribute('data-resolved')).toBe(true);
-    expect(view.getByTestId('review-card').hasAttribute('data-resolved-miniature')).toBe(true);
+    expect(card().hasAttribute('data-resolved')).toBe(true);
+    expect(card().hasAttribute('data-resolved-miniature')).toBe(true);
     act(() => editor.exec({ type: 'toggleReviewPane' }));
     const marker = view.getByTestId('review-marker');
     expect(marker.querySelector('.docx-review__resolved-icon')).not.toBeNull();
     act(() => fireEvent.click(marker));
-    expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(false);
+    expect(card().open).toBe(true);
+    expect(view.getByText('Resolved')).toBeDefined();
+    expect(document.querySelector('.docx-comment-band--resolved-active')).not.toBeNull();
     expect(view.queryByTestId('review-resolve')).toBeNull();
-
-    act(() =>
-      fireEvent.click(
-        view.getByTestId('review-card').querySelector('.docx-review__resolved-toggle')!
-      )
-    );
-    expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(true);
+    expect(view.queryByTestId('review-reply-input')).toBeNull();
+    toggleResolved();
+    expect(card().open).toBe(false);
+    toggleResolved();
+    expect(card().open).toBe(true);
     expect(view.getByTestId('review-reopen')).toBeDefined();
     act(() => fireEvent.pointerDown(document.body));
-    expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(false);
-
-    act(() => fireEvent.click(view.getByTestId('review-card').querySelector('summary')!));
+    expect(card().open).toBe(false);
+    toggleResolved();
     act(() => fireEvent.click(view.getByTestId('review-reopen')));
     expect(commentOf(editor).resolved).toBe(false);
     expect(view.getByTestId('review-resolve')).toBeDefined();
@@ -900,7 +901,6 @@ const SAME_LINE = docx(
     '<w:r><w:delText>struck</w:delText></w:r></w:del></w:p>'
 );
 
-/** The glyph each marker drew, keyed by the kind it is for. */
 function markerGlyphs(view: ReturnType<typeof render>): Map<string, string> {
   const glyphs = new Map<string, string>();
   for (const marker of view.queryAllByTestId('review-marker')) {

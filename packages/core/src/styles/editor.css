@@ -111,6 +111,8 @@
   --doc-comment-border: rgba(245, 174, 0, 0.45);
   --doc-comment-active-bg: rgba(255, 212, 0, 0.35);
   --doc-comment-active-border: rgba(245, 174, 0, 0.9);
+  --doc-comment-resolved-active-bg: rgba(255, 212, 0, 0.18);
+  --doc-comment-resolved-active-border: rgba(245, 174, 0, 0.6);
 
   /* Text */
   --doc-text: #202124; /* primary text */
@@ -5499,6 +5501,30 @@ a.docx-hyperlink:focus-visible {
   display: none;
 }
 
+.docx-review__resolved-status {
+  display: none;
+  color: var(--doc-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.docx-review__card[data-resolved-miniature][open] > .docx-review__resolved-toggle {
+  width: 100%;
+  height: 28px;
+  margin: -4px 0 4px;
+  justify-content: space-between;
+  align-self: stretch;
+  border-radius: 4px;
+}
+
+.docx-review__card[data-resolved-miniature][open]
+  > .docx-review__resolved-toggle
+  > .docx-review__resolved-status {
+  display: inline;
+}
+
 .docx-review__card[data-resolved-miniature]:not([open]) .docx-review__resolved-toggle {
   width: 28px;
   height: 28px;
@@ -5827,6 +5853,11 @@ a.docx-hyperlink:focus-visible {
 .docx-comment-band--active {
   background: var(--doc-comment-active-bg);
   box-shadow: inset 0 -1px 0 var(--doc-comment-active-border);
+}
+
+.docx-comment-band--resolved-active {
+  background: var(--doc-comment-resolved-active-bg);
+  box-shadow: inset 0 -1px 0 var(--doc-comment-resolved-active-border);
 }
 
 /* WHOSE COMMENT THIS IS, for CSS only.

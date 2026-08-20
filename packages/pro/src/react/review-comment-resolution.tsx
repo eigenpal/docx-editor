@@ -5,10 +5,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import {
+  createContext,
+  useContext,
   useEffect,
+  useMemo,
   useRef,
+  useState,
   type ComponentPropsWithoutRef,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { ACCEPT_ICON, REOPEN_ICON, icon, resolvedCommentIcon } from './review-icons.tsx';
@@ -23,27 +28,104 @@ interface ResolutionPartDeps {
   readonly guardMousedown: (event: ReactMouseEvent) => void;
 }
 
+interface ResolvedEntry {
+  readonly key: string;
+  readonly kind: string;
+  readonly resolved?: boolean;
+}
+
+interface ResolvedDisclosureValue {
+  readonly key: string | null;
+  readonly open: (key: string) => void;
+  readonly close: () => void;
+}
+
+const ResolvedDisclosureContext = createContext<ResolvedDisclosureValue>({
+  key: null,
+  open: () => {},
+  close: () => {},
+});
+
+export function ResolvedDisclosureProvider({
+  items,
+  children,
+}: {
+  readonly items: readonly ResolvedEntry[];
+  readonly children: ReactNode;
+}) {
+  const [key, setKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (
+      key !== null &&
+      !items.some((entry) => entry.key === key && entry.kind === 'comment' && entry.resolved)
+    ) {
+      setKey(null);
+    }
+  }, [items, key]);
+  const value = useMemo(
+    () => ({ key, open: (next: string) => setKey(next), close: () => setKey(null) }),
+    [key]
+  );
+  return (
+    <ResolvedDisclosureContext.Provider value={value}>
+      {children}
+    </ResolvedDisclosureContext.Provider>
+  );
+}
+
+export function useResolvedDisclosure(): ResolvedDisclosureValue {
+  return useContext(ResolvedDisclosureContext);
+}
+
 interface ResolvedCommentCardProps extends ComponentPropsWithoutRef<'details'> {
   readonly label: string;
+  readonly statusLabel: string;
+  readonly entryKey: string;
+  readonly onActivate: () => void;
+  readonly onDeactivate: () => void;
 }
 
 /** Native disclosure wrapper for a resolved comment icon with a green check. */
-export function ResolvedCommentCard({ label, children, ...props }: ResolvedCommentCardProps) {
+export function ResolvedCommentCard({
+  label,
+  statusLabel,
+  entryKey,
+  onActivate,
+  onDeactivate,
+  children,
+  ...props
+}: ResolvedCommentCardProps) {
+  const disclosure = useResolvedDisclosure();
   const detailsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const details = detailsRef.current;
       if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
-        details.open = false;
+        disclosure.close();
+        onDeactivate();
       }
     };
     document.addEventListener('pointerdown', closeOnOutsidePointer, true);
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
-  }, []);
+  }, [disclosure, onDeactivate]);
 
   return (
-    <details ref={detailsRef} {...props}>
+    <details
+      ref={detailsRef}
+      {...props}
+      open={disclosure.key === entryKey}
+      onToggle={(event) => {
+        if (event.currentTarget.open) {
+          disclosure.open(entryKey);
+          onActivate();
+        } else {
+          disclosure.close();
+          onDeactivate();
+        }
+      }}
+    >
       <summary className="docx-review__resolved-toggle" aria-label={label}>
+        <span className="docx-review__resolved-status">{statusLabel}</span>
         {resolvedCommentIcon()}
       </summary>
       {children}

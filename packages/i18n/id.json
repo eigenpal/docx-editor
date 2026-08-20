@@ -604,7 +604,8 @@
     "structural": "Struktur dokumen diubah",
     "deleteComment": "Hapus komentar",
     "discardChange": "Buang perubahan",
-    "showResolvedComment": null
+    "showResolvedComment": null,
+    "resolved": null
   },
   "imageAltText": {
     "description": "Deskripsi",

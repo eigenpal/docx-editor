@@ -533,10 +533,17 @@ describe('DocxEditorReview (Vue)', () => {
       (details.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       );
-      await waitFor(() => details.open);
+      await flush();
+      const expanded = mounted.container.querySelector(
+        '[data-testid="review-card"]'
+      ) as HTMLDetailsElement;
+      expect(expanded.open).toBe(true);
       expect(mounted.container.querySelector('[data-testid="review-reopen"]')).not.toBeNull();
       document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-      await waitFor(() => !details.open);
+      await flush();
+      expect(
+        (mounted.container.querySelector('[data-testid="review-card"]') as HTMLDetailsElement).open
+      ).toBe(false);
       mounted.editor().exec({ type: 'toggleReviewPane' });
       await waitFor(
         () => mounted.container.querySelector('[data-testid="review-marker"]') !== null
@@ -546,6 +553,20 @@ describe('DocxEditorReview (Vue)', () => {
           .querySelector('[data-testid="review-marker"]')
           ?.querySelector('.docx-review__resolved-icon')
       ).not.toBeNull();
+      (mounted.container.querySelector('[data-testid="review-marker"]') as HTMLElement).click();
+      await flush();
+      const reopened = mounted.container.querySelector(
+        '[data-testid="review-card"]'
+      ) as HTMLDetailsElement;
+      expect(reopened.open).toBe(true);
+      expect(reopened.querySelector('.docx-review__resolved-status')?.textContent).toBe('Resolved');
+      expect(reopened.querySelector('[data-testid="review-reply-input"]')).toBeNull();
+      expect(mounted.container.querySelector('.docx-comment-band--resolved-active')).not.toBeNull();
+      (reopened.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(
+        new MouseEvent('click', { bubbles: true })
+      );
+      await flush();
+      expect(reopened.open).toBe(false);
     } finally {
       mounted.unmount();
     }

@@ -164,7 +164,7 @@ export const ReviewMarkers = markPart(
 
       return () => {
         if (props.hidden) return null;
-        const { review, authorSlots, authorInfo } = rail.value;
+        const { review, authorSlots, authorInfo, setExpandedResolvedKey } = rail.value;
         const { roots, stackedTops } = stacked.value;
         return (
           <div class={`docx-review__markers${props.className ? ` ${props.className}` : ''}`}>
@@ -206,6 +206,9 @@ export const ReviewMarkers = markPart(
                   aria-label={`${t('review.showPane')}: ${entry.author ? `${entry.author}. ` : ''}${entry.text}`}
                   onMousedown={guardMousedown}
                   onClick={() => {
+                    if (entry.kind === 'comment' && entry.resolved) {
+                      setExpandedResolvedKey(entry.key);
+                    }
                     review.setPaneOpen(true);
                     review.setActive(entry.key);
                   }}
