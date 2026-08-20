@@ -374,6 +374,47 @@ function columnOccurrenceTargetOf(command: EditorCommand): TableColumnOccurrence
   return validateColumnOccurrenceTarget(command.target) ? command.target : null;
 }
 
+/**
+ * The rows a cell RECTANGLE covers, in table order.
+ *
+ * A rectangle is a set of cells, and Delete Rows read only the row of its first one — so
+ * dragging across two rows and deleting removed one of them and reported success. Answers a
+ * single-element list for an ordinary caret, which is the same command with a smaller set.
+ */
+function rowIdsOfSelection(part: OoxmlPart, anchor: ResolvedAnchor): readonly string[] {
+  const topo = readEditableTableTopology(part.root, anchor.tableId);
+  if (!topo.ok) return [anchor.rowId];
+  const selected = new Set(anchor.cellIds);
+  const rows = topo.topology.rows
+    .filter((entry) => entry.cells.some((cell) => selected.has(cell.id)))
+    .map((entry) => entry.row.id);
+  return rows.length > 0 ? rows : [anchor.rowId];
+}
+
+/** The grid columns a cell rectangle covers, by id, left to right. */
+function gridColumnIdsOfSelection(part: OoxmlPart, anchor: ResolvedAnchor): readonly string[] {
+  const topo = readEditableTableTopology(part.root, anchor.tableId);
+  if (!topo.ok || !topo.topology.grid) return [];
+  const selected = new Set(anchor.cellIds);
+  const columns = new Set<string>();
+  for (const entry of topo.topology.rows) {
+    // The grid position is the running sum of the spans before it — the same walk
+    // `anchorForGridColumn` does, because a merged cell occupies more than one column.
+    let cursor = 0;
+    for (const cell of entry.cells) {
+      const span = readCellGridSpan(cell);
+      if (selected.has(cell.id)) {
+        for (let step = 0; step < span; step += 1) {
+          const column = topo.topology.gridColumns[cursor + step];
+          if (column) columns.add(column.id);
+        }
+      }
+      cursor += span;
+    }
+  }
+  return [...columns];
+}
+
 function gridColumnIdAt(part: OoxmlPart, tableId: string, columnIndex: number): string | null {
   const topo = readEditableTableTopology(part.root, tableId);
   if (!topo.ok || !topo.topology.grid) return null;
@@ -717,13 +758,15 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
     }
     case 'deleteRow': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
-      const op: TreeDocOp = {
+      // EVERY row the selection covers. One op named the anchor's row alone, so a rectangle
+      // spanning two rows lost one of them and the command still answered `ok: true`.
+      const ops: TreeDocOp[] = rowIdsOfSelection(part, anchor).map((rowId) => ({
         op: 'deleteTableRow',
         tableId: anchor.tableId,
-        rowId: anchor.rowId,
-        referenceCellId: anchor.cellId,
-      };
-      return planValidated(part, [op], { kind: 'adoptCommittedCaret' });
+        rowId,
+        ...(rowId === anchor.rowId ? { referenceCellId: anchor.cellId } : {}),
+      }));
+      return planValidated(part, ops, { kind: 'adoptCommittedCaret' });
     }
     case 'insertColumn': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
@@ -753,12 +796,16 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
       if (!gridColumnId) {
         return refusal('invalidArgs', 'the table has no grid column to delete');
       }
-      const op: TreeDocOp = {
-        op: 'deleteTableColumn',
-        tableId,
-        gridColumnId,
-      };
-      return planValidated(part, [op], { kind: 'adoptCommittedCaret' });
+      // Every column the rectangle covers, for the reason Delete Rows states above. An
+      // explicit occurrence target names one column on purpose and keeps it.
+      const gridColumnIds =
+        columnTarget?.gridColumnId === undefined
+          ? gridColumnIdsOfSelection(part, anchor)
+          : [gridColumnId];
+      const ops: TreeDocOp[] = (gridColumnIds.length > 0 ? gridColumnIds : [gridColumnId]).map(
+        (id) => ({ op: 'deleteTableColumn', tableId, gridColumnId: id })
+      );
+      return planValidated(part, ops, { kind: 'adoptCommittedCaret' });
     }
     case 'deleteTable': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');

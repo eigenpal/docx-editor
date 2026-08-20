@@ -316,6 +316,14 @@ function domPointFromPositionIn(
     const end = identity.end;
     if (!text) continue;
     painted = true;
+    // A FIELD IS NOT A PLACE TO PUT A SELECTION END. `positionFromDomPoint` refuses every
+    // endpoint under `[data-docx-field]`, and an atom is one model unit wide, so a position
+    // at its START satisfied the `offset < end` test and was written inside it — where the
+    // reader then answered null and `semanticSelectionFromDom` collapsed the whole range to
+    // its other end. Shift-extending onto a page number lost the selection before the next
+    // command ran. Skipping the span keeps the boundary of the one before it, which reads
+    // back as exactly this offset.
+    if ((span as HTMLElement).closest?.('[data-docx-field]')) continue;
     if (position.offset >= identity.start && position.offset <= end) {
       // A position on a boundary belongs to the span that STARTS there, so a caret between
       // two words sits before the second rather than after the first. The first match wins

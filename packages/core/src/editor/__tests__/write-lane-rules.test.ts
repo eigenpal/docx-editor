@@ -269,3 +269,74 @@ describe('#353 paste in suggesting mode', () => {
     });
   });
 });
+
+describe('#343 inserting a footnote', () => {
+  test('replaces the selection and leaves the caret after the reference', () => {
+    withSurface(p('Hello world'), (surface) => {
+      const id = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 0 },
+        head: { paragraphId: id, offset: 5 },
+      });
+      expect(surface.insertNote('footnote')).toBe(true);
+      // "Hello" is gone, the reference stands in its place.
+      expect(surface.session.bodyText()).toBe('\uFFFC world');
+      surface.exitNote();
+      // After the reference, which is where the next character belongs.
+      expect(surface.state().selection.head.offset).toBe(1);
+      surface.type('X');
+      expect(surface.session.bodyText()).toBe('\uFFFCX world');
+    });
+  });
+
+  test('at a caret, the reference keeps the text it was inserted into', () => {
+    withSurface(p('Hello world'), (surface) => {
+      caretTo(surface, 0, 5);
+      expect(surface.insertNote('footnote')).toBe(true);
+      expect(surface.session.bodyText()).toBe('Hello\uFFFC world');
+      surface.exitNote();
+      surface.type('X');
+      expect(surface.session.bodyText()).toBe('Hello\uFFFCX world');
+    });
+  });
+});
+
+describe('#354 redo puts the caret where the redone edit ends', () => {
+  test('backspace', () => {
+    withSurface(p('abcdef'), (surface) => {
+      caretTo(surface, 0, 3);
+      surface.deleteBackward();
+      surface.undo();
+      surface.redo();
+      expect(paragraphTexts(surface)).toEqual(['abdef']);
+      expect(surface.state().selection.head.offset).toBe(2);
+      surface.type('Q');
+      expect(paragraphTexts(surface)).toEqual(['abQdef']);
+    });
+  });
+
+  test('a single-line paste', () => {
+    withSurface(p('abcdef'), (surface) => {
+      caretTo(surface, 0, 3);
+      surface.insertPlainText('XY');
+      surface.undo();
+      surface.redo();
+      surface.type('Q');
+      expect(paragraphTexts(surface)).toEqual(['abcXYQdef']);
+    });
+  });
+
+  test('deleting a selection', () => {
+    withSurface(p('abcdef'), (surface) => {
+      surface.setSelection({
+        anchor: { paragraphId: surface.session.paragraphIds()[0]!, offset: 1 },
+        head: { paragraphId: surface.session.paragraphIds()[0]!, offset: 4 },
+      });
+      surface.deleteSelection();
+      surface.undo();
+      surface.redo();
+      surface.type('Q');
+      expect(paragraphTexts(surface)).toEqual(['aQef']);
+    });
+  });
+});

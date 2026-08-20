@@ -590,6 +590,18 @@ function rebuildChildren(children: readonly OoxmlNode[], plan: RebuildPlan): Oox
 
   for (const [index, child] of children.entries()) {
     if (child.kind !== 'textValue' && plan.removeRows.has(child.id)) continue;
+    // A TABLE WITHOUT ROWS IS NOT A TABLE. `CT_Tbl` requires at least one `w:tr`, and the
+    // structural op says the same by refusing to delete a table's last row (`block-required`).
+    // Accepting the tracked deletion of the only row wrote exactly that shape: an invisible
+    // zero-row block left standing above the reader's content, which the rest of the engine
+    // then treats as illegal. The table goes with its last row, as it does in Word.
+    if (
+      child.kind === 'table' &&
+      child.children.every((row) => row.kind !== 'tableRow' || plan.removeRows.has(row.id)) &&
+      child.children.some((row) => row.kind === 'tableRow')
+    ) {
+      continue;
+    }
     if (child.kind !== 'textValue' && plan.dropMarks.has(child.id)) continue;
     if (child.kind !== 'textValue' && plan.restoreProperties.has(child.id)) continue;
     const action = child.kind === 'textValue' ? undefined : plan.actions.get(child.id);

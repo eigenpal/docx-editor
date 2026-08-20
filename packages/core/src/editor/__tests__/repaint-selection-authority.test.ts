@@ -14,7 +14,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
-import { applySelectionToDom } from '../dom-selection.ts';
+import { applySelectionToDom, semanticSelectionFromDom } from '../dom-selection.ts';
+import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
+import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -178,6 +181,53 @@ describe('a repaint never invents a selection the user did not make', () => {
     } finally {
       surface.destroy();
       container.remove();
+    }
+  });
+});
+
+const FIELD_PARAGRAPH =
+  '<w:p><w:r><w:t xml:space="preserve">alpha </w:t></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+  '<w:r><w:instrText xml:space="preserve"> REF Company </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  '<w:r><w:t>Street</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+  '<w:r><w:t xml:space="preserve"> omega</w:t></w:r></w:p>';
+
+function paint(): HTMLElement {
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>${FIELD_PARAGRAPH}</w:body></w:document>`,
+    {
+      name: '/word/document.xml',
+      contentType: 'application/xml',
+    }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const layout = layoutSemanticDocument(parsed.part, 1, { measurer: createFixedMeasurer(6, 14) });
+  const root = document.createElement('div');
+  paintSemanticLayout(root, layout, { scale: 1, ariaHidden: false });
+  document.body.append(root);
+  return root;
+}
+
+describe('a selection ending at a field start', () => {
+  test('round-trips as the range the user made', () => {
+    const root = paint();
+    try {
+      const field = root.querySelector<HTMLElement>('[data-docx-field]')!;
+      const paragraphId = field.dataset.paragraphId!;
+      const fieldStart = Number(field.dataset.start);
+      expect(Number(field.dataset.end) - fieldStart).toBe(1);
+      const range = {
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: fieldStart },
+      };
+      const selection = document.getSelection()!;
+      expect(applySelectionToDom(root, range, selection)).toBe(true);
+      expect(field.contains(selection.focusNode!)).toBe(false);
+      expect(semanticSelectionFromDom(root, selection)).toEqual(range);
+    } finally {
+      document.getSelection()?.removeAllRanges();
+      root.remove();
     }
   });
 });
