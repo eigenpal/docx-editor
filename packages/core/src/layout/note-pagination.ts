@@ -746,6 +746,20 @@ function bodyUsedHeight(page: PageRecord): number {
 
 /** Remove note-pass output before recomputing it from canonical references. */
 function bodyOnlyPage(page: PageRecord): PageRecord {
+  // IDENTITY WHEN THERE IS NOTHING TO STRIP. The rest-destructure allocates a new object
+  // every time, and a page record is what the painter reuses BY IDENTITY — so a document
+  // with a notes part and no notes at all handed the painter a whole new set of pages on
+  // every pass, and every visible page's DOM was rebuilt on every keystroke. The lane runs
+  // for any package that HAS a footnotes or endnotes part, which is nearly every Word file.
+  // Its three siblings — `withPageFieldSources`, `attachContentControlBoundaries` and
+  // `reprojectBodyNoteMarks` — all return the original page when nothing moved.
+  if (
+    page.footnotes === undefined &&
+    page.endnotes === undefined &&
+    page.noteStream === undefined
+  ) {
+    return page;
+  }
   const { footnotes, endnotes, noteStream, ...body } = page;
   void footnotes;
   void endnotes;
@@ -1825,9 +1839,12 @@ export function attachNotesToLayout(
       carry = built.nextCarry;
     }
 
+    // Same rule one level up: a page with no footnote area and nothing to strip is the page
+    // it came in as, and saying so is what lets the painter keep its DOM.
+    if (!footnotes) return bodyPage;
     return {
       ...bodyPage,
-      ...(footnotes ? { footnotes } : {}),
+      footnotes,
     };
   });
 

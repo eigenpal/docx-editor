@@ -406,9 +406,11 @@ export function resolveStoryListItems(
       advanced.level.lvlJc,
       advanced.level.suff,
       advanced.level.vanish ? 1 : 0,
-      // Not the ordinal — its LENGTH. The first line starts where the marker ends whenever
-      // the marker overflows its hanging slot, so `9.` and `10.` can break differently.
-      markerText.length,
+      // The MARKER ITSELF, not its length. The first line starts where the marker ends
+      // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
+      // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
+      // served the previous marker's width to the new one, and the line wrapped a word late.
+      markerText,
     ].join('|');
 
     map.set(paragraph.id, {
