@@ -5515,8 +5515,8 @@ a.docx-hyperlink:focus-visible {
 .docx-review__resolved-icon {
   position: relative;
   display: inline-flex;
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   align-items: center;
   justify-content: center;
 }
@@ -5527,13 +5527,13 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-review__resolved-comment > svg {
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
 }
 
 .docx-review__resolved-tick {
   position: absolute;
-  inset: 4px 5px 6px;
+  inset: 2px 3px 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -5541,8 +5541,8 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-review__resolved-tick > svg {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
 }
 
 .docx-review__head {
