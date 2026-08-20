@@ -37,6 +37,7 @@ export {
 } from './editor/DocxEditorLoading';
 export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
 export { useEditorState, editorStateActiveSubscriptionCount } from './editor/useEditorState';
+export { notificationYieldsToTask } from './editor/deferred-notifier';
 export { useScopeClassName } from './editor/scope-context';
 export { LOADING_SNAPSHOT } from './editor/loading-snapshot';
 // Context-fed chrome parts (also reachable as `DocxEditor.HorizontalRuler` /

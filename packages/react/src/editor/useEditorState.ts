@@ -21,6 +21,7 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
+import { deferredTick } from './deferred-notifier';
 import { LOADING_SNAPSHOT } from './loading-snapshot';
 
 const NOOP_UNSUBSCRIBE = () => {};
@@ -42,31 +43,16 @@ export function editorStateActiveSubscriptionCount(): number {
  *    not-yet-published layout and cache that stale answer for the whole version. A
  *    microtask runs after the commit's synchronous work, so the first read of the
  *    new version sees the published layout.
- * 2. Efficiency. One commit can emit `change` AND `selectionChange`; coalescing turns
- *    the burst into a single re-render pass. When the browser reports more hardware input
- *    waiting, a task replaces the usual microtask so key repeat cannot force dozens of
- *    synchronous React store updates without yielding and trip React's maximum-update-depth
- *    guard even though the updates are legitimate.
+ * 2. Efficiency and update-depth safety. One commit can emit `change` AND
+ *    `selectionChange`; coalescing turns the burst into a single re-render pass. When
+ *    the browser reports more hardware input waiting — or too many notification waves
+ *    have gone by without the event loop reaching a timer — a task replaces the usual
+ *    microtask, so sustained key repeat cannot chain synchronous React store updates
+ *    past React's maximum-update-depth guard even though every update is legitimate.
+ *    The wave policy lives in {@link deferredTick}'s module, shared with the Vue twin.
  */
 export function deferredNotifier(onStoreChange: () => void): () => void {
-  let scheduled = false;
-  return () => {
-    if (scheduled) return;
-    scheduled = true;
-    const scheduling = (
-      globalThis as typeof globalThis & {
-        navigator?: {
-          scheduling?: { isInputPending?: (options?: { includeContinuous?: boolean }) => boolean };
-        };
-      }
-    ).navigator?.scheduling;
-    const flush = () => {
-      scheduled = false;
-      onStoreChange();
-    };
-    if (scheduling?.isInputPending?.({ includeContinuous: true })) setTimeout(flush, 0);
-    else queueMicrotask(flush);
-  };
+  return deferredTick(onStoreChange);
 }
 
 /** Optional lifecycle hooks for test instrumentation. @internal */

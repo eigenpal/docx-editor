@@ -32,6 +32,7 @@ export {
   type ReviewGutterInput,
 } from './editor/review-gutter';
 export { useEditorState, editorStateActiveSubscriptionCount } from './editor/useEditorState';
+export { notificationYieldsToTask } from './editor/deferred-notifier';
 export { useReviewAuthors } from './editor/useReviewAuthors';
 export {
   DocxEditorAuthorStyle,

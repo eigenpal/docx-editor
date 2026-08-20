@@ -24,7 +24,7 @@ import type {
   ReviewItemPlacement,
   ReviewItemQuery,
 } from '@docx-editor.dev/core/contracts/editor';
-import { useDocxEditor } from '@docx-editor.dev/react';
+import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
 
 /**
  * Collapse an input burst into one rail refresh.
@@ -32,20 +32,15 @@ import { useDocxEditor } from '@docx-editor.dev/react';
  * Review placement ranks and maps every card in the document. Running that synchronous
  * external-store update after every queued key-repeat event lets the rail consume more time
  * than the edit itself on review-heavy documents. Ordinary changes still notify immediately;
- * only a browser-reported input backlog moves the refresh to a task so queued events share it.
+ * a browser-reported input backlog — or a notification-wave streak the shared policy says
+ * must yield ({@link notificationYieldsToTask}) — moves the refresh to a task so queued
+ * events share it and React's maximum-update-depth guard never sees an unbroken chain.
  */
 function deferredReviewNotifier(onStoreChange: () => void): () => void {
   let scheduled = false;
   return () => {
     if (scheduled) return;
-    const scheduling = (
-      globalThis as typeof globalThis & {
-        navigator?: {
-          scheduling?: { isInputPending?: (options?: { includeContinuous?: boolean }) => boolean };
-        };
-      }
-    ).navigator?.scheduling;
-    if (!scheduling?.isInputPending?.({ includeContinuous: true })) {
+    if (!notificationYieldsToTask()) {
       onStoreChange();
       return;
     }
