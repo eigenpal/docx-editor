@@ -527,6 +527,8 @@ describe('DocxEditorReview (Vue)', () => {
         '[data-testid="review-card"]'
       ) as HTMLDetailsElement;
       expect(details.open).toBe(false);
+      expect(details.querySelector('.docx-review__resolved-comment')).not.toBeNull();
+      expect(details.querySelector('.docx-review__resolved-tick')).not.toBeNull();
 
       (details.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(
         new MouseEvent('click', { bubbles: true })

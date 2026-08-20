@@ -322,8 +322,8 @@ the v2 context-fed components WRAP, so Vue needs them. No composables, no inject
 
 - [x] 14.1 `@docx-editor.dev/pro/vue`. `DocxEditorReview` compound rail, `useReview` composable, and owned selection retention via public `retainSelection` tokens and matching `releaseSelection(token)`.
 - [x] 14.1b Match comment drafts to the configured author color, keep Vue slot measurement stable
-      across card updates, and collapse resolved comments to an expandable green-check miniature
-      in both adapters.
+      across card updates, and collapse resolved comments to an expandable comment icon with a
+      green-check miniature in both adapters.
 - [ ] 14.2 `vue-drawing-authoring-parity` overlaps phase 8: its image authoring surface is a
       React export, so parity puts it here. Fold it in and archive it, or keep it as the
       tracking change for that phase — owner call, not one to make by accident

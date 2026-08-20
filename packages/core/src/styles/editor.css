@@ -5507,10 +5507,42 @@ a.docx-hyperlink:focus-visible {
   outline-offset: 1px;
 }
 
-.docx-review__resolved-tick {
+.docx-review__resolved-icon {
+  position: relative;
   display: inline-flex;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
+}
+
+.docx-review__resolved-comment {
+  display: inline-flex;
+  color: var(--doc-text-muted);
+}
+
+.docx-review__resolved-comment > svg {
+  width: 24px;
+  height: 24px;
+}
+
+.docx-review__resolved-tick {
+  position: absolute;
+  right: -1px;
+  bottom: 1px;
+  display: inline-flex;
+  width: 11px;
+  height: 11px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--doc-success);
+  color: var(--doc-surface);
+}
+
+.docx-review__resolved-tick > svg {
+  width: 8px;
+  height: 8px;
 }
 
 .docx-review__head {

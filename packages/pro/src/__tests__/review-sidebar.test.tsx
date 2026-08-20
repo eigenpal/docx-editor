@@ -477,6 +477,12 @@ describe('the review sidebar', () => {
     expect(commentOf(editor).resolved).toBe(true);
     expect(view.getByTestId('review-card').hasAttribute('data-resolved')).toBe(true);
     expect(view.getByTestId('review-card').hasAttribute('data-resolved-miniature')).toBe(true);
+    expect(
+      view.getByTestId('review-card').querySelector('.docx-review__resolved-comment')
+    ).not.toBeNull();
+    expect(
+      view.getByTestId('review-card').querySelector('.docx-review__resolved-tick')
+    ).not.toBeNull();
     expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(false);
     expect(view.queryByTestId('review-resolve')).toBeNull();
 

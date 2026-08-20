@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
 import { Slot, useTranslation } from '@docx-editor.dev/vue';
-import { ACCEPT_ICON, DELETE_ICON, REJECT_ICON, icon } from './review-icons.tsx';
+import { ACCEPT_ICON, COMMENT_ICON, DELETE_ICON, REJECT_ICON, icon } from './review-icons.tsx';
 import { revisionLabelKey } from './review-labels.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
@@ -534,7 +534,12 @@ export const ReviewCard = markPart(
                 class: 'docx-review__resolved-toggle',
                 'aria-label': t('review.showResolvedComment'),
               },
-              [h('span', { class: 'docx-review__resolved-tick' }, [icon(ACCEPT_ICON)])]
+              [
+                h('span', { class: 'docx-review__resolved-icon' }, [
+                  h('span', { class: 'docx-review__resolved-comment' }, [icon(COMMENT_ICON)]),
+                  h('span', { class: 'docx-review__resolved-tick' }, [icon(ACCEPT_ICON)]),
+                ]),
+              ]
             ),
             h(ReviewCardPreset, null, { default: () => slots.default?.() }),
           ]);
