@@ -45,6 +45,17 @@ export interface SurfaceSelectionSyncDeps {
   /** Take a selection up WITHOUT mirroring or reporting — the caller is about to do both. */
   adoptSelection(next: SemanticSelection): void;
   commit(run: () => TreeApplyResult | boolean): void;
+  /**
+   * The surface's own write lane — attribution, protection and refusals included.
+   *
+   * The IME is the one edit that reaches the tree from here, and calling the session directly
+   * meant composed text skipped every rule the other lanes go through.
+   */
+  applyOps(
+    ops: readonly TreeDocOp[],
+    mark: { paragraphId: string; start: number; end: number } | null,
+    scope: import('@docx-editor.dev/core/store').StoryScope
+  ): TreeApplyResult;
   render(): void;
   flushLayout(): boolean;
   /** The engine's painted caret, repainted with every mirror. */
@@ -253,16 +264,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       : [];
     const scope = deps.storyScope();
     deps.commit(() => {
-      const result = session.applyTreeOps(
-        [...plan.ops, ...formatOps],
-        deps.selectionMark(),
-        undefined,
-        scope
-      );
+      const result = deps.applyOps([...plan.ops, ...formatOps], deps.selectionMark(), scope);
       // The composed text is not the armed format's hostage: a refused format op must not
       // take the IME's own edit down with it (the same rule `type()` follows).
       if (formatOps.length === 0 || !result.rejected) return result;
-      return session.applyTreeOps(plan.ops, deps.selectionMark(), undefined, scope);
+      return deps.applyOps(plan.ops, deps.selectionMark(), scope);
     });
     deps.setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
   }

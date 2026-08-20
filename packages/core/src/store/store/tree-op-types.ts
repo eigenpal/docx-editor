@@ -364,6 +364,14 @@ export type TreeDocOp =
        * offset produces an empty paragraph between the two boundaries — a blank line.
        */
       readonly offsets: readonly number[];
+      /**
+       * Propose the breaks rather than making them, exactly as the single split does.
+       *
+       * Every boundary is a paragraph mark this author is adding, so each paragraph that
+       * PRECEDES one carries `w:rPr/w:ins`. Without it a multi-line paste in suggesting mode
+       * tracked its text and not its breaks, and Reject left the extra paragraphs standing.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | { readonly op: 'joinParagraphs'; readonly firstId: string; readonly secondId: string }
   | {

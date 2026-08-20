@@ -187,3 +187,50 @@ describe('typing over a pending suggestion', () => {
     });
   });
 });
+
+// TAKING A BREAK BACK IS NOT A SECOND PROPOSAL.
+//
+// A join is addressed by the SECOND paragraph, because the mark between two paragraphs
+// belongs to the first — so Backspace at the start of a paragraph reaches the mark through
+// `proposeParagraphMerge`, which never asked whether the mark was this author's own. Enter
+// then Backspace therefore wrote a `w:del` on top of the `w:ins` from a second earlier: two
+// cards in the rail for a decision nobody made, an empty paragraph left standing, and a mark
+// whose Reject makes permanent the very break the user had just taken back. Word retracts it.
+describe('Enter then Backspace, in suggesting mode', () => {
+  test('the paragraph break goes away instead of stacking a deletion on it', () => {
+    withSurface(listItem('Introduction') + listItem('Analysis'), (surface) => {
+      caretTo(surface, 0, 'Introduction'.length);
+      surface.splitParagraph();
+      expect(surface.session.paragraphIds()).toHaveLength(3);
+
+      surface.deleteBackward();
+      expect(surface.state().lastRejection).toBeNull();
+      expect(surface.session.paragraphIds()).toHaveLength(2);
+      expect(paragraphTexts(surface)).toEqual(['Introduction', 'Analysis']);
+
+      // Nothing is left to review: the proposal and its retraction cancel out.
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).not.toMatch(/<w:ins/);
+      expect(xml).not.toMatch(/<w:del/);
+    });
+  });
+
+  test('somebody ELSE’s proposed break is still proposed away, not joined', () => {
+    // The rule is about YOUR OWN proposal. A break another reviewer proposed is theirs to
+    // keep until someone decides on it, so Backspace over it stays a proposal.
+    withSurface(
+      '<w:p><w:pPr><w:rPr><w:ins w:id="7" w:author="Grace Hopper" w:date="2026-01-01T00:00:00Z"/></w:rPr></w:pPr>' +
+        '<w:r><w:t>Introduction</w:t></w:r></w:p>' +
+        listItem('Analysis'),
+      (surface) => {
+        caretTo(surface, 1, 0);
+        surface.deleteBackward();
+        expect(surface.state().lastRejection).toBeNull();
+        expect(surface.session.paragraphIds()).toHaveLength(2);
+        const xml = serializeOoxmlPart(surface.session.part());
+        expect(xml).toMatch(/<w:ins[^>]*w:author="Grace Hopper"/);
+        expect(xml).toMatch(/<w:del[^>]*w:author="Ada Lovelace"/);
+      }
+    );
+  });
+});

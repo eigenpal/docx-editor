@@ -2237,6 +2237,9 @@ export function mountPaginatedSurface(
       // is already in two paragraphs, and what is being proposed is the break between them.
       // §17.13.5 puts the new mark on the FIRST paragraph, and rejecting it runs the two
       // back together.
+      // Paste cuts its pasted text into paragraphs with ONE op, so the proposal rides on the
+      // op itself: the store mints the paragraphs, so only the store can address their marks.
+      if (op.op === 'splitParagraphMany') return [{ ...op, revision }];
       if (op.op === 'splitParagraph') {
         return [
           op,
@@ -2447,6 +2450,12 @@ export function mountPaginatedSurface(
     // The raw take-up, without the mirror or the report `setSelection` performs: the render
     // this runs inside is about to do both.
     adoptSelection: (next) => {
+      // A GESTURE IS A CARET MOVE, AND EVERY CARET MOVE LANDS THE BUFFER FIRST. Typing is
+      // held on a zero-delay task, so a selection taken up before the flush makes those
+      // characters land wherever the gesture went — `rematerialize` says so at its own call.
+      // The engine pointer path flushes through `setSelection`, but touch and native pointer
+      // mode never reach it, so a tap after a burst moved the burst to the tap.
+      flushTypeBuffer();
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
@@ -2455,6 +2464,11 @@ export function mountPaginatedSurface(
       caretFollowPending = true;
     },
     commit: (run) => commit(run),
+    // The composition readback writes through the SAME lane as every other edit. Calling the
+    // session directly skipped `trackedOps` and `writeRefusal`, so IME text in suggesting
+    // mode landed untracked — the reviewer proposing a change was editing the document —
+    // and forms protection and content-control locks did not apply to it either.
+    applyOps: (ops, mark, scope) => applyOps(ops, mark, undefined, scope),
     render: () => render(),
     flushLayout: () => flushLayout(),
     updateCaret: () => {
@@ -4578,15 +4592,25 @@ export function mountPaginatedSurface(
     const start = plan.collapseTo;
     const joined = lines.join('');
     const ops: TreeDocOp[] = [...plan.ops];
+    // WHERE THE REPLACEMENT GOES, the same question `type()` answers. In suggesting mode a
+    // deletion keeps the characters it strikes, so the replacement belongs AFTER them — and
+    // keeps only those, since whatever of the range was this author's own pending insertion
+    // is retracted and leaves. Pasting at the range start put the new text in front of the
+    // struck words and left the caret inside it, so the next keystroke landed mid-word.
+    const struck = editingMode === 'suggest' ? orderedRange() : null;
+    const insertAt =
+      struck && struck.to.paragraphId === start.paragraphId
+        ? struck.to.offset - retractedByOwnInsertion(struck.from, struck.to)
+        : start.offset;
     // Plain text pasted at a caret takes the armed typing format, like typed text — Word
     // formats a plain paste as if you had typed it. Written over the PRE-SPLIT offsets, so
     // the op runs before `splitParagraphMany` cuts the paragraph up.
-    const pendingOps = consumePendingFormatOps(start.paragraphId, start.offset, joined.length);
+    const pendingOps = consumePendingFormatOps(start.paragraphId, insertAt, joined.length);
     if (joined.length > 0) {
       ops.push({
         op: 'insertText',
         paragraphId: start.paragraphId,
-        offset: start.offset,
+        offset: insertAt,
         text: joined,
       });
       ops.push(...pendingOps);
@@ -4595,7 +4619,7 @@ export function mountPaginatedSurface(
     let consumed = 0;
     for (let index = 0; index < lines.length - 1; index += 1) {
       consumed += lines[index]!.length;
-      boundaries.push(start.offset + consumed);
+      boundaries.push(insertAt + consumed);
     }
     if (boundaries.length > 0) {
       ops.push({ op: 'splitParagraphMany', paragraphId: start.paragraphId, offsets: boundaries });
@@ -4611,7 +4635,7 @@ export function mountPaginatedSurface(
         if (boundaries.length === 0) {
           return collapsedAt({
             paragraphId: start.paragraphId,
-            offset: start.offset + lastLine.length,
+            offset: insertAt + lastLine.length,
           });
         }
         // The caret lands at the end of the pasted text: in the LAST minted paragraph, right
