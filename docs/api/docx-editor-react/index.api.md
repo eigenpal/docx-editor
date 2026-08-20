@@ -1599,7 +1599,7 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 }
 
 // @public
-export function provideDocxEditor(): never;
+export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
 
 // @public
 export interface ProvideDocxEditorResult {

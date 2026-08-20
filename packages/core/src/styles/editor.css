@@ -2342,6 +2342,10 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   box-sizing: border-box;
   border: 2px solid var(--doc-accent);
+  pointer-events: none;
+}
+
+.docx-image-selection-overlay__frame.docx-editor-one-surface__overlay-control {
   pointer-events: auto;
 }
 

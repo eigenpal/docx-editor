@@ -561,6 +561,7 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
   const editor = useDocxEditor();
   const { isEnabled } = useEditorCommand(slot);
   const { setOpenMenu } = useMenuContext();
+  const label = useMenuLabel();
   const [hover, setHover] = useState<{ rows: number; cols: number } | null>(null);
   // The cell that holds the grid's single tab stop. A 6x6 of tabbable buttons is 36 tab
   // stops for a keyboard user; a grid is ONE, with arrows moving inside it.
@@ -650,7 +651,7 @@ export function MenuTableGrid({ slot = 'table.insert', className }: MenuTableGri
       // announces them without any positional context, and the roles a menu permits do not
       // include one for "cell in a 6x6".
       role="grid"
-      aria-label={`${TABLE_GRID_COLUMNS} × ${TABLE_GRID_ROWS}`}
+      aria-label={label('toolbar.insertTable')}
       className={`docx-menubar__grid${className ? ` ${className}` : ''}`}
       onMouseLeave={() => setHover(null)}
       onKeyDown={(event) => {

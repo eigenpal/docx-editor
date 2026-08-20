@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "Podział sekcji (ciągły)",
     "sectionBreakNextPage": "Podział sekcji (następna strona)",
     "insertFootnote": "Wstaw przypis dolny",
-    "insertEndnote": "Wstaw przypis końcowy"
+    "insertEndnote": "Wstaw przypis końcowy",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

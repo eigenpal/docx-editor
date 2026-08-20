@@ -102,10 +102,13 @@ export const DocxEditorRoot = defineComponent({
   name: 'DocxEditorRoot',
   props: {
     document: {
-      type: [Object, Uint8Array, ArrayBuffer] as PropType<DocumentSource>,
+      type: [String, Object, Uint8Array, ArrayBuffer] as PropType<DocumentSource>,
       default: undefined,
     },
-    fonts: { type: Object as PropType<DocxEditorRootProps['fonts']>, default: undefined },
+    fonts: {
+      type: [Object, Function] as PropType<DocxEditorRootProps['fonts']>,
+      default: undefined,
+    },
     author: { type: String, default: undefined },
     locale: { type: String, default: undefined },
     translate: { type: Function as PropType<DocxEditorRootProps['translate']>, default: undefined },

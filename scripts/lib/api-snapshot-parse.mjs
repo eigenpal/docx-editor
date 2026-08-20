@@ -142,19 +142,9 @@ export function extractInterfaceMemberTypes(snapshotText, interfaceName) {
       continue;
     }
 
-    const fieldMatch = /^ {4}readonly (\w+)\??: (.+)$/.exec(line);
+    const fieldMatch = /^ {4}(?:readonly )?(\w+)\??: (.+)$/.exec(line);
     if (fieldMatch) {
       const [, name, rest] = fieldMatch;
-      if (rest.trim().endsWith(';')) {
-        flushField(name, [rest]);
-      } else {
-        pendingField = { name, parts: [rest] };
-      }
-      continue;
-    }
-    const plainField = /^ {4}(\w+)\??: (.+)$/.exec(line);
-    if (plainField && !line.includes('(')) {
-      const [, name, rest] = plainField;
       if (rest.trim().endsWith(';')) {
         flushField(name, [rest]);
       } else {
@@ -258,9 +248,10 @@ function parseReturnType(rest) {
   let angles = 0;
   let braces = 0;
   let parens = 0;
-  for (const c of body) {
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
     if (c === '<') angles++;
-    else if (c === '>') angles--;
+    else if (c === '>' && body[i - 1] !== '=') angles--;
     else if (c === '{') braces++;
     else if (c === '}') braces--;
     else if (c === '(') parens++;

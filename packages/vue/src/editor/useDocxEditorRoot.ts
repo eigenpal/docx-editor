@@ -250,7 +250,7 @@ export function useDocxEditorRootOwner(
         [
           toValue(props).document,
           toValue(props).fonts,
-          translateResolver.value,
+          catalogue.value,
           toValue(props).imageDecodePort,
         ] as const,
       createEditor,

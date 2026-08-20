@@ -520,13 +520,15 @@ export const ImageSelectionOverlay = defineComponent({
             ref={(el: unknown) => {
               overlayRef.value = el instanceof HTMLDivElement ? el : null;
             }}
-            class="docx-image-selection-overlay docx-editor-one-surface__overlay-control"
+            class="docx-image-selection-overlay"
             data-drawing-node-id={current.id}
             tabindex={0}
             onKeydown={onOverlayKeyDown}
           >
             <div
-              class="docx-image-selection-overlay__frame"
+              class={`docx-image-selection-overlay__frame${
+                showMove ? ' docx-editor-one-surface__overlay-control' : ''
+              }`}
               role="group"
               aria-label={t('imageOverlay.selection')}
               style={{

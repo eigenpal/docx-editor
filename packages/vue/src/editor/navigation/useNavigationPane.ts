@@ -124,7 +124,7 @@ export function useNavigationPane(
   scopeDispose(
     watch(
       [viewport, openVal, () => geometry.value.reviewPaneOpen, () => rail.value.mounted],
-      () => {
+      (_values, _previous, onCleanup) => {
         const el = viewport.value;
         if (!el) {
           viewportWidth.value = 0;
@@ -144,7 +144,7 @@ export function useNavigationPane(
         if (typeof ResizeObserver === 'undefined') return;
         const observer = new ResizeObserver(measure);
         observer.observe(el);
-        return () => observer.disconnect();
+        onCleanup(() => observer.disconnect());
       },
       { flush: 'post' }
     )

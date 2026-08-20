@@ -155,10 +155,42 @@ export interface ProvideDocxEditorResult {
   readonly editorRef: ReturnType<typeof useDocxEditor>;
 }
 
-/** @public Vue-only — in React compose `<DocxEditorRoot>` instead. */
-export function provideDocxEditor(): never {
-  throw new Error('provideDocxEditor is supported only in @docx-editor.dev/vue');
+/**
+ * Prepares Root props and listeners while exposing the instance created by that Root.
+ * Call this function during render, like a React hook.
+ *
+ * @public
+ */
+function useProvidedDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult {
+  const latest = useRef(options);
+  latest.current = options;
+  const [editorRef, setEditorRef] = useState<DocxEditorInstance | null>(null);
+  const {
+    onReady: _onReady,
+    onChange: _onChange,
+    onFontError: _onFontError,
+    ...rootProps
+  } = options;
+  const rootListeners = useMemo<DocxEditorRootListeners>(
+    () => ({
+      onReady: (editor) => {
+        setEditorRef(editor as DocxEditorInstance);
+        latest.current.onReady?.(editor);
+      },
+      onChange: (change) => latest.current.onChange?.(change),
+      onFontError: (error) => latest.current.onFontError?.(error),
+    }),
+    []
+  );
+  return {
+    DocxEditorRoot,
+    rootProps,
+    rootListeners,
+    editorRef,
+  };
 }
+
+export { useProvidedDocxEditor as provideDocxEditor };
 
 /**
  * Creates and owns a `DocxEditorInstance` and provides it to the subtree. Renders no

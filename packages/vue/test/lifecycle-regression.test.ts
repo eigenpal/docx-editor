@@ -20,6 +20,9 @@ import { useDocxSource } from '../src/editor/useDocxSource';
 import type { DocxSource } from '../src/editor/useDocxSource';
 import type { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { useFonts } from '../src/editor/useFonts';
+import { useHyperlinkPopupInstance } from '../src/editor/useHyperlinkPopup';
+import { SEARCH_DEBOUNCE_MS, useDocumentSearch } from '../src/editor/navigation/useDocumentSearch';
+import { useNavigationPane } from '../src/editor/navigation/useNavigationPane';
 import { LocaleProvider } from '../src/i18n';
 
 function bindRootProps(setup: ProvideDocxEditorResult): Record<string, unknown> {
@@ -93,6 +96,37 @@ describe('DocxEditorRoot lifecycle regressions', () => {
     }
   });
 
+  test('accepts the blank document source without a Vue prop warning', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: 'blank' },
+          {
+            default: () =>
+              h(DocxEditorViewport, null, {
+                default: () => h(DocxEditorContent),
+              }),
+          }
+        ),
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(container.querySelector('.docx-page')).not.toBeNull();
+      expect(warnings.some((args) => String(args[0]).includes('Invalid prop'))).toBe(false);
+    } finally {
+      app.unmount();
+      container.remove();
+      console.warn = warn;
+    }
+  });
+
   test('nested LocaleProvider catalogue change rebuilds exactly once', async () => {
     const instances: DocxEditorInstance[] = [];
     const outer = { _lang: 'en', toolbar: { file: 'File' } } as Translations;
@@ -138,6 +172,52 @@ describe('DocxEditorRoot lifecycle regressions', () => {
       await flush();
       expect(instances.length).toBe(2);
       expect(instances[0]).not.toBe(instances[1]);
+    } finally {
+      app.unmount();
+      container.remove();
+    }
+  });
+
+  test('inline translate identity changes preserve edits and the editor instance', async () => {
+    const instances: DocxEditorInstance[] = [];
+    const tick = ref(0);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      setup() {
+        return () => {
+          const prefix = tick.value;
+          return h(
+            DocxEditorRoot,
+            {
+              document: SOURCE,
+              translate: (key: string) => `${prefix}:${key}`,
+              onReady: (editor: Editor) => {
+                instances.push(editor as DocxEditorInstance);
+              },
+            },
+            {
+              default: () =>
+                h(DocxEditorViewport, null, {
+                  default: () => h(DocxEditorContent),
+                }),
+            }
+          );
+        };
+      },
+    });
+    try {
+      app.mount(container);
+      await flush();
+      expect(instances).toHaveLength(1);
+      expect(instances[0]!.exec({ type: 'insertText', text: '!' }).ok).toBe(true);
+      expect(instances[0]!.snapshot().canUndo).toBe(true);
+
+      tick.value += 1;
+      await flush();
+
+      expect(instances).toHaveLength(1);
+      expect(instances[0]!.snapshot().canUndo).toBe(true);
     } finally {
       app.unmount();
       container.remove();
@@ -383,8 +463,10 @@ describe('useDocxSource reactivity', () => {
   test('aborts stale URL fetch when source changes', async () => {
     const source = ref<string>('/first.docx');
     let resolveFirst: ((value: Response) => void) | undefined;
-    const fetchMock = mock((input: string) => {
+    let firstSignal: AbortSignal | undefined;
+    const fetchMock = mock((input: string, init?: RequestInit) => {
       if (input.endsWith('first.docx')) {
+        firstSignal = init?.signal ?? undefined;
         return new Promise<Response>((resolve) => {
           resolveFirst = resolve;
         });
@@ -405,6 +487,7 @@ describe('useDocxSource reactivity', () => {
     app.mount(document.createElement('div'));
     source.value = '/second.docx';
     await flush();
+    expect(firstSignal?.aborted).toBe(true);
     expect(result!.document.value).toEqual(SOURCE);
     resolveFirst!(
       new Response(new Uint8Array([9, 9, 9]), {
@@ -414,6 +497,141 @@ describe('useDocxSource reactivity', () => {
     await flush();
     expect(result!.document.value).toEqual(SOURCE);
     app.unmount();
+  });
+});
+
+describe('useHyperlinkPopup state', () => {
+  test('keeps same-tick text and URL updates', () => {
+    let popup: ReturnType<typeof useHyperlinkPopupInstance> | null = null;
+    const app = createApp({
+      setup() {
+        popup = useHyperlinkPopupInstance(false);
+        return () => null;
+      },
+    });
+    app.mount(document.createElement('div'));
+    popup!.open();
+    popup!.setText('Link text');
+    popup!.setUrl('https://example.com');
+    expect(popup!.state.value).toMatchObject({
+      text: 'Link text',
+      url: 'https://example.com',
+    });
+    app.unmount();
+  });
+});
+
+describe('watcher cleanup', () => {
+  test('cancels the previous document-search debounce', async () => {
+    let editor: DocxEditorInstance | null = null;
+    let search: ReturnType<typeof useDocumentSearch> | null = null;
+    const findMatches = mock((_query: string, _options: unknown) => []);
+    const Probe = defineComponent({
+      setup() {
+        search = useDocumentSearch();
+        return () => null;
+      },
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          {
+            document: SOURCE,
+            onReady: (value: Editor) => {
+              editor = value as DocxEditorInstance;
+            },
+          },
+          {
+            default: () =>
+              h(DocxEditorViewport, null, {
+                default: () => [h(DocxEditorContent), h(Probe)],
+              }),
+          }
+        ),
+    });
+    try {
+      app.mount(container);
+      await flush();
+      (editor as unknown as { findMatches: typeof findMatches }).findMatches = findMatches;
+      search!.setQuery('h');
+      await nextTick();
+      search!.setQuery('hello');
+      await new Promise((resolve) => setTimeout(resolve, SEARCH_DEBOUNCE_MS + 25));
+      await nextTick();
+      expect(findMatches).toHaveBeenCalledTimes(1);
+      expect(findMatches.mock.calls[0]?.[0]).toBe('hello');
+    } finally {
+      app.unmount();
+      container.remove();
+    }
+  });
+
+  test('disconnects the previous navigation ResizeObserver', async () => {
+    const OriginalResizeObserver = globalThis.ResizeObserver;
+    const disconnects: Array<ReturnType<typeof mock>> = [];
+    class TrackingResizeObserver {
+      readonly disconnect = mock(() => {});
+      constructor(_callback: ResizeObserverCallback) {
+        disconnects.push(this.disconnect);
+      }
+      observe(): void {}
+      unobserve(): void {}
+    }
+    globalThis.ResizeObserver = TrackingResizeObserver as unknown as typeof ResizeObserver;
+    const open = ref(false);
+    const Probe = defineComponent({
+      setup() {
+        useNavigationPane(() => ({ open: open.value }));
+        return () => null;
+      },
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const app = createApp({
+      render: () =>
+        h(
+          DocxEditorRoot,
+          { document: SOURCE },
+          {
+            default: () =>
+              h(DocxEditorViewport, null, {
+                default: () => [h(DocxEditorContent), h(Probe)],
+              }),
+          }
+        ),
+    });
+    let mounted = false;
+    try {
+      app.mount(container);
+      mounted = true;
+      await flush();
+      const beforeToggle = disconnects.length;
+      const disconnectCallsBefore = disconnects.reduce(
+        (total, disconnect) => total + disconnect.mock.calls.length,
+        0
+      );
+      expect(beforeToggle).toBeGreaterThan(0);
+      open.value = true;
+      await nextTick();
+      expect(disconnects.length).toBeGreaterThan(beforeToggle);
+      const disconnectCallsAfterToggle = disconnects.reduce(
+        (total, disconnect) => total + disconnect.mock.calls.length,
+        0
+      );
+      expect(disconnectCallsAfterToggle).toBeGreaterThan(disconnectCallsBefore);
+      app.unmount();
+      mounted = false;
+      expect(
+        disconnects.reduce((total, disconnect) => total + disconnect.mock.calls.length, 0)
+      ).toBeGreaterThan(disconnectCallsAfterToggle);
+    } finally {
+      if (mounted) app.unmount();
+      container.remove();
+      globalThis.ResizeObserver = OriginalResizeObserver;
+    }
   });
 });
 

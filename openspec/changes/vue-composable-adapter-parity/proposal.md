@@ -64,8 +64,8 @@ and no exemption file at the end of this change.
 - `@docx-editor.dev/core` moves from `dependencies` to `peerDependencies` + a `workspace:*`
   `devDependency`, the shape `packages/react/package.json` already has and
   `packages/react/test/package-dependencies.test.ts` already pins.
-- The build moves to `tsup`, with the engine, `vue`, the i18n package, `harfbuzzjs` and
-  `emf-converter` external, and `metafile: true`. The metafile is not optional:
+- The build moves to `tsup`, with the engine, `vue`, and the i18n package external, and
+  `metafile: true`. The metafile is not optional:
   `scripts/generate-third-party-notices.mjs` reads `dist/metafile-*.json`, the run is
   all-or-nothing, and a publishable package with no attribution path fails the release.
 - `@docx-editor.dev/i18n` gets a real semver range. `private: true` goes. The package joins

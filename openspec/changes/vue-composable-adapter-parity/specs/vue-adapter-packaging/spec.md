@@ -63,8 +63,8 @@ Published packages are one fixed group: a changeset declares one bump and the re
 
 ### Requirement: The Vue adapter SHALL be built with the same toolchain contract as React
 
-The package SHALL build with `tsup`, SHALL externalize `vue`, the engine, the i18n package,
-`harfbuzzjs` and `emf-converter`, and SHALL author components as render-function TypeScript
+The package SHALL build with `tsup`, SHALL externalize `vue`, the engine, and the i18n package,
+and SHALL author components as render-function TypeScript
 (`defineComponent` + `h`) rather than single-file components.
 
 `tsup` does not compile SFCs, `max-lines` is the only gate that catches an over-long file and it

@@ -37,7 +37,5 @@ export default defineConfig({
   // imports it directly, so inlining a copy here would give a page running both
   // packages two engines: pro's modules would register against one instance while
   // the adapter painted from another.
-  // emf-converter is lazily imported; external keeps the metafile rasterizer out of
-  // the main bundle.
-  external: ['react', 'react-dom', 'emf-converter'],
+  external: ['react', 'react-dom'],
 });

@@ -360,7 +360,7 @@
         "zod": "^4.4.3",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "^2.0.1",
+        "@docx-editor.dev/core": "^2.6.0",
         "@docx-editor.dev/react": "^2.0.1",
         "@docx-editor.dev/vue": "^2.0.1",
         "react": "^18.0.0 || ^19.0.0",
@@ -383,14 +383,13 @@
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
-        "emf-converter": "2.0.2",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "fflate": "^0.8.2",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "^2.0.1",
+        "@docx-editor.dev/core": "^2.6.0",
         "react": "^18.0.0 || ^19.0.0",
         "react-dom": "^18.0.0 || ^19.0.0",
       },
@@ -404,8 +403,6 @@
       "version": "2.5.0",
       "dependencies": {
         "@docx-editor.dev/i18n": "^2.5.0",
-        "emf-converter": "2.0.2",
-        "harfbuzzjs": "1.6.0",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
@@ -413,7 +410,7 @@
         "vue": "^3.5.29",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "^2.0.1",
+        "@docx-editor.dev/core": "^2.6.0",
         "vue": "^3.3.0",
       },
       "optionalPeers": [

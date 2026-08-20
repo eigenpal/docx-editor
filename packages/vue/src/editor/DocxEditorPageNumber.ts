@@ -48,7 +48,7 @@ export const DocxEditorPageNumber = defineComponent({
 
     watch(
       [editorRef, total, viewport],
-      ([editor, pageTotal, vp]) => {
+      ([editor, pageTotal, vp], _previous, onCleanup) => {
         visible.value = false;
         if (!editor || !vp || pageTotal <= 1) return;
         current.value = editor.getCurrentPage('viewport');
@@ -62,10 +62,10 @@ export const DocxEditorPageNumber = defineComponent({
           }, HIDE_DELAY_MS);
         };
         vp.addEventListener('scroll', onScroll, { passive: true });
-        return () => {
+        onCleanup(() => {
           vp.removeEventListener('scroll', onScroll);
           if (hideTimer) clearTimeout(hideTimer);
-        };
+        });
       },
       { flush: 'post' }
     );

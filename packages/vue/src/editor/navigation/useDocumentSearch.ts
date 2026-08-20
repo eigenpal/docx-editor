@@ -44,12 +44,12 @@ export function useDocumentSearch(): UseDocumentSearchResult {
   const activeIndex = ref(-1);
 
   scopeDispose(
-    watch([query, runQuery], ([q, rq]) => {
+    watch([query, runQuery], ([q, rq], _previous, onCleanup) => {
       if (q === rq) return;
       const timer = setTimeout(() => {
         runQuery.value = q;
       }, SEARCH_DEBOUNCE_MS);
-      return () => clearTimeout(timer);
+      onCleanup(() => clearTimeout(timer));
     })
   );
 

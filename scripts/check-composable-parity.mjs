@@ -95,7 +95,14 @@ function compareInterface(name, reactSnap, vueSnap, issues, stats) {
   const vueTypes = extractInterfaceMemberTypes(vueSnap, name);
   if (!reactTypes || !vueTypes) return;
   for (const k of reactFields) {
-    if (!reactTypes.has(k) || !vueTypes.has(k)) continue;
+    if (!reactTypes.has(k)) {
+      issues.push(`INTERFACE '${name}.${k}': React member type was not parsed`);
+      continue;
+    }
+    if (!vueTypes.has(k)) {
+      issues.push(`INTERFACE '${name}.${k}': Vue member type was not parsed`);
+      continue;
+    }
     stats.memberTypeChecks += 1;
     const r = normalizeType(reactTypes.get(k));
     const v = normalizeType(vueTypes.get(k));
@@ -362,6 +369,40 @@ export interface Editor {}
   if (issues.length !== 0) {
     console.error('Self-test FAIL: MaybeRefOrGetter param should normalize');
     for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  const functionReturn = `
+export function useToolbarLabel(): (key: string) => string;
+`;
+  const functionReturnDrift = `
+export function useToolbarLabel(): (key: number) => string;
+`;
+  ({ issues } = runComposableParityCheck({
+    reactSnap: functionReturn,
+    vueSnap: functionReturnDrift,
+  }));
+  if (!issues.some((i) => i.includes("FUNCTION 'useToolbarLabel'"))) {
+    console.error('Self-test FAIL: expected function return signature mismatch');
+    process.exit(1);
+  }
+
+  const functionMember = `
+export interface SampleResult {
+    beginEdit: () => void;
+    onReady?: (editor: Editor) => void;
+}
+export interface Editor {}
+`;
+  const functionMemberDrift = functionMember
+    .replace('beginEdit: () => void', 'beginEdit: () => number')
+    .replace('(editor: Editor) => void', '(editor: string) => void');
+  ({ issues } = runComposableParityCheck({
+    reactSnap: functionMember,
+    vueSnap: functionMemberDrift,
+  }));
+  if (issues.filter((i) => i.includes('type mismatch')).length !== 2) {
+    console.error('Self-test FAIL: expected function-property type mismatches');
     process.exit(1);
   }
 

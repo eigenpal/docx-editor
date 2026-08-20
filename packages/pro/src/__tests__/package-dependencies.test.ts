@@ -29,7 +29,7 @@ const manifest = JSON.parse(
 
 describe('how this package asks for the engine', () => {
   test('the engine is a peer, so the consumer resolves one copy of it', () => {
-    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toBeDefined();
+    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toBe('^2.6.0');
     expect(manifest.dependencies?.['@docx-editor.dev/core']).toBeUndefined();
   });
 

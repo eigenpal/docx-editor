@@ -44,34 +44,34 @@ same name, and the divergence file ends at zero entries and is deleted.
 
 A paired export SHALL live at the same relative path in both adapters. Concretely:
 
-| React | Vue |
-| --- | --- |
-| `src/index.ts` | `src/index.ts` |
-| `src/types.ts` | `src/types.ts` |
-| `src/editor/context.ts` | `src/editor/context.ts` |
-| `src/editor/DocxEditorRoot.tsx` | `src/editor/DocxEditorRoot.ts` |
-| `src/editor/DocxEditorViewport.tsx` | `src/editor/DocxEditorViewport.ts` |
-| `src/editor/DocxEditorContent.tsx` | `src/editor/DocxEditorContent.ts` |
-| `src/editor/useEditorState.ts` | `src/editor/useEditorState.ts` |
-| `src/editor/use*.ts` (the composables) | same path, same name |
-| `src/editor/toolbar/**` | `src/editor/toolbar/**` |
-| `src/editor/menu/**` | `src/editor/menu/**` |
-| `src/editor/navigation/**` | `src/editor/navigation/**` |
-| `src/editor/contextmenu/**` | `src/editor/contextmenu/**` |
-| `src/editor/images/**` | `src/editor/images/**` |
-| `src/editor/merge-arrangement.tsx` | `src/editor/merge-arrangement.ts` |
-| `src/editor/scope-context.ts` | `src/editor/scope-context.ts` |
-| `src/editor/loading-snapshot.ts` | neither — `LOADING_SNAPSHOT` lifts into core, see below |
-| `src/i18n/**` | `src/i18n/**` |
-| `src/rulerTicks.ts`, `src/useEditorSnapshot.ts` | same paths |
-| `src/components/DocxEditor.tsx` (the sugar) | `src/components/DocxEditor.ts` |
-| `src/components/PaginatedDocxEditor.tsx` | `src/components/PaginatedDocxEditor.ts` |
-| `src/components/DocumentOutline.tsx` | `src/components/DocumentOutline.ts` |
-| `src/components/ui/HorizontalRuler.tsx`, `VerticalRuler.tsx` | mirrored — the v2 ruler parts wrap them |
-| `src/lib/**` | mirrored only as far as a paired export needs |
-| `src/styles/editor.css` | `src/styles/editor.css` (already thin, unchanged) |
-| the pre-v2 shell chrome | NO Vue twin — deprecated, see below |
-| `src/managers/**`, `src/hooks/**` | NO Vue twin — they serve only the deprecated chrome |
+| React                                                        | Vue                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------- |
+| `src/index.ts`                                               | `src/index.ts`                                          |
+| `src/types.ts`                                               | `src/types.ts`                                          |
+| `src/editor/context.ts`                                      | `src/editor/context.ts`                                 |
+| `src/editor/DocxEditorRoot.tsx`                              | `src/editor/DocxEditorRoot.ts`                          |
+| `src/editor/DocxEditorViewport.tsx`                          | `src/editor/DocxEditorViewport.ts`                      |
+| `src/editor/DocxEditorContent.tsx`                           | `src/editor/DocxEditorContent.ts`                       |
+| `src/editor/useEditorState.ts`                               | `src/editor/useEditorState.ts`                          |
+| `src/editor/use*.ts` (the composables)                       | same path, same name                                    |
+| `src/editor/toolbar/**`                                      | `src/editor/toolbar/**`                                 |
+| `src/editor/menu/**`                                         | `src/editor/menu/**`                                    |
+| `src/editor/navigation/**`                                   | `src/editor/navigation/**`                              |
+| `src/editor/contextmenu/**`                                  | `src/editor/contextmenu/**`                             |
+| `src/editor/images/**`                                       | `src/editor/images/**`                                  |
+| `src/editor/merge-arrangement.tsx`                           | `src/editor/merge-arrangement.ts`                       |
+| `src/editor/scope-context.ts`                                | `src/editor/scope-context.ts`                           |
+| `src/editor/loading-snapshot.ts`                             | neither — `LOADING_SNAPSHOT` lifts into core, see below |
+| `src/i18n/**`                                                | `src/i18n/**`                                           |
+| `src/rulerTicks.ts`, `src/useEditorSnapshot.ts`              | same paths                                              |
+| `src/components/DocxEditor.tsx` (the sugar)                  | `src/components/DocxEditor.ts`                          |
+| `src/components/PaginatedDocxEditor.tsx`                     | `src/components/PaginatedDocxEditor.ts`                 |
+| `src/components/DocumentOutline.tsx`                         | `src/components/DocumentOutline.ts`                     |
+| `src/components/ui/HorizontalRuler.tsx`, `VerticalRuler.tsx` | mirrored — the v2 ruler parts wrap them                 |
+| `src/lib/**`                                                 | mirrored only as far as a paired export needs           |
+| `src/styles/editor.css`                                      | `src/styles/editor.css` (already thin, unchanged)       |
+| the pre-v2 shell chrome                                      | NO Vue twin — deprecated, see below                     |
+| `src/managers/**`, `src/hooks/**`                            | NO Vue twin — they serve only the deprecated chrome     |
 
 ### The old React chrome is deprecated, not twinned
 
@@ -243,14 +243,12 @@ default to TRUE in React, so a naive `{ type: Boolean }` declaration turns the p
 into a bare surface with no chrome and no error. Every Boolean-valued prop declares
 `default: undefined` and resolves its default in the component body.
 
-**5. A locale change REBUILDS the editor, and must keep doing so.** React's Root lists
-`defaultTranslate` in its creation effect's dependencies, and `defaultTranslate` changes when the
-catalogue does — so a locale switch destroys and recreates the instance. That is not an
-oversight to improve on: `translate` is sampled by `createDocxEditor` and is what paints drawing
-refusal labels, so a live catalogue swap without a rebuild would leave those painted strings in
-the old language. Chrome LABELS re-resolve without a rebuild because components render them;
-the engine's copy does not. Parity is 100%, so Vue mirrors this, including the edit loss it
-implies.
+**5. A locale change REBUILDS the editor, but a custom translator identity change does not.**
+React's Root lists `defaultTranslate` in its creation effect's dependencies. It reads the custom
+`translate` prop through the latest-props ref instead. Vue therefore watches the catalogue
+identity, not the computed resolver identity. A locale switch rebuilds because the engine samples
+the catalogue translator for painted labels. A parent render that creates a new inline
+`translate` function preserves the editor, edits, caret, and undo history.
 
 **6. No new UI dependency.** React's `Slot` is ~40 lines in-tree, deliberately not
 `@radix-ui/react-slot`, and the v2 pickers (`FontFamily`, `ParagraphStyle`, the colour splits,
@@ -351,15 +349,15 @@ It does NOT throw, matching React and for the same stated reason.
 
 Four more injections mirror React's four context providers, each an `InjectionKey`:
 
-| React | Vue |
-| --- | --- |
-| `DocxEditorContext` | `docxEditorKey` (exported as `useDocxEditor`'s source) |
-| `ReviewRailContext` | `ReviewRailContext` — same NAME, an `InjectionKey<ReviewRailRegistry>` |
-| `HyperlinkPopupContext` | published by the Root, read by `useHyperlinkPopup` |
-| `ContentControlContext` | published by the Root, read by `useContentControl` |
-| `NavigationLayoutContext` | a plain store, NOT a ref — see below |
-| `ScopedByAncestorContext` | `useScopeClassName()` over an injected boolean |
-| `LocaleContext` / `LangContext` | `LocaleProvider` + `useTranslation` |
+| React                           | Vue                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------- |
+| `DocxEditorContext`             | `docxEditorKey` (exported as `useDocxEditor`'s source)                 |
+| `ReviewRailContext`             | `ReviewRailContext` — same NAME, an `InjectionKey<ReviewRailRegistry>` |
+| `HyperlinkPopupContext`         | published by the Root, read by `useHyperlinkPopup`                     |
+| `ContentControlContext`         | published by the Root, read by `useContentControl`                     |
+| `NavigationLayoutContext`       | a plain store, NOT a ref — see below                                   |
+| `ScopedByAncestorContext`       | `useScopeClassName()` over an injected boolean                         |
+| `LocaleContext` / `LangContext` | `LocaleProvider` + `useTranslation`                                    |
 
 `ReviewRailContext` keeps its React NAME even though it is an `InjectionKey` and not a
 `Context`, because `check:export-parity` compares names and a rename would need an exemption
@@ -498,19 +496,19 @@ unchanged.
 A file in `packages/vue/src` that contains any of the following is wrong by construction, and
 each has a core home:
 
-| Temptation | Where it lives |
-| --- | --- |
-| enabled/active/disabledReason for a slot | `toolbarCommandState` |
-| a slot's command | `commandForSlot` / `commandForSlotValue` |
-| toolbar/menu arrangement | `CHROME_GROUPS` / `CHROME_MENUS` |
-| ruler ticks, page box | `ruler-ticks.ts` (re-exported by both adapters) |
-| the four indent handles' drag geometry | `ruler-indent.ts` |
-| the zoom ladder and the fit | `zoom-levels.ts` + `zoom-fit.ts` |
-| the navigation pane displacement | `navigationShift` / `navigationPaneReservation` |
-| search debounce and the match cap | `SEARCH_DEBOUNCE_MS` / `SEARCH_MATCH_LIMIT` |
-| font composition | `composeFontConfiguration` |
-| any colour, spacing, or chrome rule | `@docx-editor.dev/core/styles/editor.css` |
-| any user-facing English | `packages/i18n/en.json` |
+| Temptation                               | Where it lives                                  |
+| ---------------------------------------- | ----------------------------------------------- |
+| enabled/active/disabledReason for a slot | `toolbarCommandState`                           |
+| a slot's command                         | `commandForSlot` / `commandForSlotValue`        |
+| toolbar/menu arrangement                 | `CHROME_GROUPS` / `CHROME_MENUS`                |
+| ruler ticks, page box                    | `ruler-ticks.ts` (re-exported by both adapters) |
+| the four indent handles' drag geometry   | `ruler-indent.ts`                               |
+| the zoom ladder and the fit              | `zoom-levels.ts` + `zoom-fit.ts`                |
+| the navigation pane displacement         | `navigationShift` / `navigationPaneReservation` |
+| search debounce and the match cap        | `SEARCH_DEBOUNCE_MS` / `SEARCH_MATCH_LIMIT`     |
+| font composition                         | `composeFontConfiguration`                      |
+| any colour, spacing, or chrome rule      | `@docx-editor.dev/core/styles/editor.css`       |
+| any user-facing English                  | `packages/i18n/en.json`                         |
 
 `check:feature-parity` already walks both `src` trees and reports drift; it becomes useful again
 once the Vue tree has something to compare.

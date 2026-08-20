@@ -20,9 +20,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const manifest = JSON.parse(
-  readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8')
-) as {
+const manifest = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8')) as {
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
@@ -31,7 +29,7 @@ const manifest = JSON.parse(
 
 describe('how this package asks for the engine', () => {
   test('the engine is a peer, so the consumer resolves one copy of it', () => {
-    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toBeDefined();
+    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toBe('^2.6.0');
     expect(manifest.dependencies?.['@docx-editor.dev/core']).toBeUndefined();
   });
 
@@ -47,5 +45,9 @@ describe('how this package asks for the engine', () => {
     // A peer is what a CONSUMER resolves. It is not an install for this package's own build, so
     // the dev dependency is what makes `bun run build` and these tests see the engine at all.
     expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
+  });
+
+  test('does not install engine implementation dependencies', () => {
+    expect(manifest.dependencies?.['emf-converter']).toBeUndefined();
   });
 });

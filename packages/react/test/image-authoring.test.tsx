@@ -35,7 +35,9 @@ const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
 const PNG_1X1 = Uint8Array.from(
-  atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='),
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  ),
   (c) => c.charCodeAt(0)
 );
 
@@ -83,10 +85,7 @@ function createTestImageDecodePort(): ImageDecodePort {
   });
 }
 
-function inlinePictureDocument(
-  wrapSquare?: string,
-  behindDoc?: '0' | '1'
-): Uint8Array {
+function inlinePictureDocument(wrapSquare?: string, behindDoc?: '0' | '1'): Uint8Array {
   const drawingInner =
     wrapSquare !== undefined
       ? `<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="1" allowOverlap="0" behindDoc="${behindDoc ?? '0'}" locked="0" layoutInCell="1" relativeHeight="0">` +
@@ -163,9 +162,7 @@ const PLAIN_SOURCE = zipSync({
   'word/document.xml': strToU8(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hello world</w:t></w:r></w:p></w:body></w:document>`
   ),
-  'word/_rels/document.xml.rels': strToU8(
-    `<Relationships xmlns="${REL}"></Relationships>`
-  ),
+  'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"></Relationships>`),
 });
 
 function placeTextCaret(editor: DocxEditorInstance, offset = 5): void {
@@ -188,7 +185,7 @@ async function waitForSurface(editor: () => DocxEditorInstance): Promise<void> {
 
 function mount(
   ui: React.ReactNode,
-  source: Uint8Array = PLAIN_SOURCE,
+  source: Uint8Array = PLAIN_SOURCE
 ): {
   view: ReturnType<typeof render>;
   editor: () => DocxEditorInstance;
@@ -248,7 +245,9 @@ describe('binds image value commands', () => {
   }
 
   test('exposes all nine wrap options with stable dispatch', async () => {
-    const source = inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>');
+    const source = inlinePictureDocument(
+      '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+    );
     let latest: ReturnType<typeof useEditorValueCommand> | null = null;
     const { editor, selectDrawing, ready } = mount(
       <WrapProbe
@@ -256,7 +255,9 @@ describe('binds image value commands', () => {
           latest = state;
         }}
       />,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -271,11 +272,7 @@ describe('binds image value commands', () => {
   });
 
   test('alt text value tracks description, not name', async () => {
-    function AltProbe({
-      onReady,
-    }: {
-      onReady: (value: string | null) => void;
-    }) {
+    function AltProbe({ onReady }: { onReady: (value: string | null) => void }) {
       const { value } = useEditorValueCommand('image.altText');
       useEffect(() => {
         onReady(value);
@@ -289,7 +286,9 @@ describe('binds image value commands', () => {
           description = value;
         }}
       />,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -340,7 +339,9 @@ describe('inserts validated image files', () => {
   test('insert button preserves caret on mousedown', async () => {
     const { view, ready, selectDrawing } = mount(
       <DocxEditorToolbar />,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -355,11 +356,26 @@ describe('inserts validated image files', () => {
 describe('offers all nine Word wrap choices', () => {
   test('menu lists every target and dispatches one command', async () => {
     const cases: ReadonlyArray<{ wrap: string; expected: ImageWrapTarget }> = [
-      { wrap: '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>', expected: 'square' },
-      { wrap: '<wp:wrapSquare wrapText="left" distT="1" distB="2" distL="3" distR="4"/>', expected: 'squareLeft' },
-      { wrap: '<wp:wrapSquare wrapText="right" distT="1" distB="2" distL="3" distR="4"/>', expected: 'squareRight' },
-      { wrap: '<wp:wrapTight wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"><wp:wrapPolygon edited="0"><wp:start x="0" y="0"/><wp:lineTo x="914400" y="0"/><wp:lineTo x="914400" y="914400"/><wp:lineTo x="0" y="914400"/><wp:lineTo x="0" y="0"/></wp:wrapPolygon></wp:wrapTight>', expected: 'tight' },
-      { wrap: '<wp:wrapThrough wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"><wp:wrapPolygon edited="0"><wp:start x="0" y="0"/><wp:lineTo x="914400" y="0"/><wp:lineTo x="914400" y="914400"/><wp:lineTo x="0" y="914400"/><wp:lineTo x="0" y="0"/></wp:wrapPolygon></wp:wrapThrough>', expected: 'through' },
+      {
+        wrap: '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>',
+        expected: 'square',
+      },
+      {
+        wrap: '<wp:wrapSquare wrapText="left" distT="1" distB="2" distL="3" distR="4"/>',
+        expected: 'squareLeft',
+      },
+      {
+        wrap: '<wp:wrapSquare wrapText="right" distT="1" distB="2" distL="3" distR="4"/>',
+        expected: 'squareRight',
+      },
+      {
+        wrap: '<wp:wrapTight wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"><wp:wrapPolygon edited="0"><wp:start x="0" y="0"/><wp:lineTo x="914400" y="0"/><wp:lineTo x="914400" y="914400"/><wp:lineTo x="0" y="914400"/><wp:lineTo x="0" y="0"/></wp:wrapPolygon></wp:wrapTight>',
+        expected: 'tight',
+      },
+      {
+        wrap: '<wp:wrapThrough wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"><wp:wrapPolygon edited="0"><wp:start x="0" y="0"/><wp:lineTo x="914400" y="0"/><wp:lineTo x="914400" y="914400"/><wp:lineTo x="0" y="914400"/><wp:lineTo x="0" y="0"/></wp:wrapPolygon></wp:wrapThrough>',
+        expected: 'through',
+      },
       { wrap: '<wp:wrapTopAndBottom distT="1" distB="2"/>', expected: 'topAndBottom' },
       { wrap: '<wp:wrapNone distT="1" distB="2" distL="3" distR="4"/>', expected: 'inFront' },
     ];
@@ -384,7 +400,9 @@ describe('offers all nine Word wrap choices', () => {
   test('contextual image group appears when a drawing is selected', async () => {
     const { view, ready, selectDrawing } = mount(
       <DocxEditorToolbar />,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -398,7 +416,9 @@ describe('edits image properties atomically', () => {
   test('apply writes one setImageProperties command', async () => {
     const { editor, ready, selectDrawing } = mount(
       null,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -417,8 +437,15 @@ describe('edits image properties atomically', () => {
   test('properties dialog apply closes after commit', async () => {
     let closed = false;
     const { view, ready, selectDrawing } = mount(
-      <DocxEditorImagePropertiesDialog open onClose={() => { closed = true; }} />,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      <DocxEditorImagePropertiesDialog
+        open
+        onClose={() => {
+          closed = true;
+        }}
+      />,
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -434,7 +461,9 @@ describe('edits image properties atomically', () => {
   test('cancel makes no mutation', async () => {
     const { view, editor, ready, selectDrawing } = mount(
       <DocxEditorImagePropertiesDialog open onClose={() => {}} />,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -500,7 +529,9 @@ describe('edits floating image position in properties', () => {
       await Promise.resolve();
     });
     const dialog = within(view.container).getByRole('dialog');
-    expect(within(dialog).getByText('Position is available only for floating images.')).toBeTruthy();
+    expect(
+      within(dialog).getByText('Position is available only for floating images.')
+    ).toBeTruthy();
     expect(within(dialog).queryByLabelText('Horizontal offset')).toBeNull();
   });
 
@@ -603,7 +634,9 @@ describe('authors accessible image text', () => {
     }
     const { editor, ready, selectDrawing } = mount(
       <AltWriter />,
-      inlinePictureDocument('<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>')
+      inlinePictureDocument(
+        '<wp:wrapSquare wrapText="bothSides" distT="1" distB="2" distL="3" distR="4"/>'
+      )
     );
     await ready();
     await selectDrawing();
@@ -621,16 +654,18 @@ describe('renders semantic image resize handles', () => {
   }
 
   test('shows eight handles for a selected inline picture', async () => {
-    const { view, ready, selectDrawing } = mount(
-      null,
-      inlinePictureDocument()
-    );
+    const { view, ready, selectDrawing } = mount(null, inlinePictureDocument());
     await ready();
     await selectDrawing();
     await act(async () => {
       await Promise.resolve();
     });
     expect(overlayHandles(view.container)).toHaveLength(8);
+    expect(
+      view.container
+        .querySelector('.docx-image-selection-overlay__frame')
+        ?.classList.contains('docx-editor-one-surface__overlay-control')
+    ).toBe(false);
   });
 
   test('shows no overlay for plain text selection', async () => {
@@ -674,9 +709,15 @@ describe('previews pointer gestures and commits once', () => {
     expect(handle).not.toBeNull();
     const beforeRevision = editor().surface!.session.packageRevision();
     fireEvent.pointerDown(handle!, { clientX: 100, clientY: 100, pointerId: 1, button: 0 });
-    fireEvent(window, new PointerEvent('pointermove', { clientX: 140, clientY: 140, bubbles: true, pointerId: 1 }));
+    fireEvent(
+      window,
+      new PointerEvent('pointermove', { clientX: 140, clientY: 140, bubbles: true, pointerId: 1 })
+    );
     expect(editor().surface!.session.packageRevision()).toBe(beforeRevision);
-    fireEvent(window, new PointerEvent('pointerup', { clientX: 140, clientY: 140, bubbles: true, pointerId: 1 }));
+    fireEvent(
+      window,
+      new PointerEvent('pointerup', { clientX: 140, clientY: 140, bubbles: true, pointerId: 1 })
+    );
     await act(async () => {
       await Promise.resolve();
     });
@@ -704,8 +745,14 @@ describe('previews pointer gestures and commits once', () => {
       '.docx-image-selection-overlay__handle[aria-label="Resize right edge"]'
     )!;
     fireEvent.pointerDown(handle, { clientX: 100, clientY: 100, pointerId: 3, button: 0 });
-    fireEvent(window, new PointerEvent('pointermove', { clientX: 120, clientY: 100, bubbles: true, pointerId: 3 }));
-    fireEvent(window, new PointerEvent('pointerup', { clientX: 160, clientY: 100, bubbles: true, pointerId: 3 }));
+    fireEvent(
+      window,
+      new PointerEvent('pointermove', { clientX: 120, clientY: 100, bubbles: true, pointerId: 3 })
+    );
+    fireEvent(
+      window,
+      new PointerEvent('pointerup', { clientX: 160, clientY: 100, bubbles: true, pointerId: 3 })
+    );
     await act(async () => {
       await Promise.resolve();
     });

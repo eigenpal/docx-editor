@@ -208,6 +208,7 @@ export const MenuTableGrid = defineComponent({
       ) as unknown as ChromeSlotId
     );
     const menuContext = useMenuContext();
+    const label = useMenuLabel();
     const hover = ref<{ rows: number; cols: number } | null>(null);
     const cursor = ref({ rows: 1, cols: 1 });
     const gridRef = ref<HTMLDivElement | null>(null);
@@ -278,7 +279,7 @@ export const MenuTableGrid = defineComponent({
           ref={gridRef}
           role="grid"
           class={`docx-menubar__grid${props.className ? ` ${props.className}` : ''}`}
-          aria-label="Insert table"
+          aria-label={label('toolbar.insertTable')}
           onKeydown={(event: KeyboardEvent) => {
             if (event.key === 'ArrowRight') move({ cols: 1 });
             else if (event.key === 'ArrowLeft') move({ cols: -1 });

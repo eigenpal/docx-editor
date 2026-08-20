@@ -58,7 +58,7 @@ export function useDocxSource(
   scopeDispose(
     watch(
       () => toValue(reactiveOptions).fonts,
-      (fontsSource) => {
+      (fontsSource, _previous, onCleanup) => {
         if (fontsSource === undefined) {
           fonts.value = undefined;
           fontsSettled.value = true;
@@ -77,9 +77,9 @@ export function useDocxSource(
             if (live) fontsSettled.value = true;
           }
         })();
-        return () => {
+        onCleanup(() => {
           live = false;
-        };
+        });
       },
       { immediate: true }
     )
@@ -88,7 +88,7 @@ export function useDocxSource(
   scopeDispose(
     watch(
       () => toValue(reactiveSource),
-      (nextSource) => {
+      (nextSource, _previous, onCleanup) => {
         fetchGeneration += 1;
         const generation = fetchGeneration;
         if (nextSource == null) {
@@ -133,10 +133,10 @@ export function useDocxSource(
             documentLoading.value = false;
           }
         })();
-        return () => {
+        onCleanup(() => {
           live = false;
           controller.abort();
-        };
+        });
       },
       { immediate: true, flush: 'post' }
     )

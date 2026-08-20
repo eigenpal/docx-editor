@@ -166,10 +166,13 @@ export interface DocxEditorNamespace {
 
 const docxEditorFrameProps = {
   document: {
-    type: [Object, Uint8Array, ArrayBuffer] as PropType<DocxEditorProps['document']>,
+    type: [String, Object, Uint8Array, ArrayBuffer] as PropType<DocxEditorProps['document']>,
     default: undefined,
   },
-  fonts: { type: Object as PropType<DocxEditorProps['fonts']>, default: undefined },
+  fonts: {
+    type: [Object, Function] as PropType<DocxEditorProps['fonts']>,
+    default: undefined,
+  },
   class: { type: String, default: undefined },
   t: { type: Function as PropType<DocxEditorProps['t']>, default: undefined },
   colorMode: { type: String as PropType<'light' | 'dark' | 'system'>, default: 'light' },

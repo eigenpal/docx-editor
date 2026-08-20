@@ -37,7 +37,6 @@ export default defineConfig([
       'vue/index': 'src/vue/index.ts',
     },
     dts: {
-      resolve: true,
       compilerOptions: {
         jsx: 'preserve',
         jsxImportSource: 'vue',

@@ -494,13 +494,15 @@ export function ImageSelectionOverlay({
     return (
       <div
         ref={overlayRef}
-        className="docx-image-selection-overlay docx-editor-one-surface__overlay-control"
+        className="docx-image-selection-overlay"
         data-drawing-node-id={active.id}
         tabIndex={0}
         onKeyDown={onOverlayKeyDown}
       >
         <div
-          className="docx-image-selection-overlay__frame"
+          className={`docx-image-selection-overlay__frame${
+            showMove ? ' docx-editor-one-surface__overlay-control' : ''
+          }`}
           role="group"
           aria-label={t('imageOverlay.selection')}
           style={{

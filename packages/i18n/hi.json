@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "अनुभाग ब्रेक (निरंतर)",
     "sectionBreakNextPage": "अनुभाग ब्रेक (अगला पृष्ठ)",
     "insertFootnote": "फ़ुटनोट डालें",
-    "insertEndnote": "एंडनोट डालें"
+    "insertEndnote": "एंडनोट डालें",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

@@ -53,6 +53,12 @@ never remounts — so a `document` or `fonts` identity change must build a NEW i
 - **THEN** the previous instance is destroyed, a new one is created, and the published ref moves
   to it
 
+#### Scenario: An inline translator does not rebuild
+
+- **WHEN** a parent render gives the Root a new custom `translate` function identity
+- **THEN** the editor instance, edits, caret, and undo history survive
+- **AND** a catalogue identity change still rebuilds the editor
+
 #### Scenario: A zoom change does not rebuild
 
 - **WHEN** the `zoom` prop moves

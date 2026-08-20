@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "Saut de section (continu)",
     "sectionBreakNextPage": "Saut de section (page suivante)",
     "insertFootnote": "Insérer une note de bas de page",
-    "insertEndnote": "Insérer une note de fin"
+    "insertEndnote": "Insérer une note de fin",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

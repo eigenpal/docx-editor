@@ -32,7 +32,8 @@
     "help": "Bantuan",
     "reportIssue": "Laporkan Masalah",
     "insertFootnote": "Sisipkan catatan kaki",
-    "insertEndnote": "Sisipkan catatan akhir"
+    "insertEndnote": "Sisipkan catatan akhir",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

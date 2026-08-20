@@ -143,19 +143,12 @@ describe('each host mounts the engine surface and nothing more (task 11.1)', () 
     mounted.unmount();
   });
 
-  test('Vue paints pages and reports the revision', async () => {
+  test('Vue paints pages', async () => {
     const mounted = mountVue(SOURCE);
     await flushVue();
     const surface = surfaceOf(mounted.container)!;
     expect(surface).not.toBeNull();
-    // The PAINTED pages are the engine's own DOM and appear synchronously. The reported
-    // counts are framework state, and Vue propagates those on the next tick where React's
-    // `act` flushes them — a difference in when, not in what.
     expect(surface.querySelectorAll('.docx-page').length).toBeGreaterThan(0);
-    await flushVue();
-    const reported = Number(surface.dataset.pageCount ?? 0);
-    const painted = surface.querySelectorAll('.docx-page').length;
-    expect(reported > 0 || painted > 0).toBe(true);
     mounted.unmount();
   });
 

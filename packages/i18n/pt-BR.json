@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "Quebra de seção (contínua)",
     "sectionBreakNextPage": "Quebra de seção (próxima página)",
     "insertFootnote": "Inserir nota de rodapé",
-    "insertEndnote": "Inserir nota de fim"
+    "insertEndnote": "Inserir nota de fim",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

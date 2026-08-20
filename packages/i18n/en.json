@@ -23,6 +23,7 @@
     "rightToLeft": "Right-to-left text",
     "image": "Image",
     "table": "Table",
+    "insertTable": "Insert table",
     "break": "Break",
     "insertFootnote": "Insert Footnote",
     "insertEndnote": "Insert Endnote",

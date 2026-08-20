@@ -53,7 +53,7 @@ Lands before any new surface: everything after it must be written against ONE en
 - [x] 2.2 `@docx-editor.dev/i18n` gets a real semver range; drop `private: true`
 - [x] 2.3 Replace `vite.config.ts` with `tsup.config.ts`: `platform: 'browser'`,
       `format: ['cjs','esm']`, `dts: true`, `metafile: true`,
-      `external: ['vue','@docx-editor.dev/core','@docx-editor.dev/i18n','harfbuzzjs','emf-converter']`
+      `external: ['vue','@docx-editor.dev/core','@docx-editor.dev/i18n']`
 - [x] 2.4 `packages/vue/test/package-dependencies.test.ts`, the twin of React's, asserting all
       three facts (peer present, no regular dependency, dev dependency pins the workspace)
 - [x] 2.5 A build assertion that `dist/index.js` imports the engine by bare specifier and inlines
@@ -61,11 +61,9 @@ Lands before any new surface: everything after it must be written against ONE en
 - [x] 2.6 Add the package to `build:packages`; keep `build:packages:vue` working or fold it in
 - [x] 2.7 `bun run check:package-artifacts`, `SKIP_CONSUMER_INSTALL_BUILD=1 bun run
 check:consumer-install`, `bun run notices:generate` all pass with Vue in the set
-- [x] 2.8 Mirror React's dependency list rather than inventing one: `harfbuzzjs` and
-      `emf-converter` stay declared (pinned, external), `fflate` stays a devDependency — it is
-      what the tests build DOCX fixtures with, and moving it would externalize it and change the
-      published output. Add NO component library: `Slot` is in-tree, and React's one Radix import
-      backs a file nothing imports
+- [x] 2.8 Declare only imports the adapter uses. `fflate` stays a devDependency because tests
+      build DOCX fixtures with it. Do not declare engine implementation dependencies such as
+      `harfbuzzjs` or `emf-converter`. Add NO component library: `Slot` is in-tree
 
 ## 2b. The consistency gate, built BEFORE the composables
 
@@ -103,8 +101,9 @@ Rebuilt from nothing, one file per React file, at the React file's path.
       rail key under the name `ReviewRailContext`, and `useDocxEditor()` returning the ref
 - [x] 3.2 `DocxEditorRoot` + `provideDocxEditor()`: `provide` a `shallowRef` in `setup`, create
       the container-less instance in `onMounted` (NEVER in `setup` — it runs on the server),
-      one instance per `document`/`fonts`/`translate`/`imageDecodePort` identity — React's four
-      creation-effect dependencies, no more and no fewer — destroy in `onUnmounted`
+      one instance per `document`/`fonts`/default-catalogue/`imageDecodePort` identity. Read a
+      custom `translate` through the latest props without rebuilding for its identity. Destroy
+      in `onUnmounted`
 - [x] 3.2b No engine value is deep-reactive: `shallowRef` everywhere, no `reactive()`, no
       `readonly()` on anything compared by identity. Add a lint or test that fails on any of the
       three applied to an editor, a snapshot or a slice

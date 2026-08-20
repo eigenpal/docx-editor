@@ -95,10 +95,6 @@ export function useHyperlinkPopup(): UseHyperlinkPopupResult {
 export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResult {
   const editorRef = useDocxEditor();
   const state = ref<HyperlinkPopupState>(CLOSED);
-  const stateRef = { current: state.value };
-  watch(state, (next) => {
-    stateRef.current = next;
-  });
   const snapshot = useEditorState(selectTick);
   const canEdit = computed(() =>
     editorRef.value ? editorRef.value.can({ type: 'insertText', text: '' }).ok : false
@@ -178,7 +174,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   );
 
   watch([snapshot, editorRef], () => {
-    const current = stateRef.current;
+    const current = state.value;
     const editor = editorRef.value;
     if (current.mode === 'reading' && current.link) {
       const atCaret = isFieldLink(current.link)
@@ -196,30 +192,30 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
   });
 
   const copy = async (): Promise<boolean> => {
-    const href = stateRef.current.link?.href;
+    const href = state.value.link?.href;
     if (!href) return false;
     try {
       await navigator.clipboard.writeText(href);
     } catch {
       return false;
     }
-    state.value = { ...stateRef.current, copied: true };
+    state.value = { ...state.value, copied: true };
     return true;
   };
 
   const beginEdit = () => {
-    state.value = { ...stateRef.current, mode: 'editing', copied: false, error: false };
+    state.value = { ...state.value, mode: 'editing', copied: false, error: false };
   };
   const setText = (text: string) => {
-    state.value = { ...stateRef.current, text, copied: false, error: false };
+    state.value = { ...state.value, text, copied: false, error: false };
   };
   const setUrl = (url: string) => {
-    state.value = { ...stateRef.current, url, copied: false, error: false };
+    state.value = { ...state.value, url, copied: false, error: false };
   };
 
   const commitEdit = (): boolean => {
     const editor = editorRef.value;
-    const current = stateRef.current;
+    const current = state.value;
     const hyperlinks = editor?.surface?.hyperlinks;
     if (!hyperlinks) return false;
     const url = current.url.trim();
@@ -242,7 +238,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
 
   const unlink = (): boolean => {
     const hyperlinks = editorRef.value?.surface?.hyperlinks;
-    const link = stateRef.current.link;
+    const link = state.value.link;
     if (!hyperlinks) return false;
     const removed = hyperlinks.removeHyperlink(link?.id);
     if (removed) close();
@@ -251,7 +247,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
 
   const openTarget = (): boolean => {
     const navigation = editorRef.value?.surface?.navigation;
-    const link = stateRef.current.link;
+    const link = state.value.link;
     if (!navigation || !link) return false;
     if (link.kind === 'internal') {
       const jumped = link.anchor ? navigation.goToBookmark(link.anchor) : false;

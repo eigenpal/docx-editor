@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "分节符（连续）",
     "sectionBreakNextPage": "分节符（下一页）",
     "insertFootnote": "插入脚注",
-    "insertEndnote": "插入尾注"
+    "insertEndnote": "插入尾注",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

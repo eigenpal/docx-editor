@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "Abschnittsumbruch (fortlaufend)",
     "sectionBreakNextPage": "Abschnittsumbruch (nächste Seite)",
     "insertFootnote": "Fußnote einfügen",
-    "insertEndnote": "Endnote einfügen"
+    "insertEndnote": "Endnote einfügen",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

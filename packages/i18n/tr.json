@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "Bölüm sonu (sürekli)",
     "sectionBreakNextPage": "Bölüm sonu (sonraki sayfa)",
     "insertFootnote": "Dipnot ekle",
-    "insertEndnote": "Sonnot ekle"
+    "insertEndnote": "Sonnot ekle",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

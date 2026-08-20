@@ -6,7 +6,15 @@
 // This is the only check that reads a published manifest rather than a workspace one, so
 // it is the only place a `workspace:` range, a missing `exports` subpath or a `files` list
 // that drops a needed file can fail before a user hits it.
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -16,6 +24,62 @@ const tempRoot = mkdtempSync(path.join(tmpdir(), 'docx-editor-consumers-'));
 const packDir = path.join(tempRoot, 'packs');
 const reactAppDir = path.join(tempRoot, 'react-app');
 const vueAppDir = path.join(tempRoot, 'vue-app');
+const stagedPackagesDir = path.join(tempRoot, 'staged-packages');
+
+const bumpRank = { patch: 1, minor: 2, major: 3 };
+
+// This check runs before `changeset version`. Stage the versions that the fixed group will
+// publish, so a peer floor for that pending release is tested against matching local tarballs.
+function nextVersion(version, bump) {
+  const [major, minor, patch] = version.split('.').map(Number);
+  if (bump === 'major') return `${major + 1}.0.0`;
+  if (bump === 'minor') return `${major}.${minor + 1}.0`;
+  return `${major}.${minor}.${patch + 1}`;
+}
+
+function pendingPackageVersions() {
+  const changesetDir = path.join(ROOT, '.changeset');
+  const bumps = new Map();
+  for (const file of readdirSync(changesetDir).filter((name) => name.endsWith('.md'))) {
+    const frontmatter = /^---\n([\s\S]*?)\n---/.exec(
+      readFileSync(path.join(changesetDir, file), 'utf8')
+    )?.[1];
+    if (!frontmatter) continue;
+    for (const match of frontmatter.matchAll(
+      /^['"]?(@docx-editor\.dev\/[^'":]+)['"]?: (patch|minor|major)$/gm
+    )) {
+      const [, name, bump] = match;
+      const current = bumps.get(name);
+      if (!current || bumpRank[bump] > bumpRank[current]) bumps.set(name, bump);
+    }
+  }
+  const config = JSON.parse(readFileSync(path.join(changesetDir, 'config.json'), 'utf8'));
+  for (const group of config.fixed ?? []) {
+    const groupBump = group
+      .map((name) => bumps.get(name))
+      .filter(Boolean)
+      .sort((a, b) => bumpRank[b] - bumpRank[a])[0];
+    if (groupBump) for (const name of group) bumps.set(name, groupBump);
+  }
+  const versions = new Map();
+  for (const [name, bump] of bumps) {
+    const packageDir = readdirSync(path.join(ROOT, 'packages'))
+      .map((entry) => path.join(ROOT, 'packages', entry))
+      .find((dir) => {
+        try {
+          return JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8')).name === name;
+        } catch {
+          return false;
+        }
+      });
+    if (!packageDir) continue;
+    const manifest = JSON.parse(readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
+    versions.set(name, nextVersion(manifest.version, bump));
+  }
+  return versions;
+}
+
+const pendingVersions = pendingPackageVersions();
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -35,11 +99,22 @@ function run(command, args, options = {}) {
 }
 
 function packPackage(packagePath) {
-  const output = run(
-    'npm',
-    ['pack', path.join(ROOT, packagePath), '--json', '--pack-destination', packDir],
-    { capture: true }
-  );
+  const source = path.join(ROOT, packagePath);
+  const manifest = JSON.parse(readFileSync(path.join(source, 'package.json'), 'utf8'));
+  const pendingVersion = pendingVersions.get(manifest.name);
+  let packSource = source;
+  if (pendingVersion && pendingVersion !== manifest.version) {
+    mkdirSync(stagedPackagesDir, { recursive: true });
+    packSource = path.join(stagedPackagesDir, path.basename(packagePath));
+    cpSync(source, packSource, { recursive: true });
+    writeFileSync(
+      path.join(packSource, 'package.json'),
+      `${JSON.stringify({ ...manifest, version: pendingVersion }, null, 2)}\n`
+    );
+  }
+  const output = run('npm', ['pack', packSource, '--json', '--pack-destination', packDir], {
+    capture: true,
+  });
   const [packed] = JSON.parse(output);
   if (!packed?.filename) throw new Error(`npm pack returned no filename for ${packagePath}`);
   return path.join(packDir, packed.filename);
@@ -252,11 +327,9 @@ createApp({ render: () => h(DocxEditor) }).mount('#app');
       2
     )
   );
-  run(
-    'npm',
-    ['install', '--ignore-scripts', 'vue', 'vite', 'typescript', ...tarballs],
-    { cwd: vueAppDir }
-  );
+  run('npm', ['install', '--ignore-scripts', 'vue', 'vite', 'typescript', ...tarballs], {
+    cwd: vueAppDir,
+  });
   run('npm', ['run', 'build'], { cwd: vueAppDir });
   console.log('Fresh Vue consumer install/build passed.');
 } finally {

@@ -13,13 +13,7 @@ export default defineConfig({
   treeshake: true,
   minify: true,
   metafile: true,
-  external: [
-    'vue',
-    '@docx-editor.dev/core',
-    '@docx-editor.dev/i18n',
-    'harfbuzzjs',
-    'emf-converter',
-  ],
+  external: ['vue', '@docx-editor.dev/core', '@docx-editor.dev/i18n'],
   esbuildOptions(options) {
     options.jsx = 'automatic';
     options.jsxImportSource = 'vue';

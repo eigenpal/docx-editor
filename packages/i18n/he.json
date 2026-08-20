@@ -32,7 +32,8 @@
     "sectionBreakContinuous": "מעבר מקטע (רציף)",
     "sectionBreakNextPage": "מעבר מקטע (עמוד הבא)",
     "insertFootnote": "הוסף הערת שוליים",
-    "insertEndnote": "הוסף הערת סוף"
+    "insertEndnote": "הוסף הערת סוף",
+    "insertTable": null
   },
   "formattingBar": {
     "groups": {

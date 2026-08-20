@@ -8,7 +8,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, wri
 import { dirname, join, relative, extname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const REACT_SRC = join(ROOT, 'packages/react/src');
 const VUE_SRC = join(ROOT, 'packages/vue/src');
 
