@@ -4,7 +4,15 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
+import {
+  computed,
+  defineComponent,
+  h,
+  onBeforeUnmount,
+  onMounted,
+  type PropType,
+  type VNode,
+} from 'vue';
 import { Slot, useTranslation } from '@docx-editor.dev/vue';
 import {
   ACCEPT_ICON,
@@ -476,6 +484,21 @@ export const ReviewCard = markPart(
       const entryRef = useReviewItem();
       const cardId = useReviewStableId('card');
       const t = useReviewLabel();
+      const closeOnOutsidePointer = (event: PointerEvent) => {
+        const resolvedDetails = document.getElementById(cardId);
+        if (
+          resolvedDetails instanceof HTMLDetailsElement &&
+          resolvedDetails.open &&
+          event.target instanceof Node &&
+          !resolvedDetails.contains(event.target)
+        ) {
+          resolvedDetails.open = false;
+        }
+      };
+      onMounted(() => document.addEventListener('pointerdown', closeOnOutsidePointer, true));
+      onBeforeUnmount(() =>
+        document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
+      );
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;

@@ -535,6 +535,8 @@ describe('DocxEditorReview (Vue)', () => {
       );
       await waitFor(() => details.open);
       expect(mounted.container.querySelector('[data-testid="review-reopen"]')).not.toBeNull();
+      document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      await waitFor(() => !details.open);
       mounted.editor().exec({ type: 'toggleReviewPane' });
       await waitFor(
         () => mounted.container.querySelector('[data-testid="review-marker"]') !== null

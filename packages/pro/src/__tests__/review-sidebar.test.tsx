@@ -491,7 +491,10 @@ describe('the review sidebar', () => {
     );
     expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(true);
     expect(view.getByTestId('review-reopen')).toBeDefined();
+    act(() => fireEvent.pointerDown(document.body));
+    expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(false);
 
+    act(() => fireEvent.click(view.getByTestId('review-card').querySelector('summary')!));
     act(() => fireEvent.click(view.getByTestId('review-reopen')));
     expect(commentOf(editor).resolved).toBe(false);
     expect(view.getByTestId('review-resolve')).toBeDefined();

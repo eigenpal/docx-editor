@@ -4,7 +4,12 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import type { ComponentPropsWithoutRef, MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  type ComponentPropsWithoutRef,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { ACCEPT_ICON, REOPEN_ICON, icon, resolvedCommentIcon } from './review-icons.tsx';
 import type { ReviewActionProps } from './DocxEditorReview.tsx';
@@ -24,8 +29,20 @@ interface ResolvedCommentCardProps extends ComponentPropsWithoutRef<'details'> {
 
 /** Native disclosure wrapper for a resolved comment icon with a green check. */
 export function ResolvedCommentCard({ label, children, ...props }: ResolvedCommentCardProps) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+        details.open = false;
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+  }, []);
+
   return (
-    <details {...props}>
+    <details ref={detailsRef} {...props}>
       <summary className="docx-review__resolved-toggle" aria-label={label}>
         {resolvedCommentIcon()}
       </summary>
