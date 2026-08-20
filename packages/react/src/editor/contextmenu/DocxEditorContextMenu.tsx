@@ -118,7 +118,9 @@ function ContextMenuAddComment() {
       icon={chromeIcon(control?.paths)}
       slot="review.comments"
       disabled={disabled}
-      title={gate && !gate.ok ? gate.reason : undefined}
+      title={
+        gate && !gate.ok ? gate.reason : readOnly ? label('editingMode.viewingHint') : undefined
+      }
       onSelect={() => {
         if (!rail?.requestCommentDraft()) return;
         menu.setOpenMenu(null);

@@ -251,6 +251,12 @@ describe('headers and footers, read-only', () => {
     const result = mountPaginatedSurface(container, docx({}), { scale: 1, editingMode: 'view' });
     if (!result.ok) throw new Error(result.reason);
     expect(container.classList.contains('docx-paginated-surface--viewing')).toBe(true);
+    // The pages layer is created `contenteditable` unconditionally, so OPENING in viewing —
+    // as opposed to switching into it — came up writable: a caret, an IME, and a screen
+    // reader told the document takes input.
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    expect(pages.contentEditable).toBe('false');
+    expect(pages.getAttribute('aria-readonly')).toBe('true');
   });
 
   test('comprehensive fixture: HF right tabs reach the authored stop on the surface', () => {

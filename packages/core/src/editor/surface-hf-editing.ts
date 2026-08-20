@@ -71,6 +71,15 @@ export function createHeaderFooterScopeController(deps: {
   notify(): void;
   /** Pages currently built in the viewport; absent/undefined treats every page as available. */
   materializedPages?(): ReadonlySet<number> | undefined;
+  /**
+   * Whether entering a furniture story is refused right now.
+   *
+   * Asked HERE rather than at each caller because there are three of them — the pointer's
+   * double click, the surface's own `enterHeaderFooter`, and `setActiveScope` — and gating
+   * one left the other two opening the dimmed body, the active band and the whole
+   * header options bar on a document open for viewing.
+   */
+  entryRefused?(): boolean;
 }): HeaderFooterScopeController {
   let activeHf: ActiveHeaderFooterScope | null = null;
   let cachedState: HeaderFooterStateSnapshot | null = null;
@@ -91,6 +100,9 @@ export function createHeaderFooterScopeController(deps: {
     readonly variant?: 'default' | 'first' | 'even';
     readonly position?: SemanticPosition;
   }): boolean => {
+    // Re-entering the story that is ALREADY open is a caret move inside it, not an entry —
+    // a mode that changed under an open band must not strand the caret there.
+    if (deps.entryRefused?.() === true && activeHf?.scope.rId !== args.rId) return false;
     if (!args.rId || deps.session.partFor({ kind: 'headerFooter', rId: args.rId }) === null) {
       return false;
     }
