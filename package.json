@@ -57,6 +57,7 @@
     "check:parity-contract": "node scripts/check-parity-contract.mjs",
     "check:public-docs-surface": "node scripts/check-public-docs-surface.mjs",
     "check:shipped-advisories": "node scripts/check-shipped-advisories.mjs",
+    "check:tsconfig-lib-floor": "node scripts/check-tsconfig-lib-floor.mjs",
     "demo-doc:build": "bun scripts/demo-doc/build.ts",
     "dev": "ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true bun run --filter './examples/vite' --filter './examples/vue' dev",
     "dev:agent": "cd examples/agent && npm run dev",

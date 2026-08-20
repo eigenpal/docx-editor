@@ -1,8 +1,13 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    // ES2022 rather than ES2020 because this program contains core's sources through the
+    // `paths` below, and they use ES2022 features (`Array.prototype.at`, `Error.cause`).
+    // An ES2020 floor only appears to work: `@types/bun` pulls in `@types/node`, whose
+    // `compatibility/indexable.d.ts` back-declares `.at` for older libs, so the gap hides
+    // until something type-checks without those ambient types — such as the dts build.
+    "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "jsx": "preserve",
     "jsxImportSource": "vue",

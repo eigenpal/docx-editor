@@ -37,6 +37,13 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: tsconfig lib floor check
+        # Several packages map core to `../core/src`, so they type-check core's
+        # sources and core's `lib` is their floor. Below it, `build:packages`
+        # fails in the dts build with a raw TS2550 — this reports the cause, and
+        # sits here so it lands before that build runs.
+        run: bun run check:tsconfig-lib-floor
+
       - name: Format check
         run: bun run format:check
 
