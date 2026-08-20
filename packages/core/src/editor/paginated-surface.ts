@@ -150,6 +150,7 @@ import {
   noteCaretHost,
   pointerHeaderFooterState,
   scopedDocumentOrder,
+  setEditingModeChrome,
   setHeaderFooterEditingChrome,
   storyScopeOf,
 } from './surface-scope.ts';
@@ -1943,7 +1944,7 @@ export function mountPaginatedSurface(
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
     // Viewing mode hides write affordances the painter cannot know about — today the
     // blank header/footer "double-click to add" band.
-    container.classList.toggle('docx-paginated-surface--viewing', editingMode === 'view');
+    setEditingModeChrome(container, editingMode);
     // The pages are absolutely positioned, so the layer has no intrinsic size and the
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
@@ -3932,6 +3933,14 @@ export function mountPaginatedSurface(
       // not silently become a suggestion (or a viewing-mode refusal).
       flushTypeBuffer();
       editingMode = mode;
+      // Viewing has no furniture EDITING scope. Switching while a header was open left the
+      // body dimmed and inert under an active band and its whole options bar — a write UI
+      // over a document that now refuses writes. Exiting repaints, so this runs first.
+      if (mode === 'view') hfScope?.exitHeaderFooter();
+      // A mode change moves no content, so nothing else here repaints. The chrome class
+      // still has to follow immediately: without this the blank header/footer band kept
+      // inviting a double-click to add a story that viewing mode then refused.
+      setEditingModeChrome(container, editingMode);
       // The old refusal described the old mode. Left standing, a host rendering it showed
       // "the document is open for viewing" over a document that had just become editable.
       lastRejection = null;
@@ -4610,6 +4619,11 @@ export function mountPaginatedSurface(
           : null;
       },
       enterHeaderFooter: (info) => {
+        // Opening furniture is the door to a WRITE, and this lane never passes the facade —
+        // so it refuses in viewing exactly like `enterEmptyHeaderFooter` below, and like the
+        // `editHeaderFooter` command the facade classifies as mutating. Without it the hint
+        // was hidden and the scope was still one double-click away.
+        if (editingMode === 'view') return;
         // The pointer lane flips story scope too: land buffered typing first
         // (see setActiveScope).
         flushTypeBuffer();
