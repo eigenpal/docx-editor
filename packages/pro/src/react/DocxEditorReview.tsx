@@ -378,6 +378,7 @@ import {
   REJECT_ICON,
   icon,
   markerIconPath,
+  resolvedCommentIcon,
 } from './review-icons.tsx';
 import { ResolvedCommentCard, createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
@@ -1116,7 +1117,9 @@ function ReviewMarkers({
             }}
           >
             {(typeof iconOverride === 'function' ? iconOverride(entry) : iconOverride) ??
-              icon(markerIconPath(entry))}
+              (entry.kind === 'comment' && entry.resolved
+                ? resolvedCommentIcon()
+                : icon(markerIconPath(entry)))}
           </button>
         );
       })}

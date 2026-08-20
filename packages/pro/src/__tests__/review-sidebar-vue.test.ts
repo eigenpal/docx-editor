@@ -535,6 +535,15 @@ describe('DocxEditorReview (Vue)', () => {
       );
       await waitFor(() => details.open);
       expect(mounted.container.querySelector('[data-testid="review-reopen"]')).not.toBeNull();
+      mounted.editor().exec({ type: 'toggleReviewPane' });
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-marker"]') !== null
+      );
+      expect(
+        mounted.container
+          .querySelector('[data-testid="review-marker"]')
+          ?.querySelector('.docx-review__resolved-icon')
+      ).not.toBeNull();
     } finally {
       mounted.unmount();
     }

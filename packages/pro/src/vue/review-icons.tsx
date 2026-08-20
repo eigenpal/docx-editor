@@ -21,6 +21,13 @@ export const COMMENT_ICON =
 export const COMMENT_OUTLINE_ICON =
   'M880-80 720-240H160q-33 0-56.5-23.5T80-320v-480q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v720ZM160-320h594l46 45v-525H160v480Zm0 0v-480 480Z';
 export const ACCEPT_ICON = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
+
+export const resolvedCommentIcon = (): VNode =>
+  h('span', { class: 'docx-review__resolved-icon' }, [
+    h('span', { class: 'docx-review__resolved-comment' }, [icon(COMMENT_OUTLINE_ICON)]),
+    h('span', { class: 'docx-review__resolved-tick' }, [icon(ACCEPT_ICON)]),
+  ]);
+
 export const REOPEN_ICON =
   'M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z';
 export const REJECT_ICON =

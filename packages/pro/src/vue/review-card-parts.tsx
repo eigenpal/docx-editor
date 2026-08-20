@@ -8,10 +8,10 @@ import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
 import { Slot, useTranslation } from '@docx-editor.dev/vue';
 import {
   ACCEPT_ICON,
-  COMMENT_OUTLINE_ICON,
   DELETE_ICON,
   REJECT_ICON,
   icon,
+  resolvedCommentIcon,
 } from './review-icons.tsx';
 import { revisionLabelKey } from './review-labels.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
@@ -540,14 +540,7 @@ export const ReviewCard = markPart(
                 class: 'docx-review__resolved-toggle',
                 'aria-label': t('review.showResolvedComment'),
               },
-              [
-                h('span', { class: 'docx-review__resolved-icon' }, [
-                  h('span', { class: 'docx-review__resolved-comment' }, [
-                    icon(COMMENT_OUTLINE_ICON),
-                  ]),
-                  h('span', { class: 'docx-review__resolved-tick' }, [icon(ACCEPT_ICON)]),
-                ]),
-              ]
+              [resolvedCommentIcon()]
             ),
             h(ReviewCardPreset, null, { default: () => slots.default?.() }),
           ]);
