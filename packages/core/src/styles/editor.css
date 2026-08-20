@@ -5479,7 +5479,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-review__card[data-resolved-miniature]:not([open]):hover {
-  background: var(--doc-surface-hover);
+  background: var(--doc-surface-hover, rgb(0 0 0 / 6%));
   color: var(--doc-text);
 }
 
@@ -5771,7 +5771,7 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-review__input:focus-visible {
-  outline: 1px solid var(--doc-border-strong);
+  outline: 1px solid var(--doc-border-strong, #c8ccd2);
   outline-offset: -1px;
 }
 
