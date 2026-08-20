@@ -1528,32 +1528,25 @@ function ReviewCard({ className, asChild, hidden, children }: ReviewPartProps) {
     'data-testid': 'review-card',
     ...(!resolvedCollapsible ? { 'aria-labelledby': `${cardId}-author ${cardId}-summary` } : {}),
     'data-kind': entry.kind === 'revision' ? (entry.revisionKind ?? 'revision') : entry.kind,
-    // Per-author CSS hooks, mirroring the painted document's `data-review-author` /
-    // `data-review-author-slot`: `[data-review-author='Name']` restyles one reviewer's cards,
-    // `[data-review-author-slot='2']` does it without knowing the name.
+    // Match each card to its painted author style.
     ...(entry.author
       ? {
           'data-review-author': entry.author,
           'data-review-author-slot': authorSlot(authorInfo.get(entry.author), slot),
         }
       : {}),
-    // Which custom node, not just that it is one: every custom card is `data-kind="custom"`,
-    // so a theme could otherwise never tell a citation card from a clause card.
+    // Let themes distinguish custom node types.
     ...(entry.kind === 'custom' && entry.item.kind === 'custom'
       ? { 'data-node-name': entry.item.name }
       : {}),
     ...(entry.isActive ? { 'data-active': '' } : {}),
     ...(entry.kind === 'comment' && entry.resolved ? { 'data-resolved': '' } : {}),
     ...(resolvedCollapsible ? { 'data-resolved-miniature': '' } : {}),
-    // The author colour is a CSS variable rather than a class, so a host restyling the card
-    // keeps the per-author identity without re-deriving the slot order. It is the ONLY
-    // styling the packaged card takes from a declaration.
+    // Keep author identity when a host restyles the card.
     style: authorCardStyle(entry.author, authorInfo.get(entry.author), slot),
     ...(!resolvedCollapsible ? { tabIndex: 0, role: 'button' as const } : {}),
     id: cardId,
-    // The rail's mousedown guard keeps the caret, which also cancelled focus and made the
-    // card's own text unselectable. Taking focus explicitly restores the keyboard path
-    // without giving the caret away.
+    // Restore keyboard focus without moving the document caret.
     ...(!resolvedCollapsible
       ? {
           onMouseDown: (event: React.MouseEvent) => {

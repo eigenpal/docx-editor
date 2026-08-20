@@ -473,26 +473,22 @@ describe('the review sidebar', () => {
     expect(view.getByTestId('review-resolve')).toBeDefined();
     expect(view.queryByTestId('review-reopen')).toBeNull();
 
-    await act(async () => {
-      fireEvent.click(view.getByTestId('review-resolve'));
-    });
+    act(() => fireEvent.click(view.getByTestId('review-resolve')));
     expect(commentOf(editor).resolved).toBe(true);
     expect(view.getByTestId('review-card').hasAttribute('data-resolved')).toBe(true);
     expect(view.getByTestId('review-card').hasAttribute('data-resolved-miniature')).toBe(true);
     expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(false);
     expect(view.queryByTestId('review-resolve')).toBeNull();
 
-    await act(async () => {
+    act(() =>
       fireEvent.click(
         view.getByTestId('review-card').querySelector('.docx-review__resolved-toggle')!
-      );
-    });
+      )
+    );
     expect((view.getByTestId('review-card') as HTMLDetailsElement).open).toBe(true);
     expect(view.getByTestId('review-reopen')).toBeDefined();
 
-    await act(async () => {
-      fireEvent.click(view.getByTestId('review-reopen'));
-    });
+    act(() => fireEvent.click(view.getByTestId('review-reopen')));
     expect(commentOf(editor).resolved).toBe(false);
     expect(view.getByTestId('review-resolve')).toBeDefined();
   });
@@ -515,12 +511,8 @@ describe('the review sidebar', () => {
         </DocxEditorViewport>
       </DocxEditorRoot>
     );
-    await act(async () => {
-      instance!.surface!.selectAll();
-    });
-    await act(async () => {
-      fireEvent.click(view.getByTestId('review-add-comment'));
-    });
+    act(() => instance!.surface!.selectAll());
+    act(() => fireEvent.click(view.getByTestId('review-add-comment')));
     const draft = view.getByTestId('review-draft');
     expect(draft.dataset.reviewAuthor).toBe('Demo Reviewer');
     expect(draft.style.getPropertyValue('--doc-review-author-current')).toBe('#b42318');
@@ -929,8 +921,6 @@ describe('the collapsed rail says what each marker IS', () => {
       </DocxEditorRoot>
     );
     act(() => undefined);
-    // Markers replace the cards only while the pane is CLOSED — that is the whole surface
-    // under test, and it is the one a reader spends most of their time looking at.
     act(() => {
       instance!.exec({ type: 'toggleReviewPane' });
     });
@@ -938,7 +928,6 @@ describe('the collapsed rail says what each marker IS', () => {
     const glyphs = markerGlyphs(view);
     expect(glyphs.get('insert')).toBeTruthy();
     expect(glyphs.get('delete')).toBeTruthy();
-    // The regression: every one of these used to be byte-identical.
     expect(glyphs.get('insert')).not.toBe(glyphs.get('delete'));
   });
 
@@ -967,8 +956,6 @@ describe('the collapsed rail says what each marker IS', () => {
       .queryAllByTestId('review-marker')
       .map((marker) => Number.parseFloat((marker as HTMLElement).style.top));
     expect(tops.length).toBe(2);
-    // Both anchors are the same line; drawn raw, the second marker sat exactly on the
-    // first. Stacked, they are at least a marker's height (28px) apart.
     const sorted = [...tops].sort((a, b) => a - b);
     expect(sorted[1]! - sorted[0]!).toBeGreaterThanOrEqual(28);
   });
@@ -998,11 +985,7 @@ describe('the collapsed rail says what each marker IS', () => {
       instance!.exec({ type: 'toggleReviewPane' });
     });
 
-    // The host's glyph reached every marker...
     expect(view.queryAllByTestId('host-glyph').length).toBeGreaterThan(0);
-    // ...and the override did NOT lose the anchoring the rail computed for it. Taken
-    // verbatim, an override mounts with the default scale and no positioning, which stacks
-    // every marker on top of the first.
     for (const marker of view.queryAllByTestId('review-marker')) {
       expect((marker as HTMLElement).style.position).toBe('absolute');
     }
