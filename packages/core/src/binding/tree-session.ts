@@ -850,22 +850,25 @@ export function openTreeSession(
   let themeFontsCache: DocumentThemeFonts | null = null;
   /**
    * The trees the document-wide catalogs read: the live body, the styles part, and every
-   * distinct header/footer part across sections. Shared so `documentFonts` and
-   * `rendersText` can never disagree about what "the document" covers. Not memoized —
-   * both callers cache their own answer per package revision, and this only gathers
-   * already-resolved roots.
+   * other story — each distinct header and footer across sections, and both note parts.
+   *
+   * NOTES ARE STORIES TOO. The list enumerated them explicitly and stopped one short, so a
+   * family declared only in a footnote was invisible: the host was never told to load it, so
+   * the note measured and painted with a fallback face, and the font picker did not offer it.
+   *
+   * Shared so `documentFonts` and `rendersText` can never disagree about what "the document"
+   * covers. Not memoized — both callers cache their own answer per package revision, and this
+   * only gathers already-resolved roots.
    */
   const catalogRoots = (): OoxmlElement[] => {
     const roots: OoxmlElement[] = [bodyStore().part.root];
     const styles = resolveStylesRoot();
     if (styles) roots.push(styles);
     const seen = new Set<OoxmlPart>();
-    for (const section of resolvedHeaderFooterBySection().parts) {
-      for (const part of [...section.headers.values(), ...section.footers.values()]) {
-        if (seen.has(part)) continue;
-        seen.add(part);
-        roots.push(part.root);
-      }
+    for (const part of furnitureAndNoteParts()) {
+      if (seen.has(part)) continue;
+      seen.add(part);
+      roots.push(part.root);
     }
     return roots;
   };
