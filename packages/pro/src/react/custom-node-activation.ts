@@ -19,6 +19,7 @@ import {
 import { decodeCustomNodeTag } from '../custom-nodes/tag-codec.ts';
 import { parseCustomNodeData } from '../custom-nodes/data-schema.ts';
 import { customNodePayloadsByControl } from '@docx-editor.dev/core/store';
+import { storyScopeOfId } from '../custom-nodes/insert-custom-node.ts';
 import type { PaginatedSurface as EditorSurface } from '@docx-editor.dev/core/editor';
 
 /**
@@ -123,10 +124,16 @@ function payloadOf(
   const surface = (editor as (Editor & { readonly surface?: EditorSurface | null }) | null)
     ?.surface;
   if (!surface) return undefined;
-  const part = surface.session.part();
-  const source = customNodePayloadsByControl(surface.session.currentPackage(), part.name).get(
-    controlId
-  );
+  // The control is in ITS OWN story and the store hangs off the MAIN part, which are different
+  // parts. Asking the body for both handed the host `data: undefined` for a chip in a header,
+  // so a definition deriving its attrs from the payload produced different attrs there than in
+  // the body — silently, because absent data is also what a chip with no payload looks like.
+  const story = surface.session.partFor(storyScopeOfId(editor as Editor, controlId));
+  const source = customNodePayloadsByControl(
+    surface.session.currentPackage(),
+    (story ?? surface.session.part()).name,
+    surface.session.part().name
+  ).get(controlId);
   if (!source) return undefined;
   // Through the definition's own schema, so this branch hands back the same checked type the
   // review-item branch does. A payload that fails it arrives absent, exactly as it does there.

@@ -455,12 +455,23 @@ export interface CustomNodePayloadRead {
  */
 export function customNodePayloadsByControl(
   pkg: OoxmlPackage,
-  storyPartName: string
+  storyPartName: string,
+  /**
+   * The part that RELATES the customXml store, when it is not the story's own.
+   *
+   * Two different questions wear one name here: which part holds the CONTROLS, and which part
+   * relates the STORE they bind into. Word only reads a store hung off the main document part,
+   * so {@link writeCustomNode} already takes them separately — this read did not, and answered
+   * with the body's controls whatever story it was asked about. A chip in a header therefore
+   * read as having no payload at all, and an update that meant to keep the existing data
+   * dropped it.
+   */
+  dataOwnerPartName: string = storyPartName
 ): ReadonlyMap<string, CustomNodePayloadRead> {
   const found = new Map<string, CustomNodePayloadRead>();
   const story = pkg.parts.get(storyPartName);
   if (!story) return found;
-  const stores = customXmlDataParts(pkg, storyPartName);
+  const stores = customXmlDataParts(pkg, dataOwnerPartName);
   if (stores.length === 0) return found;
   const nodesByStore = stores.map((store) => ({
     itemId: store.itemId,

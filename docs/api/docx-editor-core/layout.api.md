@@ -432,6 +432,9 @@ export interface ContentControlGeometryFragment {
 }
 
 // @public
+export function contentControlHoldingParagraph(part: OoxmlPart, paragraphId: string): ContentControlBoundaryRecord | null;
+
+// @public
 export type ContentControlLevel = 'block' | 'inline' | 'row' | 'cell';
 
 // @public
@@ -439,6 +442,9 @@ export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 's
 
 // @public
 export type ContentControlMappedType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
+
+// @public
+export function contentControlRecordsInPart(part: OoxmlPart): readonly ContentControlBoundaryRecord[];
 
 // @public
 export function contentControlsInLayout(layout: SemanticLayout): readonly ContentControlBoundaryRecord[];
@@ -1118,7 +1124,7 @@ export interface LayoutCacheStats {
 }
 
 // @public
-export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, hfPageContext?: HeaderFooterPageContext, documentProperties?: DocumentProperties): HeaderFooterStoryLayout;
+export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, hfPageContext?: HeaderFooterPageContext, documentProperties?: DocumentProperties, inputs?: HeaderFooterStoryInputs): HeaderFooterStoryLayout;
 
 // @public
 export function layoutNoteById(part: OoxmlPart | null | undefined, noteId: number, contentWidth: number, options: LayoutNoteStoryOptions): NoteStoryLayout | null;
@@ -1517,6 +1523,7 @@ export interface NotesLayoutInput {
     readonly footnotesPart: OoxmlPart | null;
     // (undocumented)
     readonly measurer: TextMeasurer;
+    readonly numberingIndex?: NumberingIndex;
     // (undocumented)
     readonly producer: string;
     // (undocumented)
@@ -2516,7 +2523,7 @@ export interface SelectionRect {
 }
 
 // @public
-export function selectionRects(layout: SemanticLayout, selection: SemanticSelection): SelectionRect[];
+export function selectionRects(layout: SemanticLayout, selection: SemanticSelection, order: readonly string[]): SelectionRect[];
 
 // @public
 export interface SemanticHit {
@@ -2904,7 +2911,8 @@ export function spanOffsetX(span: StyleSpanRecord, offset: number, measurer: Tex
 export function spansInCells(layout: SemanticLayout, cellIds: readonly string[]): readonly StyleSpanRecord[];
 
 // @public
-export function spansInSelection(layout: SemanticLayout, selection: SemanticSelection): StyleSpanRecord[];
+export function spansInSelection(layout: SemanticLayout, selection: SemanticSelection,
+order: readonly string[]): StyleSpanRecord[];
 
 // @public
 export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode): OoxmlElement[];

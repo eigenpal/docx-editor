@@ -207,7 +207,7 @@ export function updateCustomNode<Schema extends StandardSchemaV1 | undefined = u
   // Everything the caller did not mention is carried from the node being replaced. An update is
   // a REWRITE of one control, so anything omitted has to survive it: the payload, the tag attrs
   // that carry the node's identity, the Word title, and the lock.
-  const bound = boundPayloadOf(surface, nodeId);
+  const bound = boundPayloadOf(surface, nodeId, scope);
   const payload =
     update.data === null
       ? null
@@ -332,13 +332,24 @@ function carriedPayload(bound: CustomNodePayloadRead | undefined): ValidatedPayl
       };
 }
 
-/** The payload this control already binds, so a rewrite reuses both its id and its data. */
+/**
+ * The payload this control already binds, so a rewrite reuses both its id and its data.
+ *
+ * The control is looked up in ITS OWN story and the store on the MAIN part, because those are
+ * different parts and only the second is one Word reads. Asking the body for both answered
+ * `undefined` for a chip in a header, and `undefined` means "no payload" — so an update that
+ * named only `text` was passed no payload, which the contract defines as keeping the existing
+ * one, and the node it should have kept was left orphaned for the next sweep to delete.
+ */
 function boundPayloadOf(
   surface: PaginatedSurface,
-  controlNodeId: string
+  controlNodeId: string,
+  scope: StoryScope
 ): CustomNodePayloadRead | undefined {
-  const part = surface.session.part();
-  return customNodePayloadsByControl(surface.session.currentPackage(), part.name).get(
-    controlNodeId
-  );
+  const story = surface.session.partFor(scope) ?? surface.session.part();
+  return customNodePayloadsByControl(
+    surface.session.currentPackage(),
+    story.name,
+    surface.session.part().name
+  ).get(controlNodeId);
 }

@@ -151,22 +151,6 @@ function createBoundedContextCache(maxEntries: number): {
 }
 
 /**
- * Lay one header/footer part out at `contentWidth`.
- *
- * Line ids are namespaced by part so the body's `line-N` counter — which incremental
- * convergence compares — never moves because a header changed.
- *
- * When `pageContext` is set, allowlisted PAGE/NUMPAGES/SECTIONPAGES instructions project
- * live values; otherwise those fields contribute only cached result text (often empty).
- * Field-free stories ignore `pageContext` and share one baseline layout.
- *
- * `defaultTabStopPt` is the document's `w:settings/w:defaultTabStop` (ECMA-376 §17.15.1.25)
- * in points; absent keeps the 0.5" schema default. Furniture tabs on the SAME grid as the
- * body — a page-number tab in a metric-locale footer belongs on the document's interval, not
- * on a constant. It sits at the tail because the parameters ahead of it are already
- * positional; new callers should keep passing `undefined` for what they do not set.
- */
-/**
  * Story-level inputs the body path has always had and furniture never did.
  *
  * A BAG, not more positional parameters. The signature below already carries fifteen, and its
@@ -184,6 +168,25 @@ export interface HeaderFooterStoryInputs {
   readonly numberingIndex?: NumberingIndex;
 }
 
+/**
+ * Lay one header/footer part out at `contentWidth`.
+ *
+ * Line ids are namespaced by part so the body's `line-N` counter — which incremental
+ * convergence compares — never moves because a header changed.
+ *
+ * When `pageContext` is set, allowlisted PAGE/NUMPAGES/SECTIONPAGES instructions project
+ * live values; otherwise those fields contribute only cached result text (often empty).
+ * Field-free stories ignore `pageContext` and share one baseline layout.
+ *
+ * `defaultTabStopPt` is the document's `w:settings/w:defaultTabStop` (ECMA-376 §17.15.1.25)
+ * in points; absent keeps the 0.5" schema default. Furniture tabs on the SAME grid as the
+ * body — a page-number tab in a metric-locale footer belongs on the document's interval, not
+ * on a constant. It sits at the tail because the parameters ahead of it are already
+ * positional; new callers should keep passing `undefined` for what they do not set.
+ *
+ * NEW inputs belong in {@link HeaderFooterStoryInputs}, the trailing bag, rather than as a
+ * sixteenth position. Fifteen is what stopped `numberingIndex` being threaded here at all.
+ */
 export function layoutHeaderFooterStory(
   part: OoxmlPart,
   contentWidth: number,

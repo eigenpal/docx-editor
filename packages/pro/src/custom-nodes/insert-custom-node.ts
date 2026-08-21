@@ -319,10 +319,15 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
   surface.flushPendingInput();
   const at = input.at ?? surface.state().selection.head;
   const lock = input.lock === undefined ? 'contentLocked' : input.lock;
-  // The story the paragraph is IN. The write defaults to the body, so inserting a chip into
-  // an open header addressed a paragraph the body store has never heard of and was refused
-  // as `unknown-paragraph` — a header is an ordinary place to want one.
-  const scope = storyScopeOfEditor(editor);
+  // The story the TARGET PARAGRAPH is in, which is the one `at` names when the caller gave it
+  // and the caret's own otherwise. The write defaults to the body, so inserting a chip into an
+  // open header addressed a paragraph the body store has never heard of and was refused as
+  // `unknown-paragraph` — a header is an ordinary place to want one.
+  //
+  // From the paragraph rather than from the reader, the way `removeCustomNode` and
+  // `updateCustomNode` already resolve theirs: a caller may pass an `at` in a story it is not
+  // standing in, and the id says which one that is.
+  const scope = storyScopeOfId(editor, at.paragraphId);
   const written = surface.session.insertCustomNode(
     {
       paragraphId: at.paragraphId,
