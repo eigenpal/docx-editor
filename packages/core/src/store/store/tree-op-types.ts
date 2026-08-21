@@ -127,6 +127,14 @@ export type AcceptedParagraphProperty = (typeof ACCEPTED_PARAGRAPH_PROPERTIES)[n
  * Deliberately structural rather than a typed union: the accepted property lists bound WHICH
  * properties may be written, so the shape itself does not need to enumerate them.
  */
+/** One tab stop an op can author: where it sits, how it aligns, and what fills the gap. */
+export interface TabStopWrite {
+  /** Position from the paragraph content origin, in twips. */
+  readonly positionTwips: number;
+  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+}
+
 export interface OoxmlProperty {
   readonly localName: string;
   readonly attributes?: Readonly<Record<string, string>>;
@@ -348,6 +356,18 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly numId: string | null;
       readonly level?: number;
+    }
+  | {
+      /**
+       * Replace a paragraph's custom tab stops, or clear them with an empty list.
+       *
+       * Its OWN op rather than a `w:tabs` entry in `setParagraphProperties`, because
+       * `OoxmlProperty` is flat and `w:tabs` carries its meaning in `w:tab` children — the
+       * same reason `setListNumbering` exists for `w:numPr`.
+       */
+      readonly op: 'setParagraphTabStops';
+      readonly paragraphId: string;
+      readonly stops: readonly TabStopWrite[];
     }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | {
@@ -943,6 +963,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertPageField',
   'setListLevel',
   'setListNumbering',
+  'setParagraphTabStops',
   'setParagraphMarkProperties',
   'splitParagraph',
   'splitParagraphMany',

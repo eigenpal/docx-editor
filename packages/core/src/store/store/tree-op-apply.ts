@@ -84,6 +84,7 @@ import {
   applySetParagraphMarkProperties,
   withoutSectionMark,
   applySetListNumbering,
+  applySetParagraphTabStops,
   applySetSectionMark,
   applySetSectionProperties,
 } from './tree-op-section.ts';
@@ -366,6 +367,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       return applySetParagraphMarkProperties(part, paragraph, op.properties, options, nextId);
     case 'setListNumbering':
       return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
+    case 'setParagraphTabStops':
+      return applySetParagraphTabStops(part, paragraph, op.stops, options, nextId);
     case 'insertPageBreak':
       return applyInsertContent(
         part,

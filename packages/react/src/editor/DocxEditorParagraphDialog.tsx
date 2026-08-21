@@ -1,7 +1,7 @@
 // The Paragraph dialog as a context-fed part (`DocxEditor.ParagraphDialog`).
 //
-// Word's dialog, field for field: alignment, indentation with its Special/By pair, spacing
-// with its line-spacing rule and value, and the flags. Every field reads from
+// Alignment, indentation with its Special/By pair, spacing with its line-spacing rule and
+// value, and the paragraph flags. Every field reads from
 // `useParagraphFormat()` and the whole form is written back as ONE `setParagraphFormat`
 // command on OK, so the dialog is a single undo step. The host owns visibility
 // (`open`/`onClose`); the engine owns everything else.
@@ -15,7 +15,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import { useTranslation } from '../i18n';
-import { useParagraphFormat, type ParagraphFormatUpdate } from './useParagraphFormat';
+import {
+  useParagraphFormat,
+  type ParagraphFormatUpdate,
+  type ParagraphTabStop,
+} from './useParagraphFormat';
 
 /** Props for `DocxEditor.ParagraphDialog`. @public */
 export interface DocxEditorParagraphDialogProps {
@@ -30,7 +34,19 @@ const TWIPS_PER_INCH = 1440;
 const twipsToInches = (twips: number): number => Math.round((twips / TWIPS_PER_INCH) * 100) / 100;
 const inchesToTwips = (inches: number): number => Math.round(inches * TWIPS_PER_INCH);
 
-/** Word's "Special" pair: the signed first-line offset, split into a kind and a magnitude. */
+type TabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar';
+type TabLeaderName = 'none' | 'dot' | 'hyphen' | 'underscore';
+
+/** One label per alignment, so the list rows read as words rather than as `w:val` values. */
+const TAB_ALIGNMENT_LABELS = {
+  left: 'dialogs.paragraph.tabAlignLeft',
+  center: 'dialogs.paragraph.tabAlignCenter',
+  right: 'dialogs.paragraph.tabAlignRight',
+  decimal: 'dialogs.paragraph.tabAlignDecimal',
+  bar: 'dialogs.paragraph.tabAlignBar',
+} as const satisfies Record<TabAlignment, string>;
+
+/** The "Special" pair: the signed first-line offset, split into a kind and a magnitude. */
 type SpecialIndent = 'none' | 'firstLine' | 'hanging';
 
 const specialOf = (signedTwips: number | null): SpecialIndent => {
@@ -120,7 +136,7 @@ const btnStyle: CSSProperties = {
 };
 
 /**
- * Word's Paragraph dialog. Reads the selection through `useParagraphFormat()` and applies
+ * The Paragraph dialog. Reads the selection through `useParagraphFormat()` and applies
  * the whole form as one undoable command.
  *
  * @public
@@ -147,6 +163,10 @@ export function DocxEditorParagraphDialog({
   const [keepLines, setKeepLines] = useState(false);
   const [widowControl, setWidowControl] = useState(true);
   const [pageBreakBefore, setPageBreakBefore] = useState(false);
+  const [tabStops, setTabStops] = useState<readonly ParagraphTabStop[]>([]);
+  const [newTabPosition, setNewTabPosition] = useState(0);
+  const [newTabAlignment, setNewTabAlignment] = useState<TabAlignment>('left');
+  const [newTabLeader, setNewTabLeader] = useState<TabLeaderName>('none');
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Seed from the selection when the dialog OPENS — not on every tick, or a concurrent
@@ -176,6 +196,7 @@ export function DocxEditorParagraphDialog({
     setKeepLines(format.keepLines === true);
     setWidowControl(format.widowControl !== false);
     setPageBreakBefore(format.pageBreakBefore === true);
+    setTabStops(format.tabStops ?? []);
     seeded.current = true;
   }, [open, format]);
 
@@ -199,6 +220,7 @@ export function DocxEditorParagraphDialog({
       keepLines,
       widowControl,
       pageBreakBefore,
+      tabStops,
     };
     // A refused write keeps the dialog OPEN: `apply` is honest about op-layer rejections,
     // so closing here would claim a success that did not happen.
@@ -220,7 +242,24 @@ export function DocxEditorParagraphDialog({
     keepLines,
     widowControl,
     pageBreakBefore,
+    tabStops,
   ]);
+
+  /** Add or replace the stop at this position — "Set" replaces one already there. */
+  const setTabStop = useCallback(() => {
+    const position = Math.round(newTabPosition);
+    const kept = tabStops.filter((stop) => stop.positionTwips !== position);
+    setTabStops(
+      [
+        ...kept,
+        {
+          positionTwips: position,
+          alignment: newTabAlignment,
+          ...(newTabLeader !== 'none' ? { leader: newTabLeader } : {}),
+        },
+      ].sort((a, b) => a.positionTwips - b.positionTwips)
+    );
+  }, [tabStops, newTabPosition, newTabAlignment, newTabLeader]);
 
   if (!open) return null;
 
@@ -385,6 +424,84 @@ export function DocxEditorParagraphDialog({
             </span>
           </div>
           {checkbox('contextualSpacing', contextualSpacing, setContextualSpacing)}
+
+          <div style={sectionLabelStyle}>{t('dialogs.paragraph.tabStops')}</div>
+          {tabStops.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--doc-text-muted)' }}>
+              {t('dialogs.paragraph.tabEmpty')}
+            </div>
+          ) : (
+            tabStops.map((stop) => (
+              <div key={stop.positionTwips} style={rowStyle}>
+                <span style={{ ...labelStyle, color: 'var(--doc-text)' }}>
+                  {twipsToInches(stop.positionTwips)} {t('dialogs.paragraph.unitInches')}
+                </span>
+                <span style={{ flex: 1, fontSize: 13, color: 'var(--doc-text-muted)' }}>
+                  {t(TAB_ALIGNMENT_LABELS[stop.alignment])}
+                </span>
+                <button
+                  type="button"
+                  style={btnStyle}
+                  onClick={() => setTabStops(tabStops.filter((entry) => entry !== stop))}
+                  aria-label={`${t('dialogs.paragraph.tabRemove')} ${twipsToInches(stop.positionTwips)}`}
+                >
+                  {t('dialogs.paragraph.tabRemove')}
+                </button>
+              </div>
+            ))
+          )}
+          <div style={rowStyle}>
+            <label style={labelStyle}>{t('dialogs.paragraph.tabPosition')}</label>
+            <input
+              type="number"
+              style={inputStyle}
+              min={0}
+              step={0.1}
+              value={twipsToInches(newTabPosition)}
+              onChange={(event) =>
+                setNewTabPosition(Math.max(0, inchesToTwips(Number(event.target.value) || 0)))
+              }
+              aria-label={t('dialogs.paragraph.tabPosition')}
+            />
+            <span style={unitStyle}>{t('dialogs.paragraph.unitInches')}</span>
+          </div>
+          <div style={rowStyle}>
+            <label style={labelStyle}>{t('dialogs.paragraph.tabAlignment')}</label>
+            <select
+              style={inputStyle}
+              value={newTabAlignment}
+              onChange={(event) => setNewTabAlignment(event.target.value as TabAlignment)}
+              aria-label={t('dialogs.paragraph.tabAlignment')}
+            >
+              <option value="left">{t('dialogs.paragraph.tabAlignLeft')}</option>
+              <option value="center">{t('dialogs.paragraph.tabAlignCenter')}</option>
+              <option value="right">{t('dialogs.paragraph.tabAlignRight')}</option>
+              <option value="decimal">{t('dialogs.paragraph.tabAlignDecimal')}</option>
+              <option value="bar">{t('dialogs.paragraph.tabAlignBar')}</option>
+            </select>
+          </div>
+          <div style={rowStyle}>
+            <label style={labelStyle}>{t('dialogs.paragraph.tabLeader')}</label>
+            <select
+              style={inputStyle}
+              value={newTabLeader}
+              onChange={(event) => setNewTabLeader(event.target.value as TabLeaderName)}
+              aria-label={t('dialogs.paragraph.tabLeader')}
+            >
+              <option value="none">{t('dialogs.paragraph.tabNone')}</option>
+              <option value="dot">{t('dialogs.paragraph.tabLeaderDot')}</option>
+              <option value="hyphen">{t('dialogs.paragraph.tabLeaderHyphen')}</option>
+              <option value="underscore">{t('dialogs.paragraph.tabLeaderUnderscore')}</option>
+            </select>
+          </div>
+          <div style={{ ...rowStyle, justifyContent: 'flex-end' }}>
+            <button type="button" style={btnStyle} onClick={setTabStop}>
+              {t('dialogs.paragraph.tabAdd')}
+            </button>
+            <button type="button" style={btnStyle} onClick={() => setTabStops([])}>
+              {t('dialogs.paragraph.tabClearAll')}
+            </button>
+          </div>
 
           <div style={sectionLabelStyle}>{t('dialogs.paragraph.pagination')}</div>
           {checkbox('keepNext', keepNext, setKeepNext)}

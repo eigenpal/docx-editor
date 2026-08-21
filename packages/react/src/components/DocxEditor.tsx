@@ -488,7 +488,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Navigation: typeof DocxEditorNavigationCompound;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
-  /** Word's Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
+  /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;

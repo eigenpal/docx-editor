@@ -1,4 +1,4 @@
-// Word's Paragraph dialog as one command.
+// The Paragraph dialog as one command.
 //
 // The dialog changes alignment, indents, spacing, line spacing and five flags at once, so
 // it writes ONE transaction: pressing OK is one undo step and the page repaints once. A
@@ -34,6 +34,38 @@ function mount(body: string): DocxEditorInstance {
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+  const editor = createDocxEditor({ container, document: bytes });
+  if (!editor.surface) throw new Error('surface failed to mount');
+  return editor;
+}
+
+/** A document whose `Tabbed` style carries a centre stop at 1.5 inches. */
+function mountStyled(body: string): DocxEditorInstance {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const styles =
+    `<w:styles xmlns:w="${W}">` +
+    '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Tabbed"><w:name w:val="Tabbed"/>' +
+    '<w:pPr><w:tabs><w:tab w:val="center" w:pos="2160"/></w:tabs></w:pPr></w:style>' +
+    '</w:styles>';
+  const bytes = zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId9" Type="${OD.replace('officeDocument', 'styles')}" Target="styles.xml"/></Relationships>`
+    ),
+    'word/styles.xml': strToU8(styles),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
@@ -149,6 +181,95 @@ describe('setParagraphFormat writes the whole dialog at once', () => {
       lineSpacing: { rule: 'multiple', value: 0 },
     });
     expect(badLine.ok).toBe(false);
+  });
+});
+
+describe('tab stops, which a flat property write could never author', () => {
+  // `w:tabs` carries its meaning in `w:tab` CHILDREN, and `OoxmlProperty` is flat, so
+  // `propertyElement` can PRESERVE stops but never create one. Hence a dedicated op — the
+  // same reason `setListNumbering` is one for `w:numPr`.
+  test('stops are written, sorted, and read back through the cascade', () => {
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+    expect(
+      editor.exec({
+        type: 'setParagraphFormat',
+        tabStops: [
+          { positionTwips: 2880, alignment: 'right', leader: 'dot' },
+          { positionTwips: 1440, alignment: 'left' },
+        ],
+      }).ok
+    ).toBe(true);
+
+    const xml = xmlOf(editor);
+    // Ascending position, which is the order a reader placing them expects.
+    expect(xml.indexOf('w:pos="1440"')).toBeLessThan(xml.indexOf('w:pos="2880"'));
+    expect(xml).toContain('w:val="left"');
+    expect(xml).toContain('w:val="right"');
+    expect(xml).toContain('w:leader="dot"');
+    // `w:leader` defaults to none, so the plain stop carries no redundant attribute.
+    expect([...xml.matchAll(/w:leader=/g)]).toHaveLength(1);
+
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'left' },
+      { positionTwips: 2880, alignment: 'right', leader: 'dot' },
+    ]);
+  });
+
+  test('an empty list clears them, and omitting the field leaves them alone', () => {
+    const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs>'));
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().tabStops).toHaveLength(1);
+
+    // Another field, tab stops unnamed: the stops survive.
+    editor.exec({ type: 'setParagraphFormat', alignment: 'center' });
+    expect(editor.surface!.formatting().tabStops).toHaveLength(1);
+    expect(xmlOf(editor)).toContain('w:pos="1440"');
+
+    // "Clear all".
+    editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    expect(xmlOf(editor)).not.toContain('w:tabs');
+    expect(editor.surface!.formatting().tabStops).toEqual([]);
+  });
+
+  test('a stop the STYLE sets reads through, so an editor shows what is in force', () => {
+    // Read from the flat cascade this would be invisible: the projection carries the
+    // `w:tabs` element and none of its children.
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Tabbed"/></w:pPr><w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 2160, alignment: 'center' },
+    ]);
+  });
+
+  test('the whole dialog including tab stops is still ONE undo step', () => {
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      alignment: 'center',
+      spaceBeforePt: 12,
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+    expect(xmlOf(editor)).toContain('w:pos="1440"');
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    const undone = xmlOf(editor);
+    expect(undone).not.toContain('w:tabs');
+    expect(undone).not.toContain('w:jc');
+    expect(undone).not.toContain('w:spacing');
+  });
+
+  test('out-of-range stops are refused rather than clamped', () => {
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+    const refused = editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 99_999_999, alignment: 'left' }],
+    });
+    expect(refused.ok).toBe(false);
+    expect(xmlOf(editor)).not.toContain('w:tabs');
   });
 });
 

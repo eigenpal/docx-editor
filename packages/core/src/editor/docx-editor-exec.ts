@@ -158,6 +158,7 @@ export function execEditorCommand(
         ...(command.pageBreakBefore !== undefined
           ? { pageBreakBefore: command.pageBreakBefore }
           : {}),
+        ...(command.tabStops !== undefined ? { tabStops: command.tabStops } : {}),
       });
       if (!written) {
         return {

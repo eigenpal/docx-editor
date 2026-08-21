@@ -490,6 +490,7 @@ export interface RunFormatting {
     readonly subscript?: boolean;
     // (undocumented)
     readonly superscript?: boolean;
+    readonly tabStops?: readonly ParagraphTabStopValue[];
     // (undocumented)
     readonly underline?: boolean;
 }

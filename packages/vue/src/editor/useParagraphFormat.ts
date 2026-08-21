@@ -10,6 +10,13 @@ import { useEditorState } from './useEditorState';
 /** One tri-state paragraph flag: on, off, or "the selection disagrees". @public */
 export type ParagraphFlagState = boolean | null;
 
+/** One custom tab stop, as a control reads and writes it. @public */
+export interface ParagraphTabStop {
+  readonly positionTwips: number;
+  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+}
+
 /** What the Paragraph dialog reads: every field, as the selection currently stands. @public */
 export interface ParagraphFormatRead {
   readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
@@ -28,6 +35,8 @@ export interface ParagraphFormatRead {
   readonly keepLines: ParagraphFlagState;
   readonly widowControl: ParagraphFlagState;
   readonly pageBreakBefore: ParagraphFlagState;
+  /** Custom tab stops, cascade included. Null when the selection disagrees. */
+  readonly tabStops: readonly ParagraphTabStop[] | null;
 }
 
 /**
@@ -52,6 +61,8 @@ export interface ParagraphFormatUpdate {
   readonly keepLines?: boolean;
   readonly widowControl?: boolean;
   readonly pageBreakBefore?: boolean;
+  /** Replace the custom tab stops. An EMPTY list clears them; omit to leave them alone. */
+  readonly tabStops?: readonly ParagraphTabStop[];
 }
 
 /** What `useParagraphFormat` returns. @public */
@@ -89,6 +100,7 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
     keepLines: flags.keepLines,
     widowControl: flags.widowControl,
     pageBreakBefore: flags.pageBreakBefore,
+    tabStops: formatting.tabStops ?? null,
   };
 };
 

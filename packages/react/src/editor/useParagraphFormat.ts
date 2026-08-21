@@ -23,6 +23,13 @@ export type ParagraphFlagState = boolean | null;
  *
  * @public
  */
+/** One custom tab stop, as a control reads and writes it. @public */
+export interface ParagraphTabStop {
+  readonly positionTwips: number;
+  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+}
+
 export interface ParagraphFormatRead {
   readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
   readonly spaceBeforePt: number | null;
@@ -40,6 +47,8 @@ export interface ParagraphFormatRead {
   readonly keepLines: ParagraphFlagState;
   readonly widowControl: ParagraphFlagState;
   readonly pageBreakBefore: ParagraphFlagState;
+  /** Custom tab stops, cascade included. Null when the selection disagrees. */
+  readonly tabStops: readonly ParagraphTabStop[] | null;
 }
 
 /**
@@ -64,6 +73,8 @@ export interface ParagraphFormatUpdate {
   readonly keepLines?: boolean;
   readonly widowControl?: boolean;
   readonly pageBreakBefore?: boolean;
+  /** Replace the custom tab stops. An EMPTY list clears them; omit to leave them alone. */
+  readonly tabStops?: readonly ParagraphTabStop[];
 }
 
 /** What `useParagraphFormat` returns. @public */
@@ -105,6 +116,7 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
     keepLines: flags.keepLines,
     widowControl: flags.widowControl,
     pageBreakBefore: flags.pageBreakBefore,
+    tabStops: formatting.tabStops ?? null,
   };
 };
 
@@ -123,7 +135,14 @@ const sameFormat = (a: ParagraphFormatRead | null, b: ParagraphFormatRead | null
     a.keepNext === b.keepNext &&
     a.keepLines === b.keepLines &&
     a.widowControl === b.widowControl &&
-    a.pageBreakBefore === b.pageBreakBefore
+    a.pageBreakBefore === b.pageBreakBefore &&
+    a.tabStops?.length === b.tabStops?.length &&
+    (a.tabStops ?? []).every(
+      (stop, index) =>
+        stop.positionTwips === b.tabStops?.[index]?.positionTwips &&
+        stop.alignment === b.tabStops?.[index]?.alignment &&
+        (stop.leader ?? 'none') === (b.tabStops?.[index]?.leader ?? 'none')
+    )
   );
 };
 

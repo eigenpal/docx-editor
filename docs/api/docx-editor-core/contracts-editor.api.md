@@ -1402,6 +1402,7 @@ export interface ParagraphFormatCommand {
     spaceAfterPt?: number | null;
     // (undocumented)
     spaceBeforePt?: number | null;
+    tabStops?: readonly ParagraphTabStopValue[];
     // (undocumented)
     widowControl?: boolean;
 }
@@ -1414,6 +1415,16 @@ export interface ParagraphSummary {
     readonly styleId?: string;
     // (undocumented)
     readonly text: string;
+}
+
+// @public
+export interface ParagraphTabStopValue {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
 }
 
 // @public
@@ -1686,6 +1697,7 @@ export interface RunFormatting {
     readonly subscript?: boolean;
     // (undocumented)
     readonly superscript?: boolean;
+    readonly tabStops?: readonly ParagraphTabStopValue[];
     // (undocumented)
     readonly underline?: boolean;
 }

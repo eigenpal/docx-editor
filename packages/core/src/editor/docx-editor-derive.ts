@@ -69,6 +69,7 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
     // selection disagrees", so an absent object and a disagreeing one would be the same
     // value to a checkbox that has to tell them apart.
     paragraphFlags: formatting.paragraphFlags,
+    ...(formatting.tabStops !== null ? { tabStops: formatting.tabStops } : {}),
   };
 }
 

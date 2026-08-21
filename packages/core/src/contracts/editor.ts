@@ -1057,7 +1057,7 @@ export interface EditorCommands
     firstLine?: number | null;
   };
   /**
-   * Word's Paragraph dialog as one command: alignment, indents, spacing, line spacing and
+   * The Paragraph dialog as one command: alignment, indents, spacing, line spacing and
    * the five paragraph flags, applied to every paragraph the selection touches.
    *
    * ONE undo step, because a dialog is one gesture. The single-purpose commands beside it

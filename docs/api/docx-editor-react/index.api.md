@@ -1568,7 +1568,7 @@ export interface PaginatedDocxEditorShellProps {
 // @public
 export type ParagraphFlagState = boolean | null;
 
-// @public
+// @public (undocumented)
 export interface ParagraphFormatRead {
     // (undocumented)
     readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
@@ -1594,6 +1594,7 @@ export interface ParagraphFormatRead {
     readonly spaceAfterPt: number | null;
     // (undocumented)
     readonly spaceBeforePt: number | null;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
     // (undocumented)
     readonly widowControl: ParagraphFlagState;
 }
@@ -1625,6 +1626,7 @@ export interface ParagraphFormatUpdate {
     readonly spaceAfterPt?: number | null;
     // (undocumented)
     readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     readonly widowControl?: boolean;
 }

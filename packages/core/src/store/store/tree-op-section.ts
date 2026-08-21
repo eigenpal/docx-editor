@@ -29,7 +29,13 @@ import {
   sectionChild,
   targetSectionNodes,
 } from './tree-op-section-address.ts';
-import type { OoxmlProperty, TreeDocOp, TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
+import type {
+  OoxmlProperty,
+  TabStopWrite,
+  TreeDocOp,
+  TreeOpEffect,
+  TreeOpResult,
+} from './tree-op-types.ts';
 import {
   TEXT_DEPS,
   cloneWithNewIds,
@@ -276,6 +282,89 @@ export function applySetListNumbering(
     children: [numPr],
   } as unknown as OoxmlNode;
   // `w:pPr` must be the paragraph's FIRST child per the schema.
+  return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
+}
+
+/**
+ * Replace a paragraph's custom tab stops (`w:tabs`), or remove them entirely.
+ *
+ * A DEDICATED op, for the same reason `setListNumbering` is one: `w:tabs` carries its meaning
+ * in CHILDREN (`w:tab`), and `OoxmlProperty` is flat — a name and attributes. `propertyElement`
+ * keeps the children of the node it replaces, so a property write can PRESERVE tab stops but
+ * can never author one. The whole list is replaced rather than merged, because that is what a
+ * tab-stop editor hands back: the rows as they now stand.
+ *
+ * Stops are written in ascending position, which is the order `w:tabs` is read in and the one
+ * a reader placing them expects.
+ */
+export function applySetParagraphTabStops(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  stops: readonly TabStopWrite[],
+  options: EditOptions | undefined,
+  nextId: () => string
+): TreeOpResult {
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    // A tab stop moves where text lands on the line, so the paragraph re-breaks.
+    impact: 'flow-structural',
+  };
+  const pPr = paragraphPropertiesNodeOf(paragraph);
+  const existing = namedChild(pPr, 'tabs');
+
+  if (stops.length === 0) {
+    if (!existing) return ok(part, effect);
+    return fromEdit(removeNode(part, existing.id, options), effect);
+  }
+
+  const ordered = [...stops].sort((a, b) => a.positionTwips - b.positionTwips);
+  const tabs = sectionElement(
+    nextId(),
+    'tabs',
+    [],
+    ordered.map((stop) =>
+      sectionElement(
+        nextId(),
+        'tab',
+        [
+          wmlAttribute('val', stop.alignment),
+          wmlAttribute('pos', String(Math.round(stop.positionTwips))),
+          // `w:leader` defaults to `none`, so the common stop stays as Word writes it rather
+          // than carrying a redundant attribute.
+          ...(stop.leader && stop.leader !== 'none' ? [wmlAttribute('leader', stop.leader)] : []),
+        ],
+        []
+      )
+    )
+  );
+  if (existing) return fromEdit(replaceNode(part, existing.id, tabs, options), effect);
+  if (pPr) {
+    // `w:tabs` follows `w:pStyle` and `w:numPr` in `CT_PPrBase`; appending past the last of
+    // those keeps the schema order without restating the whole sequence here.
+    const afterIndex =
+      pPr.children.reduce(
+        (last, child, index) =>
+          child.kind !== 'textValue' &&
+          (child.localName === 'pStyle' || child.localName === 'numPr')
+            ? index
+            : last,
+        -1
+      ) + 1;
+    return fromEdit(insertChildren(part, pPr.id, afterIndex, [tabs], options), effect);
+  }
+  const created = {
+    id: nextId(),
+    kind: 'paragraphProperties',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'pPr',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [tabs],
+  } as unknown as OoxmlNode;
   return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
 }
 

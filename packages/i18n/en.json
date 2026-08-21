@@ -307,7 +307,24 @@
       "unitInches": "in",
       "unitPoints": "pt",
       "ok": "OK",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "tabStops": "Tab stops",
+      "tabPosition": "Position",
+      "tabAlignment": "Alignment",
+      "tabLeader": "Leader",
+      "tabAdd": "Set",
+      "tabClearAll": "Clear all",
+      "tabRemove": "Clear",
+      "tabNone": "None",
+      "tabAlignLeft": "Left",
+      "tabAlignCenter": "Center",
+      "tabAlignRight": "Right",
+      "tabAlignDecimal": "Decimal",
+      "tabAlignBar": "Bar",
+      "tabLeaderDot": "Dotted",
+      "tabLeaderHyphen": "Dashed",
+      "tabLeaderUnderscore": "Underlined",
+      "tabEmpty": "No tab stops set."
     }
   },
   "comments": {

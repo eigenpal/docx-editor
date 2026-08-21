@@ -331,6 +331,7 @@ const TREE_OP_REACH: {
   proposeParagraphMerge: (op) => whole(op.paragraphId),
   setListLevel: (op) => whole(op.paragraphId),
   setListNumbering: (op) => whole(op.paragraphId),
+  setParagraphTabStops: (op) => whole(op.paragraphId),
   setSectionMark: (op) => whole(op.paragraphId),
   deleteBlock: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.blockId, removes: true }] }),
   // A link is a node in a paragraph, so its OWNER is resolved the same way any node's is: the

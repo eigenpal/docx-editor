@@ -647,11 +647,15 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           entries.push({ localName, attributes: paragraphFlagAttributes(on) });
         }
       }
+      // Tab stops ride the SAME transaction as the properties above, so the dialog is still
+      // one undo step. They are a separate op because `w:tabs` carries `w:tab` children and
+      // a property is flat — see `applySetParagraphTabStops`.
+      const wantsTabStops = update.tabStops !== undefined;
       const wantsIndent =
         update.indentLeftTwips !== undefined ||
         update.indentRightTwips !== undefined ||
         update.indentFirstLineTwips !== undefined;
-      if (entries.length === 0 && !wantsIndent) return false;
+      if (entries.length === 0 && !wantsIndent && !wantsTabStops) return false;
 
       const ops: TreeDocOp[] = [];
       for (const paragraphId of touched) {
@@ -695,6 +699,17 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           });
         }
         ops.push({ op: 'setParagraphProperties', paragraphId, properties });
+        if (wantsTabStops) {
+          ops.push({
+            op: 'setParagraphTabStops',
+            paragraphId,
+            stops: update.tabStops!.map((stop) => ({
+              positionTwips: Math.round(stop.positionTwips),
+              alignment: stop.alignment,
+              ...(stop.leader && stop.leader !== 'none' ? { leader: stop.leader } : {}),
+            })),
+          });
+        }
       }
       if (ops.length === 0) return false;
       return commitOverTarget(() => applyOps(ops, selectionMark()));

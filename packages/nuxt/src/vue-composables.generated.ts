@@ -24,6 +24,7 @@ export const VUE_COMPOSABLES = [
   'useNotePropertiesState',
   'useNoteScopeState',
   'usePageSetup',
+  'useParagraphFormat',
   'useParagraphIndent',
   'useParagraphStyle',
   'useReviewAuthors',

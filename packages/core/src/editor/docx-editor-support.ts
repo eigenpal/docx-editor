@@ -421,6 +421,27 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       ) {
         return { supported: false, code: 'invalidArgs', reason: 'unknown alignment' };
       }
+      if (command.tabStops !== undefined) {
+        if (command.tabStops.length > 64) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: 'setParagraphFormat accepts at most 64 tab stops',
+          };
+        }
+        for (const stop of command.tabStops) {
+          if (!Number.isInteger(stop.positionTwips) || Math.abs(stop.positionTwips) > 31680) {
+            return {
+              supported: false,
+              code: 'invalidArgs',
+              reason: 'tab stop positions must be whole twips within ±31680',
+            };
+          }
+          if (!['left', 'center', 'right', 'decimal', 'bar'].includes(stop.alignment)) {
+            return { supported: false, code: 'invalidArgs', reason: 'unknown tab alignment' };
+          }
+        }
+      }
       return { supported: true, mutating: true };
     }
     case 'setIndent': {
@@ -811,6 +832,7 @@ const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
   spaceAfterPt: true,
   indent: true,
   paragraphFlags: true,
+  tabStops: true,
 };
 void COMPARED_FORMATTING_KEYS;
 
@@ -850,7 +872,16 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.paragraphFlags?.keepNext !== b.paragraphFlags?.keepNext ||
     a.paragraphFlags?.keepLines !== b.paragraphFlags?.keepLines ||
     a.paragraphFlags?.widowControl !== b.paragraphFlags?.widowControl ||
-    a.paragraphFlags?.pageBreakBefore !== b.paragraphFlags?.pageBreakBefore
+    a.paragraphFlags?.pageBreakBefore !== b.paragraphFlags?.pageBreakBefore ||
+    // By VALUE: a fresh array per derive, so a reference compare would report every tick as
+    // a change and re-render every `snapshot().formatting` subscriber on each keystroke.
+    a.tabStops?.length !== b.tabStops?.length ||
+    (a.tabStops ?? []).some(
+      (stop, index) =>
+        stop.positionTwips !== b.tabStops?.[index]?.positionTwips ||
+        stop.alignment !== b.tabStops?.[index]?.alignment ||
+        (stop.leader ?? 'none') !== (b.tabStops?.[index]?.leader ?? 'none')
+    )
   ) {
     return false;
   }

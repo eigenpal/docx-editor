@@ -5,6 +5,12 @@
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { IndentFormatting } from '../contracts/types.ts';
+import type {
+  ParagraphFlagFormatting,
+  ParagraphFormatUpdate,
+  ParagraphPropertyEdit,
+  ParagraphTabStop,
+} from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
@@ -229,7 +235,7 @@ export interface SurfaceFormatting {
    */
   readonly indent: IndentFormatting | null;
   /**
-   * The paragraph flags Word's Paragraph dialog shows as checkboxes, or null when the
+   * The paragraph flags the Paragraph dialog shows as checkboxes, or null when the
    * selection's paragraphs disagree about that one.
    *
    * `contextualSpacing` is "Don't add space between paragraphs of the same style"; the
@@ -237,51 +243,12 @@ export interface SurfaceFormatting {
    * sets reads as on — which is what a checkbox has to show.
    */
   readonly paragraphFlags: ParagraphFlagFormatting;
-}
-
-/**
- * Every field of Word's Paragraph dialog, in the units the rest of this contract uses:
- * points for spacing, TWIPS for indents.
- *
- * An omitted field is left as authored. Where `null` is allowed it REMOVES the setting,
- * which is not the same as writing a zero — a zero blocks the cascade, a removal lets the
- * style through again.
- */
-export interface ParagraphFormatUpdate {
-  readonly alignment?: 'left' | 'center' | 'right' | 'both';
-  readonly spaceBeforePt?: number | null;
-  readonly spaceAfterPt?: number | null;
-  readonly lineSpacing?: {
-    readonly rule: 'multiple' | 'exact' | 'atLeast';
-    readonly value: number;
-  } | null;
-  readonly indentLeftTwips?: number | null;
-  readonly indentRightTwips?: number | null;
-  /** ONE signed first-line offset: negative is a hanging indent (§17.3.1.12). */
-  readonly indentFirstLineTwips?: number | null;
-  readonly contextualSpacing?: boolean;
-  readonly keepNext?: boolean;
-  readonly keepLines?: boolean;
-  readonly widowControl?: boolean;
-  readonly pageBreakBefore?: boolean;
-}
-
-/** One property in a batched paragraph write. */
-export interface ParagraphPropertyEdit {
-  readonly localName: string;
-  /** A null-valued attribute REMOVES that attribute; see `setParagraphProperty`. */
-  readonly attributes?: Record<string, string | null>;
-  /** Keep the attributes this entry does not name, for multi-setting elements. */
-  readonly mergeAttributes?: boolean;
-}
-
-/** One tri-state paragraph flag: on, off, or "the selection disagrees". */
-export interface ParagraphFlagFormatting {
-  readonly contextualSpacing: boolean | null;
-  readonly keepNext: boolean | null;
-  readonly keepLines: boolean | null;
-  readonly widowControl: boolean | null;
-  readonly pageBreakBefore: boolean | null;
+  /**
+   * The paragraph's resolved custom tab stops, cascade included, or null when the selection
+   * disagrees or nothing is loaded. Positions in TWIPS, like every other measurement a
+   * control writes back.
+   */
+  readonly tabStops: readonly ParagraphTabStop[] | null;
 }
 
 /**
@@ -617,7 +584,7 @@ export interface PaginatedSurface {
    */
   setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
   /**
-   * Word's Paragraph dialog as ONE write: alignment, indents, spacing, line spacing and the
+   * The Paragraph dialog as ONE write: alignment, indents, spacing, line spacing and the
    * five paragraph flags, over every paragraph the selection touches.
    *
    * One transaction, so pressing OK is one undo step and the page repaints once. An omitted
@@ -993,3 +960,10 @@ export interface PaginatedSurface {
 export type OpenPaginatedResult =
   | { readonly ok: true; readonly surface: PaginatedSurface }
   | { readonly ok: false; readonly reason: string; readonly detail?: string };
+
+export type {
+  ParagraphFlagFormatting,
+  ParagraphFormatUpdate,
+  ParagraphPropertyEdit,
+  ParagraphTabStop,
+} from './paragraph-format-contract.ts';

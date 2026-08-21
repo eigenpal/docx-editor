@@ -25,6 +25,7 @@ import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/Do
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { DocxEditorNavigation, Navigation } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
+import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
@@ -153,6 +154,8 @@ export interface DocxEditorNamespace {
   readonly DocumentOutline: typeof DocxEditorDocumentOutline;
   readonly Navigation: typeof Navigation;
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+  /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
+  readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
@@ -521,6 +524,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   DocumentOutline: DocxEditorDocumentOutline,
   Navigation: DocxEditorNavigation,
   PageSetupDialog: DocxEditorPageSetupDialog,
+  ParagraphDialog: DocxEditorParagraphDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,

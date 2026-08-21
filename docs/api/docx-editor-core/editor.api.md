@@ -1835,6 +1835,7 @@ export interface SurfaceFormatting {
     readonly subscript: boolean;
     // (undocumented)
     readonly superscript: boolean;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
     // (undocumented)
     readonly underline: boolean;
 }

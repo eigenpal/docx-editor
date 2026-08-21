@@ -1,11 +1,11 @@
-// How each field of Word's Paragraph dialog becomes `w:pPr` attributes.
+// How each field of the Paragraph dialog becomes `w:pPr` attributes.
 //
 // Shared by the single-purpose commands (`setParagraphSpacing`, `setLineSpacing`) and by
 // `setParagraphFormat`, which writes the whole dialog in one transaction. One rule per
 // setting, in one place: a dialog that spelled `w:spacing` differently from the menu row
 // beside it would make the same gesture mean two things.
 
-/** The three line-spacing rules, as the contract and Word's dialog both name them. */
+/** The three line-spacing rules, as the contract and the dialog both name them. */
 export type LineSpacingRuleName = 'multiple' | 'exact' | 'atLeast';
 
 /**

@@ -16,6 +16,7 @@ import {
   type PageRecord,
   type ParagraphFragmentRecord,
   type ParagraphIndent,
+  type ResolvedTabStops,
   type SemanticLayout,
   type SemanticSelection,
   type StyleSpanRecord,
@@ -165,6 +166,35 @@ export function paragraphPropertiesOf(
   }
   return index.get(paragraphId) ?? [];
 }
+
+/**
+ * A paragraph's resolved tab stops, from the layout records, or null for a paragraph the
+ * published layout does not carry.
+ *
+ * Not derivable from {@link paragraphPropertiesOf}: `w:tabs` carries its meaning in `w:tab`
+ * CHILDREN and the flat property projection has none, so the cascade shows the element and
+ * not a single stop.
+ */
+export function paragraphTabStopsOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): ResolvedTabStops | null {
+  let index = fragmentTabStopsByLayout.get(layout);
+  if (!index) {
+    const built = new Map<string, ResolvedTabStops>();
+    // Per page, so it composes with the page memo the other two indexes use.
+    for (const page of layout.pages) {
+      eachParagraphFragmentOnPage(page, (fragment) =>
+        recordFragment(built, fragment, fragment.tabStops)
+      );
+    }
+    index = built;
+    fragmentTabStopsByLayout.set(layout, built);
+  }
+  return index.get(paragraphId) ?? null;
+}
+
+const fragmentTabStopsByLayout = new WeakMap<SemanticLayout, Map<string, ResolvedTabStops>>();
 
 /** A paragraph's effective indent, plus whether it sits inside a table. */
 export interface ParagraphIndentEntry {
@@ -544,8 +574,13 @@ export function formattingAt(
     const first = pick(styles[0]!);
     return styles.every((style) => pick(style) === first) ? first : null;
   };
-  const agreedOver = <T>(values: readonly T[]): T | null =>
-    values.length > 0 && values.every((value) => value === values[0]) ? values[0]! : null;
+  // `same` defaults to identity; a caller whose value is a fresh object per paragraph passes
+  // its own comparison, or every selection would read as disagreeing.
+  const agreedOver = <T>(
+    values: readonly T[],
+    same: (a: T, b: T) => boolean = (a, b) => a === b
+  ): T | null =>
+    values.length > 0 && values.every((value) => same(value, values[0]!)) ? values[0]! : null;
 
   // Font family and size answer the EFFECTIVE value, the way Word's boxes do: a span
   // without a direct `w:rFonts`/`w:sz` falls back to what it inherits (style chain,
@@ -658,7 +693,7 @@ export function formattingAt(
     };
   })();
 
-  // Word's Paragraph dialog shows these as checkboxes, so each answers on / off / mixed.
+  // the Paragraph dialog shows these as checkboxes, so each answers on / off / mixed.
   // Read through the cascade like everything else here: a flag a STYLE sets is on, which is
   // what the box has to show. `w:val` absent means ON for every one of them (§17.17.4).
   const flag = (localName: string) =>
@@ -690,6 +725,26 @@ export function formattingAt(
     spaceBeforePt: spacePt('before'),
     spaceAfterPt: spacePt('after'),
     indent,
+    // Compared by VALUE across the selection, not by reference: the stops are a fresh array
+    // per paragraph, and two paragraphs with identical stops must read as agreeing.
+    tabStops:
+      agreedOver(
+        touchedParagraphs.map((id) => paragraphTabStopsOf(layout, id)?.stops ?? null),
+        (a, b) =>
+          a === null || b === null
+            ? a === b
+            : a.length === b.length &&
+              a.every(
+                (stop, index) =>
+                  Math.round(stop.positionPt * 20) === Math.round(b[index]!.positionPt * 20) &&
+                  stop.alignment === b[index]!.alignment &&
+                  (stop.leader ?? 'none') === (b[index]!.leader ?? 'none')
+              )
+      )?.map((stop) => ({
+        positionTwips: Math.round(stop.positionPt * 20),
+        alignment: stop.alignment,
+        ...(stop.leader ? { leader: stop.leader } : {}),
+      })) ?? null,
     paragraphFlags: {
       contextualSpacing: flag('contextualSpacing'),
       keepNext: flag('keepNext'),

@@ -287,7 +287,24 @@
       "title": null,
       "unitInches": null,
       "unitPoints": null,
-      "widowControl": null
+      "widowControl": null,
+      "tabAdd": null,
+      "tabAlignBar": null,
+      "tabAlignCenter": null,
+      "tabAlignDecimal": null,
+      "tabAlignLeft": null,
+      "tabAlignRight": null,
+      "tabAlignment": null,
+      "tabClearAll": null,
+      "tabEmpty": null,
+      "tabLeader": null,
+      "tabLeaderDot": null,
+      "tabLeaderHyphen": null,
+      "tabLeaderUnderscore": null,
+      "tabNone": null,
+      "tabPosition": null,
+      "tabRemove": null,
+      "tabStops": null
     }
   },
   "comments": {

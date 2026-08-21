@@ -2374,6 +2374,7 @@ export interface DocxEditorNamespace {
     readonly PageNumber: typeof DocxEditorPageNumber;
     // (undocumented)
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -4316,6 +4317,7 @@ export interface ParagraphFormatRead {
     readonly spaceAfterPt: number | null;
     // (undocumented)
     readonly spaceBeforePt: number | null;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
     // (undocumented)
     readonly widowControl: ParagraphFlagState;
 }
@@ -4347,6 +4349,7 @@ export interface ParagraphFormatUpdate {
     readonly spaceAfterPt?: number | null;
     // (undocumented)
     readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     readonly widowControl?: boolean;
 }

@@ -22,7 +22,7 @@ export interface ParagraphFlags {
 }
 
 /**
- * Every field of Word's Paragraph dialog, as `setParagraphFormat` takes it.
+ * Every field of the Paragraph dialog, as `setParagraphFormat` takes it.
  *
  * An omitted field is left as authored. `null` REMOVES a setting so the style supplies it
  * again — not the same as a zero, which blocks the cascade.
@@ -43,6 +43,18 @@ export interface ParagraphFormatCommand {
   keepLines?: boolean;
   widowControl?: boolean;
   pageBreakBefore?: boolean;
+  /**
+   * Replace the paragraph's custom tab stops. An empty list CLEARS them, which is what
+   * "Clear All" does; omit the field to leave them as authored.
+   */
+  tabStops?: readonly ParagraphTabStopValue[];
+}
+
+/** One custom tab stop, as a command states it. @public */
+export interface ParagraphTabStopValue {
+  readonly positionTwips: number;
+  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 }
 
 /** Ownership token for one retained selection highlight. @public */
@@ -252,7 +264,7 @@ export interface RunFormatting {
   readonly spaceBeforePt?: number;
   readonly spaceAfterPt?: number;
   /**
-   * The paragraph flags Word's Paragraph dialog shows as checkboxes.
+   * The paragraph flags the Paragraph dialog shows as checkboxes.
    *
    * Each is `true`, `false`, or `null` when the selection's paragraphs disagree — a
    * checkbox needs all three. Read through the cascade, so a flag a STYLE sets reads as on,
@@ -260,6 +272,11 @@ export interface RunFormatting {
    * next. Absent on a `Run`, like every other selection-level field here.
    */
   readonly paragraphFlags?: ParagraphFlags;
+  /**
+   * The paragraph's custom tab stops at the selection, cascade included. Absent when the
+   * selection disagrees or the paragraphs have none.
+   */
+  readonly tabStops?: readonly ParagraphTabStopValue[];
   /**
    * The EFFECTIVE paragraph indent at the selection — cascade and numbering merge
    * included, so a numbered item that authors no `w:ind` reports the indent its list
