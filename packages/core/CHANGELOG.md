@@ -1,5 +1,27 @@
 # @docx-editor.dev/core
 
+## 2.7.0
+
+### Minor Changes
+
+- 010a327: Fixed paragraph formatting controls reading a paragraph's document defaults instead of its own formatting, which left "Add space before/after paragraph" with no effect on the page. `PaginatedDocxEditorHandle.setParagraphProperty` takes an `options.mergeAttributes` flag so a line-spacing pick keeps the paragraph's spacing. Fixes #360
+
+### Patch Changes
+
+- 4c907ed: Fixes a group of caret and scope defects: undo after editing a header no longer leaves the editor unable to type, opening a header while a footnote is open no longer refuses every keystroke, inserting a footnote over a selection replaces it instead of destroying the note on the next keystroke, redo puts the caret where the redone edit ends, resolving a tracked change keeps the caret on the text it was in, accepting the deletion of a table's only row removes the table, a selection ending at a field no longer collapses, Backspace after a table is a quiet no-op instead of a dropped keystroke, and the paragraph, delete-row and delete-column commands act on every cell of a selected rectangle.
+- 447d983: Fixed the caret jumping back to the start of a header or footer after each character typed. The `change` event's revision and `getDocumentHandle().revision` now rise for every edit, including one made in a header, footer or note, and an explicit table target is no longer refused as stale after such an edit. Fixes #361
+- 047b2c6: Entering a header or moving between shared header copies no longer rebuilds every visible page. The active band is retinted in place.
+- 4c907ed: Typing no longer rebuilds every visible page. A document carrying a footnotes part — which is nearly every file Word writes, even with no notes in it — discarded every page record on every layout pass, and pressing Enter in a list re-measured every paragraph in the document.
+- 25235c1: Pressing Enter or Backspace in a large multi-section document no longer re-lays the whole document; layout now reuses unchanged sections and whole pages shifted by the edit, and typing latency in 500+ page documents drops sharply.
+- 25235c1: Typing in long documents with footnotes gets faster again: the notes pass reuses per-page footnote areas, reserves, reference hits, and mark contexts across keystrokes when nothing note-related changed, instead of re-deriving them for every page on every edit.
+- 25235c1: Typing in a long document repaints only the paragraph that changed, instead of rebuilding whole pages: pages keep their identity when content controls or page-level indexes have not moved, and the document-wide indexes the toolbar and review rail read are now built per page and reused.
+- 4c907ed: Typed characters now stay in order after a repaint. A repaint that followed an edit could read the browser's own selection back as the paragraph start, so the first character landed and every one after it was inserted in front of it.
+- 4c907ed: Backspace now takes back a paragraph break you proposed a moment earlier, instead of proposing to delete your own proposal. Enter then Backspace in suggesting mode left an empty paragraph behind and two entries in the review pane.
+- 4c907ed: Typing over your own pending suggestion now replaces it. The keystroke was refused and silently dropped, because a suggestion the same author retracts leaves the paragraph instead of staying struck in place.
+- 25235c1: Typing latency in very long documents drops further: layout reuses each unchanged section's whole prepass, list numbering, font catalogs, drawing scans, and note-mark projection reuse memoized answers across keystrokes, and shaped text measurement stops rebuilding string keys per probe.
+- 4c907ed: Fixes four write lanes that had drifted from the rules the others follow: Enter inside a tracked insertion now breaks the paragraph at the caret, a table inside a header or footer can be deleted, IME text in suggesting mode is proposed rather than written, and a multi-line paste proposes its paragraph breaks and leaves the caret after the pasted text.
+  - @docx-editor.dev/i18n@2.7.0
+
 ## 2.6.1
 
 ### Patch Changes

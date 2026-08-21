@@ -1,5 +1,24 @@
 # @docx-editor.dev/editor-api
 
+## 2.7.0
+
+### Patch Changes
+
+- Updated dependencies [4c907ed]
+- Updated dependencies [447d983]
+- Updated dependencies [047b2c6]
+- Updated dependencies [4c907ed]
+- Updated dependencies [25235c1]
+- Updated dependencies [25235c1]
+- Updated dependencies [25235c1]
+- Updated dependencies [010a327]
+- Updated dependencies [4c907ed]
+- Updated dependencies [4c907ed]
+- Updated dependencies [4c907ed]
+- Updated dependencies [25235c1]
+- Updated dependencies [4c907ed]
+  - @docx-editor.dev/core@2.7.0
+
 ## 2.6.1
 
 ### Patch Changes
