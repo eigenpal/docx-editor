@@ -260,3 +260,32 @@ The unified editing model SHALL preserve all existing header/footer capabilities
 - **WHEN** the user opens, edits the header, and saves a document
 - **THEN** the saved DOCX, when re-opened, contains the edited header content
 - **AND** image relationship parts for the header continue to live in `word/_rels/header*.xml.rels`, not `word/_rels/document.xml.rels`
+
+### Requirement: List counters restart per story
+
+A `w:numPr` paragraph in a header or footer SHALL resolve its marker from `numbering.xml` and
+paint it, as an equivalent paragraph in the body does. Each story SHALL keep its OWN counter
+state: a header list SHALL start at the level's `w:start` rather than continuing a sequence the
+body began, even when the two share a `numId`.
+
+A header is laid out once per variant and attached to every page it applies to, so a numbered
+list in a header shows the same numbers on every page. That is the consequence of counting per
+story, it matches Word, and it is recorded here because it reads as a defect on first sight.
+
+#### Scenario: A numbered header paints its marker
+
+- **WHEN** a header holds a paragraph with `w:numPr` on a decimal `numId`
+- **THEN** the painted header shows that level's marker and its numbering indent
+- **AND** the numbered-list control reports itself active with the caret in that paragraph
+- **AND** pressing it removes the numbering, as it does in the body
+
+#### Scenario: A header shares a numId with the body
+
+- **WHEN** the body and a header both hold list paragraphs on the same `numId`
+- **THEN** the header's list starts at the level's `w:start`
+- **AND** the body's own sequence is unaffected by the header's items
+
+#### Scenario: A repeated header numbers the same on every page
+
+- **WHEN** a document with a numbered header list runs to three pages
+- **THEN** every page's header shows the same numbers
