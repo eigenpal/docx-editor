@@ -894,7 +894,24 @@ export function openTreeSession(
     readonly openStories: string;
     readonly index: ParagraphAnchorIndex;
   } | null = null;
+  const readNormalizedParts = new WeakMap<OoxmlPart, OoxmlPart>();
   let bookmarksCache: { readonly revision: number; readonly index: BookmarkIndex } | null = null;
+  /**
+   * A story part with its paraIds minted, for READING only.
+   *
+   * Memoized on the part's identity: parts are immutable, so one normalization per part is
+   * always enough, and without the memo every revision would rebuild every furniture part in a
+   * document that has several. The result never reaches the package — the store mints its own
+   * on open, deterministically and identically.
+   */
+  const normalizedForRead = (part: OoxmlPart): OoxmlPart => {
+    const cached = readNormalizedParts.get(part);
+    if (cached) return cached;
+    const normalized = normalizeParagraphIdentity(part);
+    readNormalizedParts.set(part, normalized);
+    return normalized;
+  };
+
   const paragraphAnchors = (): ParagraphAnchorIndex => {
     // Keyed on the PACKAGE revision, because the index now spans every story: a split in a
     // header mints a paragraph the body revision knows nothing about, and against that key the
@@ -915,7 +932,15 @@ export function openTreeSession(
       // in the package copy, and indexing that copy could not address it.
       const open = packageStore.openStoryParts();
       const seen = new Set(open.map((part) => part.name));
-      const rest = furnitureAndNoteParts().filter((part) => !seen.has(part.name));
+      // And an UNOPENED story is normalized on the way in, for the same reason from the other
+      // side: a header nobody has entered carries no `w14:paraId` at all, so indexing the
+      // package copy verbatim left every one of its paragraphs unaddressable until the reader
+      // happened to click into it. Minting is deterministic and seeded by the structural node
+      // id, so the ids computed here are the ones the store will mint when the story does
+      // open — the same paraId before and after, which is what makes an anchor durable.
+      const rest = furnitureAndNoteParts()
+        .filter((part) => !seen.has(part.name))
+        .map(normalizedForRead);
       anchorsCache = {
         revision,
         openStories,

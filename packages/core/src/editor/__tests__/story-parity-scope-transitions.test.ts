@@ -64,6 +64,29 @@ describe('a caret and its scope agree across a story change', () => {
     }
   });
 
+  test('an undo that lands on a substituted paragraph lands at its start', () => {
+    const open = openStory('header');
+    try {
+      open.surface.type('HEADER');
+      open.surface.exitHeaderFooter();
+      const bodyParagraph = open.surface.session.paragraphIds()[0]!;
+      open.surface.setSelection({
+        anchor: { paragraphId: bodyParagraph, offset: 0 },
+        head: { paragraphId: bodyParagraph, offset: 0 },
+      });
+
+      // The undo's mark names a HEADER paragraph, which the body story does not hold. Clamping
+      // to the first body paragraph is deliberate — installing the header's id would leave the
+      // caret in `contenteditable="false"` furniture and every keystroke refused. Carrying its
+      // OFFSET across was not: it was counted in a different paragraph, so it put the caret
+      // some arbitrary way into this one for no reason the reader can see.
+      open.surface.undo();
+      expect(open.surface.state().selection.head.offset).toBe(0);
+    } finally {
+      open.destroy();
+    }
+  });
+
   test('undo after a story change unwinds the edit in its own story', async () => {
     const open = openStory('header');
     try {
