@@ -367,7 +367,11 @@ fails until it gets an attribution path; `packages/fonts` carries OFL text in
 
 - **PRs** — short factual title (conventional-commit prefix); body is the minimum
   the diff doesn't show, often one sentence. No `@`-mentions, unrelated issue
-  numbers, file lists, tooling footers or emojis.
+  numbers, file lists, tooling footers or emojis. Write the body in the
+  [Google developer documentation style](https://developers.google.com/style),
+  the same guide the docs site follows: second person, active voice, present
+  tense, sentence-case headings, American spelling, short sentences, one idea
+  each. Code font for identifiers and filenames; bold for UI elements only.
 - **Bugs** — `gh issue view <N> --repo eigenpal/docx-editor`. Dev server `bun run
 dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`.
   Commit `fix: ... (fixes #N)`. Screenshots → `screenshots/`.
