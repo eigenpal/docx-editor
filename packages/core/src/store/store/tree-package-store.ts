@@ -758,6 +758,20 @@ export class TreePackageStore {
     return store?.selectionForRedo() ?? null;
   }
 
+  /**
+   * The live part of every story store ALREADY open, body excluded.
+   *
+   * Already open, and never opening one. `w14:paraId` is minted when a story store opens, and
+   * the coordinator's package only learns of the minting on the first commit — so a header the
+   * reader has entered but not yet typed in carries none in the package copy, and anything
+   * indexing from there cannot address it. Reading the open stores closes that gap without
+   * paying the cost the cap exists for: resolving every scope in turn would open a store per
+   * header, and a store whose part is still in the package is never evicted.
+   */
+  openStoryParts(): readonly OoxmlPart[] {
+    return [...this.stories.values()].map((store) => store.part);
+  }
+
   /** How many story stores are open (body counts as one). */
   openedStoryCount(): number {
     return 1 + this.stories.size;

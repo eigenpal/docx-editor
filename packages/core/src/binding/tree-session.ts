@@ -885,11 +885,22 @@ export function openTreeSession(
   } | null = null;
   let bookmarksCache: { readonly revision: number; readonly index: BookmarkIndex } | null = null;
   const paragraphAnchors = (): ParagraphAnchorIndex => {
-    // Keyed on the body-store revision, like the outline: a split mints a new paragraph and
-    // a join removes one, but between commits the map cannot move.
-    const store = bodyStore();
-    if (!anchorsCache || anchorsCache.revision !== store.revision) {
-      anchorsCache = { revision: store.revision, index: buildParagraphAnchorIndex(store.part) };
+    // Keyed on the PACKAGE revision, because the index now spans every story: a split in a
+    // header mints a paragraph the body revision knows nothing about, and against that key the
+    // map would have kept answering for the document as it was before.
+    const revision = packageStore.packageRevision;
+    if (!anchorsCache || anchorsCache.revision !== revision) {
+      // Open story stores FIRST, so their live parts win the dedupe below. `w14:paraId` is
+      // minted when a story store opens and only reaches the coordinator's package on the
+      // first commit — so a header the reader has entered but not yet typed in carries none
+      // in the package copy, and indexing that copy could not address it.
+      const open = packageStore.openStoryParts();
+      const seen = new Set(open.map((part) => part.name));
+      const rest = furnitureAndNoteParts().filter((part) => !seen.has(part.name));
+      anchorsCache = {
+        revision,
+        index: buildParagraphAnchorIndex([bodyStore().part, ...open, ...rest]),
+      };
     }
     return anchorsCache.index;
   };

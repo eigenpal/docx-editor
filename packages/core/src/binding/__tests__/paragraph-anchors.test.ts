@@ -26,7 +26,7 @@ describe('buildParagraphAnchorIndex', () => {
         '<w:sdt><w:sdtContent><w:p w14:paraId="4C000003"><w:r><w:t>sdt</w:t></w:r></w:p></w:sdtContent></w:sdt>' +
         '<w:p w14:paraId="4C000004"><w:r><w:t>last</w:t></w:r></w:p>'
     );
-    const index = buildParagraphAnchorIndex(part);
+    const index = buildParagraphAnchorIndex([part]);
     const ids = allParagraphs(part).map((paragraph) => paragraph.id);
     expect(ids).toHaveLength(4);
     ids.forEach((nodeId, ordinal) => {
@@ -43,7 +43,7 @@ describe('buildParagraphAnchorIndex', () => {
 
   test('values stay verbatim; lookup keys are uppercased', () => {
     const part = load('<w:p w14:paraId="4c00aa0e"><w:r><w:t>x</w:t></w:r></w:p>');
-    const index = buildParagraphAnchorIndex(part);
+    const index = buildParagraphAnchorIndex([part]);
     const [nodeId] = allParagraphs(part).map((paragraph) => paragraph.id);
     expect(index.paraIdByNode.get(nodeId!)).toBe('4c00aa0e');
     expect(index.nodeByParaId.get('4C00AA0E')).toBe(nodeId!);
@@ -55,7 +55,7 @@ describe('buildParagraphAnchorIndex', () => {
       '<w:p w14:paraId="4C000001"><w:r><w:t>a</w:t></w:r></w:p>' +
         '<w:p w14:paraId="4C000001"><w:r><w:t>b</w:t></w:r></w:p>'
     );
-    const index = buildParagraphAnchorIndex(part);
+    const index = buildParagraphAnchorIndex([part]);
     const [first, second] = allParagraphs(part).map((paragraph) => paragraph.id);
     expect(index.nodeByParaId.get('4C000001')).toBe(first!);
     expect(index.paraIdByNode.get(second!)).toBe('4C000001');
@@ -65,7 +65,7 @@ describe('buildParagraphAnchorIndex', () => {
     const part = load(
       '<w:p><w:r><w:t>bare</w:t></w:r></w:p><w:p w14:paraId="4C000001"><w:r><w:t>x</w:t></w:r></w:p>'
     );
-    const index = buildParagraphAnchorIndex(part);
+    const index = buildParagraphAnchorIndex([part]);
     const [bare, identified] = allParagraphs(part).map((paragraph) => paragraph.id);
     expect(index.ordinalByNode.get(bare!)).toBe(0);
     expect(index.paraIdByNode.has(bare!)).toBe(false);

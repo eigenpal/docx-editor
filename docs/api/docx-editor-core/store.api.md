@@ -4384,6 +4384,7 @@ export class TreePackageStore {
     // (undocumented)
     get lastModelChange(): TreeModelChange | null;
     openedStoryCount(): number;
+    openStoryParts(): readonly OoxmlPart[];
     // (undocumented)
     get packageRevision(): number;
     partFor(scope: StoryScope): OoxmlPart | null;

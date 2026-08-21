@@ -89,7 +89,15 @@ export function resolveDocAnchor(
   if (typeof anchor.paraId !== 'string' || anchor.paraId.length === 0) {
     return { ok: false, code: 'invalidArgs', reason: 'paraId must be a non-empty string' };
   }
-  const nodeId = anchors.nodeByParaId.get(anchor.paraId.toUpperCase());
+  const canonical = anchor.paraId.toUpperCase();
+  if (anchors.ambiguousParaIds.has(canonical)) {
+    return {
+      ok: false,
+      code: 'ambiguous',
+      reason: `paraId '${anchor.paraId}' is claimed by more than one story`,
+    };
+  }
+  const nodeId = anchors.nodeByParaId.get(canonical);
   if (nodeId === undefined) {
     return {
       ok: false,

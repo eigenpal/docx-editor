@@ -6,9 +6,11 @@
 // the translation, built in one `allParagraphs` walk and memoized per revision by the
 // session, the same way `documentOutline` is.
 //
-// Scope: the EDITABLE set of the main document part (body + table cells + block
-// SDTs). Header/footer/footnote paragraphs are `DocLocation` territory — the contract
-// keeps a structural address form precisely "for content the paraId map cannot reach".
+// Scope: EVERY story the document holds — the main part, each header and footer, and the note
+// parts. It was the main part alone, and the comment here pointed at `DocLocation` as the way
+// to reach the rest; `resolveAnchorSelection` refuses `DocLocation` endpoints outright, so no
+// addressing form reached a header paragraph at all. `snapshot().selection` was therefore null
+// for the whole time the caret was in one, which is an agent unable to see where the user is.
 
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { isValidParaId, paraIdOf } from '@docx-editor.dev/core/store';
@@ -39,24 +41,44 @@ function validParaIdOf(paragraph: OoxmlNode): string | null {
 export interface ParagraphAnchorIndex {
   /** nodeId → `w14:paraId`, verbatim as authored/minted. Paragraphs without one are absent. */
   readonly paraIdByNode: ReadonlyMap<string, string>;
-  /** UPPERCASED paraId → nodeId (matching is case-insensitive). First occurrence wins on the impossible-by-invariant duplicate. */
+  /** UPPERCASED paraId → nodeId (matching is case-insensitive). The first story to claim it. */
   readonly nodeByParaId: ReadonlyMap<string, string>;
   /** nodeId → reading-order ordinal, for document-ordering DocRange endpoints. */
   readonly ordinalByNode: ReadonlyMap<string, number>;
+  /**
+   * UPPERCASED paraIds more than one story claims.
+   *
+   * Minting is unique per PART and the contract's uniqueness is per DOCUMENT, so an authored
+   * file may repeat one. Resolving such an anchor to whichever story came first would be a
+   * silent wrong answer; it is refused as ambiguous instead.
+   */
+  readonly ambiguousParaIds: ReadonlySet<string>;
 }
 
-/** Build the index over every editable paragraph of the part, in reading order. */
-export function buildParagraphAnchorIndex(part: OoxmlPart): ParagraphAnchorIndex {
+/** Build the index over every editable paragraph of every story, in reading order. */
+export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): ParagraphAnchorIndex {
   const paraIdByNode = new Map<string, string>();
   const nodeByParaId = new Map<string, string>();
   const ordinalByNode = new Map<string, number>();
-  allParagraphs(part).forEach((paragraph, ordinal) => {
-    ordinalByNode.set(paragraph.id, ordinal);
-    const paraId = validParaIdOf(paragraph);
-    if (paraId === null) return;
-    paraIdByNode.set(paragraph.id, paraId);
-    const canonical = paraId.toUpperCase();
-    if (!nodeByParaId.has(canonical)) nodeByParaId.set(canonical, paragraph.id);
-  });
-  return Object.freeze({ paraIdByNode, nodeByParaId, ordinalByNode });
+  const ambiguousParaIds = new Set<string>();
+  let ordinal = 0;
+  for (const part of parts) {
+    for (const paragraph of allParagraphs(part)) {
+      // Ordinals run ACROSS the parts in the order given, so a comparison between two
+      // paragraphs of one story stays correct and one across stories is at least stable.
+      ordinalByNode.set(paragraph.id, ordinal);
+      ordinal += 1;
+      const paraId = validParaIdOf(paragraph);
+      if (paraId === null) continue;
+      paraIdByNode.set(paragraph.id, paraId);
+      const canonical = paraId.toUpperCase();
+      // `w14:paraId` is minted unique per PART, and the contract's uniqueness is per
+      // DOCUMENT. Nothing stops an authored file repeating one across `header1.xml` and
+      // `document.xml`, and first-wins would then resolve such an anchor to the body twin
+      // silently. Recorded instead, so the resolver can refuse it as ambiguous.
+      if (nodeByParaId.has(canonical)) ambiguousParaIds.add(canonical);
+      else nodeByParaId.set(canonical, paragraph.id);
+    }
+  }
+  return Object.freeze({ paraIdByNode, nodeByParaId, ordinalByNode, ambiguousParaIds });
 }
