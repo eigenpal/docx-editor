@@ -850,10 +850,24 @@ export function paragraphFragmentsOf(
  * The same walk as {@link paragraphFragmentsOf} for fragment lists that do not sit on the
  * page directly — a header/footer story's fragments, a note story's.
  */
+/**
+ * Memoized per fragments array and variant: page fragment arrays are identity-stable
+ * across incremental passes while every consumer (hit testing, selection, notes) flattens
+ * them per read, which made the flatten itself a per-keystroke cost on long documents.
+ */
+const paragraphFragmentsMemos = new WeakMap<
+  readonly BlockFragmentRecord[],
+  { withRepeats?: ParagraphFragmentRecord[]; withoutRepeats?: ParagraphFragmentRecord[] }
+>();
+
 export function paragraphFragmentsOfBlocks(
   blocks: readonly BlockFragmentRecord[],
   includeHeaderRepeats = false
 ): ParagraphFragmentRecord[] {
+  let memo = paragraphFragmentsMemos.get(blocks);
+  const slot = includeHeaderRepeats ? 'withRepeats' : 'withoutRepeats';
+  const cached = memo?.[slot];
+  if (cached) return cached;
   const found: ParagraphFragmentRecord[] = [];
   const visitBlocks = (list: readonly BlockFragmentRecord[]): void => {
     for (const block of list) {
@@ -868,6 +882,11 @@ export function paragraphFragmentsOfBlocks(
     }
   };
   visitBlocks(blocks);
+  if (!memo) {
+    memo = {};
+    paragraphFragmentsMemos.set(blocks, memo);
+  }
+  memo[slot] = found;
   return found;
 }
 

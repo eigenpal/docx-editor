@@ -84,33 +84,89 @@ interface PartDrawingContextSlot {
   readonly dispose: () => void;
 }
 
+/**
+ * One immutable subtree's drawing-atom facts, memoized per node so a keystroke's fresh
+ * part re-uses every shared block instead of re-walking the whole document (this runs on
+ * the drawing bundle's per-commit compatibility check).
+ */
+interface SubtreeDrawingAtoms {
+  /** Atom id → node for drawings in this subtree (usually empty). */
+  readonly atoms: ReadonlyMap<string, OoxmlNode>;
+  /** Nodes a flat walk of this subtree visits, for the global element budget. */
+  readonly visited: number;
+  /** Deepest visited node, relative to the subtree root (0 = the root itself). */
+  readonly deepest: number;
+}
+const subtreeDrawingAtomMemos = new WeakMap<OoxmlNode, SubtreeDrawingAtoms>();
+const EMPTY_ATOMS: ReadonlyMap<string, OoxmlNode> = new Map();
+/** Containers at least this wide compose from child memos instead of being one entry. */
+const ATOM_COMPOSE_CHILD_THRESHOLD = 16;
+const MAX_ATOM_COMPOSE_DEPTH = 32;
+
+function subtreeDrawingAtoms(node: OoxmlNode, composeDepth: number): SubtreeDrawingAtoms {
+  const cached = subtreeDrawingAtomMemos.get(node);
+  if (cached) return cached;
+  let result: SubtreeDrawingAtoms;
+  if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
+    result = { atoms: new Map([[node.id, node]]), visited: 1, deepest: 0 };
+  } else if (!('children' in node) || node.children.length === 0) {
+    result = { atoms: EMPTY_ATOMS, visited: 1, deepest: 0 };
+  } else if (
+    // The spine above the block level (document → body) is NARROW; composing it anyway is
+    // what routes the memoization down to the per-block subtrees. Below that, only wide
+    // containers earn their own composition.
+    (composeDepth < 2 || node.children.length >= ATOM_COMPOSE_CHILD_THRESHOLD) &&
+    composeDepth < MAX_ATOM_COMPOSE_DEPTH
+  ) {
+    let atoms: Map<string, OoxmlNode> | null = null;
+    let visited = 1;
+    let deepest = 0;
+    for (const child of node.children) {
+      const entry = subtreeDrawingAtoms(child, composeDepth + 1);
+      visited += entry.visited;
+      if (entry.deepest + 1 > deepest) deepest = entry.deepest + 1;
+      if (entry.atoms.size > 0) {
+        if (!atoms) atoms = new Map();
+        for (const [id, atom] of entry.atoms) atoms.set(id, atom);
+      }
+    }
+    result = { atoms: atoms ?? EMPTY_ATOMS, visited, deepest };
+  } else {
+    const atoms = new Map<string, OoxmlNode>();
+    let visited = 0;
+    let deepest = 0;
+    const stack: { readonly node: OoxmlNode; readonly depth: number }[] = [{ node, depth: 0 }];
+    while (stack.length > 0) {
+      const frame = stack.pop()!;
+      visited += 1;
+      // Defense-in-depth like the flat walk this replaces: past the global element budget
+      // the walk stops and the saturated count makes the caller answer null.
+      if (visited > MAX_PART_SCAN_ELEMENTS) break;
+      if (frame.depth > deepest) deepest = frame.depth;
+      const current = frame.node;
+      if (current.kind === 'drawing' || isRunLevelMcAlternateContent(current)) {
+        atoms.set(current.id, current);
+        continue;
+      }
+      if (!('children' in current)) continue;
+      for (let index = current.children.length - 1; index >= 0; index -= 1) {
+        stack.push({ node: current.children[index]!, depth: frame.depth + 1 });
+      }
+    }
+    result = { atoms: atoms.size > 0 ? atoms : EMPTY_ATOMS, visited, deepest };
+  }
+  subtreeDrawingAtomMemos.set(node, result);
+  return result;
+}
+
 /** @internal Exposed for bounded traversal regression tests. */
 export function drawingAtomIdentities(part: OoxmlPart): ReadonlyMap<string, OoxmlNode> | null {
-  const atoms = new Map<string, OoxmlNode>();
-  const stack: { readonly node: OoxmlNode; readonly depth: number }[] = [
-    { node: part.root, depth: 0 },
-  ];
-  let visited = 0;
-  while (stack.length > 0) {
-    const frame = stack.pop()!;
-    visited += 1;
-    if (
-      visited > MAX_PART_SCAN_ELEMENTS ||
-      frame.depth > DEFAULT_DRAWING_PROJECTION_LIMITS.maxDrawingDepth
-    ) {
-      return null;
-    }
-    const { node } = frame;
-    if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
-      atoms.set(node.id, node);
-      continue;
-    }
-    if (!('children' in node)) continue;
-    for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      stack.push({ node: node.children[index]!, depth: frame.depth + 1 });
-    }
-  }
-  return atoms;
+  // Same bounds as the flat walk this replaces: over the element budget or past the
+  // drawing depth limit answers null ("cannot verify"), never a partial map.
+  const facts = subtreeDrawingAtoms(part.root, 0);
+  if (facts.visited > MAX_PART_SCAN_ELEMENTS) return null;
+  if (facts.deepest > DEFAULT_DRAWING_PROJECTION_LIMITS.maxDrawingDepth) return null;
+  return facts.atoms;
 }
 
 function drawingProjectionLayoutToken(projection: DrawingProjection): string {

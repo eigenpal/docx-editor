@@ -48,8 +48,15 @@ export const METRIC_COMPATIBLE_FALLBACK_FAMILIES: ReadonlyMap<string, string> = 
   ['calibri', 'Carlito'],
 ]);
 
-/** Default width-cache capacity before least-recently-used eviction. */
-export const DEFAULT_MAX_CANVAS_WIDTH_CACHE_ENTRIES = 4096;
+/**
+ * Default width-cache capacity before least-recently-used eviction.
+ *
+ * Sized past the working set of a several-hundred-page document: the canvas path carries
+ * whole cold opens (fonts still resolving) and the per-run fallback of the shaped
+ * measurer, and a cap under the distinct-string count made every full pass re-measure
+ * what the previous one had just evicted.
+ */
+export const DEFAULT_MAX_CANVAS_WIDTH_CACHE_ENTRIES = 65536;
 /** Default line-metrics cache capacity (one entry per distinct font shorthand). */
 export const DEFAULT_MAX_CANVAS_METRICS_CACHE_ENTRIES = 256;
 

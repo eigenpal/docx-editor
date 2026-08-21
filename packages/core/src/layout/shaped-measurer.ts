@@ -120,11 +120,43 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
     language = 'en',
   } = options;
 
-  const widths = new Map<string, number>();
-  const lines = new Map<string, { height: number; baseline: number }>();
+  // Nested by font object and half-point size rather than by one concatenated string key:
+  // `measure` runs once per word-boundary probe of every line break in the document, and
+  // building (then hashing) a `identity|size|text` string per call made the KEYS a
+  // measurable slice of a large document's cold open. The font level is a WeakMap so a
+  // font-epoch swap releases its subtree.
+  const widthsByFont = new WeakMap<ResolvedFont, Map<number, Map<string, number>>>();
+  const linesByFont = new WeakMap<
+    ResolvedFont,
+    Map<number, { height: number; baseline: number }>
+  >();
+  // Style objects live inside cached broken lines, so one resolution per style OBJECT
+  // amortizes the family/weight lookup across every probe of the runs that share it.
+  const fontsByStyle = new WeakMap<ResolvedRunStyle, ResolvedFont | null>();
 
-  const keyOf = (font: ResolvedFont, style: ResolvedRunStyle): string =>
-    `${font.identity}|${halfPointsOf(style)}`;
+  const resolveFontCached = (style: ResolvedRunStyle): ResolvedFont | null => {
+    // A stored `null` ("no font resolves") comes back as null, not undefined, so the
+    // negative answer is cached too.
+    const cached = fontsByStyle.get(style);
+    if (cached !== undefined) return cached;
+    const font = resolveFont(style);
+    fontsByStyle.set(style, font);
+    return font;
+  };
+
+  const widthsFor = (font: ResolvedFont, halfPoints: number): Map<string, number> => {
+    let bySize = widthsByFont.get(font);
+    if (!bySize) {
+      bySize = new Map();
+      widthsByFont.set(font, bySize);
+    }
+    let byText = bySize.get(halfPoints);
+    if (!byText) {
+      byText = new Map();
+      bySize.set(halfPoints, byText);
+    }
+    return byText;
+  };
 
   const shape = (text: string, font: ResolvedFont, style: ResolvedRunStyle): ShapedRun =>
     shaper.shape({
@@ -152,11 +184,11 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
   return {
     measure(text, style) {
       if (text.length === 0) return 0;
-      const font = resolveFont(style);
+      const font = resolveFontCached(style);
       if (!font) return fallback.measure(text, style);
 
-      const key = `${keyOf(font, style)}|${text}`;
-      let advance = widths.get(key);
+      const byText = widthsFor(font, halfPointsOf(style));
+      let advance = byText.get(text);
       if (advance === undefined) {
         let total = 0;
         try {
@@ -167,7 +199,7 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
           return fallback.measure(text, style);
         }
         advance = total / fixedPointScale;
-        widths.set(key, advance);
+        byText.set(text, advance);
       }
       // Base-size advance scaled to the drawn size; the cache stays keyed on the base size,
       // so baseline and super/subscript runs of one face share entries.
@@ -178,12 +210,17 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
     },
 
     lineMetrics(style) {
-      const font = resolveFont(style);
+      const font = resolveFontCached(style);
       if (!font) return fallback.lineMetrics(style);
 
       const factor = sizeFactorOf(style);
-      const key = keyOf(font, style);
-      const cached = lines.get(key);
+      let bySize = linesByFont.get(font);
+      if (!bySize) {
+        bySize = new Map();
+        linesByFont.set(font, bySize);
+      }
+      const halfPoints = halfPointsOf(style);
+      const cached = bySize.get(halfPoints);
       if (cached) {
         return factor === 1
           ? cached
@@ -214,7 +251,7 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
       // Fallback answers are already at the drawn size; only face metrics shaped at the base
       // size are cached and rescaled.
       if (!scalable) return metrics;
-      lines.set(key, metrics);
+      bySize.set(halfPoints, metrics);
       return factor === 1
         ? metrics
         : { height: metrics.height * factor, baseline: metrics.baseline * factor };

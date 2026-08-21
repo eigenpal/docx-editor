@@ -106,9 +106,16 @@ export interface HeaderFooterStoryLayout {
   readonly withPageContext: (ctx: FieldPageContext) => HeaderFooterStoryLayout;
 }
 
+/** Memoized per immutable part: the fingerprint+hash walk is pure and parts never mutate. */
+const headerFooterContentKeys = new WeakMap<OoxmlPart, string>();
+
 /** Bounded digest of a header/footer part's canonical tree for furniture cache identity. */
 export function headerFooterContentKey(part: OoxmlPart): string {
-  return stableHash(canonicalOoxmlFingerprint(part));
+  const cached = headerFooterContentKeys.get(part);
+  if (cached !== undefined) return cached;
+  const key = stableHash(canonicalOoxmlFingerprint(part));
+  headerFooterContentKeys.set(part, key);
+  return key;
 }
 
 function createBoundedContextCache(maxEntries: number): {

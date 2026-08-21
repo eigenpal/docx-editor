@@ -237,6 +237,15 @@ export interface SemanticLayoutOptions {
    */
   readonly retainKeys?: Set<string> | false;
   /**
+   * Part-level drawing projection/resource epoch for the section prepass memo.
+   *
+   * Moves whenever any drawing projection or resource state in the part does, standing in
+   * for the per-paragraph drawing tokens the memo would otherwise have to recompute to
+   * validate. A caller that supplies `drawingTokenForParagraph` without this epoch keeps
+   * the recompute path — the memo must never miss a token move it cannot see.
+   */
+  readonly drawingLayoutEpoch?: string;
+  /**
    * Who produced the measurements, folded into every cache key.
    *
    * A font arriving after first paint changes every advance in the document while no
@@ -408,6 +417,26 @@ interface PreparedBlockMemo {
 }
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
+
+/**
+ * One section's whole prepass — prepared entries, cache keys, flow keys and document
+ * order — kept on the section's {@link LayoutSession} and reused verbatim while every
+ * input it derives from is unchanged. Stored through the session's opaque `prepass` slot.
+ */
+interface SectionPrepass {
+  readonly bodies: readonly OoxmlElement[];
+  readonly producer: string;
+  readonly contentWidth: number;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+  readonly drawingEpoch: string;
+  readonly prepared: PreparedBlock[];
+  readonly keys: string[];
+  readonly paragraphDocumentOrder: ReadonlyMap<string, number>;
+  readonly keepsNext: boolean[];
+  readonly markerTexts: (string | undefined)[];
+  readonly flowKeys: string[];
+}
 const drawingSourceOrderByContext = new WeakMap<
   InlineDrawingLayoutContext,
   ReadonlyMap<string, number>
@@ -930,9 +959,64 @@ function layoutBlocksPass(
     });
     return entry;
   };
-  const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
-
-  const keys = prepared.map((entry) => entry.key);
+  // SECTION PREPASS MEMO. Everything derived below is a pure function of the block list
+  // plus the inputs the memo compares, and on a typing pass in a many-section document
+  // every section but the edited one has an IDENTICAL block list — while rebuilding these
+  // arrays anyway made the prepass, not placement, the floor cost of a keystroke.
+  // `drawingLayoutEpoch` stands in for the per-block drawing tokens (the epoch moves
+  // whenever any drawing projection or resource in the part does); a caller that threads
+  // per-paragraph drawing tokens WITHOUT an epoch keeps the recompute path, because the
+  // memo could not see a token move.
+  const drawingEpoch =
+    options.drawingTokenForParagraph === undefined && options.drawingLayoutToken === undefined
+      ? (options.drawingLayoutEpoch ?? '')
+      : (options.drawingLayoutEpoch ?? null);
+  const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
+  const prepassValid =
+    prepassMemo != null &&
+    drawingEpoch !== null &&
+    prepassMemo.drawingEpoch === drawingEpoch &&
+    prepassMemo.producer === producer &&
+    prepassMemo.contentWidth === contentWidth &&
+    prepassMemo.styleCascade === styleCascade &&
+    prepassMemo.listItems === listItems &&
+    prepassMemo.bodies.length === bodies.length &&
+    prepassMemo.bodies.every((block, index) => block === bodies[index]);
+  const prepass: SectionPrepass = prepassValid ? prepassMemo : buildSectionPrepass();
+  function buildSectionPrepass(): SectionPrepass {
+    const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
+    const keys = prepared.map((entry) => entry.key);
+    const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
+    const markerTexts = prepared.map((entry) =>
+      entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
+    );
+    return {
+      bodies,
+      producer,
+      contentWidth,
+      styleCascade,
+      listItems,
+      drawingEpoch: drawingEpoch ?? '',
+      prepared,
+      keys,
+      paragraphDocumentOrder: paragraphDocumentOrderOf(
+        prepared,
+        contentWidth,
+        styleCascade,
+        displayMode
+      ),
+      keepsNext,
+      markerTexts,
+      // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
+      // stored under; only `w:keepNext` and list markers make the two differ (§17.3.1.15).
+      flowKeys: listMarkerFlowKeys(
+        keepNextFlowKeys(keys, (index) => keepsNext[index]!),
+        (index) => markerTexts[index]
+      ),
+    };
+  }
+  if (session && drawingEpoch !== null && !prepassValid) session.prepass = prepass;
+  const { prepared, keys, paragraphDocumentOrder, keepsNext, flowKeys } = prepass;
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
   const publishRetainedKeys = (): void => {
     // `false` is the orchestrator saying this pass skips the sweep; a standalone pass asks
@@ -946,22 +1030,6 @@ function layoutBlocksPass(
       prepared.flatMap((entry) => (entry.kind === 'table' ? [entry.table] : []))
     );
   };
-  const paragraphDocumentOrder = paragraphDocumentOrderOf(
-    prepared,
-    contentWidth,
-    styleCascade,
-    displayMode
-  );
-  const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
-  const markerTexts = prepared.map((entry) =>
-    entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
-  );
-  // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
-  // stored under; only `w:keepNext` makes the two differ (§17.3.1.15).
-  const flowKeys = listMarkerFlowKeys(
-    keepNextFlowKeys(keys, (index) => keepsNext[index]!),
-    (index) => markerTexts[index]
-  );
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
   // break; resuming from one would place new content against a stale flow. A parity flip

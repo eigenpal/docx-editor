@@ -202,9 +202,20 @@ export function fragmentOwnsAtomOffset(
   return atomOffset >= fragment.range.start && atomOffset < fragment.range.end;
 }
 
+/**
+ * Memoized by the fragments array's identity: pages reuse their fragment arrays across
+ * incremental passes, and this flatten runs per page per pass on the ref-collection path.
+ */
+const paragraphFragmentsMemos = new WeakMap<
+  readonly BlockFragmentRecord[],
+  ParagraphFragmentRecord[]
+>();
+
 function paragraphFragmentsOfBlocks(
   blocks: readonly BlockFragmentRecord[]
 ): ParagraphFragmentRecord[] {
+  const cached = paragraphFragmentsMemos.get(blocks);
+  if (cached) return cached;
   const found: ParagraphFragmentRecord[] = [];
   const visit = (list: readonly BlockFragmentRecord[]): void => {
     for (const block of list) {
@@ -219,6 +230,7 @@ function paragraphFragmentsOfBlocks(
     }
   };
   visit(blocks);
+  paragraphFragmentsMemos.set(blocks, found);
   return found;
 }
 
@@ -772,12 +784,47 @@ export function reprojectBodyNoteMarks(
 
   let anyPageChanged = false;
   const pages = layout.pages.map((page) => {
+    // Most pages of a long document carry no note reference at all; their fragment trees
+    // are identity-stable across passes, so the answer memoizes and the reprojection walk
+    // skips them in O(1) instead of visiting every span per keystroke.
+    if (!blocksCarryNoteNav(page.fragments)) return page;
     const fragments = reprojectBodyBlocks(page.fragments, noteMarks);
     if (fragments === page.fragments) return page;
     anyPageChanged = true;
     return { ...page, fragments };
   });
   return anyPageChanged ? { revision: layout.revision, pages } : layout;
+}
+
+/** Whether any span under `blocks` is a projected to-note citation, memoized by identity. */
+const blocksNoteNavMemos = new WeakMap<readonly BlockFragmentRecord[], boolean>();
+
+function blocksCarryNoteNav(blocks: readonly BlockFragmentRecord[]): boolean {
+  const cached = blocksNoteNavMemos.get(blocks);
+  if (cached !== undefined) return cached;
+  let found = false;
+  const visit = (list: readonly BlockFragmentRecord[]): void => {
+    for (const block of list) {
+      if (found) return;
+      if (block.kind === 'paragraph') {
+        for (const line of block.lines) {
+          for (const span of line.spans) {
+            if (span.projected && span.noteNav?.direction === 'to-note') {
+              found = true;
+              return;
+            }
+          }
+        }
+        continue;
+      }
+      for (const row of block.rows) {
+        for (const cell of row.cells) visit(cell.blocks);
+      }
+    }
+  };
+  visit(blocks);
+  blocksNoteNavMemos.set(blocks, found);
+  return found;
 }
 
 function reprojectBodyBlocks(

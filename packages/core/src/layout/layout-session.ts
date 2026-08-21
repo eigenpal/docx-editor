@@ -96,6 +96,12 @@ export interface LayoutSession {
   parityDependent: boolean;
   /** Parity (0/1) of the document page index this session's layout started on. */
   startPageParity: number;
+  /**
+   * The section's memoized prepass (prepared blocks, cache keys, flow keys, document
+   * order), reused verbatim while its inputs are unchanged. Opaque here: the shape is
+   * owned by `semantic-layout.ts`, which is the only reader and writer.
+   */
+  prepass: unknown;
   /** Line counter at the start of the previous pass, for translating reused section counts. */
   startLineCounter: number;
   /**
@@ -151,6 +157,7 @@ export function createLayoutSession(): LayoutSession {
     context: '',
     parityDependent: false,
     startPageParity: 0,
+    prepass: null,
     startLineCounter: 0,
     endLineCounter: 0,
     endCursorY: 0,

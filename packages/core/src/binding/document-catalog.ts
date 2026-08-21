@@ -50,6 +50,67 @@ export function collectDocumentFonts(
   themeFonts?: { readonly major: string | null; readonly minor: string | null }
 ): readonly string[] {
   const byFold = new Map<string, string>();
+  // Composed from per-subtree memos: every keystroke publishes a new root whose children
+  // are all shared but one, and re-walking the whole document per commit made the font
+  // picker's derivation a per-keystroke cost on long documents. The memo is keyed on the
+  // immutable subtree node plus the theme pair, because the theme decides what a theme
+  // slot reference contributes.
+  for (const root of roots) {
+    // The root ELEMENT itself is walked directly (a root is never an `rFonts`); its
+    // children carry the memo.
+    for (const child of root.children) {
+      if (!isElement(child)) continue;
+      for (const [fold, family] of subtreeFontsOf(child, themeFonts)) {
+        if (!byFold.has(fold)) byFold.set(fold, family);
+      }
+    }
+  }
+  const fonts = [...byFold.values()];
+  fonts.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return fonts;
+}
+
+interface SubtreeFontsMemo {
+  readonly major: string | null;
+  readonly minor: string | null;
+  readonly byFold: ReadonlyMap<string, string>;
+}
+const subtreeFontsMemos = new WeakMap<OoxmlElement, SubtreeFontsMemo>();
+
+/**
+ * Containers at least this wide compose from their children's memos instead of walking:
+ * `w:body` (thousands of blocks) must not be one memo entry, or the first edit under it
+ * re-walks the whole story anyway.
+ */
+const COMPOSE_CHILD_THRESHOLD = 16;
+/** Compose recursion stops here; deeper subtrees take the iterative terminal walk. */
+const MAX_COMPOSE_DEPTH = 32;
+
+function subtreeFontsOf(
+  subtree: OoxmlElement,
+  themeFonts: { readonly major: string | null; readonly minor: string | null } | undefined,
+  depth = 0
+): ReadonlyMap<string, string> {
+  const major = themeFonts?.major ?? null;
+  const minor = themeFonts?.minor ?? null;
+  const cached = subtreeFontsMemos.get(subtree);
+  if (cached && cached.major === major && cached.minor === minor) return cached.byFold;
+  if (
+    subtree.children.length >= COMPOSE_CHILD_THRESHOLD &&
+    depth < MAX_COMPOSE_DEPTH &&
+    subtree.localName !== 'rFonts'
+  ) {
+    const merged = new Map<string, string>();
+    for (const child of subtree.children) {
+      if (!isElement(child)) continue;
+      for (const [fold, family] of subtreeFontsOf(child, themeFonts, depth + 1)) {
+        if (!merged.has(fold)) merged.set(fold, family);
+      }
+    }
+    subtreeFontsMemos.set(subtree, { major, minor, byFold: merged });
+    return merged;
+  }
+  const byFold = new Map<string, string>();
   const add = (family: string | null | undefined): void => {
     if (!family || !FONT_NAME.test(family)) return;
     const fold = family.toLowerCase();
@@ -59,7 +120,7 @@ export function collectDocumentFonts(
   // be the one place a deep generic subtree can overflow the call stack. Children are
   // pushed in reverse so the stack pops them in DOCUMENT order — "first-seen casing"
   // has to mean the first occurrence a reader would see, not the last.
-  const stack: OoxmlNode[] = [...roots].reverse();
+  const stack: OoxmlNode[] = [subtree];
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (!isElement(node)) continue;
@@ -81,9 +142,8 @@ export function collectDocumentFonts(
     }
     for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
   }
-  const fonts = [...byFold.values()];
-  fonts.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  return fonts;
+  subtreeFontsMemos.set(subtree, { major, minor, byFold });
+  return byFold;
 }
 
 /**
