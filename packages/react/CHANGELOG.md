@@ -1,5 +1,12 @@
 # @eigenpal/docx-js-editor
 
+## 2.6.1
+
+### Patch Changes
+
+- fd610f2: Fixed the type declaration build for the react, vue, pro, and fonts packages, which could fail depending on which ambient type packages were installed.
+  - @docx-editor.dev/i18n@2.6.1
+
 ## 2.6.0
 
 ### Minor Changes
