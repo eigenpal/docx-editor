@@ -67,9 +67,9 @@ const bold = useEditorCommand('text.bold');
 <template>
   <button
     @mousedown.prevent
-    :disabled="!bold.isEnabled"
-    :aria-pressed="bold.isActive"
-    :title="bold.disabledReason ?? 'Bold'"
+    :disabled="!bold.isEnabled.value"
+    :aria-pressed="bold.isActive.value"
+    :title="bold.disabledReason.value ?? 'Bold'"
     @click="bold.execute()"
   >
     Bold

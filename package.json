@@ -36,6 +36,7 @@
     "fix:pro-license-headers": "bun run --filter '@docx-editor.dev/pro' license:add",
     "check:consumer-install": "node scripts/check-consumer-install.mjs",
     "check:docs-mdx": "node scripts/check-docs-mdx.mjs",
+    "check:docs-vue-refs": "node scripts/check-docs-vue-refs.mjs",
     "check:editor-api-license-headers": "bun run --filter '@docx-editor.dev/editor-api' license:check",
     "fix:editor-api-license-headers": "bun run --filter '@docx-editor.dev/editor-api' license:add",
     "check:editor-contract": "node scripts/check-editor-contract.mjs",

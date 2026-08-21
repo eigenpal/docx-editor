@@ -8,8 +8,10 @@ order: 38
 Call each composable during `setup()` inside `DocxEditor.Root`. The packaged
 `<DocxEditor>` also renders this root.
 
-These composables use Vue refs and computed refs. Vue unwraps those values in
-templates. Use `.value` when you read them in script code.
+These composables return a ref, or a plain object that holds refs. A template
+unwraps a ref only when the ref is a top-level binding. A ref that sits on a
+returned object stays a ref, so read it with `.value` in the template and in
+script code.
 
 ## useEditorCommand
 
@@ -25,9 +27,9 @@ const bold = useEditorCommand('text.bold');
 <template>
   <button
     @mousedown.prevent
-    :disabled="!bold.isEnabled"
-    :data-active="bold.isActive || undefined"
-    :title="bold.disabledReason ?? 'Bold'"
+    :disabled="!bold.isEnabled.value"
+    :data-active="bold.isActive.value || undefined"
+    :title="bold.disabledReason.value ?? 'Bold'"
     @click="bold.execute()"
   >
     B
@@ -36,8 +38,8 @@ const bold = useEditorCommand('text.bold');
 ```
 
 `execute()` returns `true` when the editor applies the command. `isActive`,
-`isEnabled`, and `disabledReason` are computed refs. The template unwraps them.
-Use `bold.isEnabled.value` in script code.
+`isEnabled`, and `disabledReason` are computed refs on a plain object. The
+template does not unwrap them, so read each one with `.value`.
 
 The engine is the only source for enabled state. Show `disabledReason` when a
 control cannot run.
@@ -158,16 +160,19 @@ const font = useFontFamily();
 
 <template>
   <select
-    :value="font.value ?? ''"
-    :disabled="!font.isEnabled"
+    :value="font.value.value ?? ''"
+    :disabled="!font.isEnabled.value"
     @change="font.setValue(($event.target as HTMLSelectElement).value)"
   >
-    <option v-for="family in font.options" :key="family" :value="family">
+    <option v-for="family in font.options.value" :key="family" :value="family">
       {{ family }}
     </option>
   </select>
 </template>
 ```
+
+The current family sits on the `value` member, and that member is a computed
+ref. Read it as `font.value.value`.
 
 `useParagraphStyle` provides the same pattern for paragraph styles.
 
@@ -192,7 +197,7 @@ function toggleOrientation() {
 </script>
 
 <template>
-  <button :disabled="!page.isEnabled" @click="toggleOrientation">
+  <button :disabled="!page.isEnabled.value" @click="toggleOrientation">
     {{ landscape ? 'Use portrait' : 'Use landscape' }}
   </button>
 </template>
@@ -217,15 +222,15 @@ const outline = useDocumentOutline();
 </script>
 
 <template>
-  <p v-if="outline.isEmpty">No headings</p>
+  <p v-if="outline.isEmpty.value">No headings</p>
   <ul v-else>
     <li
-      v-for="{ heading, depth } in outline.items"
+      v-for="{ heading, depth } in outline.items.value"
       :key="heading.blockId"
       :style="{ paddingInlineStart: `${depth * 12}px` }"
     >
       <button
-        :aria-current="heading.blockId === outline.selectedBlockId ? 'location' : undefined"
+        :aria-current="heading.blockId === outline.selectedBlockId.value ? 'location' : undefined"
         @click="outline.goTo(heading.blockId)"
       >
         {{ heading.text }}
@@ -254,16 +259,16 @@ const search = useDocumentSearch();
   <label>
     Find
     <input
-      :value="search.query"
+      :value="search.query.value"
       @input="search.setQuery(($event.target as HTMLInputElement).value)"
     />
   </label>
   <span aria-live="polite">
-    {{ search.matches.length === 0 ? 0 : search.activeIndex + 1 }}
-    / {{ search.matches.length }}{{ search.truncated ? '+' : '' }}
+    {{ search.matches.value.length === 0 ? 0 : search.activeIndex.value + 1 }}
+    / {{ search.matches.value.length }}{{ search.truncated.value ? '+' : '' }}
   </span>
-  <button :disabled="search.matches.length === 0" @click="search.previous">Previous</button>
-  <button :disabled="search.matches.length === 0" @click="search.next">Next</button>
+  <button :disabled="search.matches.value.length === 0" @click="search.previous">Previous</button>
+  <button :disabled="search.matches.value.length === 0" @click="search.next">Next</button>
 </template>
 ```
 

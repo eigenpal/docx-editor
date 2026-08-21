@@ -206,6 +206,13 @@ jobs:
         # it on the PR, not in `docx-editor-page`'s build.
         run: bun run check:docs-mdx
 
+      - name: Docs Vue ref check
+        # A Vue template unwraps a ref only when the ref is a top-level binding.
+        # Most composables return a plain object of refs, so a sample that drops
+        # `.value` renders a control that never disables. Nothing type-checks
+        # this prose, so the wrong sample would ship as written.
+        run: bun run check:docs-vue-refs
+
   # Diffs the PR's published-package sizes against the latest successful main
   # run and keeps ONE sticky PR comment up to date. Fails on huge tarball
   # growth (thresholds in scripts/check-package-size.mjs) unless the PR
