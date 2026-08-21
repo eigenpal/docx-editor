@@ -569,4 +569,19 @@ describe('a hard break occupies a model offset in layout too', () => {
     const { surface } = mount('<w:p><w:r><w:t>ab</w:t><w:br/></w:r></w:p>');
     expect(surface.session.bodyText()).toBe('ab\n');
   });
+
+  test('a commit made outside this surface still reaches the screen', async () => {
+    // The shape an undo from another editor sharing the store takes, or a host writing
+    // straight to the session: nothing calls the surface's own `commit`, so the only route
+    // to the pages is the scheduler publishing on its own. Without a `schedule` there was
+    // no such route — the model moved and the painted pages kept the old revision for good.
+    const { surface, container } = mount(paragraph('ORIGINAL'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'EXT-' }]);
+    expect(surface.session.bodyText()).toContain('EXT-ORIGINAL');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(container.textContent).toContain('EXT-ORIGINAL');
+    surface.destroy();
+  });
 });

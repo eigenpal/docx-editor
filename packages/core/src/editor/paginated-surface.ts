@@ -919,6 +919,28 @@ export function mountPaginatedSurface(
       return layout;
     },
     currentRevision: () => session.packageRevision(),
+    // THE BACKSTOP, not the normal route. Every edit this surface makes still lays out
+    // synchronously inside `commit`, because the next edit has to read current geometry —
+    // and `flush` cancels whatever this armed, so the ordinary keystroke pays one timer
+    // arm and one cancel, never a second pass.
+    //
+    // What it buys is the two cases that reach the scheduler without a synchronous flush
+    // behind them. A commit from OUTSIDE this surface (undo, or another editor sharing the
+    // store) only ever reached the screen through `publish`, and with nothing armed it
+    // simply never got there: the model moved and the painted pages kept the old revision
+    // for good. And when `flush` abandons a pass — stale, or cancelled mid-flight — it
+    // carries the scope forward and re-arms, which was a no-op, so the surface sat on a
+    // stale paint until some unrelated call happened to flush. That second one is how the
+    // header caret bug stayed invisible: a paint one revision behind is exactly what makes
+    // the post-edit caret unwritable.
+    //
+    // A timer rather than an animation frame, like the rest of this file: rAF does not fire
+    // in a background tab, and a document that stops repainting when the tab is hidden is
+    // the same stale-paint failure by another route.
+    schedule: (run) => {
+      const handle = setTimeout(run, 0);
+      return () => clearTimeout(handle);
+    },
     publish: (layout) => {
       // Release the previous layout BEFORE the new one replaces it: the roster cache held
       // it by strong reference, and a 200-page graph kept alive beside the live one is tens

@@ -261,6 +261,23 @@ describe('a layout computed against a superseded revision is never published (ta
     expect(h.scheduler.staleDiscards).toBe(1);
   });
 
+  test('an abandoned pass re-arms itself, so nothing waits for an unrelated flush', () => {
+    let runs = 0;
+    const h = harness({ revisionDuringRun: () => (runs++ === 0 ? 2 : 2) });
+    h.scheduler.notify(change({ dirty: ['p1'], toRevision: 1 }));
+    h.step();
+    // Discarded as stale. The carried-forward scope has to schedule its own retry: a host
+    // that supplies no `schedule` strands it until something else happens to flush, and a
+    // surface sitting on a stale paint cannot write a post-edit caret into it.
+    expect(h.published.length).toBe(0);
+    expect(h.scheduler.staleDiscards).toBe(1);
+    expect(h.queueLength()).toBe(1);
+
+    h.step();
+    expect(h.published.length).toBe(1);
+    expect(h.published[0]!.layout.revision).toBe(2);
+  });
+
   test('a current layout publishes with the scope it was computed for', () => {
     const h = harness();
     h.scheduler.notify(change({ dirty: ['p1'], toRevision: 1 }));

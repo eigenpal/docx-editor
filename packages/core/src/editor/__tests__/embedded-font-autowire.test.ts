@@ -160,8 +160,13 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       onFontError: (error) => errors.push(error),
     });
     await mounted(editor);
+    // The document is READABLE before its fonts resolve — that is the property, and it is
+    // what `measurer: 'fixed'` here stood for. Asserting the measurer is still fixed at
+    // this point asserts that an async resolution has not landed yet, which nothing
+    // promises: `mounted` polls on a timer, and under a loaded parallel run the upgrade
+    // can arrive inside one of its sleeps.
     expect(editor.surface).not.toBeNull();
-    expect(editor.fontMeasurement().measurer).toBe('fixed');
+    expect(container.textContent).toContain('shaped hello');
     await fontsSettled(editor);
     expect(editor.fontMeasurement()).toMatchObject({ measurer: 'shaped', resolving: false });
     expect(errors).toHaveLength(0);
