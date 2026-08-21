@@ -989,9 +989,9 @@ export type TableCellVerticalAlignment = 'top' | 'center' | 'bottom';
 /**
  * Adjacent grid columns addressed by an internal divider resize gesture.
  *
- * `sourceRevision` is captured from the store revision when the target is built.
- * Commit MUST refuse when it does not equal the current store revision, even if an older layout
- * remains published for geometry.
+ * `sourceRevision` is the PACKAGE revision of the layout the target was read from — the number
+ * `getDocumentHandle()` reports, never one story's own. Commit MUST refuse when it no longer
+ * equals the current one, even if an older layout remains published for geometry.
  */
 export interface TableColumnDividerResizeTarget {
   readonly sourceRevision: number;
@@ -1004,9 +1004,9 @@ export interface TableColumnDividerResizeTarget {
 /**
  * Last grid column and table width addressed by an outer-right-edge resize gesture.
  *
- * `sourceRevision` is captured from the store revision when the target is built.
- * Commit MUST refuse when it does not equal the current store revision, even if an older layout
- * remains published for geometry.
+ * `sourceRevision` follows the same rule as {@link TableColumnDividerResizeTarget}: the package
+ * revision of the layout the target was read from, and commit refuses once it no longer equals
+ * the current one.
  */
 export interface TableRightEdgeResizeTarget {
   readonly sourceRevision: number;
@@ -1015,7 +1015,7 @@ export interface TableRightEdgeResizeTarget {
   readonly isHeaderRepeat: boolean;
 }
 
-/** Explicit row occurrence for furniture/context commands. */
+/** Explicit row occurrence. `sourceRevision` per {@link TableColumnDividerResizeTarget}. */
 export interface TableRowOccurrenceTarget {
   readonly sourceRevision: number;
   readonly tableId: string;
@@ -1023,7 +1023,7 @@ export interface TableRowOccurrenceTarget {
   readonly isHeaderRepeat: boolean;
 }
 
-/** Explicit column occurrence for furniture/context commands. */
+/** Explicit column occurrence. `sourceRevision` per {@link TableColumnDividerResizeTarget}. */
 export interface TableColumnOccurrenceTarget {
   readonly sourceRevision: number;
   readonly tableId: string;

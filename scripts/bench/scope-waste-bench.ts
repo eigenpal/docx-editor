@@ -24,7 +24,11 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { strToU8, zipSync } from 'fflate';
+// The engine's own zip writer, not `fflate` directly: `fflate` is a dependency of
+// `packages/core`, and a script in this directory resolves against the ROOT package, where
+// it is not declared. Importing it here ran fine locally on a hoisted install and failed on
+// CI with "Cannot find package 'fflate'".
+import { strToU8, writeZip } from '../../packages/core/src/store/package/zip.ts';
 import { paragraphTextOf } from '../../packages/core/src/store/index.ts';
 import { mountPaginatedSurface } from '../../packages/core/src/editor/paginated-surface.ts';
 import type { PaginatedSurface } from '../../packages/core/src/editor/paginated-surface-contract.ts';
@@ -42,45 +46,53 @@ const TABLE =
 
 /** A document carrying every story the scenarios type into, so nothing is created mid-run. */
 function fixture(): Uint8Array {
-  const part = (kind: 'header' | 'footer', name: string, text: string): [string, Uint8Array] => [
-    `word/${name}`,
-    strToU8(`<w:${kind === 'header' ? 'hdr' : 'ftr'} xmlns:w="${W}">${p(text)}</w:${
-      kind === 'header' ? 'hdr' : 'ftr'
-    }>`),
-  ];
-  return zipSync({
-    '[Content_Types].xml': strToU8(
-      `<Types xmlns="${CT}">` +
-        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
-        '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' +
-        '</Types>'
-    ),
-    '_rels/.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
-    ),
-    'word/_rels/document.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}">` +
-        `<Relationship Id="rId10" Type="${R}/header" Target="header1.xml"/>` +
-        `<Relationship Id="rId11" Type="${R}/footer" Target="footer1.xml"/>` +
-        '</Relationships>'
-    ),
-    ...Object.fromEntries([
-      part('header', 'header1.xml', 'HDR'),
-      part('footer', 'footer1.xml', 'FTR'),
-    ]),
-    'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
-        p('body one') +
-        p('body two') +
-        TABLE +
-        '<w:sectPr>' +
-        '<w:headerReference w:type="default" r:id="rId10"/>' +
-        '<w:footerReference w:type="default" r:id="rId11"/>' +
-        '</w:sectPr></w:body></w:document>'
-    ),
-  });
+  const story = (kind: 'header' | 'footer', name: string, text: string): [string, Uint8Array] => {
+    const root = kind === 'header' ? 'hdr' : 'ftr';
+    return [`/word/${name}`, strToU8(`<w:${root} xmlns:w="${W}">${p(text)}</w:${root}>`)];
+  };
+  const contentTypes =
+    `<Types xmlns="${CT}">` +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+    '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+    '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' +
+    '</Types>';
+  const documentXml =
+    `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+    p('body one') +
+    p('body two') +
+    TABLE +
+    '<w:sectPr>' +
+    '<w:headerReference w:type="default" r:id="rId10"/>' +
+    '<w:footerReference w:type="default" r:id="rId11"/>' +
+    '</w:sectPr></w:body></w:document>';
+  // Canonical part names carry a leading slash; `writeZip` validates them through the OPC
+  // profile and strips it for the zip entry.
+  return writeZip(
+    new Map<string, Uint8Array>([
+      ['/[Content_Types].xml', strToU8(contentTypes)],
+      [
+        '/_rels/.rels',
+        strToU8(
+          `<Relationships xmlns="${REL}">` +
+            `<Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/>` +
+            '</Relationships>'
+        ),
+      ],
+      [
+        '/word/_rels/document.xml.rels',
+        strToU8(
+          `<Relationships xmlns="${REL}">` +
+            `<Relationship Id="rId10" Type="${R}/header" Target="header1.xml"/>` +
+            `<Relationship Id="rId11" Type="${R}/footer" Target="footer1.xml"/>` +
+            '</Relationships>'
+        ),
+      ],
+      story('header', 'header1.xml', 'HDR'),
+      story('footer', 'footer1.xml', 'FTR'),
+      ['/word/document.xml', strToU8(documentXml)],
+    ])
+  );
 }
 
 export interface ScopeWasteScenario {
