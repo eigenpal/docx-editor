@@ -47,6 +47,11 @@ import type {
   TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
 import { paintPageNoteAreas } from './semantic-paint-notes.ts';
+import {
+  applyHeaderFooterPaintChrome,
+  headerFooterBandHeightPt,
+  headerFooterBandIsActive,
+} from './semantic-paint-hf-chrome.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
@@ -203,6 +208,10 @@ export interface PaintOptions {
    *
    * When set, the matching `[data-docx-hf]` container is editable and every body
    * `.docx-page-content` box is inert; all other furniture stays read-only.
+   *
+   * Deliberately OUTSIDE the paint-reuse key: entering a header must not rebuild
+   * body sheets. Chrome is applied to already-painted nodes in place, the way TOC
+   * hover is.
    */
   readonly activeHeaderFooterRId?: string;
   /**
@@ -210,6 +219,8 @@ export interface PaintOptions {
    *
    * Required with {@link activeHeaderFooterRId} so only one painted copy receives
    * `data-docx-hf-active` / the engine caret when the same rId appears on many pages.
+   * Also outside the paint-reuse key — moving the caret across shared copies retints
+   * markers in place rather than replacing every page.
    */
   readonly activeHeaderFooterPageIndex?: number;
   /**
@@ -353,7 +364,9 @@ function appendAnchoredDrawingsForRecords(
   // the band is not being edited: their box overflows are VISIBLE (Word draws header ink
   // into the margins and over the body), so a shape hanging past the band must not
   // swallow clicks meant for the document text underneath (#856).
-  interactive = true
+  interactive = true,
+  /** Marks a page-relative furniture layer so in-place chrome can retint hit-testing. */
+  hfFrontKind?: 'header' | 'footer'
 ): void {
   if (drawings.length === 0) return;
   const drawing = drawingContextOf(ctx);
@@ -366,6 +379,7 @@ function appendAnchoredDrawingsForRecords(
   layerElement.style.position = 'absolute';
   layerElement.style.inset = '0';
   layerElement.style.pointerEvents = 'none';
+  if (hfFrontKind) layerElement.dataset.docxHfFront = hfFrontKind;
   for (const element of paintAnchoredDrawingsLayer(
     document,
     drawings,
@@ -500,7 +514,8 @@ function appendHfPageRelativeDrawingLayer(
     ctx,
     pageOrigin,
     layer,
-    interactive
+    interactive,
+    layer === 'inFront' ? story.kind : undefined
   );
 }
 
@@ -2289,12 +2304,7 @@ function paintPage(
     const anchored = story.anchoredDrawings ?? [];
     // Ahead of the layers below, which BOTH need it: furniture ink is inert while the band
     // is not being edited, wherever on the sheet it was lifted to.
-    const active =
-      !!options.activeHeaderFooterRId &&
-      !!story.rId &&
-      options.activeHeaderFooterRId === story.rId &&
-      (options.activeHeaderFooterPageIndex === undefined ||
-        options.activeHeaderFooterPageIndex === page.index);
+    const active = headerFooterBandIsActive(story, page.index, options);
     // The BEHIND half was already painted, on the sheet and ahead of the body content —
     // see `appendHfBehindDrawingLayer`. Only the in-front ink belongs to the band.
     const container = document.createElement('div');
@@ -2315,11 +2325,7 @@ function paintPage(
     // flows to a hairline, which makes the ACTIVE edit band invisible. Editing extends the
     // band down to the sheet edge — origin unchanged, so fragment and caret geometry stay
     // put, and normal-mode sizing keeps the flow-height rule (#856) intact.
-    const bandHeight = !active
-      ? story.box.height
-      : story.kind === 'footer'
-        ? Math.max(story.box.height, page.box.y + page.box.height - story.box.y)
-        : Math.max(story.box.height, page.contentBox.y - story.box.y);
+    const bandHeight = headerFooterBandHeightPt(story, page, active);
     container.style.height = `${bandHeight * options.scale}px`;
     // VISIBLE, exactly because the box is sized by flow height alone (#856). Word paints
     // header ink wherever it lands — a negative indent hangs into the left margin, an
@@ -2859,17 +2865,16 @@ export function paintSemanticLayout(
   };
   const document = container.ownerDocument;
   // The alias lookup is part of the paint parameters: a page painted before fonts
-  // registered must not be reused verbatim afterwards. Occurrence page is included so
-  // moving the caret host across shared furniture copies rebuilds active markers.
+  // registered must not be reused verbatim afterwards. Header/footer occurrence is
+  // applied in place (see applyHeaderFooterPaintChrome) so entering a header, or
+  // moving the caret across shared furniture copies, does not rebuild body sheets.
   // Content-control chrome is furniture only, but toggling it must rebuild painted pages
-  // so show-all / caret chrome appear. Hover is the one exception: it is applied to the
-  // painted nodes in place, because a pointer crossing a region may not move it.
+  // so show-all / caret chrome appear. Hover is the one other exception: it is applied
+  // to the painted nodes in place, because a pointer crossing a region may not move it.
   const parameters =
     `${resolved.scale}|${resolved.ariaHidden}|` +
     `${resolved.fontAlias ? aliasIdentity(resolved.fontAlias) : ''}|` +
     `${resolved.defaultFontFamily ?? ''}|` +
-    `${resolved.activeHeaderFooterRId ?? ''}|` +
-    `${resolved.activeHeaderFooterPageIndex ?? ''}|` +
     `cc:${chromeKey}:${additionalKey}|toc:${tocKey}|` +
     `ro:${readOnlyKey}|tocEmpty:${emptyTocKey}|` +
     `${options.imageUrlPort ? 'url' : ''}|` +
@@ -2950,4 +2955,5 @@ export function paintSemanticLayout(
     }
     container.insertBefore(entry.element, cursor);
   }
+  applyHeaderFooterPaintChrome(pages, resolved);
 }

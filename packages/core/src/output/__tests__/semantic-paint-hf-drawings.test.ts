@@ -341,4 +341,34 @@ describe('header band ink overflows instead of clipping', () => {
       expect(element.style.pointerEvents).toBe('none');
     }
   });
+
+  test('toggling the active band on a retained page does not replace the sheet', () => {
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const page = container.querySelector<HTMLElement>('.docx-page')!;
+    const band = container.querySelector<HTMLElement>('[data-docx-hf="header"]')!;
+    const drawing = container.querySelector<HTMLElement>(
+      '[data-docx-hf="header"] .docx-drawing-layer > *'
+    )!;
+    expect(band.hasAttribute('data-docx-hf-active')).toBe(false);
+    expect(drawing.style.pointerEvents).toBe('none');
+
+    paintSemanticLayout(container, layout, {
+      scale: 1,
+      activeHeaderFooterRId: 'rId1',
+      activeHeaderFooterPageIndex: 0,
+    });
+    expect(container.querySelector('.docx-page')).toBe(page);
+    expect(band.hasAttribute('data-docx-hf-active')).toBe(true);
+    expect(band.getAttribute('contenteditable')).toBe('true');
+    expect(drawing.style.pointerEvents).toBe('auto');
+    expect(container.querySelector('.docx-page-content')?.getAttribute('contenteditable')).toBe(
+      'false'
+    );
+
+    paintSemanticLayout(container, layout, { scale: 1 });
+    expect(container.querySelector('.docx-page')).toBe(page);
+    expect(band.hasAttribute('data-docx-hf-active')).toBe(false);
+    expect(drawing.style.pointerEvents).toBe('none');
+  });
 });
