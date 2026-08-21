@@ -778,6 +778,22 @@ export class TreePackageStore {
   }
 
   /**
+   * Which stories are open, as a value that changes whenever the set does.
+   *
+   * A cache key for anything derived from {@link TreePackageStore.openStoryParts}. Opening a
+   * story store deliberately does NOT bump the package revision — it publishes no edit — but it
+   * does mint `w14:paraId` for that story, so a paraId index built before the open is stale
+   * afterwards and nothing else would say so. Measured: a host that reads `snapshot()` on mount
+   * (every host does) poisoned that index with a body-only answer for the rest of the session,
+   * and a caret in a header reported no selection at all.
+   *
+   * The NAMES, not the count: closing one story and opening another leaves the count equal.
+   */
+  openStoryToken(): string {
+    return [...this.stories.keys()].sort().join(',');
+  }
+
+  /**
    * Insert a validated raster image as one package undo unit (task 12).
    */
   insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult> {

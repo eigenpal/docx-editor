@@ -661,6 +661,10 @@
     "splitUnsupported": null,
     "trackedOnly": null,
     "unavailable": null,
-    "viewing": null
+    "viewing": null,
+    "bodyOnlyNote": null,
+    "bodyOnlySectionBreak": null,
+    "bodyOnlyToc": null,
+    "furnitureOnlyPageField": null
   }
 }

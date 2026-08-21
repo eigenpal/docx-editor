@@ -473,6 +473,36 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
 }
 
 /**
+ * Marker identity of every list item a header/footer story paints.
+ *
+ * The exact sibling of {@link storyDrawingResourceToken}, and for the same reason. What
+ * otherwise identifies a story — `contentKey` and `flowHeight` — describes the AUTHORED part,
+ * and neither moves when `numbering.xml` changes: the definition lives in a different part, and
+ * a marker sits in the hanging-indent slot, so the story is exactly as tall with `1.` as with
+ * `vii.`. Without this the unchanged-pass early exit finds every key equal and returns the
+ * previous pages BY IDENTITY, furniture included.
+ *
+ * Measured before this existed: a body edit that also changed the numbering left six reused
+ * pages showing the old header marker and the one rebuilt page showing the new one — two
+ * different numbers for the same header in one section.
+ */
+export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
+  const tokens: string[] = [];
+  const visitBlock = (block: BlockFragmentRecord): void => {
+    if (block.kind === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) for (const inner of cell.blocks) visitBlock(inner);
+      }
+      return;
+    }
+    const marker = block.marker;
+    if (marker) tokens.push(`${block.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
+  };
+  for (const block of story.fragments) visitBlock(block);
+  return tokens.length === 0 ? '' : `|list:${tokens.join(',')}`;
+}
+
+/**
  * Resource identity of every image a header/footer story paints.
  *
  * Part of the session context, because the rest of what identifies a story — `contentKey`
@@ -529,7 +559,8 @@ export function furnitureLayoutContext(
     [...source]
       .map(
         ([variant, story]) =>
-          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}${storyDrawingResourceToken(story)}`
+          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}` +
+          `${storyDrawingResourceToken(story)}${storyListMarkerToken(story)}`
       )
       .sort()
       .join(',');

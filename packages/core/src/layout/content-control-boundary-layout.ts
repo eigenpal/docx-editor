@@ -779,9 +779,22 @@ export function attachContentControlBoundaries(
  * draws nothing, which is what it does today.
  */
 export function contentControlRecordsInPart(
-  part: OoxmlPart
+  part: OoxmlPart,
+  /**
+   * Keep only controls holding one of these paragraphs.
+   *
+   * For a notes PART, which holds every note in the document rather than one story. Rostered
+   * whole, Tab walked out of the open footnote and into the next one, and the keystrokes after
+   * it landed in a note the reader was not in.
+   */
+  withinParagraphs?: ReadonlySet<string>
 ): readonly ContentControlBoundaryRecord[] {
-  return collectedControlIndexOf(part).controls.map(recordWithoutGeometry);
+  const controls = collectedControlIndexOf(part).controls.filter((collected) => {
+    if (!withinParagraphs) return true;
+    if (collected.paragraphId !== undefined) return withinParagraphs.has(collected.paragraphId);
+    return collected.blockIds.some((id) => withinParagraphs.has(id));
+  });
+  return controls.map(recordWithoutGeometry);
 }
 
 /**

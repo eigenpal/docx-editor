@@ -15,8 +15,9 @@
 // Alpha exercises the cascade reads and Beta a plain baseline. Gamma and Delta are BOTH here
 // because a single decimal item makes `list.bullet` pass vacuously: the button reads inactive
 // in every story including the body, so a body-only marker read looks like agreement. Control
-// is what gives the `contentControl.*` slots something to be enabled by, and what the
-// content-control resolution test hangs off.
+// is what the content-control resolution test hangs off. It does NOT light up the
+// `contentControl.*` toolbar slots: the sweep only ever places the caret in the probe
+// paragraphs, so those two slots are compared while disabled in every story.
 
 import { zipSync, strToU8 } from 'fflate';
 

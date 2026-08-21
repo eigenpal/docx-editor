@@ -21,7 +21,11 @@
     "splitUnsupported": "Cell split is not supported",
     "imageSuggesting": "Image property edits are unavailable in suggesting mode",
     "invalidValue": "This value is not valid for the command",
-    "unavailable": "This command is unavailable"
+    "unavailable": "This command is unavailable",
+    "bodyOnlySectionBreak": "Section breaks go in the document body.",
+    "bodyOnlyToc": "A table of contents goes in the document body.",
+    "bodyOnlyNote": "Footnotes and endnotes are added from the document body.",
+    "furnitureOnlyPageField": "Open a header or footer to insert a page number."
   },
   "toolbar": {
     "ariaLabel": "Formatting toolbar",

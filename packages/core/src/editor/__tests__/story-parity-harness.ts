@@ -104,6 +104,9 @@ export function openStory(story: StoryKind): OpenStory {
   const destroy = (): void => {
     editor.destroy();
     host.remove();
+    // The surface leaves a Range anchored at nodes this just detached. Only the serial run can
+    // see state left on `document`, so it is cleared here rather than discovered later.
+    document.getSelection()?.removeAllRanges();
   };
   try {
     editor.attach(host);

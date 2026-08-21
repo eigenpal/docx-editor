@@ -444,7 +444,8 @@ export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 's
 export type ContentControlMappedType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'repeatingSection';
 
 // @public
-export function contentControlRecordsInPart(part: OoxmlPart): readonly ContentControlBoundaryRecord[];
+export function contentControlRecordsInPart(part: OoxmlPart,
+withinParagraphs?: ReadonlySet<string>): readonly ContentControlBoundaryRecord[];
 
 // @public
 export function contentControlsInLayout(layout: SemanticLayout): readonly ContentControlBoundaryRecord[];

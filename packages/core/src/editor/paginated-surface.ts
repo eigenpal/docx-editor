@@ -599,7 +599,7 @@ export function mountPaginatedSurface(
     producer,
     cache: layoutCache,
     styleCascade,
-    numberingIndex: numberingIndex(),
+    numberingIndex,
     defaultTabStopPt,
     // Furniture answers the document's display mode, like the body does — and it is named
     // even when it is the default, because a lane that says nothing is treated as saying
@@ -721,6 +721,7 @@ export function mountPaginatedSurface(
   const structure = createSurfaceStructure({
     session: gatedSession,
     storyScope,
+    headerFooterSectionIndex: () => hfScope?.getActive()?.sectionIndex,
     paragraphOrder,
     // A rectangle is not the range it stands in for — the same question `createSurfaceFormat`
     // asks. Without it, bulleting or indenting one selected column also hit the cells between
@@ -801,7 +802,7 @@ export function mountPaginatedSurface(
       producer,
       cache: layoutCache,
       styleCascade,
-      numberingIndex: numberingIndex(),
+      numberingIndex,
       defaultTabStopPt,
       inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
       drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -1334,8 +1335,14 @@ export function mountPaginatedSurface(
   function editableControlsInOrder(): ContentControlBoundaryRecord[] {
     const scope = storyScope();
     const storyPart = scope.kind === 'body' ? null : session.partFor(scope);
+    // A notes PART holds every note in the document, so its controls are not one story's.
+    // Rostered whole, Tab walked out of the open footnote and into the next one — the same
+    // escape this roster was scoped to stop, one level down — and the keystrokes after it
+    // landed in a note the reader was not in. `paragraphOrder()` is already bounded to the
+    // open note, so it is what bounds this.
+    const withinNote = scope.kind === 'notesPart' ? new Set(paragraphOrder()) : undefined;
     const controls = storyPart
-      ? [...contentControlRecordsInPart(storyPart)]
+      ? [...contentControlRecordsInPart(storyPart, withinNote)]
       : [...contentControlsInLayout(currentLayout)];
     return controls
       .filter((control) => contentLockedOrBound(control) === null)
@@ -3595,7 +3602,7 @@ export function mountPaginatedSurface(
           producer,
           cache: layoutCache,
           styleCascade,
-          numberingIndex: numberingIndex(),
+          numberingIndex,
           defaultTabStopPt,
           displayMode: options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
           inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),

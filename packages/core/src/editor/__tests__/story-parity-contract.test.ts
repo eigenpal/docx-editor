@@ -163,13 +163,21 @@ describe('the story-parity contract', () => {
   });
 
   // The guard is not vacuous: if the sweep saw nothing, every comparison below would pass by
-  // examining nothing at all. At least one slot has to be live somewhere, and at least one has
-  // to report an active state, or the fixture has stopped exercising the engine.
+  // examining nothing at all.
+  //
+  // The floors are close to what the fixture actually produces, not `> 0`, which a fixture
+  // collapsed to a single working control would still clear. Measured at this probe: about 150
+  // of the 270 cells enabled and 15 active.
+  //
+  // Be clear about what that leaves. Roughly a third of the 54 slots are disabled in EVERY
+  // story here — undo and redo with no history, the image and table-border slots with nothing
+  // selected, the unwired ones — so for those the sweep asserts only that the same refusal
+  // reason appears everywhere. That is worth having and is less than whole-toolbar coverage.
   test('the sweep is not vacuous', () => {
     const states = sweep(PROBE.formatted);
     const all = STORY_KINDS.flatMap((story) => [...states.get(story)!.values()]);
-    expect(all.filter((state) => state.enabled).length).toBeGreaterThan(0);
-    expect(all.filter((state) => state.active).length).toBeGreaterThan(0);
+    expect(all.filter((state) => state.enabled).length).toBeGreaterThanOrEqual(100);
+    expect(all.filter((state) => state.active).length).toBeGreaterThanOrEqual(10);
   });
 
   const sweeps = PROBES.map((probe) => ({ ...probe, states: sweep(probe.paragraphIndex) }));

@@ -27,6 +27,7 @@ import {
 } from '../store/store/comment-writes.ts';
 import {
   customNodePayloadsByControl,
+  type CustomNodePayloadRead,
   insertCustomNodeWrite,
   removeCustomNodeWrite,
   sweepCustomNodePayloads,
@@ -881,6 +882,7 @@ export function openTreeSession(
   } | null = null;
   let anchorsCache: {
     readonly revision: number;
+    readonly openStories: string;
     readonly index: ParagraphAnchorIndex;
   } | null = null;
   let bookmarksCache: { readonly revision: number; readonly index: BookmarkIndex } | null = null;
@@ -889,7 +891,15 @@ export function openTreeSession(
     // header mints a paragraph the body revision knows nothing about, and against that key the
     // map would have kept answering for the document as it was before.
     const revision = packageStore.packageRevision;
-    if (!anchorsCache || anchorsCache.revision !== revision) {
+    // AND which stories are open. Opening one mints its paraIds without publishing an edit, so
+    // the package revision does not move and an index built a moment earlier would be served
+    // for the rest of the session — which is what a host reading `snapshot()` on mount does.
+    const openStories = packageStore.openStoryToken();
+    if (
+      !anchorsCache ||
+      anchorsCache.revision !== revision ||
+      anchorsCache.openStories !== openStories
+    ) {
       // Open story stores FIRST, so their live parts win the dedupe below. `w14:paraId` is
       // minted when a story store opens and only reaches the coordinator's package on the
       // first commit — so a header the reader has entered but not yet typed in carries none
@@ -899,10 +909,37 @@ export function openTreeSession(
       const rest = furnitureAndNoteParts().filter((part) => !seen.has(part.name));
       anchorsCache = {
         revision,
+        openStories,
         index: buildParagraphAnchorIndex([bodyStore().part, ...open, ...rest]),
       };
     }
     return anchorsCache.index;
+  };
+
+  /**
+   * The payload every custom node binds, from EVERY story, merged.
+   *
+   * The review queue lists cards from every story, so it needs the payloads of every story. It
+   * asked for the body's, which meant a chip in a header produced a card with `data: undefined`
+   * — indistinguishable from a chip that genuinely carries none, which is the same confusion
+   * the activation helpers were fixed for.
+   *
+   * The store hangs off the MAIN part in every case: Word only reads one authored there. So the
+   * story varies per call and the data owner does not.
+   */
+  const customNodePayloadsAcrossStories = (): ReadonlyMap<string, CustomNodePayloadRead> => {
+    const owner = bodyStore().part.name;
+    const merged = new Map<string, CustomNodePayloadRead>();
+    for (const part of [bodyStore().part, ...furnitureAndNoteParts()]) {
+      for (const [controlId, payload] of customNodePayloadsByControl(
+        currentPackage(),
+        part.name,
+        owner
+      )) {
+        merged.set(controlId, payload);
+      }
+    }
+    return merged;
   };
 
   /**
@@ -1273,7 +1310,7 @@ export function openTreeSession(
               furnitureParts,
               commentsPart,
               commentsExtendedPart,
-              customNodePayloads: customNodePayloadsByControl(currentPackage(), store.part.name),
+              customNodePayloads: customNodePayloadsAcrossStories(),
             });
           }
         } else {
@@ -1286,7 +1323,7 @@ export function openTreeSession(
             // Resolved HERE because a payload lives in a customXml data part: the derivation
             // receives story parts, and reaching a package part from one is not something a
             // capability module can do.
-            customNodePayloads: customNodePayloadsByControl(currentPackage(), store.part.name),
+            customNodePayloads: customNodePayloadsAcrossStories(),
           });
         }
 

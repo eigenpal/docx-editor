@@ -121,9 +121,10 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
     reason: 'a table of contents can only be inserted in the editable document body',
   },
 
-  // A section break splits the body's `w:sectPr` chain, and `insertSectionBreak` already
-  // refuses outside the body. The reason below is the one the gate OUGHT to publish; it does
-  // not publish any today, which is the defect recorded in KNOWN_BROKEN.
+  // A section break splits the body's `w:sectPr` chain, and `insertSectionBreak` refuses
+  // outside the body. That refusal used to be invisible — `can` saw only the static break
+  // vocabulary — so the control rendered live in a header and pressing it did nothing. The
+  // reason below is what the gate publishes now.
   'insert.sectionBreakNextPage': {
     parity: 'bodyOnly',
     reason: 'a section break can only be inserted in the editable document body',
@@ -164,9 +165,13 @@ export interface KnownBroken {
 /**
  * Slots the engine does NOT satisfy yet.
  *
- * The tests assert these still fail, in the named dimension, so the list cannot rot: fixing one
- * without removing its entry fails as loudly as breaking one. Every entry is a defect with a
- * known root cause, never "this is fine really". A control that is legitimately different
- * belongs in {@link SLOT_PARITY} as `bodyOnly` or `furnitureOnly`.
+ * EMPTY. The change that introduced this contract drained it; the machinery stays for the next
+ * parity defect, which is the point at which arguing about whether to keep it would cost more
+ * than it saves.
+ *
+ * When it has entries, the tests assert each still fails IN THE NAMED DIMENSION, so the list
+ * cannot rot: fixing one without removing its entry fails as loudly as breaking one. Every
+ * entry is a defect with a known root cause, never "this is fine really" — a control that is
+ * legitimately different belongs in {@link SLOT_PARITY} as `bodyOnly` or `furnitureOnly`.
  */
 export const KNOWN_BROKEN: Readonly<Partial<Record<ChromeSlotId, KnownBroken>>> = Object.freeze({});

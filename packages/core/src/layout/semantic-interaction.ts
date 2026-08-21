@@ -470,6 +470,28 @@ export function contentControlsInLayout(
 }
 
 /**
+ * Position lookup for one reading order, memoized on the array.
+ *
+ * `documentOrder` and `scopedDocumentOrder` both answer with an identity-stable array, so the
+ * map survives as long as the order does. Scanning with `indexOf` instead cost two O(n) walks
+ * per formatting read on a path that fires on every selection change — measured at 0.12 ms for
+ * a selection near the end of a 240-page document, and growing with the document.
+ */
+const orderIndexes = new WeakMap<readonly string[], Map<string, number>>();
+
+function positionIn(order: readonly string[], paragraphId: string): number {
+  let index = orderIndexes.get(order);
+  if (!index) {
+    index = new Map();
+    order.forEach((id, at) => {
+      if (!index!.has(id)) index!.set(id, at);
+    });
+    orderIndexes.set(order, index);
+  }
+  return index.get(paragraphId) ?? -1;
+}
+
+/**
  * Order a selection's endpoints, against the order of the story they live in.
  *
  * `order` is REQUIRED, and deliberately so. It used to default to the body's `documentOrder`,
@@ -488,8 +510,8 @@ export function orderPositions(
       ? { from: selection.anchor, to: selection.head }
       : { from: selection.head, to: selection.anchor };
   }
-  const anchorIndex = order.indexOf(selection.anchor.paragraphId);
-  const headIndex = order.indexOf(selection.head.paragraphId);
+  const anchorIndex = positionIn(order, selection.anchor.paragraphId);
+  const headIndex = positionIn(order, selection.head.paragraphId);
   if (anchorIndex === -1 || headIndex === -1) return null;
   if (
     anchorIndex < headIndex ||
@@ -818,8 +840,8 @@ export function spansInSelection(
   const lines = paragraphLinesIndex(layout);
   // Positions WITHIN the given order, not the body index: the two agree for the body and
   // nowhere else, and `paragraphLinesIndex` already covers every story.
-  const first = order.indexOf(ordered.from.paragraphId);
-  const last = order.indexOf(ordered.to.paragraphId);
+  const first = positionIn(order, ordered.from.paragraphId);
+  const last = positionIn(order, ordered.to.paragraphId);
   if (first === -1 || last === -1) return [];
   for (let at = first; at <= last; at += 1) {
     for (const { line } of lines.get(order[at]!) ?? []) {

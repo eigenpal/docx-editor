@@ -5,10 +5,10 @@
 
 import type { InlineDrawingRecord } from './drawing-layout.ts';
 import { documentOrderIndex } from './document-order.ts';
-import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
+import { paragraphFragmentsOf } from './semantic-records.ts';
+import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import type {
   LineRecord,
-  PageRecord,
   ParagraphFragmentRecord,
   SemanticLayout,
   StyleSpanRecord,
@@ -224,25 +224,4 @@ export function fragmentHolding(
     }
   }
   return null;
-}
-
-/**
- * Every paragraph fragment a page DRAWS, in any story.
- *
- * `page.fragments` is the body's alone. A header, a footer and each note hang their own
- * fragments off the page beside it, and a caret can be in any of them — so a walk that stops
- * at the body answers "this paragraph is not laid out" for a paragraph the user is looking at.
- * That is what made a `w:numPr` paragraph in a header read as "not a list", which in turn made
- * the list buttons unable to turn one off.
- */
-function paragraphFragmentsOnPage(page: PageRecord): ParagraphFragmentRecord[] {
-  const found = [...paragraphFragmentsOf(page)];
-  for (const story of [page.header, page.footer]) {
-    if (story) found.push(...paragraphFragmentsOfBlocks(story.fragments));
-  }
-  for (const area of [page.footnotes, page.endnotes]) {
-    if (!area) continue;
-    for (const note of area.notes) found.push(...paragraphFragmentsOfBlocks(note.fragments));
-  }
-  return found;
 }

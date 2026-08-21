@@ -12,7 +12,13 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { STORY_KINDS } from './story-parity-contract.ts';
-import { PROBE } from './story-parity-fixture.ts';
+import { HEADER_R_ID, PROBE } from './story-parity-fixture.ts';
+
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const W14_NS = 'http://schemas.microsoft.com/office/word/2010/wordml';
+import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
+import { buildParagraphAnchorIndex } from '../../binding/paragraph-anchors.ts';
+import { resolveDocAnchor } from '../anchor-resolution.ts';
 import { caretIn, openStory, partOfNodeId, PART_OF_STORY } from './story-parity-harness.ts';
 
 describe('every story is addressable', () => {
@@ -72,4 +78,60 @@ describe('every story is addressable', () => {
       open.destroy();
     }
   });
+
+  // THE HOST'S ORDER, which every test above inverts. `openStory` enters the story before it
+  // reads anything, and entering is what mints the story's paraIds — so the tests above only
+  // ever ask the question after the answer exists. A real host reads `snapshot()` on mount,
+  // long before the reader opens a header, and that read used to poison the index with a
+  // body-only answer that nothing invalidated for the rest of the session.
+  test('reading the index before entering a header does not poison it', () => {
+    const open = openStory('body');
+    try {
+      const before = open.surface.session.paragraphAnchors();
+      expect(before.paraIdByNode.size).toBeGreaterThan(0);
+
+      expect(open.surface.enterHeaderFooter({ rId: HEADER_R_ID })).toBe(true);
+      const headerParagraph = open.surface.session.paragraphIdsIn({
+        kind: 'headerFooter',
+        rId: HEADER_R_ID,
+      })[0]!;
+
+      const after = open.surface.session.paragraphAnchors();
+      expect(
+        after.paraIdByNode.get(headerParagraph),
+        'the header is unaddressable after a read that preceded it'
+      ).toBeTruthy();
+    } finally {
+      open.destroy();
+    }
+  });
+
+  test('a paraId two stories both claim is refused rather than guessed', () => {
+    const index = buildParagraphAnchorIndex([
+      twinPart('/word/document.xml'),
+      twinPart('/word/header1.xml'),
+    ]);
+    expect([...index.ambiguousParaIds]).toEqual([TWIN_PARA_ID]);
+    const resolved = resolveDocAnchor(twinPart('/word/document.xml'), index, {
+      paraId: TWIN_PARA_ID,
+    });
+    expect(resolved.ok).toBe(false);
+    if (resolved.ok) return;
+    // Refused, not resolved to whichever story happened to come first.
+    expect(resolved.code).toBe('ambiguous');
+  });
 });
+
+const TWIN_PARA_ID = '11112222';
+
+/** A one-paragraph part whose `w14:paraId` is deliberately the same in every story. */
+function twinPart(name: string): OoxmlPart {
+  const result = readOoxmlPart(
+    `<w:document xmlns:w="${W_NS}" xmlns:w14="${W14_NS}"><w:body>` +
+      `<w:p w14:paraId="${TWIN_PARA_ID}"><w:r><w:t>twin</w:t></w:r></w:p>` +
+      `</w:body></w:document>`,
+    { name, contentType: 'app/xml' }
+  );
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}

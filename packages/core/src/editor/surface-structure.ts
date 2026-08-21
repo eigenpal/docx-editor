@@ -32,6 +32,8 @@ export interface SurfaceStructureDeps {
   readonly session: TreeDocxSessionView;
   /** Active story for content mutations — body or open furniture. */
   storyScope(): StoryScope;
+  /** Section index of the header or footer the reader has open, when one is. */
+  headerFooterSectionIndex?(): number | undefined;
   /** The CURRENT layout — read per call, never captured. */
   layout(): SemanticLayout;
   commit(
@@ -611,6 +613,15 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // the page width `insertTableOp` sizes a grid from and the metrics the ruler clamps to.
       const scope = deps.storyScope();
       if (scope.kind === 'headerFooter') {
+        // The section the reader has OPEN, when the surface knows it. One header may be
+        // referenced by several sections — inheritance makes that the common shape — and the
+        // first to name it is not the page the caret is looking at. The geometry feeds the
+        // ruler's clamps and the grid `insertTableOp` sizes, so the wrong section gives a
+        // table sized for another page's width.
+        const openSection = deps.headerFooterSectionIndex?.();
+        if (openSection !== undefined && sections[openSection]) {
+          return sections[openSection]!.properties;
+        }
         const owningSection = session
           .headerFooterResolutionBySection()
           .findIndex((section) =>
@@ -621,6 +632,10 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         if (owningSection !== -1 && sections[owningSection])
           return sections[owningSection]!.properties;
       }
+      // A note belongs to the section its REFERENCE is in, which this cannot see from the note
+      // alone. The first section is the honest default: the tail is the document-wide answer
+      // and is wrong for every note that is not on the last page.
+      if (scope.kind === 'notesPart') return sections[0]!.properties;
       const blocks = storyBlocks(session.part());
       const contains = (node: (typeof blocks)[number], id: string): boolean => {
         if (node.id === id) return true;

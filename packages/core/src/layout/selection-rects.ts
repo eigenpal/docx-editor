@@ -6,18 +6,24 @@
 
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
-import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
-import type { PageRecord, ParagraphFragmentRecord, SemanticLayout } from './semantic-records.ts';
+import { paragraphFragmentsOf } from './semantic-records.ts';
+import type { SemanticLayout } from './semantic-records.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
 
 /**
  * The rectangles covering a selection, one per line it spans.
  *
- * `order` is the reading order of the story the selection lives in. Required for the reason
- * {@link orderPositions} explains: with the body's order, a selection anywhere else ranked
- * both endpoints at -1 and painted nothing, so a retained pin in a header showed no highlight
- * and a comment anchored in one drew no band.
+ * BODY fragments only, and a selection outside the body paints nothing. That is a real gap —
+ * a retained pin in a header shows no highlight, and a comment anchored in one draws no band
+ * even though the review queue lists it — but it is the honest shape of what this can answer
+ * today. Widening the walk to the other stories is not enough on its own: header and footer
+ * fragments carry positions relative to their own story box, note fragments relative to their
+ * note area, and one header story object is attached to EVERY page it applies to. Fed straight
+ * into a page-content-relative rect, those produce a band per page, at coordinates belonging
+ * to a different box. Measured, that put a header comment's band on all six pages of a
+ * document at the top-left of the body text. Painting nothing is wrong; painting over the
+ * wrong words is worse, so the walk stays here until the geometry is carried with it.
  */
 export function selectionRects(
   layout: SemanticLayout,
@@ -28,7 +34,7 @@ export function selectionRects(
   if (!ordered) return [];
   const rects: SelectionRect[] = [];
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOnAnyStory(page)) {
+    for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
         for (const segment of lineSegments(line)) {
           const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
@@ -81,7 +87,7 @@ export function keyedRangeRects(
   if (ranges.length === 0) return found;
   for (const page of layout.pages) {
     if (pages && !pages.has(page.index)) continue;
-    for (const fragment of paragraphFragmentsOnAnyStory(page)) {
+    for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
         for (const segment of lineSegments(line))
           for (const range of ranges) {
@@ -101,25 +107,6 @@ export function keyedRangeRects(
           }
       }
     }
-  }
-  return found;
-}
-
-/**
- * Every paragraph fragment a page draws, in any story.
- *
- * `page.fragments` is the body's. A comment anchored in a header, a footnote or an endnote is
- * listed by the review queue and can be made active, so its band has to be measurable too —
- * without this the card opened and nothing highlighted.
- */
-function paragraphFragmentsOnAnyStory(page: PageRecord): ParagraphFragmentRecord[] {
-  const found = [...paragraphFragmentsOf(page)];
-  for (const story of [page.header, page.footer]) {
-    if (story) found.push(...paragraphFragmentsOfBlocks(story.fragments));
-  }
-  for (const area of [page.footnotes, page.endnotes]) {
-    if (!area) continue;
-    for (const note of area.notes) found.push(...paragraphFragmentsOfBlocks(note.fragments));
   }
   return found;
 }
