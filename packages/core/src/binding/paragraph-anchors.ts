@@ -62,11 +62,13 @@ export interface ParagraphAnchorIndex {
    */
   readonly partByNode: ReadonlyMap<string, OoxmlPart>;
   /**
-   * Every node claiming an ambiguous paraId, so a caller holding a part can disambiguate.
+   * Every node claiming an ambiguous paraId. DIAGNOSTIC, never a way to pick one.
    *
-   * Refusing outright would hand a hostile file a denial: a header repeating each body
-   * paragraph's `w14:paraId` would make the whole body unaddressable. A caller that names a
-   * part is asking about THAT part, and only a clash the caller cannot resolve is ambiguous.
+   * Resolution refuses a clash outright, and this is what says which paragraphs caused it, for
+   * a reader repairing the file. Preferring one claimant by the caller's part was tried and
+   * reverted: every resolver call site passes the MAIN part, so the preference could only ever
+   * land on the body twin and answer `ok` for a header paragraph the caller meant. See
+   * `resolveDocAnchor` in `editor/anchor-resolution.ts`.
    */
   readonly claimantsByParaId: ReadonlyMap<string, readonly string[]>;
 }

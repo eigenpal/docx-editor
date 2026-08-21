@@ -127,6 +127,8 @@ describe('a paraId two stories claim stays addressable in each', () => {
       const headerParagraph = open.paragraphIds[PROBE.plain]!;
       const paraId = anchors.paraIdByNode.get(headerParagraph)!;
       expect(anchors.nodeByParaId.get(paraId.toUpperCase())).toBe(headerParagraph);
+      // One claimant, so nothing is ambiguous. The map is diagnostic — it says which
+      // paragraphs caused a clash — and never a way for the resolver to pick one.
       expect(anchors.claimantsByParaId.get(paraId.toUpperCase())).toEqual([headerParagraph]);
       void HEADER_R_ID;
     } finally {
