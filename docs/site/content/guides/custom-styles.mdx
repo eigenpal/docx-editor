@@ -20,6 +20,9 @@ Any content users create or insert inherits those styles automatically.
 
 Create a `.docx` containing your brand styles, remove its content, and load it whenever a user starts a new document.
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { useEffect, useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -37,6 +40,25 @@ export function BrandedEditor() {
   return <DocxEditor document={template} />;
 }
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useDocxSource } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
+
+const { document: template } = useDocxSource('/templates/brand.docx');
+</script>
+
+<template>
+  <DocxEditor :document="template" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 ## Create a template
 
@@ -63,6 +85,9 @@ Newly inserted tables do not pick up a document default table style: Insert → 
 
 Provide brand fonts through the editor's `fonts` prop. `loadFonts` fetches the URLs you list and returns a fragment the editor both measures and paints with:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { loadFonts } from '@docx-editor.dev/react';
 
@@ -76,7 +101,36 @@ const brand = await loadFonts({
 <DocxEditor document={template} fonts={brand} />;
 ```
 
-The font picker offers the families the document declares plus the ones you configure. See [React props: Fonts](/docs/2.x/react/props#fonts) for the prop and [Fonts and measurement](/docs/2.x/guides/fonts) for hashes, failure handling, and on-demand loading.
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue';
+import { DocxEditor, loadFonts, type FontConfigurationFragment } from '@docx-editor.dev/vue';
+
+// A top-level `await` would make this an async component, which renders
+// nothing without a <Suspense> ancestor. Resolve into a ref instead.
+const brand = shallowRef<FontConfigurationFragment>();
+void loadFonts({
+  sources: [
+    { url: '/fonts/CustomSans-Regular.ttf', family: 'Custom Sans', weight: 400, style: 'normal' },
+    { url: '/fonts/CustomSans-Bold.ttf', family: 'Custom Sans', weight: 700, style: 'normal' },
+  ],
+}).then((loaded) => {
+  brand.value = loaded;
+});
+</script>
+
+<template>
+  <DocxEditor :document="template" :fonts="brand" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The font picker offers the families the document declares plus the ones you configure. See [React props: Fonts](/docs/2.x/react/props#fonts) or [Vue props: Fonts](/docs/2.x/vue/props#fonts) for the prop, and [Fonts and measurement](/docs/2.x/guides/fonts) for hashes, failure handling, and on-demand loading.
 
 A font that is only installed on the user's system or registered through your own `@font-face` rules affects painting, not measurement: the editor measures with the bytes you hand it and falls back to estimated metrics for families it has no bytes for.
 
@@ -90,4 +144,4 @@ The editor preserves existing style files (`styles.xml`, `theme1.xml`, `settings
 
 - [Fonts and measurement](/docs/2.x/guides/fonts): font sources and how they compose
 - [Word fidelity](/docs/2.x/word-fidelity): what survives a round trip
-- [Props](/docs/2.x/react/props): `fonts` and the rest of the root props
+- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props): `fonts` and the rest of the root props

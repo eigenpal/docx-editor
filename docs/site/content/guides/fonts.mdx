@@ -39,6 +39,9 @@ wraps them:
 | Arial           | Liberation Sans  | SIL OFL |
 | Courier New     | Liberation Mono  | SIL OFL |
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { useEffect, useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -79,6 +82,46 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { onMounted, shallowRef } from 'vue';
+import { DocxEditorRoot, type FontConfigurationFragment } from '@docx-editor.dev/vue';
+import { loadDefaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
+
+defineProps<{ bytes: Uint8Array }>();
+
+// `settled` gates the FIRST mount. `fonts` is sampled at mount and an identity change
+// rebuilds the editor, so mounting before fonts resolve costs a visible rebuild, and a
+// rebuild resets the undo stack and the caret. Waiting once avoids both.
+const settled = shallowRef(false);
+const fonts = shallowRef<FontConfigurationFragment>();
+
+onMounted(async () => {
+  try {
+    fonts.value = await loadDefaultFonts(); // or { families: ['Calibri'] }
+    // Optional: also register the substitutes with the browser under the Word family
+    // names, so painted glyphs match the metrics layout measured with.
+    void installDefaultFontFaces();
+  } catch {
+    // A load failure settles with no fonts: the editor opens on the fixed measurer,
+    // which is the documented degradation.
+  } finally {
+    settled.value = true;
+  }
+});
+</script>
+
+<template>
+  <DocxEditorRoot v-if="settled" :document="bytes" :fonts="fonts" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 Font binaries load lazily as separate assets, only for the families you ask for.
 Importing the package fetches nothing.
 
@@ -88,8 +131,9 @@ faces, `loadFonts` fetches URLs you specify and caches them locally. When you pi
 control:
 
 ```ts
-// Also re-exported by the adapter: '@docx-editor.dev/react'.
-import { loadFonts, composeFontConfiguration } from '@docx-editor.dev/react';
+// Also re-exported by both adapters: '@docx-editor.dev/react' and
+// '@docx-editor.dev/vue'.
+import { loadFonts, composeFontConfiguration } from '@docx-editor.dev/core/editor';
 
 const brand = await loadFonts({
   sources: [
@@ -126,7 +170,7 @@ turns them into a source directly, with the hash computed for you. It returns a 
 failure rather than throwing when the descriptor or the bytes are unusable:
 
 ```ts
-import { createFontSource, composeFontConfiguration } from '@docx-editor.dev/react';
+import { createFontSource, composeFontConfiguration } from '@docx-editor.dev/core/editor';
 
 const made = createFontSource(bytes, { family: 'Acme Sans', weight: 400, style: 'normal' });
 if ('source' in made) {
@@ -146,6 +190,9 @@ makes no network request on open.
 file, with the families that file declares. A document then loads only the faces it uses,
 and one that names nothing you cover loads nothing:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
@@ -155,6 +202,27 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
   return <DocxEditor.Root document={bytes} fonts={fonts} />;
 }
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditorRoot, useFonts } from '@docx-editor.dev/vue';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+defineProps<{ bytes: Uint8Array }>();
+
+const fonts = useFonts(googleFonts());
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :fonts="fonts" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 `googleFonts()` serves those families from a generated catalog. Every face is pinned to
 one `google/fonts` commit and carries a baked `sha256:` that the editor re-derives before
@@ -186,12 +254,12 @@ const fonts = useFonts(async ({ families, defaultFamily }) => {
   hands a resolver, and `googleFonts()` matches names only against its closed catalog.
 </Callout>
 
-`useFonts` exists because `DocxEditor.Root` rebuilds its instance when `fonts` changes
-identity. An inline `fonts={googleFonts()}` is a new function on every render, which would
-rebuild the editor forever. `useFonts` returns one resolver for the component's life. It
-also merges origins, so on-demand and upfront faces compose:
+`useFonts` exists because the editor root rebuilds its instance when `fonts` changes
+identity. An inline resolver is a new function on every render, which would rebuild the
+editor forever. `useFonts` returns one resolver for the component's life. It also merges
+origins, so on-demand and upfront faces compose:
 
-```tsx
+```ts
 const fonts = useFonts(googleFonts(), brandFragment);
 ```
 
@@ -225,11 +293,14 @@ measuring accurately.
 
 ## Observing font state
 
-`onFontError` is a prop on `DocxEditor.Root` (and an option on `createDocxEditor`);
-each error carries a typed `code` (`missing`, `malformed`, `overLimit`,
-`hashMismatch`, …) and, where known, the face `request` it concerns. To answer "am I
-measuring Word-accurately right now?", read `fontMeasurement()` on the editor
-instance:
+Font errors reach you as `onFontError` on the React root, as the `@font-error` emit on
+the Vue root, and as an option on `createDocxEditor`. Each error carries a typed `code`
+(`missing`, `malformed`, `overLimit`, `hashMismatch`, …) and, where known, the face
+`request` it concerns. To answer "am I measuring Word-accurately right now?", read
+`fontMeasurement()` on the editor instance:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 <DocxEditor.Root
@@ -243,6 +314,37 @@ const editor = useDocxEditor();
 editor?.fontMeasurement();
 // → { measurer: 'shaped' | 'fixed', resolving: boolean, producer?: string }
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditorRoot } from '@docx-editor.dev/vue';
+
+function reportFontError(error: { code: string; diagnostic?: string; message: string }) {
+  report(error.code, error.diagnostic ?? error.message);
+}
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :fonts="fragment" @font-error="reportFontError">
+    <!-- Viewport, content, and any component that reads the editor. -->
+  </DocxEditorRoot>
+</template>
+```
+
+```ts
+// In a DESCENDANT of DocxEditorRoot: useDocxEditor() reads the root's provide,
+// and the editor is null until the content mounts, so wrap the read in a
+// computed rather than calling it once during setup.
+const editor = useDocxEditor();
+const measurement = computed(() => editor.value?.fontMeasurement());
+// → { measurer: 'shaped' | 'fixed', resolving: boolean, producer?: string }
+```
+
+</Framework>
+</FrameworkTabs>
 
 `{ measurer: 'fixed', resolving: false }` is the steady state for a document with no
 usable font source; `resolving: true` means shaped resolution is still in flight.
@@ -258,6 +360,9 @@ are the common ones, and so is any build that inlines dynamic imports, such as a
 library bundle. Those builds succeed and then fail at runtime, reaching
 `onFontError` as an `EditorFontError` with code `wasmUnavailable`:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 <DocxEditor
   onFontError={(error) => {
@@ -265,6 +370,18 @@ library bundle. Those builds succeed and then fail at runtime, reaching
   }}
 />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor
+  @font-error="(error) => error.code === 'wasmUnavailable' && showSetupError(error.diagnostic)"
+/>
+```
+
+</Framework>
+</FrameworkTabs>
 
 Without that binary the editor keeps rendering, but it measures text with
 fallback metrics, so line breaks and page breaks no longer match Word. The
@@ -327,6 +444,6 @@ instead.
 
 ## Next steps
 
-- [Props: Fonts](/docs/2.x/react/props#fonts): `fonts` and `onFontError`
+- [React props: Fonts](/docs/2.x/react/props#fonts) and [Vue props: Fonts](/docs/2.x/vue/props#fonts): `fonts` and font error reporting
 - [Word fidelity](/docs/2.x/word-fidelity): how measurement affects pagination
 - [Custom styles](/docs/2.x/guides/custom-styles): styles, themes, and the font picker

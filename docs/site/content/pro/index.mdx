@@ -11,23 +11,35 @@ order: 60
 
 - [**Tracked changes**](/docs/2.x/pro/tracked-changes): Use suggesting mode, render markup, and accept or reject changes.
 - [**Comments**](/docs/2.x/pro/comments): Add threads and replies to a text range.
+- [**Review colors and styling**](/docs/2.x/pro/review-styling): Color review content by author or by change type.
 - [**Custom nodes**](/docs/2.x/pro/custom-nodes): Store your inline node types as Word content controls.
 
 Both adapter entries export custom-node chip and context-menu chrome.
 
 ## Install
 
-Install the Pro package with the Vue adapter and core engine:
+Install the Pro package with your adapter and the core engine:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```bash
+npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
+```
+
+Import the review rail from `@docx-editor.dev/pro/react`.
+
+</Framework>
+<Framework value="vue">
 
 ```bash
 npm install @docx-editor.dev/vue @docx-editor.dev/core @docx-editor.dev/pro
 ```
 
-For React, replace `@docx-editor.dev/vue` with `@docx-editor.dev/react`.
+Import the review rail from `@docx-editor.dev/pro/vue`.
 
-Import the Vue review rail from `@docx-editor.dev/pro/vue`.
-
-Import the React review rail from `@docx-editor.dev/pro/react`.
+</Framework>
+</FrameworkTabs>
 
 ## Register a module
 
@@ -35,9 +47,34 @@ Pass review capabilities to the editor root through `modules`.
 
 The editor registers modules during creation. Keep the module array stable across renders.
 
-### Vue
+This example registers `reviewModule` and adds the review rail:
 
-This Vue example registers `reviewModule` and adds the review rail:
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+// Module array built once, outside render.
+const MODULES = [reviewModule()];
+
+export function Reviewer({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        {/* The review sidebar: tracked changes and comments as cards beside the page. */}
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
@@ -65,30 +102,8 @@ const modules = [reviewModule()];
 </template>
 ```
 
-### React
-
-This React example registers `reviewModule` and adds the review rail:
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
-
-// Module array built once, outside render.
-const MODULES = [reviewModule()];
-
-export function Reviewer({ bytes }: { bytes: Uint8Array }) {
-  return (
-    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
-      <DocxEditor.Toolbar />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-        {/* The review sidebar: tracked changes and comments as cards beside the page. */}
-        <DocxEditorReview />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  );
-}
-```
+</Framework>
+</FrameworkTabs>
 
 The packaged `DocxEditor` component also accepts `modules` in each adapter.
 
@@ -104,7 +119,15 @@ Comments and tracked changes require an author. Office Open XML (OOXML) requires
 
 Set `author` on the root.
 
-This Vue example sets the root prop:
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+```
+
+</Framework>
+<Framework value="vue">
 
 ```vue
 <DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
@@ -112,11 +135,8 @@ This Vue example sets the root prop:
 </DocxEditorRoot>
 ```
 
-This React example sets the same prop:
-
-```tsx
-<DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
-```
+</Framework>
+</FrameworkTabs>
 
 Write calls return whether the editor applied the change. They do not throw for an unavailable author.
 
@@ -126,7 +146,25 @@ For example, a reply without an author returns `false`. The editor does not crea
 
 `useReview()` provides all capabilities in the packaged review rail. Use the rail, or render your own interface.
 
-Vue composables return computed refs. This example shows the number of pending items:
+This example shows the number of pending items:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function ChangeCount() {
+  const { items, ready } = useReview();
+  if (!ready) return null;
+  return <span>{items.length} pending</span>;
+}
+```
+
+React hooks return the values directly.
+
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
@@ -142,17 +180,10 @@ const pending = computed(() => review.items.value.length);
 </template>
 ```
 
-React hooks return values directly. This example shows the same count:
+Vue composables return computed refs, so read them with `.value` in script code.
 
-```tsx
-import { useReview } from '@docx-editor.dev/pro/react';
-
-function ChangeCount() {
-  const { items, ready } = useReview();
-  if (!ready) return null;
-  return <span>{items.length} pending</span>;
-}
-```
+</Framework>
+</FrameworkTabs>
 
 For the complete composable API, see [Tracked changes](/docs/2.x/pro/tracked-changes).
 
@@ -180,6 +211,7 @@ For a Vue application, read the key from your build tool instead of `process.env
 
 - [Tracked changes](/docs/2.x/pro/tracked-changes): Configure suggesting mode and the review interface.
 - [Comments](/docs/2.x/pro/comments): Add, reply to, resolve, and reopen comment threads.
+- [Review colors and styling](/docs/2.x/pro/review-styling): Give each reviewer a color and an avatar.
 - [Custom nodes](/docs/2.x/pro/custom-nodes): Add custom-node chrome.
 - [Vue composition](/docs/2.x/vue/composition): Arrange Vue editor parts.
 - [React composition](/docs/2.x/react/composition): Arrange React editor parts.

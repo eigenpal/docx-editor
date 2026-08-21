@@ -13,6 +13,9 @@ Requires the custom-nodes module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
 ## A citation, end to end
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { z } from 'zod';
 import { customNodesModule, defineCustomNode, insertCustomNode } from '@docx-editor.dev/pro';
@@ -62,6 +65,78 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
   );
 }
 ```
+
+</Framework>
+<Framework value="vue">
+
+```ts
+// citation.ts
+import { z } from 'zod';
+import { customNodesModule, defineCustomNode } from '@docx-editor.dev/pro';
+
+export const Citation = defineCustomNode({
+  name: 'citation',
+  tagPrefix: 'acme',
+  schema: z.object({
+    sourceId: z.string().min(1),
+    author: z.string(),
+    year: z.number().int(),
+  }),
+  text: (data) => `(${data.author} ${String(data.year)})`,
+});
+
+// Built once, outside setup: modules are read when the editor is constructed.
+export const MODULES = [customNodesModule({ nodes: [Citation] })];
+```
+
+```vue
+<!-- CiteButton.vue: useDocxEditor() reads the root's provide, so it has to run
+     in a descendant of DocxEditorRoot, not in the component that renders it. -->
+<script setup lang="ts">
+import { insertCustomNode } from '@docx-editor.dev/pro';
+import { useDocxEditor } from '@docx-editor.dev/vue';
+import { Citation } from './citation';
+
+const editor = useDocxEditor(); // null until the content is mounted
+
+function cite() {
+  if (!editor.value) return;
+  const result = insertCustomNode(editor.value, Citation, {
+    data: { sourceId: 'smith-2024', author: 'Smith', year: 2024 },
+  });
+  if (!result.ok) console.warn(result.reason);
+}
+</script>
+
+<template>
+  <button type="button" :disabled="!editor" @click="cite">Cite</button>
+</template>
+```
+
+```vue
+<!-- Editor.vue -->
+<script setup lang="ts">
+import { CustomNodeChrome } from '@docx-editor.dev/pro/vue';
+import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/vue';
+import { Citation, MODULES } from './citation';
+import CiteButton from './CiteButton.vue';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :modules="MODULES">
+    <CiteButton />
+    <DocxEditorViewport>
+      <DocxEditorContent />
+      <CustomNodeChrome :on-node-click="(node) => console.log(Citation.dataOf(node))" />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 Cite drops `(Smith 2024)` at the caret as a chip. Save, open in Word, bring it back: the chip is
 recognized again, payload included.
@@ -127,7 +202,10 @@ Everything else is optional: `label` and `chrome.color` for the chip, `onClick` 
 
 Chips are content-locked by default, so editing runs through the context menu:
 
-For React, mount both components inside the viewport:
+Mount both components inside the viewport:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
@@ -141,7 +219,8 @@ import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/re
 </DocxEditor.Viewport>;
 ```
 
-For Vue, import the same components from the Vue Pro entry:
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
@@ -167,6 +246,11 @@ const openEditForm = (node: ActivatedCustomNode) => {
 </template>
 ```
 
+Both entries export the same component names.
+
+</Framework>
+</FrameworkTabs>
+
 An activated node carries `name`, `attrs`, `tag`, `data` and `rect` (viewport-relative, for
 anchoring your own popover), plus `nodeId` and `text` when they resolve.
 
@@ -190,14 +274,14 @@ inserts and updates return `{ ok: true, changed: true, nodeId }`; refusals inclu
 An update replaces the control and returns its new node ID. The ID passed to `updateCustomNode` no
 longer resolves, so update any state that held it:
 
-```tsx
+```ts
 const result = updateCustomNode(editor, Citation, card.nodeId, { data: next });
 if (result.ok && result.nodeId) setCard({ ...card, nodeId: result.nodeId });
 ```
 
 A payload the schema rejected comes back with `issues`, each pointing at a field:
 
-```tsx
+```ts
 const result = insertCustomNode(editor, Citation, { data: form });
 if (!result.ok) {
   for (const issue of result.issues ?? []) {
@@ -228,9 +312,22 @@ Chrome and read surfaces carry every definition's nodes under one type, so their
 `unknown`. `dataOf` narrows a node to this definition and validates its payload, so you never write
 a parse at the call site:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 <CustomNodeChrome onNodeClick={(node) => open(Citation.dataOf(node))} />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<CustomNodeChrome :on-node-click="(node) => open(Citation.dataOf(node))" />
+```
+
+</Framework>
+</FrameworkTabs>
 
 Inside `text`, `reviewCard` and `fromDocx`, `data` is already the schema's output type.
 
@@ -328,6 +425,9 @@ or Word offers to repair the file. See
 **A card in the review sidebar.** `reviewCard` contributes one card per node, anchored at its range.
 `useReviewItem()` scopes your content to the card it renders inside:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
 
@@ -341,6 +441,27 @@ function CitationActions() {
   <CitationActions />
 </DocxEditorReview>;
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<!-- CitationActions.vue -->
+<script setup lang="ts">
+import { useReviewItem } from '@docx-editor.dev/pro/vue';
+
+const item = useReviewItem();
+</script>
+
+<template>
+  <button v-if="item?.kind === 'custom'" type="button" @click="openSource(item)">
+    Open source
+  </button>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 This needs the review module registered alongside the custom-nodes module.
 

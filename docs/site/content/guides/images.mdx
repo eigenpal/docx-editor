@@ -1,15 +1,15 @@
 ---
 title: 'Images & drawings'
-description: 'Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React, accessibility, and the security boundaries.'
+description: 'Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React or Vue, accessibility, and the security boundaries.'
 category: 'Guides'
 seoTitle: 'Images and floating pictures'
 ---
 
-DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip through the engine. React ships insert, wrap, properties, alt text, and selection-overlay authoring.
+DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip through the engine. Both adapters ship insert, wrap, properties, alt text, and selection-overlay authoring.
 
 ## Supported formats
 
-| Format                                      | Insert (React)                       | Layout & paint                                                     | Round-trip                                |
+| Format                                      | Insert                               | Layout & paint                                                     | Round-trip                                |
 | ------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ | ----------------------------------------- |
 | PNG, JPEG, GIF                              | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent`                                | Original media preserved unless replaced  |
 | BMP, WebP                                   | No insert                            | Full decode at authored `wp:extent`                                | Original media preserved                  |
@@ -36,12 +36,29 @@ An SVG whose root element cannot be read renders as a placeholder rather than be
 
 Use the canonical read model shared by snapshot and imperative API:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { useEditorState } from '@docx-editor.dev/react';
 
 const image = useEditorState((s) => s.image);
 // SelectedImageState | null: widthEmu/heightEmu, crop, wrap, position, locks, resourceStatus
 ```
+
+</Framework>
+<Framework value="vue">
+
+```ts
+import { useEditorState } from '@docx-editor.dev/vue';
+
+const image = useEditorState((s) => s.image);
+// ShallowRef<SelectedImageState | null>: widthEmu/heightEmu, crop, wrap, position,
+// locks, resourceStatus
+```
+
+</Framework>
+</FrameworkTabs>
 
 ```ts
 editor.getSelectedImage(); // same SelectedImageState shape
@@ -50,9 +67,10 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 
 `SelectedImageState.wrap` reports all nine Word menu targets (`inline`, `square`, `squareLeft`, `squareRight`, `tight`, `through`, `topAndBottom`, `behind`, `inFront`). `behind` and `inFront` are both `wrapNone` with different `@behindDoc`.
 
-## React authoring surface
+## Authoring surface
 
-Default toolbar slots (contextual `image` group when a picture is selected):
+Both adapters export the same parts under the same names. Default toolbar slots
+(contextual `image` group when a picture is selected):
 
 | Slot               | Component / hook                                            | Engine command                                    |
 | ------------------ | ----------------------------------------------------------- | ------------------------------------------------- |
@@ -62,6 +80,9 @@ Default toolbar slots (contextual `image` group when a picture is selected):
 | `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties`                              |
 
 Insert preflight:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```ts
 import { normalizeImageBytes } from '@docx-editor.dev/react';
@@ -77,6 +98,27 @@ if (result.ok) {
   });
 }
 ```
+
+</Framework>
+<Framework value="vue">
+
+```ts
+import { normalizeImageBytes } from '@docx-editor.dev/vue';
+
+const result = normalizeImageBytes(bytes);
+if (result.ok) {
+  await editor.executeImageCommand({
+    type: 'insertImage',
+    data: result.bytes,
+    mime: result.mime,
+    widthPoints: result.widthPoints,
+    heightPoints: result.heightPoints,
+  });
+}
+```
+
+</Framework>
+</FrameworkTabs>
 
 Floating pictures: select in the canvas, drag to move (`setImagePosition`), eight handles or Alt+Arrow to resize (`setImageProperties`), wrap menu for all nine choices. One undo step per completed gesture.
 
@@ -116,6 +158,6 @@ Not rendered and not guaranteed to round-trip:
 
 ## Next steps
 
-- [Toolbar customization](/docs/2.x/guides/toolbar): override `DocxEditor.Toolbar.ImageWrap` and siblings
+- [Toolbar customization](/docs/2.x/guides/toolbar): override the toolbar's `ImageWrap` part and its siblings
 - [Word fidelity matrix](/docs/2.x/word-fidelity): live support claims
 - [Headers & footers](/docs/2.x/guides/headers-footers): letterhead anchors in furniture bands

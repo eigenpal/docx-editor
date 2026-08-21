@@ -1,4 +1,11 @@
 {
   "title": "Pro",
-  "pages": ["index", "tracked-changes", "comments", "custom-nodes", "custom-nodes-reference"]
+  "pages": [
+    "index",
+    "tracked-changes",
+    "review-styling",
+    "comments",
+    "custom-nodes",
+    "custom-nodes-reference"
+  ]
 }

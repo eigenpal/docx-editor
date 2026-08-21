@@ -1,23 +1,43 @@
 ---
 title: 'Toolbar'
-description: 'Customize the React editor chrome: keep the packaged toolbar, override single slots, or compose your own from DocxEditor.Toolbar and its parts.'
+description: 'Customize the editor chrome in React or Vue: keep the packaged toolbar and title bar, override a single slot, or compose your own from the parts.'
 category: 'Guides'
 seoTitle: 'Toolbar customization'
 ---
 
-The packaged React host has two levels of chrome: a title bar (`title`, `renderTitleBarLeft`, `renderTitleBarRight`, `menu`) and a formatting bar (`DocxEditor.Toolbar`). Both the packaged host and the lower-level compounds live on the React package root.
+The packaged host has two levels of chrome: a title bar (`title`, the title bar slots, and `menu`) and a formatting bar (the `Toolbar` part). Both the packaged host and the lower-level compounds live on the adapter package root.
 
 <ToolbarLayoutDiagram />
 
 ## Use the packaged chrome
 
-The fastest path is still `<DocxEditor />`:
+The fastest path is still the packaged host:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 <DocxEditor document={bytes} title="Proposal.docx" renderTitleBarRight={() => <SaveIndicator />} />
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes" title="Proposal.docx">
+  <template #titleBarRight>
+    <SaveIndicator />
+  </template>
+</DocxEditor>
+```
+
+</Framework>
+</FrameworkTabs>
+
 Use these root props to steer the packaged frame:
+
+<FrameworkTabs variant="block">
+<Framework value="react">
 
 | Prop                                         | Type                                    | Description                                        |
 | -------------------------------------------- | --------------------------------------- | -------------------------------------------------- |
@@ -30,9 +50,29 @@ Use these root props to steer the packaged frame:
 | `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                  |
 | `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
 
+</Framework>
+<Framework value="vue">
+
+| API                                | Type                                    | Description                                        |
+| ---------------------------------- | --------------------------------------- | -------------------------------------------------- |
+| `title`                            | `string`                                | Document name shown in the title bar.              |
+| `@title-change`                    | `(title: string) => void`               | Makes the title editable.                          |
+| `#titleBarLeft` / `#titleBarRight` | slot                                    | Host-owned title bar slots.                        |
+| `menu`                             | `boolean \| DocxEditorMenuProps`        | Toggle or customize the packaged menu row.         |
+| `chrome`                           | `boolean`                               | Set `false` to remove the packaged frame entirely. |
+| `navigation`                       | `boolean`                               | Toggle the packaged navigation pane.               |
+| `hyperlinkPopup`                   | `boolean`                               | Toggle the packaged link popover.                  |
+| `contextMenu`                      | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.     |
+
+</Framework>
+</FrameworkTabs>
+
 ## Drop to the provider primitives
 
 When you want your own frame, use the same provider primitives the packaged host uses internally:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -52,11 +92,48 @@ function MyChrome({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-`DocxEditor.Root` owns the editor instance, `DocxEditor.Viewport` is the scroll container, and `DocxEditor.Content` is the painted page surface. The other compounds layer on top of that same provider.
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorContent,
+  DocxEditorContextMenu,
+  DocxEditorHyperLink,
+  DocxEditorNavigation,
+  DocxEditorRoot,
+  DocxEditorToolbar,
+  DocxEditorViewport,
+} from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes">
+    <DocxEditorToolbar />
+    <DocxEditorViewport>
+      <DocxEditorNavigation />
+      <DocxEditorContent />
+      <DocxEditorHyperLink />
+      <DocxEditorContextMenu />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The root owns the editor instance, the viewport is the scroll container, and the content part is the painted page surface. The other compounds layer on top of that same provider.
 
 ## Add root-level command buttons
 
-For small custom controls, reach the shared command hooks from the root package:
+For small custom controls, reach the shared command API from the package root:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useEditorCommand } from '@docx-editor.dev/react';
@@ -75,7 +152,29 @@ function BoldButton() {
 }
 ```
 
-## Table editing (React)
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useEditorCommand } from '@docx-editor.dev/vue';
+
+const bold = useEditorCommand('text.bold');
+</script>
+
+<template>
+  <!-- chrome must not steal the caret -->
+  <button @mousedown.prevent @click="bold.execute()" :disabled="!bold.isEnabled.value">Bold</button>
+</template>
+```
+
+`useEditorCommand` returns computed refs on a plain object, so read `isEnabled`,
+`isActive`, and `disabledReason` with `.value`.
+
+</Framework>
+</FrameworkTabs>
+
+## Table editing
 
 When the caret or a rectangular cell selection is inside a table, the formatting toolbar shows contextual table controls:
 
@@ -89,6 +188,6 @@ The [Igloo demo](https://igloo.docx-editor.dev/) 🧊 is a worked example of eve
 
 ## Next steps
 
-- [React package overview](/docs/2.x/react)
-- [React props](/docs/2.x/react/props)
-- [React examples](/docs/2.x/react/examples)
+- [React package overview](/docs/2.x/react) and [Vue package overview](/docs/2.x/vue)
+- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props)
+- [React examples](/docs/2.x/react/examples) and [Vue examples](/docs/2.x/vue/examples)

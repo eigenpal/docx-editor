@@ -292,7 +292,8 @@ The full card column changes to balanced marker strips on narrow viewports.
 
 ## useDocxSource
 
-Fetch bytes and fonts from a URL, `File`, or `Blob`:
+Fetch bytes and fonts from a URL string, a `URL`, a `Uint8Array`, or an
+`ArrayBuffer`:
 
 ```ts
 const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
