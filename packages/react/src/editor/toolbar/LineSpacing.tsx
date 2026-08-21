@@ -15,6 +15,7 @@ import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
+import { useParagraphFormat } from '../useParagraphFormat';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
@@ -58,6 +59,10 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   const editor = useDocxEditor();
   const spacing = useEditorState(selectSpacing, sameSpacing);
   const { isEnabled, disabledReason } = useEditorCommand('list.lineSpacing');
+  // The row opens a `setParagraphFormat` editor, so THAT is the command whose availability
+  // decides whether it works — not `list.lineSpacing`, whose gate it used to borrow. Asked
+  // through the same hook the dialog itself uses, so there is still one answer.
+  const paragraphFormat = useParagraphFormat();
   const label = useToolbarLabel();
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -150,6 +155,9 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
             type="button"
             role="menuitem"
             className="docx-toolbar__menu-item"
+            // Its OWN slot, not line spacing's: the row opens a `setParagraphFormat`
+            // editor, so that is the command whose availability decides whether it works.
+            disabled={!paragraphFormat.isEnabled}
             onMouseDown={guardToolbarMousedown}
             onClick={() => {
               setOpen(false);

@@ -326,7 +326,8 @@
       "tabLeaderUnderscore": "Underlined",
       "tabEmpty": "No tab stops set.",
       "tabPositionLabel": "{{position}} in",
-      "tabRemoveAt": "Clear the tab stop at {{position}} inches"
+      "tabRemoveAt": "Clear the tab stop at {{position}} inches",
+      "refused": "Those values cannot be applied here."
     }
   },
   "comments": {

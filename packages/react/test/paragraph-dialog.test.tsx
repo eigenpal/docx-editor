@@ -248,6 +248,61 @@ describe('the Paragraph dialog', () => {
     expect(editor().surface!.formatting().paragraphFlags.keepNext).toBe(true);
   });
 
+  test('Tab stays inside the dialog rather than landing on the document behind it', async () => {
+    // The page behind is the EDITABLE surface, so a Tab that escapes puts the caret back in
+    // the text the dialog is about to format, and the next keystroke types into it.
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    const panel = view.container.querySelector('[role="dialog"]');
+    if (!panel) throw new Error('the dialog did not render');
+    const focusable = [...panel.querySelectorAll<HTMLElement>('button, input, select')].filter(
+      (node) => !node.hasAttribute('disabled')
+    );
+    const last = focusable[focusable.length - 1]!;
+
+    // Walking forward off the END wraps to the first control, not out of the dialog.
+    await act(async () => {
+      last.focus();
+      fireEvent.keyDown(panel, { key: 'Tab' });
+    });
+    expect(panel.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(focusable[0]!);
+
+    // And Shift+Tab off the FRONT wraps to the last.
+    await act(async () => {
+      fireEvent.keyDown(panel, { key: 'Tab', shiftKey: true });
+    });
+    expect(document.activeElement).toBe(last);
+  });
+
+  test('a refused write says so instead of swallowing the OK', async () => {
+    // `Exactly 0` is a line box of no height; the op layer refuses it. Before this the
+    // dialog just sat there, which reads as broken rather than as refused.
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    await act(async () => {
+      fireEvent.change(field(view, 'Line spacing'), { target: { value: 'exact' } });
+    });
+    await act(async () => {
+      fireEvent.change(field(view, 'At'), { target: { value: '0' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+
+    const alert = view.container.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    // Still open, because nothing was written.
+    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
   test('a no-change OK writes nothing, so it cannot detach a paragraph from its style', async () => {
     // Sending the whole form would bake every cascaded value into direct `w:pPr`: the
     // paragraph keeps its look and quietly stops following the style it was written from.

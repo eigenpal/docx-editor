@@ -23,6 +23,7 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
+  trapTabWithin,
   TAB_ALIGNMENT_LABELS,
   twipsToInches,
   withTabStop,
@@ -41,6 +42,12 @@ export interface DocxEditorParagraphDialogProps {
   onClose: () => void;
   className?: string;
 }
+
+const refusedStyle: CSSProperties = {
+  marginRight: 'auto',
+  fontSize: '12px',
+  color: 'var(--doc-danger)',
+};
 
 const overlayStyle: CSSProperties = {
   position: 'fixed',
@@ -160,6 +167,7 @@ export function DocxEditorParagraphDialog({
   // when a host renders two. Clicking a visible label is how a pointer user hits a small
   // checkbox, and `aria-label` alone does not give them that.
   const fieldId = useId();
+  const [refused, setRefused] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Seed from the selection when the dialog OPENS — not on every tick, or a concurrent
@@ -237,8 +245,14 @@ export function DocxEditorParagraphDialog({
       return;
     }
     // A refused write keeps the dialog OPEN: `apply` is honest about op-layer rejections,
-    // so closing here would claim a success that did not happen.
-    if (apply(update)) onClose();
+    // so closing here would claim a success that did not happen. It has to SAY so — a
+    // dialog that swallows the OK and sits there looks broken rather than refused.
+    if (apply(update)) {
+      setRefused(false);
+      onClose();
+      return;
+    }
+    setRefused(true);
   }, [
     apply,
     onClose,
@@ -351,6 +365,9 @@ export function DocxEditorParagraphDialog({
       onClick={onClose}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
+        if (panelRef.current && trapTabWithin(panelRef.current, event.nativeEvent)) {
+          event.preventDefault();
+        }
         // Enter is the form's default submit, EXCEPT on a control that owns the key: a
         // button acts on the Enter that focused it, and keydown here runs first, so Cancel
         // pressed from the keyboard would otherwise apply the form before closing it.
@@ -556,6 +573,12 @@ export function DocxEditorParagraphDialog({
           {checkbox('pageBreakBefore', pageBreakBefore, setPageBreakBefore)}
         </div>
         <div style={footerStyle}>
+          {/* `role="alert"` so the refusal is announced, not just drawn. */}
+          {refused ? (
+            <span role="alert" style={refusedStyle}>
+              {t('dialogs.paragraph.refused')}
+            </span>
+          ) : null}
           <button type="button" style={btnStyle} onClick={onClose}>
             {t('dialogs.paragraph.cancel')}
           </button>

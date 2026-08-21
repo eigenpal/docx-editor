@@ -21,6 +21,7 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
+  trapTabWithin,
   TAB_ALIGNMENT_LABELS,
   twipsToInches,
   withTabStop,
@@ -30,6 +31,12 @@ import {
   type TabAlignment,
   type TabLeaderName,
 } from './paragraph-dialog-fields';
+
+const refusedStyle: CSSProperties = {
+  marginRight: 'auto',
+  fontSize: '12px',
+  color: 'var(--doc-danger)',
+};
 
 const overlayStyle: CSSProperties = {
   position: 'fixed',
@@ -169,6 +176,7 @@ export const DocxEditorParagraphDialog = defineComponent({
       return root instanceof HTMLElement ? root.querySelector('[role="dialog"]') : null;
     };
     const opener = ref<Element | null>(null);
+    const refused = ref(false);
     // Seed from the selection when the dialog OPENS — not on every tick, or a concurrent
     // edit would fight the user's typing.
     watch(
@@ -250,8 +258,14 @@ export const DocxEditorParagraphDialog = defineComponent({
         return;
       }
       // A refused write keeps the dialog OPEN rather than claiming a success that did not
-      // happen.
-      if (paragraph.apply(update)) props.onClose();
+      // happen. It has to SAY so — a dialog that swallows the OK and sits there looks
+      // broken rather than refused.
+      if (paragraph.apply(update)) {
+        refused.value = false;
+        props.onClose();
+        return;
+      }
+      refused.value = true;
     };
 
     return () => {
@@ -331,6 +345,8 @@ export const DocxEditorParagraphDialog = defineComponent({
           onClick={props.onClose}
           onKeydown={(event: KeyboardEvent) => {
             if (event.key === 'Escape') props.onClose();
+            const panel = panelOf();
+            if (panel && trapTabWithin(panel, event)) event.preventDefault();
             // Enter is the form's default submit, EXCEPT on a control that owns the key: a
             // button acts on the Enter that focused it, and keydown here runs first, so
             // Cancel pressed from the keyboard would otherwise apply the form first.
@@ -546,6 +562,12 @@ export const DocxEditorParagraphDialog = defineComponent({
               })}
             </div>
             <div style={footerStyle}>
+              {/* `role="alert"` so the refusal is announced, not just drawn. */}
+              {refused.value ? (
+                <span role="alert" style={refusedStyle}>
+                  {t('dialogs.paragraph.refused')}
+                </span>
+              ) : null}
               <button type="button" style={btnStyle} onClick={props.onClose}>
                 {t('dialogs.paragraph.cancel')}
               </button>
