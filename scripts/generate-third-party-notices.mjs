@@ -122,6 +122,31 @@ function licenseIdOf(manifest) {
   return null;
 }
 
+/**
+ * Every JavaScript bundle in this package's `dist/`, keyed the way esbuild keys its
+ * `outputs`: a path relative to the package, with forward slashes.
+ *
+ * Only executable output counts. Declarations carry no third-party code, and assets
+ * (`harfbuzz.wasm`, `editor.css`, the font files) reach `dist/` by a copy step no
+ * metafile describes.
+ */
+function shippedBundles(dir) {
+  const bundles = [];
+  const walk = (current) => {
+    for (const item of readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, item.name);
+      if (item.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!/\.(?:js|cjs|mjs)$/.test(item.name)) continue;
+      bundles.push(path.relative(dir, full).split(path.sep).join('/'));
+    }
+  };
+  walk(path.join(dir, 'dist'));
+  return bundles.sort();
+}
+
 /** Every third-party package esbuild inlined into this package's bundles. */
 function bundledDependencies({ dir, entry }) {
   const dist = path.join(dir, 'dist');
@@ -145,9 +170,22 @@ function bundledDependencies({ dir, entry }) {
   }
 
   const found = new Map();
+  const accountedFor = new Set();
   for (const metafile of metafiles) {
-    const { inputs } = JSON.parse(readFileSync(path.join(dist, metafile), 'utf8'));
-    for (const input of Object.keys(inputs)) {
+    let build;
+    try {
+      build = JSON.parse(readFileSync(path.join(dist, metafile), 'utf8'));
+    } catch (error) {
+      problems.push(
+        `${entry}: dist/${metafile} is not valid JSON (${error.message}) — tsup names this ` +
+          `file after the build FORMAT alone, so two configs in one array config that share ` +
+          `a format write the same path at the same time and can interleave. Give one of ` +
+          `them a name of its own; \`writeMetafileAs\` in packages/pro/tsup.config.ts does that`
+      );
+      continue;
+    }
+    for (const output of Object.keys(build.outputs ?? {})) accountedFor.add(output);
+    for (const input of Object.keys(build.inputs)) {
       if (!input.includes('node_modules')) continue;
       // esbuild writes inputs relative to the build's cwd, which is the package.
       const owner = owningPackage(path.resolve(dir, input));
@@ -160,6 +198,19 @@ function bundledDependencies({ dir, entry }) {
       if (name.startsWith(WORKSPACE_SCOPE)) continue;
       found.set(`${name}@${version}`, { ...owner.manifest, dir: owner.dir });
     }
+  }
+
+  // A metafile that lost a race is still valid JSON — it just describes one build
+  // instead of two, and the notice comes out short with nothing to say so. Every
+  // shipped bundle has to appear in some metafile's `outputs`, or the list above is
+  // derived from less than the package ships.
+  for (const bundle of shippedBundles(dir)) {
+    if (accountedFor.has(bundle)) continue;
+    problems.push(
+      `${entry}: ${bundle} ships but appears in no dist/metafile-*.json, so nothing ` +
+        `records what it inlined. Either its build does not write a metafile, or two ` +
+        `builds wrote the same metafile-<format>.json and one overwrote the other`
+    );
   }
 
   // Plain comparison, not `localeCompare`: collation is locale-dependent (a
