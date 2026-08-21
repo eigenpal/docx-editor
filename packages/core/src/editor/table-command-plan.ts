@@ -59,6 +59,15 @@ export interface TableCommandPlannerInput {
   readonly command: EditorCommand;
   readonly part: OoxmlPart;
   readonly layout: SemanticLayout;
+  /**
+   * The PACKAGE revision, never a story's own.
+   *
+   * Explicit targets carry `sourceRevision` copied from `layout.revision`, which layout
+   * stamps from `session.packageRevision()`, and the staleness checks below compare the
+   * two. A body-store revision here reads as permanently stale the moment a header/footer
+   * or notes edit moves the package revision without moving the body's: every explicit
+   * target is then refused as stale and the command mutates nothing.
+   */
   readonly storeRevision: number;
   readonly selection: SemanticSelection;
   readonly cellSelection: CellSelection | null;

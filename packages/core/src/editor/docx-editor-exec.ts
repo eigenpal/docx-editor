@@ -325,7 +325,7 @@ export function execEditorCommand(
           command,
           part: mounted.session.part(),
           layout: mounted.layout(),
-          storeRevision: mounted.session.revision(),
+          storeRevision: mounted.session.packageRevision(),
           selection: mounted.state().selection,
           cellSelection: mounted.state().cellSelection,
           themeColors: mounted.session.documentThemeColors(),

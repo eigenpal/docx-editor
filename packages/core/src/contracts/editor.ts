@@ -107,7 +107,7 @@ export type {
  * breaking change.
  */
 export interface DocumentHandle {
-  /** The document's current store revision. */
+  /** Package revision: rises for every edit, wherever it landed. Safe to compare. */
   readonly revision: number;
 }
 
@@ -223,7 +223,7 @@ export class EditorFontError extends Error {
  * be prohibitive for large documents. Call `save()` to get bytes on demand.
  */
 export interface DocumentChange {
-  /** The store revision after this change. */
+  /** Package revision after this change — `getDocumentHandle()`'s number, monotonic. */
   readonly revision: number;
   /** Block ids created/deleted/edited by this change, when the engine reports them. */
   readonly created?: readonly string[];

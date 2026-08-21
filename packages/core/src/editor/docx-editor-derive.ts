@@ -208,7 +208,7 @@ export function buildTableCommandPlannerInput(
     command,
     part: surface.session.part(),
     layout: surface.layout(),
-    storeRevision: surface.session.revision(),
+    storeRevision: surface.session.packageRevision(),
     selection: surface.state().selection,
     cellSelection: surface.state().cellSelection,
     themeColors: surface.session.documentThemeColors(),
