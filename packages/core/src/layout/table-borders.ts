@@ -242,7 +242,14 @@ function readBox(
     right: OMITTED,
   };
   for (const side of sides) {
-    result[side] = readBorderSide(childNamed(container, side));
+    // `w:start`/`w:end` are the direction-relative spellings of the vertical sides, and in
+    // the ISO Strict schema they are the ONLY ones `CT_TcBorders` / `CT_TblBorders` declare
+    // (wml.xsd `CT_TcBorders`, `CT_TblBorders`). Reading the transitional names alone lost
+    // every vertical rule in a Strict-authored document — the cell simply drew no border.
+    const relative = side === 'left' ? 'start' : side === 'right' ? 'end' : undefined;
+    const element =
+      childNamed(container, side) ?? (relative ? childNamed(container, relative) : undefined);
+    result[side] = readBorderSide(element);
   }
   return result;
 }

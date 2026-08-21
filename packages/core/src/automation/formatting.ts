@@ -300,9 +300,15 @@ export function paragraphFormatRead(
  * paragraph — and a caller who wrote that zero back would flatten the hang.
  */
 function firstLineIndentOf(indent: OoxmlElement | undefined): number | null {
+  // HANGING WINS (§17.3.1.12). The two are one setting spelled two ways, not two settings,
+  // and an element stating both is a real shape — this engine's own `writeFirstLine` emits
+  // the unused one as an explicit zero. Preferring `w:firstLine` made this lane report a
+  // positive indent for a paragraph the page hangs, and a caller writing that back flattened
+  // it. Every other reader here already resolves the pair this way.
+  const hanging = pointsFromTwips(attributeOf(indent, 'hanging'));
+  if (hanging !== null && hanging > 0) return -hanging;
   const firstLine = pointsFromTwips(attributeOf(indent, 'firstLine'));
   if (firstLine !== null) return firstLine;
-  const hanging = pointsFromTwips(attributeOf(indent, 'hanging'));
   return hanging === null ? null : -hanging;
 }
 
@@ -340,9 +346,12 @@ export function fontProperties(request: AutomationFontWrite): FormattingPlan<Oox
     // The value goes into an attribute the serializer escapes; what it must NOT carry is a
     // character XML cannot hold at all, which escaping does not fix.
     if (!isValidXmlText(name)) return { ok: false, detail: 'name: not valid XML text' };
+    // Latin and high-range slots only. Writing `cs` too meant a font pick rewrote the
+    // complex-script face as well, and the whole element replaced the run's own — see
+    // `mergedFontProperty`, which the write path merges through.
     properties.push({
       localName: 'rFonts',
-      attributes: { ascii: name, hAnsi: name, cs: name },
+      attributes: { ascii: name, hAnsi: name },
     });
   }
   if (request.size !== undefined) {

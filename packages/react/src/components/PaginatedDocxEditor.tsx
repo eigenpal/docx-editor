@@ -64,7 +64,17 @@ export interface PaginatedDocxEditorHandle {
   navigate(command: NavigationCommand, extend?: boolean): void;
   toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
   setRunProperty(localName: string, attributes?: Record<string, string>): void;
-  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+  /**
+   * `options.mergeAttributes` keeps the attributes the call does not name, for the
+   * properties carrying several independent settings in one element — `w:spacing` holds the
+   * line rule AND the space before and after, so a line-spacing pick without it deleted the
+   * paragraph's spacing.
+   */
+  setParagraphProperty(
+    localName: string,
+    attributes?: Record<string, string | null>,
+    options?: { readonly mergeAttributes?: boolean }
+  ): void;
   /** Formatting at the selection, for a toolbar to reflect. */
   formatting(): SurfaceFormatting | null;
   /** The section the document declares — what a ruler is made of. */
@@ -148,8 +158,11 @@ export function PaginatedDocxEditor({
         surfaceRef.current?.toggleRunProperty(localName, attributes),
       setRunProperty: (localName: string, attributes?: Record<string, string>) =>
         surfaceRef.current?.setRunProperty(localName, attributes),
-      setParagraphProperty: (localName: string, attributes?: Record<string, string>) =>
-        surfaceRef.current?.setParagraphProperty(localName, attributes),
+      setParagraphProperty: (
+        localName: string,
+        attributes?: Record<string, string | null>,
+        options?: { readonly mergeAttributes?: boolean }
+      ) => surfaceRef.current?.setParagraphProperty(localName, attributes, options),
       formatting: () => surfaceRef.current?.formatting() ?? null,
       sectionProperties: () => surfaceRef.current?.sectionProperties() ?? null,
       save: () => {

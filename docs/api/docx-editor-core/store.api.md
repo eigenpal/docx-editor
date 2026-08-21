@@ -1953,6 +1953,12 @@ export const MAX_STORY_SDT_NESTING = 32;
 export const MAX_SVG_SNIFF_BYTES = 512;
 
 // @public
+export function mergedFontProperty(authored: readonly OoxmlProperty[], incoming: OoxmlProperty): OoxmlProperty;
+
+// @public
+export function mergedMultiSettingProperty(authored: readonly OoxmlProperty[], incoming: OoxmlProperty): OoxmlProperty;
+
+// @public
 export function mergedProperties(existing: readonly OoxmlProperty[], incoming: OoxmlProperty | readonly OoxmlProperty[]): OoxmlProperty[];
 
 // @public

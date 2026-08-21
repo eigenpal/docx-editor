@@ -9,10 +9,11 @@
 
 import {
   documentOrder,
-  paragraphFragmentsOf,
+  paragraphsInCells,
   spansInCells,
   spansInSelection,
   type BlockFragmentRecord,
+  type ParagraphFragmentRecord,
   type ParagraphIndent,
   type SemanticLayout,
   type SemanticSelection,
@@ -31,6 +32,7 @@ import {
   type OoxmlPart,
   type RunPropertyEdit,
 } from '@docx-editor.dev/core/store';
+import { mergedMultiSettingProperty } from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
@@ -41,6 +43,70 @@ import { cascadedParagraphAttributes } from '../layout/paragraph-style.ts';
 export interface SurfaceProperty {
   readonly localName: string;
   readonly attributes?: Record<string, string>;
+}
+
+/**
+ * Every paragraph fragment the layout publishes, in EVERY story the caret can reach.
+ *
+ * `layout.pages[].fragments` is the BODY. Headers, footers, footnotes and endnotes are
+ * editable scopes of their own (`enterHeaderFooter`, `enterNote`), and a paragraph index
+ * built from the body alone answers nothing for a caret inside one — so the toolbar read
+ * defaults over a centred header and Increase Indent stepped from an indent of zero,
+ * moving header text BACKWARDS. `paragraphLinesIndex` already walks the same four stories
+ * for exactly this reason; these two indexes did not.
+ *
+ * Header-repeat rows are skipped: a repeated row is the SAME paragraph drawn again, and it
+ * carries the header row's properties rather than its own.
+ *
+ * `inTable` rides along because it is the ruler's gate and this is the walk that knows it.
+ */
+function eachParagraphFragment(
+  layout: SemanticLayout,
+  visit: (fragment: ParagraphFragmentRecord, inTable: boolean) => void
+): void {
+  const walk = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        visit(block, inTable);
+        continue;
+      }
+      for (const row of block.rows) {
+        if (row.isHeaderRepeat) continue;
+        for (const cell of row.cells) walk(cell.blocks, true);
+      }
+    }
+  };
+  for (const page of layout.pages) {
+    walk(page.fragments, false);
+    if (page.header) walk(page.header.fragments, false);
+    if (page.footer) walk(page.footer.fragments, false);
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) walk(note.fragments, false);
+    }
+  }
+}
+
+/**
+ * Record one paragraph under EVERY id it is drawn for: its own, and every member of a
+ * merged run laid out under it.
+ *
+ * A resolved view draws a run of paragraphs as one fragment under the survivor's name, and
+ * each member is being shown with that fragment's properties — so each has to be reachable
+ * by them. First-wins, so a continuation fragment on a later page never displaces the one
+ * that opened the paragraph.
+ */
+function recordFragment<T>(
+  index: Map<string, T>,
+  fragment: ParagraphFragmentRecord,
+  value: T
+): void {
+  if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, value);
+  for (const line of fragment.lines) {
+    for (const segment of lineSegments(line)) {
+      if (!index.has(segment.paragraphId)) index.set(segment.paragraphId, value);
+    }
+  }
 }
 
 /**
@@ -69,21 +135,10 @@ export function paragraphPropertiesOf(
   // pages for one paragraph's `w:pPr` projection made that read O(document).
   let index = fragmentPropsByLayout.get(layout);
   if (!index) {
-    index = new Map();
-    for (const page of layout.pages) {
-      for (const fragment of paragraphFragmentsOf(page)) {
-        if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, fragment.props);
-        // A merged fragment lays every member out under the SURVIVOR's `w:pPr`, so that is
-        // the projection each member is being shown with. Without this a member the fragment
-        // is not named after read no properties at all, and the toolbar showed defaults.
-        for (const line of fragment.lines) {
-          for (const segment of lineSegments(line)) {
-            if (!index.has(segment.paragraphId)) index.set(segment.paragraphId, fragment.props);
-          }
-        }
-      }
-    }
-    fragmentPropsByLayout.set(layout, index);
+    const built = new Map<string, readonly SurfaceProperty[]>();
+    eachParagraphFragment(layout, (fragment) => recordFragment(built, fragment, fragment.props));
+    index = built;
+    fragmentPropsByLayout.set(layout, built);
   }
   return index.get(paragraphId) ?? [];
 }
@@ -114,32 +169,9 @@ export function paragraphIndentOf(
   let index = fragmentIndentByLayout.get(layout);
   if (!index) {
     const built = new Map<string, ParagraphIndentEntry>();
-    // Walked here rather than through `paragraphFragmentsOf`, which flattens cell
-    // paragraphs in with body ones — that difference is exactly what this index carries.
-    const visit = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
-      for (const block of blocks) {
-        if (block.kind === 'paragraph') {
-          if (!built.has(block.paragraphId)) {
-            built.set(block.paragraphId, { indent: block.indent, inTable });
-          }
-          // A resolved view lays a run of paragraphs out as ONE, under the survivor's name,
-          // and every member is drawn with that fragment's indent — so every member has to
-          // be reachable by it. Without this the caret in the other half read no indent at
-          // all and the ruler dropped all four handles, which is the same miss
-          // `paragraphPropertiesOf` maps out through `lineSegments`.
-          for (const line of block.lines) {
-            for (const segment of lineSegments(line)) {
-              if (!built.has(segment.paragraphId)) {
-                built.set(segment.paragraphId, { indent: block.indent, inTable });
-              }
-            }
-          }
-          continue;
-        }
-        for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks, true);
-      }
-    };
-    for (const page of layout.pages) visit(page.fragments, false);
+    eachParagraphFragment(layout, (fragment, inTable) =>
+      recordFragment(built, fragment, { indent: fragment.indent, inTable })
+    );
     index = built;
     fragmentIndentByLayout.set(layout, built);
   }
@@ -187,16 +219,17 @@ export function runPropertyEdits(
     const from = Math.max(range.start, start);
     const to = Math.min(range.end, end);
     if (from >= to) return;
+    const authored = authoredProperties(
+      propertyContainer(child, 'runProperties', 'rPr'),
+      AUTHORABLE_RUN_PROPERTIES
+    );
     edits.push({
       start: from,
       end: to,
-      properties: mergedProperties(
-        authoredProperties(
-          propertyContainer(child, 'runProperties', 'rPr'),
-          AUTHORABLE_RUN_PROPERTIES
-        ),
-        incoming
-      ),
+      // Merged per attribute for the two run properties carrying several independent
+      // settings, the same rule the store lane's own walk applies — see
+      // `mergedMultiSettingProperty`.
+      properties: mergedProperties(authored, mergedMultiSettingProperty(authored, incoming)),
       ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
     });
   });
@@ -485,7 +518,7 @@ export function formattingAt(
   // alignment control depend on the DIRECTION the user dragged: a centred paragraph
   // selected together with a left one showed Centre pressed one way and Left the other,
   // and pressing either was a change to both. Word shows none of the four pressed.
-  const touchedParagraphs = paragraphsTouched(layout, selection);
+  const touchedParagraphs = paragraphsTouched(layout, selection, cells);
   const paragraphValue = <T>(read: (properties: readonly SurfaceProperty[]) => T): T | null =>
     agreedOver(touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id))));
   // Normalized BEFORE agreement: `w:jc` absent and `w:jc val="left"` are the same
@@ -610,8 +643,14 @@ export function formattingAt(
  */
 function paragraphsTouched(
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  cells?: readonly string[]
 ): readonly string[] {
+  // A RECTANGLE first, for the same reason the write takes it first: a selected column read
+  // as a range runs through the cells between its corners, so the toolbar answered "mixed"
+  // over a column that was uniformly centred — and would then have centred it correctly.
+  // The button never lit, before a press or after one.
+  if (cells && cells.length > 0) return [...paragraphsInCells(layout, cells)];
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return [selection.head.paragraphId];
   }

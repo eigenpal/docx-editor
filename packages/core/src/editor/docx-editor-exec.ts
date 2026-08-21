@@ -34,6 +34,14 @@ import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
  *
  * `undefined` states nothing at all: the command names one side or both, and the side it
  * does not name keeps whatever the paragraph already authored.
+ *
+ * The other two attributes on the side go WITH the measurement, because each supersedes it
+ * (§17.3.1.33): `w:beforeAutospacing` substitutes Word's own gap, and `w:beforeLines`
+ * measures in hundredths of a line instead of twips. A merging write that left either in
+ * place wrote a number the file then ignored — the same way the autospacing flag swallowed
+ * this command whole before. Cleared to an explicit `"0"` rather than dropped where the
+ * cascade can supply them again, and dropped entirely when the measurement itself is
+ * dropped, so the paragraph inherits a consistent set.
  */
 function spacingSide(
   side: 'before' | 'after',
@@ -41,8 +49,9 @@ function spacingSide(
 ): Record<string, string | null> {
   if (points === undefined) return {};
   const autospacing = `${side}Autospacing`;
-  if (points === null) return { [side]: null, [autospacing]: null };
-  return { [side]: String(Math.round(points * 20)), [autospacing]: '0' };
+  const lines = `${side}Lines`;
+  if (points === null) return { [side]: null, [autospacing]: null, [lines]: null };
+  return { [side]: String(Math.round(points * 20)), [autospacing]: '0', [lines]: null };
 }
 
 /**

@@ -173,7 +173,10 @@ export function indexStyles(part: OoxmlPart | undefined): Map<string, StyleIndex
             nodeId: node.id,
             name,
             basedOn,
-            isDefault: (attr(node, 'default') ?? '') === '1',
+            // `ST_OnOff`, so all three on-spellings count — the layout lane's
+            // `isDefaultFlag` reads the same attribute and must reach the same answer, or
+            // the page paints the default style while the automation lane reports none.
+            isDefault: ['1', 'true', 'on'].includes(attr(node, 'default') ?? ''),
           });
         }
       }

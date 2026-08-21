@@ -42,7 +42,12 @@ export interface PaginatedDocxEditorHandle {
   navigate(command: NavigationCommand, extend?: boolean): void;
   toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
   setRunProperty(localName: string, attributes?: Record<string, string>): void;
-  setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+  /** `options.mergeAttributes` keeps the attributes the call does not name — see the React twin. */
+  setParagraphProperty(
+    localName: string,
+    attributes?: Record<string, string | null>,
+    options?: { readonly mergeAttributes?: boolean }
+  ): void;
   formatting(): SurfaceFormatting | null;
   sectionProperties(): SectionProperties | null;
   save(): Uint8Array | null;
@@ -145,8 +150,11 @@ export const PaginatedDocxEditor = defineComponent({
         surfaceRef.value?.toggleRunProperty(localName, attributes),
       setRunProperty: (localName: string, attributes?: Record<string, string>) =>
         surfaceRef.value?.setRunProperty(localName, attributes),
-      setParagraphProperty: (localName: string, attributes?: Record<string, string>) =>
-        surfaceRef.value?.setParagraphProperty(localName, attributes),
+      setParagraphProperty: (
+        localName: string,
+        attributes?: Record<string, string | null>,
+        options?: { readonly mergeAttributes?: boolean }
+      ) => surfaceRef.value?.setParagraphProperty(localName, attributes, options),
       formatting: () => surfaceRef.value?.formatting() ?? null,
       sectionProperties: () => surfaceRef.value?.sectionProperties() ?? null,
       save: () => {

@@ -166,8 +166,16 @@ export function isValidStyleId(raw: string | undefined): raw is string {
   return true;
 }
 
+/**
+ * `w:style/@w:default` — `ST_OnOff`, so `on` is a legal spelling alongside `1` and `true`.
+ *
+ * Absent means off here, unlike a toggle ELEMENT: the attribute's presence is the statement.
+ * Reading only two of the three on-spellings meant a document whose Normal said
+ * `w:default="on"` had no default paragraph style at all — every unstyled paragraph fell to
+ * the format's own defaults and the style box went blank.
+ */
 function isDefaultFlag(raw: string | undefined): boolean {
-  return raw === '1' || raw === 'true';
+  return raw === '1' || raw === 'true' || raw === 'on';
 }
 
 function propertiesFingerprint(props: readonly OoxmlProperty[]): unknown {

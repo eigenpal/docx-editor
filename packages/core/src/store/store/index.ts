@@ -80,6 +80,8 @@ export {
   directParagraphProperties,
   formatOwnedRunIds,
   isAuthorableRunProperty,
+  mergedFontProperty,
+  mergedMultiSettingProperty,
   mergedProperties,
   propertyContainer,
   runAddressRanges,

@@ -364,11 +364,18 @@ function readShading(cellProperties: OoxmlElement | undefined): string | undefin
   return shadingFillFromElement(cellProperties && childNamed(cellProperties, 'shd'));
 }
 
+/**
+ * A `w:trPr` toggle (`w:tblHeader`, `w:cantSplit`), absent meaning off.
+ *
+ * `off` is an off value (§17.17.4), like `0` and `false` — the `onOff` helper below already
+ * accepts all three. Missing it here meant `<w:tblHeader w:val="off"/>` read as ON, and the
+ * row repeated as a header on every page of a long table.
+ */
 function readFlag(container: OoxmlElement | undefined, localName: string): boolean {
   const flag = container && childNamed(container, localName);
   if (!flag) return false;
   const value = attributeValue(flag, 'val');
-  return value !== '0' && value !== 'false';
+  return value === undefined || (value !== '0' && value !== 'false' && value !== 'off');
 }
 
 const AUTO_ROW_HEIGHT: TableRowHeight = Object.freeze({ rule: 'auto' });
@@ -413,10 +420,13 @@ function twipsSide(node: OoxmlElement | undefined): number | undefined {
  */
 function readMarginSides(container: OoxmlElement | undefined): Partial<CellMarginsPt> {
   if (!container) return {};
+  // `w:start`/`w:end` are the direction-relative spellings, and the ISO Strict `CT_TcMar` /
+  // `CT_TblCellMar` declare only those. Reading `w:left`/`w:right` alone put the text of a
+  // Strict-authored cell at the fallback pad instead of its authored inset.
   const top = twipsSide(childNamed(container, 'top'));
-  const left = twipsSide(childNamed(container, 'left'));
+  const left = twipsSide(childNamed(container, 'left') ?? childNamed(container, 'start'));
   const bottom = twipsSide(childNamed(container, 'bottom'));
-  const right = twipsSide(childNamed(container, 'right'));
+  const right = twipsSide(childNamed(container, 'right') ?? childNamed(container, 'end'));
   return {
     ...(top === undefined ? {} : { top }),
     ...(left === undefined ? {} : { left }),

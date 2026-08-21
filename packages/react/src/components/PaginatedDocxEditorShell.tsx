@@ -195,10 +195,14 @@ export function PaginatedDocxEditorShell({
       case 'lineSpacing':
         // The picker already speaks TWIPS (240 = single). Multiplying again turned "1.5
         // lines" into 360 lines.
-        return editor.setParagraphProperty('spacing', {
-          line: String(Math.round(action.value)),
-          lineRule: 'auto',
-        });
+        // Merged: `w:spacing` carries the line rule and the space before/after together, so
+        // a replacing write deleted the paragraph's spacing on its way to changing the line
+        // height. Same rule as the engine's own `setLineSpacing`.
+        return editor.setParagraphProperty(
+          'spacing',
+          { line: String(Math.round(action.value)), lineRule: 'auto' },
+          { mergeAttributes: true }
+        );
       case 'applyStyle':
         return editor.setParagraphProperty('pStyle', { val: action.value });
       default:

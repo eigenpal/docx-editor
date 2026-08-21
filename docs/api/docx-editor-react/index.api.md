@@ -1495,8 +1495,9 @@ export interface PaginatedDocxEditorHandle {
     sectionProperties(): SectionProperties | null;
     // (undocumented)
     selectAll(): void;
-    // (undocumented)
-    setParagraphProperty(localName: string, attributes?: Record<string, string>): void;
+    setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
+        readonly mergeAttributes?: boolean;
+    }): void;
     // (undocumented)
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     // (undocumented)
