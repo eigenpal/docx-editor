@@ -508,6 +508,13 @@ export function createInlineDrawingLayoutBundle(
     });
   const slots = new Map<string, PartDrawingContextSlot>();
   const partByName = new Map<string, OoxmlPart>();
+  // Monotonic per-bundle slot mint, folded into `cacheTokenForPart`: a slot's own epoch
+  // counters restart at zero when a reset recreates it, so `part|0|0|N` would recur and an
+  // epoch-keyed consumer (the section prepass memo) could validate against a stale token.
+  // A fresh mint per created slot makes every recreation observably different, which fails
+  // safe — one extra rebuild, never a stale reuse.
+  let slotMints = 0;
+  const slotMintBySlot = new WeakMap<PartDrawingContextSlot, number>();
   const handlesByKey = new Map<string, ValidatedImageBytesHandle>();
   const releaseTokensByKey = new Map<string, ValidatedImageBytesReleaseToken>();
   const rememberReadyHandle = (handle: ValidatedImageBytesHandle): void => {
@@ -554,6 +561,8 @@ export function createInlineDrawingLayoutBundle(
       forgetReadyHandle,
     });
     slots.set(ownerPartName, slot);
+    slotMints += 1;
+    slotMintBySlot.set(slot, slotMints);
     return slot;
   };
 
@@ -604,7 +613,8 @@ export function createInlineDrawingLayoutBundle(
       return slotFor(ownerPartName, options.session).context;
     },
     cacheTokenForPart(ownerPartName: string) {
-      return slotFor(ownerPartName, options.session).cacheTokenForPart();
+      const slot = slotFor(ownerPartName, options.session);
+      return `${slotMintBySlot.get(slot) ?? 0}|${slot.cacheTokenForPart()}`;
     },
     drawingTokenForParagraph(paragraph: OoxmlNode, ownerPartName: string) {
       return slotFor(ownerPartName, options.session).drawingTokenForParagraph(paragraph);

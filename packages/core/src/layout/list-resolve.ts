@@ -554,16 +554,22 @@ function numberedParagraphsOfBlock(
  * per-array memo above keys on — while replacing one non-list paragraph node, so the
  * numbered sequence is unchanged and the previous map still answers. Handing back the SAME
  * map object is also what lets a section-level prepass memo validate list inputs with one
- * identity compare. Single-slot: two documents interleaving their passes only miss, never
- * mix, because the sequence is compared node-for-node.
+ * identity compare.
+ *
+ * Keyed on the story's FIRST block node in a WeakMap rather than held in a module slot, so
+ * a closed document's resolve — its numbered subtrees, item map, cascade and index — dies
+ * with its tree instead of being pinned until some other document lays out. An edit to the
+ * first block itself only misses (one extra resolve), never mixes: the numbered sequence is
+ * still compared node-for-node.
  */
-let lastStoryResolve: {
+interface LastStoryResolve {
   readonly rawIndex: NumberingIndex | undefined;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly isFontAvailable: ((family: string) => boolean) | undefined;
   readonly numbered: readonly OoxmlElement[];
   readonly listItems: ReadonlyMap<string, ResolvedListItem>;
-} | null = null;
+}
+const lastStoryResolves = new WeakMap<OoxmlElement, LastStoryResolve>();
 
 function resolveStoryListItemsStable(
   blocks: readonly OoxmlElement[],
@@ -572,12 +578,13 @@ function resolveStoryListItemsStable(
   styleCascade: StyleCascadeTable | undefined,
   isFontAvailable?: (family: string) => boolean
 ): ReadonlyMap<string, ResolvedListItem> {
+  const anchor = blocks[0];
   const numbered: OoxmlElement[] = [];
   for (const block of blocks) {
     const blockNumbered = numberedParagraphsOfBlock(block, styleCascade);
     for (const paragraph of blockNumbered) numbered.push(paragraph);
   }
-  const last = lastStoryResolve;
+  const last = anchor ? lastStoryResolves.get(anchor) : undefined;
   if (
     last &&
     last.rawIndex === rawIndex &&
@@ -589,7 +596,9 @@ function resolveStoryListItemsStable(
     return last.listItems;
   }
   const listItems = resolveStoryListItems(blocks, linkedIndex, styleCascade, isFontAvailable);
-  lastStoryResolve = { rawIndex, styleCascade, isFontAvailable, numbered, listItems };
+  if (anchor) {
+    lastStoryResolves.set(anchor, { rawIndex, styleCascade, isFontAvailable, numbered, listItems });
+  }
   return listItems;
 }
 

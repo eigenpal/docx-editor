@@ -47,6 +47,15 @@ export interface ParagraphLayoutCache<T> {
   set(key: ParagraphLayoutKey, value: T): void;
   /** Drop entries for paragraphs a commit removed, so the cache cannot grow without bound. */
   retain(keys: ReadonlySet<ParagraphLayoutKey>): void;
+  /**
+   * Whether THIS published pass should pay for a document-wide {@link retain} sweep.
+   *
+   * Retention only trims memory — the aging window tolerates deferral — while building the
+   * union of live keys costs real time on a large document, so callers ask per pass and
+   * sweep on a stride. Per cache instance, so one editor's cadence cannot starve another's.
+   * Optional for compatibility: a cache without it is retained on every pass.
+   */
+  retentionPassDue?(): boolean;
   clear(): void;
   readonly stats: LayoutCacheStats;
 }
@@ -282,17 +291,11 @@ export function retainLiveBreakKeys<T>(
  * Retention only trims memory — the generation TTL tolerates deferral — while the union of
  * live keys it builds costs real time on a large document. So it runs on a stride of
  * published passes instead of on every keystroke; between sweeps the cache grows by at most
- * one re-keyed paragraph per pass.
+ * one re-keyed paragraph per pass. The tick lives on each cache instance
+ * ({@link ParagraphLayoutCache.retentionPassDue}), so interleaved editors in one process
+ * cannot starve each other's sweeps.
  */
 const RETENTION_PASS_STRIDE = 8;
-
-let retentionTick = 0;
-
-/** Whether this published pass should pay for the document-wide retention sweep. */
-export function retentionPassDue(): boolean {
-  retentionTick += 1;
-  return retentionTick % RETENTION_PASS_STRIDE === 0;
-}
 
 /**
  * How many retain generations an entry survives without being listed or touched.
@@ -321,10 +324,14 @@ export function createParagraphLayoutCache<T>(
   options: ParagraphLayoutCacheOptions = {}
 ): ParagraphLayoutCache<T> {
   const maxEntries = Math.max(1, options.maxEntries ?? 4096);
+  // The absolute ceiling the working-set exemption below cannot exceed: a cache whose
+  // owner never (or rarely) retains still may not grow without bound.
+  const hardMaxEntries = maxEntries * 8;
   // Insertion order IS the recency order: a hit deletes and re-inserts, so the oldest key
   // is always the first one the iterator yields.
   const entries = new Map<ParagraphLayoutKey, { value: T; generation: number }>();
   let generation = 0;
+  let retentionTick = 0;
   let hits = 0;
   let misses = 0;
   let evictions = 0;
@@ -350,11 +357,17 @@ export function createParagraphLayoutCache<T>(
         const oldest = entries.entries().next();
         if (oldest.done) break;
         // The least recent entry is still part of the current working set: everything
-        // after it is too, so the cap yields rather than thrash.
-        if (oldest.value[1].generation >= generation) break;
+        // after it is too, so the soft cap yields rather than thrash — up to the hard
+        // ceiling, past which memory wins over reuse.
+        if (oldest.value[1].generation >= generation && entries.size <= hardMaxEntries) break;
         entries.delete(oldest.value[0]);
         evictions += 1;
       }
+    },
+
+    retentionPassDue() {
+      retentionTick += 1;
+      return retentionTick % RETENTION_PASS_STRIDE === 0;
     },
 
     retain(keys) {

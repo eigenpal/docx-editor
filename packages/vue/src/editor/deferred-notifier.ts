@@ -29,7 +29,10 @@ export function notificationYieldsToTask(): boolean {
   ).navigator?.scheduling;
   // Without the Scheduling API there is no input-driven cascade to break — test
   // environments and non-Chromium engines keep the legacy immediate path, and the wave
-  // counter must not accrue where timers may never run to reset it.
+  // counter must not accrue where timers may never run to reset it. The residual case is a
+  // REAL Chromium page under FAKED timers (Playwright clock.install): 17 waves would pin
+  // every notification behind the fake clock until it advances. No repo test does that;
+  // one that must should also stub `navigator.scheduling`.
   if (typeof scheduling?.isInputPending !== 'function') return false;
   if (scheduling.isInputPending({ includeContinuous: true })) return true;
   if (!waveOpen) {

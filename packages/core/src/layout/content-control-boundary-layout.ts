@@ -389,7 +389,13 @@ function pageContribution(
       const needSpans = index.neededParagraphIds.has(fragment.paragraphId);
       for (const line of fragment.lines) {
         const lineKey = lineOrdinal;
-        lineOrdinal += 1;
+        // Clamped inside the page's key band: a hostile page with a million zero-height
+        // lines must not spill ordinals into the next page's space (the tail lines then
+        // share one union box, which degrades gracefully and stays page-local).
+        lineOrdinal = Math.min(
+          lineOrdinal + 1,
+          page.index * PAGE_LINE_ORDINAL_SPAN + PAGE_LINE_ORDINAL_SPAN - 1
+        );
         if (!needSpans) continue;
         // The glyph band: the box less the spacing on BOTH sides of it. Subtracting only
         // `leading` was right while every rule put its extra above the text; `auto`/`atLeast`

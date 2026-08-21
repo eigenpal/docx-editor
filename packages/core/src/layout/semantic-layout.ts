@@ -29,7 +29,6 @@ import {
   paragraphLayoutKey,
   registerTableCellBreakKeys,
   retainLiveBreakKeys,
-  retentionPassDue,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
 import {
@@ -1020,9 +1019,11 @@ function layoutBlocksPass(
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
   const publishRetainedKeys = (): void => {
     // `false` is the orchestrator saying this pass skips the sweep; a standalone pass asks
-    // the stride itself.
+    // its own cache's stride.
     if (options.retainKeys === false) return;
-    if (options.retainKeys === undefined && !retentionPassDue()) return;
+    if (options.retainKeys === undefined && cache && !(cache.retentionPassDue?.() ?? true)) {
+      return;
+    }
     retainLiveBreakKeys(
       cache,
       options.retainKeys,
@@ -2811,11 +2812,15 @@ function layoutBlocksPass(
       : checkpoints;
     session.keys = flowKeys;
     session.context = context;
-    // Sticky on partial passes: the untouched prefix may still hold the parity-dependent
-    // anchor a resumed pass never re-placed. A full pass recomputes from scratch.
+    // Sticky whenever any part of the previous layout was reused: a resumed pass never
+    // re-places the prefix and a converged pass never re-places the tail, so their
+    // parity-reading anchors could not fire `onPageParityRead` this pass. Only a pass that
+    // placed EVERYTHING (full start, no convergence) may clear the flag.
     const passParityDependent = usedPageParity || furniture?.evenAndOddHeaders === true;
     session.parityDependent =
-      startIndex === 0 ? passParityDependent : session.parityDependent || passParityDependent;
+      startIndex === 0 && !converged
+        ? passParityDependent
+        : session.parityDependent || passParityDependent;
     session.startPageParity = startPageParity;
     session.startLineCounter = lineCounterStart;
     session.endLineCounter = lineCounter;

@@ -25,7 +25,6 @@ import {
 } from './section-properties.ts';
 import type { PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
-import { retentionPassDue } from './layout-cache.ts';
 
 export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
@@ -275,7 +274,7 @@ export function layoutMultiSectionDocument(
   // every section `false` so none of them retains alone.
   const retainKeys =
     rest.cache && rest.retainKeys !== false
-      ? (rest.retainKeys ?? (retentionPassDue() ? new Set<string>() : false))
+      ? (rest.retainKeys ?? ((rest.cache.retentionPassDue?.() ?? true) ? new Set<string>() : false))
       : false;
   const retainOnce = (): void => {
     if (retainKeys && !rest.retainKeys) rest.cache?.retain(retainKeys);

@@ -1178,6 +1178,7 @@ export interface LayoutSession {
     multi: MultiSectionLayoutState | null;
     notePageBottomReserves: ReadonlyMap<number, number> | null;
     parityDependent: boolean;
+    prepass: unknown;
     // @internal
     previous: SemanticLayout | null;
     startLineCounter: number;
@@ -1797,7 +1798,7 @@ export interface ParagraphFragmentRecord {
 // @public
 export function paragraphFragmentsOf(page: PageRecord, includeHeaderRepeats?: boolean): ParagraphFragmentRecord[];
 
-// @public
+// @public (undocumented)
 export function paragraphFragmentsOfBlocks(blocks: readonly BlockFragmentRecord[], includeHeaderRepeats?: boolean): ParagraphFragmentRecord[];
 
 // @public
@@ -1831,6 +1832,7 @@ export interface ParagraphLayoutCache<T> {
     // (undocumented)
     get(key: ParagraphLayoutKey): T | undefined;
     retain(keys: ReadonlySet<ParagraphLayoutKey>): void;
+    retentionPassDue?(): boolean;
     // (undocumented)
     set(key: ParagraphLayoutKey, value: T): void;
     // (undocumented)
@@ -2558,6 +2560,7 @@ export interface SemanticLayoutOptions {
     readonly drawingExclusionConverged?: boolean;
     readonly drawingExclusionPass?: number;
     readonly drawingExclusionZonesByPage?: ReadonlyMap<number, readonly ExclusionZone[]>;
+    readonly drawingLayoutEpoch?: string;
     // @deprecated (undocumented)
     readonly drawingLayoutToken?: string;
     readonly drawingSourceOrder?: ReadonlyMap<string, number>;

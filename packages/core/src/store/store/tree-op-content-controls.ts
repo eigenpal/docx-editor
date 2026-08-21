@@ -120,8 +120,10 @@ export function enclosingContentControls(part: OoxmlPart, nodeId: string): reado
   // Climbed through the part's id→parent index rather than re-walked from the root: this
   // sits on every keystroke's validation path, and the walk it replaces visited the whole
   // document per op. Semantics are unchanged: a text-value id encloses nothing, an element
-  // returns its control ancestors outermost first, and a control includes ITSELF only when
-  // the bounded control enumeration can see it (nesting and count limits).
+  // returns its control ancestors outermost first, and a control target always includes
+  // ITSELF — including one nested or numbered past the enumeration bounds, because this
+  // chain feeds lock resolution and dropping the control's own `w:lock` there would weaken
+  // protection exactly for the documents an attacker shapes.
   const target = findNode(part, nodeId);
   if (!target || target.kind === 'textValue') return [];
   const ancestors: OoxmlNode[] = [];
@@ -131,11 +133,7 @@ export function enclosingContentControls(part: OoxmlPart, nodeId: string): reado
     parent = parentNodeOf(part, parent.id);
   }
   ancestors.reverse();
-  if (target.kind === 'contentControl') {
-    for (const entry of contentControlsIn(part.root)) {
-      if (entry.node.id === nodeId) return [...ancestors, target];
-    }
-  }
+  if (target.kind === 'contentControl') ancestors.push(target);
   return ancestors;
 }
 
