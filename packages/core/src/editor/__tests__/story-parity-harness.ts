@@ -95,7 +95,9 @@ function textByParagraph(surface: PaginatedSurface, scope: StoryScope): Map<stri
 export function openStory(story: StoryKind): OpenStory {
   const host = document.createElement('div');
   document.body.append(host);
-  const editor = createDocxEditor({ document: storyParityDocx() });
+  // An author is named because suggesting refuses a write without one, and a test that wants
+  // a tracked change should get one rather than a silent refusal.
+  const editor = createDocxEditor({ document: storyParityDocx(), author: 'Parity' });
   // Everything after the mount can throw, and a host left on `document.body` outlives the test
   // that made it. The suite is sharded one process per file, which HIDES that from the parallel
   // run and surfaces it only in the serial one.

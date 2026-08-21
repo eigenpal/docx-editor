@@ -467,7 +467,7 @@ export interface Editor {
     readonly underline?: boolean;
   } | null;
 
-  /** Find matches for a query, for the find/replace dialog. */
+  /** Find matches for a query, for the find/replace dialog. The BODY story only. */
   findMatches(
     query: string,
     options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }

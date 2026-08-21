@@ -103,13 +103,7 @@ import {
   type RunPropertyLike,
   type StyleRunDefaults,
 } from './document-run-defaults.ts';
-import {
-  allParagraphs,
-  bodyParagraphs,
-  docToTreeOps,
-  reconcileDoc,
-  treeToDoc,
-} from './tree-binding.ts';
+import { allParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from './tree-binding.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
 import { buildParagraphAnchorIndex, type ParagraphAnchorIndex } from './paragraph-anchors.ts';
 import {
@@ -900,6 +894,40 @@ export function openTreeSession(
     return anchorsCache.index;
   };
 
+  /**
+   * Every story part that is not the body: each header and footer, then the two note parts,
+   * deduplicated.
+   *
+   * NOTES ARE STORIES TOO. A tracked change or a comment inside a footnote paints on the page
+   * like any other, but the review queue once walked the body and the header/footer parts
+   * alone — so it was visible in the document and unreachable from every review surface, and
+   * `acceptAllRevisions` refuses while it is still there.
+   *
+   * Read straight from the package rather than through `resolveStory`, which would OPEN a
+   * store for every note part just to answer a read.
+   */
+  const furnitureAndNoteParts = (): OoxmlPart[] => {
+    const parts: OoxmlPart[] = [];
+    const seen = new Set<OoxmlPart>();
+    for (const section of resolvedHeaderFooterBySection().parts) {
+      for (const slots of [section.headers, section.footers]) {
+        for (const part of slots.values()) {
+          if (seen.has(part)) continue;
+          seen.add(part);
+          parts.push(part);
+        }
+      }
+    }
+    const pkg = currentPackage();
+    for (const noteKind of ['footnote', 'endnote'] as const) {
+      const part = resolveNotesPart(pkg, noteKind);
+      if (!part || seen.has(part)) continue;
+      seen.add(part);
+      parts.push(part);
+    }
+    return parts;
+  };
+
   return {
     ok: true,
     session: {
@@ -1200,29 +1228,7 @@ export function openTreeSession(
         const commentsExtendedPart = pkg.parts.get(
           commentsExtendedPartNameOf(pkg, store.part.name)
         );
-        const furnitureParts: OoxmlPart[] = [];
-        const seenFurniture = new Set<OoxmlPart>();
-        for (const section of resolvedHeaderFooterBySection().parts) {
-          for (const slots of [section.headers, section.footers]) {
-            for (const part of slots.values()) {
-              if (seenFurniture.has(part)) continue;
-              seenFurniture.add(part);
-              furnitureParts.push(part);
-            }
-          }
-        }
-        // NOTES ARE STORIES TOO. A tracked change or a comment inside a footnote paints on
-        // the page like any other, but the queue only ever walked the body and the
-        // header/footer parts — so it was visible in the document and unreachable from
-        // every review surface, and `acceptAllRevisions` refuses while it is still there.
-        // Read straight from the package rather than through `resolveStory`, which would
-        // OPEN a store for every derivation just to answer a read.
-        for (const noteKind of ['footnote', 'endnote'] as const) {
-          const part = resolveNotesPart(pkg, noteKind);
-          if (!part || seenFurniture.has(part)) continue;
-          seenFurniture.add(part);
-          furnitureParts.push(part);
-        }
+        const furnitureParts = furnitureAndNoteParts();
 
         const patchParagraphId =
           reviewCache && lastChange
@@ -1286,13 +1292,23 @@ export function openTreeSession(
       },
 
       hasReviewContent() {
-        const store = bodyStore();
-        if (!reviewContentCache || reviewContentCache.revision !== store.revision) {
+        // EVERY story, and keyed on the PACKAGE revision.
+        //
+        // The contract asks whether THE DOCUMENT carries review content, and the free tier's
+        // upsell hint is the one thing that reads it. Walking the body alone answered `false`
+        // for a file whose tracked changes live in a header or a footnote — while
+        // `reviewItems` right beside it listed them correctly, so two derivations of one
+        // question disagreed. And keying on the body revision meant an accept inside a header
+        // moved only `packageRevision`, leaving a stale answer cached behind it.
+        const revision = packageStore.packageRevision;
+        if (!reviewContentCache || reviewContentCache.revision !== revision) {
+          const stories = [bodyStore().part, ...furnitureAndNoteParts()];
           reviewContentCache = {
-            revision: store.revision,
-            present:
-              collectRevisionSites(store.part).length > 0 ||
-              storyCarriesCommentAnchor(store.part.root),
+            revision,
+            present: stories.some(
+              (part) =>
+                collectRevisionSites(part).length > 0 || storyCarriesCommentAnchor(part.root)
+            ),
           };
         }
         return reviewContentCache.present;
@@ -1528,8 +1544,18 @@ export function openTreeSession(
  * so body text silently disagreed with the offsets the ops and the layout use. A caret at
  * offset 12 and a `bodyText().slice(12)` have to mean the same place.
  */
+/**
+ * The body story's text, every paragraph of it.
+ *
+ * `allParagraphs`, not `bodyParagraphs`. The latter collects only DIRECT `w:p` children of
+ * `w:body` because it exists to match the ProseMirror projection, so reading text through it
+ * silently dropped every table cell and every paragraph inside a block content control — a
+ * table-heavy document came back nearly empty. It also broke this read's own contract, which
+ * says a caret at offset 12 and `bodyText().slice(12)` mean the same place: they cannot, once
+ * a table precedes the caret.
+ */
 function projectedText(part: OoxmlPart): string {
-  return bodyParagraphs(part)
+  return allParagraphs(part)
     .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
     .join('\n');
 }
