@@ -398,6 +398,89 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(editor.surface!.formatting().tabStops).toEqual([]);
   });
 
+  test('values the reader would silently discard are refused, not written', () => {
+    // Both used to return ok, write markup, and then read back as no stop at all — the
+    // "reports success and does nothing" class this dialog exists to avoid.
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+
+    // A negative position: `clampPositionTwips` drops anything below zero.
+    expect(
+      editor.exec({
+        type: 'setParagraphFormat',
+        tabStops: [{ positionTwips: -720, alignment: 'left' }],
+      }).ok
+    ).toBe(false);
+    // `bar` draws a vertical rule; the tab reader does not model it.
+    expect(
+      editor.exec({
+        type: 'setParagraphFormat',
+        tabStops: [{ positionTwips: 720, alignment: 'bar' }],
+      }).ok
+    ).toBe(false);
+    expect(xmlOf(editor)).not.toContain('w:tabs');
+  });
+
+  test('the clear pile is bounded, so the engine can always see the stops it wrote', () => {
+    // A clear can never be retired — nothing downstream can say whether a suppressed
+    // position would come back without it — so left unbounded the element grew by one inert
+    // child per position ever deleted. The reader walks a fixed number of children, so past
+    // that the real stops sorted off the end and the paragraph went dead: the stop in the
+    // file, and layout, paint and the dialog all reporting none.
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+
+    // 140 rounds of "add a stop at a fresh position, then remove it".
+    for (let round = 0; round < 140; round += 1) {
+      const positionTwips = 100 + round * 100;
+      editor.exec({ type: 'setParagraphFormat', tabStops: [{ positionTwips, alignment: 'left' }] });
+      editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    }
+    expect([...xmlOf(editor).matchAll(/<w:tab /g)].length).toBeLessThanOrEqual(64);
+
+    // The paragraph is still editable, which is the whole point.
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 30_000, alignment: 'right' }],
+    });
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 30_000, alignment: 'right' },
+    ]);
+  });
+
+  test('a real stop is never dropped to make room for a clear', () => {
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+    for (let round = 0; round < 80; round += 1) {
+      editor.exec({
+        type: 'setParagraphFormat',
+        tabStops: [{ positionTwips: 200 + round * 200, alignment: 'left' }],
+      });
+      editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    }
+    // Ten stops at once, well inside what Word allows, all of them readable back.
+    const wanted = Array.from({ length: 10 }, (_unused, index) => ({
+      positionTwips: 1000 + index * 500,
+      alignment: 'left' as const,
+    }));
+    editor.exec({ type: 'setParagraphFormat', tabStops: wanted });
+    expect(editor.surface!.formatting().tabStops).toEqual(wanted);
+  });
+
+  test('a fractional clear does not spawn a second one at its rounded position', () => {
+    const editor = mount(p('alpha', '<w:tabs><w:tab w:val="clear" w:pos="1440.5"/></w:tabs>'));
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 2880, alignment: 'right' }],
+    });
+    const xml = xmlOf(editor);
+    // ONE clear, not two. It lands at the rounded position, which is the only one the
+    // reader can see anyway — `1440.5` and `1441` resolve to the same stop for it.
+    expect([...xml.matchAll(/w:val="clear"/g)]).toHaveLength(1);
+    expect(xml).toContain('w:val="right"');
+  });
+
   test('a fractional w:pos the reader rounds away is preserved, like bar and num', () => {
     const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1440.5"/></w:tabs>'));
     editor.surface!.selectAll();

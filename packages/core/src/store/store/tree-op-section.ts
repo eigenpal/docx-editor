@@ -306,6 +306,14 @@ export function applySetListNumbering(
 /** `w:tab` values the tab-stop reader does not model, and a write must therefore preserve. */
 const OPAQUE_TAB_VALUES: ReadonlySet<string> = new Set(['bar', 'num']);
 
+/**
+ * The most `w:tab` children one `w:tabs` may carry.
+ *
+ * Half what `applyTabsElement` is willing to walk, so a document this write produces is
+ * always fully readable by the reader that feeds it.
+ */
+const MAX_TAB_STOP_CHILDREN = 64;
+
 export function applySetParagraphTabStops(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
@@ -331,10 +339,18 @@ export function applySetParagraphTabStops(
   );
   const positionOf = (child: (typeof existingTabs)[number]): number =>
     Math.round(Number(attributeValueOf(child, 'pos')));
-  /** A `w:tab` this write cannot re-author, because the reader that feeds it never saw it. */
+  /**
+   * A `w:tab` this write cannot re-author, because the reader that feeds it never saw it.
+   *
+   * A `clear` is never opaque even at a fractional position: it is regenerated below from
+   * `standingClears`, and counting it here too emitted the same suppression twice — once
+   * carried through at `1440.5` and once regenerated at `1441`, inventing a clear the
+   * document never had at a position an inherited stop might occupy.
+   */
   const isOpaque = (child: (typeof existingTabs)[number]): boolean =>
-    OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') ||
-    !Number.isInteger(Number(attributeValueOf(child, 'pos')));
+    attributeValueOf(child, 'val') !== 'clear' &&
+    (OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') ||
+      !Number.isInteger(Number(attributeValueOf(child, 'pos'))));
   // `w:bar` and `w:num` are not caret stops — a bar tab draws a vertical rule and `num` is
   // a legacy list artefact — and a fractional `w:pos` is legal but rounded away on read. The
   // reader reports none of them and an editor cannot name them, so a wholesale replace would
@@ -358,14 +374,28 @@ export function applySetParagraphTabStops(
   // set a stop at 2160, dropping the direct one let the style's take its place, so "Clear
   // All" reported success and the stop stayed (with a different alignment). A `clear` at a
   // position nothing inherits is inert markup, which is the cheaper mistake.
-  const cleared = [
+  const allClears = [
     ...new Set([
       ...standingClears,
       ...(inForcePositionsTwips ?? [])
         .map((position) => Math.round(position))
         .filter((position) => !kept.has(position)),
     ]),
-  ];
+  ].sort((a, b) => a - b);
+  // Bounded, because a clear can never be retired: nothing downstream can say whether a
+  // suppressed position would come back without it, so `standingClears` re-emits every one
+  // forever. Left unbounded the element grew by one inert child per position the user had
+  // ever deleted, and the READER walks at most `MAX_TAB_STOPS * 2` children — so past that
+  // the real stops sorted off the end and the engine could no longer see the stops it had
+  // itself just written. A paragraph in that state is dead: the stop is in the file, and
+  // layout, paint and the dialog all report none.
+  //
+  // Real stops and carried-through markup are never sacrificed; only clears are dropped,
+  // lowest positions first, and only in a document with more cleared positions than Word
+  // allows tab stops. Losing a suppression there resurrects an inherited stop, which is
+  // visible and fixable. The alternative is a paragraph nothing can edit.
+  const clearBudget = Math.max(0, MAX_TAB_STOP_CHILDREN - stops.length - opaque.length);
+  const cleared = allClears.slice(0, clearBudget);
 
   if (stops.length === 0 && cleared.length === 0 && opaque.length === 0) {
     if (!existing) return ok(part, effect);

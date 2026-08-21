@@ -1,0 +1,209 @@
+// Snapshot equality (editor lane).
+//
+// Split out of docx-editor-support.ts, which is at its line cap. Everything here answers
+// one question — has this piece of the snapshot actually moved? — which is what keeps
+// `snapshot()` reference-stable for `useSyncExternalStore`. Re-exported from
+// docx-editor-support.ts so importers keep one entry point.
+
+import type {
+  DocAnchor,
+  DocRange,
+  EditorSnapshot,
+  PageSetup,
+  RunFormatting,
+} from '@docx-editor.dev/core/contracts/editor';
+import { isDocAnchorRange } from './anchor-resolution.ts';
+
+/**
+ * Compile-time exhaustiveness for `formattingEqual`, in the manner of the content-node
+ * switches: every key of `RunFormatting` is listed, so ADDING a field fails `typecheck`
+ * here until its comparison is written.
+ *
+ * A field the comparator misses is a field the cache reports as unchanged. The previous
+ * object is handed back, a host reading `snapshot().formatting` by reference never sees the
+ * value move, and the control that made the write goes on showing the old state while the
+ * document holds the new one — a silent, one-line-of-omission bug that no test of the write
+ * path can catch, because the write is fine. A comment asking the next author to remember
+ * is not a guarantee; this is.
+ */
+const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
+  bold: true,
+  italic: true,
+  underline: true,
+  strike: true,
+  color: true,
+  highlight: true,
+  fontFamily: true,
+  fontSizePt: true,
+  superscript: true,
+  subscript: true,
+  alignment: true,
+  styleId: true,
+  lineSpacing: true,
+  spaceBeforePt: true,
+  spaceAfterPt: true,
+  indent: true,
+  paragraphFlags: true,
+  tabStops: true,
+};
+void COMPARED_FORMATTING_KEYS;
+
+/** Value equality for the snapshot's `formatting` sub-object (color compared by value). */
+export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (
+    a.bold !== b.bold ||
+    a.italic !== b.italic ||
+    a.underline !== b.underline ||
+    a.strike !== b.strike ||
+    a.superscript !== b.superscript ||
+    a.subscript !== b.subscript ||
+    a.highlight !== b.highlight ||
+    a.fontFamily !== b.fontFamily ||
+    a.fontSizePt !== b.fontSizePt ||
+    a.alignment !== b.alignment ||
+    a.styleId !== b.styleId ||
+    a.spaceBeforePt !== b.spaceBeforePt ||
+    a.spaceAfterPt !== b.spaceAfterPt ||
+    a.lineSpacing?.rule !== b.lineSpacing?.rule ||
+    a.lineSpacing?.value !== b.lineSpacing?.value ||
+    // FIELD BY FIELD, like `lineSpacing` above. `indent` is a fresh object on every derive,
+    // so comparing it by reference would report every tick as a change, hand back a new
+    // sub-object each time, and re-render every `snapshot().formatting` subscriber on each
+    // keystroke — the exact opposite of what this cache exists for.
+    a.indent?.left !== b.indent?.left ||
+    a.indent?.right !== b.indent?.right ||
+    a.indent?.firstLine !== b.indent?.firstLine ||
+    a.indent?.mixed.left !== b.indent?.mixed.left ||
+    a.indent?.mixed.right !== b.indent?.mixed.right ||
+    a.indent?.mixed.firstLine !== b.indent?.mixed.firstLine ||
+    // Field by field for the same reason as `indent`: a fresh object every derive, so a
+    // reference compare would report every tick as a change.
+    a.paragraphFlags?.contextualSpacing !== b.paragraphFlags?.contextualSpacing ||
+    a.paragraphFlags?.keepNext !== b.paragraphFlags?.keepNext ||
+    a.paragraphFlags?.keepLines !== b.paragraphFlags?.keepLines ||
+    a.paragraphFlags?.widowControl !== b.paragraphFlags?.widowControl ||
+    a.paragraphFlags?.pageBreakBefore !== b.paragraphFlags?.pageBreakBefore ||
+    // By VALUE: a fresh array per derive, so a reference compare would report every tick as
+    // a change and re-render every `snapshot().formatting` subscriber on each keystroke.
+    a.tabStops?.length !== b.tabStops?.length ||
+    (a.tabStops ?? []).some(
+      (stop, index) =>
+        stop.positionTwips !== b.tabStops?.[index]?.positionTwips ||
+        stop.alignment !== b.tabStops?.[index]?.alignment ||
+        (stop.leader ?? 'none') !== (b.tabStops?.[index]?.leader ?? 'none')
+    )
+  ) {
+    return false;
+  }
+  if (a.color === b.color) return true;
+  if (!a.color || !b.color) return false;
+  // ColorValue is a small tagged union of primitives; key-by-key compare covers all arms.
+  const left = a.color as Record<string, unknown>;
+  const right = b.color as Record<string, unknown>;
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) if (left[key] !== right[key]) return false;
+  return true;
+}
+
+/** Value equality for the snapshot's `page` sub-object. */
+export function pageEqual(a: EditorSnapshot['page'], b: EditorSnapshot['page']): boolean {
+  return a.current === b.current && a.total === b.total;
+}
+
+/** Value equality for the snapshot's `pageSetup` sub-object. */
+export function pageSetupEqual(a: PageSetup | null, b: PageSetup | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.pageWidthTwips === b.pageWidthTwips &&
+    a.pageHeightTwips === b.pageHeightTwips &&
+    a.orientation === b.orientation &&
+    a.marginsTwips.top === b.marginsTwips.top &&
+    a.marginsTwips.right === b.marginsTwips.right &&
+    a.marginsTwips.bottom === b.marginsTwips.bottom &&
+    a.marginsTwips.left === b.marginsTwips.left &&
+    a.gutterTwips === b.gutterTwips
+  );
+}
+
+function docAnchorEndpointEqual(
+  a: DocRange['from'] | undefined,
+  b: DocRange['from'] | undefined
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const left = a as Partial<DocAnchor>;
+  const right = b as Partial<DocAnchor>;
+  return (
+    left.paraId === right.paraId &&
+    left.search === right.search &&
+    left.occurrence === right.occurrence
+  );
+}
+
+/**
+ * Value equality for the snapshot's `selection`. Emitted ranges carry bare DocAnchor
+ * endpoints, but all anchor fields are compared for honesty; a DocLocation endpoint
+ * (never emitted today) compares unequal unless reference-equal.
+ */
+export function docRangeEqual(a: DocRange | null, b: DocRange | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (!isDocAnchorRange(a) || !isDocAnchorRange(b)) return false;
+  return docAnchorEndpointEqual(a.from, b.from) && docAnchorEndpointEqual(a.to, b.to);
+}
+
+/**
+ * A reference-stable cache for the right-click TOC context.
+ *
+ * A fresh object per derivation would make {@link snapshotsEqual} report every tick as
+ * a change and hand every subscriber a new snapshot, which is the opposite of what the
+ * snapshot cache is for. The id is the only value, so one object per id is enough.
+ */
+export function createTocContextCache(): (id: string | null) => { readonly id: string } | null {
+  let cached: { readonly id: string } | null = null;
+  return (id) => {
+    if (id === null) cached = null;
+    else if (cached?.id !== id) cached = Object.freeze({ id });
+    return cached;
+  };
+}
+
+/**
+ * Whether two snapshots are value-equal AFTER sub-object reuse — i.e. every field can be
+ * compared by reference or primitive. When true, the previous snapshot object itself is
+ * kept, so `snapshot()` returns the same reference across ticks that changed nothing.
+ */
+export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
+  return (
+    a.scope === b.scope &&
+    a.isLoading === b.isLoading &&
+    a.isOpening === b.isOpening &&
+    a.parseError === b.parseError &&
+    a.editable === b.editable &&
+    a.zoom === b.zoom &&
+    a.selection === b.selection &&
+    // Load-bearing: `selection` is a paraId range with no offsets, so collapsing a range
+    // INSIDE one paragraph leaves it identical. Without this compare, a control gated on
+    // the caret/range distinction would never see the moment it changed.
+    a.selectionCollapsed === b.selectionCollapsed &&
+    a.formatting === b.formatting &&
+    a.table === b.table &&
+    a.tocContext === b.tocContext &&
+    a.image === b.image &&
+    a.fontSubstitutions === b.fontSubstitutions &&
+    a.page === b.page &&
+    a.canUndo === b.canUndo &&
+    a.canRedo === b.canRedo &&
+    a.pageSetup === b.pageSetup &&
+    a.zoomMode === b.zoomMode &&
+    // Every member the snapshot carries has to be compared here or it cannot move a
+    // subscriber: the comments button stayed pressed after the pane closed because this
+    // list did not know the pane existed.
+    a.reviewPaneOpen === b.reviewPaneOpen &&
+    a.editingMode === b.editingMode &&
+    a.lastRejection === b.lastRejection
+  );
+}

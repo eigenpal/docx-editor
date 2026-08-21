@@ -172,6 +172,7 @@ export const DocxEditorParagraphDialog = defineComponent({
     const widowControl = ref(true);
     const pageBreakBefore = ref(false);
     const tabStops = ref<readonly ParagraphTabStop[]>([]);
+    const clearedAllTabStops = ref(false);
     const newTabPosition = ref(0);
     const newTabAlignment = ref<TabAlignment>('left');
     const newTabLeader = ref<TabLeaderName>('none');
@@ -225,6 +226,7 @@ export const DocxEditorParagraphDialog = defineComponent({
         widowControl.value = seed.widowControl;
         pageBreakBefore.value = seed.pageBreakBefore;
         tabStops.value = seed.tabStops;
+        clearedAllTabStops.value = false;
         mixed.value = mixedFieldsOf(format);
         seedMixed.value = mixed.value;
         refused.value = false;
@@ -232,22 +234,30 @@ export const DocxEditorParagraphDialog = defineComponent({
         seeded.value = true;
         // Focus the panel so Escape reaches the overlay's key handler. Without it the
         // dialog cannot be dismissed from the keyboard until the user tabs into it.
-        // The selection the dialog is ABOUT. Typing in any field moves the DOM selection
-        // into that input, so by the time the dialog closes the document has none — and
-        // focusing a surface with no selection puts the caret at the top.
         void nextTick(() => panelOf()?.focus());
       },
       { immediate: true }
     );
 
     /** Add or replace the stop at this position — "Set" replaces one already there. */
-    const setTabStop = (): void => {
+    /**
+     * Add or replace the stop at this position — "Set" replaces one already there.
+     *
+     * A position of zero is not a stop: the field opens at 0, so pressing Set without
+     * typing anything used to add a real `0 in` row that OK then wrote to the document.
+     */
+    const setTabStop = (): boolean => {
+      const positionTwips = Math.round(newTabPosition.value);
+      if (positionTwips <= 0) return false;
       mixed.value = { ...mixed.value, tabStops: false };
       tabStops.value = withTabStop(tabStops.value, {
-        positionTwips: Math.round(newTabPosition.value),
+        positionTwips,
         alignment: newTabAlignment.value,
         ...(newTabLeader.value !== 'none' ? { leader: newTabLeader.value } : {}),
       });
+      newTabPosition.value = 0;
+      newTabLeader.value = 'none';
+      return true;
     };
 
     const handleApply = (): void => {
@@ -273,6 +283,7 @@ export const DocxEditorParagraphDialog = defineComponent({
                 widowControl: widowControl.value,
                 pageBreakBefore: pageBreakBefore.value,
                 tabStops: tabStops.value,
+                clearedAllTabStops: clearedAllTabStops.value,
               },
               seedMixed.value,
               mixed.value
@@ -309,7 +320,9 @@ export const DocxEditorParagraphDialog = defineComponent({
             id={`${fieldId}-${labelKey}`}
             type="number"
             style={inputStyle}
+            min="0"
             step="0.1"
+            {...(labelKey === 'tabPosition' ? { 'data-docx-tab-entry': '' } : {})}
             value={twipsToInches(value)}
             onInput={(event) =>
               set(inchesToTwips(Number((event.target as HTMLInputElement).value) || 0))
@@ -382,7 +395,15 @@ export const DocxEditorParagraphDialog = defineComponent({
             // button acts on the Enter that focused it, and keydown here runs first, so
             // Cancel pressed from the keyboard would otherwise apply the form first.
             if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) {
-              handleApply();
+              // Enter inside the tab-stop entry row means "Set", the way it does in Word.
+              // Submitting the whole form there threw the pending row away without a word:
+              // it is not part of `tabStops` yet, so OK closed and wrote nothing.
+              const target = event.target;
+              if (target instanceof HTMLElement && target.dataset.docxTabEntry !== undefined) {
+                setTabStop();
+                return;
+              }
+              if (paragraph.isEnabled.value) handleApply();
             }
           }}
         >
@@ -566,6 +587,7 @@ export const DocxEditorParagraphDialog = defineComponent({
                       .value as TabAlignment;
                   }}
                   aria-label={t('dialogs.paragraph.tabAlignment')}
+                  data-docx-tab-entry=""
                 >
                   <option value="left">{t('dialogs.paragraph.tabAlignLeft')}</option>
                   <option value="center">{t('dialogs.paragraph.tabAlignCenter')}</option>
@@ -588,6 +610,7 @@ export const DocxEditorParagraphDialog = defineComponent({
                     newTabLeader.value = (event.target as HTMLSelectElement).value as TabLeaderName;
                   }}
                   aria-label={t('dialogs.paragraph.tabLeader')}
+                  data-docx-tab-entry=""
                 >
                   <option value="none">{t('dialogs.paragraph.tabNone')}</option>
                   <option value="dot">{t('dialogs.paragraph.tabLeaderDot')}</option>

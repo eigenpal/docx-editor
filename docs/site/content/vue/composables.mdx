@@ -234,8 +234,9 @@ function toggle() {
 ```
 
 A field reads `null` when the selected paragraphs disagree about it. A checkbox
-shows that as indeterminate. A number field has no such state, so it opens on one
-of the values and stays there until you change it. Omit a field to leave it as
+shows that as indeterminate. A number field has no such state: it opens on a
+default rather than on either value in play, and stays there until you change it.
+Nothing is written for a field you don't touch, so the paragraphs keep disagreeing. Omit a field to leave it as
 authored. The spacing, line-spacing and indent fields also take `null`, which
 removes the setting so the style supplies it again. That isn't the same as
 writing a zero, which blocks the style.

@@ -3667,13 +3667,7 @@ export const TABLE_BORDER_STYLES: readonly ["single", "dashed", "dotted", "doubl
 export type TableBorderStyle = (typeof TABLE_BORDER_STYLES)[number];
 
 // @public
-export interface TabStopWrite {
-    // (undocumented)
-    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
-    // (undocumented)
-    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
-    readonly positionTwips: number;
-}
+export type TabStopWrite = ParagraphTabStop;
 
 // @public
 export type TargetMode = 'Internal' | 'External';

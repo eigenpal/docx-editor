@@ -170,6 +170,7 @@ export function DocxEditorParagraphDialog({
   const [widowControl, setWidowControl] = useState(true);
   const [pageBreakBefore, setPageBreakBefore] = useState(false);
   const [tabStops, setTabStops] = useState<readonly ParagraphTabStop[]>([]);
+  const [clearedAllTabStops, setClearedAll] = useState(false);
   const [newTabPosition, setNewTabPosition] = useState(0);
   const [newTabAlignment, setNewTabAlignment] = useState<TabAlignment>('left');
   const [newTabLeader, setNewTabLeader] = useState<TabLeaderName>('none');
@@ -210,6 +211,7 @@ export function DocxEditorParagraphDialog({
     setWidowControl(seed.widowControl);
     setPageBreakBefore(seed.pageBreakBefore);
     setTabStops(seed.tabStops);
+    setClearedAll(false);
     const openedMixed = mixedFieldsOf(format);
     setMixed(openedMixed);
     seedMixedRef.current = openedMixed;
@@ -264,6 +266,7 @@ export function DocxEditorParagraphDialog({
               widowControl,
               pageBreakBefore,
               tabStops,
+              clearedAllTabStops,
             },
             seedMixedRef.current,
             mixed
@@ -305,16 +308,26 @@ export function DocxEditorParagraphDialog({
     tabStops,
   ]);
 
-  /** Add or replace the stop at this position — "Set" replaces one already there. */
-  const setTabStop = useCallback(() => {
+  /**
+   * Add or replace the stop at this position — "Set" replaces one already there.
+   *
+   * A position of zero is not a stop: the field opens at 0, so pressing Set without typing
+   * anything used to add a real `0 in` row that OK then wrote to the document.
+   */
+  const setTabStop = useCallback((): boolean => {
+    const positionTwips = Math.round(newTabPosition);
+    if (positionTwips <= 0) return false;
     setMixed((previous) => ({ ...previous, tabStops: false }));
     setTabStops(
       withTabStop(tabStops, {
-        positionTwips: Math.round(newTabPosition),
+        positionTwips,
         alignment: newTabAlignment,
         ...(newTabLeader !== 'none' ? { leader: newTabLeader } : {}),
       })
     );
+    setNewTabPosition(0);
+    setNewTabLeader('none');
+    return true;
   }, [tabStops, newTabPosition, newTabAlignment, newTabLeader]);
 
   if (!open) return null;
@@ -405,7 +418,17 @@ export function DocxEditorParagraphDialog({
         // button acts on the Enter that focused it, and keydown here runs first, so Cancel
         // pressed from the keyboard would otherwise apply the form before closing it.
         if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) {
-          handleApply();
+          // Enter inside the tab-stop entry row means "Set", the way it does in Word.
+          // Submitting the whole form there threw the pending row away without a word:
+          // it is not part of `tabStops` yet, so OK closed and wrote nothing.
+          const target = event.target;
+          const inTabEntry =
+            target instanceof HTMLElement && target.dataset.docxTabEntry !== undefined;
+          if (inTabEntry) {
+            setTabStop();
+            return;
+          }
+          if (isEnabled) handleApply();
         }
       }}
     >
@@ -466,8 +489,11 @@ export function DocxEditorParagraphDialog({
           </div>
           {special !== 'none' ? (
             <div style={rowStyle}>
-              <label style={labelStyle}>{t('dialogs.paragraph.by')}</label>
+              <label style={labelStyle} htmlFor={`${fieldId}-by`}>
+                {t('dialogs.paragraph.by')}
+              </label>
               <input
+                id={`${fieldId}-by`}
                 type="number"
                 style={inputStyle}
                 min={0}
@@ -517,8 +543,11 @@ export function DocxEditorParagraphDialog({
             </select>
           </div>
           <div style={rowStyle}>
-            <label style={labelStyle}>{t('dialogs.paragraph.at')}</label>
+            <label style={labelStyle} htmlFor={`${fieldId}-at`}>
+              {t('dialogs.paragraph.at')}
+            </label>
             <input
+              id={`${fieldId}-at`}
               type="number"
               style={inputStyle}
               min={0.01}
@@ -565,8 +594,11 @@ export function DocxEditorParagraphDialog({
             ))
           )}
           <div style={rowStyle}>
-            <label style={labelStyle}>{t('dialogs.paragraph.tabPosition')}</label>
+            <label style={labelStyle} htmlFor={`${fieldId}-tabPosition`}>
+              {t('dialogs.paragraph.tabPosition')}
+            </label>
             <input
+              id={`${fieldId}-tabPosition`}
               type="number"
               style={inputStyle}
               min={0}
@@ -576,6 +608,7 @@ export function DocxEditorParagraphDialog({
                 setNewTabPosition(Math.max(0, inchesToTwips(Number(event.target.value) || 0)))
               }
               aria-label={t('dialogs.paragraph.tabPosition')}
+              data-docx-tab-entry=""
             />
             <span style={unitStyle}>{t('dialogs.paragraph.unitInches')}</span>
           </div>
@@ -589,6 +622,7 @@ export function DocxEditorParagraphDialog({
               value={newTabAlignment}
               onChange={(event) => setNewTabAlignment(event.target.value as TabAlignment)}
               aria-label={t('dialogs.paragraph.tabAlignment')}
+              data-docx-tab-entry=""
             >
               <option value="left">{t('dialogs.paragraph.tabAlignLeft')}</option>
               <option value="center">{t('dialogs.paragraph.tabAlignCenter')}</option>
@@ -609,6 +643,7 @@ export function DocxEditorParagraphDialog({
               value={newTabLeader}
               onChange={(event) => setNewTabLeader(event.target.value as TabLeaderName)}
               aria-label={t('dialogs.paragraph.tabLeader')}
+              data-docx-tab-entry=""
             >
               <option value="none">{t('dialogs.paragraph.tabNone')}</option>
               <option value="dot">{t('dialogs.paragraph.tabLeaderDot')}</option>
@@ -627,6 +662,7 @@ export function DocxEditorParagraphDialog({
                 // Over a MIXED list this is still a decision, even though the list already
                 // shows empty — `changedFields` needs the disagreement marked resolved.
                 setMixed((previous) => ({ ...previous, tabStops: false }));
+                setClearedAll(true);
                 setTabStops([]);
               }}
             >

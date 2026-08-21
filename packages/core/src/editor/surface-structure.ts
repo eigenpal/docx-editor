@@ -19,7 +19,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
-import { fragmentsOfParagraph } from '../layout/semantic-record-queries.ts';
+import { paragraphTabStopsOf } from './surface-formatting.ts';
 import {
   lineSpacingAttributes,
   paragraphFlagAttributes,
@@ -705,7 +705,13 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           // one. The read resolves the cascade and the write lands on the paragraph, so
           // without this a style's stop survives a "Clear All" and the command still
           // reports success — see `applySetParagraphTabStops`.
-          const inForce = fragmentsOfParagraph(deps.layout(), paragraphId)[0]?.tabStops;
+          //
+          // Through `paragraphTabStopsOf`, which is the SAME walk the read uses. A
+          // page-fragment walk sees the body only: header, footer and note fragments hang
+          // off `page.header`/`page.footer`/`page.footnotes` and were never visited, so
+          // every paragraph in those stories cleared nothing and the style put its stop
+          // straight back — with the command still reporting success.
+          const inForce = paragraphTabStopsOf(deps.layout(), paragraphId);
           ops.push({
             op: 'setParagraphTabStops',
             paragraphId,

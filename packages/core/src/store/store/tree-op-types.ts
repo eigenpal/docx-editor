@@ -4,6 +4,7 @@
 // accepted property boundaries, and the effect/rejection contracts. Validation lives in
 // tree-op-validate.ts; application lives in tree-op-apply.ts; both re-export via tree-ops.ts.
 
+import type { ParagraphTabStop } from '../../contracts/types.ts';
 import type { ContentControlLock } from '../package/content-control-nodes.ts';
 import type { OoxmlDrawingNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import type {
@@ -114,13 +115,14 @@ export const ACCEPTED_PARAGRAPH_PROPERTIES = [
 export type AcceptedRunProperty = (typeof ACCEPTED_RUN_PROPERTIES)[number];
 export type AcceptedParagraphProperty = (typeof ACCEPTED_PARAGRAPH_PROPERTIES)[number];
 
-/** One tab stop an op can author: where it sits, how it aligns, and what fills the gap. */
-export interface TabStopWrite {
-  /** Position from the paragraph content origin, in twips. */
-  readonly positionTwips: number;
-  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
-  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
-}
+/**
+ * One tab stop an op can author: where it sits, how it aligns, and what fills the gap.
+ *
+ * An alias, not a second declaration. The contract lane already names this shape, and two
+ * public names for one shape is a trap — a caller building a stop for a read and for an op
+ * would otherwise have to name it two things.
+ */
+export type TabStopWrite = ParagraphTabStop;
 
 /**
  * One authored property: an element name plus its `w:`-namespace attributes.

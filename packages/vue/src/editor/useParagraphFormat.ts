@@ -95,8 +95,9 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
     spaceBeforePt: formatting.spaceBeforePt ?? null,
     spaceAfterPt: formatting.spaceAfterPt ?? null,
     lineSpacing: formatting.lineSpacing ?? null,
-    // `mixed` on a side means the selection disagrees, which a dialog shows as empty rather
-    // than as the first paragraph's number.
+    // `mixed` on a side means the selection disagrees. The packaged dialog has no blank
+    // state for a number field, so it opens on a default and writes nothing unless you
+    // touch it — a control that CAN render "mixed" should, and this null is how.
     indentLeftTwips: indent && !indent.mixed.left ? indent.left : null,
     indentRightTwips: indent && !indent.mixed.right ? indent.right : null,
     indentFirstLineTwips: indent && !indent.mixed.firstLine ? indent.firstLine : null,

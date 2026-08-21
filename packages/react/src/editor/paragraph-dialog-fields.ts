@@ -82,6 +82,8 @@ export interface ParagraphDialogFields {
   widowControl: boolean;
   pageBreakBefore: boolean;
   tabStops: readonly ParagraphTabStop[];
+  /** The user pressed "Clear all", which is a decision even when the list already looked empty. */
+  clearedAllTabStops: boolean;
 }
 
 /**
@@ -111,6 +113,7 @@ export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields {
     widowControl: format.widowControl !== false,
     pageBreakBefore: format.pageBreakBefore === true,
     tabStops: format.tabStops ?? [],
+    clearedAllTabStops: false,
   };
 }
 
@@ -234,9 +237,15 @@ export function changedFields(
     take('widowControl', current.widowControl);
   if (seed.pageBreakBefore !== current.pageBreakBefore || resolved('pageBreakBefore'))
     take('pageBreakBefore', current.pageBreakBefore);
-  // Same rule for the tab list: a mixed selection shows an EMPTY list, so "Clear all" over
-  // one leaves it equal to the seed while plainly being a decision.
-  if (!sameTabStops(seed.tabStops, current.tabStops) || resolved('tabStops'))
+  // Same rule for the tab list, with one extra condition: the list must ALSO differ from
+  // the seed, or a net-zero gesture writes. "Clear all" over a mixed selection is a real
+  // decision and the list legitimately equals the seed there — but so does "add a stop,
+  // change your mind, remove it", and that used to clear every selected paragraph.
+  // `clearedAllTabStops` is set only by the button that says so.
+  if (
+    !sameTabStops(seed.tabStops, current.tabStops) ||
+    (resolved('tabStops') && current.clearedAllTabStops)
+  )
     take('tabStops', current.tabStops);
 
   return moved ? update : null;
