@@ -209,6 +209,36 @@ function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undef
 }
 
 /**
+ * Fold every entry of one `w:pPr` element name in a FLATTENED CASCADE into one attribute bag.
+ *
+ * A cascaded property list carries one entry per level — `w:docDefaults`, then each style in
+ * the `basedOn` chain, then the paragraph's own `w:pPr` — in that order, LOWEST PRECEDENCE
+ * FIRST. `Array.prototype.find` therefore answers the document's defaults and never the
+ * paragraph's own formatting, which is the wrong end of the list: read that way, a paragraph
+ * that had just been given 24pt of space before still reported the 8pt its `w:docDefaults`
+ * set.
+ *
+ * Attributes merge INDEPENDENTLY, the rule {@link paragraphSpacing} and
+ * {@link paragraphLineSpacing} already follow: `w:spacing` carries the line rule, the space
+ * before and the space after in one element, and a style that states `w:before` alone must
+ * leave the `w:after` an earlier level set in place.
+ *
+ * Returns null when no level states the element at all — not the same as one stating it with
+ * no attributes.
+ */
+export function cascadedParagraphAttributes(
+  props: readonly OoxmlProperty[],
+  localName: string
+): Readonly<Record<string, string>> | null {
+  let merged: Record<string, string> | null = null;
+  for (const property of props) {
+    if (property.localName !== localName) continue;
+    merged = { ...(merged ?? {}), ...(property.attributes ?? {}) };
+  }
+  return merged;
+}
+
+/**
  * Resolve `w:spacing` before/after from flat paragraph properties.
  *
  * Line spacing (`w:line` / `w:lineRule`) is a separate concern — it changes measured line

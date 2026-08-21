@@ -24,6 +24,17 @@ const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
 /** Word's "Add space before/after paragraph" writes 10pt — its Normal style's own value. */
 const DEFAULT_PARAGRAPH_SPACE_PT = 10;
 
+/**
+ * Word's "Remove space before/after paragraph" writes an explicit ZERO, not nothing.
+ *
+ * The two are different answers, and the command draws the same distinction: dropping the
+ * attribute lets the paragraph inherit again, so on a paragraph whose SPACE CAME FROM ITS
+ * STYLE — every Word default document, whose Normal states 8pt after — Remove gave the space
+ * straight back and the row went on offering to remove it. A zero blocks the cascade, which
+ * is what the row says it does.
+ */
+const REMOVED_PARAGRAPH_SPACE_PT = 0;
+
 const selectSpacing = (snapshot: EditorSnapshot) => ({
   lineSpacing: snapshot.formatting?.lineSpacing ?? null,
   spaceBeforePt: snapshot.formatting?.spaceBeforePt ?? null,
@@ -132,7 +143,12 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
             role="menuitem"
             className="docx-toolbar__menu-item"
             onMouseDown={guardToolbarMousedown}
-            onClick={() => applySpace('beforePt', hasBefore ? null : DEFAULT_PARAGRAPH_SPACE_PT)}
+            onClick={() =>
+              applySpace(
+                'beforePt',
+                hasBefore ? REMOVED_PARAGRAPH_SPACE_PT : DEFAULT_PARAGRAPH_SPACE_PT
+              )
+            }
           >
             {label(hasBefore ? 'lineSpacing.removeSpaceBefore' : 'lineSpacing.addSpaceBefore')}
           </button>
@@ -141,7 +157,12 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
             role="menuitem"
             className="docx-toolbar__menu-item"
             onMouseDown={guardToolbarMousedown}
-            onClick={() => applySpace('afterPt', hasAfter ? null : DEFAULT_PARAGRAPH_SPACE_PT)}
+            onClick={() =>
+              applySpace(
+                'afterPt',
+                hasAfter ? REMOVED_PARAGRAPH_SPACE_PT : DEFAULT_PARAGRAPH_SPACE_PT
+              )
+            }
           >
             {label(hasAfter ? 'lineSpacing.removeSpaceAfter' : 'lineSpacing.addSpaceAfter')}
           </button>

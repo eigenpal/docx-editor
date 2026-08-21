@@ -33,7 +33,9 @@ import {
 } from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
-import { lineSegments } from '../layout/line-segments.ts';
+import { fragmentHolding, lineSegments } from '../layout/line-segments.ts';
+import { paragraphAlignment } from '../layout/paragraph-flow.ts';
+import { cascadedParagraphAttributes, paragraphSpacing } from '../layout/paragraph-style.ts';
 
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
 export interface SurfaceProperty {
@@ -84,6 +86,24 @@ export function paragraphPropertiesOf(
     fragmentPropsByLayout.set(layout, index);
   }
   return index.get(paragraphId) ?? [];
+}
+
+/**
+ * What auto paragraph spacing resolves against for one paragraph.
+ *
+ * The flag is worth 14pt in the body and nothing at all inside a list or a table cell, so
+ * the same `w:beforeAutospacing="1"` means two different gaps and the reader has to be told
+ * which. Both answers come from the published layout — the marker record for list membership
+ * (a `w:numPr` that resolves to nothing is not a list), the fragment walk for the cell.
+ */
+function autoSpacingContextOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): { inList: boolean; inTableCell: boolean } {
+  return {
+    inList: fragmentHolding(layout, paragraphId)?.marker !== undefined,
+    inTableCell: paragraphIndentOf(layout, paragraphId)?.inTable === true,
+  };
 }
 
 /** A paragraph's effective indent, plus whether it sits inside a table. */
@@ -472,18 +492,17 @@ export function formattingAt(
   // selected together with a left one showed Centre pressed one way and Left the other,
   // and pressing either was a change to both. Word shows none of the four pressed.
   const touchedParagraphs = paragraphsTouched(layout, selection);
-  const paragraphValue = <T>(read: (properties: readonly SurfaceProperty[]) => T): T | null =>
-    agreedOver(touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id))));
+  const paragraphValue = <T>(
+    read: (properties: readonly SurfaceProperty[], paragraphId: string) => T
+  ): T | null =>
+    agreedOver(touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id), id)));
   // Normalized BEFORE agreement: `w:jc` absent and `w:jc val="left"` are the same
   // alignment, and comparing the raw attribute would call them a mixed selection.
-  const alignment = paragraphValue((properties) => {
-    const jc = properties.find((property) => property.localName === 'jc')?.attributes?.val;
-    return jc === 'center' || jc === 'right' || jc === 'both'
-      ? jc
-      : jc === 'end'
-        ? ('right' as const)
-        : ('left' as const);
-  });
+  //
+  // Read through the LAYOUT's own resolver, so the pressed button and the painted line can
+  // never disagree about the same paragraph. It also folds the cascade the way a cascade has
+  // to be folded — see `cascadedParagraphAttributes`.
+  const alignment = paragraphValue((properties) => paragraphAlignment(properties));
   // Resolved per paragraph BEFORE agreement, so a styled paragraph selected together with
   // an unstyled one still reads as mixed (two different styles), while an unstyled
   // paragraph on its own reports the default rather than nothing. Comparing raw `w:pStyle`
@@ -493,7 +512,7 @@ export function formattingAt(
   const style =
     paragraphValue(
       (properties) =>
-        properties.find((property) => property.localName === 'pStyle')?.attributes?.val ??
+        cascadedParagraphAttributes(properties, 'pStyle')?.val ??
         defaultParagraphStyleId ??
         undefined
     ) ?? null;
@@ -503,7 +522,7 @@ export function formattingAt(
   // 240ths are the same attribute meaning two different quantities, and a control that
   // showed the raw number would be right half the time.
   const spacing = (properties: readonly SurfaceProperty[]) =>
-    properties.find((property) => property.localName === 'spacing')?.attributes;
+    cascadedParagraphAttributes(properties, 'spacing') ?? undefined;
   const lineSpacingText = paragraphValue((properties) => {
     const attributes = spacing(properties);
     const line = Number(attributes?.line);
@@ -518,10 +537,21 @@ export function formattingAt(
     const [rule, value] = lineSpacingText.split(':');
     return { rule: rule as 'multiple' | 'exact' | 'atLeast', value: Number(value) };
   })();
+  // The EFFECTIVE gap, in points, or null when no level of the cascade states it.
+  //
+  // `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the measurement beside them, so a
+  // paragraph carrying the flag has a gap the twips do not describe — Word's own value there
+  // is `w:before="100"` with the flag on, which reads 5pt and paints 14. A control acting on
+  // the twips offered to ADD space to a paragraph that already had some.
   const spacePt = (attribute: 'before' | 'after') =>
-    paragraphValue((properties) => {
-      const raw = Number(spacing(properties)?.[attribute]);
-      return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
+    paragraphValue((properties, paragraphId) => {
+      const attributes = spacing(properties);
+      const stated =
+        attributes?.[attribute] !== undefined ||
+        attributes?.[`${attribute}Autospacing`] !== undefined;
+      if (!stated) return null;
+      const resolved = paragraphSpacing(properties, autoSpacingContextOf(layout, paragraphId));
+      return Math.round(resolved[attribute] * 100) / 100;
     });
   // Indent does NOT go null on disagreement, unlike everything above it: the values are the
   // FIRST touched paragraph's and `mixed` reports the rest per field. A ruler has to draw

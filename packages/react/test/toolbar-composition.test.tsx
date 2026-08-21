@@ -535,7 +535,15 @@ describe('the shaped parts', () => {
     await act(async () => {
       rows()[0]!.click();
     });
-    expect(editor().snapshot().formatting?.spaceBeforePt).toBeUndefined();
+    // ZERO, not absent. Removing the attribute would let the paragraph inherit its style's
+    // space again — on a Word default document that gives the space straight back, and the
+    // row goes on offering to remove what removing did not remove.
+    expect(editor().snapshot().formatting?.spaceBeforePt).toBe(0);
+
+    await act(async () => {
+      trigger.click();
+    });
+    expect(rows()[0]!.textContent).toBe(label('lineSpacing.addSpaceBefore' as TranslationKey));
   });
 
   test('line spacing and paragraph space are independent settings of one w:spacing', async () => {

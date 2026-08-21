@@ -28,6 +28,7 @@ import {
 } from './surface-formatting.ts';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
+import { cascadedParagraphAttributes } from '../layout/paragraph-style.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** What the composition root lends this lane. */
@@ -308,10 +309,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         // attribute REMOVES that one, which is how Word's "Remove space before paragraph"
         // differs from setting it to zero.
         const merged = options?.mergeAttributes
-          ? {
-              ...(own.find((property) => property.localName === localName)?.attributes ?? {}),
-              ...attributes,
-            }
+          ? { ...(cascadedParagraphAttributes(own, localName) ?? {}), ...attributes }
           : (attributes ?? {});
         const kept = Object.fromEntries(
           Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)

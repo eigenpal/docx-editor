@@ -30,6 +30,22 @@ import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts'
 import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
 
 /**
+ * One side of `w:spacing`, as the attributes a `setParagraphSpacing` write states.
+ *
+ * `undefined` states nothing at all: the command names one side or both, and the side it
+ * does not name keeps whatever the paragraph already authored.
+ */
+function spacingSide(
+  side: 'before' | 'after',
+  points: number | null | undefined
+): Record<string, string | null> {
+  if (points === undefined) return {};
+  const autospacing = `${side}Autospacing`;
+  if (points === null) return { [side]: null, [autospacing]: null };
+  return { [side]: String(Math.round(points * 20)), [autospacing]: '0' };
+}
+
+/**
  * Run one admitted command against the surface.
  *
  * Returns an `ExecResult` when the command answers for itself (a refusal, or a read-only
@@ -84,15 +100,16 @@ export function execEditorCommand(
         {
           // `null` REMOVES the attribute (Word's "Remove space before paragraph"), which is
           // not the same as writing a zero: a removed value inherits from the style again.
-          ...(command.beforePt !== undefined
-            ? {
-                before:
-                  command.beforePt === null ? null : String(Math.round(command.beforePt * 20)),
-              }
-            : {}),
-          ...(command.afterPt !== undefined
-            ? { after: command.afterPt === null ? null : String(Math.round(command.afterPt * 20)) }
-            : {}),
+          //
+          // The autospacing flag on the same side goes with the measurement, because it
+          // REPLACES it: `w:beforeAutospacing="1"` is worth 14pt whatever `w:before` says, so
+          // a paragraph inheriting the flag — which is what Word writes for HTML-shaped
+          // content, as `w:before="100" w:beforeAutospacing="1"` — swallowed this write
+          // whole and the page did not move. Word clears the flag the same way when a value
+          // is typed. An explicit `0` is written rather than the attribute dropped: dropping
+          // it would let the inherited flag come back and win again.
+          ...spacingSide('before', command.beforePt),
+          ...spacingSide('after', command.afterPt),
         },
         { mergeAttributes: true }
       );

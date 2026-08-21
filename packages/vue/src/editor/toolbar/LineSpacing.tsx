@@ -10,6 +10,9 @@ import type { ToolbarSlotPartComponent } from './parts';
 
 const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
 const DEFAULT_PARAGRAPH_SPACE_PT = 10;
+// Remove writes an explicit ZERO, not nothing: dropping the attribute lets the style's own
+// space come back, so on a Word default document Remove gave the space straight back.
+const REMOVED_PARAGRAPH_SPACE_PT = 0;
 
 const selectSpacing = (snapshot: EditorSnapshot) => ({
   lineSpacing: snapshot.formatting?.lineSpacing ?? null,
@@ -120,7 +123,10 @@ export const ToolbarLineSpacing = defineComponent({
                 class="docx-toolbar__menu-item"
                 onMousedown={guardToolbarMousedown}
                 onClick={() =>
-                  applySpace('beforePt', hasBefore ? null : DEFAULT_PARAGRAPH_SPACE_PT)
+                  applySpace(
+                    'beforePt',
+                    hasBefore ? REMOVED_PARAGRAPH_SPACE_PT : DEFAULT_PARAGRAPH_SPACE_PT
+                  )
                 }
               >
                 {label(hasBefore ? 'lineSpacing.removeSpaceBefore' : 'lineSpacing.addSpaceBefore')}
@@ -130,7 +136,12 @@ export const ToolbarLineSpacing = defineComponent({
                 role="menuitem"
                 class="docx-toolbar__menu-item"
                 onMousedown={guardToolbarMousedown}
-                onClick={() => applySpace('afterPt', hasAfter ? null : DEFAULT_PARAGRAPH_SPACE_PT)}
+                onClick={() =>
+                  applySpace(
+                    'afterPt',
+                    hasAfter ? REMOVED_PARAGRAPH_SPACE_PT : DEFAULT_PARAGRAPH_SPACE_PT
+                  )
+                }
               >
                 {label(hasAfter ? 'lineSpacing.removeSpaceAfter' : 'lineSpacing.addSpaceAfter')}
               </button>
