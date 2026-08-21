@@ -194,8 +194,19 @@ export function DocxEditorParagraphDialog({
     seeded.current = true;
   }, [open, format]);
 
+  // Focus the panel on open and hand it back on close. Leaving focus on `<body>` after OK
+  // strands a keyboard user at the top of the document, having just formatted a paragraph
+  // somewhere else.
+  const openerRef = useRef<Element | null>(null);
   useEffect(() => {
-    if (open) panelRef.current?.focus();
+    if (!open) return;
+    openerRef.current = document.activeElement;
+    panelRef.current?.focus();
+    return () => {
+      const opener = openerRef.current;
+      openerRef.current = null;
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
   }, [open]);
 
   const handleApply = useCallback(() => {
@@ -340,7 +351,12 @@ export function DocxEditorParagraphDialog({
       onClick={onClose}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
-        if (event.key === 'Enter') handleApply();
+        // Enter is the form's default submit, EXCEPT on a control that owns the key: a
+        // button acts on the Enter that focused it, and keydown here runs first, so Cancel
+        // pressed from the keyboard would otherwise apply the form before closing it.
+        if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) {
+          handleApply();
+        }
       }}
     >
       <div

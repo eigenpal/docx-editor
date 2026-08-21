@@ -4293,8 +4293,7 @@ export type ParagraphFlagState = boolean | null;
 
 // @public
 export interface ParagraphFormatRead {
-    // (undocumented)
-    readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
+    readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
     // (undocumented)
     readonly contextualSpacing: ParagraphFlagState;
     readonly indentFirstLineTwips: number | null;

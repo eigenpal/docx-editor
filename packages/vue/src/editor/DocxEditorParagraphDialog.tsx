@@ -3,7 +3,15 @@
 // form is written back as ONE `setParagraphFormat` on OK, so the dialog is a single undo
 // step. The host owns visibility (`open`/`onClose`); the engine owns everything else.
 
-import { defineComponent, nextTick, ref, watch, type CSSProperties, type PropType } from 'vue';
+import {
+  defineComponent,
+  getCurrentInstance,
+  nextTick,
+  ref,
+  watch,
+  type CSSProperties,
+  type PropType,
+} from 'vue';
 import { useTranslation } from '../i18n';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
 import {
@@ -152,8 +160,15 @@ export const DocxEditorParagraphDialog = defineComponent({
     const seeded = ref(false);
     const seedRef = ref<ParagraphDialogFields | null>(null);
     const mixed = ref<ParagraphDialogMixed>(NO_MIXED_FIELDS);
-    const panelRef = ref<HTMLDivElement | null>(null);
-
+    // Reached through the instance rather than a template ref: this component's vnodes are
+    // hoistable, and Vue refuses a `ref` on a hoisted vnode ("Missing ref owner context"),
+    // which left the dialog opening unfocused and Escape doing nothing.
+    const instance = getCurrentInstance();
+    const panelOf = (): HTMLElement | null => {
+      const root = instance?.vnode.el;
+      return root instanceof HTMLElement ? root.querySelector('[role="dialog"]') : null;
+    };
+    const opener = ref<Element | null>(null);
     // Seed from the selection when the dialog OPENS — not on every tick, or a concurrent
     // edit would fight the user's typing.
     watch(
@@ -161,6 +176,11 @@ export const DocxEditorParagraphDialog = defineComponent({
       ([open, format]) => {
         if (!open) {
           seeded.value = false;
+          // Hand focus back to whatever opened the dialog. Leaving it on `<body>` strands a
+          // keyboard user at the top of the document.
+          const previous = opener.value;
+          opener.value = null;
+          if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
           return;
         }
         if (seeded.value || format === null) return;
@@ -187,7 +207,8 @@ export const DocxEditorParagraphDialog = defineComponent({
         seeded.value = true;
         // Focus the panel so Escape reaches the overlay's key handler. Without it the
         // dialog cannot be dismissed from the keyboard until the user tabs into it.
-        void nextTick(() => panelRef.value?.focus());
+        opener.value = document.activeElement;
+        void nextTick(() => panelOf()?.focus());
       },
       { immediate: true }
     );
@@ -288,12 +309,11 @@ export const DocxEditorParagraphDialog = defineComponent({
           <input
             type="checkbox"
             checked={checked}
-            // `indeterminate` is a DOM PROPERTY with no attribute, so it has to be written
-            // on the node. Without it a setting the selection disagrees about renders as
-            // plain unchecked, which claims agreement that is not there.
-            ref={(node) => {
-              if (node instanceof HTMLInputElement) node.indeterminate = mixed.value[labelKey];
-            }}
+            // A setting the selection disagrees about is INDETERMINATE, not unchecked —
+            // unchecked would claim the paragraphs agree it is off. `indeterminate` is a
+            // DOM property with no attribute, so it is bound with Vue's `.` prefix, which
+            // patches it as a property rather than as markup.
+            {...{ '.indeterminate': mixed.value[labelKey] }}
             onChange={(event) => {
               // Touching the box RESOLVES the disagreement: from here it means what it shows.
               mixed.value = { ...mixed.value, [labelKey]: false };
@@ -311,7 +331,12 @@ export const DocxEditorParagraphDialog = defineComponent({
           onClick={props.onClose}
           onKeydown={(event: KeyboardEvent) => {
             if (event.key === 'Escape') props.onClose();
-            if (event.key === 'Enter') handleApply();
+            // Enter is the form's default submit, EXCEPT on a control that owns the key: a
+            // button acts on the Enter that focused it, and keydown here runs first, so
+            // Cancel pressed from the keyboard would otherwise apply the form first.
+            if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) {
+              handleApply();
+            }
           }}
         >
           <div
@@ -320,7 +345,6 @@ export const DocxEditorParagraphDialog = defineComponent({
             aria-label={t('dialogs.paragraph.title')}
             tabindex={-1}
             style={dialogStyle}
-            ref={panelRef}
             onClick={(event: MouseEvent) => event.stopPropagation()}
             // Painted pages ARE the editable surface, so any mousedown that reaches them
             // moves the caret — and the dialog formats whatever the caret is on.

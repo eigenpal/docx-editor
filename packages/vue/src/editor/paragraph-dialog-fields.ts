@@ -92,7 +92,7 @@ export interface ParagraphDialogFields {
 export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields {
   const firstLine = format.indentFirstLineTwips;
   return {
-    alignment: format.alignment === 'both' ? 'justify' : (format.alignment ?? 'left'),
+    alignment: format.alignment ?? 'left',
     indentLeft: format.indentLeftTwips ?? 0,
     indentRight: format.indentRightTwips ?? 0,
     special: specialOf(firstLine),

@@ -172,6 +172,19 @@ export function paragraphPropertiesOf(
   return index.get(paragraphId) ?? [];
 }
 
+const fragmentTabStopsByPage = new WeakMap<PageRecord, ReadonlyMap<string, ResolvedTabStops>>();
+
+function pageTabStops(page: PageRecord): ReadonlyMap<string, ResolvedTabStops> {
+  const cached = fragmentTabStopsByPage.get(page);
+  if (cached) return cached;
+  const stops = new Map<string, ResolvedTabStops>();
+  eachParagraphFragmentOnPage(page, (fragment) =>
+    recordFragment(stops, fragment, fragment.tabStops)
+  );
+  fragmentTabStopsByPage.set(page, stops);
+  return stops;
+}
+
 /**
  * A paragraph's resolved tab stops, from the layout records, or null for a paragraph the
  * published layout does not carry.
@@ -187,11 +200,13 @@ export function paragraphTabStopsOf(
   let index = fragmentTabStopsByLayout.get(layout);
   if (!index) {
     const built = new Map<string, ResolvedTabStops>();
-    // Per page, so it composes with the page memo the other two indexes use.
+    // Through the PAGE memo, like the other two indexes. An incremental pass keeps most
+    // page records by identity, so a keystroke re-walks only the pages that moved rather
+    // than every line in the document.
     for (const page of layout.pages) {
-      eachParagraphFragmentOnPage(page, (fragment) =>
-        recordFragment(built, fragment, fragment.tabStops)
-      );
+      for (const [id, stops] of pageTabStops(page)) {
+        if (!built.has(id)) built.set(id, stops);
+      }
     }
     index = built;
     fragmentTabStopsByLayout.set(layout, built);

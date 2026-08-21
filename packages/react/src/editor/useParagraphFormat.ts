@@ -13,6 +13,13 @@ import { useEditorState } from './useEditorState';
 /** One tri-state paragraph flag: on, off, or "the selection disagrees". */
 export type ParagraphFlagState = boolean | null;
 
+/** One custom tab stop, as a control reads and writes it. @public */
+export interface ParagraphTabStop {
+  readonly positionTwips: number;
+  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+}
+
 /**
  * What the Paragraph dialog reads: every field, as the selection currently stands.
  *
@@ -23,15 +30,13 @@ export type ParagraphFlagState = boolean | null;
  *
  * @public
  */
-/** One custom tab stop, as a control reads and writes it. @public */
-export interface ParagraphTabStop {
-  readonly positionTwips: number;
-  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
-  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
-}
-
 export interface ParagraphFormatRead {
-  readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
+  /**
+   * `justify`, not OOXML's `both`. The engine speaks `w:jc` values; an adapter speaks the
+   * word its consumers write. Read and write use the SAME spelling here, so a value that
+   * comes out of `format` can go straight back into `apply`.
+   */
+  readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
   readonly spaceBeforePt: number | null;
   readonly spaceAfterPt: number | null;
   readonly lineSpacing: {
@@ -101,7 +106,7 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
   const indent = formatting.indent;
   const flags = formatting.paragraphFlags ?? EMPTY_FLAGS;
   return {
-    alignment: formatting.alignment ?? null,
+    alignment: formatting.alignment === 'both' ? 'justify' : (formatting.alignment ?? null),
     spaceBeforePt: formatting.spaceBeforePt ?? null,
     spaceAfterPt: formatting.spaceAfterPt ?? null,
     lineSpacing: formatting.lineSpacing ?? null,
