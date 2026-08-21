@@ -13,6 +13,7 @@ import {
   spansInCells,
   spansInSelection,
   type BlockFragmentRecord,
+  type PageRecord,
   type ParagraphFragmentRecord,
   type ParagraphIndent,
   type SemanticLayout,
@@ -60,8 +61,8 @@ export interface SurfaceProperty {
  *
  * `inTable` rides along because it is the ruler's gate and this is the walk that knows it.
  */
-function eachParagraphFragment(
-  layout: SemanticLayout,
+function eachParagraphFragmentOnPage(
+  page: PageRecord,
   visit: (fragment: ParagraphFragmentRecord, inTable: boolean) => void
 ): void {
   const walk = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
@@ -76,14 +77,12 @@ function eachParagraphFragment(
       }
     }
   };
-  for (const page of layout.pages) {
-    walk(page.fragments, false);
-    if (page.header) walk(page.header.fragments, false);
-    if (page.footer) walk(page.footer.fragments, false);
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      for (const note of area.notes) walk(note.fragments, false);
-    }
+  walk(page.fragments, false);
+  if (page.header) walk(page.header.fragments, false);
+  if (page.footer) walk(page.footer.fragments, false);
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    for (const note of area.notes) walk(note.fragments, false);
   }
 }
 
@@ -121,6 +120,27 @@ const fragmentPropsByLayout = new WeakMap<
 >();
 
 /**
+ * One page's contribution to that index, remembered on the PAGE record.
+ *
+ * A page that layout does not touch keeps its record identity across revisions, so a
+ * keystroke walks the lines of one page instead of every page in the document. The map above
+ * is still rebuilt per layout, because a paragraph can move between pages.
+ */
+const fragmentPropsByPage = new WeakMap<
+  PageRecord,
+  ReadonlyMap<string, readonly SurfaceProperty[]>
+>();
+
+function pageProps(page: PageRecord): ReadonlyMap<string, readonly SurfaceProperty[]> {
+  const cached = fragmentPropsByPage.get(page);
+  if (cached) return cached;
+  const props = new Map<string, readonly SurfaceProperty[]>();
+  eachParagraphFragmentOnPage(page, (fragment) => recordFragment(props, fragment, fragment.props));
+  fragmentPropsByPage.set(page, props);
+  return props;
+}
+
+/**
  * A paragraph's CASCADED properties, read back from the layout records.
  *
  * `w:docDefaults` + the style chain + direct formatting, flattened: what the paragraph
@@ -135,10 +155,13 @@ export function paragraphPropertiesOf(
   // pages for one paragraph's `w:pPr` projection made that read O(document).
   let index = fragmentPropsByLayout.get(layout);
   if (!index) {
-    const built = new Map<string, readonly SurfaceProperty[]>();
-    eachParagraphFragment(layout, (fragment) => recordFragment(built, fragment, fragment.props));
-    index = built;
-    fragmentPropsByLayout.set(layout, built);
+    index = new Map();
+    for (const page of layout.pages) {
+      for (const [id, props] of pageProps(page)) {
+        if (!index.has(id)) index.set(id, props);
+      }
+    }
+    fragmentPropsByLayout.set(layout, index);
   }
   return index.get(paragraphId) ?? [];
 }
@@ -150,6 +173,20 @@ export interface ParagraphIndentEntry {
 }
 
 const fragmentIndentByLayout = new WeakMap<SemanticLayout, Map<string, ParagraphIndentEntry>>();
+
+/** One page's indents, on the page record, for the same reason {@link pageProps} is. */
+const fragmentIndentByPage = new WeakMap<PageRecord, ReadonlyMap<string, ParagraphIndentEntry>>();
+
+function pageIndents(page: PageRecord): ReadonlyMap<string, ParagraphIndentEntry> {
+  const cached = fragmentIndentByPage.get(page);
+  if (cached) return cached;
+  const indents = new Map<string, ParagraphIndentEntry>();
+  eachParagraphFragmentOnPage(page, (fragment, inTable) =>
+    recordFragment(indents, fragment, { indent: fragment.indent, inTable })
+  );
+  fragmentIndentByPage.set(page, indents);
+  return indents;
+}
 
 /**
  * A paragraph's EFFECTIVE indent — cascade plus the numbering merge — from the layout
@@ -169,9 +206,11 @@ export function paragraphIndentOf(
   let index = fragmentIndentByLayout.get(layout);
   if (!index) {
     const built = new Map<string, ParagraphIndentEntry>();
-    eachParagraphFragment(layout, (fragment, inTable) =>
-      recordFragment(built, fragment, { indent: fragment.indent, inTable })
-    );
+    for (const page of layout.pages) {
+      for (const [id, entry] of pageIndents(page)) {
+        if (!built.has(id)) built.set(id, entry);
+      }
+    }
     index = built;
     fragmentIndentByLayout.set(layout, built);
   }

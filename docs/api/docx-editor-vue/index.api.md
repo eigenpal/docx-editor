@@ -3896,6 +3896,9 @@ export function normalizeImageBytes(bytes: Uint8Array): NormalizedImagePayload;
 // @public (undocumented)
 export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
 
+// @internal
+export function notificationYieldsToTask(): boolean;
+
 // @public (undocumented)
 export const OUTLINE_BUTTON_LEFT_OFFSET = 12;
 

@@ -74,6 +74,9 @@ const unfilled = controls.items.filter((c) => c.placeholderShown);
 
 `useContentControl()` is the live equivalent. It reports the control at the caret, whether it can be written, and why not when it cannot:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { useContentControl } from '@docx-editor.dev/react';
 
@@ -102,9 +105,40 @@ function ControlInspector() {
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useContentControl } from '@docx-editor.dev/vue';
+
+const { control, setValue, canSetValue, setValueDisabledReason, remove, canRemove } =
+  useContentControl();
+</script>
+
+<template>
+  <div v-if="control">
+    <h4>{{ control.alias ?? control.tag ?? control.id }}</h4>
+    <p>{{ control.controlType }}</p>
+    <button
+      type="button"
+      :disabled="!canSetValue"
+      :title="setValueDisabledReason ?? undefined"
+      @click="setValue('Acme GmbH')"
+    >
+      Fill
+    </button>
+    <button type="button" :disabled="!canRemove" @click="remove()">Remove</button>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 The inspector state carries `tag`, `alias`, `id`, `controlType`, `locked`, `removalLocked`, `effectiveLock`, `bound` (whether it is driven by a data binding), and `placeholder`.
 
-`showAll` / `setShowAll` toggles boundary rendering for every control, and `formFill` / `setFormFill` puts the document into fill-only mode, where the caret can enter controls but not the text around them. `DocxEditor.ContentControl` is the packaged inspector panel over exactly this hook, and `CONTENT_CONTROL_SLOTS` lists the matching chrome slot ids.
+`showAll` / `setShowAll` toggles boundary rendering for every control, and `formFill` / `setFormFill` puts the document into fill-only mode, where the caret can enter controls but not the text around them. The packaged `ContentControl` part is the inspector panel over exactly this API, and `CONTENT_CONTROL_SLOTS` lists the matching chrome slot ids.
 
 A data-bound control refuses a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` says so rather than failing silently.
 
@@ -122,4 +156,4 @@ In the editor, typed controls get an interactive trigger at the top-right of the
 
 - [Editing API](/docs/2.x/editor-api): the full object model and its batching rules
 - [Custom nodes](/docs/2.x/pro/custom-nodes): your own typed inline nodes over the same OOXML primitive
-- [Hooks](/docs/2.x/react/hooks)
+- [React hooks](/docs/2.x/react/hooks) and [Vue composables](/docs/2.x/vue/composables)

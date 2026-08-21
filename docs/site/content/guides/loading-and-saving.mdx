@@ -11,18 +11,44 @@ The editor takes a `.docx` file in and gives a `.docx` file back. Everything hap
 
 The editor takes the document through the `document` prop. The most common value is `Uint8Array` DOCX bytes:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 <DocxEditor document={bytes} />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes" />
+```
+
+</Framework>
+</FrameworkTabs>
 
 ### Starting empty
 
 To open the editor on an empty page, pass `'blank'`. It is Word's blank template, with the
 same Calibri 11pt defaults a new document in Word has:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 <DocxEditor document="blank" />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor document="blank" />
+```
+
+</Framework>
+</FrameworkTabs>
 
 Omitting `document` is not the same thing. It means no document at all, so the editor shows
 its loading screen and every control stays disabled. Use `undefined` only while your own
@@ -32,17 +58,44 @@ For a **File > New** command that a user can run more than once, call `blankDocu
 instead. `'blank'` is a constant, so the editor treats a second `'blank'` as the same
 document and keeps what the user typed. Fresh bytes replace it:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 
 <button onClick={() => ref.current?.load(blankDocumentBytes())}>New</button>;
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+
+const editorRef = ref<DocxEditorRef | null>(null);
+</script>
+
+<template>
+  <button type="button" @click="editorRef?.load(blankDocumentBytes())">New</button>
+  <DocxEditor ref="editorRef" document="blank" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 Call `blankDocumentBytes()` inside an event handler or into state, never inline in the
 `document` prop. It returns a new array each time, so an inline call rebuilds the editor on
 every render.
 
 ### From a URL
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useEffect, useState } from 'react';
@@ -67,9 +120,36 @@ export function Editor({ url }: { url: string }) {
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useDocxSource } from '@docx-editor.dev/vue';
+
+const props = defineProps<{ url: string }>();
+const { document, isLoading, error } = useDocxSource(() => props.url);
+</script>
+
+<template>
+  <p v-if="error">The document failed to load.</p>
+  <p v-else-if="isLoading">Loading…</p>
+  <DocxEditor v-else :document="document" />
+</template>
+```
+
+`useDocxSource()` fetches the bytes and tracks the request, so a changing URL never
+applies a stale response.
+
+</Framework>
+</FrameworkTabs>
+
 ### From a file input
 
 Read the selected file into bytes, then pass those bytes through `document`:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useState } from 'react';
@@ -95,9 +175,45 @@ export function FileEditor() {
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+const doc = shallowRef<Uint8Array>();
+
+async function pick(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  doc.value = new Uint8Array(await file.arrayBuffer());
+}
+</script>
+
+<template>
+  <input
+    type="file"
+    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    @change="pick"
+  />
+  <DocxEditor v-if="doc" :document="doc" />
+</template>
+```
+
+`useDocxSource()` takes a URL string, a `URL`, a `Uint8Array`, or an `ArrayBuffer`.
+For a picked file, read the bytes first, as this sample does.
+
+</Framework>
+</FrameworkTabs>
+
 ### Swapping documents at runtime
 
 To replace the document without remounting the component, use the ref:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 const ref = useRef<DocxEditorRef>(null);
@@ -105,22 +221,49 @@ const ref = useRef<DocxEditorRef>(null);
 ref.current?.load(nextBytes);
 ```
 
+</Framework>
+<Framework value="vue">
+
+```ts
+const editorRef = ref<DocxEditorRef | null>(null);
+
+editorRef.value?.load(nextBytes);
+```
+
+</Framework>
+</FrameworkTabs>
+
 ## Saving
 
 Two paths matter:
 
-- `ref.save()` returns `Promise<ArrayBuffer | null>`
-- `onSave` lets you override the packaged File → Save action
+- `save()` on the ref returns `Promise<ArrayBuffer | null>`
+- The packaged File → Save action, which you override with `onSave` in React and the
+  `@save` emit in Vue
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 <DocxEditor ref={ref} document={bytes} onSave={() => void persist()} />
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor ref="editorRef" :document="bytes" @save="persist" />
+```
+
+</Framework>
+</FrameworkTabs>
+
 `save()` resolves `null` when there is no document to serialize, so guard the result.
 
 ## Download helper
 
-The serialized buffer downloads like any other binary:
+The serialized buffer downloads like any other binary. This helper is the same in both
+adapters, because both export the `DocxEditorRef` type:
 
 ```ts
 async function downloadDocx(ref: DocxEditorRef, fileName: string) {
@@ -140,7 +283,10 @@ async function downloadDocx(ref: DocxEditorRef, fileName: string) {
 
 ## Autosave
 
-Debounce `ref.save()` when `onChange` fires:
+Debounce the save call when the document reports a change:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useRef } from 'react';
@@ -163,10 +309,44 @@ export function AutosaveEditor({ docId, bytes }: { docId: string; bytes: Uint8Ar
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { onBeforeUnmount, ref } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+
+const props = defineProps<{ docId: string; bytes: Uint8Array }>();
+const editorRef = ref<DocxEditorRef | null>(null);
+let timer: number | null = null;
+
+function onChange() {
+  if (timer !== null) window.clearTimeout(timer);
+  timer = window.setTimeout(async () => {
+    const buf = await editorRef.value?.save();
+    if (!buf) return;
+    await fetch(`/api/documents/${props.docId}`, { method: 'PUT', body: buf });
+  }, 1500);
+}
+
+onBeforeUnmount(() => {
+  if (timer !== null) window.clearTimeout(timer);
+});
+</script>
+
+<template>
+  <DocxEditor ref="editorRef" :document="bytes" @change="onChange" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 Pick a debounce window that matches your backend's write tolerance. 1 to 2 seconds is a reasonable default.
 
 ## Next steps
 
-- [Props reference](/docs/2.x/react/props) for `document`, `onSave`, and the shared ref
+- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for `document`, the save action, and the shared ref
 - [Editing API](/docs/2.x/editor-api) to read and write a document without mounting an editor
-- [React examples](/docs/2.x/react/examples) for more loading, saving, and editor state patterns
+- [React examples](/docs/2.x/react/examples) and [Vue examples](/docs/2.x/vue/examples) for more loading, saving, and editor state patterns

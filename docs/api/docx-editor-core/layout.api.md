@@ -33,6 +33,7 @@ export function applyLineSpacing(spacing: ParagraphLineSpacing, naturalHeight: n
 export function attachNotesToLayout(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, options?: {
     readonly fallbackReasons?: readonly NotePaginationFallbackReason[];
     readonly paragraphSectionIndex?: ReadonlyMap<string, number>;
+    readonly memo?: unknown;
 }): NotesAttachResult;
 
 // @public
@@ -373,7 +374,8 @@ export interface CompoundBorderMetrics {
 export function computeDoubleBorderMetricsPt(widthPt: number): CompoundBorderMetrics;
 
 // @public
-export function computeFootnoteReserves(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, noteMarks: NoteMarkContext): {
+export function computeFootnoteReserves(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, noteMarks: NoteMarkContext,
+passMemo?: unknown): {
     readonly reserves: ReadonlyMap<number, number>;
     readonly stable: boolean;
     readonly reasons: readonly NotePaginationFallbackReason[];
@@ -1177,9 +1179,13 @@ export interface LayoutSession {
     keys: string[];
     multi: MultiSectionLayoutState | null;
     notePageBottomReserves: ReadonlyMap<number, number> | null;
+    notes: unknown;
+    parityDependent: boolean;
+    prepass: unknown;
     // @internal
     previous: SemanticLayout | null;
     startLineCounter: number;
+    startPageParity: number;
     // (undocumented)
     stats: LayoutSessionStats;
 }
@@ -1229,7 +1235,8 @@ export interface LevelOverride {
 }
 
 // @public
-export function lineAtPosition(layout: SemanticLayout, paragraphId: string, offset: number): LineRecord | null;
+export function lineAtPosition(layout: SemanticLayout, paragraphId: string, offset: number,
+candidates?: Iterable<LineRecord>): LineRecord | null;
 
 // @public
 export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number;
@@ -1500,6 +1507,7 @@ export interface NotesLayoutInput {
     readonly documentEndnoteProps: ResolvedEndnoteProperties;
     readonly documentFootnoteProps: ResolvedFootnoteProperties;
     readonly documentProperties?: DocumentProperties;
+    readonly drawingLayoutEpoch?: string;
     readonly drawingsForPart?: (ownerPartName: string) => NoteStoryDrawings | undefined;
     readonly endnotePropsBySection: readonly ResolvedEndnoteProperties[];
     // (undocumented)
@@ -1795,7 +1803,7 @@ export interface ParagraphFragmentRecord {
 // @public
 export function paragraphFragmentsOf(page: PageRecord, includeHeaderRepeats?: boolean): ParagraphFragmentRecord[];
 
-// @public
+// @public (undocumented)
 export function paragraphFragmentsOfBlocks(blocks: readonly BlockFragmentRecord[], includeHeaderRepeats?: boolean): ParagraphFragmentRecord[];
 
 // @public
@@ -1829,6 +1837,7 @@ export interface ParagraphLayoutCache<T> {
     // (undocumented)
     get(key: ParagraphLayoutKey): T | undefined;
     retain(keys: ReadonlySet<ParagraphLayoutKey>): void;
+    retentionPassDue?(): boolean;
     // (undocumented)
     set(key: ParagraphLayoutKey, value: T): void;
     // (undocumented)
@@ -2556,6 +2565,7 @@ export interface SemanticLayoutOptions {
     readonly drawingExclusionConverged?: boolean;
     readonly drawingExclusionPass?: number;
     readonly drawingExclusionZonesByPage?: ReadonlyMap<number, readonly ExclusionZone[]>;
+    readonly drawingLayoutEpoch?: string;
     // @deprecated (undocumented)
     readonly drawingLayoutToken?: string;
     readonly drawingSourceOrder?: ReadonlyMap<string, number>;
@@ -2576,6 +2586,7 @@ export interface SemanticLayoutOptions {
     readonly producer?: string;
     readonly projectFieldLink?: FieldLinkProjector;
     readonly projectLink?: HyperlinkProjector;
+    readonly retainKeys?: Set<string> | false;
     readonly sectionColumns?: SectionColumns;
     readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
     readonly session?: LayoutSession;

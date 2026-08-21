@@ -123,10 +123,16 @@ Embedded fonts load from the document. Configured fonts extend that set.
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
+import { shallowRef } from 'vue';
+import { DocxEditor, type FontConfigurationFragment } from '@docx-editor.dev/vue';
 import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await loadDefaultFonts();
+// Resolve into a ref. A top-level `await` here would make this an async
+// component, which renders nothing without a <Suspense> ancestor.
+const fonts = shallowRef<FontConfigurationFragment>();
+void loadDefaultFonts().then((loaded) => {
+  fonts.value = loaded;
+});
 
 function reportFontError(error: { code: string }) {
   report(error.code);

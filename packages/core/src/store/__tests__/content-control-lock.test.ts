@@ -5,6 +5,11 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.ts';
 import { findContentControl } from '../store/tree-op-nodes.ts';
+import {
+  contentControlLockAt,
+  enclosingContentControls,
+} from '../store/tree-op-content-controls.ts';
+import { MAX_CONTENT_CONTROLS_PER_PART } from '../package/content-control-nodes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -611,5 +616,50 @@ describe('hyperlink and page-field ops respect content-control restrictions', ()
       field: 'PAGE_X_OF_Y',
     });
     expect(paragraphTextOf(next, PARAGRAPH).endsWith('aaLLzz')).toBe(true);
+  });
+});
+
+describe('a control keeps its own lock past the enumeration bounds', () => {
+  // The enclosing-control chain feeds lock resolution, and both bounds — nesting depth and
+  // per-part control count — are attacker-reachable in a crafted file. The chain must
+  // include the target control ITSELF either way, or its own `w:lock` silently vanishes.
+  const lockedSdt = (inner: string): string =>
+    `<w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+
+  const controlsOf = (part: OoxmlPart): OoxmlNode[] => {
+    const found: OoxmlNode[] = [];
+    const walk = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') return;
+      if (node.kind === 'contentControl') found.push(node);
+      for (const child of node.children) walk(child);
+    };
+    walk(part.root);
+    return found;
+  };
+
+  test('a control nested past the depth bound still reports its own lock', () => {
+    let body = lockedSdt('<w:p><w:r><w:t>deep</w:t></w:r></w:p>');
+    for (let level = 0; level < 40; level += 1) body = lockedSdt(body);
+    const part = load(body);
+    // The innermost sdt sits deeper than MAX_CONTENT_CONTROL_NESTING, so the bounded
+    // control enumeration cannot see it.
+    const controls = controlsOf(part);
+    const innermost = controls[controls.length - 1]!;
+    const chain = enclosingContentControls(part, innermost.id);
+    expect(chain[chain.length - 1]).toBe(innermost);
+    expect(contentControlLockAt(part, innermost.id)).toBe('sdtContentLocked');
+  });
+
+  test('a control past the per-part count bound still reports its own lock', () => {
+    const filler = Array.from(
+      { length: MAX_CONTENT_CONTROLS_PER_PART },
+      () => '<w:sdt><w:sdtPr/><w:sdtContent><w:p/></w:sdtContent></w:sdt>'
+    ).join('');
+    const part = load(filler + lockedSdt('<w:p><w:r><w:t>last</w:t></w:r></w:p>'));
+    const controls = controlsOf(part);
+    const last = controls[controls.length - 1]!;
+    const chain = enclosingContentControls(part, last.id);
+    expect(chain).toEqual([last]);
+    expect(contentControlLockAt(part, last.id)).toBe('sdtContentLocked');
   });
 });

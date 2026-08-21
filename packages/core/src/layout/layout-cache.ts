@@ -47,6 +47,15 @@ export interface ParagraphLayoutCache<T> {
   set(key: ParagraphLayoutKey, value: T): void;
   /** Drop entries for paragraphs a commit removed, so the cache cannot grow without bound. */
   retain(keys: ReadonlySet<ParagraphLayoutKey>): void;
+  /**
+   * Whether THIS published pass should pay for a document-wide {@link retain} sweep.
+   *
+   * Retention only trims memory — the aging window tolerates deferral — while building the
+   * union of live keys costs real time on a large document, so callers ask per pass and
+   * sweep on a stride. Per cache instance, so one editor's cadence cannot starve another's.
+   * Optional for compatibility: a cache without it is retained on every pass.
+   */
+  retentionPassDue?(): boolean;
   clear(): void;
   readonly stats: LayoutCacheStats;
 }
@@ -231,50 +240,144 @@ export interface ParagraphLayoutCacheOptions {
 }
 
 /**
- * A bounded least-recently-used cache.
+ * The break-cache keys a table's cell paragraphs were last cached under, per (immutable)
+ * table node.
+ *
+ * A pass can enumerate its top-level block keys without laying anything out, but a table's
+ * CELL keys only exist while table layout runs — and a resumed pass never lays out the
+ * unchanged prefix. Recording them per node lets `retain` name every live key: the node is
+ * immutable, so the recorded keys stay right until an edit replaces the node, whose new
+ * layout re-records them.
+ */
+const tableCellBreakKeys = new WeakMap<object, readonly ParagraphLayoutKey[]>();
+
+export function registerTableCellBreakKeys(
+  table: object,
+  keys: readonly ParagraphLayoutKey[]
+): void {
+  tableCellBreakKeys.set(table, keys);
+}
+
+export function tableCellBreakKeysOf(table: object): readonly ParagraphLayoutKey[] | undefined {
+  return tableCellBreakKeys.get(table);
+}
+
+/**
+ * Retain a pass's live keys: its block keys plus the recorded cell keys of its tables.
+ *
+ * With a `collector` (the multi-section orchestrator's shared set) the keys are only
+ * ADDED — the orchestrator retains once over the union, because retaining per section
+ * evicted every other section's entries.
+ */
+export function retainLiveBreakKeys<T>(
+  cache: ParagraphLayoutCache<T> | undefined,
+  collector: Set<string> | undefined,
+  blockKeys: readonly string[],
+  tables: readonly object[]
+): void {
+  if (!cache) return;
+  const retained = collector ?? new Set<string>();
+  for (const key of blockKeys) retained.add(key);
+  for (const table of tables) {
+    const cellKeys = tableCellBreakKeys.get(table);
+    if (cellKeys) for (const key of cellKeys) retained.add(key);
+  }
+  if (!collector) cache.retain(retained);
+}
+
+/**
+ * Passes between document-wide retention sweeps.
+ *
+ * Retention only trims memory — the generation TTL tolerates deferral — while the union of
+ * live keys it builds costs real time on a large document. So it runs on a stride of
+ * published passes instead of on every keystroke; between sweeps the cache grows by at most
+ * one re-keyed paragraph per pass. The tick lives on each cache instance
+ * ({@link ParagraphLayoutCache.retentionPassDue}), so interleaved editors in one process
+ * cannot starve each other's sweeps.
+ */
+const RETENTION_PASS_STRIDE = 8;
+
+/**
+ * How many retain generations an entry survives without being listed or touched.
+ *
+ * `retain` receives the keys a pass can NAME cheaply — the top-level block keys plus the
+ * registered table-cell keys. Lanes that mint keys the pass cannot enumerate up front
+ * (notes, textbox stories) live on this grace period instead: touched entries re-stamp, so
+ * only keys no pass has wanted for this many retains are dropped. One retain runs per
+ * published layout pass, so the window is "recent passes", not wall time.
+ */
+const RETAIN_GENERATION_TTL = 8;
+
+/**
+ * A bounded least-recently-used cache with generation-scoped retention.
  *
  * Bounded because a long editing session touches far more paragraph states than a document
  * contains — every keystroke mints a new key for the paragraph being typed in — and an
  * unbounded cache would hold every intermediate state of the session.
+ *
+ * The bound never evicts the CURRENT working set: entries stamped by this generation's
+ * retain or touched since it began are skipped, and the map grows past `maxEntries` when a
+ * document is larger than the configured cap — evicting live entries made every full pass
+ * on a 500-page document re-measure the whole document.
  */
 export function createParagraphLayoutCache<T>(
   options: ParagraphLayoutCacheOptions = {}
 ): ParagraphLayoutCache<T> {
   const maxEntries = Math.max(1, options.maxEntries ?? 4096);
+  // The absolute ceiling the working-set exemption below cannot exceed: a cache whose
+  // owner never (or rarely) retains still may not grow without bound.
+  const hardMaxEntries = maxEntries * 8;
   // Insertion order IS the recency order: a hit deletes and re-inserts, so the oldest key
   // is always the first one the iterator yields.
-  const entries = new Map<ParagraphLayoutKey, T>();
+  const entries = new Map<ParagraphLayoutKey, { value: T; generation: number }>();
+  let generation = 0;
+  let retentionTick = 0;
   let hits = 0;
   let misses = 0;
   let evictions = 0;
 
   return {
     get(key) {
-      const value = entries.get(key);
-      if (value === undefined) {
+      const entry = entries.get(key);
+      if (entry === undefined) {
         misses += 1;
         return undefined;
       }
       hits += 1;
       entries.delete(key);
-      entries.set(key, value);
-      return value;
+      entry.generation = generation;
+      entries.set(key, entry);
+      return entry.value;
     },
 
     set(key, value) {
       if (entries.has(key)) entries.delete(key);
-      entries.set(key, value);
+      entries.set(key, { value, generation });
       while (entries.size > maxEntries) {
-        const oldest = entries.keys().next();
+        const oldest = entries.entries().next();
         if (oldest.done) break;
-        entries.delete(oldest.value);
+        // The least recent entry is still part of the current working set: everything
+        // after it is too, so the soft cap yields rather than thrash — up to the hard
+        // ceiling, past which memory wins over reuse.
+        if (oldest.value[1].generation >= generation && entries.size <= hardMaxEntries) break;
+        entries.delete(oldest.value[0]);
         evictions += 1;
       }
     },
 
+    retentionPassDue() {
+      retentionTick += 1;
+      return retentionTick % RETENTION_PASS_STRIDE === 0;
+    },
+
     retain(keys) {
-      for (const key of [...entries.keys()]) {
-        if (!keys.has(key)) {
+      generation += 1;
+      for (const key of keys) {
+        const entry = entries.get(key);
+        if (entry) entry.generation = generation;
+      }
+      for (const [key, entry] of entries) {
+        if (generation - entry.generation > RETAIN_GENERATION_TTL) {
           entries.delete(key);
           evictions += 1;
         }

@@ -16,13 +16,26 @@ Each adapter declares the engine as a peer dependency. Install the engine and on
 
 Use these commands to install the packages that your app needs:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```bash
-# React
 npm install @docx-editor.dev/react @docx-editor.dev/core
+```
 
-# Vue
+</Framework>
+<Framework value="vue">
+
+```bash
 npm install @docx-editor.dev/vue @docx-editor.dev/core
+```
 
+</Framework>
+</FrameworkTabs>
+
+The other packages are the same for both adapters:
+
+```bash
 # Tracked changes, comments, custom nodes
 # Commercially licensed: free to evaluate, production use needs an agreement
 npm install @docx-editor.dev/pro
@@ -35,9 +48,13 @@ npm install @docx-editor.dev/editor-api
 npm install @docx-editor.dev/fonts
 ```
 
-## Mount with React
+## Mount the editor
 
-Import the component and stylesheet once.
+Import the component and the stylesheet once.
+This example creates an empty document:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -46,17 +63,14 @@ import '@docx-editor.dev/core/styles/editor.css';
 export default function App() {
   return (
     <div style={{ height: '100vh' }}>
-      <DocxEditor />
+      <DocxEditor document="blank" />
     </div>
   );
 }
 ```
 
-## Mount with Vue
-
-Import the Vue component and stylesheet once.
-
-This example creates an empty document:
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
@@ -78,6 +92,10 @@ import '@docx-editor.dev/vue/styles.css';
 ```
 
 The Vue stylesheet imports the core stylesheet that React uses.
+
+</Framework>
+</FrameworkTabs>
+
 Your app does not need Tailwind or an icon font.
 
 `document` accepts an `ArrayBuffer`, `Uint8Array`, `DocumentHandle`, or `'blank'`.
@@ -142,6 +160,9 @@ For these documents, `@docx-editor.dev/fonts` supplies metric-compatible substit
 
 Use this example to load the substitute fonts:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 
@@ -149,6 +170,31 @@ const fonts = await loadDefaultFonts();
 
 <DocxEditor document={bytes} fonts={fonts} />;
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue';
+import { DocxEditor, type FontConfigurationFragment } from '@docx-editor.dev/vue';
+import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+
+// Resolve into a ref. A top-level `await` here would make this an async
+// component, which renders nothing without a <Suspense> ancestor.
+const fonts = shallowRef<FontConfigurationFragment>();
+void loadDefaultFonts().then((loaded) => {
+  fonts.value = loaded;
+});
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :fonts="fonts" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 For information about font source order, see [Fonts and measurement](/docs/2.x/guides/fonts).
 

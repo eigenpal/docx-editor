@@ -1,0 +1,741 @@
+---
+title: 'Review colors and styling'
+description: 'Color tracked changes and comments by author or by change type, map your own reviewer colors, add avatars, and restyle the review cards with CSS hooks.'
+category: 'Pro'
+order: 62
+---
+
+The editor assigns a color to each reviewer, and gives you three ways to change
+that: CSS tokens, declarative style components, and one imperative call. Every
+option is display-only. None of them changes the document file.
+
+These styles apply to [tracked changes](/docs/2.x/pro/tracked-changes) and
+[comments](/docs/2.x/pro/comments) alike, so one reviewer keeps one color across
+both.
+
+The editor assigns a color to each reviewer. A paragraph with changes from three reviewers shows three author colors.
+
+You do not need to configure this behavior. Color identifies the author.
+
+Decoration identifies the change type. Insertions remain underlined, and deletions remain struck through.
+
+Each author receives a color from `--doc-review-author-0` through `--doc-review-author-7`.
+
+The editor assigns slots by each author's first appearance. The ramp repeats after eight authors.
+
+The review sidebar uses the same colors. Each card uses its author color on the leading edge and avatar disc.
+
+## Restyle the ramp
+
+Override the slots under `.docx-editor` to change the shared palette.
+
+This example changes two author colors for the painted document and review cards:
+
+```css
+.docx-editor {
+  --doc-review-author-0: #7c3aed;
+  --doc-review-author-1: #0e7490;
+}
+```
+
+One ramp supports both themes. Define the slots for a light page.
+
+Dark mode applies an inverting filter to the document. The review cards adjust their colors separately.
+
+The packaged stylesheet declares the ramp on `.docx-editor`. Load your stylesheet after `editor.css`, or use a more specific selector.
+
+## Use declarative styles
+
+Mount style declarations for more control. React exposes them as `DocxEditor.AuthorStyle` and
+`DocxEditor.ColorByChangeType`. Vue exports `DocxEditorAuthorStyle` and
+`DocxEditorColorByChangeType` from `@docx-editor.dev/vue`.
+
+This example assigns one author their own color and avatar, and colors every
+other author's changes by type:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+<DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+  <DocxEditor.AuthorStyle author="Jess Lin" color="#7c3aed" avatarUrl="/avatars/jess.png" />
+  <DocxEditor.ColorByChangeType />
+
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+} from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
+    <DocxEditorAuthorStyle author="Jess Lin" color="#7c3aed" avatar-url="/avatars/jess.png" />
+    <DocxEditorColorByChangeType />
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The author-style and change-type components do not render Document Object Model (DOM) elements.
+
+They declare presentation for the engine:
+
+- **Mount:** The engine applies the declaration. A declaration present during creation applies before the first paint.
+- **Prop change:** The engine reapplies the declaration and repaints pages without a remount. The caret, selection, and undo history remain.
+- **Unmount:** The engine removes the declaration. The author returns to the ramp color.
+
+You can render declarations conditionally, map them from configuration, or control them with a color picker.
+
+Place declarations anywhere inside `DocxEditor.Root`. They access the editor through context.
+
+Use either declarations or `setRevisionStyles` as the source of style state.
+
+Calling `setRevisionStyles` while declarations are mounted replaces their combined value. The declarations reapply after a mount, unmount, or prop change.
+
+The imperative value remains until one of these changes occurs. Control the declarations from state to prevent conflicting updates.
+
+The engine paints these styles on the page. These presentation settings do not change the document file.
+
+## Map your own authors to colors
+
+If you know the reviewers, map your configuration to declarations.
+
+This example creates declarations from an author-color map:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+const AUTHOR_COLORS: Record<string, string> = {
+  'Jess Lin': '#7c3aed',
+  'Sam Reyes': '#0e7490',
+  'AI Assistant': '#b91c1c',
+};
+
+<DocxEditor.Root document={bytes} modules={MODULES}>
+  {Object.entries(AUTHOR_COLORS).map(([author, color]) => (
+    <DocxEditor.AuthorStyle key={author} author={author} color={color} />
+  ))}
+  {/* Viewport and content. */}
+</DocxEditor.Root>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditorAuthorStyle, DocxEditorRoot } from '@docx-editor.dev/vue';
+
+const AUTHOR_COLORS: Record<string, string> = {
+  'Jess Lin': '#7c3aed',
+  'Sam Reyes': '#0e7490',
+  'AI Assistant': '#b91c1c',
+};
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :modules="modules">
+    <DocxEditorAuthorStyle
+      v-for="(color, author) in AUTHOR_COLORS"
+      :key="author"
+      :author="author"
+      :color="color"
+    />
+    <!-- Viewport and content. -->
+  </DocxEditorRoot>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`author` must match the document's `w:author` string.
+
+A declaration for an absent author has no effect. You can use one shared configuration for multiple documents.
+
+Authors without declarations keep their ramp colors.
+
+Each declaration accepts more than a color. This example sets all supported presentation fields:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.AuthorStyle
+  author="Jess Lin"
+  color="#7c3aed" // ink and decoration in the document, and their card accent
+  background="rgb(124 58 237 / 8%)" // the wash behind their changes
+  spanClassName="jess-edit" // classes added to their painted changes
+  avatarUrl="https://example.com/avatars/jess.png" // their avatar in the review sidebar
+/>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorAuthorStyle
+  author="Jess Lin"
+  color="#7c3aed"
+  background="rgb(124 58 237 / 8%)"
+  span-class-name="jess-edit"
+  avatar-url="https://example.com/avatars/jess.png"
+/>
+```
+
+`color` sets the ink and decoration in the document, and the card accent. `background` is the
+wash behind their changes. `span-class-name` adds classes to their painted changes.
+`avatar-url` sets their avatar in the review sidebar.
+
+</Framework>
+</FrameworkTabs>
+
+Use `spanClassName` to apply per-author CSS to painted text.
+
+The declaration renders no wrapper. The engine adds the classes to the author's painted spans.
+
+Keep these rules metric-safe. You can use outlines, shadows, and background accents.
+
+Do not change font size, weight, or family. These changes make painted text differ from the measured layout.
+
+## Color by change type instead
+
+Mount the change-type declaration to color insertions green and deletions red:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Root document={bytes} modules={MODULES}>
+  <DocxEditor.ColorByChangeType />
+  {/* … */}
+</DocxEditor.Root>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorRoot :document="bytes" :modules="modules">
+  <DocxEditorColorByChangeType />
+  <!-- … -->
+</DocxEditorRoot>
+```
+
+</Framework>
+</FrameworkTabs>
+
+You can combine it with an author declaration.
+
+Named authors keep their declared colors. Other authors use the change-type colors:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.AuthorStyle author="AI Assistant" color="#b91c1c" />
+<DocxEditor.ColorByChangeType />
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorAuthorStyle author="AI Assistant" color="#b91c1c" />
+<DocxEditorColorByChangeType />
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Discover the authors in a document
+
+Use the document's author list to build a legend.
+
+`useReviewAuthors()` returns each displayed review author in slot order. Each entry includes its resolved color and style.
+
+The list updates when a document loads or review styling changes.
+
+This example renders an author legend:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useReviewAuthors } from '@docx-editor.dev/react';
+
+const SWATCH = { width: 10, height: 10, display: 'inline-block' };
+
+function ReviewerLegend() {
+  const authors = useReviewAuthors();
+
+  return (
+    <ul className="docx-editor">
+      {authors.map(({ author, color }) => (
+        <li key={author}>
+          <span aria-hidden="true" style={{ ...SWATCH, background: color }} />
+          {author}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+React returns the author list directly.
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useReviewAuthors } from '@docx-editor.dev/vue';
+
+const authors = useReviewAuthors();
+</script>
+
+<template>
+  <ul class="docx-editor">
+    <li v-for="entry in authors" :key="entry.author">
+      <span
+        aria-hidden="true"
+        :style="{ background: entry.color, display: 'inline-block', height: '10px', width: '10px' }"
+      />
+      {{ entry.author }}
+    </li>
+  </ul>
+</template>
+```
+
+Vue returns a shallow ref. Call `useReviewAuthors()` in a component under `DocxEditorRoot`.
+
+</Framework>
+</FrameworkTabs>
+
+The list covers tracked changes and comments.
+
+Authors of tracked changes appear first. Their order follows the first appearance of each change.
+
+Authors who only added comments follow. Each comment-only author receives a separate color.
+
+A resolved view hides resolved revisions. It omits authors whose only changes are hidden, unless those authors also commented.
+
+`color` is the author color used by review chrome.
+
+It uses a declaration when available. Otherwise, it uses the author's ramp slot.
+
+With `ColorByChangeType`, painted text uses insertion and deletion colors. Cards keep their author accents.
+
+Therefore, a legend from this list describes the sidebar colors, not the page colors.
+
+An unstyled author's `color` is a `var(--doc-review-author-N)` reference.
+
+The editor declares the ramp on `.docx-editor`. Add this class to the legend or an ancestor so the swatches resolve.
+
+Store selected colors in state and render them as declarations.
+
+This example combines the author list with color inputs:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useState } from 'react';
+import { DocxEditor, useReviewAuthors } from '@docx-editor.dev/react';
+
+function ReviewerColors() {
+  const authors = useReviewAuthors();
+  const [picks, setPicks] = useState<Record<string, string>>({});
+
+  return (
+    <>
+      {Object.entries(picks).map(([author, color]) => (
+        <DocxEditor.AuthorStyle key={author} author={author} color={color} />
+      ))}
+      {authors.map(({ author, color }) => (
+        <input
+          key={author}
+          type="color"
+          aria-label={author}
+          value={picks[author] ?? (color.startsWith('var(') ? '#000000' : color)}
+          onChange={(event) =>
+            setPicks((previous) => ({ ...previous, [author]: event.target.value }))
+          }
+        />
+      ))}
+    </>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { reactive } from 'vue';
+import { DocxEditorAuthorStyle, useReviewAuthors } from '@docx-editor.dev/vue';
+
+const authors = useReviewAuthors();
+const picks = reactive<Record<string, string>>({});
+</script>
+
+<template>
+  <DocxEditorAuthorStyle
+    v-for="(color, author) in picks"
+    :key="author"
+    :author="author"
+    :color="color"
+  />
+  <input
+    v-for="entry in authors"
+    :key="entry.author"
+    type="color"
+    :aria-label="entry.author"
+    :value="picks[entry.author] ?? (entry.color.startsWith('var(') ? '#000000' : entry.color)"
+    @input="picks[entry.author] = ($event.target as HTMLInputElement).value"
+  />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`useReview().items` includes an `author` on every card. This list includes authors who only added comments.
+
+Call `getReviewAuthors()` on the editor instance to get the author list without an adapter.
+
+A headless host can pass `revisionStyles` during editor creation. It can call `setRevisionStyles` to update styles later.
+
+Vue and React hosts can also call this method when they do not mount declarations.
+
+Both APIs accept a `RevisionStyles` value. Use `'author'`, the default, `'kind'`, or an object with named author styles.
+
+This example uses change-type colors for other authors:
+
+```ts
+editor.setRevisionStyles({
+  // What authors you don't name take. Defaults to 'author', the ramp.
+  others: 'kind',
+  authors: {
+    'Jess Lin': '#7c3aed',
+    'Sam Reyes': { color: '#0e7490', avatarUrl: '/avatars/sam.png' },
+  },
+});
+```
+
+An author value can be a color string or the fields accepted by `AuthorStyle`.
+
+Setting `others` to `'kind'` matches mounting `ColorByChangeType` with your declarations.
+
+## Add custom avatars
+
+A review card shows the author's initials in a colored disc.
+
+Set the avatar URL to show an image in the disc:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.AuthorStyle author="Jess Lin" avatarUrl="https://example.com/avatars/jess.png" />
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorAuthorStyle author="Jess Lin" avatar-url="https://example.com/avatars/jess.png" />
+```
+
+</Framework>
+</FrameworkTabs>
+
+The image covers the disc and uses its round shape. The author color remains under the image.
+
+The color appears while the image loads or if loading fails. Authors without `avatarUrl` keep their initials.
+
+An avatar does not change the painted document. Only `color` changes an author's document ink.
+
+Use a host you control for `avatarUrl`. You can also use a `data:` or `blob:` URL that your application already holds.
+
+The browser fetches the image when the card renders. The packaged card uses `referrerPolicy="no-referrer"`.
+
+The editor does not load image addresses from the document. It rejects unsafe declaration URLs, including script schemes and protocol-relative hosts.
+
+The card uses initials after rejection. `useReviewAuthor` then reports no avatar.
+
+Declarations match the exact author name in the document. The document sender controls this value.
+
+A document can use a known author's name and receive that author's color and image. Do not use review styling as identity proof.
+
+Style the packaged class to resize or reshape the disc:
+
+```css
+.docx-editor .docx-review__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+```
+
+In a custom card, read the avatar from `useReviewAuthor` and render your own image.
+
+For an example, see [Per-author card design](#per-author-card-design).
+
+## Per-author CSS hooks
+
+The editor adds author attributes to these elements:
+
+- Tracked-change spans
+- Paragraph-mark pilcrows
+- Comment highlight bands
+- Review cards
+- Hover balloons
+- Gutter markers
+
+Each element has these attributes:
+
+- `data-review-author`: The exact author name from the document.
+- `data-review-author-slot`: The author's ramp slot from `0` through `7`.
+
+Use the slot attribute when you do not know author names. The ramp repeats after eight authors.
+
+The `slot` value from the author list is an unbounded rank. The DOM attribute wraps that rank to the ramp.
+
+Build selectors from `useReviewAuthors()` with the same calculation: `` `[data-review-author-slot='${slot % 8}']` ``.
+
+One author uses the same wrapped slot across all elements. This CSS example styles an author by name or slot:
+
+```css
+/* Their changes in the text and their cards in the sidebar, together. */
+.docx-editor [data-review-author='Jess Lin'] {
+  outline: 1px dotted currentColor;
+  outline-offset: 1px;
+}
+
+/* Or by slot, which survives whoever opens the document. */
+.docx-editor [data-review-author-slot='2'] {
+  text-shadow: 0 0 6px currentColor;
+}
+```
+
+Narrow the selector to style one review surface:
+
+```css
+/* Cards only. Their leading edge is already the author's color. */
+.docx-editor .docx-review__card[data-review-author='AI Assistant'] {
+  background: #fef2f2;
+  font-weight: 600;
+}
+```
+
+Cards, balloons, markers, and bands define `--doc-review-author-current`.
+
+This custom property contains the resolved author color. Use it to color these elements.
+
+Painted spans do not define this property. The engine writes the author color to their inline `color`.
+
+Use `currentColor` for painted spans, or read the slot's ramp token.
+
+CSS rules cannot override the inline ink color or text decoration on a painted span.
+
+Set ink color through a declaration or by changing the ramp. Keep span rules metric-safe because the engine measures painted text.
+
+Spans have `data-review-author-slot` only when the editor colors changes by author.
+
+`ColorByChangeType` without author declarations keeps the name attribute and removes the slot attribute.
+
+These rules also apply to comment authors. One author uses one color across comments and tracked changes.
+
+A comment-only author receives a slot. `useReviewAuthors()` lists comment-only authors after tracked-change authors.
+
+This declaration styles a comment-only author:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+// Sam only comments. Their cards still get this color and picture.
+<DocxEditor.AuthorStyle author="Sam Reyes" color="#0e7490" avatarUrl="/avatars/sam.png" />
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<!-- Sam only comments. Their cards still get this color and picture. -->
+<DocxEditorAuthorStyle author="Sam Reyes" color="#0e7490" avatar-url="/avatars/sam.png" />
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Tint commented text by author
+
+Commented text has a highlight band. The band has `data-review-author`, `data-review-author-slot`, and `--doc-review-author-current`.
+
+By default, the band color does not change by author. Word uses the same yellow highlight for all comments.
+
+Add a CSS rule to use author colors:
+
+```css
+/* Every comment, in its author's color. The fallback keeps a band that has no author
+   (a custom node, or a comment the file left unattributed) visible. */
+.docx-editor .docx-comment-band {
+  background: color-mix(
+    in srgb,
+    var(--doc-review-author-current, var(--doc-comment-bg)) 22%,
+    transparent
+  );
+}
+
+/* Or one reviewer only. */
+.docx-editor .docx-comment-band[data-review-author='Sam Reyes'] {
+  box-shadow: inset 0 -2px 0 var(--doc-review-author-current);
+}
+```
+
+The band and card read the same variable. Their colors match without duplicate color values.
+
+The band is chrome, not page content. The dark theme's page filter does not affect it.
+
+`--doc-review-author-current` contains the light-theme value in both themes. Define a dark-theme value when you tint bands by author:
+
+```css
+.docx-editor.dark .docx-comment-band {
+  background: color-mix(in srgb, var(--doc-review-author-current) 34%, transparent);
+}
+```
+
+## Per-author card design
+
+Use composition to change card design.
+
+The packaged card uses the resolved author color for its leading edge and avatar disc. `avatarUrl` provides the avatar image.
+
+The collapsed gutter marker remains neutral. It includes author hooks for optional color styling.
+
+Use `data-review-author` hooks for more changes, or replace the card.
+
+The `List` render callback receives each item and its `author`.
+
+This example selects a card component by author:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditorReview>
+  <DocxEditorReview.List>
+    {(item) =>
+      item.author === 'AI Assistant' ? <AgentCard item={item} /> : <MyCard item={item} />
+    }
+  </DocxEditorReview.List>
+</DocxEditorReview>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorReview>
+  <DocxEditorReview.List>
+    <template #item="{ item }">
+      <AgentCard v-if="item.author === 'AI Assistant'" :item="item" />
+      <MyCard v-else :item="item" />
+    </template>
+  </DocxEditorReview.List>
+</DocxEditorReview>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Use `useReviewAuthor` to connect a custom card to author styling.
+
+It returns one author's resolved color, ramp slot, and declared style. These values match the painted text.
+
+The hook supports comment authors. A declaration change updates the card.
+
+This example renders a custom card with the resolved author style:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditorReview, useReviewAuthor, type ReviewItemView } from '@docx-editor.dev/pro/react';
+
+function MyCard({ item }: { item: ReviewItemView }) {
+  const author = useReviewAuthor(item.author);
+  return (
+    <div className="my-card" style={{ borderLeft: `3px solid ${author?.color ?? 'transparent'}` }}>
+      {author?.style?.avatarUrl ? <img src={author.style.avatarUrl} alt="" /> : item.author}
+      {item.text}
+    </div>
+  );
+}
+
+<DocxEditorReview>
+  <DocxEditorReview.List>{(item) => <MyCard item={item} />}</DocxEditorReview.List>
+</DocxEditorReview>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useReviewAuthor, type ReviewItemView } from '@docx-editor.dev/pro/vue';
+
+const props = defineProps<{ item: ReviewItemView }>();
+const author = useReviewAuthor(() => props.item.author);
+</script>
+
+<template>
+  <div class="my-card" :style="{ borderColor: author?.color }">
+    {{ item.author }}: {{ item.text }}
+  </div>
+</template>
+```
+
+The Vue composable accepts a ref or a getter and returns a computed ref.
+
+</Framework>
+</FrameworkTabs>
+
+## Next steps
+
+- [Tracked changes](/docs/2.x/pro/tracked-changes): Record, render, and resolve revisions.
+- [Comments](/docs/2.x/pro/comments): Add discussion threads beside revisions.
+- [Vue composition](/docs/2.x/vue/composition) and [React composition](/docs/2.x/react/composition): Arrange the editor and review parts.

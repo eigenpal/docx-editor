@@ -30,6 +30,7 @@ import {
   type RevisionAttribution,
 } from '@docx-editor.dev/core/layout';
 import type {
+  BlockFragmentRecord,
   ContentControlBoundaryRecord,
   ContentControlMappedType,
   LayoutBox,
@@ -2137,7 +2138,9 @@ function paintPage(
     readonly activeHeaderFooterPageIndex?: number;
     readonly contentControlChrome?: PaintOptions['contentControlChrome'];
   },
-  materialize: boolean
+  materialize: boolean,
+  /** Filled with the body block elements, so the next pass can repaint one block in place. */
+  painted?: { content?: HTMLElement; blocks?: Map<BlockFragmentRecord, HTMLElement> }
 ): HTMLElement {
   // Every drawing painted below carries this page's instance key, so a repaint of the
   // page reuses its own already-decoded <img> elements (no per-keystroke flash) without
@@ -2225,12 +2228,18 @@ function paintPage(
     rule.style.pointerEvents = 'none';
     content.append(rule);
   }
+  const blocks = painted ? new Map<BlockFragmentRecord, HTMLElement>() : null;
   for (const fragment of page.fragments) {
-    content.append(
+    const block =
       fragment.kind === 'table'
         ? paintTableFragment(document, fragment, options)
-        : paintFragment(document, fragment, options)
-    );
+        : paintFragment(document, fragment, options);
+    blocks?.set(fragment, block);
+    content.append(block);
+  }
+  if (painted && blocks) {
+    painted.content = content;
+    painted.blocks = blocks;
   }
   element.append(content);
 
@@ -2611,6 +2620,13 @@ interface RetainedPage {
   readonly record: PageRecord;
   readonly materialized: boolean;
   readonly element: HTMLElement;
+  /**
+   * The body content layer and its block elements by RECORD, kept so the next pass can
+   * repaint the one block that moved instead of the sheet it sits on. Absent on a page
+   * that was never materialized.
+   */
+  readonly content?: HTMLElement;
+  readonly blocks?: ReadonlyMap<BlockFragmentRecord, HTMLElement>;
 }
 
 interface RetainedPaint {
@@ -2628,6 +2644,128 @@ function sameBox(left: PageRecord['box'], right: PageRecord['box']): boolean {
     left.width === right.width &&
     left.height === right.height
   );
+}
+
+/** Every own key equal by identity, with no nested object on either side. */
+function samePlainValues(left: object, right: object): boolean {
+  const keys = Object.keys(left);
+  if (keys.length !== Object.keys(right).length) return false;
+  for (const key of keys) {
+    const a = (left as Record<string, unknown>)[key];
+    const b = (right as Record<string, unknown>)[key];
+    if (a !== b) return false;
+    // A nested object that happens to be the SAME object is fine; a different one is not
+    // comparable here, and `a !== b` has already refused it.
+  }
+  return true;
+}
+
+function sameItems(left: readonly unknown[], right: readonly unknown[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+/**
+ * True when two page records differ ONLY in their body blocks.
+ *
+ * The test is written against the record's own keys rather than a hand-listed set, so a
+ * field added to `PageRecord` later disables adoption — a slower repaint — instead of
+ * silently painting the page without it. Everything else must be the same object, the same
+ * flat values (a box, the page-field source), or the same array members: layout hands
+ * untouched sub-records back by identity, so anything that really changed fails this and
+ * takes the full path.
+ */
+function onlyBlocksChanged(previous: PageRecord, next: PageRecord): boolean {
+  if (previous === next) return false;
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  for (const key of keys) {
+    if (key === 'fragments') continue;
+    const a = (previous as unknown as Record<string, unknown>)[key];
+    const b = (next as unknown as Record<string, unknown>)[key];
+    if (a === b) continue;
+    if (Array.isArray(a) && Array.isArray(b) && sameItems(a, b)) continue;
+    if (
+      typeof a === 'object' &&
+      typeof b === 'object' &&
+      a !== null &&
+      b !== null &&
+      !Array.isArray(a) &&
+      !Array.isArray(b) &&
+      samePlainValues(a, b)
+    ) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+const COLUMN_SEPARATOR_CLASS = 'docx-column-separator';
+
+/**
+ * Repaint one page's changed blocks IN PLACE, keeping the sheet and every block that did
+ * not move.
+ *
+ * Typing rewrites one paragraph. Rebuilding the sheet around it detached a few thousand
+ * nodes and built them again, which the browser then had to restyle, lay out and repaint in
+ * full — and it dropped the text node the caret was in, so the selection had to be mapped
+ * and re-applied afterwards. Adopting the sheet keeps all of that: only the edited block's
+ * element is built, and on a page the caret is not on, nothing is touched at all.
+ */
+function adoptPageBlocks(
+  document: Document,
+  retained: RetainedPage,
+  page: PageRecord,
+  options: ResolvedPaintContext & {
+    readonly ariaHidden: boolean;
+    readonly activeHeaderFooterRId?: string;
+    readonly activeHeaderFooterPageIndex?: number;
+    readonly contentControlChrome?: PaintOptions['contentControlChrome'];
+  }
+): RetainedPage | null {
+  const content = retained.content;
+  const previousBlocks = retained.blocks;
+  if (!content || !previousBlocks || content.parentElement !== retained.element) return null;
+  const blockOptions = { ...options, paintInstance: `p${page.index}` };
+  const blocks = new Map<BlockFragmentRecord, HTMLElement>();
+  const elements: HTMLElement[] = [];
+  for (const fragment of page.fragments) {
+    const element =
+      previousBlocks.get(fragment) ??
+      (fragment.kind === 'table'
+        ? paintTableFragment(document, fragment, blockOptions)
+        : paintFragment(document, fragment, blockOptions));
+    blocks.set(fragment, element);
+    elements.push(element);
+  }
+  // Keyed reconcile, exactly as the container does with pages. The column separators are
+  // painted ahead of the blocks and are covered by the record comparison above, so they
+  // are left where they are rather than being re-created.
+  const kept = new Set<HTMLElement>(elements);
+  let child = content.firstChild;
+  while (child) {
+    const next = child.nextSibling;
+    const element = child as HTMLElement;
+    if (!kept.has(element) && element.classList?.contains(COLUMN_SEPARATOR_CLASS) !== true) {
+      (child as ChildNode).remove();
+    }
+    child = next;
+  }
+  let cursor = content.firstChild;
+  while (cursor && (cursor as HTMLElement).classList?.contains(COLUMN_SEPARATOR_CLASS)) {
+    cursor = cursor.nextSibling;
+  }
+  for (const element of elements) {
+    if (element === cursor) {
+      cursor = cursor.nextSibling;
+      continue;
+    }
+    content.insertBefore(element, cursor);
+  }
+  return { record: page, materialized: true, element: retained.element, content, blocks };
 }
 
 function virtualPageShellMatches(
@@ -2752,17 +2890,34 @@ export function paintSemanticLayout(
     const materialized = options.materialize?.has(page.index) ?? true;
     const kept = reusable?.get(page);
     if (kept && kept.materialized === materialized) return kept;
-    const priorShell = materialized ? null : previousByIndex?.get(page.index);
+    const prior = previousByIndex?.get(page.index);
     if (
-      priorShell &&
-      virtualPageShellMatches(priorShell, page, resolved.scale, resolved.ariaHidden)
+      !materialized &&
+      prior &&
+      virtualPageShellMatches(prior, page, resolved.scale, resolved.ariaHidden)
     ) {
-      return { record: page, materialized: false, element: priorShell.element };
+      return { record: page, materialized: false, element: prior.element };
     }
+    // Same sheet, different text: keep the page and repaint only the blocks that moved.
+    // Only ever from an unchanged parameter set, so an adopted block is one this pass
+    // would have built identically.
+    if (
+      parametersUnchanged &&
+      materialized &&
+      prior?.materialized &&
+      onlyBlocksChanged(prior.record, page)
+    ) {
+      const adopted = adoptPageBlocks(document, prior, page, resolved);
+      if (adopted) return adopted;
+    }
+    const painted: { content?: HTMLElement; blocks?: Map<BlockFragmentRecord, HTMLElement> } = {};
+    const element = paintPage(document, page, resolved, materialized, painted);
     return {
       record: page,
       materialized,
-      element: paintPage(document, page, resolved, materialized),
+      element,
+      ...(painted.content ? { content: painted.content } : {}),
+      ...(painted.blocks ? { blocks: painted.blocks } : {}),
     };
   });
   retainedPaints.set(container, { parameters, pages });

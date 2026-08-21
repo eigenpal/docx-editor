@@ -678,28 +678,77 @@ export function reviewAnchorIndex<
 ): Map<string, ReviewParagraphAnchor> {
   const index = new Map<string, ReviewParagraphAnchor>();
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragments(page)) {
-      // Every paragraph whose content this fragment HOLDS. A resolved view lays a merged
-      // group out as one fragment named after the survivor, and a card anchored in any other
-      // member would have no geometry and drop out of the rail.
-      const held = new Set<string>([fragment.paragraphId]);
-      for (const line of fragment.lines ?? []) {
-        for (const span of line.spans ?? []) held.add(span.range.paragraphId);
-      }
-      for (const paragraphId of held) {
-        // FIRST fragment wins: a paragraph split across a page break is anchored where it
-        // starts, which is where its comment marker was written.
-        if (index.has(paragraphId)) continue;
-        index.set(paragraphId, {
-          pageIndex: page.index,
-          contentY: page.contentBox.y,
-          fragmentY: fragment.box.y,
-          ...(fragment.lines ? { lines: fragment.lines } : {}),
-        });
-      }
+    for (const [paragraphId, anchor] of pageAnchors(page, paragraphFragments)) {
+      // FIRST page wins, for the same reason the first fragment does below.
+      if (index.has(paragraphId)) continue;
+      index.set(paragraphId, anchor);
     }
   }
   return index;
+}
+
+/**
+ * One page's anchors, remembered on the PAGE record.
+ *
+ * The rail re-derives its geometry on every commit, and an untouched page comes back from
+ * incremental layout as the same object — so a keystroke walks the fragments of the page it
+ * landed on, not of the whole document.
+ *
+ * Keyed on the PROJECTION as well as the page: a caller reading a different set of fragments
+ * off the same page must not be handed the other caller's answer. A caller that builds its
+ * projection inline gets a fresh cache each call, which is a miss, never a stale read.
+ */
+const pageAnchorCache = new WeakMap<
+  object,
+  WeakMap<object, ReadonlyMap<string, ReviewParagraphAnchor>>
+>();
+
+function pageAnchors<
+  TPage extends { readonly index: number; readonly contentBox: { readonly y: number } },
+>(
+  page: TPage,
+  paragraphFragments: (page: TPage) => readonly {
+    readonly paragraphId: string;
+    readonly box: { readonly y: number };
+    readonly lines?: readonly {
+      readonly range: { readonly end: number };
+      readonly box: { readonly y: number };
+      readonly spans?: readonly {
+        readonly range: { readonly paragraphId: string; readonly end: number };
+      }[];
+    }[];
+  }[]
+): ReadonlyMap<string, ReviewParagraphAnchor> {
+  let byPage = pageAnchorCache.get(paragraphFragments);
+  if (!byPage) {
+    byPage = new WeakMap();
+    pageAnchorCache.set(paragraphFragments, byPage);
+  }
+  const cached = byPage.get(page);
+  if (cached) return cached;
+  const anchors = new Map<string, ReviewParagraphAnchor>();
+  for (const fragment of paragraphFragments(page)) {
+    // Every paragraph whose content this fragment HOLDS. A resolved view lays a merged
+    // group out as one fragment named after the survivor, and a card anchored in any other
+    // member would have no geometry and drop out of the rail.
+    const held = new Set<string>([fragment.paragraphId]);
+    for (const line of fragment.lines ?? []) {
+      for (const span of line.spans ?? []) held.add(span.range.paragraphId);
+    }
+    for (const paragraphId of held) {
+      // FIRST fragment wins: a paragraph split across a page break is anchored where it
+      // starts, which is where its comment marker was written.
+      if (anchors.has(paragraphId)) continue;
+      anchors.set(paragraphId, {
+        pageIndex: page.index,
+        contentY: page.contentBox.y,
+        fragmentY: fragment.box.y,
+        ...(fragment.lines ? { lines: fragment.lines } : {}),
+      });
+    }
+  }
+  byPage.set(page, anchors);
+  return anchors;
 }
 
 /**

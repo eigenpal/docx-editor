@@ -8,7 +8,7 @@
 
 import { lineSegments } from './line-segments.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
-import type { SemanticLayout } from './semantic-records.ts';
+import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 
 // Memoized PER LAYOUT, which is sound because a published layout is immutable: a new revision
 // is a new object. Without this every selection walk recomputed the order — and `lineOverlap`
@@ -18,6 +18,41 @@ import type { SemanticLayout } from './semantic-records.ts';
 const documentOrderCache = new WeakMap<SemanticLayout, string[]>();
 const documentOrderIndexCache = new WeakMap<SemanticLayout, Map<string, number>>();
 
+/**
+ * Paragraph ids on ONE page, in order, remembered on the page record.
+ *
+ * Incremental layout hands an untouched page back as the same object, so a keystroke only
+ * ever walks the lines of the page it landed on. The whole-document walk this replaces ran
+ * on every commit — the order is rebuilt each revision because the layout object is new —
+ * and at several hundred pages that walk cost more than the edit itself.
+ */
+const pageOrderCache = new WeakMap<PageRecord, readonly string[]>();
+
+function pageOrder(page: PageRecord): readonly string[] {
+  const cached = pageOrderCache.get(page);
+  if (cached) return cached;
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const fragment of paragraphFragmentsOf(page)) {
+    // From the LINES, not the fragment. A merged fragment is named after one paragraph and
+    // carries several, and a paragraph missing from this order compares as before every
+    // other one — which would put a selection anchored in it at the top of the document.
+    for (const line of fragment.lines) {
+      for (const segment of lineSegments(line)) {
+        if (seen.has(segment.paragraphId)) continue;
+        seen.add(segment.paragraphId);
+        order.push(segment.paragraphId);
+      }
+    }
+    if (fragment.lines.length === 0 && !seen.has(fragment.paragraphId)) {
+      seen.add(fragment.paragraphId);
+      order.push(fragment.paragraphId);
+    }
+  }
+  pageOrderCache.set(page, order);
+  return order;
+}
+
 /** Paragraph ids in document order, deduplicated across fragments. */
 export function documentOrder(layout: SemanticLayout): string[] {
   const cached = documentOrderCache.get(layout);
@@ -25,21 +60,12 @@ export function documentOrder(layout: SemanticLayout): string[] {
   const seen = new Set<string>();
   const order: string[] = [];
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
-      // From the LINES, not the fragment. A merged fragment is named after one paragraph and
-      // carries several, and a paragraph missing from this order compares as before every
-      // other one — which would put a selection anchored in it at the top of the document.
-      for (const line of fragment.lines) {
-        for (const segment of lineSegments(line)) {
-          if (seen.has(segment.paragraphId)) continue;
-          seen.add(segment.paragraphId);
-          order.push(segment.paragraphId);
-        }
-      }
-      if (fragment.lines.length === 0 && !seen.has(fragment.paragraphId)) {
-        seen.add(fragment.paragraphId);
-        order.push(fragment.paragraphId);
-      }
+    for (const paragraphId of pageOrder(page)) {
+      // Deduplicated ACROSS pages as well as within one: a paragraph split by a page break
+      // is ordered where it starts.
+      if (seen.has(paragraphId)) continue;
+      seen.add(paragraphId);
+      order.push(paragraphId);
     }
   }
   documentOrderCache.set(layout, order);

@@ -106,9 +106,16 @@ export interface HeaderFooterStoryLayout {
   readonly withPageContext: (ctx: FieldPageContext) => HeaderFooterStoryLayout;
 }
 
+/** Memoized per immutable part: the fingerprint+hash walk is pure and parts never mutate. */
+const headerFooterContentKeys = new WeakMap<OoxmlPart, string>();
+
 /** Bounded digest of a header/footer part's canonical tree for furniture cache identity. */
 export function headerFooterContentKey(part: OoxmlPart): string {
-  return stableHash(canonicalOoxmlFingerprint(part));
+  const cached = headerFooterContentKeys.get(part);
+  if (cached !== undefined) return cached;
+  const key = stableHash(canonicalOoxmlFingerprint(part));
+  headerFooterContentKeys.set(part, key);
+  return key;
 }
 
 function createBoundedContextCache(maxEntries: number): {
@@ -462,4 +469,38 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   // Empty for the overwhelmingly common story with no pictures, so the context string for a
   // plain header is byte-for-byte what it was.
   return tokens.length === 0 ? '' : `!${tokens.join('!')}`;
+}
+
+/**
+ * The furniture slice of a section's layout-session context: distances and flags, then each
+ * variant's flow height, content key and drawing-resource token — everything a header or
+ * footer edit can move that the body flow would not otherwise notice.
+ */
+export function furnitureLayoutContext(
+  furniture:
+    | {
+        readonly titlePage?: boolean;
+        readonly evenAndOddHeaders?: boolean;
+        readonly headers: ReadonlyMap<string, HeaderFooterStoryLayout>;
+        readonly footers: ReadonlyMap<string, HeaderFooterStoryLayout>;
+      }
+    | undefined,
+  headerDistance: number,
+  footerDistance: number
+): string {
+  if (!furniture) return '';
+  const stories = (prefix: string, source: ReadonlyMap<string, HeaderFooterStoryLayout>) =>
+    [...source]
+      .map(
+        ([variant, story]) =>
+          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}${storyDrawingResourceToken(story)}`
+      )
+      .sort()
+      .join(',');
+  return (
+    `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
+    stories('h', furniture.headers) +
+    ';' +
+    stories('f', furniture.footers)
+  );
 }

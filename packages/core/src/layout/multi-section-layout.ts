@@ -98,7 +98,16 @@ export function furnitureForSection(
   return undefined;
 }
 
-/** Stable key for section bounds + page geometry + furniture geometry (not story text). */
+/**
+ * Stable key for section page geometry + furniture geometry (not story text).
+ *
+ * Deliberately EXCLUDES each section's block bounds: a split or join anywhere shifts the
+ * absolute block indices of every section after it while changing none of them, and keying
+ * on the bounds reset every child session — one Enter in a 100-section document re-laid all
+ * 100 sections. Content changes are what the child sessions' own per-block keys detect;
+ * this key only answers whether section COUNT, geometry, furniture, numbering and columns
+ * still line up positionally.
+ */
 export function multiSectionStructureKey(
   sections: readonly DocumentSection[],
   options: SemanticLayoutOptions
@@ -116,8 +125,6 @@ export function multiSectionStructureKey(
       const columns = section.properties.columns;
       const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
       return [
-        section.blockStart,
-        section.blockEndExclusive,
         section.properties.breakType,
         geometry.width,
         geometry.height,
@@ -261,6 +268,17 @@ export function layoutMultiSectionDocument(
   const { session, ...rest } = options;
   const structureKey = multiSectionStructureKey(sections, options);
   const multi = ensureMultiState(session, structureKey, sections.length);
+  // One retention pass over the UNION of every section's live keys. Retaining inside each
+  // section's pass evicted every other section's entries — the multi-section break cache
+  // was empty on every pass. The sweep runs on the retention stride; skipped passes hand
+  // every section `false` so none of them retains alone.
+  const retainKeys =
+    rest.cache && rest.retainKeys !== false
+      ? (rest.retainKeys ?? ((rest.cache.retentionPassDue?.() ?? true) ? new Set<string>() : false))
+      : false;
+  const retainOnce = (): void => {
+    if (retainKeys && !rest.retainKeys) rest.cache?.retain(retainKeys);
+  };
 
   const pages: PageRecord[] = [];
   const remappedAll: PageRecord[] = [];
@@ -331,6 +349,7 @@ export function layoutMultiSectionDocument(
 
     const laid = layoutSection(slice, revision, {
       ...rest,
+      retainKeys,
       geometry,
       furniture,
       sectionColumns: section.properties.columns,
@@ -443,9 +462,11 @@ export function layoutMultiSectionDocument(
     const geometry = geometryOfSection(sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES);
     const laid = layoutSection([], revision, {
       ...rest,
+      retainKeys,
       geometry,
       sectionColumns: sections[0]?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
     });
+    retainOnce();
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });
     if (multi) {
       multi.spans = [];
@@ -502,5 +523,6 @@ export function layoutMultiSectionDocument(
     };
   }
 
+  retainOnce();
   return finalized;
 }

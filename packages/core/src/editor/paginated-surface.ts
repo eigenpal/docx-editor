@@ -793,6 +793,7 @@ export function mountPaginatedSurface(
       inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
       drawingTokenForParagraphForPart: (partName, paragraph) =>
         drawingBundle.drawingTokenForParagraph(paragraph, partName),
+      drawingLayoutEpochForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
     });
     return layoutSemanticDocument(session.part(), revision, {
       measurer,
@@ -810,6 +811,9 @@ export function mountPaginatedSurface(
       inlineDrawingLayout: drawingBundle.bodyContext,
       drawingTokenForParagraph: (paragraph) =>
         drawingBundle.drawingTokenForParagraph(paragraph, session.part().name),
+      // The part-level epoch that lets the section prepass memo trust the tokens above
+      // without re-asking every paragraph on every pass.
+      drawingLayoutEpoch: drawingBundle.cacheTokenForPart(session.part().name),
       ...(notes ? { notes } : {}),
       // The layout context key already folds the mode in (`|rev:<mode>`), so a surface
       // constructed `proposed` never shares cached pages with an `all-markup` one.

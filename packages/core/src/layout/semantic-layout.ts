@@ -25,7 +25,12 @@ import {
   type FieldLinkProjector,
   type HyperlinkProjector,
 } from './field-projection.ts';
-import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
+import {
+  paragraphLayoutKey,
+  registerTableCellBreakKeys,
+  retainLiveBreakKeys,
+  type ParagraphLayoutCache,
+} from './layout-cache.ts';
 import {
   alignSpans,
   alignDrawings,
@@ -133,7 +138,13 @@ import {
   emptyTocSuppressedResultParagraphIds,
   tocFieldChromeParagraphIds,
 } from './toc-layout.ts';
-import { storyDrawingResourceToken, type HeaderFooterStoryLayout } from './hf-layout.ts';
+import { furnitureLayoutContext, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
+import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
+import {
+  attachContentControlBoundaries,
+  contentControlContextToken,
+  withContentControlMetadata,
+} from './content-control-boundary-layout.ts';
 import {
   DEFAULT_SECTION_PROPERTIES,
   enumerateDocumentSectionsFromBlocks,
@@ -146,13 +157,7 @@ import { inheritNotesLayoutInput, layoutSemanticDocumentWithNotes } from './note
 import { noteMarksCacheToken } from './note-projection.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
-  effectiveContentControlLock,
-  unionLayoutBoxes,
   type BlockFragmentRecord,
-  type ContentControlBoundaryRecord,
-  type ContentControlGeometryFragment,
-  type ContentControlLevel,
-  type ContentControlLock,
   type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
@@ -164,19 +169,6 @@ import {
   type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
-import {
-  MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
-  contentControlContentChildren,
-  isContentControl,
-} from '../store/package/content-control-walk.ts';
-import {
-  contentControlPropertiesOf,
-  controlLevelOf,
-  mapContentControlType,
-  parseContentControlLock,
-  propertyChild,
-  propertyVal,
-} from './content-control-properties.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
@@ -235,6 +227,23 @@ export interface SemanticLayoutOptions {
    * nobody touched are never measured again.
    */
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
+  /**
+   * Collector for the cache keys a pass wants retained, instead of retaining directly.
+   * Supplied by the multi-section orchestrator, which retains once over the union —
+   * retaining per section evicted every other section's entries. `false` skips retention
+   * for this pass entirely (the orchestrator strides sweeps). See
+   * {@link retainLiveBreakKeys}.
+   */
+  readonly retainKeys?: Set<string> | false;
+  /**
+   * Part-level drawing projection/resource epoch for the section prepass memo.
+   *
+   * Moves whenever any drawing projection or resource state in the part does, standing in
+   * for the per-paragraph drawing tokens the memo would otherwise have to recompute to
+   * validate. A caller that supplies `drawingTokenForParagraph` without this epoch keeps
+   * the recompute path — the memo must never miss a token move it cannot see.
+   */
+  readonly drawingLayoutEpoch?: string;
   /**
    * Who produced the measurements, folded into every cache key.
    *
@@ -436,6 +445,26 @@ function listTokenForTableBlock(
 }
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
+
+/**
+ * One section's whole prepass — prepared entries, cache keys, flow keys and document
+ * order — kept on the section's {@link LayoutSession} and reused verbatim while every
+ * input it derives from is unchanged. Stored through the session's opaque `prepass` slot.
+ */
+interface SectionPrepass {
+  readonly bodies: readonly OoxmlElement[];
+  readonly producer: string;
+  readonly contentWidth: number;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+  readonly drawingEpoch: string;
+  readonly prepared: PreparedBlock[];
+  readonly keys: string[];
+  readonly paragraphDocumentOrder: ReadonlyMap<string, number>;
+  readonly keepsNext: boolean[];
+  readonly markerTexts: (string | undefined)[];
+  readonly flowKeys: string[];
+}
 const drawingSourceOrderByContext = new WeakMap<
   InlineDrawingLayoutContext,
   ReadonlyMap<string, number>
@@ -808,24 +837,7 @@ function layoutBlocksPass(
   const pageBottomReserves = options.pageBottomReserves;
   const session = options.session;
   const lineCounterStart = options.lineCounterStart ?? 0;
-  const furnitureContext = furniture
-    ? `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
-      [...furniture.headers]
-        .map(
-          ([variant, story]) =>
-            `h${variant}=${story.flowHeight}@${story.contentKey}${storyDrawingResourceToken(story)}`
-        )
-        .sort()
-        .join(',') +
-      ';' +
-      [...furniture.footers]
-        .map(
-          ([variant, story]) =>
-            `f${variant}=${story.flowHeight}@${story.contentKey}${storyDrawingResourceToken(story)}`
-        )
-        .sort()
-        .join(',')
-    : '';
+  const furnitureContext = furnitureLayoutContext(furniture, headerDistance, footerDistance);
   const flowStartY = options.flowStartY ?? 0;
   const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
   // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
@@ -837,8 +849,19 @@ function layoutBlocksPass(
   const columnRegionBottom = options.columnRegionBottom;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   // Body line ids are paragraph-local, so a changed line count in an earlier section does
-  // not invalidate this section. Geometry, flow start, and document page index still do.
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}|pi:${pageIndexStart}${furnitureContext}${notesReserveKey}${columnsContext}`;
+  // not invalidate this section. Geometry and flow start still do. The document page index
+  // is deliberately NOT here — numbers re-project at finalize and shells renumber at remap;
+  // keying on it re-laid every section below an Enter that added one page. The one real
+  // dependence, page PARITY, is checked by `comparable` through the session parity fields.
+  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
+  const startPageParity = pageIndexStart & 1;
+  /** Set when this pass places an anchored drawing whose geometry reads page parity. */
+  let usedPageParity = false;
+  /** Cell break keys of the table currently laying out, for the retention registry. */
+  let collectingCellBreakKeys: string[] | null = null;
+  const markPageParityRead = (): void => {
+    usedPageParity = true;
+  };
 
   const pages: PageRecord[] = [];
   /**
@@ -981,29 +1004,89 @@ function layoutBlocksPass(
     });
     return entry;
   };
-  const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
-
-  const keys = prepared.map((entry) => entry.key);
-  const paragraphDocumentOrder = paragraphDocumentOrderOf(
-    prepared,
-    contentWidth,
-    styleCascade,
-    displayMode
-  );
-  const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
-  const markerTexts = prepared.map((entry) =>
-    entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
-  );
-  // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
-  // stored under; only `w:keepNext` makes the two differ (§17.3.1.15).
-  const flowKeys = listMarkerFlowKeys(
-    keepNextFlowKeys(keys, (index) => keepsNext[index]!),
-    (index) => markerTexts[index]
-  );
+  // SECTION PREPASS MEMO. Everything derived below is a pure function of the block list
+  // plus the inputs the memo compares, and on a typing pass in a many-section document
+  // every section but the edited one has an IDENTICAL block list — while rebuilding these
+  // arrays anyway made the prepass, not placement, the floor cost of a keystroke.
+  // `drawingLayoutEpoch` stands in for the per-block drawing tokens (the epoch moves
+  // whenever any drawing projection or resource in the part does); a caller that threads
+  // per-paragraph drawing tokens WITHOUT an epoch keeps the recompute path, because the
+  // memo could not see a token move.
+  const drawingEpoch =
+    options.drawingTokenForParagraph === undefined && options.drawingLayoutToken === undefined
+      ? (options.drawingLayoutEpoch ?? '')
+      : (options.drawingLayoutEpoch ?? null);
+  const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
+  const prepassValid =
+    prepassMemo != null &&
+    drawingEpoch !== null &&
+    prepassMemo.drawingEpoch === drawingEpoch &&
+    prepassMemo.producer === producer &&
+    prepassMemo.contentWidth === contentWidth &&
+    prepassMemo.styleCascade === styleCascade &&
+    prepassMemo.listItems === listItems &&
+    prepassMemo.bodies.length === bodies.length &&
+    prepassMemo.bodies.every((block, index) => block === bodies[index]);
+  const prepass: SectionPrepass = prepassValid ? prepassMemo : buildSectionPrepass();
+  function buildSectionPrepass(): SectionPrepass {
+    const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
+    const keys = prepared.map((entry) => entry.key);
+    const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
+    const markerTexts = prepared.map((entry) =>
+      entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
+    );
+    return {
+      bodies,
+      producer,
+      contentWidth,
+      styleCascade,
+      listItems,
+      drawingEpoch: drawingEpoch ?? '',
+      prepared,
+      keys,
+      paragraphDocumentOrder: paragraphDocumentOrderOf(
+        prepared,
+        contentWidth,
+        styleCascade,
+        displayMode
+      ),
+      keepsNext,
+      markerTexts,
+      // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
+      // stored under; only `w:keepNext` and list markers make the two differ (§17.3.1.15).
+      flowKeys: listMarkerFlowKeys(
+        keepNextFlowKeys(keys, (index) => keepsNext[index]!),
+        (index) => markerTexts[index]
+      ),
+    };
+  }
+  if (session && drawingEpoch !== null && !prepassValid) session.prepass = prepass;
+  const { prepared, keys, paragraphDocumentOrder, keepsNext, flowKeys } = prepass;
+  /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
+  const publishRetainedKeys = (): void => {
+    // `false` is the orchestrator saying this pass skips the sweep; a standalone pass asks
+    // its own cache's stride.
+    if (options.retainKeys === false) return;
+    if (options.retainKeys === undefined && cache && !(cache.retentionPassDue?.() ?? true)) {
+      return;
+    }
+    retainLiveBreakKeys(
+      cache,
+      options.retainKeys,
+      keys,
+      prepared.flatMap((entry) => (entry.kind === 'table' ? [entry.table] : []))
+    );
+  };
   const previous = session?.previous ?? null;
   // A geometry or producer change invalidates every checkpoint, because it moves every
-  // break; resuming from one would place new content against a stale flow.
-  const comparable = previous !== null && session !== undefined && session.context === context;
+  // break; resuming from one would place new content against a stale flow. A parity flip
+  // only matters when the previous pass actually read parity (even/odd headers or an
+  // inside/outside-anchored drawing).
+  const comparable =
+    previous !== null &&
+    session !== undefined &&
+    session.context === context &&
+    (!session.parityDependent || session.startPageParity === startPageParity);
   const resumable = columns.count === 1 && comparable;
 
   /** The first paragraph whose layout inputs differ from the previous pass. */
@@ -1049,13 +1132,15 @@ function layoutBlocksPass(
     session.previous = unchanged;
     session.startLineCounter = lineCounterStart;
     session.endLineCounter = translatedEndLineCounter;
+    // `comparable` already required parity equality whenever the session depends on it.
+    session.startPageParity = startPageParity;
     session.stats = {
       placed: 0,
       total: prepared.length,
       reusedPages: previous!.pages.length,
       fullPasses: session.stats.fullPasses,
     };
-    cache?.retain(new Set(keys));
+    publishRetainedKeys();
     return {
       layout: unchanged,
       pages: unchanged.pages,
@@ -1228,6 +1313,7 @@ function layoutBlocksPass(
   > =>
     Object.freeze({
       pageNumber: pageIndexStart + pages.length + 1,
+      onPageParityRead: markPageParityRead,
       pageWidth: geometry.width,
       pageHeight: geometry.height,
       marginLeft: geometry.margin.left,
@@ -1405,11 +1491,16 @@ function layoutBlocksPass(
     measurer,
     cache,
     producer,
+    // Recorded per table node, so retention can name cell entries of tables a later
+    // resumed pass never places.
+    onCellBreakKey: (key) => void collectingCellBreakKeys?.push(key),
     nextLineId: (paragraphId, start, lineIndex, occurrence) => {
       lineCounter += 1;
       return bodyLineId(paragraphId, start, lineIndex, occurrence);
     },
-    pageOccurrenceKey: () => String(pageIndexStart + pages.length),
+    // SECTION-LOCAL page index: the occurrence only disambiguates the same header row
+    // across this section's own pages, and an absolute index went stale on any remap.
+    pageOccurrenceKey: () => String(pages.length),
     styleCascade,
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
@@ -1964,26 +2055,23 @@ function layoutBlocksPass(
 
   let converged = false;
   let convergedAt = prepared.length;
+  /** Whole pages the convergence tail moved by; reused checkpoints shift with it. */
+  let convergedPageDelta = 0;
   for (let index = startIndex; index < prepared.length; index += 1) {
     const entry = prepareBlock(bodies[index]!, columnWidth());
 
     // The flow as it stands BEFORE this block: what a later pass resumes from.
     checkpoints[index] = checkpointNow();
 
-    // CONVERGENCE. Once inside the unchanged tail, if the flow returns to exactly the state
-    // the previous pass was in at this same paragraph, everything after lays out identically
-    // and the rest of the previous layout is appended verbatim.
+    // CONVERGENCE. Once inside the unchanged tail, if the IN-PAGE flow returns to exactly
+    // the state the previous pass was in at this same paragraph — cursor, pending fragments
+    // (compared structurally), anchor state — everything after lays out identically, and the
+    // rest of the previous layout is reused: verbatim when the completed page count also
+    // matches, remapped whole sheets over when it does not.
     //
     // Tested at EVERY paragraph of the unchanged tail, not just its first: an edit puts the
     // flow out of step for the rest of the page it lands on, and the state only comes back
     // into line once the page it disturbed has been completed.
-    //
-    // The fragments still pending must MATCH, because the first reused page contains them —
-    // structurally, since a paragraph re-placed by this pass is a new object even when it
-    // lands exactly where it did before.
-    //
-    // Exact means exact: one page fewer, one point of cursor, or one line id out of step and
-    // every id downstream would differ from a clean pass.
     if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
       const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
       if (
@@ -1991,23 +2079,46 @@ function layoutBlocksPass(
         mark.cursorY === cursorY &&
         mark.previousSpaceAfter === previousSpaceAfter &&
         mark.flowColumnIndex === flowColumnIndex &&
-        mark.pageCount === pages.length &&
         sameFragments(mark.pageFragments, pageFragments) &&
         sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings) &&
         // A flow that still owes the next page a drawing is not one that owes it nothing.
         sameAnchoredDrawings(mark.deferredAnchoredDrawings, deferredAnchoredDrawings) &&
         sameDeferCounts(mark.anchorPageDeferCounts, anchorPageDeferCounts)
       ) {
-        const tail = previous!.pages.slice(mark.pageCount);
-        pages.push(...tail);
-        reusedPages += tail.length;
-        converged = true;
-        convergedAt = index;
-        // Line ids are paragraph-local, so a changed line count before this join does not
-        // invalidate the tail. Still carry the tail's line COUNT so a multi-section
-        // orchestrator receives the correct terminal count for this revision.
-        lineCounter += session.endLineCounter - mark.lineCounter;
-        break;
+        // The in-page flow matches. At delta 0 the previous pages are appended by identity;
+        // at a nonzero delta the tail is identical content `delta` sheets away and is reused
+        // through `remapPage`, gated by `convergenceTailShiftAllowed`.
+        const delta = pages.length - mark.pageCount;
+        const shiftable = convergenceTailShiftAllowed({
+          delta,
+          titlePage: furniture?.titlePage === true,
+          evenAndOddHeaders: furniture?.evenAndOddHeaders === true,
+          parityDependent: session.parityDependent,
+          usedPageParity,
+          markPageCount: mark.pageCount,
+          hasNoteReserves: pageBottomReserves !== undefined,
+          hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
+        });
+        if (shiftable) {
+          const tail =
+            delta === 0
+              ? previous!.pages.slice(mark.pageCount)
+              : previous!.pages
+                  .slice(mark.pageCount)
+                  .map((page, offset) =>
+                    remapPage(page, pages.length + offset, pageBox(pages.length + offset).y)
+                  );
+          pages.push(...tail);
+          reusedPages += tail.length;
+          converged = true;
+          convergedAt = index;
+          convergedPageDelta = delta;
+          // Line ids are paragraph-local, so a changed line count before this join does not
+          // invalidate the tail. Still carry the tail's line COUNT so a multi-section
+          // orchestrator receives the correct terminal count for this revision.
+          lineCounter += session.endLineCounter - mark.lineCounter;
+          break;
+        }
       }
     }
 
@@ -2015,7 +2126,13 @@ function layoutBlocksPass(
 
     if (entry.kind === 'table') {
       previousSpaceAfter = 0;
-      layoutTableInFlow(entry.table);
+      collectingCellBreakKeys = [];
+      try {
+        layoutTableInFlow(entry.table);
+        registerTableCellBreakKeys(entry.table, collectingCellBreakKeys);
+      } finally {
+        collectingCellBreakKeys = null;
+      }
       continue;
     }
 
@@ -2720,20 +2837,37 @@ function layoutBlocksPass(
   // Retain by the keys of every paragraph in the DOCUMENT, not just those this pass
   // re-placed: a resumed pass never visits the prefix, and evicting its entries would make
   // the next full pass measure the whole document again.
-  cache?.retain(new Set(keys));
+  publishRetainedKeys();
   const layout: SemanticLayout = { revision, pages };
   if (session) {
     session.previous = layout;
     // A converged pass stops early, so the tail's checkpoints were never recomputed. The
-    // previous pass's remain valid precisely because the flow matched at the join.
+    // previous pass's remain valid precisely because the flow matched at the join — with
+    // their completed-page counts moved by however many sheets the reused tail moved.
     session.checkpoints = converged
       ? [
           ...checkpoints.slice(0, convergedAt),
-          ...session.checkpoints.slice(convergedAt + (session.keys.length - prepared.length)),
+          ...session.checkpoints
+            .slice(convergedAt + (session.keys.length - prepared.length))
+            .map((checkpoint) =>
+              convergedPageDelta === 0
+                ? checkpoint
+                : { ...checkpoint, pageCount: checkpoint.pageCount + convergedPageDelta }
+            ),
         ]
       : checkpoints;
     session.keys = flowKeys;
     session.context = context;
+    // Sticky whenever any part of the previous layout was reused: a resumed pass never
+    // re-places the prefix and a converged pass never re-places the tail, so their
+    // parity-reading anchors could not fire `onPageParityRead` this pass. Only a pass that
+    // placed EVERYTHING (full start, no convergence) may clear the flag.
+    const passParityDependent = usedPageParity || furniture?.evenAndOddHeaders === true;
+    session.parityDependent =
+      startIndex === 0 && !converged
+        ? passParityDependent
+        : session.parityDependent || passParityDependent;
+    session.startPageParity = startPageParity;
     session.startLineCounter = lineCounterStart;
     session.endLineCounter = lineCounter;
     session.endCursorY = endCursorY;
@@ -2872,603 +3006,12 @@ function layoutBlocksWithGeometry(
   return balancedResult(final);
 }
 
-// ---------------------------------------------------------------------------------------
-// Content-control boundary records
-// ---------------------------------------------------------------------------------------
-
-/**
- * Fingerprint of every control wrapper's chrome metadata — not its content.
- *
- * Changing alias/tag/lock/type/placeholder/binding without touching nested paragraphs still
- * changes this token, which is folded into the layout producer.
- */
-export function contentControlContextToken(part: OoxmlPart): string {
-  // Parts are immutable (edits publish a new part object), so the token is a pure function
-  // of the part reference. Without the memo this whole-tree walk ran on EVERY layout pass —
-  // including no-change passes that reuse every page.
-  const cached = contentControlContextTokens.get(part);
-  if (cached !== undefined) return cached;
-  const token = computeContentControlContextToken(part);
-  contentControlContextTokens.set(part, token);
-  return token;
-}
-
-const contentControlContextTokens = new WeakMap<OoxmlPart, string>();
-const contentControlSubtreeTokens = new WeakMap<OoxmlElement, string>();
-
-function computeContentControlContextToken(part: OoxmlPart): string {
-  const tokenOf = (node: OoxmlNode, depth: number): string => {
-    if (node.kind === 'textValue') return '';
-    // Paragraph/table nodes are immutable and structurally shared across text edits. Cache
-    // their complete depth-zero result so a new part revision does not re-walk every run.
-    if (depth === 0 && (node.kind === 'paragraph' || node.kind === 'table')) {
-      const cached = contentControlSubtreeTokens.get(node);
-      if (cached !== undefined) return cached;
-    }
-    let token: string;
-    if (isContentControl(node)) {
-      if (depth >= MAX_SDT_NESTING) return '';
-      const properties = contentControlPropertiesOf(node);
-      const own = [
-        node.id,
-        propertyVal(properties, 'alias') ?? '',
-        propertyVal(properties, 'tag') ?? '',
-        parseContentControlLock(propertyVal(properties, 'lock')),
-        mapContentControlType(properties),
-        propertyChild(properties, 'showingPlcHdr') ? '1' : '0',
-        propertyChild(properties, 'dataBinding') ? '1' : '0',
-      ].join(':');
-      const nested = contentControlContentChildren(node)
-        .map((inner) => tokenOf(inner, depth + 1))
-        .filter((entry) => entry.length > 0);
-      token = [own, ...nested].join('|');
-    } else {
-      token = node.children
-        .map((child) => tokenOf(child, depth))
-        .filter((entry) => entry.length > 0)
-        .join('|');
-    }
-    if (depth === 0 && (node.kind === 'paragraph' || node.kind === 'table')) {
-      contentControlSubtreeTokens.set(node, token);
-    }
-    return token;
-  };
-  return tokenOf(part.root, 0);
-}
-
-/** Addressable UTF-16 length of an inline node — mirrors the store / layout offset model. */
-function addressableInlineLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return 0;
-  if (node.kind === 'generic') return 0;
-  if (isContentControl(node)) {
-    let total = 0;
-    for (const inner of contentControlContentChildren(node))
-      total += addressableInlineLength(inner);
-    return total;
-  }
-  let total = 0;
-  for (const child of node.children) total += addressableInlineLength(child);
-  return total;
-}
-
-interface CollectedControl {
-  readonly control: OoxmlElement;
-  readonly nestingDepth: number;
-  readonly lockStack: readonly ContentControlLock[];
-  readonly level: ContentControlLevel;
-  readonly paragraphId?: string;
-  readonly range?: { readonly start: number; readonly end: number };
-  readonly blockIds: readonly string[];
-}
-
-function collectControls(part: OoxmlPart): CollectedControl[] {
-  const out: CollectedControl[] = [];
-
-  const collectBlocks = (nodes: readonly OoxmlNode[], into: string[]): void => {
-    for (const child of nodes) {
-      if (child.kind === 'paragraph' || child.kind === 'table') {
-        into.push(child.id);
-        continue;
-      }
-      if (isContentControl(child)) {
-        collectBlocks(contentControlContentChildren(child), into);
-        continue;
-      }
-      if (child.kind === 'tableRow' || child.kind === 'tableCell') {
-        collectBlocks(child.children, into);
-      }
-    }
-  };
-
-  const walkInline = (
-    nodes: readonly OoxmlNode[],
-    paragraphId: string,
-    offset: number,
-    depth: number,
-    lockStack: readonly ContentControlLock[]
-  ): number => {
-    let cursor = offset;
-    for (const child of nodes) {
-      if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
-      if (isContentControl(child)) {
-        if (depth >= MAX_SDT_NESTING) {
-          cursor += addressableInlineLength(child);
-          continue;
-        }
-        const properties = contentControlPropertiesOf(child);
-        const lock = parseContentControlLock(propertyVal(properties, 'lock'));
-        const nextStack = [...lockStack, lock];
-        const start = cursor;
-        const end = walkInline(
-          contentControlContentChildren(child),
-          paragraphId,
-          cursor,
-          depth + 1,
-          nextStack
-        );
-        out.push({
-          control: child,
-          nestingDepth: depth,
-          lockStack: nextStack,
-          level: 'inline',
-          paragraphId,
-          range: { start, end },
-          blockIds: [],
-        });
-        cursor = end;
-        continue;
-      }
-      if (child.kind === 'hyperlink') {
-        cursor = walkInline(child.children, paragraphId, cursor, depth, lockStack);
-        continue;
-      }
-      cursor += addressableInlineLength(child);
-    }
-    return cursor;
-  };
-
-  const walkBlocks = (
-    nodes: readonly OoxmlNode[],
-    depth: number,
-    lockStack: readonly ContentControlLock[]
-  ): void => {
-    for (const child of nodes) {
-      if (child.kind === 'textValue') continue;
-      if (child.kind === 'paragraph') {
-        walkInline(child.children, child.id, 0, depth, lockStack);
-        continue;
-      }
-      if (child.kind === 'table') {
-        for (const row of child.children) {
-          if (row.kind !== 'tableRow') continue;
-          walkBlocks([row], depth, lockStack);
-        }
-        continue;
-      }
-      if (child.kind === 'tableRow') {
-        for (const cell of child.children) {
-          if (cell.kind === 'tableCell') walkBlocks(cell.children, depth, lockStack);
-          else if (isContentControl(cell)) walkBlocks([cell], depth, lockStack);
-        }
-        continue;
-      }
-      if (!isContentControl(child)) continue;
-      if (depth >= MAX_SDT_NESTING) continue;
-      const properties = contentControlPropertiesOf(child);
-      const lock = parseContentControlLock(propertyVal(properties, 'lock'));
-      const nextStack = [...lockStack, lock];
-      const level = controlLevelOf(child);
-      const content = contentControlContentChildren(child);
-      if (level === 'inline') {
-        // Inline at body level is malformed; still walk content for nested discovery.
-        walkBlocks(content, depth + 1, nextStack);
-        continue;
-      }
-      const blockIds: string[] = [];
-      collectBlocks(content, blockIds);
-      out.push({
-        control: child,
-        nestingDepth: depth,
-        lockStack: nextStack,
-        level,
-        blockIds,
-      });
-      walkBlocks(content, depth + 1, nextStack);
-    }
-  };
-
-  const body = part.root.children.find((child) => child.kind === 'body');
-  if (body && body.kind !== 'textValue') walkBlocks(body.children, 0, []);
-  return out;
-}
-
-interface PlacedBlockBox {
-  readonly pageIndex: number;
-  readonly blockId: string;
-  readonly box: LayoutBox;
-}
-
-interface PlacedSpanBox {
-  readonly pageIndex: number;
-  readonly paragraphId: string;
-  readonly start: number;
-  readonly end: number;
-  /**
-   * Document-order ordinal of the line this span sits on, so inline-control fragments can
-   * union per LINE. Uniting per page gave a wrapped control one rectangle covering
-   * everything between its first and last line, including neighbouring words.
-   */
-  readonly line: number;
-  /**
-   * The span's TEXT extent: the raw span box dropped by the line's leading. Span boxes sit
-   * at the line-box top, but non-single `w:spacing` puts the whole leading ABOVE the glyphs,
-   * so a boundary built from raw boxes tints the gap over the text and misses the text
-   * itself.
-   */
-  readonly box: LayoutBox;
-}
-
-/**
- * Deterministic work accounting for boundary generation.
- *
- * This is intentionally local to the layout implementation (it is not re-exported by the
- * package entry point). Tests use it to pin resource growth without depending on wall time.
- */
-export interface ContentControlBoundaryWork {
-  geometryEntries: number;
-  blockLookups: number;
-  blockCandidates: number;
-  paragraphLookups: number;
-  spanCandidates: number;
-  pageFragments: number;
-}
-
-interface PlacedGeometryIndex {
-  readonly blocksById: ReadonlyMap<string, readonly PlacedBlockBox[]>;
-  readonly spansByParagraph: ReadonlyMap<string, readonly PlacedSpanBox[]>;
-}
-
-function placedGeometryOf(
-  layout: SemanticLayout,
-  work?: ContentControlBoundaryWork
-): PlacedGeometryIndex {
-  const blocksById = new Map<string, PlacedBlockBox[]>();
-  const spansByParagraph = new Map<string, PlacedSpanBox[]>();
-  const addBlock = (entry: PlacedBlockBox): void => {
-    work && (work.geometryEntries += 1);
-    const entries = blocksById.get(entry.blockId);
-    if (entries) entries.push(entry);
-    else blocksById.set(entry.blockId, [entry]);
-  };
-  const addSpan = (entry: PlacedSpanBox): void => {
-    work && (work.geometryEntries += 1);
-    const entries = spansByParagraph.get(entry.paragraphId);
-    if (entries) entries.push(entry);
-    else spansByParagraph.set(entry.paragraphId, [entry]);
-  };
-  let lineOrdinal = 0;
-  const visit = (pageIndex: number, fragment: BlockFragmentRecord): void => {
-    if (fragment.kind === 'paragraph') {
-      addBlock({ pageIndex, blockId: fragment.paragraphId, box: fragment.box });
-      for (const line of fragment.lines) {
-        const lineKey = lineOrdinal;
-        lineOrdinal += 1;
-        // The glyph band: the box less the spacing on BOTH sides of it. Subtracting only
-        // `leading` was right while every rule put its extra above the text; `auto`/`atLeast`
-        // put it below and leave `leading` at zero, which handed a double-spaced line a
-        // boundary chip covering the whole doubled box instead of the glyphs in it.
-        const textHeight = Math.max(
-          0,
-          line.box.height - line.leading - (line.trailingSpacing ?? 0)
-        );
-        for (const span of line.spans) {
-          addSpan({
-            pageIndex,
-            paragraphId: span.range.paragraphId,
-            start: span.range.start,
-            end: span.range.end,
-            line: lineKey,
-            box: {
-              x: span.box.x,
-              y: span.box.y + line.leading,
-              width: span.box.width,
-              height: textHeight,
-            },
-          });
-        }
-      }
-      return;
-    }
-    addBlock({ pageIndex, blockId: fragment.tableId, box: fragment.box });
-    for (const row of fragment.rows) {
-      if (row.isHeaderRepeat) continue;
-      for (const cell of row.cells) {
-        for (const inner of cell.blocks) visit(pageIndex, inner);
-      }
-    }
-  };
-  for (const page of layout.pages) {
-    for (const fragment of page.fragments) visit(page.index, fragment);
-  }
-  return { blocksById, spansByParagraph };
-}
-
-function fragmentsForBlockControl(
-  blockIds: readonly string[],
-  geometry: PlacedGeometryIndex,
-  work?: ContentControlBoundaryWork
-): ContentControlGeometryFragment[] {
-  const byPage = new Map<number, LayoutBox[]>();
-  const seen = new Set<string>();
-  for (const blockId of blockIds) {
-    if (seen.has(blockId)) continue;
-    seen.add(blockId);
-    work && (work.blockLookups += 1);
-    for (const entry of geometry.blocksById.get(blockId) ?? []) {
-      work && (work.blockCandidates += 1);
-      const list = byPage.get(entry.pageIndex);
-      if (list) list.push(entry.box);
-      else byPage.set(entry.pageIndex, [entry.box]);
-    }
-  }
-  return [...byPage.entries()]
-    .sort(([a], [b]) => a - b)
-    .flatMap(([pageIndex, boxes]) => {
-      const box = unionLayoutBoxes(boxes);
-      return box ? [{ pageIndex, box }] : [];
-    });
-}
-
-function fragmentsForInlineControl(
-  paragraphId: string,
-  range: { readonly start: number; readonly end: number },
-  geometry: PlacedGeometryIndex,
-  work?: ContentControlBoundaryWork
-): ContentControlGeometryFragment[] {
-  work && (work.paragraphLookups += 1);
-  const placed = geometry.spansByParagraph.get(paragraphId) ?? [];
-  // Grouped per LINE, not per page: a wrapped control publishes one fragment per line it
-  // touches, so chrome never paints a union rectangle over the words beside it.
-  const byLine = new Map<number, { pageIndex: number; boxes: LayoutBox[] }>();
-  // Paragraph spans are emitted in source-range order. Binary search skips all spans ending
-  // before this control, so sibling controls do not repeatedly scan the paragraph prefix.
-  let low = 0;
-  let high = placed.length;
-  while (low < high) {
-    work && (work.spanCandidates += 1);
-    const middle = low + ((high - low) >> 1);
-    const beforeStart =
-      range.start === range.end
-        ? placed[middle]!.end < range.start
-        : placed[middle]!.end <= range.start;
-    if (beforeStart) low = middle + 1;
-    else high = middle;
-  }
-  for (let index = low; index < placed.length; index += 1) {
-    const span = placed[index]!;
-    work && (work.spanCandidates += 1);
-    if (span.end <= range.start) continue;
-    if (span.start >= range.end) break;
-    const group = byLine.get(span.line);
-    if (group) group.boxes.push(span.box);
-    else byLine.set(span.line, { pageIndex: span.pageIndex, boxes: [span.box] });
-  }
-  // Empty range (empty control): fall back to a zero-width box at the caret when a span
-  // touches the insertion point, otherwise leave fragments empty.
-  if (byLine.size === 0 && range.start === range.end) {
-    for (let index = low; index < placed.length; index += 1) {
-      const span = placed[index]!;
-      work && (work.spanCandidates += 1);
-      if (span.start > range.start) break;
-      if (range.start > span.end) continue;
-      const x =
-        span.start === span.end
-          ? span.box.x
-          : span.box.x +
-            (span.box.width * (range.start - span.start)) / Math.max(1, span.end - span.start);
-      return [
-        { pageIndex: span.pageIndex, box: { x, y: span.box.y, width: 0, height: span.box.height } },
-      ];
-    }
-  }
-  // Line ordinals are assigned in document order, so sorting by line also sorts by page.
-  return [...byLine.entries()]
-    .sort(([a], [b]) => a - b)
-    .flatMap(([, group]) => {
-      const box = unionLayoutBoxes(group.boxes);
-      return box ? [{ pageIndex: group.pageIndex, box }] : [];
-    });
-}
-
-function boundaryRecordOf(
-  collected: CollectedControl,
-  geometry: PlacedGeometryIndex,
-  work?: ContentControlBoundaryWork
-): ContentControlBoundaryRecord {
-  const properties = contentControlPropertiesOf(collected.control);
-  const alias = propertyVal(properties, 'alias');
-  const tag = propertyVal(properties, 'tag');
-  const lock = collected.lockStack[collected.lockStack.length - 1] ?? 'unlocked';
-  const fragments =
-    collected.level === 'inline' && collected.paragraphId && collected.range
-      ? fragmentsForInlineControl(collected.paragraphId, collected.range, geometry, work)
-      : fragmentsForBlockControl(collected.blockIds, geometry, work);
-  return {
-    id: collected.control.id,
-    ...(alias !== undefined ? { alias } : {}),
-    ...(tag !== undefined ? { tag } : {}),
-    controlType: mapContentControlType(properties),
-    lock,
-    effectiveLock: effectiveContentControlLock(collected.lockStack),
-    placeholder: propertyChild(properties, 'showingPlcHdr') !== undefined,
-    bound: propertyChild(properties, 'dataBinding') !== undefined,
-    nestingDepth: collected.nestingDepth,
-    level: collected.level,
-    fragments,
-  };
-}
-
-function sameGeometryFragments(
-  left: readonly ContentControlGeometryFragment[],
-  right: readonly ContentControlGeometryFragment[]
-): boolean {
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    const a = left[index]!;
-    const b = right[index]!;
-    if (a === b) continue;
-    if (a.pageIndex !== b.pageIndex) return false;
-    if (
-      a.box.x !== b.box.x ||
-      a.box.y !== b.box.y ||
-      a.box.width !== b.box.width ||
-      a.box.height !== b.box.height
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function sameBoundaryRecord(
-  left: ContentControlBoundaryRecord,
-  right: ContentControlBoundaryRecord
-): boolean {
-  return (
-    left.id === right.id &&
-    left.alias === right.alias &&
-    left.tag === right.tag &&
-    left.controlType === right.controlType &&
-    left.lock === right.lock &&
-    left.effectiveLock === right.effectiveLock &&
-    left.placeholder === right.placeholder &&
-    left.bound === right.bound &&
-    left.nestingDepth === right.nestingDepth &&
-    left.level === right.level &&
-    sameGeometryFragments(left.fragments, right.fragments)
-  );
-}
-
-function sameBoundaryList(
-  left: readonly ContentControlBoundaryRecord[] | undefined,
-  right: readonly ContentControlBoundaryRecord[]
-): boolean {
-  if (!left) return right.length === 0;
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index += 1) {
-    if (!sameBoundaryRecord(left[index]!, right[index]!)) return false;
-  }
-  return true;
-}
-
-/** Copy layout-level content-control metadata onto a pages/revision shell. */
-function withContentControlMetadata(
-  layout: Pick<SemanticLayout, 'revision' | 'pages'>,
-  source: SemanticLayout
-): SemanticLayout {
-  return {
-    revision: layout.revision,
-    pages: layout.pages,
-    ...(source.contentControls !== undefined ? { contentControls: source.contentControls } : {}),
-    ...(source.controlContextToken !== undefined
-      ? { controlContextToken: source.controlContextToken }
-      : {}),
-  };
-}
-
-/**
- * Publish content-control boundary records onto a laid-out document.
- *
- * Page fragment identity is preserved when a page's control list is unchanged; metadata-only
- * edits replace the page wrapper so consumers never read a stale `contentControls` array from
- * an identity-reused page. When no page wrapper needs rewriting, the prior `pages` array is
- * kept by reference so a no-change resume still satisfies `layout.pages` identity.
- */
-export function attachContentControlBoundaries(
-  layout: SemanticLayout,
-  part: OoxmlPart,
-  token = contentControlContextToken(part),
-  work?: ContentControlBoundaryWork
-): SemanticLayout {
-  // The token includes every control id, so an empty token proves there are no controls.
-  // Avoid both otherwise-unconditional full walks: collecting controls from the tree and
-  // indexing every placed fragment/span across every page.
-  if (token === '') {
-    const pagesHaveControls = layout.pages.some(
-      (page) => page.contentControls !== undefined && page.contentControls.length > 0
-    );
-    if (
-      !pagesHaveControls &&
-      layout.controlContextToken === token &&
-      sameBoundaryList(layout.contentControls, [])
-    ) {
-      return layout;
-    }
-    const pages = pagesHaveControls
-      ? layout.pages.map((page) =>
-          page.contentControls !== undefined && page.contentControls.length > 0
-            ? { ...page, contentControls: [] }
-            : page
-        )
-      : layout.pages;
-    return {
-      revision: layout.revision,
-      pages,
-      contentControls: [],
-      controlContextToken: token,
-    };
-  }
-
-  const collected = collectControls(part);
-  const geometry = placedGeometryOf(layout, work);
-  const contentControls = collected.map((entry) => boundaryRecordOf(entry, geometry, work));
-  const byPage = new Map<number, ContentControlBoundaryRecord[]>();
-  for (const record of contentControls) {
-    for (const fragment of record.fragments) {
-      work && (work.pageFragments += 1);
-      const list = byPage.get(fragment.pageIndex);
-      const pageRecord = { ...record, fragments: [fragment] };
-      if (list) list.push(pageRecord);
-      else byPage.set(fragment.pageIndex, [pageRecord]);
-    }
-  }
-
-  if (
-    layout.controlContextToken === token &&
-    sameBoundaryList(layout.contentControls, contentControls) &&
-    layout.pages.every((page) =>
-      sameBoundaryList(page.contentControls, byPage.get(page.index) ?? [])
-    )
-  ) {
-    return layout;
-  }
-
-  let pagesChanged = false;
-  const mapped = layout.pages.map((page) => {
-    const pageControls = byPage.get(page.index) ?? [];
-    if (sameBoundaryList(page.contentControls, pageControls)) return page;
-    if (pageControls.length === 0 && !page.contentControls) return page;
-    pagesChanged = true;
-    return { ...page, contentControls: pageControls };
-  });
-  const pages = pagesChanged ? mapped : layout.pages;
-
-  if (
-    pages === layout.pages &&
-    layout.controlContextToken === token &&
-    sameBoundaryList(layout.contentControls, contentControls)
-  ) {
-    return layout;
-  }
-
-  return {
-    revision: layout.revision,
-    pages,
-    contentControls,
-    controlContextToken: token,
-  };
-}
-
 export { createFixedMeasurer } from './fixed-measurer.ts';
+
+// Boundary records moved to their own module; re-exported here because the editor facade
+// and the tests import them from the layout entry they always did.
+export {
+  attachContentControlBoundaries,
+  contentControlContextToken,
+  type ContentControlBoundaryWork,
+} from './content-control-boundary-layout.ts';

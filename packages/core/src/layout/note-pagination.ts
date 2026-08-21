@@ -156,6 +156,146 @@ export interface NotesLayoutInput {
    * drawing records, which is what a headless caller with no image port wants.
    */
   readonly drawingsForPart?: (ownerPartName: string) => NoteStoryDrawings | undefined;
+  /**
+   * Part-level drawing epoch covering the notes parts, standing in for
+   * {@link drawingsForPart}'s closure in the notes-pass memo (the closure is rebuilt per
+   * pass, so only an epoch can say "the drawing state did not move"). A caller that
+   * supplies `drawingsForPart` without this keeps the rebuild path.
+   */
+  readonly drawingLayoutEpoch?: string;
+}
+
+// ---------------------------------------------------------------------------------------
+// Notes-pass memo (session-carried)
+// ---------------------------------------------------------------------------------------
+
+interface NotesPageAttachEntry {
+  readonly allHits: readonly PageRefHit[];
+  readonly marks: NoteMarkContext;
+  readonly attached: PageRecord;
+  readonly reserve: number;
+  readonly reasons: readonly NotePaginationFallbackReason[];
+}
+
+/**
+ * Incremental state for the notes pass, carried on the layout session's opaque `notes`
+ * slot. Validity is layered: the memo object itself is replaced whenever the reference
+ * fingerprint or the notes-input fingerprint moves, so anything read THROUGH a live memo
+ * (the hit array, the mark contexts, per-page results keyed by identical hit/mark
+ * identities) is current by construction.
+ */
+interface NotesPassMemo {
+  readonly hitsFingerprint: string;
+  readonly inputFingerprint: string;
+  readonly allHits: readonly PageRefHit[];
+  readonly provisionalMarks: NoteMarkContext;
+  finalMarks: { readonly sitesFingerprint: string; readonly marks: NoteMarkContext } | null;
+  readonly pageAttach: WeakMap<PageRecord, NotesPageAttachEntry>;
+  readonly pageReserve: WeakMap<
+    PageRecord,
+    {
+      readonly allHits: readonly PageRefHit[];
+      readonly marks: NoteMarkContext;
+      readonly reserve: number;
+      readonly reasons: readonly NotePaginationFallbackReason[];
+    }
+  >;
+}
+
+function fingerprintHits(hits: readonly PageRefHit[]): string {
+  const parts: string[] = [];
+  for (const hit of hits) {
+    parts.push(
+      `${hit.noteKind}|${hit.noteId}|${hit.paragraphId}|${hit.atomOffset}|${hit.customMarkFollows ? 1 : 0}|${hit.sectionIndex}`
+    );
+  }
+  return parts.join(';');
+}
+
+function fingerprintNoteProps(props: {
+  readonly pos: string;
+  readonly numFmt: string;
+  readonly numStart: number;
+  readonly numRestart: string;
+}): string {
+  return `${props.pos},${props.numFmt},${props.numStart},${props.numRestart}`;
+}
+
+/**
+ * Content fingerprint of the notes input, paired with the IDENTITY checks a string cannot
+ * carry (parts, measurer, cache, cascade). Answers null when the input cannot be
+ * fingerprinted safely — drawings threaded without an epoch — which disables the memo.
+ */
+function fingerprintNotesInput(input: NotesLayoutInput): string | null {
+  if (input.drawingsForPart !== undefined && input.drawingLayoutEpoch === undefined) return null;
+  return [
+    input.producer,
+    input.defaultTabStopPt ?? '',
+    input.drawingLayoutEpoch ?? '',
+    fingerprintNoteProps(input.documentFootnoteProps),
+    fingerprintNoteProps(input.documentEndnoteProps),
+    input.footnotePropsBySection.map(fingerprintNoteProps).join(';'),
+    input.endnotePropsBySection.map(fingerprintNoteProps).join(';'),
+  ].join('\0');
+}
+
+/** Identity fields the fingerprint cannot express; compared against the previous input. */
+const notesInputIdentities = new WeakMap<
+  NotesPassMemo,
+  {
+    readonly footnotesPart: OoxmlPart | null;
+    readonly endnotesPart: OoxmlPart | null;
+    readonly measurer: TextMeasurer;
+    readonly cache: unknown;
+    readonly styleCascade: unknown;
+  }
+>();
+
+function notesMemoFor(
+  session: { notes: unknown } | undefined,
+  allHits: readonly PageRefHit[],
+  input: NotesLayoutInput
+): { memo: NotesPassMemo | null; allHits: readonly PageRefHit[]; reused: boolean } {
+  if (!session) return { memo: null, allHits, reused: false };
+  const inputFingerprint = fingerprintNotesInput(input);
+  if (inputFingerprint === null) {
+    session.notes = null;
+    return { memo: null, allHits, reused: false };
+  }
+  const hitsFingerprint = fingerprintHits(allHits);
+  const existing = session.notes as NotesPassMemo | null;
+  if (existing && existing.hitsFingerprint === hitsFingerprint) {
+    const identity = notesInputIdentities.get(existing);
+    if (
+      existing.inputFingerprint === inputFingerprint &&
+      identity &&
+      identity.footnotesPart === input.footnotesPart &&
+      identity.endnotesPart === input.endnotesPart &&
+      identity.measurer === input.measurer &&
+      identity.cache === input.cache &&
+      identity.styleCascade === input.styleCascade
+    ) {
+      return { memo: existing, allHits: existing.allHits, reused: true };
+    }
+  }
+  const fresh: NotesPassMemo = {
+    hitsFingerprint,
+    inputFingerprint,
+    allHits,
+    provisionalMarks: provisionalNoteMarks(allHits, input),
+    finalMarks: null,
+    pageAttach: new WeakMap(),
+    pageReserve: new WeakMap(),
+  };
+  notesInputIdentities.set(fresh, {
+    footnotesPart: input.footnotesPart,
+    endnotesPart: input.endnotesPart,
+    measurer: input.measurer,
+    cache: input.cache,
+    styleCascade: input.styleCascade,
+  });
+  session.notes = fresh;
+  return { memo: fresh, allHits, reused: false };
 }
 
 /**
@@ -202,9 +342,20 @@ export function fragmentOwnsAtomOffset(
   return atomOffset >= fragment.range.start && atomOffset < fragment.range.end;
 }
 
+/**
+ * Memoized by the fragments array's identity: pages reuse their fragment arrays across
+ * incremental passes, and this flatten runs per page per pass on the ref-collection path.
+ */
+const paragraphFragmentsMemos = new WeakMap<
+  readonly BlockFragmentRecord[],
+  ParagraphFragmentRecord[]
+>();
+
 function paragraphFragmentsOfBlocks(
   blocks: readonly BlockFragmentRecord[]
 ): ParagraphFragmentRecord[] {
+  const cached = paragraphFragmentsMemos.get(blocks);
+  if (cached) return cached;
   const found: ParagraphFragmentRecord[] = [];
   const visit = (list: readonly BlockFragmentRecord[]): void => {
     for (const block of list) {
@@ -219,6 +370,7 @@ function paragraphFragmentsOfBlocks(
     }
   };
   visit(blocks);
+  paragraphFragmentsMemos.set(blocks, found);
   return found;
 }
 
@@ -786,12 +938,47 @@ export function reprojectBodyNoteMarks(
 
   let anyPageChanged = false;
   const pages = layout.pages.map((page) => {
+    // Most pages of a long document carry no note reference at all; their fragment trees
+    // are identity-stable across passes, so the answer memoizes and the reprojection walk
+    // skips them in O(1) instead of visiting every span per keystroke.
+    if (!blocksCarryNoteNav(page.fragments)) return page;
     const fragments = reprojectBodyBlocks(page.fragments, noteMarks);
     if (fragments === page.fragments) return page;
     anyPageChanged = true;
     return { ...page, fragments };
   });
   return anyPageChanged ? { revision: layout.revision, pages } : layout;
+}
+
+/** Whether any span under `blocks` is a projected to-note citation, memoized by identity. */
+const blocksNoteNavMemos = new WeakMap<readonly BlockFragmentRecord[], boolean>();
+
+function blocksCarryNoteNav(blocks: readonly BlockFragmentRecord[]): boolean {
+  const cached = blocksNoteNavMemos.get(blocks);
+  if (cached !== undefined) return cached;
+  let found = false;
+  const visit = (list: readonly BlockFragmentRecord[]): void => {
+    for (const block of list) {
+      if (found) return;
+      if (block.kind === 'paragraph') {
+        for (const line of block.lines) {
+          for (const span of line.spans) {
+            if (span.projected && span.noteNav?.direction === 'to-note') {
+              found = true;
+              return;
+            }
+          }
+        }
+        continue;
+      }
+      for (const row of block.rows) {
+        for (const cell of row.cells) visit(cell.blocks);
+      }
+    }
+  };
+  visit(blocks);
+  blocksNoteNavMemos.set(blocks, found);
+  return found;
 }
 
 function reprojectBodyBlocks(
@@ -1683,12 +1870,15 @@ export function computeFootnoteReserves(
   layout: SemanticLayout,
   allRefs: readonly PageRefHit[],
   input: NotesLayoutInput,
-  noteMarks: NoteMarkContext
+  noteMarks: NoteMarkContext,
+  /** Session-carried notes memo (opaque; owned by this module). */
+  passMemo?: unknown
 ): {
   readonly reserves: ReadonlyMap<number, number>;
   readonly stable: boolean;
   readonly reasons: readonly NotePaginationFallbackReason[];
 } {
+  const memo = (passMemo ?? null) as NotesPassMemo | null;
   const reserves = new Map<number, number>();
   const reasons: NotePaginationFallbackReason[] = [];
   let carry: NoteCarryMap = new Map();
@@ -1708,10 +1898,25 @@ export function computeFootnoteReserves(
       continue;
     }
 
+    // An unchanged page whose refs and marks are the previous pass's exact objects sized
+    // to the same reserve; carry chains are the exception and rebuild.
+    if (memo && carry.size === 0) {
+      const cached = memo.pageReserve.get(page);
+      if (cached && cached.allHits === allRefs && cached.marks === noteMarks) {
+        for (const reason of cached.reasons) reasons.push(reason);
+        if (cached.reserve > 0) {
+          reserves.set(page.index, Math.max(reserves.get(page.index) ?? 0, cached.reserve));
+        }
+        continue;
+      }
+    }
+
     // Column budget for the note stack (separator is added inside buildFootnoteArea).
     // Cap so body retains MIN_FOOTNOTE_BODY_BAND_PT for a referencing line to land.
     const maxArea = Math.max(0, bodyPage.contentBox.height - MIN_FOOTNOTE_BODY_BAND_PT);
 
+    const carryWasEmpty = carry.size === 0;
+    const reasonsBefore = reasons.length;
     const { area, nextCarry } = buildFootnoteArea(
       bodyPage,
       fnRefs,
@@ -1724,6 +1929,14 @@ export function computeFootnoteReserves(
     );
     carry = nextCarry;
     const needed = Math.min(area?.box.height ?? 0, maxArea);
+    if (memo && carryWasEmpty && carry.size === 0) {
+      memo.pageReserve.set(page, {
+        allHits: allRefs,
+        marks: noteMarks,
+        reserve: needed > 0 ? needed : 0,
+        reasons: reasons.slice(reasonsBefore),
+      });
+    }
     // Omit zero entries so a page the citation left does not linger as `0` in the map
     // (convergence compares maps by key set, and body layout treats missing as zero).
     if (needed > 0) {
@@ -1758,8 +1971,14 @@ export function attachNotesToLayout(
   options?: {
     readonly fallbackReasons?: readonly NotePaginationFallbackReason[];
     readonly paragraphSectionIndex?: ReadonlyMap<string, number>;
+    /**
+     * Session-carried notes memo, already validated against `allRefs` and `input`.
+     * Opaque at this boundary; the shape is owned by this module.
+     */
+    readonly memo?: unknown;
   }
 ): NotesAttachResult {
+  const memo = (options?.memo ?? null) as NotesPassMemo | null;
   const reasons: NotePaginationFallbackReason[] = [...(options?.fallbackReasons ?? [])];
   const paragraphSectionIndex = options?.paragraphSectionIndex ?? new Map<string, number>();
   const overflowBudget: NoteOverflowBudget = { remaining: MAX_NOTE_OVERFLOW_PAGES };
@@ -1782,14 +2001,30 @@ export function attachNotesToLayout(
     }
   }
 
-  const noteMarks = buildMarkContext(footnoteSites, endnoteSites, input);
+  // FINAL marks reuse by identity: the sites fingerprint covers note ids, sections, page
+  // assignment and custom-mark flags, so an equal fingerprint under a live memo (whose
+  // lifetime already pins the input) means an identical context.
+  const sitesFingerprint = memo
+    ? [...footnoteSites, ...endnoteSites]
+        .map(
+          (site) =>
+            `${site.noteId}|${site.sectionIndex}|${site.pageIndex ?? ''}|${site.customMarkFollows ? 1 : 0}`
+        )
+        .join(';')
+    : '';
+  let noteMarks: NoteMarkContext;
+  if (memo && memo.finalMarks && memo.finalMarks.sitesFingerprint === sitesFingerprint) {
+    noteMarks = memo.finalMarks.marks;
+  } else {
+    noteMarks = buildMarkContext(footnoteSites, endnoteSites, input);
+    if (memo) memo.finalMarks = { sitesFingerprint, marks: noteMarks };
+  }
 
   let carry: NoteCarryMap = new Map();
   const endnotesBySection = new Map<number, PageRefHit[]>();
   const endnotesDoc: PageRefHit[] = [];
 
   let pages: PageRecord[] = layout.pages.map((page) => {
-    const bodyPage = bodyOnlyPage(page);
     const pageRefs = filterRefsOnPage(page, allRefs, refIndex);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
     const enRefs = pageRefs.filter((r) => r.noteKind === 'endnote');
@@ -1817,9 +2052,24 @@ export function attachNotesToLayout(
       }
     }
 
+    // An unchanged page attaches to the same result as last pass when the hit array and
+    // mark context are the previous pass's exact objects and no continuation chains in or
+    // out of it. The endnote collectors above already ran, so skipping the build here
+    // loses nothing.
+    if (memo && carry.size === 0) {
+      const cached = memo.pageAttach.get(page);
+      if (cached && cached.allHits === allRefs && cached.marks === noteMarks) {
+        for (const reason of cached.reasons) reasons.push(reason);
+        return cached.attached;
+      }
+    }
+
+    const bodyPage = bodyOnlyPage(page);
     const sectionIndex = fnRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
     let footnotes: NoteAreaRecord | undefined;
+    const carryWasEmpty = carry.size === 0;
+    const reasonsBefore = reasons.length;
     if (props.pos === 'pageBottom' || props.pos === 'beneathText') {
       const pageBottomRefs = fnRefs.filter((ref) => {
         const pos = footnotePropsFor(input, ref.sectionIndex).pos;
@@ -1841,11 +2091,17 @@ export function attachNotesToLayout(
 
     // Same rule one level up: a page with no footnote area and nothing to strip is the page
     // it came in as, and saying so is what lets the painter keep its DOM.
-    if (!footnotes) return bodyPage;
-    return {
-      ...bodyPage,
-      footnotes,
-    };
+    const attached = footnotes ? { ...bodyPage, footnotes } : bodyPage;
+    if (memo && carryWasEmpty && carry.size === 0) {
+      memo.pageAttach.set(page, {
+        allHits: allRefs,
+        marks: noteMarks,
+        attached,
+        reserve: 0,
+        reasons: reasons.slice(reasonsBefore),
+      });
+    }
+    return attached;
   });
 
   const pageCountBeforeOverflow = pages.length;
@@ -1968,20 +2224,32 @@ function paragraphSectionIndexOf(
         map.set(block.id, sectionIndex);
         continue;
       }
-      // Tables: walk cell paragraphs lightly (bounded).
-      const walk = (node: OoxmlNode, depth: number): void => {
-        if (depth > 32) return;
-        if (node.kind === 'textValue') return;
-        if (node.kind === 'paragraph') {
-          map.set(node.id, sectionIndex);
-          return;
-        }
-        for (const child of node.children) walk(child, depth + 1);
-      };
-      walk(block, 0);
+      // Tables: nested paragraph ids memoized per immutable table node, so this per-pass
+      // index re-walks only tables an edit replaced.
+      for (const id of tableParagraphIdsOf(block)) map.set(id, sectionIndex);
     }
   }
   return map;
+}
+
+const tableParagraphIdMemos = new WeakMap<OoxmlNode, readonly string[]>();
+
+function tableParagraphIdsOf(table: OoxmlNode): readonly string[] {
+  const cached = tableParagraphIdMemos.get(table);
+  if (cached) return cached;
+  const ids: string[] = [];
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (depth > 32) return;
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      ids.push(node.id);
+      return;
+    }
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  walk(table, 0);
+  tableParagraphIdMemos.set(table, ids);
+  return ids;
 }
 
 /** Drop non-positive heights so missing and zero compare equal. */
@@ -2048,6 +2316,7 @@ export function layoutSemanticDocumentWithNotes<
     session?: {
       previous: SemanticLayout | null;
       multi: unknown;
+      notes: unknown;
       notePageBottomReserves?: ReadonlyMap<number, number> | null;
     };
   },
@@ -2065,8 +2334,14 @@ export function layoutSemanticDocumentWithNotes<
     (optionsWithLists as { displayMode?: RevisionDisplayMode }).displayMode ??
       DEFAULT_REVISION_DISPLAY_MODE
   );
-  const allHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
-  const noteMarks = provisionalNoteMarks(allHits, notesInput);
+  const builtHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
+  // The session memo hands back the PREVIOUS pass's hit array and provisional marks by
+  // identity when their content is unchanged, which is what lets every per-page result
+  // below validate with two identity compares.
+  const notesMemoState = notesMemoFor(optionsWithLists.session, builtHits, notesInput);
+  const notesMemo = notesMemoState.memo;
+  const allHits = notesMemoState.allHits;
+  const noteMarks = notesMemo?.provisionalMarks ?? provisionalNoteMarks(allHits, notesInput);
   const seeded = optionsWithLists.session?.notePageBottomReserves;
   let usedReserves: ReadonlyMap<number, number> = seeded
     ? compactFootnoteReserves(seeded)
@@ -2080,7 +2355,7 @@ export function layoutSemanticDocumentWithNotes<
   const appliedFingerprints = new Set<string>([footnoteReservesFingerprint(usedReserves)]);
 
   for (let attempt = 0; attempt < MAX_NOTE_REFLOW_ATTEMPTS; attempt += 1) {
-    const computed = computeFootnoteReserves(bodyLayout, allHits, notesInput, noteMarks);
+    const computed = computeFootnoteReserves(bodyLayout, allHits, notesInput, noteMarks, notesMemo);
     fallbackReasons = [...computed.reasons];
     // Published pages must reflect the reserves used to produce them — not a later map.
     if (computed.stable && footnoteReservesEqual(computed.reserves, usedReserves)) {
@@ -2125,6 +2400,7 @@ export function layoutSemanticDocumentWithNotes<
   const attached = attachNotesToLayout(bodyLayout, allHits, notesInput, {
     fallbackReasons,
     paragraphSectionIndex,
+    memo: notesMemo,
   });
   if (optionsWithLists.session) {
     optionsWithLists.session.previous = attached.layout;

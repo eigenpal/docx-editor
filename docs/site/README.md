@@ -39,12 +39,61 @@ the sidebar label).
 The site injects these — use them without imports, and don't invent new ones
 (the sync validates against this whitelist):
 
-`DemoPlayground`, `ReadOnlyDemo`, `ModeToggleDemo`, `ToolbarCustomDemo`,
-`AuthorDemo`, `UIControlsDemo`, `AgentChatDemo`, `ToolbarLayoutDiagram`,
-`DualRenderingDiagram`, `DataFlowDiagram`, `PluginHostDiagram`,
-`PluginLifecycleDiagram`, `PackageStats`, `FeatureMatrix`, `FeatureSummary`,
-`FeatureBadge`,
+`FrameworkTabs`, `Framework`, `DemoPlayground`, `ReadOnlyDemo`, `ModeToggleDemo`,
+`ToolbarCustomDemo`, `AuthorDemo`, `UIControlsDemo`, `AgentChatDemo`,
+`ToolbarLayoutDiagram`, `DualRenderingDiagram`, `DataFlowDiagram`,
+`PluginHostDiagram`, `PluginLifecycleDiagram`, `PackageStats`, `FeatureMatrix`,
+`FeatureSummary`, `FeatureBadge`,
 plus the Fumadocs defaults (`Callout`, `Cards`/`Card`, `Tabs`, `Steps`, …).
+
+### Framework switch
+
+A page that shows the same example in both adapters wraps the two versions in
+`FrameworkTabs`, React first:
+
+````mdx
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor document={bytes} />
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes" />
+```
+
+</Framework>
+</FrameworkTabs>
+````
+
+Blank lines around the fences are required, or MDX treats the block as JSX. A
+`Framework` panel can hold prose and tables too, not only code.
+
+The switch sits in the code block's top-right corner, beside the copy button.
+When a panel opens with something other than a code block — a table, or a
+paragraph — pass `variant="block"` to give the switch its own right-aligned row
+instead, so it does not sit on top of the content:
+
+```mdx
+<FrameworkTabs variant="block">
+```
+
+Prefer moving a lead-in sentence below its snippet over reaching for
+`variant="block"`: a panel that opens with its code block keeps the switch
+anchored where readers expect it.
+
+One choice serves the whole site: the reader's pick is shared by every switch on
+the page and stored in `localStorage`, so it survives navigation and matches the
+switch on the marketing pages. Both panels render, and the inactive one is
+hidden, so crawlers and `llms.md` still get both versions.
+
+Use the switch only when both versions exist. Never leave a reader on an empty
+tab: write the second version, or drop the switch and say which adapter the page
+covers.
 
 `FeatureMatrix`/`FeatureSummary`/`FeatureBadge` render `data/word-features.ts`
 (also synced by the site). Update that data file when feature status changes;

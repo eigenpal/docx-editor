@@ -7,13 +7,13 @@ order: 60
 
 <PackageStats name="@docx-editor.dev/i18n" />
 
-Locale data for the editor UI. The React adapter consumes it through the `i18n` prop.
+Locale data for the editor UI. Both adapters consume it through the `i18n` prop.
 
 ```bash
 npm install @docx-editor.dev/i18n
 ```
 
-You usually don't install this directly. `-react` pulls it in transitively. Install it explicitly only when you're using the locale data outside the editor (a custom toolbar, a search dropdown, that kind of thing).
+You usually don't install this directly. The adapter you install pulls it in transitively. Install it explicitly only when you're using the locale data outside the editor (a custom toolbar, a search dropdown, that kind of thing).
 
 ## Available locales
 
@@ -43,7 +43,10 @@ ls node_modules/@docx-editor.dev/i18n/
 
 ## Wiring into the editor
 
-Pass the locale object to the `i18n` prop. React:
+Pass the locale object to the `i18n` prop.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -52,7 +55,27 @@ import { pl } from '@docx-editor.dev/i18n';
 <DocxEditor document={bytes} i18n={pl} />;
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { pl } from '@docx-editor.dev/i18n';
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :i18n="pl" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 For several editors, or for chrome parts you compose yourself, put the catalog in context once instead:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
@@ -63,7 +86,30 @@ import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
 </LocaleProvider>;
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, DocxEditorToolbar, LocaleProvider } from '@docx-editor.dev/vue';
+import { pl } from '@docx-editor.dev/i18n';
+</script>
+
+<template>
+  <LocaleProvider :i18n="pl">
+    <DocxEditorToolbar />
+    <DocxEditor :document="bytes" />
+  </LocaleProvider>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 Either way the catalog merges over English, so a locale that has not translated every key falls back per key rather than per language. Providers nest: an inner one, or an `i18n` prop under an outer provider, overrides only the keys it names. Chrome you write from scratch reads the same catalog through `useTranslation()`:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useTranslation } from '@docx-editor.dev/react';
@@ -72,8 +118,26 @@ const { t } = useTranslation();
 <button>{t('formattingBar.bold')}</button>;
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useTranslation } from '@docx-editor.dev/vue';
+
+const { t } = useTranslation();
+</script>
+
+<template>
+  <button type="button">{{ t('formattingBar.bold') }}</button>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 ## Next steps
 
 - [Contributing a translation](/docs/2.x/i18n/contributing): add or improve a locale with one JSON file
 - [i18n API reference](/docs/2.x/api/i18n)
-- [React API reference](/docs/2.x/api/react)
+- [React API reference](/docs/2.x/api/react) and [Vue API reference](/docs/2.x/api/vue)

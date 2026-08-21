@@ -88,22 +88,37 @@ interface ScenarioComparison {
   cacheEvictionsChange: number;
 }
 
+interface ScenarioTarget {
+  paragraphId: string;
+  /** The immediately following top-level body paragraph, for join scenarios. */
+  nextParagraphId: string;
+}
+
 interface Scenario {
   name: string;
   fraction: number;
-  op(paragraphId: string): TreeDocOp;
+  /**
+   * How the target paragraph is chosen. `any-paragraph` picks from every paragraph in
+   * document order (the historical behaviour, kept so existing gate counters stand);
+   * `adjacent-body-pair` picks a plain top-level body paragraph whose next sibling is
+   * also one, so split/join ops address real Enter/Backspace sites.
+   */
+  target: 'any-paragraph' | 'adjacent-body-pair';
+  op(target: ScenarioTarget): TreeDocOp;
 }
 
 const SCENARIOS: readonly Scenario[] = [
   {
     name: 'steady-middle-text',
     fraction: 0.5,
-    op: (paragraphId) => ({ op: 'insertText', paragraphId, offset: 0, text: 'X' }),
+    target: 'any-paragraph',
+    op: ({ paragraphId }) => ({ op: 'insertText', paragraphId, offset: 0, text: 'X' }),
   },
   {
     name: 'wrap-middle-text',
     fraction: 0.5,
-    op: (paragraphId) => ({
+    target: 'any-paragraph',
+    op: ({ paragraphId }) => ({
       op: 'insertText',
       paragraphId,
       offset: 0,
@@ -113,12 +128,48 @@ const SCENARIOS: readonly Scenario[] = [
   {
     name: 'forced-middle-reflow',
     fraction: 0.5,
-    op: (paragraphId) => ({ op: 'insertHardBreak', paragraphId, offset: 0 }),
+    target: 'any-paragraph',
+    op: ({ paragraphId }) => ({ op: 'insertHardBreak', paragraphId, offset: 0 }),
   },
   {
     name: 'forced-early-reflow',
     fraction: 0.05,
-    op: (paragraphId) => ({ op: 'insertHardBreak', paragraphId, offset: 0 }),
+    target: 'any-paragraph',
+    op: ({ paragraphId }) => ({ op: 'insertHardBreak', paragraphId, offset: 0 }),
+  },
+  // The two structural edits a keyboard produces constantly: Enter splits the
+  // paragraph at the caret, Backspace at a paragraph start joins it into the
+  // one before. Both change the BLOCK COUNT, which is what distinguishes them
+  // from every scenario above.
+  {
+    name: 'enter-split-middle',
+    fraction: 0.5,
+    target: 'adjacent-body-pair',
+    op: ({ paragraphId }) => ({ op: 'splitParagraph', paragraphId, offset: 10 }),
+  },
+  {
+    name: 'backspace-join-middle',
+    fraction: 0.5,
+    target: 'adjacent-body-pair',
+    op: ({ paragraphId, nextParagraphId }) => ({
+      op: 'joinParagraphs',
+      firstId: paragraphId,
+      secondId: nextParagraphId,
+    }),
+  },
+  {
+    name: 'enter-split-early',
+    fraction: 0.05,
+    target: 'adjacent-body-pair',
+    op: ({ paragraphId }) => ({ op: 'splitParagraph', paragraphId, offset: 10 }),
+  },
+  // Ctrl+Enter: adds one whole sheet, so every page below moves without changing.
+  // The scenario that proves whole-page tail reuse (a shifted tail must not re-place).
+  {
+    name: 'page-break-middle',
+    fraction: 0.5,
+    target: 'adjacent-body-pair',
+    op: ({ paragraphId }) => ({ op: 'insertPageBreak', paragraphId, offset: 0 }),
   },
 ];
 
@@ -184,6 +235,35 @@ function paragraphsOf(part: OoxmlPart): OoxmlParagraphNode[] {
   return paragraphs;
 }
 
+/** Top-level body paragraph pairs eligible as Enter/Backspace sites. */
+function adjacentBodyPairsOf(part: OoxmlPart): ScenarioTarget[] {
+  const textLengthOf = (node: OoxmlNode): number => {
+    if (node.kind === 'textValue') return node.value.length;
+    return (node.children ?? []).reduce((sum, child) => sum + textLengthOf(child), 0);
+  };
+  const carriesSectionBreak = (node: OoxmlNode): boolean => {
+    if (node.kind === 'textValue') return false;
+    if ('localName' in node && node.localName === 'sectPr') return true;
+    return (node.children ?? []).some(carriesSectionBreak);
+  };
+  const body = part.root.children.find(
+    (child) => child.kind !== 'textValue' && 'localName' in child && child.localName === 'body'
+  );
+  if (!body || body.kind === 'textValue') return [];
+  const pairs: ScenarioTarget[] = [];
+  const blocks = body.children;
+  for (let index = 0; index + 1 < blocks.length; index += 1) {
+    const current = blocks[index]!;
+    const next = blocks[index + 1]!;
+    if (current.kind !== 'paragraph' || next.kind !== 'paragraph') continue;
+    if (carriesSectionBreak(current) || carriesSectionBreak(next)) continue;
+    // The split offset must land inside real text so both halves carry content.
+    if (textLengthOf(current) < 12) continue;
+    pairs.push({ paragraphId: current.id, nextParagraphId: next.id });
+  }
+  return pairs;
+}
+
 function furnitureFor(pkg: OoxmlPackage, part: OoxmlPart): readonly (PageFurniture | undefined)[] {
   const sections = enumerateDocumentSections(part);
   const bySection = resolveHeaderFooterPartsBySection(pkg);
@@ -213,6 +293,7 @@ const normalizedPackage = normalizedStore.currentPackage();
 const normalizedPart = normalizedStore.bodyStore().part;
 const paragraphs = paragraphsOf(normalizedPart);
 if (paragraphs.length === 0) throw new Error('fixture has no paragraphs');
+const bodyPairs = adjacentBodyPairsOf(normalizedPart);
 const furniture = furnitureFor(normalizedPackage, normalizedPart);
 
 function summarize(values: readonly number[]): TimingSummary {
@@ -243,11 +324,27 @@ function sameWork(a: WorkSummary, b: WorkSummary): boolean {
 }
 
 function runScenario(scenario: Scenario): ScenarioResult {
-  const paragraphIndex = Math.min(
-    paragraphs.length - 1,
-    Math.max(0, Math.floor((paragraphs.length - 1) * scenario.fraction))
-  );
-  const paragraphId = paragraphs[paragraphIndex]!.id;
+  let paragraphIndex: number;
+  let target: ScenarioTarget;
+  if (scenario.target === 'adjacent-body-pair') {
+    if (bodyPairs.length === 0) throw new Error(`${scenario.name}: fixture has no eligible pairs`);
+    const pairIndex = Math.min(
+      bodyPairs.length - 1,
+      Math.max(0, Math.floor((bodyPairs.length - 1) * scenario.fraction))
+    );
+    target = bodyPairs[pairIndex]!;
+    paragraphIndex = paragraphs.findIndex((node) => node.id === target.paragraphId);
+  } else {
+    paragraphIndex = Math.min(
+      paragraphs.length - 1,
+      Math.max(0, Math.floor((paragraphs.length - 1) * scenario.fraction))
+    );
+    target = {
+      paragraphId: paragraphs[paragraphIndex]!.id,
+      nextParagraphId: paragraphs[paragraphIndex]!.id,
+    };
+  }
+  const paragraphId = target.paragraphId;
   const transactionTimes: number[] = [];
   const layoutTimes: number[] = [];
   const totalTimes: number[] = [];
@@ -275,7 +372,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
     });
 
     const transactionStart = performance.now();
-    const transaction = bodyStore.transact((ctx) => ctx.apply(scenario.op(paragraphId)));
+    const transaction = bodyStore.transact((ctx) => ctx.apply(scenario.op(target)));
     const transactionMs = performance.now() - transactionStart;
     if (!transaction.ok || transaction.change === null) {
       throw new Error(`${scenario.name}: edit did not commit`);

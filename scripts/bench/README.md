@@ -24,6 +24,23 @@ bun scripts/create-synthetic-long-edit-fixture.mjs
 bun scripts/create-synthetic-long-edit-fixture.mjs --check
 ```
 
+There are also two deterministic 500+ page fixtures for the structural-edit scenarios
+(Enter, Backspace-join, Ctrl+Enter). They are generated on demand — too large to commit —
+and their SHA-256 is pinned by the gates, so regeneration is byte-identical:
+
+```bash
+bun scripts/create-synthetic-massive-edit-fixture.mjs
+bun run bench:edit e2e/fixtures/generated/synthetic-massive-multisection.docx
+bun run bench:edit e2e/fixtures/generated/synthetic-massive-singlesection.docx
+```
+
+`synthetic-massive-multisection.docx` is the repeated-copy shape a user produces by pasting
+a template until the document passes 500 pages: 105 sections, ~8.4k top-level blocks,
+repeated multi-page tables with `w:tblHeader` rows. `synthetic-massive-singlesection.docx`
+is the same content as one section with chapter-style `w:pageBreakBefore` headings. Both
+can also be loaded in the demo (`?fixture=synthetic-massive-multisection.docx`) after
+copying them into `e2e/fixtures/`.
+
 The command runs fixed edits at fixed early and middle-document paragraphs against a fixed
 text measurer. Every measured round starts from a fresh store and a warmed layout session, so
 edits do not accumulate between samples. It reports two kinds of evidence:
@@ -358,3 +375,61 @@ on a table holding tens of thousands of tracked markers), and the per-ROOT cache
 bounded to recent roots (`recent-root-cache.ts`) so the undo history's retained snapshots
 do not each pin an O(document) derived index — per-NODE memos are exempt, because
 unchanged nodes are shared across revisions.
+
+## 2026-08-20 structural-edit pass — results
+
+The trigger was a 500+ page document (a template repeated past 500 pages: 105 sections,
+~8.4k blocks, ~17k paragraphs) where one Enter or Backspace re-laid the whole document
+(~1 s of layout per keypress in the browser) while plain typing stayed incremental. Medians
+of 3 runs, Apple Silicon, Bun 1.3.14, fixed measurer, `synthetic-massive-multisection.docx`.
+
+| Scenario                          | Before                          | After                            |
+| --------------------------------- | ------------------------------- | -------------------------------- |
+| `enter-split-middle`              | 587 ms, placed 8400/8400        | 7.5 ms, placed 5, reused 624     |
+| `backspace-join-middle`           | 576 ms, placed 8398/8398        | 7.3 ms, placed 3, reused 624     |
+| `enter-split-early`               | 590 ms, placed 8400/8400        | 7.8 ms, placed 16                |
+| `page-break-middle`               | (full relayout, +1 page)        | 11.6 ms, placed 43               |
+| `wrap-middle-text`                | 22 ms, cache cold every pass    | 9 ms, cache warm                 |
+| Typing pass (17k-paragraph repro) | layout ~54 ms + transact ~16 ms | layout ~31 ms + transact ~1.6 ms |
+
+What the counters found, and what changed:
+
+1. **The multi-section structure key embedded absolute block bounds**
+   (`multi-section-layout.ts`): a split or join shifts `blockStart`/`blockEndExclusive` of
+   every section after it, so the key changed and EVERY per-section session was thrown
+   away — one Enter re-laid all 105 sections. The bounds are gone from the key; content
+   changes are what the child sessions' own per-block keys detect.
+2. **The per-section context embedded the raw document page index**
+   (`semantic-layout.ts`): an Enter that added one page shifted `pageIndexStart` of every
+   section below, making each of them incomparable and forcing full section relayouts.
+   Page numbers re-project at finalize and page shells renumber at remap, so the index is
+   out of the context; the one real dependence — page PARITY (even/odd headers,
+   inside/outside anchored drawings) — is tracked on the session and checked separately.
+   Table header-repeat line ids switched to section-local page occurrences for the same
+   reason.
+3. **Retention ran per section and evicted every other section's break cache**
+   (`layout-cache.ts`): each section's pass called `retain` with only its own keys, so a
+   multi-section document had a 0% cache hit rate across passes — every structural edit
+   re-measured every paragraph. The orchestrator now retains once over the union
+   (including table-cell keys recorded per table node), entries age out over generations
+   instead of being evicted while live, the LRU cap never evicts the current working set,
+   and the sweep runs on a stride of passes.
+4. **Convergence required an exactly equal completed-page count** (`semantic-layout.ts`):
+   an edit that added or removed a whole page could never reconverge, so everything below
+   re-placed. When the in-page flow state matches at a checkpoint but the page count
+   differs, the unchanged tail is now reused through `remapPage` — same page-relative
+   fragments, new shells `delta` sheets over — gated by `convergenceTailShiftAllowed`
+   (title page, parity, note reserves, wrap exclusion zones refuse the shift).
+5. **Content-control boundaries re-indexed every span of every page per pass**
+   (`content-control-boundary-layout.ts`, extracted from `semantic-layout.ts`): control
+   collection now memoizes per top-level block node, and placed geometry memoizes per
+   page record filtered to the paragraphs controls actually name — a typing pass walks
+   the two pages it rebuilt, not 630.
+6. **Every op's lock resolution walked the whole tree** (`tree-op-content-controls.ts`):
+   `enclosingContentControls` re-descended from the root per target; it now climbs the
+   part's id→parent index. `transact` on the 17k-paragraph document dropped ~10× .
+
+Not changed, deliberately: every convergence guard that must hold exactly (fragment
+signatures, anchor state, defer counts), every content-control lock semantic (the climb
+returns byte-identical chains), and the bench's round-0 oracle — every incremental result
+above is byte-identical to a clean full pass, asserted per scenario on every gate run.

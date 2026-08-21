@@ -213,8 +213,15 @@ describe('the cache and the session compose (tasks 9.2, 9.3)', () => {
     const options = { measurer, geometry: GEOMETRY, cache: cache as never, session };
     layoutSemanticDocument(load(DOCUMENT), 1, options);
     const size = cache.stats.size;
-    layoutSemanticDocument(load(DOCUMENT.replace('paragraph 22 ', 'paragraph X ')), 2, options);
-    expect(cache.stats.size).toBe(size);
+    const edited = load(DOCUMENT.replace('paragraph 22 ', 'paragraph X '));
+    layoutSemanticDocument(edited, 2, options);
+    // The edited paragraph mints one new key; nothing already cached may be evicted.
+    expect(cache.stats.size).toBeGreaterThanOrEqual(size);
+    // The proof: a clean full pass over the edited document misses only the entries the
+    // edit could have invalidated, never the untouched prefix.
+    const missesBefore = cache.stats.misses;
+    layoutSemanticDocument(edited, 3, { measurer, geometry: GEOMETRY, cache: cache as never });
+    expect(cache.stats.misses - missesBefore).toBeLessThanOrEqual(1);
   });
 
   test('together they still produce exactly what a clean pass produces', () => {

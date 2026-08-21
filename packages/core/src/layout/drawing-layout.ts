@@ -491,6 +491,12 @@ export interface DrawingAnchorFrameContext {
   readonly layoutInCell: boolean;
   readonly ownerPartName: string;
   readonly storyKind: DrawingAnchorStoryKind;
+  /**
+   * Called whenever a frame or alignment resolution reads the parity of
+   * {@link pageNumber}. Incremental layout listens so it knows a section's
+   * geometry depends on where in the document its pages start.
+   */
+  readonly onPageParityRead?: () => void;
 }
 
 export interface ResolvedAnchoredPosition {
@@ -531,8 +537,10 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout;
 }
 
-function isOddPage(pageNumber: number): boolean {
-  return pageNumber % 2 === 1;
+/** Every parity read goes through here so the host learns the layout depends on it. */
+function isOddPageOf(ctx: DrawingAnchorFrameContext): boolean {
+  ctx.onPageParityRead?.();
+  return ctx.pageNumber % 2 === 1;
 }
 
 function usesCellLayoutBox(
@@ -568,11 +576,11 @@ function horizontalEdges(
           center: ctx.anchorCharacterX,
         };
       case 'insideMargin':
-        return isOddPage(ctx.pageNumber)
+        return isOddPageOf(ctx)
           ? { left: x, right: x + width, center: x + width / 2 }
           : { left: x + width, right: x + width, center: x + width };
       case 'outsideMargin':
-        return isOddPage(ctx.pageNumber)
+        return isOddPageOf(ctx)
           ? { left: x + width, right: x + width, center: x + width }
           : { left: x, right: x + width, center: x + width / 2 };
       default:
@@ -605,11 +613,11 @@ function horizontalEdges(
     case 'rightMargin':
       return { left: pageRight, right: pageRight, center: pageRight };
     case 'insideMargin':
-      return isOddPage(ctx.pageNumber)
+      return isOddPageOf(ctx)
         ? { left: contentLeft, right: contentLeft, center: contentLeft }
         : { left: contentRight, right: contentRight, center: contentRight };
     case 'outsideMargin':
-      return isOddPage(ctx.pageNumber)
+      return isOddPageOf(ctx)
         ? { left: pageRight, right: pageRight, center: pageRight }
         : { left: pageLeft, right: pageLeft, center: pageLeft };
     default:
@@ -644,11 +652,11 @@ function verticalEdges(
           center: ctx.anchorLineBox.y + ctx.anchorLineBox.height / 2,
         };
       case 'insideMargin':
-        return isOddPage(ctx.pageNumber)
+        return isOddPageOf(ctx)
           ? { top: y, bottom: y + height, center: y + height / 2 }
           : { top: y + height, bottom: y + height, center: y + height };
       case 'outsideMargin':
-        return isOddPage(ctx.pageNumber)
+        return isOddPageOf(ctx)
           ? { top: y + height, bottom: y + height, center: y + height }
           : { top: y, bottom: y + height, center: y + height / 2 };
       default:
@@ -693,11 +701,11 @@ function verticalEdges(
     case 'bottomMargin':
       return { top: pageBottomInner, bottom: pageBottomInner, center: pageBottomInner };
     case 'insideMargin':
-      return isOddPage(ctx.pageNumber)
+      return isOddPageOf(ctx)
         ? { top: contentTop, bottom: contentTop, center: contentTop }
         : { top: contentBottom, bottom: contentBottom, center: contentBottom };
     case 'outsideMargin':
-      return isOddPage(ctx.pageNumber)
+      return isOddPageOf(ctx)
         ? { top: pageBottomSheet, bottom: pageBottomSheet, center: pageBottomSheet }
         : { top: pageTop, bottom: pageTop, center: pageTop };
     default:
@@ -715,7 +723,7 @@ function resolveInsideOutsideHorizontalAlign(
   objectWidth: number,
   ctx: DrawingAnchorFrameContext
 ): number | null {
-  const odd = isOddPage(ctx.pageNumber);
+  const odd = isOddPageOf(ctx);
   if (
     ctx.layoutInCell &&
     ctx.cellBox &&
@@ -737,7 +745,7 @@ function resolveInsideOutsideVerticalAlign(
   objectHeight: number,
   ctx: DrawingAnchorFrameContext
 ): number | null {
-  const odd = isOddPage(ctx.pageNumber);
+  const odd = isOddPageOf(ctx);
   // THE TEXT AREA, deliberately — the opposite choice from `pageBottomInner` two functions up.
   // `inside`/`outside` align WITHIN a band rather than measuring from a page landmark, so on an
   // odd page `inside` is the content box top and `outside` puts the object on the content box

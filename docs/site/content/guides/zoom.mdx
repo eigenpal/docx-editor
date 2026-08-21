@@ -1,6 +1,6 @@
 ---
 title: 'Zoom and fit to screen'
-description: 'Fit the document to the viewport, control the zoom lifecycle from your own UI with the useZoom hook, and let the comments pane shrink the page instead of pushing it off screen.'
+description: 'Fit the document to the viewport, drive the zoom lifecycle from your own UI with useZoom, and let the comments pane shrink the page instead of hiding it.'
 category: 'Guides'
 seoTitle: 'Zoom and fit to screen'
 ---
@@ -17,11 +17,27 @@ Zoom has a value and a mode. The value is the scale the pages paint at; the mode
 | `{ type: 'fit', fit: 'pageWidth' }` | Fit the page width in both directions, so a wide window magnifies the page.                       |
 | `{ type: 'fixed' }`                 | Hold whatever `zoom` is set to. This is the pre-fit behavior.                                     |
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 <DocxEditor document={bytes} />                          {/* auto */}
 <DocxEditor document={bytes} zoomMode={{ type: 'fit', fit: 'pageWidth' }} />
 <DocxEditor document={bytes} zoom={1} zoomMode={{ type: 'fixed' }} />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<!-- auto -->
+<DocxEditor :document="bytes" />
+<DocxEditor :document="bytes" :zoom-mode="{ type: 'fit', fit: 'pageWidth' }" />
+<DocxEditor :document="bytes" :zoom="1" :zoom-mode="{ type: 'fixed' }" />
+```
+
+</Framework>
+</FrameworkTabs>
 
 Passing `zoom` on its own also means fixed, so an app that pinned a scale keeps it.
 
@@ -31,7 +47,10 @@ Setting a level ends the fit. That is what you want from a zoom control: a reade
 
 ## Driving it yourself
 
-`useZoom` is the whole lifecycle in one hook.
+`useZoom` is the whole lifecycle in one call.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useZoom } from '@docx-editor.dev/react';
@@ -55,6 +74,32 @@ function ZoomControl() {
   );
 }
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useZoom } from '@docx-editor.dev/vue';
+
+const { zoom, isFit, auto, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom();
+</script>
+
+<template>
+  <div>
+    <button type="button" :disabled="!canZoomOut" @click="zoomOut">&minus;</button>
+    <span>{{ Math.round(zoom * 100) }}%</span>
+    <button type="button" :disabled="!canZoomIn" @click="zoomIn">+</button>
+    <button type="button" :aria-pressed="isFit" @click="auto">Fit</button>
+  </div>
+</template>
+```
+
+The Vue composable returns computed refs. Destructured bindings unwrap in the template, so
+read them with `.value` only in script code.
+
+</Framework>
+</FrameworkTabs>
 
 | Member                    | What it does                                                                              |
 | ------------------------- | ----------------------------------------------------------------------------------------- |
@@ -81,11 +126,24 @@ There is a width below which that stops helping. The rail takes a fixed 316px wh
 
 Set your own floor if 50% is not where you want it:
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 <DocxEditor document={bytes} zoomMode={{ type: 'fit', fit: 'pageWidth', minZoom: 0.35 }} />
 ```
 
-## Without React
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes" :zoom-mode="{ type: 'fit', fit: 'pageWidth', minZoom: 0.35 }" />
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Without an adapter
 
 Zoom lives in the engine, so every host reaches it the same way:
 

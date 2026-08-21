@@ -17,13 +17,29 @@ The editor ships a native dark mode. One prop, `colorMode`, themes the whole UI 
 | `'dark'`   | Dark theme.                                                                                          |
 | `'system'` | Follows the operating system via `prefers-color-scheme`, and updates live when the OS theme changes. |
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
 <DocxEditor document={bytes} colorMode="dark" />
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes" color-mode="dark" />
+```
+
+</Framework>
+</FrameworkTabs>
+
 ## Toggling from your own UI
 
 Wire `colorMode` to your own control: a switch, a settings menu, a segmented button. The editor re-themes instantly when the value changes.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
@@ -33,6 +49,28 @@ const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
 </button>
 <DocxEditor document={bytes} colorMode={colorMode} />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+const colorMode = ref<'light' | 'dark'>('light');
+</script>
+
+<template>
+  <button type="button" @click="colorMode = colorMode === 'dark' ? 'light' : 'dark'">
+    Toggle theme
+  </button>
+  <DocxEditor :document="bytes" :color-mode="colorMode" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 To follow the operating system instead, pass `colorMode="system"`.
 
@@ -57,6 +95,6 @@ Dark mode covers a large surface, and the canvas transform is heuristic. If you 
 
 ## Next steps
 
-- [Props](/docs/2.x/react/props#appearance-dark-mode): the `colorMode` prop
+- [React props](/docs/2.x/react/props#dark-mode) and [Vue props](/docs/2.x/vue/props#appearance): the `colorMode` prop
 - [Custom styles](/docs/2.x/guides/custom-styles): theming the chrome around the canvas
-- [Composition](/docs/2.x/react/composition): build chrome that themes with your app
+- [React composition](/docs/2.x/react/composition) and [Vue composition](/docs/2.x/vue/composition): build chrome that themes with your app

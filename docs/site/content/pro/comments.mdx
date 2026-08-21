@@ -17,9 +17,32 @@ Comments require the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
 ## Setup
 
-### Vue
+This example registers the review module and the rail:
 
-This Vue example registers the review module and rail:
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+export function Commentable({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
@@ -47,28 +70,8 @@ const modules = [reviewModule()];
 </template>
 ```
 
-### React
-
-This React example registers the same module and rail:
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
-
-const MODULES = [reviewModule()];
-
-export function Commentable({ bytes }: { bytes: Uint8Array }) {
-  return (
-    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
-      <DocxEditor.Toolbar />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-        <DocxEditorReview />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  );
-}
-```
+</Framework>
+</FrameworkTabs>
 
 `author` supplies `w:author` for each comment and reply. OOXML requires this value.
 
@@ -80,38 +83,10 @@ The review hook's `comment(text, author?)` comments on the current selection.
 
 It returns whether the editor applied the write. Keep the draft text when the method returns `false`.
 
-### Vue
+This example keeps the draft after a refused write:
 
-This Vue example keeps the draft after a refused write:
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useReview } from '@docx-editor.dev/pro/vue';
-
-const text = ref('');
-const review = useReview();
-
-function submit() {
-  if (review.comment(text.value)) {
-    text.value = '';
-  }
-}
-</script>
-
-<template>
-  <form v-if="review.selectionAnchorY.value !== null" @submit.prevent="submit">
-    <textarea v-model="text" />
-    <button type="submit" :disabled="!text.trim()">Comment</button>
-  </form>
-</template>
-```
-
-Mount this component inside `DocxEditorRoot`.
-
-### React
-
-This React example implements the same behavior:
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useState } from 'react';
@@ -139,6 +114,37 @@ function CommentBox() {
   );
 }
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+const text = ref('');
+const review = useReview();
+
+function submit() {
+  if (review.comment(text.value)) {
+    text.value = '';
+  }
+}
+</script>
+
+<template>
+  <form v-if="review.selectionAnchorY.value !== null" @submit.prevent="submit">
+    <textarea v-model="text" />
+    <button type="submit" :disabled="!text.trim()">Comment</button>
+  </form>
+</template>
+```
+
+Mount this component inside `DocxEditorRoot`.
+
+</Framework>
+</FrameworkTabs>
 
 `selectionAnchorY` is the proposed comment's document-space Y coordinate.
 
@@ -175,32 +181,10 @@ The editor refuses cross-cell anchors and empty comment text. It does not change
 
 You can also reply to a revision. The editor creates a comment over the revision range because OOXML gives `w:ins` and `w:del` no body.
 
-### Vue
+This example adds a fixed reply to any review item:
 
-This Vue example adds a fixed reply to any review item:
-
-```vue
-<script setup lang="ts">
-import { useReview } from '@docx-editor.dev/pro/vue';
-
-const review = useReview();
-</script>
-
-<template>
-  <ul>
-    <li v-for="item in review.items.value" :key="item.key">
-      <p>{{ item.text }}</p>
-      <span>{{ item.author }}</span>
-      <span>{{ item.replyIds.length }} replies</span>
-      <button type="button" @click="review.reply(item, 'Agreed, rephrased.')">Reply</button>
-    </li>
-  </ul>
-</template>
-```
-
-### React
-
-This React example renders the same reply action:
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 function Thread() {
@@ -224,33 +208,41 @@ function Thread() {
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+const review = useReview();
+</script>
+
+<template>
+  <ul>
+    <li v-for="item in review.items.value" :key="item.key">
+      <p>{{ item.text }}</p>
+      <span>{{ item.author }}</span>
+      <span>{{ item.replyIds.length }} replies</span>
+      <button type="button" @click="review.reply(item, 'Agreed, rephrased.')">Reply</button>
+    </li>
+  </ul>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 Like `comment`, `reply` returns whether the editor applied the write. It does not throw for a refused write.
 
 ## Read threads
 
 `useReview().items` contains comments and revisions. Filter by `kind` when you need one item type.
 
-This Vue example derives a comment list with `computed`:
+This example narrows the item type to comments:
 
-```vue
-<script setup lang="ts">
-import { computed } from 'vue';
-import { useReview } from '@docx-editor.dev/pro/vue';
-
-const review = useReview();
-const comments = computed(() => review.items.value.filter((item) => item.kind === 'comment'));
-</script>
-
-<template>
-  <ul>
-    <li v-for="comment in comments" :key="comment.key">{{ comment.text }}: {{ comment.author }}</li>
-  </ul>
-</template>
-```
-
-Render comment text with interpolation. The text comes from the file.
-
-This React example narrows the item type:
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import type { ReviewItemView } from '@docx-editor.dev/pro/react';
@@ -274,6 +266,30 @@ function CommentsOnly() {
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+const review = useReview();
+const comments = computed(() => review.items.value.filter((item) => item.kind === 'comment'));
+</script>
+
+<template>
+  <ul>
+    <li v-for="comment in comments" :key="comment.key">{{ comment.text }}: {{ comment.author }}</li>
+  </ul>
+</template>
+```
+
+Render comment text with interpolation. The text comes from the file.
+
+</Framework>
+</FrameworkTabs>
+
 Comment items add `resolved` and `parentId` to the shared fields.
 
 `resolved` reports whether `w15:commentsEx` marks the thread as complete. `parentId` is absent at the thread root.
@@ -291,9 +307,30 @@ For a document-level read without the review module, `editor.getComments()` retu
 The packaged card renders `<DocxEditorReview.Resolve />` on an open comment and
 `<DocxEditorReview.Reopen />` on a resolved one. Custom cards use the matching hook actions:
 
-### Vue
+This example selects the correct action for the comment state:
 
-This Vue example selects the correct action for the comment state:
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+function CommentDecision({ item }: { item: ReviewItemView }) {
+  const { resolve, reopen, commentResolutionDisabledReason } = useReview();
+  if (item.kind !== 'comment') return null;
+
+  return (
+    <button
+      disabled={commentResolutionDisabledReason !== null}
+      title={commentResolutionDisabledReason ?? undefined}
+      onClick={() => (item.resolved ? reopen(item) : resolve(item))}
+    >
+      {item.resolved ? 'Reopen' : 'Resolve'}
+    </button>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
@@ -317,26 +354,8 @@ const review = useReview();
 </template>
 ```
 
-### React
-
-This React example provides the same control:
-
-```tsx
-function CommentDecision({ item }: { item: ReviewItemView }) {
-  const { resolve, reopen, commentResolutionDisabledReason } = useReview();
-  if (item.kind !== 'comment') return null;
-
-  return (
-    <button
-      disabled={commentResolutionDisabledReason !== null}
-      title={commentResolutionDisabledReason ?? undefined}
-      onClick={() => (item.resolved ? reopen(item) : resolve(item))}
-    >
-      {item.resolved ? 'Reopen' : 'Resolve'}
-    </button>
-  );
-}
-```
+</Framework>
+</FrameworkTabs>
 
 Both actions return whether the editor accepted the request. A stale item or non-comment item returns `false`.
 
@@ -358,7 +377,7 @@ Writing a comment or reply emits the editor's `change` event.
 
 Use this event for autosave and dirty tracking:
 
-```tsx
+```ts
 useEditorEvent('change', (change) => void autosave(change.revision));
 ```
 
@@ -373,6 +392,7 @@ The editor reads and writes comments in headers, footers, footnotes, and endnote
 ## Next steps
 
 - [Tracked changes](/docs/2.x/pro/tracked-changes): Use the full `useReview` API, sidebar parts, and filters.
+- [Review colors and styling](/docs/2.x/pro/review-styling): Color comment authors and restyle the cards.
 - [Vue composition](/docs/2.x/vue/composition): Arrange Vue editor and review parts.
 - [React composition](/docs/2.x/react/composition): Arrange React editor and review parts.
 - [Custom nodes](/docs/2.x/pro/custom-nodes): Add custom-node chrome.

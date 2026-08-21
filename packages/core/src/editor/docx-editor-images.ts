@@ -11,6 +11,7 @@ import type {
   SelectedImageState,
 } from '../contracts/editor.ts';
 import { lineAtPosition } from '../layout/index.ts';
+import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
@@ -118,7 +119,7 @@ export function resolveSelectedDrawingRecord(
   if (!surface) return null;
   const { anchor, head } = surface.state().selection;
   if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
-  const line = lineAtPosition(surface.layout(), anchor.paragraphId, anchor.offset);
+  const line = lineAtIndexedPosition(surface.layout(), anchor.paragraphId, anchor.offset);
   const inline = inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset);
   if (inline) return inline;
   return anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset);

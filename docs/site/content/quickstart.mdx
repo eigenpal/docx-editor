@@ -1,6 +1,6 @@
 ---
 title: 'Quickstart'
-description: 'Load, edit, and save a .docx in the browser with React. Copy-paste setup: a file input, the editor component, and a download button, in one file.'
+description: 'Load, edit, and save a .docx in the browser with React or Vue. Copy-paste setup: a file input, the editor component, and a download button, in one file.'
 category: 'Getting Started'
 ---
 
@@ -14,11 +14,24 @@ This page builds a browser editor that opens a local `.docx` and downloads the e
 
 The adapter carries the string catalog and holds the engine as a peer, so install both.
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-On Next.js, Remix, or other SSR frameworks the editor must render client-side; mounting it during SSR throws `window is not defined`. Use the recipe in [Installation](/docs/2.x/installation). The code below works as-is in client-rendered apps such as Vite.
+</Framework>
+<Framework value="vue">
+
+```bash
+npm install @docx-editor.dev/vue @docx-editor.dev/core
+```
+
+</Framework>
+</FrameworkTabs>
+
+On Next.js, Nuxt, Remix, or other SSR frameworks the editor must render client-side; mounting it during SSR throws `window is not defined`. Use the recipe in [Installation](/docs/2.x/installation). The code below works as-is in client-rendered apps such as Vite.
 
 </Step>
 
@@ -27,6 +40,9 @@ On Next.js, Remix, or other SSR frameworks the editor must render client-side; m
 ### Load, edit, save
 
 The whole flow in one file. A file input feeds the editor, the editor handles editing (typing, formatting, undo, tables), and a button serializes the current state back to a `.docx` download.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 // App.tsx
@@ -73,12 +89,80 @@ export default function App() {
 }
 ```
 
+</Framework>
+<Framework value="vue">
+
+```vue
+<!-- App.vue -->
+<script setup lang="ts">
+import { ref, shallowRef } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
+
+const editorRef = ref<DocxEditorRef | null>(null);
+const fileName = ref<string>();
+const bytes = shallowRef<Uint8Array>();
+
+async function pick(event: Event) {
+  const picked = (event.target as HTMLInputElement).files?.[0];
+  fileName.value = picked?.name;
+  bytes.value = picked ? new Uint8Array(await picked.arrayBuffer()) : undefined;
+}
+
+async function download() {
+  const buffer = await editorRef.value?.save();
+  if (!buffer) return;
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName.value ?? 'document.docx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+
+<template>
+  <div class="app">
+    <div class="bar">
+      <input type="file" accept=".docx" @change="pick" />
+      <button type="button" @click="download">Download .docx</button>
+    </div>
+    <div class="surface">
+      <DocxEditor v-if="bytes" ref="editorRef" :document="bytes" mode="edit" />
+    </div>
+  </div>
+</template>
+
+<style>
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.bar {
+  padding: 8px;
+  display: flex;
+  gap: 8px;
+}
+.surface {
+  flex: 1;
+  min-height: 0;
+}
+</style>
+```
+
+</Framework>
+</FrameworkTabs>
+
 Four things to know about this code:
 
 - `document` takes a `Uint8Array`, an `ArrayBuffer`, a `DocumentHandle`, or `'blank'` for an empty document. Omitting it means no document at all. The editor shows its loading screen, and every control stays disabled until you supply bytes.
 - `mode` is `'edit'` (default), `'view'`, or `'suggesting'`, and is read at mount. Remount to change it.
 - `save()` on the ref returns `Promise<ArrayBuffer | null>`: a complete `.docx`, or `null` when there is no document. Parsing and serialization both happen in the browser; the document never touches a server.
-- `<DocxEditor>` fills its parent, so give it a box with a real height. The stylesheet import is required once per app.
+- The editor fills its parent, so give it a box with a real height. The stylesheet import is required once per app.
 
 </Step>
 
@@ -86,14 +170,35 @@ Four things to know about this code:
 
 ### Fetch instead of a file input (optional)
 
-Loading a template from your own server is the same prop with fetched bytes:
+Load a template from your own server instead:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```ts
 const bytes = new Uint8Array(await fetch('/template.docx').then((r) => r.arrayBuffer()));
 // <DocxEditor document={bytes} />
 ```
 
-To react to the built-in Save action (Cmd+S, or File → Save) instead of adding your own button, pass `onSave`. It replaces the packaged behavior, so read the bytes off the ref:
+</Framework>
+<Framework value="vue">
+
+```ts
+import { useDocxSource } from '@docx-editor.dev/vue';
+
+const { document: bytes, isLoading } = useDocxSource('/template.docx');
+// <DocxEditor :document="bytes" />
+```
+
+`useDocxSource()` does the fetch and tracks its state for you.
+
+</Framework>
+</FrameworkTabs>
+
+To react to the built-in Save action (Cmd+S, or File → Save) instead of adding your own button, handle the save event. It replaces the packaged behavior, so read the bytes off the ref:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 <DocxEditor
@@ -105,6 +210,25 @@ To react to the built-in Save action (Cmd+S, or File → Save) instead of adding
   }}
 />
 ```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+async function onSave() {
+  const buffer = await editorRef.value?.save();
+  if (buffer) await upload(buffer);
+}
+</script>
+
+<template>
+  <DocxEditor ref="editorRef" :document="bytes" @save="onSave" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 </Step>
 
@@ -122,7 +246,7 @@ No file handy? Try the [live demo](https://docx-editor.dev/editor) first.
 
 ## Next steps
 
-- [Installation](/docs/2.x/installation) for Next.js, Remix, and Astro specifics
-- [Composition](/docs/2.x/react/composition) to replace the packaged chrome with your own
+- [Installation](/docs/2.x/installation) for Next.js, Nuxt, Remix, and Astro specifics
+- [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition) to replace the packaged chrome with your own
 - [Word fidelity](/docs/2.x/word-fidelity) if you're evaluating feature support and round-trip behavior
-- [Props and ref methods](/docs/2.x/react/props) for everything `<DocxEditor>` can do
+- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for everything the packaged editor can do

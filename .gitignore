@@ -101,6 +101,10 @@ examples/vite/public/sample-20x.docx
 examples/vite/public/sample-review.docx
 examples/vite/public/sample-review-20x.docx
 e2e/fixtures/synthetic-huge-tracked.docx
+# Generated on demand by scripts/create-synthetic-massive-edit-fixture.mjs
+e2e/fixtures/generated/
+e2e/fixtures/synthetic-massive-multisection.docx
+e2e/fixtures/synthetic-massive-singlesection.docx
 
 # SARIF from `bun run check:shipped-advisories --sarif=...`
 *.sarif

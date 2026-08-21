@@ -503,7 +503,13 @@ export function withResolvedListItems<
   const listItems =
     options.listItems ??
     (numberingIndex.nums.size > 0
-      ? resolveStoryListItems(blocks, numberingIndex, options.styleCascade, options.isFontAvailable)
+      ? resolveStoryListItemsStable(
+          blocks,
+          options.numberingIndex,
+          numberingIndex,
+          options.styleCascade,
+          options.isFontAvailable
+        )
       : undefined);
   if (options.listItems === undefined) {
     resolvedListItemsMemos.set(blocks, {
@@ -519,6 +525,83 @@ export function withResolvedListItems<
     numberingIndex,
     ...(listItems ? { listItems } : {}),
   };
+}
+
+/** Numbered paragraphs of one top-level block, memoized per (immutable block, cascade). */
+interface NumberedBlockMemo {
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly numbered: readonly OoxmlElement[];
+}
+const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
+
+function numberedParagraphsOfBlock(
+  block: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): readonly OoxmlElement[] {
+  const cached = numberedBlockMemos.get(block);
+  if (cached && cached.styleCascade === styleCascade) return cached.numbered;
+  const numbered = walkStoryParagraphs([block]).filter(
+    (paragraph) => paragraphListPrelude(paragraph, styleCascade).numPr !== null
+  );
+  numberedBlockMemos.set(block, { styleCascade, numbered });
+  return numbered;
+}
+
+/**
+ * The previous full-story resolve, for reuse BY IDENTITY across keystrokes.
+ *
+ * The resolved item map is a pure function of the SEQUENCE of numbered paragraph nodes
+ * (the counter walk skips everything else), the linked numbering index, the cascade, and
+ * the font oracle. A text edit republishes the whole blocks array — which is what the
+ * per-array memo above keys on — while replacing one non-list paragraph node, so the
+ * numbered sequence is unchanged and the previous map still answers. Handing back the SAME
+ * map object is also what lets a section-level prepass memo validate list inputs with one
+ * identity compare.
+ *
+ * Keyed on the story's FIRST block node in a WeakMap rather than held in a module slot, so
+ * a closed document's resolve — its numbered subtrees, item map, cascade and index — dies
+ * with its tree instead of being pinned until some other document lays out. An edit to the
+ * first block itself only misses (one extra resolve), never mixes: the numbered sequence is
+ * still compared node-for-node.
+ */
+interface LastStoryResolve {
+  readonly rawIndex: NumberingIndex | undefined;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly isFontAvailable: ((family: string) => boolean) | undefined;
+  readonly numbered: readonly OoxmlElement[];
+  readonly listItems: ReadonlyMap<string, ResolvedListItem>;
+}
+const lastStoryResolves = new WeakMap<OoxmlElement, LastStoryResolve>();
+
+function resolveStoryListItemsStable(
+  blocks: readonly OoxmlElement[],
+  rawIndex: NumberingIndex | undefined,
+  linkedIndex: NumberingIndex,
+  styleCascade: StyleCascadeTable | undefined,
+  isFontAvailable?: (family: string) => boolean
+): ReadonlyMap<string, ResolvedListItem> {
+  const anchor = blocks[0];
+  const numbered: OoxmlElement[] = [];
+  for (const block of blocks) {
+    const blockNumbered = numberedParagraphsOfBlock(block, styleCascade);
+    for (const paragraph of blockNumbered) numbered.push(paragraph);
+  }
+  const last = anchor ? lastStoryResolves.get(anchor) : undefined;
+  if (
+    last &&
+    last.rawIndex === rawIndex &&
+    last.styleCascade === styleCascade &&
+    last.isFontAvailable === isFontAvailable &&
+    last.numbered.length === numbered.length &&
+    last.numbered.every((node, index) => node === numbered[index])
+  ) {
+    return last.listItems;
+  }
+  const listItems = resolveStoryListItems(blocks, linkedIndex, styleCascade, isFontAvailable);
+  if (anchor) {
+    lastStoryResolves.set(anchor, { rawIndex, styleCascade, isFontAvailable, numbered, listItems });
+  }
+  return listItems;
 }
 
 /**
