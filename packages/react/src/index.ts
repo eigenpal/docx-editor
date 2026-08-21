@@ -258,6 +258,7 @@ export {
   type ParagraphFlagState,
   type ParagraphFormatRead,
   type ParagraphFormatUpdate,
+  type ParagraphTabStop,
   type UseParagraphFormatReturn,
 } from './editor/useParagraphFormat';
 export {

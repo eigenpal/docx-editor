@@ -12,14 +12,26 @@
 // that does nothing (issue #360). A field you type a number into does not have that
 // problem.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import { useTranslation } from '../i18n';
+import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
 import {
-  useParagraphFormat,
-  type ParagraphFormatUpdate,
-  type ParagraphTabStop,
-} from './useParagraphFormat';
+  changedFields,
+  formatInches,
+  inchesToTwips,
+  mixedFieldsOf,
+  NO_MIXED_FIELDS,
+  seedFields,
+  TAB_ALIGNMENT_LABELS,
+  twipsToInches,
+  withTabStop,
+  type ParagraphDialogFields,
+  type ParagraphDialogMixed,
+  type SpecialIndent,
+  type TabAlignment,
+  type TabLeaderName,
+} from './paragraph-dialog-fields';
 
 /** Props for `DocxEditor.ParagraphDialog`. @public */
 export interface DocxEditorParagraphDialogProps {
@@ -29,30 +41,6 @@ export interface DocxEditorParagraphDialogProps {
   onClose: () => void;
   className?: string;
 }
-
-const TWIPS_PER_INCH = 1440;
-const twipsToInches = (twips: number): number => Math.round((twips / TWIPS_PER_INCH) * 100) / 100;
-const inchesToTwips = (inches: number): number => Math.round(inches * TWIPS_PER_INCH);
-
-type TabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar';
-type TabLeaderName = 'none' | 'dot' | 'hyphen' | 'underscore';
-
-/** One label per alignment, so the list rows read as words rather than as `w:val` values. */
-const TAB_ALIGNMENT_LABELS = {
-  left: 'dialogs.paragraph.tabAlignLeft',
-  center: 'dialogs.paragraph.tabAlignCenter',
-  right: 'dialogs.paragraph.tabAlignRight',
-  decimal: 'dialogs.paragraph.tabAlignDecimal',
-  bar: 'dialogs.paragraph.tabAlignBar',
-} as const satisfies Record<TabAlignment, string>;
-
-/** The "Special" pair: the signed first-line offset, split into a kind and a magnitude. */
-type SpecialIndent = 'none' | 'firstLine' | 'hanging';
-
-const specialOf = (signedTwips: number | null): SpecialIndent => {
-  if (signedTwips === null || signedTwips === 0) return 'none';
-  return signedTwips < 0 ? 'hanging' : 'firstLine';
-};
 
 const overlayStyle: CSSProperties = {
   position: 'fixed',
@@ -167,36 +155,42 @@ export function DocxEditorParagraphDialog({
   const [newTabPosition, setNewTabPosition] = useState(0);
   const [newTabAlignment, setNewTabAlignment] = useState<TabAlignment>('left');
   const [newTabLeader, setNewTabLeader] = useState<TabLeaderName>('none');
+  const [mixed, setMixed] = useState<ParagraphDialogMixed>(NO_MIXED_FIELDS);
+  // One prefix per mounted dialog, so a `<label for>` points at THIS dialog's input even
+  // when a host renders two. Clicking a visible label is how a pointer user hits a small
+  // checkbox, and `aria-label` alone does not give them that.
+  const fieldId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Seed from the selection when the dialog OPENS — not on every tick, or a concurrent
   // edit would fight the user's typing. The same rule `DocxEditorPageSetupDialog` follows.
   const seeded = useRef(false);
+  /** What the fields held on open, so `handleApply` can send only what MOVED. */
+  const seedRef = useRef<ParagraphDialogFields | null>(null);
   useEffect(() => {
     if (!open) {
       seeded.current = false;
       return;
     }
     if (seeded.current || format === null) return;
-    setAlignment(format.alignment === 'both' ? 'justify' : (format.alignment ?? 'left'));
-    setIndentLeft(format.indentLeftTwips ?? 0);
-    setIndentRight(format.indentRightTwips ?? 0);
-    const kind = specialOf(format.indentFirstLineTwips);
-    setSpecial(kind);
-    setSpecialBy(Math.abs(format.indentFirstLineTwips ?? 0));
-    setSpaceBefore(format.spaceBeforePt ?? 0);
-    setSpaceAfter(format.spaceAfterPt ?? 0);
-    setLineRule(format.lineSpacing?.rule ?? 'multiple');
-    setLineValue(format.lineSpacing?.value ?? 1.08);
-    // A `null` flag means the selection disagrees. The box opens UNCHECKED and, because
-    // only changed fields are sent, an untouched mixed flag is left mixed rather than
-    // being flattened to off across the whole selection.
-    setContextualSpacing(format.contextualSpacing === true);
-    setKeepNext(format.keepNext === true);
-    setKeepLines(format.keepLines === true);
-    setWidowControl(format.widowControl !== false);
-    setPageBreakBefore(format.pageBreakBefore === true);
-    setTabStops(format.tabStops ?? []);
+    const seed = seedFields(format);
+    setAlignment(seed.alignment);
+    setIndentLeft(seed.indentLeft);
+    setIndentRight(seed.indentRight);
+    setSpecial(seed.special);
+    setSpecialBy(seed.specialBy);
+    setSpaceBefore(seed.spaceBefore);
+    setSpaceAfter(seed.spaceAfter);
+    setLineRule(seed.lineRule);
+    setLineValue(seed.lineValue);
+    setContextualSpacing(seed.contextualSpacing);
+    setKeepNext(seed.keepNext);
+    setKeepLines(seed.keepLines);
+    setWidowControl(seed.widowControl);
+    setPageBreakBefore(seed.pageBreakBefore);
+    setTabStops(seed.tabStops);
+    setMixed(mixedFieldsOf(format));
+    seedRef.current = seed;
     seeded.current = true;
   }, [open, format]);
 
@@ -205,23 +199,32 @@ export function DocxEditorParagraphDialog({
   }, [open]);
 
   const handleApply = useCallback(() => {
-    const signedFirstLine =
-      special === 'none' ? 0 : special === 'hanging' ? -Math.abs(specialBy) : Math.abs(specialBy);
-    const update: ParagraphFormatUpdate = {
-      alignment,
-      indentLeftTwips: indentLeft,
-      indentRightTwips: indentRight,
-      indentFirstLineTwips: signedFirstLine,
-      spaceBeforePt: spaceBefore,
-      spaceAfterPt: spaceAfter,
-      lineSpacing: { rule: lineRule, value: lineValue },
-      contextualSpacing,
-      keepNext,
-      keepLines,
-      widowControl,
-      pageBreakBefore,
-      tabStops,
-    };
+    const seed = seedRef.current;
+    const update =
+      seed === null
+        ? null
+        : changedFields(seed, {
+            alignment,
+            indentLeft,
+            indentRight,
+            special,
+            specialBy,
+            spaceBefore,
+            spaceAfter,
+            lineRule,
+            lineValue,
+            contextualSpacing,
+            keepNext,
+            keepLines,
+            widowControl,
+            pageBreakBefore,
+            tabStops,
+          });
+    // Nothing moved, so there is nothing to write. Closing is the whole job.
+    if (update === null) {
+      onClose();
+      return;
+    }
     // A refused write keeps the dialog OPEN: `apply` is honest about op-layer rejections,
     // so closing here would claim a success that did not happen.
     if (apply(update)) onClose();
@@ -247,17 +250,12 @@ export function DocxEditorParagraphDialog({
 
   /** Add or replace the stop at this position — "Set" replaces one already there. */
   const setTabStop = useCallback(() => {
-    const position = Math.round(newTabPosition);
-    const kept = tabStops.filter((stop) => stop.positionTwips !== position);
     setTabStops(
-      [
-        ...kept,
-        {
-          positionTwips: position,
-          alignment: newTabAlignment,
-          ...(newTabLeader !== 'none' ? { leader: newTabLeader } : {}),
-        },
-      ].sort((a, b) => a.positionTwips - b.positionTwips)
+      withTabStop(tabStops, {
+        positionTwips: Math.round(newTabPosition),
+        alignment: newTabAlignment,
+        ...(newTabLeader !== 'none' ? { leader: newTabLeader } : {}),
+      })
     );
   }, [tabStops, newTabPosition, newTabAlignment, newTabLeader]);
 
@@ -269,10 +267,14 @@ export function DocxEditorParagraphDialog({
     set: (twips: number) => void
   ) => (
     <div style={rowStyle}>
-      <label style={labelStyle}>{t(`dialogs.paragraph.${labelKey}`)}</label>
+      <label style={labelStyle} htmlFor={`${fieldId}-${labelKey}`}>
+        {t(`dialogs.paragraph.${labelKey}`)}
+      </label>
       <input
+        id={`${fieldId}-${labelKey}`}
         type="number"
         style={inputStyle}
+        min={0}
         step={0.1}
         value={twipsToInches(value)}
         onChange={(event) => set(inchesToTwips(Number(event.target.value) || 0))}
@@ -288,8 +290,11 @@ export function DocxEditorParagraphDialog({
     set: (points: number) => void
   ) => (
     <div style={rowStyle}>
-      <label style={labelStyle}>{t(`dialogs.paragraph.${labelKey}`)}</label>
+      <label style={labelStyle} htmlFor={`${fieldId}-${labelKey}`}>
+        {t(`dialogs.paragraph.${labelKey}`)}
+      </label>
       <input
+        id={`${fieldId}-${labelKey}`}
         type="number"
         style={inputStyle}
         min={0}
@@ -303,12 +308,27 @@ export function DocxEditorParagraphDialog({
   );
 
   const checkbox = (
-    labelKey: 'contextualSpacing' | 'keepNext' | 'keepLines' | 'widowControl' | 'pageBreakBefore',
+    labelKey: keyof ParagraphDialogMixed,
     checked: boolean,
     set: (next: boolean) => void
   ) => (
     <label style={checkRowStyle}>
-      <input type="checkbox" checked={checked} onChange={(event) => set(event.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        // `indeterminate` is a DOM PROPERTY with no attribute, so React cannot set it from
+        // JSX — it has to be written on the node. Without it a setting the selection
+        // disagrees about renders as plain unchecked, which claims agreement that is not
+        // there.
+        ref={(node) => {
+          if (node) node.indeterminate = mixed[labelKey];
+        }}
+        onChange={(event) => {
+          // Touching the box RESOLVES the disagreement: from here it means what it shows.
+          setMixed((previous) => ({ ...previous, [labelKey]: false }));
+          set(event.target.checked);
+        }}
+      />
       {t(`dialogs.paragraph.${labelKey}`)}
     </label>
   );
@@ -331,6 +351,10 @@ export function DocxEditorParagraphDialog({
         tabIndex={-1}
         style={dialogStyle}
         onClick={(event) => event.stopPropagation()}
+        // Painted pages ARE the editable surface, so any mousedown that reaches them moves
+        // the caret — and the dialog formats whatever the caret is on. Without this,
+        // clicking a field inside it moves the selection out from under the edit.
+        onMouseDown={(event) => event.stopPropagation()}
       >
         <div style={headerStyle}>{t('dialogs.paragraph.title')}</div>
         <div style={bodyStyle}>
@@ -434,7 +458,9 @@ export function DocxEditorParagraphDialog({
             tabStops.map((stop) => (
               <div key={stop.positionTwips} style={rowStyle}>
                 <span style={{ ...labelStyle, color: 'var(--doc-text)' }}>
-                  {twipsToInches(stop.positionTwips)} {t('dialogs.paragraph.unitInches')}
+                  {t('dialogs.paragraph.tabPositionLabel', {
+                    position: formatInches(stop.positionTwips),
+                  })}
                 </span>
                 <span style={{ flex: 1, fontSize: 13, color: 'var(--doc-text-muted)' }}>
                   {t(TAB_ALIGNMENT_LABELS[stop.alignment])}
@@ -443,7 +469,9 @@ export function DocxEditorParagraphDialog({
                   type="button"
                   style={btnStyle}
                   onClick={() => setTabStops(tabStops.filter((entry) => entry !== stop))}
-                  aria-label={`${t('dialogs.paragraph.tabRemove')} ${twipsToInches(stop.positionTwips)}`}
+                  aria-label={t('dialogs.paragraph.tabRemoveAt', {
+                    position: formatInches(stop.positionTwips),
+                  })}
                 >
                   {t('dialogs.paragraph.tabRemove')}
                 </button>
@@ -476,8 +504,10 @@ export function DocxEditorParagraphDialog({
               <option value="left">{t('dialogs.paragraph.tabAlignLeft')}</option>
               <option value="center">{t('dialogs.paragraph.tabAlignCenter')}</option>
               <option value="right">{t('dialogs.paragraph.tabAlignRight')}</option>
+              {/* No `bar`: it draws a vertical rule rather than stopping the caret, so the
+                  engine neither paints it nor reports it back. Offering it here would add a
+                  row that vanishes on OK. An existing one is preserved on save. */}
               <option value="decimal">{t('dialogs.paragraph.tabAlignDecimal')}</option>
-              <option value="bar">{t('dialogs.paragraph.tabAlignBar')}</option>
             </select>
           </div>
           <div style={rowStyle}>

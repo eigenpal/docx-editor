@@ -3870,6 +3870,7 @@ export type TreeDocOp = {
     readonly op: 'setParagraphTabStops';
     readonly paragraphId: string;
     readonly stops: readonly TabStopWrite[];
+    readonly inForcePositionsTwips?: readonly number[];
 } | {
     readonly op: 'splitParagraph';
     readonly paragraphId: string;

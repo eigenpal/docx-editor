@@ -38,13 +38,19 @@ import type {
 } from './tree-op-types.ts';
 import {
   TEXT_DEPS,
+  attributeValueOf,
   cloneWithNewIds,
   fromEdit,
   namedChild,
   ok,
   paragraphPropertiesNodeOf,
 } from './tree-op-nodes.ts';
-import { RUN_VOCABULARY, mergedPropertyChildren } from './tree-op-properties.ts';
+import {
+  CT_PPR_SEQUENCE,
+  RUN_VOCABULARY,
+  mergedPropertyChildren,
+  schemaInsertIndex,
+} from './tree-op-properties.ts';
 
 /**
  * A `w:pPr` without its `w:sectPr`, keeping identity when there is none. `undefined`
@@ -297,10 +303,14 @@ export function applySetListNumbering(
  * Stops are written in ascending position, which is the order `w:tabs` is read in and the one
  * a reader placing them expects.
  */
+/** `w:tab` values the tab-stop reader does not model, and a write must therefore preserve. */
+const OPAQUE_TAB_VALUES: ReadonlySet<string> = new Set(['bar', 'num']);
+
 export function applySetParagraphTabStops(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   stops: readonly TabStopWrite[],
+  inForcePositionsTwips: readonly number[] | undefined,
   options: EditOptions | undefined,
   nextId: () => string
 ): TreeOpResult {
@@ -315,45 +325,80 @@ export function applySetParagraphTabStops(
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const existing = namedChild(pPr, 'tabs');
 
-  if (stops.length === 0) {
+  const kept = new Set(stops.map((stop) => Math.round(stop.positionTwips)));
+  // `w:bar` and `w:num` are not caret stops — a bar tab draws a vertical rule and `num` is
+  // a legacy list artefact — so the reader that feeds this write does not report them and
+  // an editor cannot name them. A wholesale replace would therefore delete, on the next
+  // unrelated tab edit, markup the user never saw. Carry them through instead.
+  const opaque = (existing?.children ?? []).filter(
+    (child) =>
+      child.kind !== 'textValue' &&
+      child.localName === 'tab' &&
+      OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') &&
+      !kept.has(Math.round(Number(attributeValueOf(child, 'pos'))))
+  );
+  // What this paragraph authors ITSELF. Replacing `w:tabs` already removes these, so they
+  // need no `clear` — only a stop that survives the replace does.
+  const authored = new Set(
+    (existing?.children ?? [])
+      .filter((child) => child.kind !== 'textValue' && child.localName === 'tab')
+      .map((child) => Number(attributeValueOf(child, 'pos')))
+      .filter((position) => Number.isFinite(position))
+  );
+  // A stop that was in force, comes from a STYLE, and is no longer wanted. Without an
+  // explicit `clear` the style puts it straight back and the edit silently does nothing.
+  const cleared = [...new Set(inForcePositionsTwips ?? [])]
+    .map((position) => Math.round(position))
+    .filter((position) => !kept.has(position) && !authored.has(position));
+
+  if (stops.length === 0 && cleared.length === 0 && opaque.length === 0) {
     if (!existing) return ok(part, effect);
     return fromEdit(removeNode(part, existing.id, options), effect);
   }
 
-  const ordered = [...stops].sort((a, b) => a.positionTwips - b.positionTwips);
-  const tabs = sectionElement(
-    nextId(),
-    'tabs',
-    [],
-    ordered.map((stop) =>
+  const authoredChildren = [
+    ...stops.map((stop) => ({ ...stop, positionTwips: Math.round(stop.positionTwips) })),
+    ...cleared.map((positionTwips) => ({ positionTwips, alignment: 'clear' as const })),
+  ]
+    .sort((a, b) => a.positionTwips - b.positionTwips)
+    .map((stop) =>
       sectionElement(
         nextId(),
         'tab',
         [
           wmlAttribute('val', stop.alignment),
-          wmlAttribute('pos', String(Math.round(stop.positionTwips))),
+          wmlAttribute('pos', String(stop.positionTwips)),
           // `w:leader` defaults to `none`, so the common stop stays as Word writes it rather
-          // than carrying a redundant attribute.
-          ...(stop.leader && stop.leader !== 'none' ? [wmlAttribute('leader', stop.leader)] : []),
+          // than carrying a redundant attribute. A `clear` never carries one: it removes a
+          // stop, and the leader travelled with the stop it is removing.
+          ...('leader' in stop && stop.leader && stop.leader !== 'none'
+            ? [wmlAttribute('leader', stop.leader)]
+            : []),
         ],
         []
       )
+    );
+  // `w:tabs` is a bare sequence of `w:tab`, unordered by the schema, but the reader merges
+  // by position and a document is easier to read in order. The carried-through stops sort
+  // in with the rest on `w:pos`.
+  const tabs = sectionElement(
+    nextId(),
+    'tabs',
+    [],
+    [...authoredChildren, ...opaque.map((child) => cloneWithNewIds(child, nextId))].sort(
+      (a, b) => Number(attributeValueOf(a, 'pos') ?? 0) - Number(attributeValueOf(b, 'pos') ?? 0)
     )
   );
   if (existing) return fromEdit(replaceNode(part, existing.id, tabs, options), effect);
   if (pPr) {
-    // `w:tabs` follows `w:pStyle` and `w:numPr` in `CT_PPrBase`; appending past the last of
-    // those keeps the schema order without restating the whole sequence here.
-    const afterIndex =
-      pPr.children.reduce(
-        (last, child, index) =>
-          child.kind !== 'textValue' &&
-          (child.localName === 'pStyle' || child.localName === 'numPr')
-            ? index
-            : last,
-        -1
-      ) + 1;
-    return fromEdit(insertChildren(part, pPr.id, afterIndex, [tabs], options), effect);
+    // `CT_PPrBase` is a strict `xsd:sequence`, and `w:tabs` sits at slot 11 — after
+    // `keepNext`, `keepLines`, `pageBreakBefore`, `framePr`, `widowControl`, `numPr`,
+    // `suppressLineNumbers`, `pBdr` and `shd`, not just after `pStyle` and `numPr`. Ranking
+    // against the whole sequence is the only way to land in a slot Word will read: a
+    // `w:pPr` that already carried `w:keepNext` otherwise came out with `w:tabs` in front
+    // of it, which `xmllint --schema wml.xsd` rejects and Word reports as unreadable.
+    const index = schemaInsertIndex(pPr.children, CT_PPR_SEQUENCE, 'tabs');
+    return fromEdit(insertChildren(part, pPr.id, index, [tabs], options), effect);
   }
   const created = {
     id: nextId(),

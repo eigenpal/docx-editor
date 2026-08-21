@@ -39,7 +39,12 @@ import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
-import { cascadedParagraphAttributes } from '../layout/paragraph-style.ts';
+import {
+  cascadedParagraphAttributes,
+  paragraphBreaksBefore,
+  paragraphContextualSpacing,
+} from '../layout/paragraph-style.ts';
+import { paragraphKeeps, type ParagraphKeeps } from '../layout/pagination-keeps.ts';
 
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
 export interface SurfaceProperty {
@@ -693,16 +698,18 @@ export function formattingAt(
     };
   })();
 
-  // the Paragraph dialog shows these as checkboxes, so each answers on / off / mixed.
-  // Read through the cascade like everything else here: a flag a STYLE sets is on, which is
-  // what the box has to show. `w:val` absent means ON for every one of them (§17.17.4).
-  const flag = (localName: string) =>
-    paragraphValue((properties) => {
-      const attributes = cascadedParagraphAttributes(properties, localName);
-      if (!attributes) return false;
-      const value = attributes.val;
-      return value === undefined || (value !== '0' && value !== 'false' && value !== 'off');
-    });
+  // The Paragraph dialog shows these as checkboxes, so each answers on / off / mixed.
+  //
+  // Delegated to the LAYOUT readers rather than folded here. A toggle is stated by the
+  // presence of its element, so a level that states `<w:keepNext/>` with no attributes has
+  // to override a lower level's `w:val="0"` — and an attribute-wise merge of the cascade
+  // cannot see that, because a level with no attributes contributes nothing to it. Reading
+  // it separately also let the two answers drift: `w:widowControl` defaults to ON
+  // (§17.3.1.44) and a second implementation defaulted it off. One reader, one answer.
+  const keeps = (pick: (resolved: ParagraphKeeps) => boolean) =>
+    paragraphValue((properties) => pick(paragraphKeeps(properties)));
+  const pageBreakBeforeFlag = paragraphValue(paragraphBreaksBefore);
+  const contextualSpacingFlag = paragraphValue(paragraphContextualSpacing);
 
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
@@ -746,11 +753,11 @@ export function formattingAt(
         ...(stop.leader ? { leader: stop.leader } : {}),
       })) ?? null,
     paragraphFlags: {
-      contextualSpacing: flag('contextualSpacing'),
-      keepNext: flag('keepNext'),
-      keepLines: flag('keepLines'),
-      widowControl: flag('widowControl'),
-      pageBreakBefore: flag('pageBreakBefore'),
+      contextualSpacing: contextualSpacingFlag,
+      keepNext: keeps((resolved) => resolved.keepNext),
+      keepLines: keeps((resolved) => resolved.keepLines),
+      widowControl: keeps((resolved) => resolved.widowControl),
+      pageBreakBefore: pageBreakBeforeFlag,
     },
   } satisfies SurfaceFormatting;
 }

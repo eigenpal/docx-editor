@@ -1681,6 +1681,16 @@ export interface ParagraphStyleProps extends ParagraphStylePartProps {
 }
 
 // @public
+export interface ParagraphTabStop {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
+}
+
+// @public
 export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
 
 // @public

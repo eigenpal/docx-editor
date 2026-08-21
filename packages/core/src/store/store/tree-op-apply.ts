@@ -368,7 +368,14 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     case 'setListNumbering':
       return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
     case 'setParagraphTabStops':
-      return applySetParagraphTabStops(part, paragraph, op.stops, options, nextId);
+      return applySetParagraphTabStops(
+        part,
+        paragraph,
+        op.stops,
+        op.inForcePositionsTwips,
+        options,
+        nextId
+      );
     case 'insertPageBreak':
       return applyInsertContent(
         part,

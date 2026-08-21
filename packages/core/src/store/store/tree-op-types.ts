@@ -368,6 +368,18 @@ export type TreeDocOp =
       readonly op: 'setParagraphTabStops';
       readonly paragraphId: string;
       readonly stops: readonly TabStopWrite[];
+      /**
+       * Every stop position IN FORCE when the editor read the paragraph, including the
+       * ones a style supplied.
+       *
+       * Tab stops are read through the cascade and written at the paragraph level, so a
+       * replace alone cannot remove an inherited stop — the user clears a row, the style
+       * puts it straight back, and the command reports success. A position that was in
+       * force and is not in `stops` is suppressed with `w:val="clear"`, which is what the
+       * value exists for (§17.3.1.37). Omit when the caller has no cascade to speak of;
+       * the write is then a plain paragraph-level replace.
+       */
+      readonly inForcePositionsTwips?: readonly number[];
     }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | {

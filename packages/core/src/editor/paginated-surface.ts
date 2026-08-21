@@ -171,6 +171,10 @@ export type {
   PaginatedSurfaceOptions,
   PaginatedSurfacePerf,
   PaginatedSurfaceState,
+  ParagraphFlagFormatting,
+  ParagraphFormatUpdate,
+  ParagraphPropertyEdit,
+  ParagraphTabStop,
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
 

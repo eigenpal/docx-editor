@@ -216,6 +216,42 @@ describe('tab stops, which a flat property write could never author', () => {
     ]);
   });
 
+  test('w:tabs lands in its CT_PPrBase slot, not in front of what outranks it', () => {
+    // `CT_PPrBase` is a strict `xsd:sequence`. This is the whole reason the dialog needs a
+    // schema-ranked insert: it always sends the pagination flags, so nearly every OK that
+    // carries a tab stop writes into a `w:pPr` that already holds `w:keepNext`.
+    const editor = mount(p('alpha', '<w:keepNext w:val="1"/>'));
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      keepLines: true,
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+
+    const xml = xmlOf(editor);
+    const order = [...xml.matchAll(/<w:(keepNext|keepLines|tabs|spacing|ind|jc)[ />]/g)].map(
+      (match) => match[1]
+    );
+    // Sequence slots: keepNext 2, keepLines 3, tabs 11.
+    expect(order.indexOf('tabs')).toBeGreaterThan(order.indexOf('keepNext'));
+    expect(order.indexOf('tabs')).toBeGreaterThan(order.indexOf('keepLines'));
+  });
+
+  test('and stays ahead of the properties IT outranks', () => {
+    const editor = mount(p('alpha', '<w:jc w:val="center"/>'));
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      spaceBeforePt: 12,
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+
+    const xml = xmlOf(editor);
+    const order = [...xml.matchAll(/<w:(tabs|spacing|jc)[ />]/g)].map((match) => match[1]);
+    // Sequence slots: tabs 11, spacing 22, jc 27.
+    expect(order).toEqual(['tabs', 'spacing', 'jc']);
+  });
+
   test('an empty list clears them, and omitting the field leaves them alone', () => {
     const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs>'));
     editor.surface!.selectAll();
@@ -230,6 +266,93 @@ describe('tab stops, which a flat property write could never author', () => {
     editor.exec({ type: 'setParagraphFormat', tabStops: [] });
     expect(xmlOf(editor)).not.toContain('w:tabs');
     expect(editor.surface!.formatting().tabStops).toEqual([]);
+  });
+
+  test('clearing a STYLE stop suppresses it, rather than reporting a success that did nothing', () => {
+    // Stops are read through the cascade and written at the paragraph, so a plain replace
+    // cannot remove one a style supplies: the user clears the row, the style puts it back,
+    // and the command still says ok. `w:val="clear"` is what OOXML has for this.
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Tabbed"/></w:pPr><w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 2160, alignment: 'center' },
+    ]);
+
+    expect(editor.exec({ type: 'setParagraphFormat', tabStops: [] }).ok).toBe(true);
+    expect(xmlOf(editor)).toContain('w:val="clear"');
+    expect(editor.surface!.formatting().tabStops).toEqual([]);
+  });
+
+  test('a deleted row does not come back from the style on the next read', () => {
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Tabbed"/>' +
+        '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().tabStops).toHaveLength(2);
+
+    // Delete the style's 2160 row, keep the paragraph's own 1440.
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'left' },
+    ]);
+  });
+
+  test('a paragraph-authored stop is dropped by the replace, with no redundant clear', () => {
+    // Only a stop that SURVIVES the replace needs suppressing. Clearing what the paragraph
+    // authored itself would be markup Word never writes.
+    const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs>'));
+    editor.surface!.selectAll();
+    editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    const xml = xmlOf(editor);
+    expect(xml).not.toContain('w:val="clear"');
+    expect(xml).not.toContain('w:tabs');
+  });
+
+  test('a bar tab the reader cannot model survives an unrelated tab edit', () => {
+    // `w:bar` draws a vertical rule; it is not a caret stop, so the reader that feeds this
+    // write never reports it and no editor can name it. A wholesale replace would delete
+    // markup the user never saw.
+    const editor = mount(
+      p(
+        'alpha',
+        '<w:tabs><w:tab w:val="bar" w:pos="720"/><w:tab w:val="left" w:pos="1440"/></w:tabs>'
+      )
+    );
+    editor.surface!.selectAll();
+    // The reader shows only the real stop, which is what the layout lane means by one.
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'left' },
+    ]);
+
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 2880, alignment: 'right' }],
+    });
+    const xml = xmlOf(editor);
+    expect(xml).toContain('w:val="bar"');
+    expect(xml).toContain('w:pos="720"');
+    expect(xml).toContain('w:val="right"');
+    // The stop the editor replaced is gone; the one it could not see is not.
+    expect(xml).not.toContain('w:pos="1440"');
+  });
+
+  test('and is dropped when the editor writes a real stop at its position', () => {
+    const editor = mount(p('alpha', '<w:tabs><w:tab w:val="bar" w:pos="720"/></w:tabs>'));
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 720, alignment: 'center' }],
+    });
+    const xml = xmlOf(editor);
+    expect(xml).not.toContain('w:val="bar"');
+    expect(xml).toContain('w:val="center"');
   });
 
   test('a stop the STYLE sets reads through, so an editor shows what is in force', () => {

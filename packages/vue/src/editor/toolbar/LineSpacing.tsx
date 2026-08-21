@@ -7,6 +7,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartComponent } from './parts';
+import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 
 const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
 const DEFAULT_PARAGRAPH_SPACE_PT = 10;
@@ -39,6 +40,7 @@ export const ToolbarLineSpacing = defineComponent({
     const command = useEditorCommand('list.lineSpacing');
     const label = useToolbarLabel();
     const open = ref(false);
+    const dialogOpen = ref(false);
     const rootRef = ref<HTMLSpanElement | null>(null);
 
     watch(open, (isOpen, _, onCleanup) => {
@@ -122,6 +124,19 @@ export const ToolbarLineSpacing = defineComponent({
                 role="menuitem"
                 class="docx-toolbar__menu-item"
                 onMousedown={guardToolbarMousedown}
+                onClick={() => {
+                  open.value = false;
+                  dialogOpen.value = true;
+                }}
+              >
+                {label('lineSpacing.options')}
+              </button>
+              <div class="docx-toolbar__menu-separator" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                class="docx-toolbar__menu-item"
+                onMousedown={guardToolbarMousedown}
                 onClick={() =>
                   applySpace(
                     'beforePt',
@@ -147,6 +162,15 @@ export const ToolbarLineSpacing = defineComponent({
               </button>
             </div>
           ) : null}
+          {/* The rows above are Word's shortcuts — a fixed Add, a zeroing Remove. The
+              dialog is the escape hatch for an exact value, which is what "Line spacing
+              options…" opens in Word and what this menu had no answer for. */}
+          <DocxEditorParagraphDialog
+            open={dialogOpen.value}
+            onClose={() => {
+              dialogOpen.value = false;
+            }}
+          />
         </span>
       );
     };

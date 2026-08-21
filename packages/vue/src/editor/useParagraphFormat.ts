@@ -104,6 +104,32 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
   };
 };
 
+const sameFormat = (a: ParagraphFormatRead | null, b: ParagraphFormatRead | null): boolean => {
+  if (a === null || b === null) return a === b;
+  return (
+    a.alignment === b.alignment &&
+    a.spaceBeforePt === b.spaceBeforePt &&
+    a.spaceAfterPt === b.spaceAfterPt &&
+    a.lineSpacing?.rule === b.lineSpacing?.rule &&
+    a.lineSpacing?.value === b.lineSpacing?.value &&
+    a.indentLeftTwips === b.indentLeftTwips &&
+    a.indentRightTwips === b.indentRightTwips &&
+    a.indentFirstLineTwips === b.indentFirstLineTwips &&
+    a.contextualSpacing === b.contextualSpacing &&
+    a.keepNext === b.keepNext &&
+    a.keepLines === b.keepLines &&
+    a.widowControl === b.widowControl &&
+    a.pageBreakBefore === b.pageBreakBefore &&
+    a.tabStops?.length === b.tabStops?.length &&
+    (a.tabStops ?? []).every(
+      (stop, index) =>
+        stop.positionTwips === b.tabStops?.[index]?.positionTwips &&
+        stop.alignment === b.tabStops?.[index]?.alignment &&
+        (stop.leader ?? 'none') === (b.tabStops?.[index]?.leader ?? 'none')
+    )
+  );
+};
+
 const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
 
 /**
@@ -113,7 +139,7 @@ const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
  */
 export function useParagraphFormat(): UseParagraphFormatReturn {
   const editorRef = useDocxEditor();
-  const format = useEditorState(selectFormat);
+  const format = useEditorState(selectFormat, sameFormat);
   const editable = useEditorState(selectEditable);
 
   const isEnabled = computed(

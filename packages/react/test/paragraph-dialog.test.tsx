@@ -220,13 +220,46 @@ describe('the Paragraph dialog', () => {
     });
     await openDialog();
     expect(editor().surface!.formatting().paragraphFlags.keepNext).toBeNull();
-    expect(checkboxFor(view, 'Keep with next').checked).toBe(false);
+    // Indeterminate, NOT unchecked. Unchecked would claim the paragraphs agree it is off.
+    expect(checkboxFor(view, 'Keep with next').indeterminate).toBe(true);
 
     await act(async () => {
       okButton(view).click();
     });
-    // Both paragraphs now agree, because OK sends the form as shown — the honest reading of
-    // a dialog whose box was visibly unchecked when the user pressed OK.
-    expect(editor().surface!.formatting().paragraphFlags.keepNext).toBe(false);
+    // Still mixed: the user never touched the box, and an untouched field is not a decision.
+    expect(editor().surface!.formatting().paragraphFlags.keepNext).toBeNull();
+  });
+
+  test('touching that box RESOLVES the disagreement across the selection', async () => {
+    const { view, editor, openDialog } = mountDialog(p('one', '<w:keepNext/>') + p('two'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    // Click it on, which also clears the indeterminate look — from here it means what it shows.
+    await act(async () => {
+      fireEvent.click(checkboxFor(view, 'Keep with next'));
+    });
+    expect(checkboxFor(view, 'Keep with next').indeterminate).toBe(false);
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().surface!.formatting().paragraphFlags.keepNext).toBe(true);
+  });
+
+  test('a no-change OK writes nothing, so it cannot detach a paragraph from its style', async () => {
+    // Sending the whole form would bake every cascaded value into direct `w:pPr`: the
+    // paragraph keeps its look and quietly stops following the style it was written from.
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    await act(async () => {
+      okButton(view).click();
+    });
+    // Nothing authored: the paragraph still holds only what it opened with.
+    expect(editor().snapshot().canUndo).toBe(false);
   });
 });

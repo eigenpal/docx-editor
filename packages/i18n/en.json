@@ -324,7 +324,9 @@
       "tabLeaderDot": "Dotted",
       "tabLeaderHyphen": "Dashed",
       "tabLeaderUnderscore": "Underlined",
-      "tabEmpty": "No tab stops set."
+      "tabEmpty": "No tab stops set.",
+      "tabPositionLabel": "{{position}} in",
+      "tabRemoveAt": "Clear the tab stop at {{position}} inches"
     }
   },
   "comments": {

@@ -552,6 +552,16 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
           return 'invalid-range';
         }
       }
+      // Bounded on the same terms: a clear is an element too, and both lists are
+      // file-derived once a document round-trips through the editor.
+      if (op.inForcePositionsTwips !== undefined) {
+        if (!Array.isArray(op.inForcePositionsTwips) || op.inForcePositionsTwips.length > 64) {
+          return 'invalid-range';
+        }
+        for (const position of op.inForcePositionsTwips) {
+          if (!Number.isInteger(position) || Math.abs(position) > 31680) return 'invalid-range';
+        }
+      }
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;

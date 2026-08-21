@@ -19,6 +19,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
+import { fragmentsOfParagraph } from '../layout/semantic-record-queries.ts';
 import {
   lineSpacingAttributes,
   paragraphFlagAttributes,
@@ -700,6 +701,11 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         }
         ops.push({ op: 'setParagraphProperties', paragraphId, properties });
         if (wantsTabStops) {
+          // What the editor SAW, so the op can tell an inherited stop from an authored
+          // one. The read resolves the cascade and the write lands on the paragraph, so
+          // without this a style's stop survives a "Clear All" and the command still
+          // reports success — see `applySetParagraphTabStops`.
+          const inForce = fragmentsOfParagraph(deps.layout(), paragraphId)[0]?.tabStops;
           ops.push({
             op: 'setParagraphTabStops',
             paragraphId,
@@ -708,6 +714,13 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
               alignment: stop.alignment,
               ...(stop.leader && stop.leader !== 'none' ? { leader: stop.leader } : {}),
             })),
+            ...(inForce
+              ? {
+                  inForcePositionsTwips: inForce.stops.map((stop) =>
+                    Math.round(stop.positionPt * 20)
+                  ),
+                }
+              : {}),
           });
         }
       }
