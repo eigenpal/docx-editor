@@ -200,7 +200,15 @@ export interface RunFormatting {
     readonly rule: 'multiple' | 'exact' | 'atLeast';
     readonly value: number;
   };
-  /** Space above and below the paragraph at the selection, in points. */
+  /**
+   * Space above and below the paragraph at the selection, in points.
+   *
+   * The measurement the cascade STATES — `w:docDefaults`, the style chain and direct
+   * formatting resolved together — not the gap the page finally draws. The two differ for a
+   * paragraph carrying `w:beforeAutospacing`, where Word substitutes its own value and
+   * ignores the measurement, and again where two paragraphs collapse their adjacent spacing.
+   * Absent when the selection's paragraphs disagree or no level states it.
+   */
   readonly spaceBeforePt?: number;
   readonly spaceAfterPt?: number;
   /**

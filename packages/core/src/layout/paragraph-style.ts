@@ -7,14 +7,26 @@
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { borderStrokeWidthPt } from './border-metrics.ts';
 
-/** Whether a paragraph must start a new page (`w:pageBreakBefore`). */
+/**
+ * Whether a paragraph must start a new page (`w:pageBreakBefore`).
+ *
+ * LAST WINS, like every other toggle read off the cascade (`paragraphKeeps` does the same
+ * for `w:keepNext`). An any-wins `.some()` cannot be switched off: a Chapter or Heading style
+ * carries `w:pageBreakBefore`, and Word writes `w:val="0"` on the one instance whose author
+ * unchecked the box — that paragraph still broke, so the document grew a blank page and every
+ * page number after it was wrong.
+ *
+ * An absent `w:val` is on (§17.17.4), and the off vocabulary is the whole of it — `off` is a
+ * spelling too, which {@link isOn} beside this already accepts.
+ */
 export function paragraphBreaksBefore(props: readonly OoxmlProperty[]): boolean {
-  return props.some(
-    (property) =>
-      property.localName === 'pageBreakBefore' &&
-      property.attributes?.val !== '0' &&
-      property.attributes?.val !== 'false'
-  );
+  let breaks = false;
+  for (const property of props) {
+    if (property.localName !== 'pageBreakBefore') continue;
+    const val = property.attributes?.val;
+    breaks = val === undefined || isOn(val);
+  }
+  return breaks;
 }
 
 /**
@@ -44,7 +56,7 @@ export interface ParagraphSpacing {
 
 /**
  * The gap Word substitutes when `w:beforeAutospacing` / `w:afterAutospacing` is on
- * (ECMA-376 §17.3.1.2, §17.3.1.13).
+ * (ECMA-376 §17.3.1.33, the `w:spacing` clause both attributes belong to).
  *
  * The attribute means "the consumer decides", and the authored `@before` / `@after` beside it
  * is IGNORED rather than used as the value. Word's answer is HTML's default `<p>` margin,

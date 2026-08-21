@@ -98,8 +98,9 @@ export function execEditorCommand(
       mounted.setParagraphProperty(
         'spacing',
         {
-          // `null` REMOVES the attribute (Word's "Remove space before paragraph"), which is
-          // not the same as writing a zero: a removed value inherits from the style again.
+          // `null` REMOVES the attribute, which is not the same as writing a zero: a removed
+          // value inherits from the style again, while a zero blocks the cascade. Word's
+          // "Remove space before paragraph" is the ZERO — the toolbar sends 0, not null.
           //
           // The autospacing flag on the same side goes with the measurement, because it
           // REPLACES it: `w:beforeAutospacing="1"` is worth 14pt whatever `w:before` says, so

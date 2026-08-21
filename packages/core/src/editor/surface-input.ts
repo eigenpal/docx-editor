@@ -248,10 +248,14 @@ export function createKeyDownHandler(
       return;
     }
     if (accel && !event.shiftKey && LINE_SPACING[event.key]) {
-      surface.setParagraphProperty('spacing', {
-        line: LINE_SPACING[event.key]!,
-        lineRule: 'auto',
-      });
+      // Merged, like the toolbar's `setLineSpacing`: `w:spacing` carries the line rule AND
+      // the space before and after, so a replacing write made Ctrl+2 delete the paragraph's
+      // paragraph spacing on its way to double-spacing it.
+      surface.setParagraphProperty(
+        'spacing',
+        { line: LINE_SPACING[event.key]!, lineRule: 'auto' },
+        { mergeAttributes: true }
+      );
       event.preventDefault();
       return;
     }

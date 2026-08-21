@@ -33,9 +33,9 @@ import {
 } from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
-import { fragmentHolding, lineSegments } from '../layout/line-segments.ts';
+import { lineSegments } from '../layout/line-segments.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
-import { cascadedParagraphAttributes, paragraphSpacing } from '../layout/paragraph-style.ts';
+import { cascadedParagraphAttributes } from '../layout/paragraph-style.ts';
 
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
 export interface SurfaceProperty {
@@ -86,24 +86,6 @@ export function paragraphPropertiesOf(
     fragmentPropsByLayout.set(layout, index);
   }
   return index.get(paragraphId) ?? [];
-}
-
-/**
- * What auto paragraph spacing resolves against for one paragraph.
- *
- * The flag is worth 14pt in the body and nothing at all inside a list or a table cell, so
- * the same `w:beforeAutospacing="1"` means two different gaps and the reader has to be told
- * which. Both answers come from the published layout — the marker record for list membership
- * (a `w:numPr` that resolves to nothing is not a list), the fragment walk for the cell.
- */
-function autoSpacingContextOf(
-  layout: SemanticLayout,
-  paragraphId: string
-): { inList: boolean; inTableCell: boolean } {
-  return {
-    inList: fragmentHolding(layout, paragraphId)?.marker !== undefined,
-    inTableCell: paragraphIndentOf(layout, paragraphId)?.inTable === true,
-  };
 }
 
 /** A paragraph's effective indent, plus whether it sits inside a table. */
@@ -492,10 +474,8 @@ export function formattingAt(
   // selected together with a left one showed Centre pressed one way and Left the other,
   // and pressing either was a change to both. Word shows none of the four pressed.
   const touchedParagraphs = paragraphsTouched(layout, selection);
-  const paragraphValue = <T>(
-    read: (properties: readonly SurfaceProperty[], paragraphId: string) => T
-  ): T | null =>
-    agreedOver(touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id), id)));
+  const paragraphValue = <T>(read: (properties: readonly SurfaceProperty[]) => T): T | null =>
+    agreedOver(touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id))));
   // Normalized BEFORE agreement: `w:jc` absent and `w:jc val="left"` are the same
   // alignment, and comparing the raw attribute would call them a mixed selection.
   //
@@ -537,21 +517,19 @@ export function formattingAt(
     const [rule, value] = lineSpacingText.split(':');
     return { rule: rule as 'multiple' | 'exact' | 'atLeast', value: Number(value) };
   })();
-  // The EFFECTIVE gap, in points, or null when no level of the cascade states it.
+  // The gap the cascade states, in points, or null when no level states it.
   //
-  // `w:beforeAutospacing` / `w:afterAutospacing` REPLACE the measurement beside them, so a
-  // paragraph carrying the flag has a gap the twips do not describe — Word's own value there
-  // is `w:before="100"` with the flag on, which reads 5pt and paints 14. A control acting on
-  // the twips offered to ADD space to a paragraph that already had some.
+  // The MEASUREMENT, not the resolved gap: `w:beforeAutospacing` replaces the twips beside
+  // it with Word's auto value, and resolving that here needs to know whether the paragraph
+  // is in a list or a cell — two answers only the layout holds, and guessing either one
+  // makes the control disagree with the page it sits above. The measurement is the honest
+  // answer, and it is the same answer for the one question asked of it today: Word writes
+  // `w:before="100"` beside the flag, so an auto-spaced paragraph reads non-zero and the
+  // menu offers Remove, as Word's does.
   const spacePt = (attribute: 'before' | 'after') =>
-    paragraphValue((properties, paragraphId) => {
-      const attributes = spacing(properties);
-      const stated =
-        attributes?.[attribute] !== undefined ||
-        attributes?.[`${attribute}Autospacing`] !== undefined;
-      if (!stated) return null;
-      const resolved = paragraphSpacing(properties, autoSpacingContextOf(layout, paragraphId));
-      return Math.round(resolved[attribute] * 100) / 100;
+    paragraphValue((properties) => {
+      const raw = Number(spacing(properties)?.[attribute]);
+      return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
     });
   // Indent does NOT go null on disagreement, unlike everything above it: the values are the
   // FIRST touched paragraph's and `mixed` reports the rest per field. A ruler has to draw

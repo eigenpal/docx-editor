@@ -23,6 +23,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { createKeyDownHandler } from '../surface-input.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -142,6 +143,81 @@ describe('paragraph reads answer the cascade, not its floor', () => {
     expect(editor.exec({ type: 'adjustIndent', direction: 'decrease' }).ok).toBe(true);
     expect(left()).toBe(2160);
   });
+
+  test('Increase Indent steps forward when the two spellings of w:ind meet', () => {
+    // `w:left` is the transitional spelling, `w:start` the ISO Strict one, and they are two
+    // spellings of ONE setting. Merged per ATTRIBUTE the style's `w:left` outranked the
+    // paragraph's own `w:start`, and the press moved the paragraph BACKWARDS.
+    const editor = mount(
+      '<w:p><w:pPr><w:pStyle w:val="Fancy"/><w:ind w:start="2880"/></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    const left = () => editor.snapshot().formatting?.indent?.left;
+    expect(left()).toBe(2880);
+    expect(editor.exec({ type: 'adjustIndent', direction: 'increase' }).ok).toBe(true);
+    expect(left()).toBe(3600);
+  });
+});
+
+describe('the line-spacing shortcut keeps the paragraph spacing beside it', () => {
+  test('Ctrl+2 double-spaces without deleting space before/after', () => {
+    // `w:spacing` carries three independent settings, so the chord has to MERGE the way the
+    // toolbar's own `setLineSpacing` does. Replacing the element made Ctrl+2 silently drop
+    // the paragraph's space before and after on its way to double-spacing it.
+    const editor = mount(
+      '<w:p><w:pPr><w:spacing w:before="240" w:after="240"/></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    expect(paintedSpacing(editor)).toEqual({ before: 12, after: 12 });
+
+    const onKeyDown = createKeyDownHandler(editor.surface!);
+    onKeyDown({
+      key: '2',
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: () => {},
+    } as KeyboardEvent);
+
+    expect(paintedSpacing(editor)).toEqual({ before: 12, after: 12 });
+    expect(editor.snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });
+  });
+});
+
+describe('a paragraph can switch its style page break off', () => {
+  test('w:pageBreakBefore w:val="0" over a style that sets it keeps one page', () => {
+    const styles =
+      `<w:styles xmlns:w="${W}">` +
+      '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="Chapter"><w:name w:val="Chapter"/>' +
+      '<w:pPr><w:pageBreakBefore/></w:pPr></w:style>' +
+      '</w:styles>';
+    const breaking = mount(
+      '<w:p><w:r><w:t>alpha</w:t></w:r></w:p>' +
+        '<w:p><w:pPr><w:pStyle w:val="Chapter"/></w:pPr><w:r><w:t>beta</w:t></w:r></w:p>',
+      styles
+    );
+    expect(breaking.surface!.layout().pages.length).toBe(2);
+
+    // Word writes this when the author unchecks "Page break before" on one instance. Read
+    // any-wins, the style's own entry still matched and the document grew a blank page.
+    const cancelled = mount(
+      '<w:p><w:r><w:t>alpha</w:t></w:r></w:p>' +
+        '<w:p><w:pPr><w:pStyle w:val="Chapter"/><w:pageBreakBefore w:val="0"/></w:pPr>' +
+        '<w:r><w:t>beta</w:t></w:r></w:p>',
+      styles
+    );
+    expect(cancelled.surface!.layout().pages.length).toBe(1);
+  });
+
+  test('"off" is an off value, like every other ST_OnOff read', () => {
+    const editor = mount(
+      '<w:p><w:r><w:t>alpha</w:t></w:r></w:p>' +
+        '<w:p><w:pPr><w:pageBreakBefore w:val="off"/></w:pPr><w:r><w:t>beta</w:t></w:r></w:p>'
+    );
+    expect(editor.surface!.layout().pages.length).toBe(1);
+  });
 });
 
 describe('auto paragraph spacing yields to an explicit write', () => {
@@ -206,8 +282,16 @@ describe('auto paragraph spacing yields to an explicit write', () => {
       ),
     });
     const editor = createDocxEditor({ container, document: bytes });
+    // The flag is worth nothing inside a list, so the page draws the item flush.
     expect(paintedSpacing(editor)).toEqual({ before: 0, after: 0 });
-    // The control must not offer to REMOVE a gap the list already suppresses.
-    expect(editor.snapshot().formatting?.spaceBeforePt).toBe(0);
+    // The read answers the MEASUREMENT the cascade states (100 twips), not that resolved
+    // gap: resolving it needs list and cell membership, which this lane cannot see without
+    // guessing. Documented on `spaceBeforePt`.
+    expect(editor.snapshot().formatting?.spaceBeforePt).toBe(5);
+
+    // The write still has to land, which is the half that matters: an explicit space beats
+    // the flag even here.
+    expect(editor.exec({ type: 'setParagraphSpacing', beforePt: 18 }).ok).toBe(true);
+    expect(paintedSpacing(editor).before).toBe(18);
   });
 });

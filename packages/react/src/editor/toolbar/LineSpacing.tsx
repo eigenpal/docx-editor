@@ -21,7 +21,13 @@ import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
 /** Word's line-spacing menu, in lines. */
 const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
 
-/** Word's "Add space before/after paragraph" writes 10pt — its Normal style's own value. */
+/**
+ * What Word's "Add space before/after paragraph" writes: a flat 10pt.
+ *
+ * The ribbon command's own constant, not a value read from the document — a paragraph given
+ * space this way lands on 10pt whatever its style states, so the pair is not a round trip
+ * back to a Normal that states 8pt.
+ */
 const DEFAULT_PARAGRAPH_SPACE_PT = 10;
 
 /**

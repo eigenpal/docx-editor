@@ -19,7 +19,6 @@ import {
 } from '@docx-editor.dev/core/layout';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
-import { cascadedParagraphAttributes } from '../layout/paragraph-style.ts';
 import {
   directParagraphProperties,
   mergedProperties,
@@ -273,16 +272,27 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   /**
    * `w:ind/@left` in twips, zero when nothing states it.
    *
-   * Folded across the whole list rather than picked out of it: this reads a CASCADE, whose
+   * Resolved across the whole list rather than picked out of it: this reads a CASCADE, whose
    * entries run lowest precedence first, so taking the first `w:ind` answered the style's
    * indent for a paragraph that had already been indented past it — and Increase Indent then
-   * rewrote the same one step forever (see `cascadedParagraphAttributes`).
+   * rewrote the same one step forever.
+   *
+   * Resolved PER LEVEL, not per attribute, which is where `cascadedParagraphAttributes` is
+   * the wrong tool: `w:left` and `w:start` are two SPELLINGS OF ONE SETTING (transitional and
+   * ISO Strict), so flattening both into one bag and preferring `left` answers whichever
+   * level happened to use that word. A paragraph spelling it `w:start` over a style spelling
+   * it `w:left` then stepped BACKWARDS on Increase Indent. This is the rule `paragraphIndent`
+   * already applies, and the two must agree or the ruler and the button disagree.
    */
   function leftIndentTwipsOf(
     properties: readonly { localName: string; attributes?: Readonly<Record<string, string>> }[]
   ): number {
-    const ind = cascadedParagraphAttributes(properties, 'ind');
-    const raw = ind?.left ?? ind?.start;
+    let raw: string | undefined;
+    for (const property of properties) {
+      if (property.localName !== 'ind') continue;
+      const stated = property.attributes?.left ?? property.attributes?.start;
+      if (stated !== undefined) raw = stated;
+    }
     if (!raw || !/^-?\d{1,7}$/.test(raw)) return 0;
     return Number(raw);
   }
@@ -475,7 +485,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         // Only the paragraph's OWN `w:ind` attributes are carried over: `w:ind` cascades
         // attribute by attribute (17.3.1.12), so an inherited hanging survives untouched
         // rather than being restated here.
-        const existing = cascadedParagraphAttributes(direct, 'ind');
+        const existing = direct.find((property) => property.localName === 'ind');
         ops.push({
           op: 'setParagraphProperties',
           paragraphId,
@@ -484,7 +494,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
             // Zero is written rather than dropped: an authored `w:ind` may inherit a
             // non-zero left from its style, and removing the attribute would let that
             // come back instead of taking the outdent.
-            attributes: leftIndentAttributes(existing ?? undefined, String(next)),
+            attributes: leftIndentAttributes(existing?.attributes, String(next)),
           }),
         });
       }
@@ -512,7 +522,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         // an op whose base is the cascade is refused, and `w:ind` carries four independent
         // settings in one element, so naming one field must leave the others as authored.
         const direct = directParagraphProperties(session.part(), paragraphId);
-        const authored = cascadedParagraphAttributes(direct, 'ind') ?? {};
+        const authored = direct.find((property) => property.localName === 'ind')?.attributes ?? {};
         let attributes: Record<string, string> = { ...authored };
         if (update.left !== undefined) {
           attributes = writeIndentSide(attributes, 'left', 'start', update.left);
