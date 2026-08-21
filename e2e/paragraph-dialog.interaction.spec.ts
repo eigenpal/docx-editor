@@ -4,12 +4,17 @@
 // are cheap and run on every push; this spec is not wired into CI and exists to be run by
 // hand when the dialog's focus handling changes.
 //
-// What it guards: closing the dialog must leave the caret where the user left it. Typing in
-// any field moves the DOM selection into that input, so by the time the dialog closes the
-// document has none — and focusing a surface with no selection puts the caret at offset
-// zero of the first paragraph, losing the user's place in a long document. Both close paths
-// have shipped this bug: OK first, then Cancel, which looked fine only because nobody had
-// typed before cancelling.
+// What it guards, both of which this branch has shipped broken:
+//
+//   1. Closing must not MOVE the user. A restore that focuses the editing surface makes it
+//      scroll its own caret into view a frame later, which after a repaginating write
+//      throws the reader ~1800px away from the paragraph they just edited.
+//   2. Closing must not leave a SELECTION behind. Restoring the engine's paragraph-granular
+//      selection turns a caret into a whole-paragraph range, and the next keystroke then
+//      replaces the paragraph. That is data loss, not a cosmetic slip.
+//
+// The dialog therefore leaves the document alone on close, and these are the two things
+// that must stay true of it.
 //
 // It cannot live with the unit tests. happy-dom does not reproduce what a browser does to a
 // selection on focus, so the same assertions there pass whether or not the code is right —
@@ -22,12 +27,30 @@ import { expect, test, type Page } from '@playwright/test';
 const DEMO_URL = 'http://localhost:5273/';
 const DIALOG = '[role="dialog"][aria-label="Paragraph"]';
 
-/** Which paragraph the caret sits in, by the engine's id rather than the DOM's shape. */
-async function caretParagraph(page: Page): Promise<string | null> {
+interface CaretState {
+  readonly paragraph: string | null;
+  readonly collapsed: boolean;
+  readonly selectedText: string;
+}
+
+/**
+ * Where the caret is AND how wide it is.
+ *
+ * The width is the point. A restore that puts the caret back in the right paragraph but
+ * spanning the whole of it is worse than losing it: the next keystroke replaces the
+ * paragraph instead of typing into it. An earlier version of this test asserted only the
+ * paragraph id and passed while exactly that shipped.
+ */
+async function caretState(page: Page): Promise<CaretState> {
   return page.evaluate(() => {
-    const node = window.getSelection()?.anchorNode ?? null;
+    const selection = window.getSelection();
+    const node = selection?.anchorNode ?? null;
     const element = node?.nodeType === 3 ? node.parentElement : (node as Element | null);
-    return element?.closest('[data-paragraph-id]')?.getAttribute('data-paragraph-id') ?? null;
+    return {
+      paragraph: element?.closest('[data-paragraph-id]')?.getAttribute('data-paragraph-id') ?? null,
+      collapsed: selection?.isCollapsed ?? true,
+      selectedText: selection?.toString() ?? '',
+    };
   });
 }
 
@@ -63,7 +86,7 @@ async function openParagraphDialog(page: Page): Promise<void> {
   await page.waitForSelector(DIALOG);
 }
 
-test('the caret survives the dialog, through both OK and Cancel', async ({ page }) => {
+test('closing the dialog moves neither the document nor the text', async ({ page }) => {
   // An ordinary 13" viewport: the buttons have to be reachable without scrolling the form.
   await page.setViewportSize({ width: 1440, height: 778 });
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
@@ -77,8 +100,13 @@ test('the caret survives the dialog, through both OK and Cancel', async ({ page 
   await page.waitForTimeout(300);
   await clickIntoVisibleParagraph(page);
 
-  const before = await caretParagraph(page);
-  expect(before).not.toBeNull();
+  const before = await caretState(page);
+  expect(before.paragraph).not.toBeNull();
+  expect(before.collapsed).toBe(true);
+  const paragraphText = await page.evaluate(
+    (id) => document.querySelector(`[data-paragraph-id="${CSS.escape(id!)}"]`)?.textContent ?? null,
+    before.paragraph
+  );
   const scrollBefore = await scroller.evaluate((element) => element.scrollTop);
 
   // ── OK, having typed, which is what moves the selection into a field ──────────────
@@ -89,8 +117,23 @@ test('the caret survives the dialog, through both OK and Cancel', async ({ page 
   await page.getByRole('button', { name: 'OK', exact: true }).click();
   await expect(page.locator(DIALOG)).toHaveCount(0);
 
-  expect(await caretParagraph(page), 'OK moved the caret').toBe(before);
-  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(scrollBefore);
+  // The user is still looking at what they were looking at.
+  expect(await scroller.evaluate((element) => element.scrollTop), 'OK scrolled the document').toBe(
+    scrollBefore
+  );
+  // And nothing is selected, so the next keystroke types rather than replaces. Weaker than
+  // it looks: with the dialog leaving the document alone there is usually no selection at
+  // all by this point, so this assertion holds trivially. It is kept as a tripwire for a
+  // future restore mechanism, not as proof the current one is safe.
+  expect((await caretState(page)).collapsed, 'OK left a selection behind').toBe(true);
+  // The paragraph the dialog formatted still holds its text.
+  expect(
+    await page.evaluate(
+      (id) =>
+        document.querySelector(`[data-paragraph-id="${CSS.escape(id!)}"]`)?.textContent ?? null,
+      before.paragraph
+    )
+  ).toBe(paragraphText);
 
   // ── Cancel, also having typed ─────────────────────────────────────────────────────
   await openParagraphDialog(page);
@@ -98,6 +141,13 @@ test('the caret survives the dialog, through both OK and Cancel', async ({ page 
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.locator(DIALOG)).toHaveCount(0);
 
-  expect(await caretParagraph(page), 'Cancel moved the caret').toBe(before);
-  expect(await scroller.evaluate((element) => element.scrollTop)).toBe(scrollBefore);
+  expect(
+    await scroller.evaluate((element) => element.scrollTop),
+    'Cancel scrolled the document'
+  ).toBe(scrollBefore);
+  expect((await caretState(page)).collapsed, 'Cancel left a selection behind').toBe(true);
+  // Not asserted: that the caret is still IN the paragraph. The dialog deliberately does
+  // not put focus back on the document — see the note on the React dialog's focus effect —
+  // so after either close path the user clicks once to resume typing. Writing that
+  // assertion would pin behaviour the dialog does not promise.
 });

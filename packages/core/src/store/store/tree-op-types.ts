@@ -114,19 +114,6 @@ export const ACCEPTED_PARAGRAPH_PROPERTIES = [
 export type AcceptedRunProperty = (typeof ACCEPTED_RUN_PROPERTIES)[number];
 export type AcceptedParagraphProperty = (typeof ACCEPTED_PARAGRAPH_PROPERTIES)[number];
 
-/**
- * One authored property: an element name plus its `w:`-namespace attributes.
- *
- * Modeled as name+attributes rather than a typed record per property because that is what
- * the tree holds, so an op maps to nodes without a lossy intermediate vocabulary. Attribute
- * VALUES are validated as XML text; their meaning is the resolver's business.
- */
-/**
- * One property an op writes, as a name plus attributes.
- *
- * Deliberately structural rather than a typed union: the accepted property lists bound WHICH
- * properties may be written, so the shape itself does not need to enumerate them.
- */
 /** One tab stop an op can author: where it sits, how it aligns, and what fills the gap. */
 export interface TabStopWrite {
   /** Position from the paragraph content origin, in twips. */
@@ -135,6 +122,16 @@ export interface TabStopWrite {
   readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 }
 
+/**
+ * One authored property: an element name plus its `w:`-namespace attributes.
+ *
+ * Modeled as name+attributes rather than a typed record per property because that is what
+ * the tree holds, so an op maps to nodes without a lossy intermediate vocabulary. Attribute
+ * VALUES are validated as XML text; their meaning is the resolver's business.
+ *
+ * Deliberately structural rather than a typed union: the accepted property lists bound WHICH
+ * properties may be written, so the shape itself does not need to enumerate them.
+ */
 export interface OoxmlProperty {
   readonly localName: string;
   readonly attributes?: Readonly<Record<string, string>>;

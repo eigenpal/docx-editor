@@ -428,6 +428,20 @@ export interface Paragraph {
 }
 
 // @public
+export interface ParagraphFlags {
+    // (undocumented)
+    readonly contextualSpacing: boolean | null;
+    // (undocumented)
+    readonly keepLines: boolean | null;
+    // (undocumented)
+    readonly keepNext: boolean | null;
+    // (undocumented)
+    readonly pageBreakBefore: boolean | null;
+    // (undocumented)
+    readonly widowControl: boolean | null;
+}
+
+// @public
 export interface ParagraphSummary {
     // (undocumented)
     readonly paraId?: string;
@@ -435,6 +449,16 @@ export interface ParagraphSummary {
     readonly styleId?: string;
     // (undocumented)
     readonly text: string;
+}
+
+// @public
+export interface ParagraphTabStop {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
 }
 
 // @public

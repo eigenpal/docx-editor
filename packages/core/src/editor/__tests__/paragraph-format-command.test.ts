@@ -265,9 +265,10 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(editor.surface!.formatting().tabStops).toHaveLength(1);
     expect(xmlOf(editor)).toContain('w:pos="1440"');
 
-    // "Clear all".
+    // "Clear all". The stop was in force, so it is suppressed with an explicit `clear`
+    // rather than merely dropped — see the op's note on the paragraph/style overlap.
     editor.exec({ type: 'setParagraphFormat', tabStops: [] });
-    expect(xmlOf(editor)).not.toContain('w:tabs');
+    expect(xmlOf(editor)).toContain('w:val="clear"');
     expect(editor.surface!.formatting().tabStops).toEqual([]);
   });
 
@@ -307,15 +308,32 @@ describe('tab stops, which a flat property write could never author', () => {
     ]);
   });
 
-  test('a paragraph-authored stop is dropped by the replace, with no redundant clear', () => {
-    // Only a stop that SURVIVES the replace needs suppressing. Clearing what the paragraph
-    // authored itself would be markup Word never writes.
+  test('a paragraph-authored stop is cleared explicitly, not merely dropped', () => {
+    // Dropping it is enough ONLY when the position is exclusively direct, and the write
+    // cannot tell: where the paragraph and its style both set 2160, dropping the direct one
+    // let the style's take its place and "Clear All" silently did nothing. Every unwanted
+    // in-force position gets a `clear`; a redundant one is inert.
     const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs>'));
     editor.surface!.selectAll();
     editor.exec({ type: 'setParagraphFormat', tabStops: [] });
-    const xml = xmlOf(editor);
-    expect(xml).not.toContain('w:val="clear"');
-    expect(xml).not.toContain('w:tabs');
+    expect(xmlOf(editor)).toContain('w:val="clear"');
+    expect(editor.surface!.formatting().tabStops).toEqual([]);
+  });
+
+  test('a stop the paragraph AND its style both set is really removed', () => {
+    // The case the "no redundant clear" rule got wrong.
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Tabbed"/>' +
+        '<w:tabs><w:tab w:val="right" w:pos="2160"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 2160, alignment: 'right' },
+    ]);
+    editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    // Not back as the style's centre stop, which is what used to happen.
+    expect(editor.surface!.formatting().tabStops).toEqual([]);
   });
 
   test('repeated identical OKs converge, rather than flipping the document between two states', () => {
@@ -414,8 +432,10 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(xml).toContain('w:val="bar"');
     expect(xml).toContain('w:pos="720"');
     expect(xml).toContain('w:val="right"');
-    // The stop the editor replaced is gone; the one it could not see is not.
-    expect(xml).not.toContain('w:pos="1440"');
+    // The stop the editor replaced no longer applies; the one it could not see still does.
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 2880, alignment: 'right' },
+    ]);
   });
 
   test('and is dropped when the editor writes a real stop at its position', () => {

@@ -349,23 +349,21 @@ export function applySetParagraphTabStops(
     .filter((child) => attributeValueOf(child, 'val') === 'clear')
     .map(positionOf)
     .filter((position) => Number.isFinite(position) && !kept.has(position));
-  // Real stops this paragraph authors ITSELF. The replace already removes these, so they
-  // need no `clear` — only a stop that survives the replace does. Clears are excluded, or a
-  // standing one would block its own regeneration.
-  const authored = new Set(
-    existingTabs
-      .filter((child) => attributeValueOf(child, 'val') !== 'clear' && !isOpaque(child))
-      .map(positionOf)
-      .filter(Number.isFinite)
-  );
-  // A stop that is in force, comes from a STYLE, and is no longer wanted. Without an
-  // explicit `clear` the style puts it straight back and the edit silently does nothing.
+  // A stop that is in force and is no longer wanted needs an explicit `clear`, or whatever
+  // supplies it puts it straight back and the edit silently does nothing.
+  //
+  // Every unwanted in-force position gets one, including positions this paragraph authors
+  // itself. Excluding those looked right — the replace removes them anyway — but it is only
+  // safe when the position is EXCLUSIVELY direct: where the paragraph and its style both
+  // set a stop at 2160, dropping the direct one let the style's take its place, so "Clear
+  // All" reported success and the stop stayed (with a different alignment). A `clear` at a
+  // position nothing inherits is inert markup, which is the cheaper mistake.
   const cleared = [
     ...new Set([
       ...standingClears,
       ...(inForcePositionsTwips ?? [])
         .map((position) => Math.round(position))
-        .filter((position) => !kept.has(position) && !authored.has(position)),
+        .filter((position) => !kept.has(position)),
     ]),
   ];
 

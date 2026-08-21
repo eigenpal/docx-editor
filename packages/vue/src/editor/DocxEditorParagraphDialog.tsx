@@ -13,7 +13,6 @@ import {
   type PropType,
 } from 'vue';
 import { useTranslation } from '../i18n';
-import { useDocxEditor } from './context';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
 import {
   changedFields,
@@ -22,15 +21,12 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
-  restorableSelection,
-  restoreFocusTo,
   trapTabWithin,
   TAB_ALIGNMENT_LABELS,
   twipsToInches,
   withTabStop,
   type ParagraphDialogFields,
   type ParagraphDialogMixed,
-  type RestorableSelection,
   type SpecialIndent,
   type TabAlignment,
   type TabLeaderName,
@@ -160,7 +156,6 @@ export const DocxEditorParagraphDialog = defineComponent({
   setup(props) {
     const { t } = useTranslation();
     const paragraph = useParagraphFormat();
-    const editorRef = useDocxEditor();
 
     const alignment = ref<'left' | 'center' | 'right' | 'justify'>('left');
     const indentLeft = ref(0);
@@ -193,9 +188,7 @@ export const DocxEditorParagraphDialog = defineComponent({
       const root = instance?.vnode.el;
       return root instanceof HTMLElement ? root.querySelector('[role="dialog"]') : null;
     };
-    const opener = ref<Element | null>(null);
     const refused = ref(false);
-    const savedSelection = ref<RestorableSelection | null>(null);
     // One prefix per mounted dialog, so a `<label for>` points at THIS dialog's input even
     // when a host renders two. Clicking a visible label is how a pointer user hits a small
     // control, and `aria-label` alone does not give them that. React uses `useId`; Vue has
@@ -208,15 +201,9 @@ export const DocxEditorParagraphDialog = defineComponent({
       ([open, format]) => {
         if (!open) {
           seeded.value = false;
-          // Hand focus back to whatever opened the dialog; leaving it on `<body>` strands a
-          // keyboard user. The OK path does this in `handleApply` instead, BEFORE the
-          // write — see `restoreFocusTo`.
-          const previous = opener.value;
-          const selection = savedSelection.value;
-          opener.value = null;
-          savedSelection.value = null;
-          restoreFocusTo(previous);
-          if (selection) editorRef.value?.exec({ type: 'setSelection', range: selection });
+          // Closing deliberately does NOT hand focus back to the document; see the note on
+          // the React twin's focus effect for the three mechanisms that were tried and why
+          // each was worse than leaving the document alone.
           return;
         }
         if (seeded.value || format === null) return;
@@ -245,11 +232,9 @@ export const DocxEditorParagraphDialog = defineComponent({
         seeded.value = true;
         // Focus the panel so Escape reaches the overlay's key handler. Without it the
         // dialog cannot be dismissed from the keyboard until the user tabs into it.
-        opener.value = document.activeElement;
         // The selection the dialog is ABOUT. Typing in any field moves the DOM selection
         // into that input, so by the time the dialog closes the document has none — and
         // focusing a surface with no selection puts the caret at the top.
-        savedSelection.value = restorableSelection(editorRef.value?.snapshot().selection);
         void nextTick(() => panelOf()?.focus());
       },
       { immediate: true }
@@ -297,9 +282,6 @@ export const DocxEditorParagraphDialog = defineComponent({
         props.onClose();
         return;
       }
-      // Focus goes back to the surface FIRST, so the commit's selection sync has somewhere
-      // to land. Restoring it after the write put the caret at the top of the document.
-      restoreFocusTo(opener.value);
       // A refused write keeps the dialog OPEN rather than claiming a success that did not
       // happen. It has to SAY so — a dialog that swallows the OK and sits there looks
       // broken rather than refused.
@@ -659,9 +641,13 @@ export const DocxEditorParagraphDialog = defineComponent({
                 type="button"
                 style={{
                   ...btnStyle,
-                  backgroundColor: 'var(--doc-accent)',
-                  color: 'var(--doc-accent-contrast)',
-                  borderColor: 'var(--doc-accent)',
+                  backgroundColor: 'var(--doc-primary)',
+                  color: 'var(--doc-on-primary)',
+                  borderColor: 'var(--doc-primary)',
+                  // The same dimming `DocxEditorPageSetup` uses. These two dialogs sit
+                  // beside each other in the same product; they cannot disagree about what
+                  // a primary button looks like.
+                  opacity: paragraph.isEnabled.value ? 1 : 0.5,
                 }}
                 disabled={!paragraph.isEnabled.value}
                 onClick={handleApply}

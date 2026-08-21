@@ -236,20 +236,6 @@ export function mergedPropertyChildren(
 }
 
 /**
- * The container's MODELLED children in `CT_PPr` order, leaving everything else where it was
- * authored.
- *
- * Placing only the NEW children by rank is enough when the container was already ordered,
- * and not otherwise: `CT_PPr` is a strict `xsd:sequence`, an out-of-order `w:pPr` still
- * reads as a typed container (only the mark's position is checked), and a rewrite that
- * preserved the authored positions of the children it rewrote emitted the same invalid
- * order back — `<w:pPr><w:jc/><w:pStyle/></w:pPr>` centred through the op came out
- * `<w:ind/><w:jc/><w:pStyle/>`, which Word reports as unreadable. An element the sequence
- * does not model (a `w14:` text effect, an `mc:AlternateContent`) keeps its authored slot:
- * its position is not ours to decide, and moving it could reorder it past the very child
- * it was written to modify.
- */
-/**
  * Where a new child belongs in an `xsd:sequence` container: BEFORE the first modelled
  * child that outranks it.
  *
@@ -274,6 +260,20 @@ export function schemaInsertIndex(
   return children.length;
 }
 
+/**
+ * The container's MODELLED children in `CT_PPr` order, leaving everything else where it was
+ * authored.
+ *
+ * Placing only the NEW children by rank is enough when the container was already ordered,
+ * and not otherwise: `CT_PPr` is a strict `xsd:sequence`, an out-of-order `w:pPr` still
+ * reads as a typed container (only the mark's position is checked), and a rewrite that
+ * preserved the authored positions of the children it rewrote emitted the same invalid
+ * order back — `<w:pPr><w:jc/><w:pStyle/></w:pPr>` centred through the op came out
+ * `<w:ind/><w:jc/><w:pStyle/>`, which Word reports as unreadable. An element the sequence
+ * does not model (a `w14:` text effect, an `mc:AlternateContent`) keeps its authored slot:
+ * its position is not ours to decide, and moving it could reorder it past the very child
+ * it was written to modify.
+ */
 function inSchemaOrder(children: readonly OoxmlNode[], sequence: readonly string[]): OoxmlNode[] {
   const slots: number[] = [];
   const modelled: OoxmlNode[] = [];

@@ -44,3 +44,5 @@ export {
   findContentControl,
   isContentControlNode,
 } from './tree-op-nodes.ts';
+
+export type { TabStopWrite } from './tree-op-types.ts';

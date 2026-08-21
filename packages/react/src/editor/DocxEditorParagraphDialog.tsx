@@ -16,7 +16,6 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import { useTranslation } from '../i18n';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
-import { useDocxEditor } from './context';
 import {
   changedFields,
   formatInches,
@@ -24,15 +23,12 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
-  restorableSelection,
-  restoreFocusTo,
   trapTabWithin,
   TAB_ALIGNMENT_LABELS,
   twipsToInches,
   withTabStop,
   type ParagraphDialogFields,
   type ParagraphDialogMixed,
-  type RestorableSelection,
   type SpecialIndent,
   type TabAlignment,
   type TabLeaderName,
@@ -158,7 +154,6 @@ export function DocxEditorParagraphDialog({
 }: DocxEditorParagraphDialogProps): ReactElement | null {
   const { t } = useTranslation();
   const { format, isEnabled, apply } = useParagraphFormat();
-  const editor = useDocxEditor();
 
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [indentLeft, setIndentLeft] = useState(0);
@@ -223,28 +218,28 @@ export function DocxEditorParagraphDialog({
     seeded.current = true;
   }, [open, format]);
 
-  // Focus the panel on open, so Escape reaches the overlay's key handler, and hand focus
-  // back on close — leaving it on `<body>` strands a keyboard user entirely. The handing
-  // back happens in `handleApply` for the OK path, BEFORE the write; see `restoreFocusTo`.
-  const openerRef = useRef<Element | null>(null);
-  const selectionRef = useRef<RestorableSelection | null>(null);
+  // Focus the panel on open, so Escape reaches the overlay's key handler.
+  //
+  // Closing deliberately does NOT hand focus back to the document. Three mechanisms were
+  // tried and each was worse than doing nothing:
+  //
+  //   - Restoring the engine's `snapshot().selection` turns a caret into a whole-paragraph
+  //     selection — that vocabulary carries no offset by design — so the next keystroke
+  //     replaces the paragraph.
+  //   - Restoring the DOM range instead is offset-correct, but focusing the surface makes
+  //     it scroll its own caret into view on a LATER frame. After a write that repaginated,
+  //     that scrolls the user away from the paragraph they just edited and virtualizes it
+  //     out of the DOM.
+  //   - Putting the scroll position back afterwards does not help: the surface's scroll
+  //     lands after the restore, not before it.
+  //
+  // So the dialog leaves the document alone. The user's place and their text are both
+  // intact; the cost is one click before typing resumes. That is the smallest of the four
+  // behaviours and the only one that cannot lose work. `e2e/paragraph-dialog.interaction.spec.ts`
+  // holds the two invariants that matter: closing moves neither the scroll nor the text.
   useEffect(() => {
-    if (!open) return;
-    openerRef.current = document.activeElement;
-    // The selection the dialog is ABOUT. Typing in any field moves the DOM selection into
-    // that input, so by the time the dialog closes the document has none — and focusing a
-    // surface with no selection puts the caret at the top. Focus alone cannot carry this.
-    selectionRef.current = restorableSelection(editor?.snapshot().selection);
-    panelRef.current?.focus();
-    return () => {
-      const opener = openerRef.current;
-      const selection = selectionRef.current;
-      openerRef.current = null;
-      selectionRef.current = null;
-      restoreFocusTo(opener);
-      if (selection) editor?.exec({ type: 'setSelection', range: selection });
-    };
-  }, [open, editor]);
+    if (open) panelRef.current?.focus();
+  }, [open]);
 
   const handleApply = useCallback(() => {
     const seed = seedRef.current;
@@ -278,9 +273,6 @@ export function DocxEditorParagraphDialog({
       onClose();
       return;
     }
-    // Focus goes back to the surface FIRST, so the commit's selection sync has somewhere to
-    // land. Restoring it after the write instead put the caret at the top of the document.
-    restoreFocusTo(openerRef.current);
     // A refused write keeps the dialog OPEN: `apply` is honest about op-layer rejections,
     // so closing here would claim a success that did not happen. It has to SAY so — a
     // dialog that swallows the OK and sits there looks broken rather than refused.
@@ -662,9 +654,13 @@ export function DocxEditorParagraphDialog({
             type="button"
             style={{
               ...btnStyle,
-              backgroundColor: 'var(--doc-accent)',
-              color: 'var(--doc-accent-contrast)',
-              borderColor: 'var(--doc-accent)',
+              backgroundColor: 'var(--doc-primary)',
+              color: 'var(--doc-on-primary)',
+              borderColor: 'var(--doc-primary)',
+              // The same dimming `DocxEditorPageSetupDialog` uses. These two dialogs sit
+              // beside each other in the same product; they cannot disagree about what a
+              // primary button looks like.
+              opacity: isEnabled ? 1 : 0.5,
             }}
             disabled={!isEnabled}
             onClick={handleApply}

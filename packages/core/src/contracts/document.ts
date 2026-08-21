@@ -54,6 +54,8 @@ export type {
   HeaderFooterSet,
   IndentFormatting,
   Paragraph,
+  ParagraphFlags,
+  ParagraphTabStop,
   Revision,
   RevisionType,
   RunFormatting,

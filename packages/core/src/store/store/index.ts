@@ -17,6 +17,7 @@ export {
   type InlineControlSpan,
   type OffsetSpan,
   type OoxmlProperty,
+  type TabStopWrite,
   type ParagraphOffsetIndex,
   type Segment,
   type TreeDocOp,
