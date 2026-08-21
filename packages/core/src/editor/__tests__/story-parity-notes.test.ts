@@ -1,0 +1,109 @@
+// A note story stays reachable whatever it holds.
+//
+// Found while building the parity fixture: giving every story an identical probe story made the
+// footnote and endnote disappear. A block `w:sdt` anywhere inside a `w:footnote` or
+// `w:endnote` costs the whole note — its paragraphs vanish from `paragraphIdsIn`, `enterNote`
+// refuses, and there is no refusal reason because nothing believes a note is there to enter.
+//
+// A content control inside a footnote is ordinary Word markup, so this is a note that cannot be
+// read or edited at all. The parity fixture works around it by leaving the note stories without
+// a control, which is why the gap is pinned here rather than left implicit in that asymmetry.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
+import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+const BLOCK_SDT =
+  `<w:sdt><w:sdtPr><w:alias w:val="Pick"/><w:tag w:val="Pick"/><w:text/></w:sdtPr>` +
+  `<w:sdtContent><w:p><w:r><w:t>Control</w:t></w:r></w:p></w:sdtContent></w:sdt>`;
+
+const NOTE_PARAGRAPH = '<w:p><w:r><w:t>Note</w:t></w:r></w:p>';
+
+/** One footnote holding exactly `inner`, referenced from the body. */
+function docx(inner: string): Uint8Array {
+  const body =
+    `<w:p><w:r><w:t>Alpha</w:t></w:r>` +
+    `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
+    `<w:footnoteReference w:id="1"/></w:r></w:p>`;
+  const footnotes =
+    `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:type="continuationSeparator" w:id="0">` +
+    `<w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:id="1">${inner}</w:footnote>`;
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.footnotes+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${footnotes}</w:footnotes>`),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr/></w:body></w:document>`
+    ),
+  });
+}
+
+function mount(inner: string): { surface: PaginatedSurface; destroy: () => void } {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const result = mountPaginatedSurface(container, docx(inner), { scale: 1 });
+  if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+  return {
+    surface: result.surface,
+    destroy: () => {
+      result.surface.destroy();
+      container.remove();
+    },
+  };
+}
+
+/** Paragraphs the footnote part publishes, minus the two separator paragraphs. */
+function noteParagraphCount(surface: PaginatedSurface): number {
+  const ids = surface.session.paragraphIdsIn({ kind: 'notesPart', noteKind: 'footnote' });
+  return Math.max(0, ids.length - 2);
+}
+
+describe('a note story is reachable whatever it holds', () => {
+  test('a footnote holding paragraphs is reachable', () => {
+    const { surface, destroy } = mount(NOTE_PARAGRAPH);
+    try {
+      expect(noteParagraphCount(surface)).toBe(1);
+      expect(surface.enterNote('footnote:1')).toBe(true);
+    } finally {
+      destroy();
+    }
+  });
+
+  test('a footnote holding a block content control is unreachable (known broken)', () => {
+    const { surface, destroy } = mount(`${NOTE_PARAGRAPH}${BLOCK_SDT}`);
+    try {
+      // The note loses not just the control's paragraph but its OWN, and with them any way in.
+      expect(
+        noteParagraphCount(surface),
+        'a footnote with a block content control is now reachable: drop the knownBroken'
+      ).toBe(0);
+      expect(surface.enterNote('footnote:1')).toBe(false);
+    } finally {
+      destroy();
+    }
+  });
+});
