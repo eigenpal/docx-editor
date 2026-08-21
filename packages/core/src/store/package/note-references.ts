@@ -224,6 +224,27 @@ function collectParagraphNoteReferences(
  * shared and mutated in place. Hits are segment-aligned (`segmentsOf`); demoted wrappers
  * never invent atomOffsets.
  */
+/**
+ * Per-paragraph note-reference memo, keyed on the immutable paragraph node.
+ *
+ * Only the budget-free scan uses it (layout runs one per published pass over a part whose
+ * paragraphs are all shared but the edited one); budgeted mutation scans keep the plain
+ * walk so their visited accounting stays exact.
+ */
+const paragraphNoteHitMemos = new WeakMap<OoxmlNode, readonly NoteReferenceHit[]>();
+
+function paragraphNoteHitsOf(
+  paragraph: OoxmlParagraphNode,
+  partName: string
+): readonly NoteReferenceHit[] {
+  const cached = paragraphNoteHitMemos.get(paragraph);
+  if (cached) return cached;
+  const hits: NoteReferenceHit[] = [];
+  collectParagraphNoteReferences(paragraph, hits, undefined, MAX_NOTE_REFERENCE_SCAN, partName);
+  paragraphNoteHitMemos.set(paragraph, hits);
+  return hits;
+}
+
 export function collectNoteReferences(
   part: OoxmlPart,
   options?: {
@@ -235,6 +256,7 @@ export function collectNoteReferences(
   // unbounded maxHits and rely on the visited-node budget (+ truncation) instead.
   const maxHits = options?.maxHits ?? MAX_NOTE_REFERENCE_SCAN;
   const budget = options?.budget;
+  const memoized = budget === undefined;
   const hits: NoteReferenceHit[] = [];
 
   const walk = (node: OoxmlNode, depth: number): void => {
@@ -247,6 +269,13 @@ export function collectNoteReferences(
     if (node.kind === 'textValue') return;
 
     if (node.kind === 'paragraph') {
+      if (memoized) {
+        for (const hit of paragraphNoteHitsOf(node, part.name)) {
+          if (hits.length >= maxHits) return;
+          hits.push(hit);
+        }
+        return;
+      }
       collectParagraphNoteReferences(node, hits, budget, maxHits, part.name);
       return;
     }

@@ -485,6 +485,8 @@ export function createNotesLayoutInput(env: {
     partName: string,
     paragraph: import('@docx-editor.dev/core/store').OoxmlNode
   ) => string;
+  /** Part-level drawing epoch, so the notes-pass memo can trust the closures above. */
+  readonly drawingLayoutEpochForPart?: (partName: string) => string;
 }): NotesLayoutInput | undefined {
   const pkg = env.session.currentPackage();
   const footnotesPart = resolveNotesPart(pkg, 'footnote');
@@ -548,6 +550,15 @@ export function createNotesLayoutInput(env: {
     styleCascade: env.styleCascade,
     defaultTabStopPt: env.defaultTabStopPt,
     ...(drawingsForPart ? { drawingsForPart } : {}),
+    // One epoch over both notes parts: either part's drawing state moving must invalidate
+    // the notes-pass memo.
+    ...(drawingsForPart && env.drawingLayoutEpochForPart
+      ? {
+          drawingLayoutEpoch: [footnotesPart, endnotesPart]
+            .map((notesPart) => (notesPart ? env.drawingLayoutEpochForPart!(notesPart.name) : ''))
+            .join('\0'),
+        }
+      : {}),
   };
 }
 

@@ -787,6 +787,7 @@ export function mountPaginatedSurface(
       inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
       drawingTokenForParagraphForPart: (partName, paragraph) =>
         drawingBundle.drawingTokenForParagraph(paragraph, partName),
+      drawingLayoutEpochForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
     });
     return layoutSemanticDocument(session.part(), revision, {
       measurer,

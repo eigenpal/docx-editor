@@ -102,6 +102,12 @@ export interface LayoutSession {
    * owned by `semantic-layout.ts`, which is the only reader and writer.
    */
   prepass: unknown;
+  /**
+   * The notes pass's memoized state (reference hits, mark contexts, per-page attach
+   * results), reused while its inputs are unchanged. Opaque here: the shape is owned by
+   * `note-pagination.ts`, which is the only reader and writer.
+   */
+  notes: unknown;
   /** Line counter at the start of the previous pass, for translating reused section counts. */
   startLineCounter: number;
   /**
@@ -167,5 +173,6 @@ export function createLayoutSession(): LayoutSession {
     balanceLimit: null,
     multi: null,
     notePageBottomReserves: null,
+    notes: null,
   };
 }

@@ -253,6 +253,32 @@ describe('footnote bottom reservation', () => {
     }
   });
 
+  test('the notes-pass memo reproduces a clean pass byte for byte', () => {
+    const { part, notes } = loadNotesDoc(filledPageWithFootnoteDoc());
+    const session = createLayoutSession();
+    layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-memo-oracle',
+    });
+    // The editor rebuilds the notes input object every pass; a content-equal rebuild must
+    // hit the session memo and still publish exactly what a memo-less pass publishes.
+    const rebuiltNotes: NotesLayoutInput = { ...notes };
+    const incremental = layoutSemanticDocument(part, 2, {
+      measurer: notes.measurer,
+      notes: rebuiltNotes,
+      session,
+      producer: 'notes-memo-oracle',
+    });
+    const clean = layoutSemanticDocument(part, 2, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'notes-memo-oracle',
+    });
+    expect(JSON.stringify(incremental)).toBe(JSON.stringify(clean));
+  });
+
   test('moving a citation re-runs body so a stale prior-page reserve is dropped', () => {
     const { part, notes } = loadNotesDoc(singleRefFootnoteDoc());
     const sections = enumerateDocumentSections(part);

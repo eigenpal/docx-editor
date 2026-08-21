@@ -33,6 +33,7 @@ export function applyLineSpacing(spacing: ParagraphLineSpacing, naturalHeight: n
 export function attachNotesToLayout(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, options?: {
     readonly fallbackReasons?: readonly NotePaginationFallbackReason[];
     readonly paragraphSectionIndex?: ReadonlyMap<string, number>;
+    readonly memo?: unknown;
 }): NotesAttachResult;
 
 // @public
@@ -373,7 +374,8 @@ export interface CompoundBorderMetrics {
 export function computeDoubleBorderMetricsPt(widthPt: number): CompoundBorderMetrics;
 
 // @public
-export function computeFootnoteReserves(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, noteMarks: NoteMarkContext): {
+export function computeFootnoteReserves(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, noteMarks: NoteMarkContext,
+passMemo?: unknown): {
     readonly reserves: ReadonlyMap<number, number>;
     readonly stable: boolean;
     readonly reasons: readonly NotePaginationFallbackReason[];
@@ -1177,6 +1179,7 @@ export interface LayoutSession {
     keys: string[];
     multi: MultiSectionLayoutState | null;
     notePageBottomReserves: ReadonlyMap<number, number> | null;
+    notes: unknown;
     parityDependent: boolean;
     prepass: unknown;
     // @internal
@@ -1503,6 +1506,7 @@ export interface NotesLayoutInput {
     readonly documentEndnoteProps: ResolvedEndnoteProperties;
     readonly documentFootnoteProps: ResolvedFootnoteProperties;
     readonly documentProperties?: DocumentProperties;
+    readonly drawingLayoutEpoch?: string;
     readonly drawingsForPart?: (ownerPartName: string) => NoteStoryDrawings | undefined;
     readonly endnotePropsBySection: readonly ResolvedEndnoteProperties[];
     // (undocumented)
