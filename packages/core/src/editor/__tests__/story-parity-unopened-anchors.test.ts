@@ -18,6 +18,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { PART_OF_STORY, partOfNodeId, scopeOf } from './story-parity-harness.ts';
 import { storyParityDocx, HEADER_R_ID, FOOTER_R_ID } from './story-parity-fixture.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { strToU8, zipSync } from 'fflate';
 
 let cleanup: (() => void) | null = null;
 afterEach(() => {
@@ -93,5 +94,88 @@ describe('a story nobody has opened is still addressable', () => {
     expect(surface.activeScope()).toEqual(scopeOf('footer'));
     expect(surface.state().selection.head.paragraphId).toBe(nodeId);
     void FOOTER_R_ID;
+  });
+});
+
+// A header whose ids are exactly the cases minting has to repair: a DUPLICATE pair, one out of
+// range, one missing, and the reserved zero. These are the shapes where a read-side mint and the
+// store's could diverge — and a paraId that changes when the reader clicks into the story names
+// a real paragraph, just not the one the caller meant.
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const AWKWARD_R_ID = 'rId10';
+
+function awkwardIdsDocx(): Uint8Array {
+  const header =
+    `<w:hdr xmlns:w="${W}" xmlns:w14="${W14}">` +
+    // `AAAAAAAA` is above the legal range, and it appears twice.
+    '<w:p w14:paraId="AAAAAAAA"><w:r><w:t>One</w:t></w:r></w:p>' +
+    '<w:p w14:paraId="AAAAAAAA"><w:r><w:t>Two</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>Three</w:t></w:r></w:p>' +
+    '<w:p w14:paraId="00000000"><w:r><w:t>Four</w:t></w:r></w:p>' +
+    '</w:hdr>';
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.' +
+        'relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.header+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/>` +
+        '</Relationships>'
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="${AWKWARD_R_ID}" Type="${R}/header" Target="header1.xml"/>` +
+        '</Relationships>'
+    ),
+    'word/header1.xml': strToU8(header),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p>` +
+        `<w:sectPr><w:headerReference w:type="default" r:id="${AWKWARD_R_ID}"/></w:sectPr>` +
+        '</w:body></w:document>'
+    ),
+  });
+}
+
+describe('a read-side mint is the mint the store will make', () => {
+  test('duplicate, out-of-range, missing and zero ids all survive opening unchanged', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const editor = createDocxEditor({ document: awkwardIdsDocx(), author: 'Parity' });
+    cleanup = () => {
+      editor.destroy();
+      host.remove();
+      document.getSelection()?.removeAllRanges();
+    };
+    editor.attach(host);
+    const surface = editor.surface!;
+
+    const headerIds = (): Map<string, string> =>
+      new Map(
+        [...surface.session.paragraphAnchors().paraIdByNode].filter(
+          ([nodeId]) => partOfNodeId(nodeId) === PART_OF_STORY.header
+        )
+      );
+
+    const before = headerIds();
+    expect(before.size, 'the header contributed no paraIds').toBe(4);
+    // Repaired, not preserved: `AAAAAAAA` is above the legal range and appears twice, and the
+    // reserved zero is never a real id.
+    expect([...before.values()]).not.toContain('AAAAAAAA');
+    expect([...before.values()]).not.toContain('00000000');
+    expect(new Set(before.values()).size, 'the repair minted a duplicate').toBe(4);
+
+    expect(surface.enterHeaderFooter({ rId: AWKWARD_R_ID })).toBe(true);
+    expect(headerIds()).toEqual(before);
   });
 });
