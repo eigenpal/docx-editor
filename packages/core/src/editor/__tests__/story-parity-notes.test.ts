@@ -1,13 +1,15 @@
 // A note story stays reachable whatever it holds.
 //
 // Found while building the parity fixture: giving every story an identical probe story made the
-// footnote and endnote disappear. A block `w:sdt` anywhere inside a `w:footnote` or
-// `w:endnote` costs the whole note — its paragraphs vanish from `paragraphIdsIn`, `enterNote`
-// refuses, and there is no refusal reason because nothing believes a note is there to enter.
+// footnote and endnote disappear. `validKnownKind` spelled out the note's child rule instead of
+// reusing the body's, and the copy admitted only `generic` where the body admits every preserved
+// child. So a block `w:sdt` — or a bookmark, a hyperlink, a range marker — demoted the NOTE, and
+// a demoted note is not a note: it leaves `notesOf`, its paragraphs leave `paragraphIdsIn`, and
+// `enterNote` refuses with no reason, because nothing believes a note is there to enter.
 //
-// A content control inside a footnote is ordinary Word markup, so this is a note that cannot be
-// read or edited at all. The parity fixture works around it by leaving the note stories without
-// a control, which is why the gap is pinned here rather than left implicit in that asymmetry.
+// All of those are ordinary Word markup inside a footnote, so this was a note that could not be
+// read or edited at all. Each is pinned below, because the rule they share is one predicate and
+// a future edit to it would take them all together.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -82,28 +84,22 @@ function noteParagraphCount(surface: PaginatedSurface): number {
   return Math.max(0, ids.length - 2);
 }
 
-describe('a note story is reachable whatever it holds', () => {
-  test('a footnote holding paragraphs is reachable', () => {
-    const { surface, destroy } = mount(NOTE_PARAGRAPH);
-    try {
-      expect(noteParagraphCount(surface)).toBe(1);
-      expect(surface.enterNote('footnote:1')).toBe(true);
-    } finally {
-      destroy();
-    }
-  });
+const BOOKMARK = '<w:bookmarkStart w:id="1" w:name="mark"/><w:bookmarkEnd w:id="1"/>';
 
-  test('a footnote holding a block content control is unreachable (known broken)', () => {
-    const { surface, destroy } = mount(`${NOTE_PARAGRAPH}${BLOCK_SDT}`);
-    try {
-      // The note loses not just the control's paragraph but its OWN, and with them any way in.
-      expect(
-        noteParagraphCount(surface),
-        'a footnote with a block content control is now reachable: drop the knownBroken'
-      ).toBe(0);
-      expect(surface.enterNote('footnote:1')).toBe(false);
-    } finally {
-      destroy();
-    }
-  });
+describe('a note story is reachable whatever it holds', () => {
+  for (const [what, inner, paragraphs] of [
+    ['paragraphs', NOTE_PARAGRAPH, 1],
+    ['a block content control', `${NOTE_PARAGRAPH}${BLOCK_SDT}`, 2],
+    ['a bookmark', `${BOOKMARK}${NOTE_PARAGRAPH}`, 1],
+  ] as const) {
+    test(`a footnote holding ${what} is reachable`, () => {
+      const { surface, destroy } = mount(inner);
+      try {
+        expect(noteParagraphCount(surface)).toBe(paragraphs);
+        expect(surface.enterNote('footnote:1')).toBe(true);
+      } finally {
+        destroy();
+      }
+    });
+  }
 });

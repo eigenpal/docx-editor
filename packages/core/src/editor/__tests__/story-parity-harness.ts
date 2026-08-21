@@ -69,11 +69,8 @@ export interface OpenStory {
   readonly surface: PaginatedSurface;
   /** The probe paragraph ids, in reading order, one per entry of `PROBE_TEXT`. */
   readonly paragraphIds: readonly string[];
-  /**
-   * The paragraph inside this story's block content control, or null for the note stories,
-   * which cannot carry one. See the note at the top of `story-parity-fixture.ts`.
-   */
-  readonly controlParagraphId: string | null;
+  /** The paragraph inside this story's block content control. */
+  readonly controlParagraphId: string;
   readonly destroy: () => void;
 }
 
@@ -130,13 +127,12 @@ export function openStory(story: StoryKind): OpenStory {
       return found[0]!;
     };
 
-    const hasControl = story === 'body' || story === 'header' || story === 'footer';
     return {
       story,
       editor,
       surface,
       paragraphIds: PROBE_TEXT.map(findByText),
-      controlParagraphId: hasControl ? findByText(CONTROL_TEXT) : null,
+      controlParagraphId: findByText(CONTROL_TEXT),
       destroy,
     };
   } catch (error) {
@@ -157,7 +153,6 @@ export function caretIn(open: OpenStory, index: number): void {
 /** Put the caret in this story's content-control paragraph. */
 export function caretInControl(open: OpenStory): void {
   const paragraphId = open.controlParagraphId;
-  if (!paragraphId) throw new Error(`${open.story} carries no content control`);
   open.surface.setSelection({
     anchor: { paragraphId, offset: 0 },
     head: { paragraphId, offset: 0 },

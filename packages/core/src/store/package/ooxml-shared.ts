@@ -395,9 +395,14 @@ export function validKnownKind(kind: KnownKind, children: readonly OoxmlNode[]):
     case 'endnotes':
       return children.every((child) => child.kind === 'note' || child.kind === 'generic');
     case 'note':
-      // Same block content model as body — paragraphs and tables; misplaced knowns demote.
+      // The same block content model as `body`, through the same predicate. Spelling it out
+      // separately drifted: the list admitted only `generic` where the body admits every
+      // preserved child, so a bookmark, a hyperlink, a range marker or a content control
+      // inside a `w:footnote` demoted the NOTE. A demoted note is not a note — it vanishes
+      // from `notesOf`, its paragraphs leave `paragraphIdsIn`, and `enterNote` refuses, so a
+      // footnote holding an ordinary content control could not be read or edited at all.
       return children.every(
-        (child) => child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'generic'
+        (child) => child.kind === 'paragraph' || child.kind === 'table' || isPreservedChild(child)
       );
     case 'noteReference':
     case 'noteRef':

@@ -91,19 +91,18 @@ describe('a content control resolves in the story the caret is in', () => {
   }
 
   for (const story of ['header', 'footer'] as const) {
-    test(`navigate('next') keeps the caret in the ${story} (known broken)`, () => {
+    test(`navigate('next') keeps the caret in the ${story}`, () => {
       const open = openStory(story);
       try {
         caretInControl(open);
         open.surface.contentControls.navigate('next');
-        // The tab roster is still built from `contentControlsInLayout`, which is body-only, so
-        // the caret's own control is never in it and 'next' lands on the first control in the
-        // document BODY. The caret then sits in the body while the scope still says furniture,
-        // and every keystroke after it routes to a store that has never heard of it.
-        expect(
-          partOfNodeId(open.surface.state().selection.head.paragraphId),
-          `navigate now stays in the ${story}: drop the knownBroken`
-        ).toBe(PART_OF_STORY.body);
+        // Against a body-only roster the caret's own control was never in the list, so its
+        // index was always -1 and 'next' landed on the first control in the document body —
+        // moving the caret out of the story while the scope still said it was open, which
+        // refuses every keystroke after it.
+        expect(partOfNodeId(open.surface.state().selection.head.paragraphId)).toBe(
+          PART_OF_STORY[story]
+        );
         expect(open.surface.activeScope()).toEqual({
           kind: 'headerFooter',
           rId: story === 'header' ? 'rId10' : 'rId11',

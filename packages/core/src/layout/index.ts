@@ -360,7 +360,10 @@ export {
   contentControlBoundaries,
   type ContentControlFragmentRecord,
 } from './content-control-boundaries.ts';
-export { contentControlHoldingParagraph } from './content-control-boundary-layout.ts';
+export {
+  contentControlHoldingParagraph,
+  contentControlRecordsInPart,
+} from './content-control-boundary-layout.ts';
 export {
   W15_NAMESPACE_URI,
   type CommentAnchor,

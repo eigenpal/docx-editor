@@ -17,12 +17,6 @@
 // in every story including the body, so a body-only marker read looks like agreement. Control
 // is what gives the `contentControl.*` slots something to be enabled by, and what the
 // content-control resolution test hangs off.
-//
-// THE NOTE STORIES CARRY NO CONTENT CONTROL, and that asymmetry is a defect, not a choice. A
-// block `w:sdt` anywhere inside a `w:footnote` or `w:endnote` makes the whole note unreachable:
-// its paragraphs vanish from `paragraphIdsIn` and `enterNote` refuses. Measured, on a footnote
-// holding one paragraph plus one block SDT. `story-parity-notes.test.ts` pins that separately,
-// so the gap is recorded rather than quietly designed around here.
 
 import { zipSync, strToU8 } from 'fflate';
 
@@ -74,24 +68,20 @@ const contentControl = (tag: string) =>
   `<w:p><w:r><w:t>${CONTROL_TEXT}</w:t></w:r></w:p>` +
   `</w:sdtContent></w:sdt>`;
 
-/**
- * The probe story. `tag` distinguishes only the content control, never the paragraphs.
- *
- * `withControl` is false for the note stories only, for the reason at the top of this file.
- */
-function probeStory(tag: string, withControl = true): string {
+/** The probe story. `tag` distinguishes only the content control, never the paragraphs. */
+function probeStory(tag: string): string {
   return (
     `<w:p><w:pPr><w:jc w:val="center"/><w:ind w:left="720"/></w:pPr>` +
     `<w:r><w:rPr><w:b/></w:rPr><w:t>${PROBE_TEXT[0]}</w:t></w:r></w:p>` +
     `<w:p><w:r><w:t>${PROBE_TEXT[1]}</w:t></w:r></w:p>` +
     listItem(PROBE_TEXT[2], 1) +
     listItem(PROBE_TEXT[3], 2) +
-    (withControl ? contentControl(tag) : '')
+    contentControl(tag)
   );
 }
 
-/** The stories whose probe story carries a content control. */
-export const STORIES_WITH_CONTROL = ['body', 'header', 'footer'] as const;
+/** Every story carries a content control, so every one can be asked the same question. */
+export const STORIES_WITH_CONTROL = ['body', 'header', 'footer', 'footnote', 'endnote'] as const;
 
 /** `w:tag` of the content control in each story, so a resolve can be named in a failure. */
 export const CONTROL_TAG = {
@@ -181,11 +171,11 @@ export function storyParityDocx(): Uint8Array {
     'word/footer1.xml': strToU8(`<w:ftr xmlns:w="${W}">${probeStory(CONTROL_TAG.footer)}</w:ftr>`),
     'word/footnotes.xml': strToU8(
       `<w:footnotes xmlns:w="${W}">${noteSeparators('footnote')}` +
-        `<w:footnote w:id="1">${probeStory(CONTROL_TAG.footnote, false)}</w:footnote></w:footnotes>`
+        `<w:footnote w:id="1">${probeStory(CONTROL_TAG.footnote)}</w:footnote></w:footnotes>`
     ),
     'word/endnotes.xml': strToU8(
       `<w:endnotes xmlns:w="${W}">${noteSeparators('endnote')}` +
-        `<w:endnote w:id="1">${probeStory(CONTROL_TAG.endnote, false)}</w:endnote></w:endnotes>`
+        `<w:endnote w:id="1">${probeStory(CONTROL_TAG.endnote)}</w:endnote></w:endnotes>`
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${BODY}` +

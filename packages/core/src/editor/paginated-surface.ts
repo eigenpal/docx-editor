@@ -45,6 +45,7 @@ import {
   cellSelectionText,
   contentControlAtSemantic,
   contentControlHoldingParagraph,
+  contentControlRecordsInPart,
   contentControlsInLayout,
   layoutSemanticDocument,
   paragraphsInCells,
@@ -1321,8 +1322,21 @@ export function mountPaginatedSurface(
     return null;
   }
 
+  /**
+   * The controls Tab cycles, in the OPEN story.
+   *
+   * Built from the layout for the body, where the records carry document order, and from the
+   * story's own part otherwise. Against the body's list a furniture caret's own control was
+   * never in the roster, so its index was always -1 and 'next' landed unconditionally on the
+   * first control in the document body — moving the caret out of the story while the scope
+   * still said it was open, which refuses every keystroke after it.
+   */
   function editableControlsInOrder(): ContentControlBoundaryRecord[] {
-    const controls = [...contentControlsInLayout(currentLayout)];
+    const scope = storyScope();
+    const storyPart = scope.kind === 'body' ? null : session.partFor(scope);
+    const controls = storyPart
+      ? [...contentControlRecordsInPart(storyPart)]
+      : [...contentControlsInLayout(currentLayout)];
     return controls
       .filter((control) => contentLockedOrBound(control) === null)
       .sort((a, b) => {
@@ -1446,7 +1460,12 @@ export function mountPaginatedSurface(
       }
       return false;
     };
-    scanInline(session.part().root.children, 0, '');
+    scanInline(
+      (session.partFor(storyScopeOfNodeId(session, controlId, storyScope())) ?? session.part()).root
+        .children,
+      0,
+      ''
+    );
     if (!hostParagraphId) return false;
     setSelection({
       anchor: { paragraphId: hostParagraphId, offset: start },

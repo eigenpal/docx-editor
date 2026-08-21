@@ -767,17 +767,28 @@ export function attachContentControlBoundaries(
 }
 
 /**
- * The innermost content control holding `paragraphId`, in `part`, WITHOUT geometry.
+ * Every content control a part declares, in document order, WITHOUT geometry.
  *
  * For the stories that have no boundary records. `attachContentControlBoundaries` publishes
  * records for the body alone, and page-content coordinates mean nothing without knowing whose
  * box they belong to: a header caret hit-tested against body rectangles and answered with a
- * body control, which `setValue` and `remove` then edited. Resolving from the caret's own
- * paragraph, in its own part, is the answer that cannot name another story.
+ * body control, which `setValue` and `remove` then edited.
  *
  * `fragments` comes back empty. There are no page rectangles for a furniture control yet, and
  * an invented one is a rectangle a hit test would match. Chrome that paints from `fragments`
  * draws nothing, which is what it does today.
+ */
+export function contentControlRecordsInPart(
+  part: OoxmlPart
+): readonly ContentControlBoundaryRecord[] {
+  return collectedControlIndexOf(part).controls.map(recordWithoutGeometry);
+}
+
+/**
+ * The innermost content control holding `paragraphId`, in `part`.
+ *
+ * Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside a
+ * control is the one the caret is actually in.
  */
 export function contentControlHoldingParagraph(
   part: OoxmlPart,
@@ -787,25 +798,26 @@ export function contentControlHoldingParagraph(
   for (const collected of collectedControlIndexOf(part).controls) {
     const holds = collected.paragraphId === paragraphId || collected.blockIds.includes(paragraphId);
     if (!holds) continue;
-    // Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside
-    // a control is the one the caret is actually in.
     if (!found || collected.nestingDepth >= found.nestingDepth) found = collected;
   }
-  if (!found) return null;
-  const properties = contentControlPropertiesOf(found.control);
+  return found ? recordWithoutGeometry(found) : null;
+}
+
+function recordWithoutGeometry(collected: CollectedControl): ContentControlBoundaryRecord {
+  const properties = contentControlPropertiesOf(collected.control);
   const alias = propertyVal(properties, 'alias');
   const tag = propertyVal(properties, 'tag');
   return {
-    id: found.control.id,
+    id: collected.control.id,
     ...(alias !== undefined ? { alias } : {}),
     ...(tag !== undefined ? { tag } : {}),
     controlType: mapContentControlType(properties),
-    lock: found.lockStack[found.lockStack.length - 1] ?? 'unlocked',
-    effectiveLock: effectiveContentControlLock(found.lockStack),
+    lock: collected.lockStack[collected.lockStack.length - 1] ?? 'unlocked',
+    effectiveLock: effectiveContentControlLock(collected.lockStack),
     placeholder: propertyChild(properties, 'showingPlcHdr') !== undefined,
     bound: propertyChild(properties, 'dataBinding') !== undefined,
-    nestingDepth: found.nestingDepth,
-    level: found.level,
+    nestingDepth: collected.nestingDepth,
+    level: collected.level,
     fragments: [],
   };
 }
