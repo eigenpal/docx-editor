@@ -67,7 +67,14 @@ describe('a caret and its scope agree across a story change', () => {
   test('an undo that lands on a substituted paragraph lands at its start', () => {
     const open = openStory('header');
     try {
-      open.surface.type('HEADER');
+      // From a NON-ZERO offset, or the mark undo restores carries none and the test cannot
+      // tell a substituted offset from a preserved one.
+      const headerParagraph = open.paragraphIds[PROBE.plain]!;
+      open.surface.setSelection({
+        anchor: { paragraphId: headerParagraph, offset: 4 },
+        head: { paragraphId: headerParagraph, offset: 4 },
+      });
+      open.surface.type('X');
       open.surface.exitHeaderFooter();
       const bodyParagraph = open.surface.session.paragraphIds()[0]!;
       open.surface.setSelection({
