@@ -174,17 +174,25 @@ function relatedPartName(
   contentType: string | readonly string[],
   conventional: string
 ): string {
-  for (const record of relationshipsOf(pkg, storyPartName)) {
-    if (record.type !== relationshipType) continue;
-    const resolved = resolveInternalTarget(storyPartName, record.rawTarget);
-    if (!resolved.ok) continue;
-    if (!pkg.parts.has(resolved.partName)) return resolved.partName;
-    const actual = resolveContentTypeOf(pkg, resolved.partName);
-    if (
-      actual !== null &&
-      (typeof contentType === 'string' ? actual === contentType : contentType.includes(actual))
-    ) {
-      return resolved.partName;
+  // The story first, then the MAIN document, because that is where Word keeps the comments
+  // relationship and where this lane now mints it. A story that names its own part still wins.
+  const owners =
+    storyPartName === pkg.mainDocumentPart
+      ? [storyPartName]
+      : [storyPartName, pkg.mainDocumentPart];
+  for (const owner of owners) {
+    for (const record of relationshipsOf(pkg, owner)) {
+      if (record.type !== relationshipType) continue;
+      const resolved = resolveInternalTarget(owner, record.rawTarget);
+      if (!resolved.ok) continue;
+      if (!pkg.parts.has(resolved.partName)) return resolved.partName;
+      const actual = resolveContentTypeOf(pkg, resolved.partName);
+      if (
+        actual !== null &&
+        (typeof contentType === 'string' ? actual === contentType : contentType.includes(actual))
+      ) {
+        return resolved.partName;
+      }
     }
   }
   return conventional;
@@ -542,7 +550,20 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
       const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
       if (!root) return current;
       const withCommentsPart = withNewPart(current, commentsName, root, COMMENTS_TYPE);
-      return withRelationship(withCommentsPart, storyPartName, COMMENTS_REL, 'comments.xml').pkg;
+      // The relationship belongs to the MAIN DOCUMENT, not to the story the comment is in.
+      // `withRelationship` fails closed when the owner has no `.rels` part, and a header, a
+      // footer or a notes part normally has none — so a comment authored in furniture wrote
+      // `comments.xml` with nothing pointing at it. Word resolves the comments part only
+      // through the main document's relationship, so it never saw the comment at all, and the
+      // engine's own thread walk missed `commentsExtended.xml` and left replies orphaned when
+      // the thread was deleted.
+      // Both parts live in `/word/`, so the relative target is unchanged by the move.
+      return withRelationship(
+        withCommentsPart,
+        current.mainDocumentPart,
+        COMMENTS_REL,
+        'comments.xml'
+      ).pkg;
     });
 
     if (parentTarget && mintedParentParaId) {
@@ -575,7 +596,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
         const withExtended = withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE);
         return withRelationship(
           withExtended,
-          storyPartName,
+          current.mainDocumentPart,
           COMMENTS_EXTENDED_REL,
           'commentsExtended.xml'
         ).pkg;
