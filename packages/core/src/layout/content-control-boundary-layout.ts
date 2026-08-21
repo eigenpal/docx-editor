@@ -649,6 +649,16 @@ export function withContentControlMetadata(
 }
 
 /**
+ * The control-carrying wrapper built for one raw page, kept on the page it wraps.
+ *
+ * Weak on the raw page, so a page that falls out of the layout takes its wrapper with it.
+ */
+const wrappedPages = new WeakMap<
+  PageRecord,
+  { readonly controls: readonly ContentControlBoundaryRecord[]; readonly wrapped: PageRecord }
+>();
+
+/**
  * Publish content-control boundary records onto a laid-out document.
  *
  * Page fragment identity is preserved when a page's control list is unchanged; metadata-only
@@ -721,7 +731,17 @@ export function attachContentControlBoundaries(
     if (sameBoundaryList(page.contentControls, pageControls)) return page;
     if (pageControls.length === 0 && !page.contentControls) return page;
     pagesChanged = true;
-    return { ...page, contentControls: pageControls };
+    // The SAME wrapper as last time, when the page underneath it and the controls on it are
+    // both unchanged. Pagination reuses a page it did not touch, but hands it back without
+    // the control list, so this stage re-wraps it on every pass — and a new wrapper every
+    // keystroke defeats every consumer keyed on page identity, from the per-page layout
+    // indexes to paint's sheet reuse. On a contract with controls on a hundred pages, those
+    // hundred sheets were rebuilt for an edit that touched none of them.
+    const cached = wrappedPages.get(page);
+    if (cached && sameBoundaryList(cached.controls, pageControls)) return cached.wrapped;
+    const wrapped = { ...page, contentControls: pageControls };
+    wrappedPages.set(page, { controls: pageControls, wrapped });
+    return wrapped;
   });
   const pages = pagesChanged ? mapped : layout.pages;
 

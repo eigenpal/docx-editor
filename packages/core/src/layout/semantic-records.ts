@@ -922,9 +922,11 @@ export function fragmentsOfParagraph(
 export function lineAtPosition(
   layout: SemanticLayout,
   paragraphId: string,
-  offset: number
+  offset: number,
+  /** Lines to test, when the caller already knows which ones can carry the paragraph. */
+  candidates?: Iterable<LineRecord>
 ): LineRecord | null {
-  for (const line of linesOf(layout)) {
+  for (const line of candidates ?? linesOf(layout)) {
     // The part of the line this paragraph OWNS. A resolved display mode lays merged
     // paragraphs out on shared lines, and the half the line is not named after would
     // otherwise never match — its spans are there, its name is not.

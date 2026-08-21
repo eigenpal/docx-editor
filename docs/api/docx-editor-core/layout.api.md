@@ -1235,7 +1235,8 @@ export interface LevelOverride {
 }
 
 // @public
-export function lineAtPosition(layout: SemanticLayout, paragraphId: string, offset: number): LineRecord | null;
+export function lineAtPosition(layout: SemanticLayout, paragraphId: string, offset: number,
+candidates?: Iterable<LineRecord>): LineRecord | null;
 
 // @public
 export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number;

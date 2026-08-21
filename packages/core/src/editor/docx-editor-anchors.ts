@@ -26,6 +26,8 @@ import { fragmentParagraphs } from '../layout/line-segments.ts';
  * A published layout is immutable, so the index is valid for exactly as long as that object
  * is the current one, and a new revision brings a new one.
  */
+const bodyFragmentsOf = (page: SemanticLayout['pages'][number]) => paragraphFragmentsOf(page);
+
 export function createAnchorIndex(): (
   layout: SemanticLayout
 ) => Map<string, ReviewParagraphAnchor> {
@@ -33,7 +35,10 @@ export function createAnchorIndex(): (
   return (layout) => {
     const cached = cache.get(layout);
     if (cached) return cached;
-    const index = reviewAnchorIndex(layout, (page) => paragraphFragmentsOf(page));
+    // The projection is passed as a STABLE reference, not an inline arrow: the index caches
+    // each page's anchors under the projection that produced them, and a fresh closure per
+    // call would miss that cache on every commit.
+    const index = reviewAnchorIndex(layout, bodyFragmentsOf);
     for (const page of layout.pages) {
       // Header/footer stories join the same index so their cards get real geometry. A story's
       // box is sheet-absolute like a page's content box, and its fragments are story-relative

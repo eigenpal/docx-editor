@@ -10,9 +10,31 @@
 // SDTs). Header/footer/footnote paragraphs are `DocLocation` territory — the contract
 // keeps a structural address form precisely "for content the paraId map cannot reach".
 
-import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { isValidParaId, paraIdOf } from '@docx-editor.dev/core/store';
 import { allParagraphs } from './tree-binding.ts';
+
+/**
+ * The validated `w14:paraId` of one paragraph NODE, remembered on the node itself.
+ *
+ * Nodes are immutable, so a paragraph that survives an edit carries the same answer. The
+ * index is rebuilt each revision — it has to be, an edit can add or remove a paragraph —
+ * and without this every rebuild re-read the attribute list and re-validated the value for
+ * every paragraph in the document, including the thousands the edit never touched.
+ */
+const validParaIds = new WeakMap<OoxmlNode, string | null>();
+
+function validParaIdOf(paragraph: OoxmlNode): string | null {
+  const cached = validParaIds.get(paragraph);
+  if (cached !== undefined) return cached;
+  const paraId = paraIdOf(paragraph);
+  // Validity gate, defense-in-depth: normalization guarantees valid ids, but should it ever
+  // fail open on a pathological file, a junk authored value must not reach
+  // `snapshot().selection` or `query('paragraphs')` — the contract says 8-hex.
+  const valid = paraId === null || !isValidParaId(paraId) ? null : paraId;
+  validParaIds.set(paragraph, valid);
+  return valid;
+}
 
 export interface ParagraphAnchorIndex {
   /** nodeId → `w14:paraId`, verbatim as authored/minted. Paragraphs without one are absent. */
@@ -30,11 +52,8 @@ export function buildParagraphAnchorIndex(part: OoxmlPart): ParagraphAnchorIndex
   const ordinalByNode = new Map<string, number>();
   allParagraphs(part).forEach((paragraph, ordinal) => {
     ordinalByNode.set(paragraph.id, ordinal);
-    const paraId = paraIdOf(paragraph);
-    // Validity gate, defense-in-depth: normalization guarantees valid ids, but should
-    // it ever fail open on a pathological file, a junk authored value must not reach
-    // `snapshot().selection` or `query('paragraphs')` — the contract says 8-hex.
-    if (paraId === null || !isValidParaId(paraId)) return;
+    const paraId = validParaIdOf(paragraph);
+    if (paraId === null) return;
     paraIdByNode.set(paragraph.id, paraId);
     const canonical = paraId.toUpperCase();
     if (!nodeByParaId.has(canonical)) nodeByParaId.set(canonical, paragraph.id);

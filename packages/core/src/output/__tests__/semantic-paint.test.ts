@@ -534,6 +534,7 @@ describe('only the pages worth building are built (task 9.4)', () => {
   test('an unchanged virtual page shell survives a new layout revision', () => {
     const container = document.createElement('div');
     paintSemanticLayout(container, layoutOf(long), { scale: 1, materialize: new Set([0]) });
+    const built = container.querySelectorAll<HTMLElement>('.docx-page')[0]!;
     const shell = container.querySelectorAll<HTMLElement>('.docx-page')[1]!;
     expect(shell.dataset.materialized).toBe('false');
     const mutations = new MutationObserver(() => {});
@@ -541,9 +542,62 @@ describe('only the pages worth building are built (task 9.4)', () => {
 
     paintSemanticLayout(container, layoutOf(long), { scale: 1, materialize: new Set([0]) });
 
-    expect(container.querySelectorAll<HTMLElement>('.docx-page')[1]).toBe(shell as never);
-    expect(mutations.takeRecords()).toHaveLength(2);
+    const pages = container.querySelectorAll<HTMLElement>('.docx-page');
+    expect(pages[1]).toBe(shell as never);
+    // The built page is adopted rather than swapped, so the container itself never moves a
+    // child: a second pass over the same content touches no sheet.
+    expect(pages[0]).toBe(built as never);
+    expect(mutations.takeRecords()).toHaveLength(0);
     mutations.disconnect();
+  });
+
+  test('editing one paragraph repaints that block and keeps every other one', () => {
+    // The typing path: one block of one page moves. Rebuilding the sheet around it made the
+    // browser restyle and lay out the whole page, and dropped the text node the caret sat in.
+    const container = document.createElement('div');
+    const before = '<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>beta</w:t></w:r></w:p>';
+    const after = '<w:p><w:r><w:t>alpha</w:t></w:r></w:p><w:p><w:r><w:t>betaX</w:t></w:r></w:p>';
+    const first = layoutOf(before);
+    const edited = layoutOf(after);
+    // What incremental layout publishes for a one-paragraph edit: the untouched block comes
+    // back as the SAME record, and only the edited one is new.
+    const next = {
+      ...edited,
+      pages: [
+        {
+          ...edited.pages[0]!,
+          fragments: [first.pages[0]!.fragments[0]!, edited.pages[0]!.fragments[1]!],
+        },
+      ],
+    };
+    paintSemanticLayout(container, first, { scale: 1 });
+    const page = container.querySelector<HTMLElement>('.docx-page')!;
+    const content = page.querySelector<HTMLElement>('.docx-page-content')!;
+    const [firstBlock, secondBlock] = [...content.children] as HTMLElement[];
+
+    paintSemanticLayout(container, next, { scale: 1 });
+
+    expect(container.querySelector('.docx-page')).toBe(page as never);
+    expect(page.querySelector('.docx-page-content')).toBe(content as never);
+    const blocks = [...content.children] as HTMLElement[];
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toBe(firstBlock as never);
+    expect(blocks[1]).not.toBe(secondBlock as never);
+    expect(blocks[1]!.textContent).toContain('betaX');
+    expect(secondBlock!.isConnected).toBe(false);
+  });
+
+  test('a page whose furniture changed is rebuilt rather than adopted', () => {
+    // Adoption is refused whenever anything but the body blocks moved, so a page can never
+    // keep a sheet that no longer describes it.
+    const container = document.createElement('div');
+    const body = '<w:p><w:r><w:t>alpha</w:t></w:r></w:p>';
+    paintSemanticLayout(container, layoutOf(body), { scale: 1 });
+    const page = container.querySelector<HTMLElement>('.docx-page')!;
+
+    paintSemanticLayout(container, layoutOf(body), { scale: 2 });
+
+    expect(container.querySelector('.docx-page')).not.toBe(page as never);
   });
 
   test('omitting the option builds everything, so the default cannot silently drop content', () => {

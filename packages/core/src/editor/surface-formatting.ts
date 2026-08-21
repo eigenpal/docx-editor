@@ -13,6 +13,7 @@ import {
   spansInCells,
   spansInSelection,
   type BlockFragmentRecord,
+  type PageRecord,
   type ParagraphIndent,
   type SemanticLayout,
   type SemanticSelection,
@@ -53,6 +54,37 @@ const fragmentPropsByLayout = new WeakMap<
 >();
 
 /**
+ * One page's contribution to that index, remembered on the PAGE record.
+ *
+ * A page that layout does not touch keeps its record identity across revisions, so a
+ * keystroke walks the lines of one page instead of every page in the document. The map above
+ * is still rebuilt per layout, because a paragraph can move between pages.
+ */
+const fragmentPropsByPage = new WeakMap<
+  PageRecord,
+  ReadonlyMap<string, readonly SurfaceProperty[]>
+>();
+
+function pageProps(page: PageRecord): ReadonlyMap<string, readonly SurfaceProperty[]> {
+  const cached = fragmentPropsByPage.get(page);
+  if (cached) return cached;
+  const props = new Map<string, readonly SurfaceProperty[]>();
+  for (const fragment of paragraphFragmentsOf(page)) {
+    if (!props.has(fragment.paragraphId)) props.set(fragment.paragraphId, fragment.props);
+    // A merged fragment lays every member out under the SURVIVOR's `w:pPr`, so that is the
+    // projection each member is being shown with. Without this a member the fragment is not
+    // named after read no properties at all, and the toolbar showed defaults.
+    for (const line of fragment.lines) {
+      for (const segment of lineSegments(line)) {
+        if (!props.has(segment.paragraphId)) props.set(segment.paragraphId, fragment.props);
+      }
+    }
+  }
+  fragmentPropsByPage.set(page, props);
+  return props;
+}
+
+/**
  * A paragraph's CASCADED properties, read back from the layout records.
  *
  * `w:docDefaults` + the style chain + direct formatting, flattened: what the paragraph
@@ -69,16 +101,8 @@ export function paragraphPropertiesOf(
   if (!index) {
     index = new Map();
     for (const page of layout.pages) {
-      for (const fragment of paragraphFragmentsOf(page)) {
-        if (!index.has(fragment.paragraphId)) index.set(fragment.paragraphId, fragment.props);
-        // A merged fragment lays every member out under the SURVIVOR's `w:pPr`, so that is
-        // the projection each member is being shown with. Without this a member the fragment
-        // is not named after read no properties at all, and the toolbar showed defaults.
-        for (const line of fragment.lines) {
-          for (const segment of lineSegments(line)) {
-            if (!index.has(segment.paragraphId)) index.set(segment.paragraphId, fragment.props);
-          }
-        }
+      for (const [id, props] of pageProps(page)) {
+        if (!index.has(id)) index.set(id, props);
       }
     }
     fragmentPropsByLayout.set(layout, index);
@@ -93,6 +117,31 @@ export interface ParagraphIndentEntry {
 }
 
 const fragmentIndentByLayout = new WeakMap<SemanticLayout, Map<string, ParagraphIndentEntry>>();
+
+/** One page's indents, on the page record, for the same reason {@link pageProps} is. */
+const fragmentIndentByPage = new WeakMap<PageRecord, ReadonlyMap<string, ParagraphIndentEntry>>();
+
+function pageIndents(page: PageRecord): ReadonlyMap<string, ParagraphIndentEntry> {
+  const cached = fragmentIndentByPage.get(page);
+  if (cached) return cached;
+  const indents = new Map<string, ParagraphIndentEntry>();
+  // Walked here rather than through `paragraphFragmentsOf`, which flattens cell paragraphs
+  // in with body ones — that difference is exactly what this index carries.
+  const visit = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
+    for (const block of blocks) {
+      if (block.kind === 'paragraph') {
+        if (!indents.has(block.paragraphId)) {
+          indents.set(block.paragraphId, { indent: block.indent, inTable });
+        }
+        continue;
+      }
+      for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks, true);
+    }
+  };
+  visit(page.fragments, false);
+  fragmentIndentByPage.set(page, indents);
+  return indents;
+}
 
 /**
  * A paragraph's EFFECTIVE indent — cascade plus the numbering merge — from the layout
@@ -112,20 +161,11 @@ export function paragraphIndentOf(
   let index = fragmentIndentByLayout.get(layout);
   if (!index) {
     const built = new Map<string, ParagraphIndentEntry>();
-    // Walked here rather than through `paragraphFragmentsOf`, which flattens cell
-    // paragraphs in with body ones — that difference is exactly what this index carries.
-    const visit = (blocks: readonly BlockFragmentRecord[], inTable: boolean): void => {
-      for (const block of blocks) {
-        if (block.kind === 'paragraph') {
-          if (!built.has(block.paragraphId)) {
-            built.set(block.paragraphId, { indent: block.indent, inTable });
-          }
-          continue;
-        }
-        for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks, true);
+    for (const page of layout.pages) {
+      for (const [id, entry] of pageIndents(page)) {
+        if (!built.has(id)) built.set(id, entry);
       }
-    };
-    for (const page of layout.pages) visit(page.fragments, false);
+    }
     index = built;
     fragmentIndentByLayout.set(layout, built);
   }
