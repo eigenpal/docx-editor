@@ -68,42 +68,56 @@ export function sectionIndexForCaret(
 }
 
 /**
- * A BODY paragraph in the same section as `paragraphId`, for an op that addresses a section by
- * anchor and can only name body content.
+ * How a section-addressed op should name the section a caret is in.
  *
- * `null` when the document has one section, where every anchor names the same thing and the
- * caller should pass none.
+ * `w:sectPr` lives on the body story, so the op can only name BODY content — and a caret in a
+ * header or a note is not body content. The three answers are genuinely different, and
+ * collapsing them to "a paragraph or `null`" is what let an unaddressable section quietly
+ * become a document-wide write.
+ */
+export type SectionAnchor =
+  /** Name this body paragraph. Its section is the one the caret is in. */
+  | { readonly kind: 'anchor'; readonly paragraphId: string }
+  /** One section: an anchor names nothing extra, so the op may omit it. */
+  | { readonly kind: 'whole-document' }
+  /**
+   * Several sections, and the caret's holds no paragraph to name.
+   *
+   * An omitted anchor here would write EVERY section, which is what `scope: 'document'` is
+   * for — so answering it to a `scope: 'section'` request changes sections nobody asked
+   * about. There is no anchor that reaches an empty final section: one exists only when every
+   * paragraph already closes an earlier section, so nothing sits at or after it.
+   */
+  | { readonly kind: 'unaddressable' };
+
+/**
+ * The anchor for the section `paragraphId` is in. See {@link SectionAnchor}.
  */
 export function sectionAnchorParagraphFor(
   session: TreeDocxSessionView,
   paragraphId: string,
   scope: StoryScope,
   openHeaderFooterSection?: number
-): string | null {
+): SectionAnchor {
   const part = session.part();
   const sections = enumerateDocumentSections(part);
-  if (sections.length <= 1) return null;
+  if (sections.length <= 1) return { kind: 'whole-document' };
   const own = bodySectionIndexOf(session, paragraphId);
-  if (own !== null) return paragraphId;
+  if (own !== null) return { kind: 'anchor', paragraphId };
 
   const index = sectionIndexForCaret(session, paragraphId, scope, openHeaderFooterSection);
   const section = sections[index];
-  if (!section) return null;
+  if (!section) return { kind: 'unaddressable' };
   const blocks = storyBlocks(part);
   for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
     const found = firstParagraphIn(blocks[i]);
-    if (found !== null) return found;
+    if (found !== null) return { kind: 'anchor', paragraphId: found };
   }
-  // A section holding no paragraph at all has NO anchor, and inventing one is worse than
-  // having none. `targetSectionNodes` resolves an anchor to the first `w:sectPr` at or after
-  // it, so any paragraph borrowed from elsewhere pins the write to THAT paragraph's section —
-  // section 0, for the obvious "first paragraph in the body" choice. An omitted anchor writes
-  // every section, which is broader than asked but does include the one the caller means; a
-  // borrowed anchor writes one section and it is the wrong one.
-  //
-  // Not exotic: a trailing body-level `w:sectPr` is minted as an empty final section, which is
-  // ordinary in a multi-section package — and its header is one a reader stands in.
-  return null;
+  // Neither a borrowed anchor nor none. Borrowing one from elsewhere in the body pins the
+  // write to THAT paragraph's section — section 0, for the obvious choice — and omitting it
+  // writes every section, which is what `scope: 'document'` already means. Both answer a
+  // question the caller did not ask; only the refusal is true.
+  return { kind: 'unaddressable' };
 }
 
 /** The first paragraph id anywhere under a block, tables and controls included. */

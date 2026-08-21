@@ -173,11 +173,21 @@ export function execEditorCommand(
       // not in that tree, so passing it straight through refused the whole write as
       // `unknown-paragraph` — Page Setup's Apply and a ruler margin drag both did nothing from
       // any furniture caret, with the dialog still reading the correct section beside them.
-      const anchor =
-        command.scope === 'section'
-          ? (mounted.sectionAnchorParagraphAt(mounted.state().selection.head.paragraphId) ??
-            undefined)
-          : undefined;
+      let anchor: string | undefined;
+      if (command.scope === 'section') {
+        const target = mounted.sectionAnchorParagraphAt(mounted.state().selection.head.paragraphId);
+        if (target.kind === 'unaddressable') {
+          // Writing every section instead is what `scope: 'document'` means, and doing it to a
+          // `scope: 'section'` request changes pages nobody asked about — quietly, because
+          // page geometry does not announce itself. A refusal is recoverable; that is not.
+          return {
+            ok: false,
+            code: 'unsupported',
+            reason: 'this section holds no paragraph to address it by',
+          };
+        }
+        anchor = target.kind === 'anchor' ? target.paragraphId : undefined;
+      }
       // When orientation arrives WITH explicit dimensions, the dimensions are
       // oriented here — Word stores landscape as swapped dimensions plus the
       // attribute. Orientation ALONE stays alone: the op swaps each written
@@ -185,6 +195,10 @@ export function execEditorCommand(
       let width = command.pageWidth;
       let height = command.pageHeight;
       if (command.orientation !== undefined && (width !== undefined || height !== undefined)) {
+        // No anchor here means `scope: 'document'`, or a single-section document — in both,
+        // the body-level properties ARE the caret's section. A `scope: 'section'` request
+        // that could not name its section was refused above rather than arriving with no
+        // anchor, which is what kept those two apart.
         const section = anchor ? mounted.sectionPropertiesAt(anchor) : mounted.sectionProperties();
         const w = width ?? section.pageSize.widthTwips;
         const h = height ?? section.pageSize.heightTwips;

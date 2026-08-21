@@ -11,8 +11,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
-import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -94,24 +93,35 @@ function mount(): DocxEditorInstance {
   return editor;
 }
 
-/** The right margin each section resolves to, in section order. */
-function rightMargins(editor: DocxEditorInstance): number[] {
-  const surface = editor.surface!;
-  // Read through the layout's own pages, which is what the reader sees.
-  const seen: number[] = [];
-  for (const page of surface.layout().pages) {
-    const [fragment] = paragraphFragmentsOfBlocks(page.fragments);
-    if (!fragment) continue;
-    seen.push(surface.sectionPropertiesAt(fragment.paragraphId).margins.rightTwips);
-  }
-  return seen;
-}
-
-describe('a section write from an empty section’s header still reaches it', () => {
-  test('the tail section’s geometry moves, and not only section 0’s', () => {
+describe('an empty section refuses a section write rather than widening it', () => {
+  test('the tail section cannot be addressed, and says so', async () => {
     const editor = mount();
     const surface = editor.surface!;
     expect(surface.enterHeaderFooter({ rId: TAIL_R_ID })).toBe(true);
+
+    const before = await documentXml(editor);
+    const result = editor.exec({
+      type: 'setPageSetup',
+      scope: 'section',
+      marginRight: APPLIED_RIGHT,
+    });
+
+    // Two wrong answers were available and both were taken in turn. Borrowing the body's first
+    // paragraph as an anchor pinned the write to SECTION 0 — the wrong section. Omitting the
+    // anchor writes EVERY section, which is what `scope: 'document'` already means, so it
+    // changes pages nobody asked about, quietly, because page geometry does not announce
+    // itself. The refusal is the only true answer.
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('this section holds no paragraph to address it by');
+    // Nothing moved. Not one section, and not both.
+    expect(await documentXml(editor)).toBe(before);
+  });
+
+  test('the section that does hold a paragraph still takes a section write', async () => {
+    const editor = mount();
+    const surface = editor.surface!;
+    expect(surface.enterHeaderFooter({ rId: FIRST_R_ID })).toBe(true);
 
     const result = editor.exec({
       type: 'setPageSetup',
@@ -120,11 +130,15 @@ describe('a section write from an empty section’s header still reaches it', ()
     });
     expect(result.ok, result.ok ? '' : result.reason).toBe(true);
 
-    // Borrowing the body's first paragraph as an anchor pinned this to section 0 and left the
-    // page the reader was looking at untouched. The section the caret is in must move.
-    const tail = surface.sectionProperties().margins.rightTwips;
-    expect(tail, 'the tail section did not take the change').toBe(APPLIED_RIGHT);
-    // And the section that does hold paragraphs is reachable at all, so this is not vacuous.
-    expect(rightMargins(editor).length).toBeGreaterThan(0);
+    // Exactly one `w:right` moved: the refusal above is about an unaddressable section, not a
+    // blanket retreat from section writes in furniture.
+    const rights = [...(await documentXml(editor)).matchAll(/w:right="(\d+)"/g)].map((m) => m[1]);
+    expect(rights).toEqual([String(APPLIED_RIGHT), String(START_RIGHT)]);
   });
 });
+
+/** The saved `word/document.xml`, where `w:sectPr` lives. */
+async function documentXml(editor: DocxEditorInstance): Promise<string> {
+  const entries = unzipSync(new Uint8Array(await editor.save()));
+  return strFromU8(entries['word/document.xml']!);
+}

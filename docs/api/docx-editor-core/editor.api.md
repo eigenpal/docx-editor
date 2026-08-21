@@ -1347,7 +1347,7 @@ export interface PaginatedSurface {
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
     revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
     revisionAuthors(): ReadonlyMap<string, number>;
-    sectionAnchorParagraphAt(paragraphId: string): string | null;
+    sectionAnchorParagraphAt(paragraphId: string): SectionAnchor;
     sectionAtPage(pageIndex: number): {
         sectionIndex: number;
         sectionStart: number;

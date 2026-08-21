@@ -111,7 +111,7 @@ describe('a section-addressed write anchors on body content', () => {
       { kind: 'headerFooter', rId: HEADER_R_ID },
       surface.headerFooterState()?.sectionIndex
     );
-    expect(anchor).toBe(surface.session.paragraphIds()[0]!);
+    expect(anchor).toEqual({ kind: 'anchor', paragraphId: surface.session.paragraphIds()[0]! });
   });
 
   test('a footnote caret anchors on the section that cites it', () => {
@@ -125,7 +125,7 @@ describe('a section-addressed write anchors on body content', () => {
       { kind: 'notesPart', noteKind: 'footnote' }
     );
     // The reference sits in the second body paragraph, which is the second section.
-    expect(anchor).toBe(surface.session.paragraphIds()[1]!);
+    expect(anchor).toEqual({ kind: 'anchor', paragraphId: surface.session.paragraphIds()[1]! });
   });
 
   test('a multi-section page setup write reaches the caret’s own section', () => {
