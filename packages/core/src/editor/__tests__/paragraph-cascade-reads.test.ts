@@ -24,6 +24,8 @@ import { zipSync, strToU8 } from 'fflate';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { createKeyDownHandler } from '../surface-input.ts';
+import { mountPaginatedSurface } from '../paginated-surface.ts';
+import { docx as surfaceDocx } from './paginated-surface-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -156,6 +158,40 @@ describe('paragraph reads answer the cascade, not its floor', () => {
     expect(left()).toBe(2880);
     expect(editor.exec({ type: 'adjustIndent', direction: 'increase' }).ok).toBe(true);
     expect(left()).toBe(3600);
+  });
+});
+
+describe('a merged paragraph reports an indent for every half', () => {
+  test('the ruler keeps its handles with the caret in the absorbed half', () => {
+    // `proposed` is what the free engine renders by default, and it lays a deleted
+    // paragraph mark out as ONE paragraph under the survivor's name. The indent index
+    // recorded only that name, so the caret in the other half read no indent at all and
+    // the ruler dropped all four handles over an ordinary body paragraph.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(
+      container,
+      surfaceDocx(
+        '<w:p><w:pPr><w:rPr><w:del w:id="1" w:author="A"/></w:rPr></w:pPr>' +
+          '<w:r><w:t xml:space="preserve">Hello </w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:ind w:left="720"/></w:pPr><w:r><w:t>world</w:t></w:r></w:p>'
+      ),
+      { revisionDisplayMode: 'proposed' }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    const surface = opened.surface;
+    const ids = surface.session.paragraphIds();
+
+    for (const id of ids) {
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 1 },
+        head: { paragraphId: id, offset: 1 },
+      });
+      // Both halves are drawn under the survivor's `w:ind`, so both report it.
+      expect(surface.formatting().indent?.left).toBe(720);
+    }
+    surface.destroy();
+    container.remove();
   });
 });
 

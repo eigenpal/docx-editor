@@ -122,6 +122,18 @@ export function paragraphIndentOf(
           if (!built.has(block.paragraphId)) {
             built.set(block.paragraphId, { indent: block.indent, inTable });
           }
+          // A resolved view lays a run of paragraphs out as ONE, under the survivor's name,
+          // and every member is drawn with that fragment's indent — so every member has to
+          // be reachable by it. Without this the caret in the other half read no indent at
+          // all and the ruler dropped all four handles, which is the same miss
+          // `paragraphPropertiesOf` maps out through `lineSegments`.
+          for (const line of block.lines) {
+            for (const segment of lineSegments(line)) {
+              if (!built.has(segment.paragraphId)) {
+                built.set(segment.paragraphId, { indent: block.indent, inTable });
+              }
+            }
+          }
           continue;
         }
         for (const row of block.rows) for (const cell of row.cells) visit(cell.blocks, true);
