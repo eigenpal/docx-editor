@@ -11,6 +11,8 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { writeClipboardText } from './clipboard-write.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
+import { storyScopeOfNodeId } from './surface-scope.ts';
+import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
 import {
   execEditHeaderFooter,
   execInsertPageField,
@@ -415,6 +417,15 @@ export function execEditorCommand(
         payload
       );
       if (!resolved.ok) return resolved;
+      // OPEN the story the anchor names before selecting into it.
+      //
+      // The paraId index spans every story, so an anchor can name a header paragraph — and
+      // `snapshot().selection` hands one out whenever the caret is in one, which the contract
+      // says round-trips through here. Selecting it without entering left the caret on a
+      // paragraph the active scope had never heard of, and every keystroke after it was
+      // dropped with no refusal: the editor simply stopped accepting text.
+      const entered = enterStoryForSelection(mounted, resolved.selection);
+      if (!entered.ok) return entered;
       mounted.setSelection(resolved.selection);
       mounted.revealPosition(resolved.selection.head, { block: 'centerIfNeeded' });
       return { ok: true, changed: false };
@@ -427,4 +438,75 @@ export function execEditorCommand(
       return { ok: false, code: 'unsupported', reason: 'unsupported command' };
   }
   return null;
+}
+
+/** The scope id of the note whose painted fragments hold `paragraphId`, or null. */
+function noteScopeHolding(mounted: PaginatedSurface, paragraphId: string): string | null {
+  for (const page of mounted.layout().pages) {
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+          if (fragment.paragraphId === paragraphId) return note.scopeId;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Put the surface in the story a selection addresses, so the caret and the scope agree.
+ *
+ * A selection whose endpoints are in different stories is refused rather than half-applied:
+ * there is no scope in which both are addressable, and a caret split across two stores is the
+ * state that silently swallows input.
+ */
+function enterStoryForSelection(
+  mounted: PaginatedSurface,
+  selection: { readonly anchor: { paragraphId: string }; readonly head: { paragraphId: string } }
+): ExecResult {
+  const scope = storyScopeOfNodeId(mounted.session, selection.head.paragraphId, {
+    kind: 'body',
+  });
+  const anchorScope = storyScopeOfNodeId(mounted.session, selection.anchor.paragraphId, {
+    kind: 'body',
+  });
+  if (JSON.stringify(scope) !== JSON.stringify(anchorScope)) {
+    return {
+      ok: false,
+      code: 'unsupported',
+      reason: 'a selection cannot span two stories',
+    };
+  }
+  const active = mounted.activeScope();
+  if (scope.kind === 'body') {
+    if (active.kind !== 'body') {
+      mounted.exitNote?.();
+      mounted.exitHeaderFooter?.();
+    }
+    return { ok: true, changed: false };
+  }
+  if (scope.kind === 'headerFooter') {
+    if (active.kind === 'headerFooter' && active.rId === scope.rId) {
+      return { ok: true, changed: false };
+    }
+    mounted.exitNote?.();
+    const opened = mounted.enterHeaderFooter?.({ rId: scope.rId });
+    return opened
+      ? { ok: true, changed: false }
+      : { ok: false, code: 'unsupported', reason: 'that header or footer could not be opened' };
+  }
+  // A notes PART holds every note, so the scope has to name the NOTE the paragraph is in. The
+  // painted layout is what knows which one that is.
+  const scopeId = noteScopeHolding(mounted, selection.head.paragraphId);
+  if (!scopeId) {
+    return { ok: false, code: 'notFound', reason: 'that note is not laid out' };
+  }
+  if (active.kind === 'note' && active.id === scopeId) return { ok: true, changed: false };
+  mounted.exitHeaderFooter?.();
+  const opened = mounted.enterNote?.(scopeId);
+  return opened
+    ? { ok: true, changed: false }
+    : { ok: false, code: 'unsupported', reason: 'that note could not be opened' };
 }

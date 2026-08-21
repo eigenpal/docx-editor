@@ -24,6 +24,7 @@ import {
 } from '../package/custom-node-payloads.ts';
 import {
   customXmlNodes,
+  type CustomXmlNode,
   readCustomXmlNode,
   withCustomXmlNode,
   withoutCustomXmlNode,
@@ -453,6 +454,38 @@ export interface CustomNodePayloadRead {
  * Every store the story relates to, so a document carrying two definitions' payloads answers
  * for both without anyone naming a namespace.
  */
+/**
+ * The customXml stores one part relates, with each store's nodes indexed by id.
+ *
+ * Memoized per package, because the owner is a constant and the readers under it are not
+ * memoized themselves. {@link customNodePayloadsByControl} is called once per STORY when the
+ * review queue rebuilds, and the queue rebuilds per package revision — so on a document with a
+ * dozen furniture parts this parsed the same store a dozen times per keystroke.
+ */
+const customXmlStoreNodesByPackage = new WeakMap<
+  OoxmlPackage,
+  Map<string, readonly { readonly itemId: string; readonly nodes: Map<string, CustomXmlNode> }[]>
+>();
+
+function customXmlStoreNodes(
+  pkg: OoxmlPackage,
+  dataOwnerPartName: string
+): readonly { readonly itemId: string; readonly nodes: Map<string, CustomXmlNode> }[] {
+  let byOwner = customXmlStoreNodesByPackage.get(pkg);
+  if (!byOwner) {
+    byOwner = new Map();
+    customXmlStoreNodesByPackage.set(pkg, byOwner);
+  }
+  const cached = byOwner.get(dataOwnerPartName);
+  if (cached) return cached;
+  const built = customXmlDataParts(pkg, dataOwnerPartName).map((store) => ({
+    itemId: store.itemId,
+    nodes: new Map(customXmlNodes(pkg, store.partName).map((node) => [node.id, node])),
+  }));
+  byOwner.set(dataOwnerPartName, built);
+  return built;
+}
+
 export function customNodePayloadsByControl(
   pkg: OoxmlPackage,
   storyPartName: string,
@@ -471,12 +504,8 @@ export function customNodePayloadsByControl(
   const found = new Map<string, CustomNodePayloadRead>();
   const story = pkg.parts.get(storyPartName);
   if (!story) return found;
-  const stores = customXmlDataParts(pkg, dataOwnerPartName);
-  if (stores.length === 0) return found;
-  const nodesByStore = stores.map((store) => ({
-    itemId: store.itemId,
-    nodes: new Map(customXmlNodes(pkg, store.partName).map((node) => [node.id, node])),
-  }));
+  const nodesByStore = customXmlStoreNodes(pkg, dataOwnerPartName);
+  if (nodesByStore.length === 0) return found;
   for (const entry of contentControlsIn(story.root)) {
     for (const store of nodesByStore) {
       const nodeId = boundCustomXmlNodeIdOf(entry.node, store.itemId);

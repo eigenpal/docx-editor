@@ -169,13 +169,16 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
   const custom: ReviewCustomItem[] = [];
   const order = new Map<string, number>();
   for (const part of parts) {
-    // The payloads the ENGINE resolved, and only for the story they belong to: they are keyed
-    // by control node id, and a header's controls are not the body's.
+    // The payloads the ENGINE resolved, for EVERY part. They are keyed by control node id and
+    // an id is part-qualified, so one map can serve every story without collision — which is
+    // what the engine now hands over. Narrowing it to the body was right when the map WAS the
+    // body's; kept after it stopped being, it meant a chip in a header produced a card with no
+    // data, indistinguishable from a chip that carries none.
     custom.push(
       ...customItemsOf(
         part,
         definitions,
-        part.name === input.storyPart.name ? input.customNodePayloads : undefined,
+        input.customNodePayloads,
         input.reportCustomNodeDiagnostic as ((d: CustomNodeDiagnostic) => void) | undefined
       )
     );

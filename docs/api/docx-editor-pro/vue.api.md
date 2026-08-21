@@ -585,10 +585,10 @@ export const DocxEditorReview: {
             top: number;
             bottom: number;
         } | null;
+        scale: number;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }> | ((item: ReviewItemView) => VNode | null | undefined);
-        scale: number;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     AddComment: vue.DefineComponent<vue.ExtractPropTypes<{
         top: {

@@ -34,6 +34,7 @@ import {
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 import { selectionMarkOf } from './surface-selection-ops.ts';
 
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
@@ -303,8 +304,12 @@ export function contentControlAtOf(
   filter?: ContentControlFilter
 ): ContentControlSummary | null {
   if (!surface) return null;
-  const part = surface.session.part();
   const { paragraphId, offset } = surface.state().selection.head;
+  // The caret's OWN part. Against the body's, a caret in a header found no paragraph and no
+  // ancestors, so the facade answered "no control here" for a control the surface had already
+  // resolved — and `exec({type:'setContentControlValue'})` refused with the same words while
+  // the Inspector button beside it was live.
+  const part = partOfNodeId(surface.session, paragraphId) ?? surface.session.part();
   const paragraph = findNode(part, paragraphId);
   if (paragraph && paragraph.kind === 'paragraph') {
     for (const summary of inlineControlsContaining(paragraph, offset, part)) {
@@ -648,7 +653,10 @@ export function canContentControlCommand(
     command.type === 'setContentControlValue'
       ? { op: 'setContentControlValue', controlId: resolved.controlId, value: command.value }
       : { op: 'removeContentControl', controlId: resolved.controlId };
-  const rejection = validateTreeOp(surface!.session.part(), op);
+  const rejection = validateTreeOp(
+    partOfNodeId(surface!.session, resolved.controlId) ?? surface!.session.part(),
+    op
+  );
   if (rejection) {
     return {
       ok: false,
@@ -685,7 +693,15 @@ export function execContentControlCommand(
       ? { op: 'setContentControlValue', controlId: resolved.controlId, value: command.value }
       : { op: 'removeContentControl', controlId: resolved.controlId };
 
-  const result = surface.session.applyTreeOps([op], mark, mark);
+  // The STORY the control is in, from its own id. Left to default, this wrote against the body
+  // store, which has never heard of a control in a header — so the facade refused a verb the
+  // surface performs happily, on the same control.
+  const result = surface.session.applyTreeOps(
+    [op],
+    mark,
+    mark,
+    storyScopeOfNodeId(surface.session, resolved.controlId, { kind: 'body' })
+  );
   if (result.rejected) {
     return treeOpRejectionToExecResult(result.reason ?? 'unsupported', command.target);
   }

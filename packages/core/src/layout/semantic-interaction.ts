@@ -472,10 +472,14 @@ export function contentControlsInLayout(
 /**
  * Position lookup for one reading order, memoized on the array.
  *
- * `documentOrder` and `scopedDocumentOrder` both answer with an identity-stable array, so the
- * map survives as long as the order does. Scanning with `indexOf` instead cost two O(n) walks
- * per formatting read on a path that fires on every selection change — measured at 0.12 ms for
- * a selection near the end of a 240-page document, and growing with the document.
+ * The BODY's order is an identity-stable memoized array, so the map survives as long as it
+ * does. That is where the cost was: scanning it with `indexOf` meant two O(n) walks per
+ * formatting read, on a path that fires on every selection change — measured at 0.12 ms for a
+ * selection near the end of a 240-page document, and growing with it.
+ *
+ * A furniture or note order is rebuilt per call, so the map never hits there and this is a
+ * little more work than the scan it replaced. A header's order is a handful of entries, which
+ * is why that trade is worth making for the body's twelve thousand.
  */
 const orderIndexes = new WeakMap<readonly string[], Map<string, number>>();
 

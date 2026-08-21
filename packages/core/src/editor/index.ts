@@ -32,6 +32,13 @@ export {
   type FontResolver,
 } from './font-composition.ts';
 export { blankDocumentBytes } from './blank-document.ts';
+/**
+ * The part a node id names, read from the live package.
+ *
+ * Published because a module building on the surface needs a way to reach a node's own part for
+ * a READ without opening — and permanently retaining — that story's store.
+ */
+export { partOfNodeId } from './surface-scope.ts';
 export {
   createFontSource,
   loadFonts,

@@ -1350,10 +1350,10 @@ export const ContextMenuItem: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     disabledReason: string;
+    active: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
-    active: boolean;
     disabled: boolean;
     className: string;
     onSelect: () => void;

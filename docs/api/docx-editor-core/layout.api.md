@@ -431,7 +431,7 @@ export interface ContentControlGeometryFragment {
     readonly pageIndex: number;
 }
 
-// @public
+// @public (undocumented)
 export function contentControlHoldingParagraph(part: OoxmlPart, paragraphId: string): ContentControlBoundaryRecord | null;
 
 // @public

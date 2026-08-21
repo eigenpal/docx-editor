@@ -158,6 +158,7 @@ import {
   setEditingModeChrome,
   setHeaderFooterEditingChrome,
   storyScopeOf,
+  partOfNodeId,
   storyScopeOfNodeId,
 } from './surface-scope.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
@@ -528,6 +529,32 @@ export function mountPaginatedSurface(
   const storyScope = () =>
     storyScopeOf(hfScope?.getActive() ?? null, noteOps?.activeNoteScope() ?? null);
   const noteScopeId = () => noteOps?.activeNoteScope()?.id ?? null;
+  /**
+   * The section a page belongs to, and where that section starts.
+   *
+   * A page is the only thing a pointer entry knows, and a header belongs to a SECTION: one
+   * header may be referenced by several, and their page geometry can differ. Without this the
+   * entry defaulted to section 0, so double-clicking the header on a landscape page answered
+   * with the first section's portrait width — which is the ruler's clamp and the grid width
+   * `insertTableOp` divides.
+   *
+   * A single-section document has no spans and every page belongs to section 0.
+   */
+  const sectionAtPage = (pageIndex: number): { sectionIndex: number; sectionStart: number } => {
+    const spans = layoutSession.multi?.spans;
+    let sectionIndex = 0;
+    let sectionStart = 0;
+    if (spans && spans.length > 0) {
+      for (let index = 0; index < spans.length; index += 1) {
+        const span = spans[index]!;
+        sectionIndex = index;
+        sectionStart = span.startIndex;
+        if (pageIndex < span.startIndex + span.pageCount) break;
+      }
+    }
+    return { sectionIndex, sectionStart };
+  };
+
   const paragraphOrder = () =>
     scopedDocumentOrder(currentLayout, hfScope?.getActive() ?? null, noteScopeId());
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
@@ -1296,7 +1323,10 @@ export function mountPaginatedSurface(
    * with `notFound` while the control was plainly on screen.
    */
   function findControl(controlId: string): OoxmlElement | null {
-    const part = session.partFor(storyScopeOfNodeId(session, controlId, storyScope()));
+    // From the PACKAGE, never `partFor`: this backs the lock and binding gates, the tab index,
+    // a checkbox's state and a dropdown's items, all of them reads, and `partFor` would spend
+    // one of the 64 story-store slots per part touched and never give it back.
+    const part = partOfNodeId(session, controlId);
     const node = findNode(part ?? session.part(), controlId);
     if (!node || !isContentControlElement(node)) return null;
     return node;
@@ -5036,6 +5066,9 @@ export function mountPaginatedSurface(
         hfScope?.enterHeaderFooter({
           rId: info.rId,
           pageIndex: info.pageIndex,
+          // The section this PAGE is in. Omitted, the scope bound section 0, and every read
+          // that resolves geometry from the open story answered for the wrong page.
+          sectionIndex: sectionAtPage(info.pageIndex).sectionIndex,
           kind: info.kind,
           ...(info.position ? { position: info.position } : {}),
         });
@@ -5058,17 +5091,7 @@ export function mountPaginatedSurface(
         flushTypeBuffer();
         // Which section owns the page, from the multi-section spans; a single-section
         // document has no spans and every page belongs to section 0.
-        const spans = layoutSession.multi?.spans;
-        let sectionIndex = 0;
-        let sectionStart = 0;
-        if (spans && spans.length > 0) {
-          for (let index = 0; index < spans.length; index += 1) {
-            const span = spans[index]!;
-            sectionIndex = index;
-            sectionStart = span.startIndex;
-            if (pageIndex < span.startIndex + span.pageCount) break;
-          }
-        }
+        const { sectionIndex, sectionStart } = sectionAtPage(pageIndex);
         const bySection = session.headerFooterResolutionBySection();
         const section = bySection[Math.min(sectionIndex, Math.max(0, bySection.length - 1))];
         // The variant this page would DISPLAY, which is the one Word creates on a blank

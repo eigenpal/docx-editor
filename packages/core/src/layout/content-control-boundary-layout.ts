@@ -792,7 +792,10 @@ export function contentControlRecordsInPart(
   const controls = collectedControlIndexOf(part).controls.filter((collected) => {
     if (!withinParagraphs) return true;
     if (collected.paragraphId !== undefined) return withinParagraphs.has(collected.paragraphId);
-    return collected.blockIds.some((id) => withinParagraphs.has(id));
+    // Any paragraph the control DRAWS, not just a top-level one. `blockIds` carries table ids
+    // as well as paragraph ids, and the membership set is paragraphs alone — so a block control
+    // wrapping a table matched nothing and dropped out of the roster entirely.
+    return paragraphsUnder(collected.control).some((id) => withinParagraphs.has(id));
   });
   return controls.map(recordWithoutGeometry);
 }
@@ -803,6 +806,27 @@ export function contentControlRecordsInPart(
  * Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside a
  * control is the one the caret is actually in.
  */
+/** Every paragraph id anywhere under a control, tables and nested controls included. */
+function paragraphsUnder(control: OoxmlElement): string[] {
+  const found: string[] = [];
+  const walk = (nodes: readonly OoxmlNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === 'textValue') continue;
+      if (node.kind === 'paragraph') {
+        found.push(node.id);
+        continue;
+      }
+      if (isContentControl(node)) {
+        walk(contentControlContentChildren(node));
+        continue;
+      }
+      walk(node.children);
+    }
+  };
+  walk(contentControlContentChildren(control));
+  return found;
+}
+
 export function contentControlHoldingParagraph(
   part: OoxmlPart,
   paragraphId: string

@@ -53,6 +53,14 @@ export interface ParagraphAnchorIndex {
    * silent wrong answer; it is refused as ambiguous instead.
    */
   readonly ambiguousParaIds: ReadonlySet<string>;
+  /**
+   * nodeId → the part it was indexed from.
+   *
+   * The index spans every story, so a caller holding one part and a node id from another reads
+   * an empty paragraph and draws a false conclusion from it. Carrying the part alongside the id
+   * is what keeps the two in step.
+   */
+  readonly partByNode: ReadonlyMap<string, OoxmlPart>;
 }
 
 /** Build the index over every editable paragraph of every story, in reading order. */
@@ -61,12 +69,16 @@ export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): Paragrap
   const nodeByParaId = new Map<string, string>();
   const ordinalByNode = new Map<string, number>();
   const ambiguousParaIds = new Set<string>();
+  const partByNode = new Map<string, OoxmlPart>();
   let ordinal = 0;
   for (const part of parts) {
     for (const paragraph of allParagraphs(part)) {
-      // Ordinals run ACROSS the parts in the order given, so a comparison between two
-      // paragraphs of one story stays correct and one across stories is at least stable.
+      // Ordinals run ACROSS the parts in the order given. A comparison between two paragraphs
+      // of ONE story is correct, which is all any caller does today. Across stories it is not
+      // meaningful: the body is always first, but the furniture parts follow in the order their
+      // stores were opened, so the same document can number them differently in two sessions.
       ordinalByNode.set(paragraph.id, ordinal);
+      partByNode.set(paragraph.id, part);
       ordinal += 1;
       const paraId = validParaIdOf(paragraph);
       if (paraId === null) continue;
@@ -80,5 +92,5 @@ export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): Paragrap
       else nodeByParaId.set(canonical, paragraph.id);
     }
   }
-  return Object.freeze({ paraIdByNode, nodeByParaId, ordinalByNode, ambiguousParaIds });
+  return Object.freeze({ paraIdByNode, nodeByParaId, ordinalByNode, ambiguousParaIds, partByNode });
 }

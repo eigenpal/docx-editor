@@ -23,9 +23,16 @@ import {
   SLOT_PARITY,
   STORY_KINDS,
   type ParityDimension,
+  type ParityRule,
   type StoryKind,
 } from './story-parity-contract.ts';
-import { caretIn, openStory, selectAcross, type OpenStory } from './story-parity-harness.ts';
+import {
+  caretIn,
+  caretInControl,
+  openStory,
+  selectAcross,
+  type OpenStory,
+} from './story-parity-harness.ts';
 import { PROBE } from './story-parity-fixture.ts';
 
 const ALL_SLOTS: readonly ChromeSlotId[] = CHROME_GROUPS.flatMap((group) =>
@@ -64,12 +71,24 @@ type Sweep = Map<StoryKind, Map<ChromeSlotId, SlotState>>;
  * Mounted once per story and reused across all 54 slots: `toolbarCommandState` is a pure read,
  * and mounting 5 stories x 54 slots would be 270 documents for no extra signal.
  */
+/**
+ * `paragraphIndex`, or the content-control paragraph when it is `IN_CONTROL`.
+ *
+ * The sweep used to place the caret only in the probe paragraphs, which left both
+ * `contentControl.*` slots compared while disabled in every story — declared `parity: 'same'`
+ * and never actually asked. Measured after adding this probe: the facade answered "no content
+ * control at the current selection" in all four non-body stories while the surface had already
+ * resolved one, so the Remove control was dead beside a live Inspector.
+ */
+const IN_CONTROL = -1;
+
 function sweep(paragraphIndex: number): Sweep {
   const result: Sweep = new Map();
   for (const story of STORY_KINDS) {
     const open = openStory(story);
     try {
-      caretIn(open, paragraphIndex);
+      if (paragraphIndex === IN_CONTROL) caretInControl(open);
+      else caretIn(open, paragraphIndex);
       const states = new Map<ChromeSlotId, SlotState>();
       for (const slot of ALL_SLOTS) states.set(slot, slotStateOf(open, slot));
       result.set(story, states);
@@ -126,9 +145,11 @@ function violationsOf(slot: ChromeSlotId, states: Sweep): Violation[] {
     }
   }
 
-  if (rule.parity === 'bodyOnly' && !body.enabled) {
-    say('enabled', `body: refused (${body.reason}), expected live`);
-  }
+  // Deliberately NOT "and it must be live in the body here". A `bodyOnly` command can be
+  // refused in the body for its own reasons at a given caret — a table of contents inside a
+  // content control, for one — and a refusal that applies everywhere equally is parity, not a
+  // violation. That it is live in the body SOMEWHERE is asserted once across the probes below,
+  // which is what stops the rule passing vacuously.
   if (rule.parity === 'furnitureOnly') {
     if (body.enabled) {
       say('enabled', 'body: enabled, expected refused');
@@ -146,6 +167,7 @@ const PROBES = [
   { label: 'a centred, indented, bold paragraph', paragraphIndex: PROBE.formatted },
   { label: 'a numbered list item', paragraphIndex: PROBE.numbered },
   { label: 'a bulleted list item', paragraphIndex: PROBE.bulleted },
+  { label: 'a block content control', paragraphIndex: IN_CONTROL },
 ] as const;
 
 describe('the story-parity contract', () => {
@@ -193,6 +215,17 @@ describe('the story-parity contract', () => {
           expect(violationsOf(slot, states).map((violation) => violation.detail)).toEqual([]);
         });
       }
+    });
+  }
+
+  // A `bodyOnly` rule means "live in the body, refused elsewhere". `violationsOf` checks the
+  // second half at every caret; this checks the first half once, so a slot that is refused
+  // everywhere on every probe cannot satisfy the rule by never being offered at all.
+  for (const [slot, rule] of Object.entries(SLOT_PARITY) as [ChromeSlotId, ParityRule][]) {
+    if (rule.parity !== 'bodyOnly' || KNOWN_BROKEN[slot]) continue;
+    test(`${slot} is live in the body somewhere`, () => {
+      const live = sweeps.some(({ states }) => states.get('body')!.get(slot)!.enabled);
+      expect(live, `${slot} is refused in the body at every probe`).toBe(true);
     });
   }
 

@@ -1462,6 +1462,9 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
+export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>, nodeId: string | undefined): OoxmlPart | null;
+
+// @public
 export function pointsToEmu(points: number): number;
 
 // @public
@@ -1897,7 +1900,7 @@ export interface TableBorderStyleOption {
     readonly labelKey: string;
     readonly previewClass: string;
     // (undocumented)
-    readonly value: TableBorderStyle_2;
+    readonly value: TableBorderStyle;
 }
 
 // @public
@@ -1910,7 +1913,7 @@ export interface TableBorderTargetOption {
 }
 
 // @public
-export type TableBorderTargetValue = TableBorderEdgeTarget_2 | 'none';
+export type TableBorderTargetValue = TableBorderEdgeTarget | 'none';
 
 // @public
 export interface TableBorderWidthOption {
@@ -1923,7 +1926,7 @@ export interface TableBorderWidthOption {
 // @public
 export interface TableChromeDraft {
     // (undocumented)
-    readonly activeTarget: TableBorderEdgeTarget_2;
+    readonly activeTarget: TableBorderEdgeTarget;
     // (undocumented)
     readonly spec: TableBorderSpec;
 }
@@ -1932,7 +1935,7 @@ export interface TableChromeDraft {
 export function tableChromeIconPaths(name: keyof typeof GENERATED_ICON_PATHS): readonly string[];
 
 // @public
-export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget_2): string;
+export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget): string;
 
 // @public
 export interface TableChromePick {

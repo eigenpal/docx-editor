@@ -105,7 +105,12 @@ export function resolveDocAnchor(
       reason: `no paragraph with paraId '${anchor.paraId}'`,
     };
   }
-  const text = paragraphTextOf(part, nodeId) ?? '';
+  // The node's OWN part. The index spans every story, so reading a header node's text out of
+  // the body part gave `''` — and an anchor with no `search` then returned `ok` with a
+  // zero-length span, installing a caret on a paragraph the open scope has never heard of and
+  // making every keystroke after it vanish with no refusal. An anchor WITH a search reported
+  // that its phrase "does not occur", which is a claim about the document that was false.
+  const text = paragraphTextOf(anchors.partByNode.get(nodeId) ?? part, nodeId) ?? '';
   if (anchor.search === undefined) {
     return { ok: true, span: { nodeId, start: 0, end: text.length } };
   }

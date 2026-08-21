@@ -25,7 +25,7 @@ import type {
 } from '@docx-editor.dev/core/layout';
 import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
-import type { StoryScope } from '@docx-editor.dev/core/store';
+import type { OoxmlPart, StoryScope } from '@docx-editor.dev/core/store';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
@@ -82,6 +82,30 @@ export type StoryScopeLookup = Pick<
  *
  * Falls back to `fallback` for an id no story claims, so the store refuses it rather than this.
  */
+/**
+ * The part a NODE lives in, WITHOUT opening a story store.
+ *
+ * `session.partFor(scope)` resolves a scope by opening that story's store, and an open store is
+ * retained for as long as its part is in the package. The cap is 64. So routing a pure READ —
+ * "is this control locked", "what is its tab index" — through `partFor` spent a permanent slot
+ * per part touched, and an id naming no node at all still spent one, because the part name is
+ * matched from the id's prefix before anything is looked up. Sixty-four such reads and no
+ * further header could be opened for the rest of the session, silently.
+ *
+ * Read straight from the live package instead. Ids carry the canonical part name, so this is a
+ * map lookup.
+ */
+export function partOfNodeId(
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>,
+  nodeId: string | undefined
+): OoxmlPart | null {
+  const hash = nodeId?.indexOf('#') ?? -1;
+  if (hash === -1) return null;
+  const partName = nodeId!.slice(0, hash);
+  if (partName.length === 0) return null;
+  return session.currentPackage().parts.get(partName) ?? null;
+}
+
 export function storyScopeOfNodeId(
   session: StoryScopeLookup,
   nodeId: string | undefined,
