@@ -12,7 +12,7 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-Open-source WYSIWYG `.docx` editor for React and Vue. Word-faithful pagination, tracked changes, comments — and **lossless round-trip**: untouched content and unsupported OOXML survive editing and save. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
+Open-source WYSIWYG `.docx` editor for React and Vue. Word-faithful pagination, tracked changes, comments, and lossless round-trip: untouched content and unsupported OOXML survive the save. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)**
 
 ## Quick Start
 
@@ -75,7 +75,7 @@ export function App() {
 
 > **Next.js / SSR:** Use dynamic import. The editor requires the DOM.
 
-Full docs: [`packages/react`](packages/react) · [API reference](https://www.docx-editor.dev/docs/2.x/react/props).
+Full docs: [React adapter](https://www.docx-editor.dev/docs/2.x/react) · [Props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props).
 
 ## Vue
 
@@ -105,7 +105,7 @@ async function onPick(event: Event) {
 
 > **Nuxt / SSR:** Load the editor in a client-only component. The editor requires the DOM.
 
-Full docs: [`packages/vue`](packages/vue) · [API reference](https://www.docx-editor.dev/docs/2.x/vue/props).
+Full docs: [Vue adapter](https://www.docx-editor.dev/docs/2.x/vue) · [Props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props).
 
 ## Development
 
