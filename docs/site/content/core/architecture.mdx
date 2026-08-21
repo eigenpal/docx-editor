@@ -14,14 +14,14 @@ What you see painted and what an edit mutates are the same tree, so nothing has 
 
 ## The canonical tree
 
-Reading a `.docx` produces one tree per package part. Nodes are **typed** where layout needs them (the paragraph, run, and table vocabulary) and **generic** everywhere else, preserving the element verbatim.
+Reading a `.docx` produces one tree per XML part, up to a bounded part count. Non-XML parts stay as bytes and are never parsed. Nodes are **typed** where layout needs them (the paragraph, run, and table vocabulary) and **generic** everywhere else, preserving the element verbatim.
 
 Two consequences:
 
 - Content the engine does not model is carried, not dropped. A known element in an invalid position demotes to generic rather than erroring.
 - Unknown content never blocks editing. A document full of extensions the engine has never seen still opens, still edits, and still saves.
 
-Every write is a transaction over the tree, addressed by node id and character offset. That is the only write path. There is no second way to mutate a document, so undo, the editing API, and every command go through the same door.
+Every write is a transaction over the tree. Content edits are addressed by node id and character offset; package-level operations such as creating a header or setting section properties are addressed by section index. That is the only write path. There is no second way to mutate a document, so undo, the editing API, and every command go through the same door.
 
 ## Layout
 

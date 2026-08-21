@@ -101,7 +101,8 @@ Useful snapshot fields include `page`, `selection`, `selectionCollapsed`,
 ## useDocxEditor
 
 This composable returns a shallow ref to the editor instance. Its value is
-`null` before the content mounts.
+`null` before the `DocxEditor.Root` mount effect creates the instance, and
+outside a `DocxEditor.Root`.
 
 ```vue
 <script setup lang="ts">

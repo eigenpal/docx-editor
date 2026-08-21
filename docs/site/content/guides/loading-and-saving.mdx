@@ -258,7 +258,7 @@ Two paths matter:
 </Framework>
 </FrameworkTabs>
 
-`save()` resolves `null` when there is no document to serialize, so guard the result.
+`save()` on the ref resolves `null` when no editor is mounted, so guard the result. `Editor.save()` on the instance always resolves an `ArrayBuffer`.
 
 ## Download helper
 

@@ -107,7 +107,9 @@ Useful fields include:
 ## `useDocxEditor`
 
 `useDocxEditor` returns the editor instance.
-It returns `null` before the content mounts.
+It returns `null` before the `DocxEditor.Root` mount effect creates the
+instance.
+It also returns `null` outside a `DocxEditor.Root`.
 Use the instance for actions and one-time reads:
 
 ```tsx
