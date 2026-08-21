@@ -1,12 +1,11 @@
 // A content control resolves in the story the caret is in, and its verbs write there.
 //
-// The sharpest test in the contract, because the defect it covers is the only one that edits
-// content the user cannot see. `contentControlAtCaret` resolves the control from the caret's
-// x/y against `layout.contentControls`, which holds BODY records only: `collectControls` looks
-// for a `w:body` child, and a `w:hdr` root has none, so nothing is ever collected from
-// furniture even if the part were passed. A header caret's coordinates then land in the body
-// content box, a body control wins the hit test, and `setValue` and `remove` rewrite and delete
-// body content while the reader is in a header.
+// The sharpest test in the contract, because the defect it was written for is the only one
+// that edited content the user could not see. `contentControlAtCaret` resolved the control
+// from the caret's x/y against `layout.contentControls`, which holds BODY records only. A
+// header caret's coordinates land in the top band of the body content box, so a body control
+// won the hit test, and `setValue` and `remove` rewrote and deleted body content while the
+// reader was editing a header.
 //
 // The assertions are structural rather than behavioural: node ids are part-qualified, so "did
 // this resolve in the right story" is a question about the id's prefix, and that holds however
@@ -26,65 +25,65 @@ import {
   savedParts,
 } from './story-parity-harness.ts';
 
-const BODY_PART = PART_OF_STORY.body;
-
 describe('a content control resolves in the story the caret is in', () => {
   for (const story of STORIES_WITH_CONTROL) {
-    const known = story !== 'body';
-
-    test(`atCaret names the ${story}'s own control${known ? ' (known broken)' : ''}`, () => {
+    test(`atCaret names the ${story}'s own control`, () => {
       const open = openStory(story);
       try {
         caretInControl(open);
         const at = open.surface.contentControls.atCaret();
         expect(at).not.toBeNull();
-        // Ids carry a leading slash. Asserting it here means a change to the id shape fails
-        // loudly instead of quietly shifting what `partOfNodeId` returns.
+        // Ids carry a leading slash. Asserting it means a change to the id shape fails loudly
+        // instead of quietly shifting what `partOfNodeId` returns.
         expect(at!.id.startsWith('/')).toBe(true);
-
-        if (known) {
-          // Pinned to the BODY part, not merely "not the header's". `not.toBe` would also pass
-          // if the resolver answered the footer's control, or a malformed id, which would be a
-          // different bug wearing this one's clothes.
-          expect(
-            partOfNodeId(at!.id),
-            `atCaret now resolves in the ${story}: drop the knownBroken`
-          ).toBe(BODY_PART);
-          expect(at!.tag).toBe(CONTROL_TAG.body);
-          return;
-        }
         expect(partOfNodeId(at!.id)).toBe(PART_OF_STORY[story]);
+        // By TAG as well as by part: every story's control is tagged with its own name, so a
+        // resolve that lands in the right part but on the wrong control still fails.
         expect(at!.tag).toBe(CONTROL_TAG[story]);
       } finally {
         open.destroy();
       }
     });
 
-    test(`setValue writes only the ${story}'s part${known ? ' (known broken)' : ''}`, async () => {
+    test(`setValue writes only the ${story}'s part`, async () => {
       const open = openStory(story);
       try {
         caretInControl(open);
         const at = open.surface.contentControls.atCaret();
         expect(at).not.toBeNull();
         const before = await savedParts(open);
-        open.surface.contentControls.setValue(at!.id, 'REPLACED');
+        expect(open.surface.contentControls.setValue(at!.id, 'REPLACED')).toBe(true);
         const after = await savedParts(open);
-        const changed = changedParts(before, after);
 
-        if (known) {
-          // The write lands in the BODY: the resolver handed over a body control, and the write
-          // path pins the body scope besides. Both halves have to be fixed together, or a
-          // corrected resolver writes into a store that has never heard of the control.
-          expect(
-            changed,
-            `setValue from the ${story} now spares the body: drop the knownBroken`
-          ).toContain(BODY_PART);
-          expect(after.get(BODY_PART)).toContain('REPLACED');
-          expect(after.get(PART_OF_STORY[story])).not.toContain('REPLACED');
-          return;
-        }
-        expect(changed).toEqual([PART_OF_STORY[story]]);
+        expect(changedParts(before, after)).toEqual([PART_OF_STORY[story]]);
         expect(after.get(PART_OF_STORY[story])).toContain('REPLACED');
+        // The body is the part this used to damage, so it is named explicitly rather than
+        // left to the "only one part changed" assertion above.
+        for (const other of STORIES_WITH_CONTROL) {
+          if (other === story) continue;
+          expect(after.get(PART_OF_STORY[other])).not.toContain('REPLACED');
+        }
+      } finally {
+        open.destroy();
+      }
+    });
+
+    test(`remove deletes only the ${story}'s control`, async () => {
+      const open = openStory(story);
+      try {
+        caretInControl(open);
+        const at = open.surface.contentControls.atCaret();
+        expect(at).not.toBeNull();
+        const before = await savedParts(open);
+        expect(open.surface.contentControls.remove(at!.id)).toBe(true);
+        const after = await savedParts(open);
+
+        expect(changedParts(before, after)).toEqual([PART_OF_STORY[story]]);
+        expect(after.get(PART_OF_STORY[story])).not.toContain(CONTROL_TAG[story]);
+        for (const other of STORIES_WITH_CONTROL) {
+          if (other === story) continue;
+          expect(after.get(PART_OF_STORY[other])).toContain(CONTROL_TAG[other]);
+        }
       } finally {
         open.destroy();
       }
@@ -97,14 +96,14 @@ describe('a content control resolves in the story the caret is in', () => {
       try {
         caretInControl(open);
         open.surface.contentControls.navigate('next');
-        // The roster is body-only, so the caret's own control is never in it and 'next'
-        // unconditionally lands on the first control in the document BODY.
+        // The tab roster is still built from `contentControlsInLayout`, which is body-only, so
+        // the caret's own control is never in it and 'next' lands on the first control in the
+        // document BODY. The caret then sits in the body while the scope still says furniture,
+        // and every keystroke after it routes to a store that has never heard of it.
         expect(
           partOfNodeId(open.surface.state().selection.head.paragraphId),
           `navigate now stays in the ${story}: drop the knownBroken`
-        ).toBe(BODY_PART);
-        // The corrupting half: the caret is in the body and the scope still says furniture, so
-        // every keystroke after this routes to a store that has never heard of it.
+        ).toBe(PART_OF_STORY.body);
         expect(open.surface.activeScope()).toEqual({
           kind: 'headerFooter',
           rId: story === 'header' ? 'rId10' : 'rId11',

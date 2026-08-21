@@ -26,6 +26,7 @@ import type {
 import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import { lineSegments } from '../layout/line-segments.ts';
@@ -54,6 +55,54 @@ export function isHeaderFooterScope(
   scope: EditorScope | ViewScope | null | undefined
 ): scope is HeaderFooterViewScope {
   return scope?.kind === 'headerFooter' && typeof scope.rId === 'string' && scope.rId.length > 0;
+}
+
+/**
+ * The session reads {@link storyScopeOfNodeId} needs. A structural subset, so a caller can
+ * hand it either the surface's session or the facade's.
+ */
+export type StoryScopeLookup = Pick<
+  TreeDocxSessionView,
+  'part' | 'headerFooterResolutionBySection' | 'partFor'
+>;
+
+/**
+ * The story a NODE lives in, which is what a write about that node must target.
+ *
+ * The open scope is a near-enough proxy most of the time and wrong exactly when it matters:
+ * nothing binds a node id to it, so a verb invoked on a control, a chip or a paragraph the
+ * reader is not currently standing in wrote against the wrong store — or, where the id came
+ * from a body-only index, against body content the reader could not see.
+ *
+ * Answered from the id's own PART NAME. Node ids are minted `${partName}#${path}`, so the
+ * question is constant-time and needs no store to be opened. That last part is load-bearing:
+ * asking each scope for its paragraph list instead OPENS a story store, the store cap is 64,
+ * and a store whose part is still in the package is never evicted — on a many-section
+ * document that left later headers unopenable for the rest of the session.
+ *
+ * Falls back to `fallback` for an id no story claims, so the store refuses it rather than this.
+ */
+export function storyScopeOfNodeId(
+  session: StoryScopeLookup,
+  nodeId: string | undefined,
+  fallback: StoryScope
+): StoryScope {
+  const hash = nodeId?.indexOf('#') ?? -1;
+  const partName = hash === -1 ? '' : nodeId!.slice(0, hash);
+  if (partName.length === 0 || partName === session.part().name) return { kind: 'body' };
+  for (const section of session.headerFooterResolutionBySection()) {
+    for (const slots of [section.headers, section.footers]) {
+      for (const slot of slots.values()) {
+        if (slot.partName === partName) return { kind: 'headerFooter', rId: slot.rId };
+      }
+    }
+  }
+  for (const noteKind of ['footnote', 'endnote'] as const) {
+    if (session.partFor({ kind: 'notesPart', noteKind })?.name === partName) {
+      return { kind: 'notesPart', noteKind };
+    }
+  }
+  return fallback;
 }
 
 export function storyScopeOf(

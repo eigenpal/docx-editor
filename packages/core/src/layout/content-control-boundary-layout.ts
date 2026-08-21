@@ -7,6 +7,7 @@
 // spans of the two pages it rebuilt, not the whole document.
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import { storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
   contentControlContentChildren,
@@ -271,9 +272,13 @@ function collectControls(part: OoxmlPart): CollectedControl[] {
   // the lock stack is empty, so a block's entries are a pure function of its subtree. A
   // keystroke publishes a new part whose body children are all shared but one — without
   // this the whole document re-walked per pass.
-  const body = part.root.children.find((child) => child.kind === 'body');
-  if (body && body.kind !== 'textValue') {
-    for (const child of body.children) {
+  // EVERY story the part holds, not a `w:body` child. A header's root is `w:hdr` and a note
+  // part's stories hang off `w:footnote` elements, so looking for `body` collected nothing
+  // from either — which is why a content control in a header had no record at all, and the
+  // caret's geometry then matched whichever BODY control sat at the same page coordinates.
+  for (const story of storyRootsOf(part)) {
+    if (story.root.kind === 'textValue') continue;
+    for (const child of story.root.children) {
       if (child.kind === 'textValue') continue;
       const cached = topLevelBlockControls.get(child);
       if (cached !== undefined) {
@@ -758,5 +763,49 @@ export function attachContentControlBoundaries(
     pages,
     contentControls,
     controlContextToken: token,
+  };
+}
+
+/**
+ * The innermost content control holding `paragraphId`, in `part`, WITHOUT geometry.
+ *
+ * For the stories that have no boundary records. `attachContentControlBoundaries` publishes
+ * records for the body alone, and page-content coordinates mean nothing without knowing whose
+ * box they belong to: a header caret hit-tested against body rectangles and answered with a
+ * body control, which `setValue` and `remove` then edited. Resolving from the caret's own
+ * paragraph, in its own part, is the answer that cannot name another story.
+ *
+ * `fragments` comes back empty. There are no page rectangles for a furniture control yet, and
+ * an invented one is a rectangle a hit test would match. Chrome that paints from `fragments`
+ * draws nothing, which is what it does today.
+ */
+export function contentControlHoldingParagraph(
+  part: OoxmlPart,
+  paragraphId: string
+): ContentControlBoundaryRecord | null {
+  let found: CollectedControl | null = null;
+  for (const collected of collectedControlIndexOf(part).controls) {
+    const holds = collected.paragraphId === paragraphId || collected.blockIds.includes(paragraphId);
+    if (!holds) continue;
+    // Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside
+    // a control is the one the caret is actually in.
+    if (!found || collected.nestingDepth >= found.nestingDepth) found = collected;
+  }
+  if (!found) return null;
+  const properties = contentControlPropertiesOf(found.control);
+  const alias = propertyVal(properties, 'alias');
+  const tag = propertyVal(properties, 'tag');
+  return {
+    id: found.control.id,
+    ...(alias !== undefined ? { alias } : {}),
+    ...(tag !== undefined ? { tag } : {}),
+    controlType: mapContentControlType(properties),
+    lock: found.lockStack[found.lockStack.length - 1] ?? 'unlocked',
+    effectiveLock: effectiveContentControlLock(found.lockStack),
+    placeholder: propertyChild(properties, 'showingPlcHdr') !== undefined,
+    bound: propertyChild(properties, 'dataBinding') !== undefined,
+    nestingDepth: found.nestingDepth,
+    level: found.level,
+    fragments: [],
   };
 }

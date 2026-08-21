@@ -44,6 +44,7 @@ import {
   caretAt,
   cellSelectionText,
   contentControlAtSemantic,
+  contentControlHoldingParagraph,
   contentControlsInLayout,
   layoutSemanticDocument,
   paragraphsInCells,
@@ -156,6 +157,7 @@ import {
   setEditingModeChrome,
   setHeaderFooterEditingChrome,
   storyScopeOf,
+  storyScopeOfNodeId,
 } from './surface-scope.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
 import { createImageOps } from './surface-image-ops.ts';
@@ -1213,14 +1215,53 @@ export function mountPaginatedSurface(
   }
 
   /** Innermost layout boundary under the caret, or null outside every control. */
+  /**
+   * The content control the caret is inside, or null.
+   *
+   * Two resolutions, because the boundary records the fast one needs exist for the body
+   * alone. In the body, geometry: a paragraph can hold several inline controls and only the
+   * caret's x/y says which. Anywhere else, the caret's own PARAGRAPH, walked in that story's
+   * part — which is the honest answer where no records exist, and is what a block control
+   * needs in any case.
+   *
+   * The story check is not an optimisation. Page-content coordinates mean nothing without
+   * knowing whose box they are in: a header caret's y lands in the top band of the BODY
+   * content box, so the geometry path answered with whichever body control sat there, and
+   * `setValue` and `remove` then rewrote and deleted body content while the reader was
+   * editing a header.
+   */
   function contentControlAtCaret(): ContentControlBoundaryRecord | null {
+    const scope = storyScope();
+    if (scope.kind !== 'body') return contentControlInStoryAtCaret(scope);
     const caret = caretAt(currentLayout, selection.head, measurer);
     if (!caret) return null;
-    return contentControlAtSemantic(currentLayout, {
+    const found = contentControlAtSemantic(currentLayout, {
       x: caret.x,
       y: caret.y + caret.height / 2,
       pageIndex: caret.pageIndex,
     });
+    // Belt and braces: the records are the body's, so a match from another part is a bug in
+    // the index rather than an answer, and must not become a write.
+    if (!found) return null;
+    return partNameOfNodeId(found.id) === session.part().name ? found : null;
+  }
+
+  /** The part name a node id names, or '' when it names none. */
+  function partNameOfNodeId(id: string): string {
+    const hash = id.indexOf('#');
+    return hash === -1 ? '' : id.slice(0, hash);
+  }
+
+  /**
+   * The innermost control holding the caret's paragraph, in the open story's own part.
+   *
+   * Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside a
+   * control is the one the caret is actually in.
+   */
+  function contentControlInStoryAtCaret(scope: StoryScope): ContentControlBoundaryRecord | null {
+    const part = session.partFor(scope);
+    if (!part) return null;
+    return contentControlHoldingParagraph(part, selection.head.paragraphId);
   }
 
   function contentLockedOrBound(control: ContentControlBoundaryRecord): string | null {
@@ -1244,8 +1285,17 @@ export function mountPaginatedSurface(
     return isContentControl(node);
   }
 
+  /**
+   * The control a given id names, in whichever story owns it.
+   *
+   * Looked up in the part the ID names, not in the body. Every read built on this — the lock
+   * and binding gates, the tab index, a checkbox's state, a dropdown's items — answered as if
+   * a control outside the body did not exist, so `disabledReason` refused every verb on one
+   * with `notFound` while the control was plainly on screen.
+   */
   function findControl(controlId: string): OoxmlElement | null {
-    const node = findNode(session.part(), controlId);
+    const part = session.partFor(storyScopeOfNodeId(session, controlId, storyScope()));
+    const node = findNode(part ?? session.part(), controlId);
     if (!node || !isContentControlElement(node)) return null;
     return node;
   }
@@ -1830,15 +1880,18 @@ export function mountPaginatedSurface(
       commit(() => {
         // `applyOps`, not `session.applyTreeOps`: this lane wrote straight past the mode
         // rules, so a checkbox in a document open for viewing still toggled and committed.
-        // Explicitly the BODY story and no selection check, because a control op names the
-        // control it edits: the story the reader happens to have open, and where their caret
-        // sits, are answers to a different question — and `contentControlRefusal` above
+        // No selection check, because a control op names the control it edits: where the
+        // reader's caret sits is a different question, and `contentControlRefusal` above
         // judges the write on exactly these terms.
+        //
+        // The STORY comes from the control's own id, not from the open scope and not from a
+        // constant. Pinned to the body, this wrote body content while the reader was editing
+        // a header, and a control in that header could never be written at all.
         const result = applyOps(
           [{ op: 'setContentControlValue', controlId, value }],
           selectionMark(),
           undefined,
-          BODY_STORY,
+          storyScopeOfNodeId(session, controlId, storyScope()),
           false
         );
         committed = result.committed;
@@ -1865,7 +1918,7 @@ export function mountPaginatedSurface(
           [{ op: 'removeContentControl', controlId: id }],
           selectionMark(),
           undefined,
-          BODY_STORY,
+          storyScopeOfNodeId(session, id, storyScope()),
           false
         );
         committed = result.committed;
