@@ -104,7 +104,8 @@
     "addSpaceAfter": "增加段后间距",
     "addSpaceBefore": "增加段前间距",
     "removeSpaceAfter": "删除段后间距",
-    "removeSpaceBefore": "删除段前间距"
+    "removeSpaceBefore": "删除段前间距",
+    "options": null
   },
   "styles": {
     "selectAriaLabel": "选择段落样式",
@@ -252,6 +253,41 @@
         "lowerRoman": "i, ii, iii, ...",
         "upperRoman": "I, II, III, ..."
       }
+    },
+    "paragraph": {
+      "afterText": null,
+      "alignCenter": null,
+      "alignJustify": null,
+      "alignLeft": null,
+      "alignRight": null,
+      "alignment": null,
+      "at": null,
+      "beforeText": null,
+      "by": null,
+      "cancel": null,
+      "contextualSpacing": null,
+      "general": null,
+      "indentation": null,
+      "keepLines": null,
+      "keepNext": null,
+      "lineSpacing": null,
+      "ok": null,
+      "pageBreakBefore": null,
+      "pagination": null,
+      "ruleAtLeast": null,
+      "ruleExactly": null,
+      "ruleMultiple": null,
+      "spaceAfter": null,
+      "spaceBefore": null,
+      "spacing": null,
+      "special": null,
+      "specialFirstLine": null,
+      "specialHanging": null,
+      "specialNone": null,
+      "title": null,
+      "unitInches": null,
+      "unitPoints": null,
+      "widowControl": null
     }
   },
   "comments": {

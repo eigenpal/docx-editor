@@ -479,6 +479,7 @@ export interface RunFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     };
+    readonly paragraphFlags?: ParagraphFlags;
     // (undocumented)
     readonly spaceAfterPt?: number;
     readonly spaceBeforePt?: number;

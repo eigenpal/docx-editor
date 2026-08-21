@@ -1,0 +1,122 @@
+// Paragraph formatting as a composable — the Vue twin of the React hook. Read off the
+// snapshot, write through the engine's `setParagraphFormat` command, which is ONE undo step
+// for a dialog's worth of fields.
+
+import { computed, type ComputedRef } from 'vue';
+import type { EditorSnapshot, RunFormatting } from '@docx-editor.dev/core/contracts/editor';
+import { useDocxEditor } from './context';
+import { useEditorState } from './useEditorState';
+
+/** One tri-state paragraph flag: on, off, or "the selection disagrees". @public */
+export type ParagraphFlagState = boolean | null;
+
+/** What the Paragraph dialog reads: every field, as the selection currently stands. @public */
+export interface ParagraphFormatRead {
+  readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
+  readonly spaceBeforePt: number | null;
+  readonly spaceAfterPt: number | null;
+  readonly lineSpacing: {
+    readonly rule: 'multiple' | 'exact' | 'atLeast';
+    readonly value: number;
+  } | null;
+  readonly indentLeftTwips: number | null;
+  readonly indentRightTwips: number | null;
+  /** ONE signed first-line offset: negative is a hanging indent. */
+  readonly indentFirstLineTwips: number | null;
+  readonly contextualSpacing: ParagraphFlagState;
+  readonly keepNext: ParagraphFlagState;
+  readonly keepLines: ParagraphFlagState;
+  readonly widowControl: ParagraphFlagState;
+  readonly pageBreakBefore: ParagraphFlagState;
+}
+
+/**
+ * The fields `apply` accepts. Omitted fields are left as authored; `null` where allowed
+ * REMOVES the setting so the style supplies it again, which is not the same as a zero.
+ *
+ * @public
+ */
+export interface ParagraphFormatUpdate {
+  readonly alignment?: 'left' | 'center' | 'right' | 'justify';
+  readonly spaceBeforePt?: number | null;
+  readonly spaceAfterPt?: number | null;
+  readonly lineSpacing?: {
+    readonly rule: 'multiple' | 'exact' | 'atLeast';
+    readonly value: number;
+  } | null;
+  readonly indentLeftTwips?: number | null;
+  readonly indentRightTwips?: number | null;
+  readonly indentFirstLineTwips?: number | null;
+  readonly contextualSpacing?: boolean;
+  readonly keepNext?: boolean;
+  readonly keepLines?: boolean;
+  readonly widowControl?: boolean;
+  readonly pageBreakBefore?: boolean;
+}
+
+/** What `useParagraphFormat` returns. @public */
+export interface UseParagraphFormatReturn {
+  readonly format: ComputedRef<ParagraphFormatRead | null>;
+  readonly isEnabled: ComputedRef<boolean>;
+  readonly apply: (update: ParagraphFormatUpdate) => boolean;
+}
+
+const EMPTY_FLAGS = {
+  contextualSpacing: null,
+  keepNext: null,
+  keepLines: null,
+  widowControl: null,
+  pageBreakBefore: null,
+} as const;
+
+const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
+  const formatting: RunFormatting | null = snapshot.formatting ?? null;
+  if (!formatting) return null;
+  const indent = formatting.indent;
+  const flags = formatting.paragraphFlags ?? EMPTY_FLAGS;
+  return {
+    alignment: formatting.alignment ?? null,
+    spaceBeforePt: formatting.spaceBeforePt ?? null,
+    spaceAfterPt: formatting.spaceAfterPt ?? null,
+    lineSpacing: formatting.lineSpacing ?? null,
+    // `mixed` on a side means the selection disagrees, which a dialog shows as empty rather
+    // than as the first paragraph's number.
+    indentLeftTwips: indent && !indent.mixed.left ? indent.left : null,
+    indentRightTwips: indent && !indent.mixed.right ? indent.right : null,
+    indentFirstLineTwips: indent && !indent.mixed.firstLine ? indent.firstLine : null,
+    contextualSpacing: flags.contextualSpacing,
+    keepNext: flags.keepNext,
+    keepLines: flags.keepLines,
+    widowControl: flags.widowControl,
+    pageBreakBefore: flags.pageBreakBefore,
+  };
+};
+
+const selectEditable = (snapshot: EditorSnapshot): boolean => snapshot.editable;
+
+/**
+ * The selection's paragraph formatting, plus the command to change it.
+ *
+ * @public
+ */
+export function useParagraphFormat(): UseParagraphFormatReturn {
+  const editorRef = useDocxEditor();
+  const format = useEditorState(selectFormat);
+  const editable = useEditorState(selectEditable);
+
+  const isEnabled = computed(
+    () =>
+      editable.value &&
+      editorRef.value !== null &&
+      editorRef.value.can({ type: 'setParagraphFormat', alignment: 'left' }).ok
+  );
+
+  const apply = (update: ParagraphFormatUpdate): boolean => {
+    if (!editorRef.value) return false;
+    const command = { type: 'setParagraphFormat' as const, ...update };
+    if (!editorRef.value.can(command).ok) return false;
+    return editorRef.value.exec(command).ok;
+  };
+
+  return { format: computed(() => format.value), isEnabled, apply };
+}

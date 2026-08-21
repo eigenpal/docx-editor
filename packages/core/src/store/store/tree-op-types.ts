@@ -105,6 +105,9 @@ export const ACCEPTED_PARAGRAPH_PROPERTIES = [
   'keepLines',
   'widowControl',
   'pageBreakBefore',
+  // Word's "Don't add space between paragraphs of the same style". Layout has always read
+  // it (`paragraphContextualSpacing`); until now nothing could write it.
+  'contextualSpacing',
   'shd', // shading
 ] as const;
 

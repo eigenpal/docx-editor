@@ -9,6 +9,7 @@
 // showing a fixed list of things to apply.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
@@ -59,6 +60,7 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   const { isEnabled, disabledReason } = useEditorCommand('list.lineSpacing');
   const label = useToolbarLabel();
   const [open, setOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
@@ -149,6 +151,19 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
             role="menuitem"
             className="docx-toolbar__menu-item"
             onMouseDown={guardToolbarMousedown}
+            onClick={() => {
+              setOpen(false);
+              setDialogOpen(true);
+            }}
+          >
+            {label('lineSpacing.options')}
+          </button>
+          <div className="docx-toolbar__menu-separator" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="docx-toolbar__menu-item"
+            onMouseDown={guardToolbarMousedown}
             onClick={() =>
               applySpace(
                 'beforePt',
@@ -174,6 +189,10 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
           </button>
         </div>
       ) : null}
+      {/* The rows above are Word's shortcuts — a fixed Add, a zeroing Remove. The dialog is
+          the escape hatch for an exact value, which is what "Line spacing options…" opens
+          in Word and what this menu had no answer for. */}
+      <DocxEditorParagraphDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
     </span>
   );
 }

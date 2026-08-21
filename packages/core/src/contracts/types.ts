@@ -5,6 +5,46 @@
  * `types-barrel.ts`. There is no `@docx-editor.dev/core/types` subpath.
  */
 
+/**
+ * The five paragraph flags a Paragraph dialog shows as checkboxes.
+ *
+ * `contextualSpacing` is Word's "Don't add space between paragraphs of the same style";
+ * the rest are its Pagination block. `null` means the selection disagrees.
+ *
+ * @public
+ */
+export interface ParagraphFlags {
+  readonly contextualSpacing: boolean | null;
+  readonly keepNext: boolean | null;
+  readonly keepLines: boolean | null;
+  readonly widowControl: boolean | null;
+  readonly pageBreakBefore: boolean | null;
+}
+
+/**
+ * Every field of Word's Paragraph dialog, as `setParagraphFormat` takes it.
+ *
+ * An omitted field is left as authored. `null` REMOVES a setting so the style supplies it
+ * again — not the same as a zero, which blocks the cascade.
+ *
+ * @public
+ */
+export interface ParagraphFormatCommand {
+  alignment?: 'left' | 'center' | 'right' | 'justify';
+  spaceBeforePt?: number | null;
+  spaceAfterPt?: number | null;
+  lineSpacing?: { rule: 'multiple' | 'exact' | 'atLeast'; value: number } | null;
+  indentLeftTwips?: number | null;
+  indentRightTwips?: number | null;
+  /** ONE signed first-line offset: negative is a hanging indent. */
+  indentFirstLineTwips?: number | null;
+  contextualSpacing?: boolean;
+  keepNext?: boolean;
+  keepLines?: boolean;
+  widowControl?: boolean;
+  pageBreakBefore?: boolean;
+}
+
 /** Ownership token for one retained selection highlight. @public */
 export type SelectionPin = symbol;
 
@@ -211,6 +251,15 @@ export interface RunFormatting {
    */
   readonly spaceBeforePt?: number;
   readonly spaceAfterPt?: number;
+  /**
+   * The paragraph flags Word's Paragraph dialog shows as checkboxes.
+   *
+   * Each is `true`, `false`, or `null` when the selection's paragraphs disagree — a
+   * checkbox needs all three. Read through the cascade, so a flag a STYLE sets reads as on,
+   * which is what the box has to show over a paragraph the page is visibly keeping with the
+   * next. Absent on a `Run`, like every other selection-level field here.
+   */
+  readonly paragraphFlags?: ParagraphFlags;
   /**
    * The EFFECTIVE paragraph indent at the selection — cascade and numbering merge
    * included, so a numbered item that authors no `w:ind` reports the indent its list

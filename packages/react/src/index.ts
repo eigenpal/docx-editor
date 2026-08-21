@@ -57,6 +57,10 @@ export {
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
 export {
+  DocxEditorParagraphDialog,
+  type DocxEditorParagraphDialogProps,
+} from './editor/DocxEditorParagraphDialog';
+export {
   DocxEditorFontNotice,
   type DocxEditorFontNoticeProps,
 } from './editor/DocxEditorFontNotice';
@@ -249,6 +253,13 @@ export {
 } from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
+export {
+  useParagraphFormat,
+  type ParagraphFlagState,
+  type ParagraphFormatRead,
+  type ParagraphFormatUpdate,
+  type UseParagraphFormatReturn,
+} from './editor/useParagraphFormat';
 export {
   useParagraphIndent,
   type IndentUpdate,

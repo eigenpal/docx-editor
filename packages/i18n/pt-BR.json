@@ -104,7 +104,8 @@
     "addSpaceAfter": "Adicionar espaço depois do parágrafo",
     "addSpaceBefore": "Adicionar espaço antes do parágrafo",
     "removeSpaceAfter": "Remover espaço depois do parágrafo",
-    "removeSpaceBefore": "Remover espaço antes do parágrafo"
+    "removeSpaceBefore": "Remover espaço antes do parágrafo",
+    "options": null
   },
   "styles": {
     "selectAriaLabel": "Selecionar estilo de parágrafo",
@@ -252,6 +253,41 @@
         "lowerRoman": "i, ii, iii, ...",
         "upperRoman": "I, II, III, ..."
       }
+    },
+    "paragraph": {
+      "afterText": null,
+      "alignCenter": null,
+      "alignJustify": null,
+      "alignLeft": null,
+      "alignRight": null,
+      "alignment": null,
+      "at": null,
+      "beforeText": null,
+      "by": null,
+      "cancel": null,
+      "contextualSpacing": null,
+      "general": null,
+      "indentation": null,
+      "keepLines": null,
+      "keepNext": null,
+      "lineSpacing": null,
+      "ok": null,
+      "pageBreakBefore": null,
+      "pagination": null,
+      "ruleAtLeast": null,
+      "ruleExactly": null,
+      "ruleMultiple": null,
+      "spaceAfter": null,
+      "spaceBefore": null,
+      "spacing": null,
+      "special": null,
+      "specialFirstLine": null,
+      "specialHanging": null,
+      "specialNone": null,
+      "title": null,
+      "unitInches": null,
+      "unitPoints": null,
+      "widowControl": null
     }
   },
   "comments": {

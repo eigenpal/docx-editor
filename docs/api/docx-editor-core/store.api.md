@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export const ACCEPTED_PARAGRAPH_PROPERTIES: readonly ["pStyle", "jc", "spacing", "ind", "tabs", "numPr", "keepNext", "keepLines", "widowControl", "pageBreakBefore", "shd"];
+export const ACCEPTED_PARAGRAPH_PROPERTIES: readonly ["pStyle", "jc", "spacing", "ind", "tabs", "numPr", "keepNext", "keepLines", "widowControl", "pageBreakBefore", "contextualSpacing", "shd"];
 
 // @public
 export const ACCEPTED_RUN_PROPERTIES: readonly ["rFonts", "sz", "szCs", "color", "b", "bCs", "i", "iCs", "u", "strike", "dstrike", "highlight", "vertAlign", "position", "caps", "smallCaps", "spacing", "w", "kern"];

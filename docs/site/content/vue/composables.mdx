@@ -207,6 +207,40 @@ function toggleOrientation() {
 `apply()` returns `true` when the editor applies the update. Sizes and margins
 use twips. Set `scope` to `'section'` or `'document'`.
 
+## useParagraphFormat
+
+Use `useParagraphFormat` to read and change the paragraph at the selection.
+`apply` sends every field as one command, so a dialog's worth of changes is one
+undo step. Read the returned refs with `.value`:
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useParagraphFormat } from '@docx-editor.dev/vue';
+
+const { format, apply, isEnabled } = useParagraphFormat();
+const isDouble = computed(() => format.value?.lineSpacing?.value === 2);
+
+function toggle() {
+  apply({ lineSpacing: { rule: 'multiple', value: isDouble.value ? 1 : 2 } });
+}
+</script>
+
+<template>
+  <button :disabled="!isEnabled" @click="toggle">
+    {{ isDouble ? 'Single space' : 'Double space' }}
+  </button>
+</template>
+```
+
+A field reads `null` when the selected paragraphs disagree about it, which a
+checkbox shows as indeterminate and a number field shows as empty. Omit a field
+to leave it as authored, and pass `null` to remove it so the style supplies it
+again.
+
+For the whole form, `DocxEditorParagraphDialog` is Word's Paragraph dialog over
+this composable.
+
 ## useParagraphIndent
 
 Returns current paragraph indents and an `apply()` action for ruler controls.

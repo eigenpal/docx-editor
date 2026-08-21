@@ -28,36 +28,7 @@ import {
 } from './docx-editor-notes.ts';
 import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
 import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
-
-/**
- * One side of `w:spacing`, as the attributes a `setParagraphSpacing` write states.
- *
- * `undefined` states nothing at all: the command names one side or both, and the side it
- * does not name keeps whatever the paragraph already authored.
- *
- * The other two attributes on the side go WITH the measurement, because each supersedes it
- * (§17.3.1.33): `w:beforeAutospacing` substitutes Word's own gap, and `w:beforeLines`
- * measures in hundredths of a line instead of twips. A merging write that left either in
- * place wrote a number the file then ignored — the same way the autospacing flag swallowed
- * this command whole before.
- *
- * They are cleared DIFFERENTLY, because their off values differ. `w:beforeAutospacing="0"`
- * is a real off, so it is written explicitly and blocks an inherited flag. `w:beforeLines`
- * has no off value — `"0"` means zero lines of space, which would supersede the twips beside
- * it and flatten the gap the caller just asked for — so the attribute is dropped instead.
- * That leaves one residual: a STYLE that states `w:beforeLines` still supersedes a direct
- * `w:before`, which this command cannot express and Word's own points-entry does not either.
- */
-function spacingSide(
-  side: 'before' | 'after',
-  points: number | null | undefined
-): Record<string, string | null> {
-  if (points === undefined) return {};
-  const autospacing = `${side}Autospacing`;
-  const lines = `${side}Lines`;
-  if (points === null) return { [side]: null, [autospacing]: null, [lines]: null };
-  return { [side]: String(Math.round(points * 20)), [autospacing]: '0', [lines]: null };
-}
+import { lineSpacingAttributes, spacingSideAttributes } from './paragraph-format-write.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -99,12 +70,7 @@ export function execEditorCommand(
       // one attribute, two units, which is exactly why the command takes the rule's own.
       mounted.setParagraphProperty(
         'spacing',
-        command.rule === 'multiple'
-          ? { line: String(Math.round(command.value * 240)), lineRule: 'auto' }
-          : {
-              line: String(Math.round(command.value * 20)),
-              lineRule: command.rule === 'exact' ? 'exact' : 'atLeast',
-            },
+        lineSpacingAttributes({ rule: command.rule, value: command.value }),
         { mergeAttributes: true }
       );
       break;
@@ -123,8 +89,8 @@ export function execEditorCommand(
           // whole and the page did not move. Word clears the flag the same way when a value
           // is typed. An explicit `0` is written rather than the attribute dropped: dropping
           // it would let the inherited flag come back and win again.
-          ...spacingSide('before', command.beforePt),
-          ...spacingSide('after', command.afterPt),
+          ...spacingSideAttributes('before', command.beforePt),
+          ...spacingSideAttributes('after', command.afterPt),
         },
         { mergeAttributes: true }
       );
@@ -162,6 +128,44 @@ export function execEditorCommand(
         ...(command.right !== undefined ? { right: command.right } : {}),
         ...(command.firstLine !== undefined ? { firstLine: command.firstLine } : {}),
       });
+      break;
+    }
+    case 'setParagraphFormat': {
+      // The contract says `justify`; `w:jc` spells it `both` — the same translation
+      // `setAlignment` makes.
+      const written = mounted.setParagraphFormat({
+        ...(command.alignment !== undefined
+          ? { alignment: command.alignment === 'justify' ? ('both' as const) : command.alignment }
+          : {}),
+        ...(command.spaceBeforePt !== undefined ? { spaceBeforePt: command.spaceBeforePt } : {}),
+        ...(command.spaceAfterPt !== undefined ? { spaceAfterPt: command.spaceAfterPt } : {}),
+        ...(command.lineSpacing !== undefined ? { lineSpacing: command.lineSpacing } : {}),
+        ...(command.indentLeftTwips !== undefined
+          ? { indentLeftTwips: command.indentLeftTwips }
+          : {}),
+        ...(command.indentRightTwips !== undefined
+          ? { indentRightTwips: command.indentRightTwips }
+          : {}),
+        ...(command.indentFirstLineTwips !== undefined
+          ? { indentFirstLineTwips: command.indentFirstLineTwips }
+          : {}),
+        ...(command.contextualSpacing !== undefined
+          ? { contextualSpacing: command.contextualSpacing }
+          : {}),
+        ...(command.keepNext !== undefined ? { keepNext: command.keepNext } : {}),
+        ...(command.keepLines !== undefined ? { keepLines: command.keepLines } : {}),
+        ...(command.widowControl !== undefined ? { widowControl: command.widowControl } : {}),
+        ...(command.pageBreakBefore !== undefined
+          ? { pageBreakBefore: command.pageBreakBefore }
+          : {}),
+      });
+      if (!written) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the paragraph format could not be written here',
+        };
+      }
       break;
     }
     case 'setPageSetup': {

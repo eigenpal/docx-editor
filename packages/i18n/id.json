@@ -104,7 +104,8 @@
     "addSpaceAfter": "Tambahkan spasi setelah paragraf",
     "addSpaceBefore": "Tambahkan spasi sebelum paragraf",
     "removeSpaceAfter": "Hapus spasi setelah paragraf",
-    "removeSpaceBefore": "Hapus spasi sebelum paragraf"
+    "removeSpaceBefore": "Hapus spasi sebelum paragraf",
+    "options": null
   },
   "styles": {
     "selectAriaLabel": "Pilih gaya paragraf",
@@ -252,6 +253,41 @@
         "lowerRoman": "i, ii, iii, ...",
         "upperRoman": "I, II, III, ..."
       }
+    },
+    "paragraph": {
+      "afterText": null,
+      "alignCenter": null,
+      "alignJustify": null,
+      "alignLeft": null,
+      "alignRight": null,
+      "alignment": null,
+      "at": null,
+      "beforeText": null,
+      "by": null,
+      "cancel": null,
+      "contextualSpacing": null,
+      "general": null,
+      "indentation": null,
+      "keepLines": null,
+      "keepNext": null,
+      "lineSpacing": null,
+      "ok": null,
+      "pageBreakBefore": null,
+      "pagination": null,
+      "ruleAtLeast": null,
+      "ruleExactly": null,
+      "ruleMultiple": null,
+      "spaceAfter": null,
+      "spaceBefore": null,
+      "spacing": null,
+      "special": null,
+      "specialFirstLine": null,
+      "specialHanging": null,
+      "specialNone": null,
+      "title": null,
+      "unitInches": null,
+      "unitPoints": null,
+      "widowControl": null
     }
   },
   "comments": {

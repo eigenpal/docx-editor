@@ -513,17 +513,21 @@ describe('the shaped parts', () => {
     const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
     const trigger = root.querySelector('button') as HTMLButtonElement;
     const rows = () => [...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[];
+    // Indexed past the escape hatch: "Line spacing options…" opens the Paragraph dialog and
+    // is not one of the spacing rows this test is about.
+    const spacingRows = () => rows().slice(1);
 
     await act(async () => {
       trigger.click();
     });
     expect(rows().map((row) => row.textContent)).toEqual([
+      label('lineSpacing.options' as TranslationKey),
       label('lineSpacing.addSpaceBefore' as TranslationKey),
       label('lineSpacing.addSpaceAfter' as TranslationKey),
     ]);
 
     await act(async () => {
-      rows()[0]!.click();
+      spacingRows()[0]!.click();
     });
     expect(editor().snapshot().formatting?.spaceBeforePt).toBe(10);
 
@@ -531,9 +535,9 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     // Word never offers to add space that is already there.
-    expect(rows()[0]!.textContent).toBe(label('lineSpacing.removeSpaceBefore' as TranslationKey));
+    expect(spacingRows()[0]!.textContent).toBe(label('lineSpacing.removeSpaceBefore' as TranslationKey));
     await act(async () => {
-      rows()[0]!.click();
+      spacingRows()[0]!.click();
     });
     // ZERO, not absent. Removing the attribute would let the paragraph inherit its style's
     // space again — on a Word default document that gives the space straight back, and the
@@ -543,7 +547,7 @@ describe('the shaped parts', () => {
     await act(async () => {
       trigger.click();
     });
-    expect(rows()[0]!.textContent).toBe(label('lineSpacing.addSpaceBefore' as TranslationKey));
+    expect(spacingRows()[0]!.textContent).toBe(label('lineSpacing.addSpaceBefore' as TranslationKey));
   });
 
   test('line spacing and paragraph space are independent settings of one w:spacing', async () => {
@@ -567,7 +571,11 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     await act(async () => {
-      ([...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[])[1]!.click();
+      // By LABEL, not by index: the menu also carries the "Line spacing options…" escape
+      // hatch, and an index would silently start clicking a different row.
+      ([...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[])
+        .find((row) => row.textContent === label('lineSpacing.addSpaceAfter' as TranslationKey))!
+        .click();
     });
 
     expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });

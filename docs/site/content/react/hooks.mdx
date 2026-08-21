@@ -197,6 +197,38 @@ function OrientationToggle() {
 }
 ```
 
+## `useParagraphFormat`
+
+Use `useParagraphFormat` to read and change the paragraph at the selection.
+`apply` sends every field as one command, so a dialog's worth of changes is
+one undo step:
+
+```tsx
+import { useParagraphFormat } from '@docx-editor.dev/react';
+
+function DoubleSpaceButton() {
+  const { format, apply, isEnabled } = useParagraphFormat();
+  const isDouble = format?.lineSpacing?.value === 2;
+
+  return (
+    <button
+      disabled={!isEnabled}
+      onClick={() => apply({ lineSpacing: { rule: 'multiple', value: isDouble ? 1 : 2 } })}
+    >
+      {isDouble ? 'Single space' : 'Double space'}
+    </button>
+  );
+}
+```
+
+A field reads `null` when the selected paragraphs disagree about it, which a
+checkbox shows as indeterminate and a number field shows as empty. Omit a field
+to leave it as authored, and pass `null` to remove it so the style supplies it
+again.
+
+For the whole form, `DocxEditor.ParagraphDialog` is Word's Paragraph dialog
+over this hook.
+
 ## `useDocumentOutline`
 
 `useDocumentOutline` returns headings in document order.

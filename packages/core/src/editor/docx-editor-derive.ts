@@ -65,6 +65,10 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
     ...(formatting.spaceBeforePt !== null ? { spaceBeforePt: formatting.spaceBeforePt } : {}),
     ...(formatting.spaceAfterPt !== null ? { spaceAfterPt: formatting.spaceAfterPt } : {}),
     ...(formatting.indent !== null ? { indent: formatting.indent } : {}),
+    // Always present, unlike the fields above: each flag carries its own null for "the
+    // selection disagrees", so an absent object and a disagreeing one would be the same
+    // value to a checkbox that has to tell them apart.
+    paragraphFlags: formatting.paragraphFlags,
   };
 }
 

@@ -104,7 +104,8 @@
     "addSpaceAfter": "Ajouter un espace après le paragraphe",
     "addSpaceBefore": "Ajouter un espace avant le paragraphe",
     "removeSpaceAfter": "Supprimer l'espace après le paragraphe",
-    "removeSpaceBefore": "Supprimer l'espace avant le paragraphe"
+    "removeSpaceBefore": "Supprimer l'espace avant le paragraphe",
+    "options": null
   },
   "styles": {
     "selectAriaLabel": "Sélectionner le type de paragraphe",
@@ -252,6 +253,41 @@
         "lowerRoman": "i, ii, iii, ...",
         "upperRoman": "I, II, III, ..."
       }
+    },
+    "paragraph": {
+      "afterText": null,
+      "alignCenter": null,
+      "alignJustify": null,
+      "alignLeft": null,
+      "alignRight": null,
+      "alignment": null,
+      "at": null,
+      "beforeText": null,
+      "by": null,
+      "cancel": null,
+      "contextualSpacing": null,
+      "general": null,
+      "indentation": null,
+      "keepLines": null,
+      "keepNext": null,
+      "lineSpacing": null,
+      "ok": null,
+      "pageBreakBefore": null,
+      "pagination": null,
+      "ruleAtLeast": null,
+      "ruleExactly": null,
+      "ruleMultiple": null,
+      "spaceAfter": null,
+      "spaceBefore": null,
+      "spacing": null,
+      "special": null,
+      "specialFirstLine": null,
+      "specialHanging": null,
+      "specialNone": null,
+      "title": null,
+      "unitInches": null,
+      "unitPoints": null,
+      "widowControl": null
     }
   },
   "comments": {

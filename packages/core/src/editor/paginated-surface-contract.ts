@@ -228,6 +228,60 @@ export interface SurfaceFormatting {
    * must draw its handles somewhere and Word draws them at the first selected paragraph.
    */
   readonly indent: IndentFormatting | null;
+  /**
+   * The paragraph flags Word's Paragraph dialog shows as checkboxes, or null when the
+   * selection's paragraphs disagree about that one.
+   *
+   * `contextualSpacing` is "Don't add space between paragraphs of the same style"; the
+   * other four are its Pagination block. Each is read from the cascade, so a flag a STYLE
+   * sets reads as on — which is what a checkbox has to show.
+   */
+  readonly paragraphFlags: ParagraphFlagFormatting;
+}
+
+/**
+ * Every field of Word's Paragraph dialog, in the units the rest of this contract uses:
+ * points for spacing, TWIPS for indents.
+ *
+ * An omitted field is left as authored. Where `null` is allowed it REMOVES the setting,
+ * which is not the same as writing a zero — a zero blocks the cascade, a removal lets the
+ * style through again.
+ */
+export interface ParagraphFormatUpdate {
+  readonly alignment?: 'left' | 'center' | 'right' | 'both';
+  readonly spaceBeforePt?: number | null;
+  readonly spaceAfterPt?: number | null;
+  readonly lineSpacing?: {
+    readonly rule: 'multiple' | 'exact' | 'atLeast';
+    readonly value: number;
+  } | null;
+  readonly indentLeftTwips?: number | null;
+  readonly indentRightTwips?: number | null;
+  /** ONE signed first-line offset: negative is a hanging indent (§17.3.1.12). */
+  readonly indentFirstLineTwips?: number | null;
+  readonly contextualSpacing?: boolean;
+  readonly keepNext?: boolean;
+  readonly keepLines?: boolean;
+  readonly widowControl?: boolean;
+  readonly pageBreakBefore?: boolean;
+}
+
+/** One property in a batched paragraph write. */
+export interface ParagraphPropertyEdit {
+  readonly localName: string;
+  /** A null-valued attribute REMOVES that attribute; see `setParagraphProperty`. */
+  readonly attributes?: Record<string, string | null>;
+  /** Keep the attributes this entry does not name, for multi-setting elements. */
+  readonly mergeAttributes?: boolean;
+}
+
+/** One tri-state paragraph flag: on, off, or "the selection disagrees". */
+export interface ParagraphFlagFormatting {
+  readonly contextualSpacing: boolean | null;
+  readonly keepNext: boolean | null;
+  readonly keepLines: boolean | null;
+  readonly widowControl: boolean | null;
+  readonly pageBreakBefore: boolean | null;
 }
 
 /**
@@ -554,6 +608,23 @@ export interface PaginatedSurface {
     attributes?: Record<string, string | null>,
     options?: { readonly mergeAttributes?: boolean }
   ): void;
+  /**
+   * Several paragraph properties in ONE transaction, so a dialog is one undo step.
+   *
+   * `setParagraphProperty` is this with a single entry. A dialog that fired one call per
+   * field would leave the user pressing Ctrl+Z five times to undo one OK, and would paint
+   * four intermediate layouts on the way.
+   */
+  setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
+  /**
+   * Word's Paragraph dialog as ONE write: alignment, indents, spacing, line spacing and the
+   * five paragraph flags, over every paragraph the selection touches.
+   *
+   * One transaction, so pressing OK is one undo step and the page repaints once. An omitted
+   * field is left as authored; `null` where the type allows it REMOVES the setting so the
+   * style supplies it again. Returns whether anything was written.
+   */
+  setParagraphFormat(update: ParagraphFormatUpdate): boolean;
   /**
    * Word's Clear All Formatting: direct run properties off the selected text, and every
    * paragraph the selection touches back to the default style with its direct paragraph

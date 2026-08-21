@@ -55,6 +55,13 @@ export { useEditorSnapshot } from './useEditorSnapshot';
 export { useZoom, type UseZoomResult } from './editor/useZoom';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
 export {
+  useParagraphFormat,
+  type ParagraphFlagState,
+  type ParagraphFormatRead,
+  type ParagraphFormatUpdate,
+  type UseParagraphFormatReturn,
+} from './editor/useParagraphFormat';
+export {
   useParagraphIndent,
   type IndentUpdate,
   type UseParagraphIndentReturn,
@@ -299,6 +306,11 @@ export {
   DocxEditorPageSetupDialog,
   type DocxEditorPageSetupDialogProps,
 } from './editor/DocxEditorPageSetup';
+
+export {
+  DocxEditorParagraphDialog,
+  type DocxEditorParagraphDialogProps,
+} from './editor/DocxEditorParagraphDialog';
 
 export {
   PaginatedDocxEditor,

@@ -232,6 +232,50 @@ export interface Paragraph {
 }
 
 // @public
+export interface ParagraphFlags {
+    // (undocumented)
+    readonly contextualSpacing: boolean | null;
+    // (undocumented)
+    readonly keepLines: boolean | null;
+    // (undocumented)
+    readonly keepNext: boolean | null;
+    // (undocumented)
+    readonly pageBreakBefore: boolean | null;
+    // (undocumented)
+    readonly widowControl: boolean | null;
+}
+
+// @public
+export interface ParagraphFormatCommand {
+    // (undocumented)
+    alignment?: 'left' | 'center' | 'right' | 'justify';
+    // (undocumented)
+    contextualSpacing?: boolean;
+    indentFirstLineTwips?: number | null;
+    // (undocumented)
+    indentLeftTwips?: number | null;
+    // (undocumented)
+    indentRightTwips?: number | null;
+    // (undocumented)
+    keepLines?: boolean;
+    // (undocumented)
+    keepNext?: boolean;
+    // (undocumented)
+    lineSpacing?: {
+        rule: 'multiple' | 'exact' | 'atLeast';
+        value: number;
+    } | null;
+    // (undocumented)
+    pageBreakBefore?: boolean;
+    // (undocumented)
+    spaceAfterPt?: number | null;
+    // (undocumented)
+    spaceBeforePt?: number | null;
+    // (undocumented)
+    widowControl?: boolean;
+}
+
+// @public
 export interface Point {
     // (undocumented)
     readonly x: number;
@@ -302,6 +346,7 @@ export interface RunFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     };
+    readonly paragraphFlags?: ParagraphFlags;
     // (undocumented)
     readonly spaceAfterPt?: number;
     readonly spaceBeforePt?: number;

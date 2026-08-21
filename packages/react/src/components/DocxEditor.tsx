@@ -18,6 +18,7 @@ import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/Do
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
+import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
@@ -487,6 +488,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Navigation: typeof DocxEditorNavigationCompound;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+  /** Word's Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
+  readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;
   /** Word-style notice when document fonts render in substitute faces. */
@@ -528,6 +531,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   DocumentOutline: DocxEditorDocumentOutline,
   Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
+  ParagraphDialog: DocxEditorParagraphDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,

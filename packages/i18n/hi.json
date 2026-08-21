@@ -104,7 +104,8 @@
     "addSpaceAfter": "अनुच्छेद के बाद स्थान जोड़ें",
     "addSpaceBefore": "अनुच्छेद से पहले स्थान जोड़ें",
     "removeSpaceAfter": "अनुच्छेद के बाद स्थान हटाएँ",
-    "removeSpaceBefore": "अनुच्छेद से पहले स्थान हटाएँ"
+    "removeSpaceBefore": "अनुच्छेद से पहले स्थान हटाएँ",
+    "options": null
   },
   "styles": {
     "selectAriaLabel": "पैराग्राफ शैली चुनें",
@@ -252,6 +253,41 @@
         "lowerRoman": "i, ii, iii, ...",
         "upperRoman": "I, II, III, ..."
       }
+    },
+    "paragraph": {
+      "afterText": null,
+      "alignCenter": null,
+      "alignJustify": null,
+      "alignLeft": null,
+      "alignRight": null,
+      "alignment": null,
+      "at": null,
+      "beforeText": null,
+      "by": null,
+      "cancel": null,
+      "contextualSpacing": null,
+      "general": null,
+      "indentation": null,
+      "keepLines": null,
+      "keepNext": null,
+      "lineSpacing": null,
+      "ok": null,
+      "pageBreakBefore": null,
+      "pagination": null,
+      "ruleAtLeast": null,
+      "ruleExactly": null,
+      "ruleMultiple": null,
+      "spaceAfter": null,
+      "spaceBefore": null,
+      "spacing": null,
+      "special": null,
+      "specialFirstLine": null,
+      "specialHanging": null,
+      "specialNone": null,
+      "title": null,
+      "unitInches": null,
+      "unitPoints": null,
+      "widowControl": null
     }
   },
   "comments": {

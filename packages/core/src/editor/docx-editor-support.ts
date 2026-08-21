@@ -368,6 +368,61 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             supported: false,
             reason: 'DocTarget addressing is not supported; unlink acts at the selection',
           };
+    case 'setParagraphFormat': {
+      // Every bound the single-purpose commands apply, applied here too: this command is a
+      // convenience over the same writes, not a way around their validation.
+      const indents = [
+        command.indentLeftTwips,
+        command.indentRightTwips,
+        command.indentFirstLineTwips,
+      ];
+      for (const value of indents) {
+        if (value === undefined || value === null) continue;
+        if (!Number.isInteger(value) || Math.abs(value) > MAX_PARAGRAPH_INDENT_TWIPS) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: `indent values must be whole twips within ±${MAX_PARAGRAPH_INDENT_TWIPS}`,
+          };
+        }
+      }
+      for (const field of ['spaceBeforePt', 'spaceAfterPt'] as const) {
+        const value = command[field];
+        if (value === undefined || value === null) continue;
+        if (!Number.isFinite(value) || value < 0 || value > 1584) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: `setParagraphFormat requires ${field} between 0 and 1584 points`,
+          };
+        }
+      }
+      const line = command.lineSpacing;
+      if (line !== undefined && line !== null) {
+        if (line.rule !== 'multiple' && line.rule !== 'exact' && line.rule !== 'atLeast') {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: "lineSpacing requires a rule of 'multiple', 'exact' or 'atLeast'",
+          };
+        }
+        const raw = line.rule === 'multiple' ? line.value * 240 : line.value * 20;
+        if (!Number.isFinite(line.value) || line.value <= 0 || Math.round(raw) > 31680) {
+          return {
+            supported: false,
+            code: 'invalidArgs',
+            reason: 'lineSpacing requires a positive value no taller than 1584pt',
+          };
+        }
+      }
+      if (
+        command.alignment !== undefined &&
+        !['left', 'center', 'right', 'justify'].includes(command.alignment)
+      ) {
+        return { supported: false, code: 'invalidArgs', reason: 'unknown alignment' };
+      }
+      return { supported: true, mutating: true };
+    }
     case 'setIndent': {
       const fields = [command.left, command.right, command.firstLine];
       if (fields.every((value) => value === undefined)) {
@@ -755,6 +810,7 @@ const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
   spaceBeforePt: true,
   spaceAfterPt: true,
   indent: true,
+  paragraphFlags: true,
 };
 void COMPARED_FORMATTING_KEYS;
 
@@ -787,7 +843,14 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.indent?.firstLine !== b.indent?.firstLine ||
     a.indent?.mixed.left !== b.indent?.mixed.left ||
     a.indent?.mixed.right !== b.indent?.mixed.right ||
-    a.indent?.mixed.firstLine !== b.indent?.mixed.firstLine
+    a.indent?.mixed.firstLine !== b.indent?.mixed.firstLine ||
+    // Field by field for the same reason as `indent`: a fresh object every derive, so a
+    // reference compare would report every tick as a change.
+    a.paragraphFlags?.contextualSpacing !== b.paragraphFlags?.contextualSpacing ||
+    a.paragraphFlags?.keepNext !== b.paragraphFlags?.keepNext ||
+    a.paragraphFlags?.keepLines !== b.paragraphFlags?.keepLines ||
+    a.paragraphFlags?.widowControl !== b.paragraphFlags?.widowControl ||
+    a.paragraphFlags?.pageBreakBefore !== b.paragraphFlags?.pageBreakBefore
   ) {
     return false;
   }

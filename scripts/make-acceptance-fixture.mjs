@@ -57,6 +57,7 @@ const PARAGRAPH_PROPERTIES = [
   ['keepLines', '<w:keepLines/>'],
   ['widowControl', '<w:widowControl/>'],
   ['pageBreakBefore', '<w:pageBreakBefore/>'],
+  ['contextualSpacing', '<w:contextualSpacing/>'],
   ['shd', '<w:shd w:val="clear" w:fill="F2F2F2"/>'],
 ];
 

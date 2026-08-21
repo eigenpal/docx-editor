@@ -124,7 +124,8 @@
     "addSpaceBefore": "Add space before paragraph",
     "removeSpaceBefore": "Remove space before paragraph",
     "addSpaceAfter": "Add space after paragraph",
-    "removeSpaceAfter": "Remove space after paragraph"
+    "removeSpaceAfter": "Remove space after paragraph",
+    "options": "Line spacing options…"
   },
   "styles": {
     "selectAriaLabel": "Select paragraph style",
@@ -272,6 +273,41 @@
         "lowerRoman": "i, ii, iii, ...",
         "upperRoman": "I, II, III, ..."
       }
+    },
+    "paragraph": {
+      "title": "Paragraph",
+      "general": "General",
+      "alignment": "Alignment",
+      "alignLeft": "Left",
+      "alignCenter": "Centered",
+      "alignRight": "Right",
+      "alignJustify": "Justified",
+      "indentation": "Indentation",
+      "beforeText": "Before text",
+      "afterText": "After text",
+      "special": "Special",
+      "specialNone": "(none)",
+      "specialFirstLine": "First line",
+      "specialHanging": "Hanging",
+      "by": "By",
+      "spacing": "Spacing",
+      "spaceBefore": "Before",
+      "spaceAfter": "After",
+      "lineSpacing": "Line spacing",
+      "ruleMultiple": "Multiple",
+      "ruleAtLeast": "At least",
+      "ruleExactly": "Exactly",
+      "at": "At",
+      "contextualSpacing": "Don't add space between paragraphs of the same style",
+      "pagination": "Pagination",
+      "keepNext": "Keep with next",
+      "keepLines": "Keep lines together",
+      "widowControl": "Widow/Orphan control",
+      "pageBreakBefore": "Page break before",
+      "unitInches": "in",
+      "unitPoints": "pt",
+      "ok": "OK",
+      "cancel": "Cancel"
     }
   },
   "comments": {

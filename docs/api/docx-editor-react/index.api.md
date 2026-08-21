@@ -596,6 +596,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly NotesChrome: typeof DocxEditorNotesChrome;
     readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -664,6 +665,17 @@ export function DocxEditorPageSetupDialog(input: DocxEditorPageSetupDialogProps)
 
 // @public
 export interface DocxEditorPageSetupDialogProps {
+    // (undocumented)
+    className?: string;
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
+export function DocxEditorParagraphDialog(input: DocxEditorParagraphDialogProps): ReactElement | null;
+
+// @public
+export interface DocxEditorParagraphDialogProps {
     // (undocumented)
     className?: string;
     onClose: () => void;
@@ -1554,6 +1566,70 @@ export interface PaginatedDocxEditorShellProps {
 }
 
 // @public
+export type ParagraphFlagState = boolean | null;
+
+// @public
+export interface ParagraphFormatRead {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
+    // (undocumented)
+    readonly contextualSpacing: ParagraphFlagState;
+    readonly indentFirstLineTwips: number | null;
+    // (undocumented)
+    readonly indentLeftTwips: number | null;
+    // (undocumented)
+    readonly indentRightTwips: number | null;
+    // (undocumented)
+    readonly keepLines: ParagraphFlagState;
+    // (undocumented)
+    readonly keepNext: ParagraphFlagState;
+    // (undocumented)
+    readonly lineSpacing: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore: ParagraphFlagState;
+    // (undocumented)
+    readonly spaceAfterPt: number | null;
+    // (undocumented)
+    readonly spaceBeforePt: number | null;
+    // (undocumented)
+    readonly widowControl: ParagraphFlagState;
+}
+
+// @public
+export interface ParagraphFormatUpdate {
+    // (undocumented)
+    readonly alignment?: 'left' | 'center' | 'right' | 'justify';
+    // (undocumented)
+    readonly contextualSpacing?: boolean;
+    // (undocumented)
+    readonly indentFirstLineTwips?: number | null;
+    // (undocumented)
+    readonly indentLeftTwips?: number | null;
+    // (undocumented)
+    readonly indentRightTwips?: number | null;
+    // (undocumented)
+    readonly keepLines?: boolean;
+    // (undocumented)
+    readonly keepNext?: boolean;
+    // (undocumented)
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore?: boolean;
+    // (undocumented)
+    readonly spaceAfterPt?: number | null;
+    // (undocumented)
+    readonly spaceBeforePt?: number | null;
+    // (undocumented)
+    readonly widowControl?: boolean;
+}
+
+// @public
 export interface ParagraphStyleItemProps extends ParagraphStylePartProps {
     value: string;
 }
@@ -2170,6 +2246,16 @@ export interface UsePageSetupReturn {
     readonly apply: (update: PageSetupUpdate) => boolean;
     readonly isEnabled: boolean;
     readonly pageSetup: PageSetup | null;
+}
+
+// @public
+export function useParagraphFormat(): UseParagraphFormatReturn;
+
+// @public
+export interface UseParagraphFormatReturn {
+    readonly apply: (update: ParagraphFormatUpdate) => boolean;
+    readonly format: ParagraphFormatRead | null;
+    readonly isEnabled: boolean;
 }
 
 // @public

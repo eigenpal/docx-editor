@@ -20,11 +20,33 @@ import {
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
 import {
+  lineSpacingAttributes,
+  paragraphFlagAttributes,
+  spacingSideAttributes,
+} from './paragraph-format-write.ts';
+import {
   directParagraphProperties,
   mergedProperties,
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
-import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import type {
+  PaginatedSurface,
+  ParagraphFormatUpdate,
+  ParagraphPropertyEdit,
+} from './paginated-surface-contract.ts';
+
+/**
+ * The dialog's checkbox fields, and the `w:pPr` element each writes.
+ *
+ * One table so the update shape and the write cannot drift apart.
+ */
+const PARAGRAPH_FLAG_PROPERTIES = [
+  ['contextualSpacing', 'contextualSpacing'],
+  ['keepNext', 'keepNext'],
+  ['keepLines', 'keepLines'],
+  ['widowControl', 'widowControl'],
+  ['pageBreakBefore', 'pageBreakBefore'],
+] as const satisfies readonly (readonly [keyof ParagraphFormatUpdate, string])[];
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
@@ -79,6 +101,7 @@ type StructureMethods = Pick<
   | 'toggleList'
   | 'adjustIndent'
   | 'setIndent'
+  | 'setParagraphFormat'
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
   | 'sectionProperties'
@@ -595,6 +618,83 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
             ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
           }),
         });
+      }
+      if (ops.length === 0) return false;
+      return commitOverTarget(() => applyOps(ops, selectionMark()));
+    },
+
+    setParagraphFormat(update) {
+      const touched = targetParagraphs();
+      if (touched === null || touched.length === 0) return false;
+      // ONE op per paragraph carrying EVERY field the dialog changed, so OK is one undo
+      // step and the page repaints once. Firing a command per field would leave the user
+      // pressing Ctrl+Z five times and would paint four intermediate layouts on the way.
+      const entries: ParagraphPropertyEdit[] = [];
+      if (update.alignment !== undefined) {
+        entries.push({ localName: 'jc', attributes: { val: update.alignment } });
+      }
+      const spacing: Record<string, string | null> = {
+        ...spacingSideAttributes('before', update.spaceBeforePt),
+        ...spacingSideAttributes('after', update.spaceAfterPt),
+        ...lineSpacingAttributes(update.lineSpacing),
+      };
+      if (Object.keys(spacing).length > 0) {
+        entries.push({ localName: 'spacing', attributes: spacing, mergeAttributes: true });
+      }
+      for (const [field, localName] of PARAGRAPH_FLAG_PROPERTIES) {
+        const on = update[field];
+        if (on !== undefined) {
+          entries.push({ localName, attributes: paragraphFlagAttributes(on) });
+        }
+      }
+      const wantsIndent =
+        update.indentLeftTwips !== undefined ||
+        update.indentRightTwips !== undefined ||
+        update.indentFirstLineTwips !== undefined;
+      if (entries.length === 0 && !wantsIndent) return false;
+
+      const ops: TreeDocOp[] = [];
+      for (const paragraphId of touched) {
+        const direct = directParagraphProperties(storyPart(), paragraphId);
+        // `w:ind` is built here rather than as another entry: its four settings are two
+        // pairs of mutually exclusive SPELLINGS, so the attributes depend on what the
+        // paragraph already authored — the same reason `setIndent` does it this way.
+        let properties = direct;
+        if (wantsIndent) {
+          const authored =
+            direct.find((property) => property.localName === 'ind')?.attributes ?? {};
+          let attributes: Record<string, string> = { ...authored };
+          if (update.indentLeftTwips !== undefined) {
+            attributes = writeIndentSide(attributes, 'left', 'start', update.indentLeftTwips);
+          }
+          if (update.indentRightTwips !== undefined) {
+            attributes = writeIndentSide(attributes, 'right', 'end', update.indentRightTwips);
+          }
+          if (update.indentFirstLineTwips !== undefined) {
+            attributes = writeFirstLine(attributes, update.indentFirstLineTwips);
+          }
+          properties = mergedProperties(properties, {
+            localName: 'ind',
+            ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+          });
+        }
+        for (const entry of entries) {
+          const merged = entry.mergeAttributes
+            ? {
+                ...(properties.find((property) => property.localName === entry.localName)
+                  ?.attributes ?? {}),
+                ...entry.attributes,
+              }
+            : (entry.attributes ?? {});
+          const kept = Object.fromEntries(
+            Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
+          ) as Record<string, string>;
+          properties = mergedProperties(properties, {
+            localName: entry.localName,
+            ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
+          });
+        }
+        ops.push({ op: 'setParagraphProperties', paragraphId, properties });
       }
       if (ops.length === 0) return false;
       return commitOverTarget(() => applyOps(ops, selectionMark()));

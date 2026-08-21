@@ -658,6 +658,17 @@ export function formattingAt(
     };
   })();
 
+  // Word's Paragraph dialog shows these as checkboxes, so each answers on / off / mixed.
+  // Read through the cascade like everything else here: a flag a STYLE sets is on, which is
+  // what the box has to show. `w:val` absent means ON for every one of them (§17.17.4).
+  const flag = (localName: string) =>
+    paragraphValue((properties) => {
+      const attributes = cascadedParagraphAttributes(properties, localName);
+      if (!attributes) return false;
+      const value = attributes.val;
+      return value === undefined || (value !== '0' && value !== 'false' && value !== 'off');
+    });
+
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
     italic: styles.length > 0 && styles.every((entry) => entry.italic),
@@ -679,6 +690,13 @@ export function formattingAt(
     spaceBeforePt: spacePt('before'),
     spaceAfterPt: spacePt('after'),
     indent,
+    paragraphFlags: {
+      contextualSpacing: flag('contextualSpacing'),
+      keepNext: flag('keepNext'),
+      keepLines: flag('keepLines'),
+      widowControl: flag('widowControl'),
+      pageBreakBefore: flag('pageBreakBefore'),
+    },
   } satisfies SurfaceFormatting;
 }
 

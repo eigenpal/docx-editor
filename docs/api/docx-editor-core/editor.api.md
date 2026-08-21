@@ -1380,6 +1380,8 @@ export interface PaginatedSurface {
             readonly numStart?: number;
         };
     }): boolean;
+    setParagraphFormat(update: ParagraphFormatUpdate): boolean;
+    setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
     }): void;
@@ -1821,6 +1823,7 @@ export interface SurfaceFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     } | null;
+    readonly paragraphFlags: ParagraphFlagFormatting;
     // (undocumented)
     readonly spaceAfterPt: number | null;
     readonly spaceBeforePt: number | null;
