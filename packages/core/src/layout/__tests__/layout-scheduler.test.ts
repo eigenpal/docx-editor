@@ -71,6 +71,9 @@ describe('scope accumulates from the store, and only widens (task 9.1)', () => {
   test('two local edits in different paragraphs stay local over the union', () => {
     const h = harness();
     h.scheduler.notify(change({ dirty: ['p1'] }));
+    // The store bumps its revision before it publishes, so a second commit is a second
+    // revision by the time the subscriber runs.
+    h.setRevision(2);
     h.scheduler.notify(change({ dirty: ['p2'], toRevision: 2 }));
     const scope = h.scheduler.pending()!;
     expect(scope.impact).toBe('text-local');
@@ -97,6 +100,23 @@ describe('scope accumulates from the store, and only widens (task 9.1)', () => {
     const scope = h.scheduler.pending()!;
     expect(scope.impact).toBe('global');
     expect(scope.structural).toBe(true);
+  });
+
+  test('a story revision that trails the package revision still scopes to the package', () => {
+    const h = harness();
+    // A header/footer part counts its own revisions from zero, so its change reports a
+    // number well below the package revision the scheduler validates against. Taking the
+    // scope revision from the change discarded the pass as stale and painted the previous
+    // revision — which put the caret back where the edit started.
+    h.setRevision(7);
+    h.scheduler.notify(
+      change({ dirty: ['hf1'], impact: 'global', fromRevision: 0, toRevision: 1 })
+    );
+    expect(h.scheduler.pending()!.revision).toBe(7);
+    expect(h.scheduler.flush()).toBe(true);
+    expect(h.published.length).toBe(1);
+    expect(h.published[0]!.layout.revision).toBe(7);
+    expect(h.scheduler.staleDiscards).toBe(0);
   });
 
   test('a split marks the batch structural and names both endpoints', () => {
@@ -152,9 +172,9 @@ describe('scheduling coalesces and stays cancellable (task 9.1)', () => {
   test('many commits in one turn produce ONE layout pass', () => {
     const h = harness();
     for (let index = 0; index < 5; index += 1) {
+      h.setRevision(index + 1);
       h.scheduler.notify(change({ dirty: [`p${index}`], toRevision: index + 1 }));
     }
-    h.setRevision(5);
     expect(h.queueLength()).toBe(1);
     h.step();
     expect(h.runs.length).toBe(1);
