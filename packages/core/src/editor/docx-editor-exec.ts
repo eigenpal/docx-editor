@@ -39,9 +39,14 @@ import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
  * (§17.3.1.33): `w:beforeAutospacing` substitutes Word's own gap, and `w:beforeLines`
  * measures in hundredths of a line instead of twips. A merging write that left either in
  * place wrote a number the file then ignored — the same way the autospacing flag swallowed
- * this command whole before. Cleared to an explicit `"0"` rather than dropped where the
- * cascade can supply them again, and dropped entirely when the measurement itself is
- * dropped, so the paragraph inherits a consistent set.
+ * this command whole before.
+ *
+ * They are cleared DIFFERENTLY, because their off values differ. `w:beforeAutospacing="0"`
+ * is a real off, so it is written explicitly and blocks an inherited flag. `w:beforeLines`
+ * has no off value — `"0"` means zero lines of space, which would supersede the twips beside
+ * it and flatten the gap the caller just asked for — so the attribute is dropped instead.
+ * That leaves one residual: a STYLE that states `w:beforeLines` still supersedes a direct
+ * `w:before`, which this command cannot express and Word's own points-entry does not either.
  */
 function spacingSide(
   side: 'before' | 'after',

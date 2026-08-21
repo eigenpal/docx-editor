@@ -36,7 +36,8 @@ export interface SurfaceStructureDeps {
   layout(): SemanticLayout;
   commit(
     run: () => TreeApplyResult | boolean,
-    nextSelection?: () => SemanticSelection | null
+    nextSelection?: () => SemanticSelection | null,
+    options?: { readonly keepCellSelection?: boolean }
   ): void;
   orderedStart(): SemanticPosition;
   orderedRange(): { from: SemanticPosition; to: SemanticPosition };
@@ -103,9 +104,11 @@ function leftIndentAttributes(
   value: string
 ): Record<string, string> {
   const attributes: Record<string, string> = { ...(authored ?? {}) };
-  // `w:leftChars` supersedes the twips (§17.3.1.12), so the step has to clear it or the
-  // paragraph does not move.
+  // The character-unit twin supersedes the twips (§17.3.1.12), so the step has to clear it
+  // or the paragraph does not move. BOTH spellings: `CT_Ind` declares `w:startChars` too,
+  // and ISO Strict declares only that one.
   delete attributes.leftChars;
+  delete attributes.startChars;
   if (authored?.start !== undefined) attributes.start = value;
   if (authored?.start === undefined || authored.left !== undefined) attributes.left = value;
   return attributes;
@@ -126,8 +129,11 @@ function writeIndentSide(
   const attributes: Record<string, string> = { ...authored };
   // The CHARACTER-unit twin goes with the measurement either way, because it SUPERSEDES it
   // (§17.3.1.12): `w:leftChars` measures the same indent in hundredths of a character, so a
-  // merging write that left it in place wrote twips the file then ignored.
+  // merging write that left it in place wrote twips the file then ignored. Both spellings —
+  // `w:startChars`/`w:endChars` are the direction-relative names, and the only ones ISO
+  // Strict declares.
   delete attributes[`${physical}Chars`];
+  delete attributes[`${relative}Chars`];
   if (value === null) {
     delete attributes[physical];
     delete attributes[relative];
@@ -189,6 +195,33 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     },
   };
 
+  /** The live cell rectangle, or null when the selection is an ordinary range. */
+  function rectangleCells(): readonly string[] | null {
+    const cells = deps.selectedCells?.();
+    return cells && cells.length > 0 ? cells : null;
+  }
+
+  /**
+   * Commit a structural write, keeping a cell RECTANGLE selected across it.
+   *
+   * `setParagraphProperty` already does this, so Centre left a selected column selected while
+   * Bullets and Increase Indent cleared it — the same gesture behaving two ways depending on
+   * which button was pressed.
+   */
+  function commitOverTarget(run: () => TreeApplyResult): boolean {
+    let committed = false;
+    commit(
+      () => {
+        const result = run();
+        committed = result.committed;
+        return result;
+      },
+      undefined,
+      { keepCellSelection: rectangleCells() !== null }
+    );
+    return committed;
+  }
+
   /**
    * The paragraphs a structural write acts on, in document order, or null when the
    * selection does not resolve against the active scope's order.
@@ -199,8 +232,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
    * last, which is what Word does and what every one of these verbs did before.
    */
   function targetParagraphs(): readonly string[] | null {
-    const cells = deps.selectedCells?.();
-    if (cells && cells.length > 0) return [...paragraphsInCells(currentLayout.value, cells)];
+    if (rectangleCells() !== null) {
+      return [...paragraphsInCells(currentLayout.value, rectangleCells()!)];
+    }
     const { from, to } = orderedRange();
     const order = orderOf();
     const firstIndex = order.indexOf(from.paragraphId);
@@ -452,13 +486,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           ...(level !== null ? { level } : {}),
         };
       });
-      let committed = false;
-      commit(() => {
-        const result = applyOps(ops, selectionMark());
-        committed = result.committed;
-        return result;
-      });
-      return committed;
+      return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 
     canAdjustIndent(direction) {
@@ -531,13 +559,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         });
       }
       if (ops.length === 0) return false;
-      let committed = false;
-      commit(() => {
-        const result = applyOps(ops, selectionMark());
-        committed = result.committed;
-        return result;
-      });
-      return committed;
+      return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 
     setIndent(update) {
@@ -575,13 +597,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         });
       }
       if (ops.length === 0) return false;
-      let committed = false;
-      commit(() => {
-        const result = applyOps(ops, selectionMark());
-        committed = result.committed;
-        return result;
-      });
-      return committed;
+      return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 
     sectionProperties: () => readSectionProperties(session.part()),

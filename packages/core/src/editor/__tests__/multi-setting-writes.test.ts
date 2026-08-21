@@ -98,6 +98,27 @@ function firstRunProperties(editor: DocxEditorInstance): Record<string, Record<s
   return byName;
 }
 
+/** Every run's own `w:rFonts` attributes, keyed by run index. */
+function runFontProperties(
+  editor: DocxEditorInstance
+): Record<number, Record<string, string> | undefined> {
+  const part = editor.surface!.session.part();
+  const paragraph = findNode(part, editor.surface!.session.paragraphIds()[0]!);
+  if (!paragraph || paragraph.kind === 'textValue') throw new Error('no paragraph');
+  const byIndex: Record<number, Record<string, string> | undefined> = {};
+  let index = 0;
+  for (const child of paragraph.children) {
+    if (child.kind !== 'run') continue;
+    const found = authoredProperties(
+      propertyContainer(child, 'runProperties', 'rPr'),
+      AUTHORABLE_RUN_PROPERTIES
+    ).find((property) => property.localName === 'rFonts');
+    byIndex[index] = found?.attributes ? { ...found.attributes } : undefined;
+    index += 1;
+  }
+  return byIndex;
+}
+
 describe('w:rFonts keeps the font slots a pick does not name', () => {
   const RUN =
     '<w:p><w:r><w:rPr>' +
@@ -134,6 +155,32 @@ describe('w:rFonts keeps the font slots a pick does not name', () => {
       hAnsi: 'Georgia',
       eastAsia: 'SimSun',
     });
+  });
+});
+
+describe('a font armed at the caret merges like one applied to a selection', () => {
+  test("typing after a caret font pick keeps the run's other slots", () => {
+    // The armed path folds its properties separately from the selection path, so it kept
+    // its own copy of the replace-the-element bug: the two halves of one feature disagreed.
+    const editor = mount(
+      '<w:p><w:r><w:rPr>' +
+        '<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="SimSun" w:cs="Arial"/>' +
+        '</w:rPr><w:t>text</w:t></w:r></w:p>'
+    );
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    // A COLLAPSED caret inside the run arms the pick rather than writing it.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 2 },
+      head: { paragraphId: id, offset: 2 },
+    });
+    editor.exec({ type: 'setMarkAttr', mark: 'fontFamily', value: 'Verdana' });
+    editor.exec({ type: 'insertText', text: 'XY' });
+
+    const fonts = Object.values(runFontProperties(editor)).filter(Boolean);
+    const typed = fonts.find((attributes) => attributes.ascii === 'Verdana');
+    expect(typed).toBeDefined();
+    expect(typed!.eastAsia).toBe('SimSun');
+    expect(typed!.cs).toBe('Arial');
   });
 });
 

@@ -304,6 +304,42 @@ describe('reading a paragraph format', () => {
   });
 });
 
+describe('a font write keeps the slots it does not name', () => {
+  // `w:rFonts` carries a font per script. Replacing the element to change the Latin face
+  // deleted the East Asian and complex-script ones — on the RUN and on the paragraph MARK,
+  // which the marker of a list item inherits from.
+  const MULTI_SCRIPT = docx(
+    `<w:p><w:pPr><w:rPr>` +
+      '<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:eastAsia="MS Mincho" w:cs="Arabic Typesetting"/>' +
+      `</w:rPr></w:pPr>` +
+      run(
+        'text',
+        '<w:rFonts w:ascii="Georgia" w:hAnsi="Georgia" w:eastAsia="MS Mincho" w:cs="Arabic Typesetting"/>'
+      ) +
+      '</w:p>'
+  );
+
+  test('the run and the mark both keep eastAsia and cs', () => {
+    const host = open(MULTI_SCRIPT);
+    const body = roots(host).body;
+    const [first] = paragraphsOf(host, body);
+    const response = host.execute({
+      operations: [{ op: 'setFont', span: { paragraph: first! }, font: { name: 'Verdana' } }],
+    });
+    expect(response.ok).toBe(true);
+
+    const xml = savedMainXml(host);
+    // Two `w:rFonts` — the mark's and the run's — and neither may have lost a slot.
+    const fonts = [...xml.matchAll(/<w:rFonts [^>]*\/>/g)].map((match) => match[0]);
+    expect(fonts).toHaveLength(2);
+    for (const font of fonts) {
+      expect(font).toContain('w:ascii="Verdana"');
+      expect(font).toContain('w:eastAsia="MS Mincho"');
+      expect(font).toContain('w:cs="Arabic Typesetting"');
+    }
+  });
+});
+
 describe('writing a paragraph format', () => {
   test('authors what was asked for and leaves the rest of the properties alone', () => {
     const host = open(SPACED);

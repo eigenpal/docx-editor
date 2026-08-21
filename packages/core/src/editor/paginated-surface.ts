@@ -134,6 +134,7 @@ import { createSurfaceFormat } from './surface-format.ts';
 import {
   authoredRunPropertiesAt,
   mergedProperties,
+  mergedMultiSettingProperty,
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { createPointerController, type PointerController } from './surface-pointer.ts';
@@ -504,8 +505,12 @@ export function mountPaginatedSurface(
         paragraphId,
         start: offset,
         end: offset + length,
+        // Merged per attribute for the multi-setting properties, exactly as the selection
+        // path does: a font armed at a caret and then typed must keep the run's other font
+        // slots, or the two halves of one feature disagree.
         properties: armed.properties.reduce(
-          (merged, property) => mergedProperties(merged, property),
+          (merged, property) =>
+            mergedProperties(merged, mergedMultiSettingProperty(merged, property)),
           [...armed.base]
         ),
       },
@@ -722,8 +727,11 @@ export function mountPaginatedSurface(
     // Shift+Enter line break, a Tab, a page break or turning the paragraph into a list item
     // all leave the user typing at a new caret in the face they armed. Captured before the
     // ops run, re-anchored at the post-edit caret.
-    commit: (run, nextSelection) =>
-      commit(run, nextSelection, { rearmPending: armedAtCaret() ?? undefined }),
+    commit: (run, nextSelection, options) =>
+      commit(run, nextSelection, {
+        rearmPending: armedAtCaret() ?? undefined,
+        ...(options?.keepCellSelection ? { keepCellSelection: true } : {}),
+      }),
     orderedStart: () => orderedStart(),
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),

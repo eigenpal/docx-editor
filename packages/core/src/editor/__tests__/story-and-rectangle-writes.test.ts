@@ -30,22 +30,28 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-/** A body with one default header, whose single paragraph is the one under test. */
-function headerDocx(headerParagraph: string): Uint8Array {
+/** A body with one default header, whose paragraphs are the ones under test. */
+function headerDocx(headerParagraph: string, extra?: Record<string, Uint8Array>): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+        (extra
+          ? '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
+          : '') +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
     ),
     'word/_rels/document.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId10" Type="${R}/header" Target="header1.xml"/></Relationships>`
+      `<Relationships xmlns="${REL}"><Relationship Id="rId10" Type="${R}/header" Target="header1.xml"/>` +
+        (extra ? `<Relationship Id="rId8" Type="${R}/numbering" Target="numbering.xml"/>` : '') +
+        '</Relationships>'
     ),
+    ...extra,
     'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${headerParagraph}</w:hdr>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${p('body')}` +
@@ -107,6 +113,28 @@ describe('formatting reads answer the open story', () => {
     // never in the order and the call returned false without writing.
     expect(surface.setIndent({ left: 2880 })).toBe(true);
     expect(surface.formatting().indent?.left).toBe(2880);
+  });
+});
+
+describe('the read sweeps the story the write does', () => {
+  test('a two-paragraph header selection reports disagreement, not the head', () => {
+    const surface = mount(
+      headerDocx(
+        '<w:p><w:pPr><w:jc w:val="center"/><w:ind w:left="1440"/></w:pPr>' +
+          '<w:r><w:t>one</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>two</w:t></w:r></w:p>'
+      )
+    );
+    expect(surface.enterHeaderFooter({ rId: 'rId10' })).toBe(true);
+    const ids = surface.session.paragraphIdsIn({ kind: 'headerFooter', rId: 'rId10' });
+    surface.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 0 },
+      head: { paragraphId: ids[1]!, offset: 3 },
+    });
+    // Falling back to the BODY order left the header ids at -1, so the read answered for the
+    // head paragraph alone while the write acted on both.
+    expect(surface.formatting().alignment).toBeNull();
+    expect(surface.formatting().indent?.mixed.left).toBe(true);
   });
 });
 

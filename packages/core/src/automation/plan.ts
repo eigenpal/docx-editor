@@ -30,8 +30,8 @@ import {
   SEARCH_MATCH_LIMIT,
 } from '../store/store/text-match.ts';
 import {
-  directParagraphMarkProperties,
   directParagraphProperties,
+  mergedParagraphMarkProperties,
   mergedProperties,
   runPropertyEdits,
 } from '../store/store/direct-properties.ts';
@@ -1200,10 +1200,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         ops.push({
           op: 'setParagraphMarkProperties',
           paragraphId: share.paragraphId,
-          properties: mergedProperties(
-            directParagraphMarkProperties(part, share.paragraphId),
-            properties.value
-          ),
+          properties: mergedParagraphMarkProperties(part, share.paragraphId, properties.value),
         });
       }
     }

@@ -1959,6 +1959,9 @@ export function mergedFontProperty(authored: readonly OoxmlProperty[], incoming:
 export function mergedMultiSettingProperty(authored: readonly OoxmlProperty[], incoming: OoxmlProperty): OoxmlProperty;
 
 // @public
+export function mergedParagraphMarkProperties(part: OoxmlPart, paragraphId: string, incoming: OoxmlProperty | readonly OoxmlProperty[]): OoxmlProperty[];
+
+// @public
 export function mergedProperties(existing: readonly OoxmlProperty[], incoming: OoxmlProperty | readonly OoxmlProperty[]): OoxmlProperty[];
 
 // @public

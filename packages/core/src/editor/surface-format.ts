@@ -28,7 +28,7 @@ import {
 } from './surface-formatting.ts';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
-import { mergedMultiSettingProperty } from '@docx-editor.dev/core/store';
+import { mergedParagraphMarkProperties } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** What the composition root lends this lane. */
@@ -80,20 +80,6 @@ type FormatMethods = Pick<
   'setRunProperty' | 'setParagraphProperty' | 'toggleRunProperty' | 'formatting' | 'clearFormatting'
 >;
 
-/**
- * A paragraph MARK's properties with one write merged in.
- *
- * The mark carries a `w:rPr` like any run, so a font pick has to keep its other font slots
- * for the same reason a run does — see `mergedFontProperty`. Without this the marker of a
- * bulleted CJK paragraph lost its East Asian face while the text beside it kept one.
- */
-function markPropertiesWith(
-  authored: readonly SurfaceProperty[],
-  incoming: SurfaceProperty
-): SurfaceProperty[] {
-  return mergedProperties(authored, mergedMultiSettingProperty(authored, incoming));
-}
-
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const { session, commit, orderedRange, selectionMark, textOf } = deps;
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
@@ -140,10 +126,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const edits = runPropertyEdits(part, from.paragraphId, from.offset, to.offset, incoming);
       // No run in range means nothing was formatted, so the mark must not move either.
       if (edits.length === 0) return;
-      const markProperties = markPropertiesWith(
-        directParagraphMarkProperties(part, from.paragraphId),
-        incoming
-      );
+      const markProperties = mergedParagraphMarkProperties(part, from.paragraphId, incoming);
       commit(() =>
         applyOps(
           [
@@ -210,10 +193,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         ops.push({
           op: 'setParagraphMarkProperties',
           paragraphId,
-          properties: markPropertiesWith(
-            directParagraphMarkProperties(part, paragraphId),
-            incoming
-          ),
+          properties: mergedParagraphMarkProperties(part, paragraphId, incoming),
         });
       }
     }
@@ -254,7 +234,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       ops.push({
         op: 'setParagraphMarkProperties' as const,
         paragraphId,
-        properties: markPropertiesWith(directParagraphMarkProperties(part, paragraphId), incoming),
+        properties: mergedParagraphMarkProperties(part, paragraphId, incoming),
       });
     }
     if (ops.length === 0) return false;
@@ -369,7 +349,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
             return fallback === null ? resolved : { ...resolved, fontFamily: fallback };
           },
           deps.selectedCells?.(),
-          deps.defaultParagraphStyleId?.() ?? null
+          deps.defaultParagraphStyleId?.() ?? null,
+          deps.paragraphOrder()
         ),
         deps.pendingFormats()
       ),

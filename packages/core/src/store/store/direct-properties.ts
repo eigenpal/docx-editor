@@ -158,12 +158,13 @@ export function mergedProperties(
  * indirectly and WINS over the explicit name beside it, so a slot being set has to have its
  * theme reference cleared with it or the pick resolves back to the theme font.
  */
-const FONT_SLOT_THEMES: Readonly<Record<string, string>> = {
-  ascii: 'asciiTheme',
-  hAnsi: 'hAnsiTheme',
-  eastAsia: 'eastAsiaTheme',
-  cs: 'cstheme',
-};
+const FONT_SLOT_THEMES: ReadonlyMap<string, string> = new Map([
+  ['ascii', 'asciiTheme'],
+  ['hAnsi', 'hAnsiTheme'],
+  ['eastAsia', 'eastAsiaTheme'],
+  // Lowercase `t` is the schema's own spelling, not a typo (`CT_Fonts`).
+  ['cs', 'cstheme'],
+]);
 
 /**
  * A `w:rFonts` write merged over what the run already authors, slot by slot.
@@ -184,7 +185,7 @@ export function mergedFontProperty(
   if (!existing) return incoming;
   const merged: Record<string, string> = { ...existing, ...(incoming.attributes ?? {}) };
   for (const slot of Object.keys(incoming.attributes ?? {})) {
-    const theme = FONT_SLOT_THEMES[slot];
+    const theme = FONT_SLOT_THEMES.get(slot);
     if (theme) delete merged[theme];
   }
   return { localName: 'rFonts', attributes: merged };
@@ -239,17 +240,6 @@ export interface RunPropertyEdit {
 }
 
 /**
- * A range run-property change, split into ONE edit per run it covers, each merged over that
- * run's own `w:rPr`.
- *
- * Neither half of that is optional. The base MUST be the run's own properties (see this file's
- * header). And the split MUST be per run: the op REPLACES the properties it names across its
- * whole range, so one op carrying one run's bag over a mixed selection homogenised it — bolding
- * `hello ` + `Georgia` rewrote the second run's `w:rFonts` with the first's. Runs are addressed by
- * offset rather than by id because these edits apply in sequence and the applier splits runs at
- * the range edges; offsets are unmoved by a property write, ids are not.
- */
-/**
  * One incoming write merged over what the node authors, for the properties that carry
  * SEVERAL independent settings in one element.
  *
@@ -270,6 +260,29 @@ export function mergedMultiSettingProperty(
   const existing = authored.find((entry) => entry.localName === 'u')?.attributes;
   if (!existing) return incoming;
   return { localName: 'u', attributes: { ...existing, ...(incoming.attributes ?? {}) } };
+}
+
+/**
+ * A paragraph MARK's own properties with one write merged in, per attribute where it counts.
+ *
+ * The mark carries a `w:rPr` like any run, so a font change has to keep its other font slots
+ * for the same reason a run does — without this the marker of a CJK list item lost its East
+ * Asian face while the text beside it kept one. Lives here because BOTH lanes write the mark:
+ * the editor's toolbar and the automation object model.
+ */
+export function mergedParagraphMarkProperties(
+  part: OoxmlPart,
+  paragraphId: string,
+  incoming: OoxmlProperty | readonly OoxmlProperty[]
+): OoxmlProperty[] {
+  const authored = directParagraphMarkProperties(part, paragraphId);
+  const additions = Array.isArray(incoming)
+    ? (incoming as readonly OoxmlProperty[])
+    : [incoming as OoxmlProperty];
+  return mergedProperties(
+    authored,
+    additions.map((property) => mergedMultiSettingProperty(authored, property))
+  );
 }
 
 function withMultiSettingsKept(

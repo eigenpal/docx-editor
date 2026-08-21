@@ -228,6 +228,7 @@ export {
   directParagraphMarkProperties,
   directParagraphProperties,
   isAuthorableRunProperty,
+  mergedMultiSettingProperty,
   mergedProperties,
   propertyContainer,
   runAddressRanges,
@@ -523,7 +524,16 @@ export function formattingAt(
    * is actually written in. Word's style box shows THAT (normally "Normal"), not a blank:
    * "no `w:pStyle`" is a statement about the file, not about what the user is looking at.
    */
-  defaultParagraphStyleId?: string | null
+  defaultParagraphStyleId?: string | null,
+  /**
+   * Paragraph ids in reading order for the ACTIVE story.
+   *
+   * The read has to sweep the same order the write does, or the two disagree about which
+   * paragraphs are involved: falling back to the body order answered for a header selection
+   * with the head paragraph alone, so a two-paragraph header selection reported the first
+   * one's alignment as if the pair agreed — and the following press changed both.
+   */
+  paragraphOrder?: readonly string[]
 ): SurfaceFormatting {
   const spans = selectionSpans(layout, selection, cells);
   const styles = spans.map((span) => span.style);
@@ -557,7 +567,7 @@ export function formattingAt(
   // alignment control depend on the DIRECTION the user dragged: a centred paragraph
   // selected together with a left one showed Centre pressed one way and Left the other,
   // and pressing either was a change to both. Word shows none of the four pressed.
-  const touchedParagraphs = paragraphsTouched(layout, selection, cells);
+  const touchedParagraphs = paragraphsTouched(layout, selection, cells, paragraphOrder);
   const paragraphValue = <T>(read: (properties: readonly SurfaceProperty[]) => T): T | null =>
     agreedOver(touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id))));
   // Normalized BEFORE agreement: `w:jc` absent and `w:jc val="left"` are the same
@@ -683,7 +693,8 @@ export function formattingAt(
 function paragraphsTouched(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  paragraphOrder?: readonly string[]
 ): readonly string[] {
   // A RECTANGLE first, for the same reason the write takes it first: a selected column read
   // as a range runs through the cells between its corners, so the toolbar answered "mixed"
@@ -693,7 +704,9 @@ function paragraphsTouched(
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return [selection.head.paragraphId];
   }
-  const order = documentOrder(layout);
+  // The ACTIVE story's order when the caller knows it; `documentOrder` is the body's, and a
+  // header selection resolves to -1 in it.
+  const order = paragraphOrder ?? documentOrder(layout);
   const anchorIndex = order.indexOf(selection.anchor.paragraphId);
   const headIndex = order.indexOf(selection.head.paragraphId);
   if (anchorIndex === -1 || headIndex === -1) return [selection.head.paragraphId];

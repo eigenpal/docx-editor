@@ -82,6 +82,7 @@ export {
   isAuthorableRunProperty,
   mergedFontProperty,
   mergedMultiSettingProperty,
+  mergedParagraphMarkProperties,
   mergedProperties,
   propertyContainer,
   runAddressRanges,
