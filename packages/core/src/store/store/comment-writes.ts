@@ -18,6 +18,7 @@ import {
 } from '../package/package-edit.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { insertChildren, findNode, replaceNode } from '../package/ooxml-edit.ts';
+import { relativeTarget } from '../package/custom-xml-part.ts';
 import { resolveInternalTarget } from '../package/opc-names.ts';
 import {
   WML_NAMESPACE_URI,
@@ -213,8 +214,7 @@ function relatedPartName(
 function withMainDocumentRelationship(
   pkg: OoxmlPackage,
   relationshipType: string,
-  targetPartName: string,
-  rawTarget: string
+  targetPartName: string
 ): OoxmlPackage {
   const owner = pkg.mainDocumentPart;
   for (const record of relationshipsOf(pkg, owner)) {
@@ -222,7 +222,11 @@ function withMainDocumentRelationship(
     const resolved = resolveInternalTarget(owner, record.rawTarget);
     if (resolved.ok && resolved.partName === targetPartName) return pkg;
   }
-  return withRelationship(pkg, owner, relationshipType, rawTarget).pkg;
+  // DERIVED from the part, not a literal. The part name honours a story's redirect to a
+  // non-conventional name, so a hardcoded `comments.xml` beside it minted a relationship
+  // naming a part that does not exist — which the guard above could then never match, so the
+  // branch was re-entered on every comment and the write was refused outright.
+  return withRelationship(pkg, owner, relationshipType, relativeTarget(owner, targetPartName)).pkg;
 }
 
 /** The comment part this story points at, or the conventional name when it has none yet. */
@@ -580,13 +584,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
             return root ? withNewPart(current, commentsName, root, COMMENTS_TYPE) : null;
           })();
       if (withCommentsPart === null) return current;
-      // Both parts live in `/word/`, so the relative target is what it always was.
-      return withMainDocumentRelationship(
-        withCommentsPart,
-        COMMENTS_REL,
-        commentsName,
-        'comments.xml'
-      );
+      return withMainDocumentRelationship(withCommentsPart, COMMENTS_REL, commentsName);
     });
 
     if (parentTarget && mintedParentParaId) {
@@ -623,12 +621,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
               return root ? withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE) : null;
             })();
         if (withExtended === null) return current;
-        return withMainDocumentRelationship(
-          withExtended,
-          COMMENTS_EXTENDED_REL,
-          extendedName,
-          'commentsExtended.xml'
-        );
+        return withMainDocumentRelationship(withExtended, COMMENTS_EXTENDED_REL, extendedName);
       });
 
       ctx.applyPackage((current) => {

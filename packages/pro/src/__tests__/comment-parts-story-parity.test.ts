@@ -193,6 +193,46 @@ describe('a package that relates comments from a story is repaired', () => {
   });
 });
 
+/** A header relating a NON-CONVENTIONAL comments part, which OPC permits and Word writes. */
+function headerRelatesRenamedCommentsDocx(): Uint8Array {
+  const entries = unzipSync(fixture());
+  entries['word/commentsAlt.xml'] = strToU8(`<w:comments xmlns:w="${W}"/>`);
+  entries['word/_rels/header1.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rId1" Type="${COMMENTS_REL_TYPE}" Target="commentsAlt.xml"/>` +
+      '</Relationships>'
+  );
+  entries['[Content_Types].xml'] = strToU8(
+    strFromU8(entries['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/commentsAlt.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.comments+xml"/></Types>'
+    )
+  );
+  return zipSync(entries);
+}
+
+describe('a story’s own comments part keeps its name', () => {
+  test('the main-document relationship names the part that exists', async () => {
+    const editor = openStory('header', headerRelatesRenamedCommentsDocx());
+    commentWithReply(editor);
+
+    const saved = await savedParts(editor);
+    const rels = saved.get(DOCUMENT_RELS) ?? '';
+    // The relationship target is DERIVED from the resolved part name. A hardcoded
+    // `comments.xml` beside a part actually called `commentsAlt.xml` minted a relationship
+    // naming a part the package does not hold — which the idempotence guard could then never
+    // match, so the branch was re-entered on every comment and the write was refused outright.
+    expect(rels).toContain('Target="commentsAlt.xml"');
+    expect(rels, 'a relationship to a part that does not exist').not.toContain(
+      'Target="comments.xml"'
+    );
+    expect(saved.has('word/comments.xml'), 'a second comments part was created').toBe(false);
+    // And the comment is really there, in the part the story already named.
+    expect(saved.get('word/commentsAlt.xml') ?? '').toContain('Root');
+  });
+});
+
 describe('a comment in any story is reachable from the main document', () => {
   for (const story of STORIES) {
     test(`${story}: the comments relationship lands on the document part`, async () => {

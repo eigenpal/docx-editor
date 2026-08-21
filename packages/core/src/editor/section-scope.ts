@@ -94,14 +94,15 @@ export function sectionAnchorParagraphFor(
     const found = firstParagraphIn(blocks[i]);
     if (found !== null) return found;
   }
-  // A section holding no paragraph at all — a body of nothing but a table's worth of nothing,
-  // or an empty continuous section. Any body paragraph is a better anchor than none: an
-  // UNANCHORED section write targets the LAST section, which in a multi-section document is a
-  // different page's geometry from the one the caller is looking at.
-  for (const block of blocks) {
-    const found = firstParagraphIn(block);
-    if (found !== null) return found;
-  }
+  // A section holding no paragraph at all has NO anchor, and inventing one is worse than
+  // having none. `targetSectionNodes` resolves an anchor to the first `w:sectPr` at or after
+  // it, so any paragraph borrowed from elsewhere pins the write to THAT paragraph's section —
+  // section 0, for the obvious "first paragraph in the body" choice. An omitted anchor writes
+  // every section, which is broader than asked but does include the one the caller means; a
+  // borrowed anchor writes one section and it is the wrong one.
+  //
+  // Not exotic: a trailing body-level `w:sectPr` is minted as an empty final section, which is
+  // ordinary in a multi-section package — and its header is one a reader stands in.
   return null;
 }
 

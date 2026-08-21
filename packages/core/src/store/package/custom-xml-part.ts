@@ -149,7 +149,7 @@ function documentIdentityOf(pkg: OoxmlPackage): string {
 const RELS_PART = /\/_rels\/[^/]*\.rels$/i;
 
 /** A relationship target for `to`, written relative to `from`'s own directory. */
-function relativeTarget(from: string, to: string): string {
+export function relativeTarget(from: string, to: string): string {
   const fromParts = from.split('/').slice(1, -1);
   const toParts = to.split('/').slice(1);
   let shared = 0;
