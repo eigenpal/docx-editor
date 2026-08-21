@@ -114,7 +114,20 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
     }
   };
 
-  for (const page of layout.pages) visit(page.fragments, page.index);
+  // EVERY story a page draws, not `page.fragments` alone. A table inside a header, a footer or
+  // a note is a table, and against the body's fragments the whole table lane answered "the
+  // selection is not inside a table" for one the user was looking at — a message that states a
+  // fact about the caret rather than the limit it actually hit.
+  for (const page of layout.pages) {
+    visit(page.fragments, page.index);
+    for (const story of [page.header, page.footer]) {
+      if (story) visit(story.fragments, page.index);
+    }
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) visit(note.fragments, page.index);
+    }
+  }
 
   const index = new Map<string, TableIndex>();
   for (const [id, cells] of placed) {

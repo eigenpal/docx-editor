@@ -206,7 +206,10 @@ export function buildTableCommandPlannerInput(
 ): TableCommandPlannerInput {
   return {
     command,
-    part: surface.session.part(),
+    // The part the CARET is in, which is the part `applyTableCommandPlan` commits against.
+    // Planned against the body while a header was open, every op named a node the header store
+    // has never heard of, so a plan that validated cleanly was then rejected on apply.
+    part: surface.session.partFor(surface.storyScope()) ?? surface.session.part(),
     layout: surface.layout(),
     storeRevision: surface.session.packageRevision(),
     selection: surface.state().selection,
