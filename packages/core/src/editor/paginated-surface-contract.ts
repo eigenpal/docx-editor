@@ -836,6 +836,15 @@ export interface PaginatedSurface {
     resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
   ): void;
   destroy(): void;
+  /**
+   * The section a painted page belongs to, and the page that section starts on.
+   *
+   * Published because opening a furniture story without a page opens it without a section, and
+   * the section is what the ruler clamps to and what a new table's grid is divided from. One
+   * header part can serve several sections, so only the page settles which one the reader is
+   * looking at.
+   */
+  sectionAtPage(pageIndex: number): { sectionIndex: number; sectionStart: number };
   /** Active editing view — body, or an open header/footer story by rId. */
   activeScope(): ViewScope;
   /** Activate a view scope. Returns false when a header/footer rId cannot be opened. */

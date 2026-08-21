@@ -1347,6 +1347,11 @@ export interface PaginatedSurface {
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
     revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
     revisionAuthors(): ReadonlyMap<string, number>;
+    sectionAnchorParagraphAt(paragraphId: string): string | null;
+    sectionAtPage(pageIndex: number): {
+        sectionIndex: number;
+        sectionStart: number;
+    };
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
@@ -2078,6 +2083,7 @@ export interface TreeDocxSessionView {
     save(): Uint8Array;
     setCommentResolved(commentId: string, resolved: boolean): boolean;
     settingsRoot(): OoxmlElement | null;
+    storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;
     stylesRoot(): OoxmlElement | null;
     // (undocumented)

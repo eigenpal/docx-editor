@@ -177,6 +177,15 @@ export interface TreeDocxSessionView {
     selectionAfter?: SelectionMark | null,
     scope?: StoryScope
   ): TreeApplyResult;
+  /**
+   * Every part that holds a story, body first, then headers, footers and note parts.
+   *
+   * A READ: parts come from the package, so this opens no story store and spends none of the
+   * 64 editable-store slots. Use it for any query that must answer about the whole document
+   * rather than about the caret — an enumeration that reads only the body reports a document
+   * the reader is not looking at.
+   */
+  storyParts(): readonly OoxmlPart[];
   /** Body text, paragraphs joined by newlines, read from the CANONICAL tree. */
   bodyText(): string;
   /** Text of a story scope, paragraphs joined by newlines. */
@@ -954,6 +963,8 @@ export function openTreeSession(
    * Read straight from the package rather than through `resolveStory`, which would OPEN a
    * store for every note part just to answer a read.
    */
+  const storyParts = (): readonly OoxmlPart[] => [bodyStore().part, ...furnitureAndNoteParts()];
+
   const furnitureAndNoteParts = (): OoxmlPart[] => {
     const parts: OoxmlPart[] = [];
     const seen = new Set<OoxmlPart>();
@@ -1078,6 +1089,7 @@ export function openTreeSession(
         return { committed: true, rejected: false, opCount: mapped.ops.length };
       },
 
+      storyParts,
       bodyText: () => projectedText(bodyStore().part),
 
       storyText(scope) {

@@ -4435,6 +4435,7 @@ export function mountPaginatedSurface(
       flushTypeBuffer();
       restoreSelection(session.redo());
     },
+    sectionAtPage,
     activeScope: () => {
       const note = noteOps?.activeNoteScope();
       if (note) return note;

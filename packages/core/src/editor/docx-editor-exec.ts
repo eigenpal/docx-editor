@@ -12,6 +12,7 @@ import { writeClipboardText } from './clipboard-write.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { storyScopeOfNodeId } from './surface-scope.ts';
+import type { StoryScope } from '@docx-editor.dev/core/store';
 import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
 import {
   execEditHeaderFooter,
@@ -464,6 +465,47 @@ function noteScopeHolding(mounted: PaginatedSurface, paragraphId: string): strin
 }
 
 /**
+ * The page a furniture paragraph is painted on, with that page's section.
+ *
+ * A header opened WITHOUT a page is opened without a section, and the section is what the
+ * ruler clamps to and what `insertTableOp` divides into columns. One part can be the default
+ * header of several sections, so "the first section that names this rId" is a different page's
+ * geometry — a table sized for the wrong paper. The painted page settles it, exactly as the
+ * pointer seam already does when the reader clicks the same header.
+ */
+function headerFooterPageHolding(
+  mounted: PaginatedSurface,
+  paragraphId: string
+): { readonly pageIndex: number; readonly sectionIndex: number } | null {
+  const pages = mounted.layout().pages;
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex]!;
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      for (const fragment of paragraphFragmentsOfBlocks(story.fragments)) {
+        if (fragment.paragraphId !== paragraphId) continue;
+        return { pageIndex, sectionIndex: mounted.sectionAtPage(pageIndex).sectionIndex };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether two scopes name the same story.
+ *
+ * Structural, not `JSON.stringify`: stringify is key-order dependent and happens to work only
+ * because both values come from the same constructor. It also cannot separate two notes in one
+ * notes part, which the caller handles by note id.
+ */
+function sameStory(a: StoryScope, b: StoryScope): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'headerFooter' && b.kind === 'headerFooter') return a.rId === b.rId;
+  if (a.kind === 'notesPart' && b.kind === 'notesPart') return a.noteKind === b.noteKind;
+  return true;
+}
+
+/**
  * Put the surface in the story a selection addresses, so the caret and the scope agree.
  *
  * A selection whose endpoints are in different stories is refused rather than half-applied:
@@ -480,7 +522,7 @@ function enterStoryForSelection(
   const anchorScope = storyScopeOfNodeId(mounted.session, selection.anchor.paragraphId, {
     kind: 'body',
   });
-  if (JSON.stringify(scope) !== JSON.stringify(anchorScope)) {
+  if (!sameStory(scope, anchorScope)) {
     return {
       ok: false,
       code: 'unsupported',
@@ -500,16 +542,35 @@ function enterStoryForSelection(
       return { ok: true, changed: false };
     }
     mounted.exitNote?.();
-    const opened = mounted.enterHeaderFooter?.({ rId: scope.rId });
+    // WITH the page, so the story opens against the section it is painted in.
+    const at = headerFooterPageHolding(mounted, selection.head.paragraphId);
+    const opened = mounted.enterHeaderFooter?.({
+      rId: scope.rId,
+      ...(at ? { pageIndex: at.pageIndex, sectionIndex: at.sectionIndex } : {}),
+    });
     return opened
       ? { ok: true, changed: false }
       : { ok: false, code: 'unsupported', reason: 'that header or footer could not be opened' };
   }
   // A notes PART holds every note, so the scope has to name the NOTE the paragraph is in. The
   // painted layout is what knows which one that is.
+  //
+  // BOTH endpoints, because `StoryScope` cannot tell two footnotes apart: every footnote in a
+  // document answers `{ kind: 'notesPart', noteKind: 'footnote' }`. So the story comparison
+  // above passed a selection running from footnote 1 to footnote 2, and this entered the
+  // head's note with the anchor left in a note that store has never heard of — the exact
+  // half-applied state the comparison exists to refuse. Typing over such a selection deleted
+  // neither endpoint's text and inserted at offset 0 of the wrong note.
   const scopeId = noteScopeHolding(mounted, selection.head.paragraphId);
   if (!scopeId) {
     return { ok: false, code: 'notFound', reason: 'that note is not laid out' };
+  }
+  const anchorScopeId =
+    selection.anchor.paragraphId === selection.head.paragraphId
+      ? scopeId
+      : noteScopeHolding(mounted, selection.anchor.paragraphId);
+  if (anchorScopeId !== scopeId) {
+    return { ok: false, code: 'unsupported', reason: 'a selection cannot span two stories' };
   }
   if (active.kind === 'note' && active.id === scopeId) return { ok: true, changed: false };
   mounted.exitHeaderFooter?.();

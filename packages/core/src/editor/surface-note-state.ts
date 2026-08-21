@@ -31,7 +31,7 @@ import {
 } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 export type NotePropertiesSlice = {

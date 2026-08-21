@@ -50,8 +50,20 @@ export const FURNITURE_AND_NOTE_STORIES: readonly StoryKind[] = [
 export type ParityRule =
   /** Identical enabled / active / value in every story. */
   | { readonly parity: 'same' }
-  /** Live in the body, refused everywhere else with exactly `reason`. */
-  | { readonly parity: 'bodyOnly'; readonly reason: string }
+  /**
+   * Live in the body, refused everywhere else with exactly `reason`.
+   *
+   * `bodyRefusedAt` names the probe labels where the body legitimately refuses it too, for a
+   * reason that has nothing to do with story scope. It is deliberately a LIST rather than a
+   * blanket exemption: dropping the body-liveness check wholesale would let a body-only
+   * command go dead at three of four carets and still pass, because every story would refuse
+   * it identically and identical refusals read as parity.
+   */
+  | {
+      readonly parity: 'bodyOnly';
+      readonly reason: string;
+      readonly bodyRefusedAt?: readonly string[];
+    }
   /** Live in a header or footer, refused in the body and in notes with exactly `reason`. */
   | { readonly parity: 'furnitureOnly'; readonly reason: string };
 
@@ -119,6 +131,11 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'insert.toc': {
     parity: 'bodyOnly',
     reason: 'a table of contents can only be inserted in the editable document body',
+    // Word refuses a TOC inside a content control, in the body as much as anywhere else. The
+    // engine publishes one string for every `canInsertToc` falsehood, so the reason it gives
+    // there talks about the body while the caret IS in the body — misleading, and the reason
+    // this is an exemption rather than a passing assertion.
+    bodyRefusedAt: ['a block content control'],
   },
 
   // A section break splits the body's `w:sectPr` chain, and `insertSectionBreak` refuses

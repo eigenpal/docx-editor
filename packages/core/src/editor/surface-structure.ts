@@ -12,7 +12,6 @@ import {
   enumerateDocumentSections,
   paragraphsInCells,
   readSectionProperties,
-  storyBlocks,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,

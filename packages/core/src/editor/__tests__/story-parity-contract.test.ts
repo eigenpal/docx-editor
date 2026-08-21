@@ -100,7 +100,7 @@ function sweep(paragraphIndex: number): Sweep {
 }
 
 /** Whether one slot satisfies its declared rule, and in which dimension it does not. */
-function violationsOf(slot: ChromeSlotId, states: Sweep): Violation[] {
+function violationsOf(slot: ChromeSlotId, states: Sweep, probe: string): Violation[] {
   const rule = SLOT_PARITY[slot];
   const body = states.get('body')!.get(slot)!;
   const found: Violation[] = [];
@@ -145,11 +145,13 @@ function violationsOf(slot: ChromeSlotId, states: Sweep): Violation[] {
     }
   }
 
-  // Deliberately NOT "and it must be live in the body here". A `bodyOnly` command can be
-  // refused in the body for its own reasons at a given caret — a table of contents inside a
-  // content control, for one — and a refusal that applies everywhere equally is parity, not a
-  // violation. That it is live in the body SOMEWHERE is asserted once across the probes below,
-  // which is what stops the rule passing vacuously.
+  // A `bodyOnly` command must be LIVE in the body at this caret, unless the rule names this
+  // probe as one where the body refuses it for its own unrelated reasons. Without the check a
+  // body-only command could go dead at three of four carets and still pass: every story would
+  // refuse it identically, and identical refusals read as parity.
+  if (rule.parity === 'bodyOnly' && !body.enabled && !(rule.bodyRefusedAt ?? []).includes(probe)) {
+    say('enabled', `body: refused (${body.reason ?? 'no reason'}), expected live`);
+  }
   if (rule.parity === 'furnitureOnly') {
     if (body.enabled) {
       say('enabled', 'body: enabled, expected refused');
@@ -212,20 +214,21 @@ describe('the story-parity contract', () => {
         // per-probe excuse.
         if (KNOWN_BROKEN[slot]) continue;
         test(slot, () => {
-          expect(violationsOf(slot, states).map((violation) => violation.detail)).toEqual([]);
+          expect(violationsOf(slot, states, label).map((violation) => violation.detail)).toEqual(
+            []
+          );
         });
       }
     });
   }
 
-  // A `bodyOnly` rule means "live in the body, refused elsewhere". `violationsOf` checks the
-  // second half at every caret; this checks the first half once, so a slot that is refused
-  // everywhere on every probe cannot satisfy the rule by never being offered at all.
+  // Every `bodyRefusedAt` label has to name a real probe, or a typo silently becomes a blanket
+  // exemption: an unmatched label excuses nothing, so the rule would look narrower than it is.
   for (const [slot, rule] of Object.entries(SLOT_PARITY) as [ChromeSlotId, ParityRule][]) {
-    if (rule.parity !== 'bodyOnly' || KNOWN_BROKEN[slot]) continue;
-    test(`${slot} is live in the body somewhere`, () => {
-      const live = sweeps.some(({ states }) => states.get('body')!.get(slot)!.enabled);
-      expect(live, `${slot} is refused in the body at every probe`).toBe(true);
+    if (rule.parity !== 'bodyOnly' || !rule.bodyRefusedAt) continue;
+    test(`${slot} exempts only probes that exist`, () => {
+      const labels = PROBES.map((probe) => probe.label);
+      expect(rule.bodyRefusedAt!.filter((label) => !labels.includes(label))).toEqual([]);
     });
   }
 
@@ -237,7 +240,7 @@ describe('the story-parity contract', () => {
     { dimension: ParityDimension },
   ][]) {
     test(`${slot} still diverges in '${entry.dimension}' (known broken)`, () => {
-      const seen = sweeps.flatMap(({ states }) => violationsOf(slot, states));
+      const seen = sweeps.flatMap(({ label, states }) => violationsOf(slot, states, label));
       const inDimension = seen.filter((violation) => violation.dimension === entry.dimension);
       expect(
         inDimension.map((violation) => violation.detail).length,
