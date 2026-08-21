@@ -13,6 +13,7 @@ import {
   type PropType,
 } from 'vue';
 import { useTranslation } from '../i18n';
+import { useDocxEditor } from './context';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
 import {
   changedFields,
@@ -21,6 +22,7 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
+  restorableSelection,
   restoreFocusTo,
   trapTabWithin,
   TAB_ALIGNMENT_LABELS,
@@ -28,6 +30,7 @@ import {
   withTabStop,
   type ParagraphDialogFields,
   type ParagraphDialogMixed,
+  type RestorableSelection,
   type SpecialIndent,
   type TabAlignment,
   type TabLeaderName,
@@ -157,6 +160,7 @@ export const DocxEditorParagraphDialog = defineComponent({
   setup(props) {
     const { t } = useTranslation();
     const paragraph = useParagraphFormat();
+    const editorRef = useDocxEditor();
 
     const alignment = ref<'left' | 'center' | 'right' | 'justify'>('left');
     const indentLeft = ref(0);
@@ -191,6 +195,7 @@ export const DocxEditorParagraphDialog = defineComponent({
     };
     const opener = ref<Element | null>(null);
     const refused = ref(false);
+    const savedSelection = ref<RestorableSelection | null>(null);
     // One prefix per mounted dialog, so a `<label for>` points at THIS dialog's input even
     // when a host renders two. Clicking a visible label is how a pointer user hits a small
     // control, and `aria-label` alone does not give them that. React uses `useId`; Vue has
@@ -207,8 +212,11 @@ export const DocxEditorParagraphDialog = defineComponent({
           // keyboard user. The OK path does this in `handleApply` instead, BEFORE the
           // write — see `restoreFocusTo`.
           const previous = opener.value;
+          const selection = savedSelection.value;
           opener.value = null;
+          savedSelection.value = null;
           restoreFocusTo(previous);
+          if (selection) editorRef.value?.exec({ type: 'setSelection', range: selection });
           return;
         }
         if (seeded.value || format === null) return;
@@ -238,6 +246,10 @@ export const DocxEditorParagraphDialog = defineComponent({
         // Focus the panel so Escape reaches the overlay's key handler. Without it the
         // dialog cannot be dismissed from the keyboard until the user tabs into it.
         opener.value = document.activeElement;
+        // The selection the dialog is ABOUT. Typing in any field moves the DOM selection
+        // into that input, so by the time the dialog closes the document has none — and
+        // focusing a surface with no selection puts the caret at the top.
+        savedSelection.value = restorableSelection(editorRef.value?.snapshot().selection);
         void nextTick(() => panelOf()?.focus());
       },
       { immediate: true }

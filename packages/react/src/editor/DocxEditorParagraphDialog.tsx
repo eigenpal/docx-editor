@@ -16,6 +16,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import { useTranslation } from '../i18n';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
+import { useDocxEditor } from './context';
 import {
   changedFields,
   formatInches,
@@ -23,6 +24,7 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
+  restorableSelection,
   restoreFocusTo,
   trapTabWithin,
   TAB_ALIGNMENT_LABELS,
@@ -30,6 +32,7 @@ import {
   withTabStop,
   type ParagraphDialogFields,
   type ParagraphDialogMixed,
+  type RestorableSelection,
   type SpecialIndent,
   type TabAlignment,
   type TabLeaderName,
@@ -155,6 +158,7 @@ export function DocxEditorParagraphDialog({
 }: DocxEditorParagraphDialogProps): ReactElement | null {
   const { t } = useTranslation();
   const { format, isEnabled, apply } = useParagraphFormat();
+  const editor = useDocxEditor();
 
   const [alignment, setAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [indentLeft, setIndentLeft] = useState(0);
@@ -223,16 +227,24 @@ export function DocxEditorParagraphDialog({
   // back on close — leaving it on `<body>` strands a keyboard user entirely. The handing
   // back happens in `handleApply` for the OK path, BEFORE the write; see `restoreFocusTo`.
   const openerRef = useRef<Element | null>(null);
+  const selectionRef = useRef<RestorableSelection | null>(null);
   useEffect(() => {
     if (!open) return;
     openerRef.current = document.activeElement;
+    // The selection the dialog is ABOUT. Typing in any field moves the DOM selection into
+    // that input, so by the time the dialog closes the document has none — and focusing a
+    // surface with no selection puts the caret at the top. Focus alone cannot carry this.
+    selectionRef.current = restorableSelection(editor?.snapshot().selection);
     panelRef.current?.focus();
     return () => {
       const opener = openerRef.current;
+      const selection = selectionRef.current;
       openerRef.current = null;
+      selectionRef.current = null;
       restoreFocusTo(opener);
+      if (selection) editor?.exec({ type: 'setSelection', range: selection });
     };
-  }, [open]);
+  }, [open, editor]);
 
   const handleApply = useCallback(() => {
     const seed = seedRef.current;

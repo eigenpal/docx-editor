@@ -301,3 +301,27 @@ export function restoreFocusTo(opener: Element | null): boolean {
   opener.focus({ preventScroll: true });
   return true;
 }
+
+/** A selection both ends of which the `setSelection` command can name. */
+export interface RestorableSelection {
+  readonly from: { readonly paraId: string };
+  readonly to: { readonly paraId: string };
+}
+
+/**
+ * The selection to put back when the dialog closes, or null when it cannot be expressed.
+ *
+ * `DocRange` ends may be anchors (`paraId`) or locations (a container plus a path); the
+ * `setSelection` command takes only the first kind. Narrowing rather than casting means a
+ * selection this cannot restore leaves the caret alone instead of moving it somewhere
+ * wrong.
+ */
+export function restorableSelection(range: unknown): RestorableSelection | null {
+  if (typeof range !== 'object' || range === null) return null;
+  const { from, to } = range as { from?: unknown; to?: unknown };
+  const named = (end: unknown): end is { paraId: string } =>
+    typeof end === 'object' &&
+    end !== null &&
+    typeof (end as { paraId?: unknown }).paraId === 'string';
+  return named(from) && named(to) ? { from, to } : null;
+}
