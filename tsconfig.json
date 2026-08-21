@@ -1,8 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    // ES2022 rather than ES2020 because `include` below pulls in `packages/react/src`,
+    // which reaches core's ES2022 sources. Same floor as the packages themselves.
+    "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -23,12 +25,6 @@
       "@docx-editor.dev/react": ["./packages/react/src/index.ts"]
     }
   },
-  "include": [
-    "src",
-    "packages/react/src",
-    "examples/shared",
-    "examples/vite",
-    "examples/plugins"
-  ],
+  "include": ["src", "packages/react/src", "examples/shared", "examples/vite", "examples/plugins"],
   "exclude": ["node_modules", "dist", "examples/nextjs", "examples/remix", "examples/astro"]
 }

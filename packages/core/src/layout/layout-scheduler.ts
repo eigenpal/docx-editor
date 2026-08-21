@@ -275,7 +275,15 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
 
   return {
     notify(change) {
-      const state = ensure(change.toRevision);
+      // `currentRevision()`, NOT `change.toRevision`: the two count in different spaces.
+      // A change published for a header/footer or notes part carries THAT part's own
+      // revision, which starts at zero when the part is created and therefore trails the
+      // package revision this scheduler validates against. A scope tagged with the smaller
+      // number is discarded by `flush` as stale on the pass that would have published it,
+      // so the surface painted one revision behind and mirrored a post-edit caret into
+      // pre-edit nodes. `notify` runs synchronously from the publish inside the commit, so
+      // the package revision here is exactly the one the change produced.
+      const state = ensure(currentRevision());
       state.impact = widen(state.impact, change.impact);
       for (const id of change.dirty) state.paragraphIds.add(id);
       for (const id of change.created) {

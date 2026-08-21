@@ -360,6 +360,19 @@ function textNodeIn(element: Element): Node {
 }
 
 /**
+ * The provenance half of a gesture: what the browser fires BEFORE the selection exists.
+ *
+ * happy-dom cannot produce a native drag, so a test that only writes `document.getSelection()`
+ * produces a selection with no history — indistinguishable from the browser re-resolving its
+ * own selection after a repaint replaced the nodes it lived in. A repaint may carry a gesture
+ * and may never invent one, so the surface reads that difference from `selectstart` /
+ * `pointerdown`, and a test standing in for a real gesture has to fire them too.
+ */
+function armGesture(target: Element): void {
+  target.dispatchEvent(new Event('selectstart', { bubbles: true, cancelable: true }));
+}
+
+/**
  * Make a browser selection and tell the surface, the way a real gesture would.
  *
  * The programmatic write the surface does on every state change is suppressed for a
@@ -499,6 +512,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
 
       // The gesture: a word selected on the first page, with its event still queued.
       const run = host.querySelector('.docx-page[data-page-index="0"] [data-start]')!;
+      armGesture(run);
       const text = textNodeIn(run);
       const selection = document.getSelection()!;
       selection.removeAllRanges();
@@ -901,6 +915,7 @@ describe('a render never discards a gesture the model has not adopted yet', () =
       // The gesture, made inside the window where the surface treats `selectionchange` as
       // the echo of its own write — which is what a queued event looks like from here.
       const run = host.querySelector('.docx-page[data-page-index="0"] [data-start]')!;
+      armGesture(run);
       const text = textNodeIn(run);
       const selection = document.getSelection()!;
       selection.removeAllRanges();

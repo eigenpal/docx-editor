@@ -37,6 +37,13 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: tsconfig lib floor check
+        # Several packages map core to `../core/src`, so they type-check core's
+        # sources and core's `lib` is their floor. Below it, `build:packages`
+        # fails in the dts build with a raw TS2550 — this reports the cause, and
+        # sits here so it lands before that build runs.
+        run: bun run check:tsconfig-lib-floor
+
       - name: Format check
         run: bun run format:check
 
@@ -198,6 +205,13 @@ jobs:
         # the docs site prerenders it. Same reasoning as the step above: catch
         # it on the PR, not in `docx-editor-page`'s build.
         run: bun run check:docs-mdx
+
+      - name: Docs Vue ref check
+        # A Vue template unwraps a ref only when the ref is a top-level binding.
+        # Most composables return a plain object of refs, so a sample that drops
+        # `.value` renders a control that never disables. Nothing type-checks
+        # this prose, so the wrong sample would ship as written.
+        run: bun run check:docs-vue-refs
 
   # Diffs the PR's published-package sizes against the latest successful main
   # run and keeps ONE sticky PR comment up to date. Fails on huge tarball

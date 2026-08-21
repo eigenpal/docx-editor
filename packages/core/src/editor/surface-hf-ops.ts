@@ -19,6 +19,17 @@ export function createHeaderFooterOps(deps: {
     selectionAfter?: () => SemanticSelection | null
   ) => void;
   deleteSelectionOps: () => readonly TreeDocOp[];
+  /**
+   * The removal ops AND the position they leave to insert at.
+   *
+   * `orderedStart()` is not that position: a plan that takes a table with it removes the
+   * paragraph the range started in, and an op naming a paragraph the same transaction
+   * deleted vetoes all of it.
+   */
+  deleteSelectionPlan: () => {
+    readonly ops: readonly TreeDocOp[];
+    readonly collapseTo: { paragraphId: string; offset: number };
+  };
   orderedStart: () => { paragraphId: string; offset: number };
   selectionMark: () => { paragraphId: string; start: number; end: number } | null;
   collapsedAt: (pos: { paragraphId: string; offset: number }) => SemanticSelection;
@@ -43,12 +54,16 @@ export function createHeaderFooterOps(deps: {
 
     insertPageField(field) {
       if (!deps.isHeaderFooterOpen()) return false;
-      const start = deps.orderedStart();
+      // The plan's `collapseTo`, never the range start: a deletion that takes a block with it
+      // leaves no paragraph at the start to insert into, and one refused op vetoes the whole
+      // transaction — so the field did not appear AND the deletion did not happen.
+      const plan = deps.deleteSelectionPlan();
+      const start = plan.collapseTo;
       deps.commit(
         () =>
           deps.applyOps(
             [
-              ...deps.deleteSelectionOps(),
+              ...plan.ops,
               {
                 op: 'insertPageField',
                 paragraphId: start.paragraphId,

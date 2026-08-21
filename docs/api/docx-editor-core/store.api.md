@@ -3865,6 +3865,7 @@ export type TreeDocOp = {
     readonly op: 'splitParagraphMany';
     readonly paragraphId: string;
     readonly offsets: readonly number[];
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly op: 'joinParagraphs';
     readonly firstId: string;

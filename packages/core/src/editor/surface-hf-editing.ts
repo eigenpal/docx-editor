@@ -80,6 +80,16 @@ export function createHeaderFooterScopeController(deps: {
    * header options bar on a document open for viewing.
    */
   entryRefused?(): boolean;
+  /**
+   * Close any OTHER story that is open before this one takes over.
+   *
+   * Two stories cannot both be the reader's. A note left open behind a header put the two
+   * scope resolvers into disagreement — one answers by header first, the other by note first
+   * — so `paragraphOrder()` listed the note's paragraphs while the selection sat in the
+   * header, and Select All followed by typing was refused as `unknown-paragraph`. The pointer
+   * path already refuses to cross stories; the toolbar command and the review rail did not.
+   */
+  leaveOtherStories?(): void;
 }): HeaderFooterScopeController {
   let activeHf: ActiveHeaderFooterScope | null = null;
   let cachedState: HeaderFooterStateSnapshot | null = null;
@@ -106,6 +116,9 @@ export function createHeaderFooterScopeController(deps: {
     if (!args.rId || deps.session.partFor({ kind: 'headerFooter', rId: args.rId }) === null) {
       return false;
     }
+    // Before anything is resolved against it: leaving a note re-scopes the layout this entry
+    // reads, so doing it afterwards would resolve the header against the note's order.
+    if (activeHf?.scope.rId !== args.rId) deps.leaveOtherStories?.();
     const layout = deps.layout();
     const found = findStoryForRId(layout, args.rId);
     const prior = activeHf;

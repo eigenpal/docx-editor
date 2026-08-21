@@ -616,9 +616,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface.setReviewActivationExclusions(reviewActivationExclusions);
     }
     lastSelection = surface.state().selection;
-    unsubscribeSession = surface.session.subscribe((change) => {
+    // `result.surface`, not the reassignable `surface`: this subscription is THIS session's.
+    unsubscribeSession = result.surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
-        revision: change.toRevision,
+        // The PACKAGE revision, never `change.toRevision`: a header/footer or notes change
+        // carries THAT part's counter, which starts at zero, so reporting it sent this
+        // number backwards and then repeated values it had already emitted.
+        revision: result.surface.session.packageRevision(),
         created: change.created,
         deleted: change.deleted,
         dirty: change.dirty,
@@ -644,7 +648,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // must learn about it, exactly as it learns about any later commit. Without these a
     // store bound before `load()` never re-reads and keeps rendering "no document".
     bump();
-    emitDocumentChange({ revision: surface.session.revision() });
+    emitDocumentChange({ revision: surface.session.packageRevision() });
     emitSelectionChange();
     // Fonts resolve per DOCUMENT (embedded faces live in the file), and only once per
     // load: the shaped remount re-enters this function with `fontKickSeq` already
@@ -1838,7 +1842,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     getDocumentHandle(): DocumentHandle {
-      return Object.freeze({ revision: surface?.session.revision() ?? 0 });
+      // Package revision: the body's own stands still for header/footer/note work.
+      return Object.freeze({ revision: surface?.session.packageRevision() ?? 0 });
     },
 
     exec(command, options) {

@@ -75,6 +75,19 @@ export function createNoteOps(deps: {
   selection: () => SemanticSelection;
   selectionMark: () => { paragraphId: string; start: number; end: number } | null;
   orderedStart: () => { paragraphId: string; offset: number };
+  /**
+   * The ops that remove the current selection, and the position left to insert at.
+   *
+   * `insertNote` used `orderedStart()` and deleted nothing, so a note inserted over a
+   * selection left the words in place and put the reference in front of them — and the
+   * restored range then covered the reference, so the next keystroke took the note with it.
+   */
+  deleteSelectionPlan: () => {
+    readonly ops: readonly TreeDocOp[];
+    readonly collapseTo: { paragraphId: string; offset: number };
+  };
+  /** Take the deletion back when the note it was making room for never arrived. */
+  undo: () => void;
   activeScope: () => ViewScope;
   setActiveScopeBodyOrHf: (scope: ViewScope) => boolean;
   setSelection: (next: SemanticSelection) => void;
@@ -89,15 +102,18 @@ export function createNoteOps(deps: {
   let activeNotePageIndex: number | null = null;
   let savedBodySelection: SemanticSelection | null = null;
 
-  const commitLifecycle = (op: TreeDocOp): boolean => {
+  const commitLifecycle = (
+    ops: TreeDocOp | readonly TreeDocOp[],
+    selectionAfter?: () => SemanticSelection | null
+  ): boolean => {
     deps.setLastRejection(null);
     deps.commit(() => {
-      const result = deps.applyOps([op], deps.selectionMark());
+      const result = deps.applyOps(Array.isArray(ops) ? ops : [ops], deps.selectionMark());
       if (result.rejected) {
         deps.setLastRejection(String(result.reason ?? 'rejected'));
       }
       return result;
-    });
+    }, selectionAfter);
     return deps.lastRejection() === null;
   };
 
@@ -159,15 +175,46 @@ export function createNoteOps(deps: {
         deps.setLastRejection('insertNote requires body scope');
         return false;
       }
-      const start = deps.orderedStart();
+      // A note REPLACES the selection, like every other insert. Nothing deleted it before, so
+      // the reference landed in front of the selected words and `enterNote` then froze that
+      // pre-insert range as the exit target — one keystroke after coming back deleted the
+      // reference, and the note itself was swept with it.
+      //
+      // TWO TRANSACTIONS, because a note is a package-level op and the session refuses to mix
+      // one with story ops. That costs a second undo step for a replacement, which is the
+      // cheaper of the two prices.
+      const plan = deps.deleteSelectionPlan();
+      // The plan's survivor, in the note op's own offset space — which counts what a reader
+      // SEES, so struck text is not in it. That is what puts the reference after the words a
+      // suggested deletion keeps, and where the removed words were in editing mode: one
+      // answer for both, without the correction the text lanes need.
+      const start = plan.collapseTo;
+      const removed =
+        plan.ops.length === 0 ||
+        commitLifecycle(plan.ops, () => ({ anchor: { ...start }, head: { ...start } }));
+      if (!removed) return false;
       const beforeIds = normalNoteIds(deps.session.currentPackage(), noteKind);
-      const inserted = commitLifecycle({
-        op: 'insertNote',
-        noteKind,
-        paragraphId: start.paragraphId,
-        offset: start.offset,
-      } as TreeDocOp);
-      if (!inserted) return false;
+      const inserted = commitLifecycle(
+        {
+          op: 'insertNote',
+          noteKind,
+          paragraphId: start.paragraphId,
+          offset: start.offset,
+        } as TreeDocOp,
+        // The reference occupies one model unit AT `start.offset`, so the caret belongs after
+        // it — where Word leaves it, and where the next character has to go.
+        () => {
+          const after = { paragraphId: start.paragraphId, offset: start.offset + 1 };
+          return { anchor: after, head: after };
+        }
+      );
+      if (!inserted) {
+        // A note is a package-level op, so it cannot share a transaction with the deletion
+        // that made room for it. If it refuses, the words are already gone with nothing to
+        // show for them — so the deletion goes back.
+        if (plan.ops.length > 0) deps.undo();
+        return false;
+      }
       const afterIds = normalNoteIds(deps.session.currentPackage(), noteKind);
       const noteId = [...afterIds].find((id) => !beforeIds.has(id));
       return noteId === undefined ? true : enterNote(formatNoteScopeId(noteKind, noteId));

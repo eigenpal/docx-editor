@@ -41,6 +41,7 @@ import {
 import { equivalentNodes } from './ooxml-node-equality.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
+import { insertionAuthor, insideDeletion } from './tree-op-retraction.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 
 function attr(localName: string, value: string) {
@@ -244,25 +245,6 @@ function deletionId(node: OoxmlNode): string | null {
       (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'id'
     )?.value ?? null
   );
-}
-
-/** The author of the enclosing `w:ins`, when there is one. */
-function insertionAuthor(stack: readonly OoxmlNode[]): string | null {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const node = stack[index]!;
-    if (node.kind === 'textValue') continue;
-    if (node.kind !== 'revisionInsert') continue;
-    const found = node.attributes.find(
-      (attribute) =>
-        attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'author'
-    );
-    return found?.value ?? '';
-  }
-  return null;
-}
-
-function insideDeletion(stack: readonly OoxmlNode[]): boolean {
-  return stack.some((node) => node.kind !== 'textValue' && node.kind === 'revisionDelete');
 }
 
 interface Cursor {

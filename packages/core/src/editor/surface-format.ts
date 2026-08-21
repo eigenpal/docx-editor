@@ -280,10 +280,17 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     },
 
     setParagraphProperty(localName, attributes, options) {
+      // A RECTANGLE IS NOT THE RANGE IT STANDS IN FOR. Read as a range, a selected column
+      // runs through every cell between its corners in document order, so centring the left
+      // column of a 2x2 table also centred the cell beside it — content the user did not
+      // select. Every run-property write already asks this question; this one did not.
+      const cells = deps.selectedCells?.();
+      const rectangle =
+        cells && cells.length > 0 ? [...paragraphsInCells(currentLayout.value, cells)] : null;
       const { from, to } = orderedRange();
-      const order = deps.paragraphOrder();
-      const firstIndex = order.indexOf(from.paragraphId);
-      const lastIndex = order.indexOf(to.paragraphId);
+      const order = rectangle ?? deps.paragraphOrder();
+      const firstIndex = rectangle ? 0 : order.indexOf(from.paragraphId);
+      const lastIndex = rectangle ? order.length - 1 : order.indexOf(to.paragraphId);
       if (firstIndex === -1 || lastIndex === -1) return;
       // EVERY paragraph the selection touches, not just the one the caret is in: selecting
       // three paragraphs and pressing centre must centre three paragraphs.
@@ -319,7 +326,11 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         };
       });
       if (ops.length === 0) return;
-      commit(() => applyOps(ops, selectionMark()));
+      // Word leaves the cells selected after a paragraph command, exactly as it does after
+      // Bold — the run-property writes above already say so.
+      commit(() => applyOps(ops, selectionMark()), undefined, {
+        keepCellSelection: rectangle !== null,
+      });
     },
 
     formatting: () =>

@@ -61,6 +61,34 @@ when validating those layers.
 Run timing comparisons sequentially. Concurrent benchmark processes compete for CPU and can hide
 or exaggerate timing changes; the structural work counters remain deterministic either way.
 
+## Wasted-layout-work benchmark
+
+```bash
+bun run bench:scope-waste
+bun run bench:scope-waste --keystrokes 20 --json
+```
+
+The editing benchmark measures how much one layout pass costs. This one measures how many
+passes the engine computes and then throws away, which is a different failure and one that
+timings hide: a discarded pass is paid for in full and repeated, so a small fixture lays out
+twice per keystroke while every median still looks ordinary.
+
+That waste is also a correctness signal, which is why it is a gate rather than a report. A
+pass discarded as stale leaves the painted DOM one revision behind the model, so the
+post-edit caret cannot be written into the nodes on screen and the next repaint reads the
+pre-edit caret back — the cursor jumps to the start of the story. That was issue #361.
+
+Each scenario types a fixed burst into a DIFFERENT story — body, table cell, a header and
+footer declared in the file, a header edited after a package-level op, a header created in
+the session, and a footnote — and reports the passes discarded during the burst.
+`scope-waste-bench-gates.test.ts` pins every one of them at zero, so the normal test suite
+fails on a regression. Every counter is hardware-independent.
+
+Types into one story only, and you measure nothing: each story part counts its own
+revisions, and the body's happens to match the package's until a non-body edit or a
+package-level op moves one without the other. Adding a scenario means adding its name to
+`EXPECTED_SCENARIOS` in the gate, which fails if the list and the report disagree.
+
 ### CI performance-benchmark comment
 
 `.github/workflows/bench.yml` runs two benchmarks on every PR, each twice: once on the PR

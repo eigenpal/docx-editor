@@ -45,6 +45,17 @@ export interface SurfaceSelectionSyncDeps {
   /** Take a selection up WITHOUT mirroring or reporting — the caller is about to do both. */
   adoptSelection(next: SemanticSelection): void;
   commit(run: () => TreeApplyResult | boolean): void;
+  /**
+   * The surface's own write lane — attribution, protection and refusals included.
+   *
+   * The IME is the one edit that reaches the tree from here, and calling the session directly
+   * meant composed text skipped every rule the other lanes go through.
+   */
+  applyOps(
+    ops: readonly TreeDocOp[],
+    mark: { paragraphId: string; start: number; end: number } | null,
+    scope: import('@docx-editor.dev/core/store').StoryScope
+  ): TreeApplyResult;
   render(): void;
   flushLayout(): boolean;
   /** The engine's painted caret, repainted with every mirror. */
@@ -89,6 +100,24 @@ export interface SurfaceSelectionSyncDeps {
    * and every explicit gesture goes through `setSelection`, which clears it.
    */
   holdsCellSelection?(): boolean;
+  /**
+   * Whether typed characters are buffered and have not reached the tree yet.
+   *
+   * A burst is held on a zero-delay task, and the position a gesture maps to is read from a
+   * DOM those characters are not in — so adopting it would land the burst wherever the
+   * gesture went. The buffer cannot be flushed from here: this runs as the first statement of
+   * a render, and a flush commits, which renders. The gesture is not lost by waiting; the
+   * flush is the very next task, and its own render adopts it with the flag still armed.
+   */
+  hasPendingInput?(): boolean;
+  /**
+   * Where text replacing `[from, to)` of one paragraph belongs.
+   *
+   * In suggesting mode a deletion keeps the characters it strikes, so the replacement goes
+   * AFTER them; the diff this lane computes is against the painted text and knows nothing of
+   * that. Composed text landed in front of the word it replaced until it asked.
+   */
+  replacementOffset?(paragraphId: string, from: number, to: number): number;
 }
 
 export interface SurfaceSelectionSync {
@@ -245,26 +274,39 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // one undo step. Asked BEFORE the commit (which retires the armed state), and only for
     // an insert landing exactly on the armed anchor; a diff that resolved elsewhere simply
     // forgets the format. Story scope routes IME commits into an open HF/note part.
+    const remove = plan.ops.find(
+      (op): op is Extract<(typeof plan.ops)[number], { op: 'deleteText' }> => op.op === 'deleteText'
+    );
     const insert = plan.ops.find(
       (op): op is Extract<(typeof plan.ops)[number], { op: 'insertText' }> => op.op === 'insertText'
     );
+    // The diff's offset is the pre-delete one. Suggesting keeps the struck characters, so
+    // that offset now points in FRONT of them.
+    const landing =
+      insert && remove
+        ? deps.replacementOffset?.(paragraphId, remove.start, remove.end)
+        : undefined;
+    const ops =
+      insert && landing !== undefined && landing !== insert.offset
+        ? plan.ops.map((op) => (op === insert ? { ...insert, offset: landing } : op))
+        : plan.ops;
     const formatOps = insert
-      ? (deps.pendingFormatOps?.(paragraphId, insert.offset, insert.text.length) ?? [])
+      ? (deps.pendingFormatOps?.(paragraphId, landing ?? insert.offset, insert.text.length) ?? [])
       : [];
     const scope = deps.storyScope();
     deps.commit(() => {
-      const result = session.applyTreeOps(
-        [...plan.ops, ...formatOps],
-        deps.selectionMark(),
-        undefined,
-        scope
-      );
+      const result = deps.applyOps([...ops, ...formatOps], deps.selectionMark(), scope);
       // The composed text is not the armed format's hostage: a refused format op must not
       // take the IME's own edit down with it (the same rule `type()` follows).
       if (formatOps.length === 0 || !result.rejected) return result;
-      return session.applyTreeOps(plan.ops, deps.selectionMark(), undefined, scope);
+      return deps.applyOps(ops, deps.selectionMark(), scope);
     });
-    deps.setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
+    deps.setSelection(
+      collapsedAt({
+        paragraphId,
+        offset: insert && landing !== undefined ? landing + insert.text.length : plan.caret,
+      })
+    );
   }
 
   /**
@@ -278,7 +320,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * armed pointerdown/selectstart is that gesture; a queued selectionchange echo has none.
    */
   function isStaleMirroredCaret(): boolean {
-    if (!modelMoved || !lastMirroredSelection || userSelectionGesture) return false;
+    if (!modelMoved || userSelectionGesture) return false;
+    // NO BASELINE AT ALL means the last mirror was REFUSED — the position had no painted
+    // place to land, or this surface did not own the selection. The browser is then still
+    // showing something older than the model by construction, and nobody has gestured since.
+    // Reading it back is how a caret the DOM could not express became a caret at the
+    // paragraph start.
+    if (!lastMirroredSelection) return true;
     const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
     return reported !== null && selectionsEqual(reported, lastMirroredSelection);
   }
@@ -313,9 +361,29 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // that runs on every repaint. A rectangle of cells keeps the DOM deliberately collapsed,
       // so a scroll or an undo would "adopt" that collapse, leave the overlay painting four
       // cells, and turn the next Delete into a one-character edit inside one of them.
-      const holdOff = deps.holdsCellSelection?.() === true || deps.isGesturing?.() === true;
-      const adopted = modelMoved || holdOff ? false : adoptPendingDomSelection();
-      modelMoved = false;
+      //
+      // A REPAINT MAY CARRY A GESTURE; IT MAY NEVER INVENT ONE. `modelMoved` is spent by the
+      // first repaint after a commit, and an edit can produce more than one — a settled image
+      // resource, a deferred publish, a scroll all repaint again while the caret this edit
+      // installed is still the newest thing anybody moved. Those later repaints used to read
+      // the browser's selection and take it, and the browser's answer after a page's DOM has
+      // been rebuilt under it is the paragraph start. So the first character typed at the end
+      // of a paragraph landed, the caret went home to offset 0, and every character after it
+      // was inserted in front of the one before: "Hello" arrived as "elloH".
+      //
+      // The provenance is the whole test. A gesture arms `userSelectionGesture` on
+      // pointerdown/selectstart before `selectionchange` is queued, which is exactly the
+      // window this reader exists to close; a browser fix-up after a repaint arms nothing.
+      const holdOff =
+        deps.holdsCellSelection?.() === true ||
+        deps.isGesturing?.() === true ||
+        deps.hasPendingInput?.() === true;
+      const adopted =
+        modelMoved || holdOff || !userSelectionGesture ? false : adoptPendingDomSelection();
+      // Spent only when the buffer is not holding the answer back: a repaint that deferred to
+      // the flush has not made the decision this flag records, and clearing it would let the
+      // NEXT repaint adopt a DOM the commit is about to move.
+      if (deps.hasPendingInput?.() !== true) modelMoved = false;
       return adopted;
     },
 
@@ -343,11 +411,19 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       applyingSelection = true;
       const began = deps.now();
       const next = deps.domSelection?.() ?? deps.selection();
-      lastMirroredSelection = next;
       // This write is the new baseline. Matching DOM carets after it are echoes until the
       // user starts another selection gesture.
       userSelectionGesture = false;
-      applySelectionToDom(pagesLayer, next, document.getSelection());
+      const wrote = applySelectionToDom(pagesLayer, next, document.getSelection());
+      // A REFUSED write is not a baseline. `applySelectionToDom` answers false when either
+      // endpoint has no painted place to land — a caret in a paragraph that painted no spans,
+      // an offset no span covers, a page that is not built — and the browser then keeps
+      // showing the PREVIOUS selection. Recording it anyway told `isStaleMirroredCaret` that
+      // the DOM had been given this value, so the disagreement it exists to catch read as a
+      // fresh gesture, and the stale caret won the next echo. The model is still the newer of
+      // the two here, which is exactly what `modelMoved` says.
+      lastMirroredSelection = wrote ? next : null;
+      if (!wrote) modelMoved = true;
       deps.recordSelectionMs(deps.now() - began);
       // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
       // synchronously. Clearing it here would defeat the guard in every real browser while
@@ -372,6 +448,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // `adoptDomSelection` spends the one-shot once it sees a mapped caret, so a click on
       // the already-current caret cannot authorize a later stale echo.
       if (isStaleMirroredCaret()) return;
+      // A KEYSTROKE IS NOT A SELECTION GESTURE. This reader exists for one case — a click or
+      // a drag whose `selectionchange` is still queued when the next key arrives — and that
+      // case always arms the flag first. Without the check, every keystroke re-read a browser
+      // selection nobody had moved, so a caret the DOM had resolved onto a container after a
+      // repaint pulled the model to the paragraph start on key after key.
+      if (!userSelectionGesture) return;
       adoptDomSelection();
     },
 

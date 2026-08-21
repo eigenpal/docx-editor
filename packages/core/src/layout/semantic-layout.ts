@@ -412,7 +412,36 @@ interface PreparedBlockMemo {
   readonly contentWidth: number;
   readonly producer: string;
   readonly drawingToken: string;
+  /**
+   * The resolved list item this entry was prepared under, by its own cache token.
+   *
+   * The entry embeds the item's indent, its available width and its break-cache key, and none
+   * of the other three validators can see a numbering change. The producer used to carry the
+   * item COUNT, which hid this by going cold on any list edit — and by re-laying out every
+   * paragraph in the document for one Enter in a list. With the count gone, this is the guard
+   * that has to be right.
+   */
+  readonly listToken: string;
   readonly entry: PreparedBlock;
+}
+
+/** Aggregate the list tokens of every paragraph a table contains, for its memo key. */
+function listTokenForTableBlock(
+  table: OoxmlNode,
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
+): string {
+  if (!listItems || listItems.size === 0) return '';
+  const tokens: string[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'paragraph') {
+      const token = listItems.get(node.id)?.cacheToken;
+      if (token) tokens.push(token);
+      return;
+    }
+    if ('children' in node) for (const child of node.children) visit(child);
+  };
+  visit(table);
+  return tokens.join(';');
 }
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
@@ -768,7 +797,13 @@ function layoutBlocksPass(
     // broken lines, so the break cache holds the citation's width under a key built from
     // this. Keying only the section left a warm cache serving `1`-wide slots to roman marks.
     (options.noteMarks ? `|nm:${noteMarksCacheToken(options.noteMarks)}` : '') +
-    (listItems && listItems.size > 0 ? `|num:${listItems.size}` : '') +
+    // NOT THE NUMBER OF LIST ITEMS. `producer` is in the session context, in every paragraph's
+    // break-cache key and in the prepared-block memo, so folding a COUNT in meant one Enter in
+    // a list re-measured every paragraph in the document and rebuilt every page — while two
+    // different numbering states with the same count still hashed the same. What a numbering
+    // change actually affects is each list paragraph, and each one carries its own
+    // `listItem.cacheToken` in its key and in the memo above.
+
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
 
@@ -858,12 +893,22 @@ function layoutBlocksPass(
         : block.kind === 'table' && options.drawingTokenForParagraph
           ? drawingTokenForTableBlock(block, options.drawingTokenForParagraph)
           : '';
+    // A TABLE'S LIST STATE IS ITS CELLS'. `listItems` is keyed by PARAGRAPH, and a numbered
+    // list that continues inside a table cell has its markers there — so reading the table's
+    // own id gave an empty token, and a renumbering that left the table's flow key untouched
+    // reused the cell markers verbatim. The drawing token aggregates the same way, for the
+    // same reason.
+    const listToken =
+      block.kind === 'table'
+        ? listTokenForTableBlock(block, listItems)
+        : (listItems?.get(block.id)?.cacheToken ?? '');
     const memo = preparedBlocks.get(block);
     if (
       memo &&
       memo.contentWidth === availableWidth &&
       memo.producer === producer &&
-      memo.drawingToken === paragraphDrawingToken
+      memo.drawingToken === paragraphDrawingToken &&
+      memo.listToken === listToken
     ) {
       return memo.entry;
     }
@@ -954,6 +999,7 @@ function layoutBlocksPass(
       contentWidth: availableWidth,
       producer,
       drawingToken: paragraphDrawingToken,
+      listToken,
       entry,
     });
     return entry;

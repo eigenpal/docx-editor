@@ -307,6 +307,7 @@ function domPointFromPositionIn(
 ): { node: Node; offset: number } | null {
   const spans = paragraphElements(searchRoot, position.paragraphId, '[data-start]');
   let fallback: { node: Node; offset: number } | null = null;
+  let painted = false;
   for (const span of spans) {
     const identity = identityOf(span);
     if (!identity || identity.paragraphId !== position.paragraphId) continue;
@@ -314,6 +315,19 @@ function domPointFromPositionIn(
     const length = span.textContent?.length ?? 0;
     const end = identity.end;
     if (!text) continue;
+    // A FIELD IS NOT A PLACE TO PUT A SELECTION END. `positionFromDomPoint` refuses every
+    // endpoint under `[data-docx-field]`, and an atom is one model unit wide, so a position
+    // at its START satisfied the `offset < end` test and was written inside it — where the
+    // reader then answered null and `semanticSelectionFromDom` collapsed the whole range to
+    // its other end. Shift-extending onto a page number lost the selection before the next
+    // command ran. Skipping the span keeps the boundary of the one before it, which reads
+    // back as exactly this offset.
+    // Counted as painted only AFTER the skip: a paragraph whose first span is a field — a
+    // note citation, a page number — has no earlier boundary to fall back to, and calling it
+    // painted made the refusal below swallow offset 0 as well. The whole range then failed to
+    // map, so Select All inside a footnote drew no highlight at all.
+    if ((span as HTMLElement).closest?.('[data-docx-field]')) continue;
+    painted = true;
     if (position.offset >= identity.start && position.offset <= end) {
       // A position on a boundary belongs to the span that STARTS there, so a caret between
       // two words sits before the second rather than after the first. The first match wins
@@ -332,6 +346,16 @@ function domPointFromPositionIn(
     }
   }
   if (fallback) return fallback;
+
+  // A paragraph that DID paint text and still has no place for this offset is a position
+  // this DOM cannot express — an offset inside a hidden run (`w:vanish` advances offsets and
+  // paints nothing), a caret past what the current paint covers, a span whose text node the
+  // paint has not built yet. Answering the line at child index 0 is not a near miss: it is
+  // the paragraph START, a legal position the readback cannot tell from a real one. The
+  // browser caret went home, the next reader took that as the truth, and every character
+  // typed after the first landed in front of the one before it. Say "cannot", and the caller
+  // keeps the model — which the engine's own painted caret draws from anyway.
+  if (painted) return null;
 
   // An EMPTY paragraph paints a line with no spans, so there is no text node to point at —
   // yet it still has exactly one caret position. Without this the caret vanished after every

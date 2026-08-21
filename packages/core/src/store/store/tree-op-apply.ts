@@ -403,12 +403,55 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       }
       return applyParagraphMarkRevision(part, paragraph, op.kind, op.revision, options);
     }
-    case 'proposeParagraphMerge':
+    case 'proposeParagraphMerge': {
+      // THE SAME RULE, ON THE LANE BACKSPACE ACTUALLY TAKES. A join is addressed by the
+      // SECOND paragraph, because the mark between two paragraphs belongs to the first — so
+      // the mark being proposed away here is the PREVIOUS paragraph's, and the case above
+      // never sees it. Enter then Backspace in suggesting mode therefore stacked a `w:del`
+      // on the `w:ins` the same author had written a second earlier: two cards in the rail
+      // for a decision nobody made, an empty paragraph left standing in the document, and a
+      // mark whose Reject makes permanent the very break the user just took back.
+      const parent = parentOf(part, paragraph.id);
+      const at = parent?.children.findIndex((child) => child.id === paragraph.id) ?? -1;
+      const previous = at > 0 ? parent?.children[at - 1] : undefined;
+      if (
+        previous &&
+        previous.kind === 'paragraph' &&
+        retractsOwnParagraphMark(previous, op.revision.author)
+      ) {
+        return applyJoin(part, previous.id, paragraph.id, options);
+      }
       return applyProposeParagraphMerge(part, paragraph, op.revision, options);
+    }
     case 'splitParagraph':
       return applySplit(part, paragraph, op.offset, options);
-    case 'splitParagraphMany':
-      return applySplitMany(part, paragraph, op.offsets, options);
+    case 'splitParagraphMany': {
+      const split = applySplitMany(part, paragraph, op.offsets, options);
+      if (!op.revision || !split.ok) return split;
+      // EVERY BOUNDARY IS A MARK THIS AUTHOR IS ADDING. `splitParagraph` proposes its one
+      // break through a companion `setParagraphMarkRevision`, which the caller can address
+      // because the paragraph exists before the op. The many-split mints its paragraphs here,
+      // so the marks have to be stamped here too: on the head and on every tail except the
+      // last, which keeps the mark the original paragraph already had. Paste is the lane that
+      // emits this op, and without it a multi-line paste in suggesting mode tracked its text
+      // and not its breaks — Reject left the extra paragraphs behind for good.
+      const marked = [paragraph.id, ...split.effect.created.slice(0, -1)];
+      let current = split;
+      for (const id of marked) {
+        const target = findNode(current.part, id);
+        if (!target || target.kind !== 'paragraph') continue;
+        const stamped = applyParagraphMarkRevision(
+          current.part,
+          target,
+          'ins',
+          op.revision,
+          options
+        );
+        if (!stamped.ok) return stamped;
+        current = { ...stamped, effect: { ...split.effect } };
+      }
+      return current;
+    }
     case 'setRunProperties':
       return applySetRunProperties(
         part,
@@ -2182,7 +2225,17 @@ function divideInline(
   segments: readonly Segment[],
   nextId: () => string
 ): { readonly head: OoxmlNode | null; readonly tail: OoxmlNode | null } {
-  if (child.kind === 'hyperlink' || isContentControlNode(child)) {
+  // A REVISION WRAPPER SPLITS LIKE A HYPERLINK. `w:ins` and `w:del` are containers of run
+  // content, not run content, so the "not a run, keep it whole" answer below put an entire
+  // tracked insertion into the HEAD half however far into it the caret was: pressing Enter in
+  // the middle of somebody's suggested sentence broke the paragraph after the suggestion
+  // instead of at the caret, and said nothing. Both halves keep the same author, date and id,
+  // which is how a reader groups them back into one decision.
+  if (
+    child.kind === 'hyperlink' ||
+    isContentControlNode(child) ||
+    (child.kind !== 'textValue' && isContentRevisionKind(child.kind))
+  ) {
     // Exclude textValue so both the wrapper and its content owner expose `.children`.
     if (child.kind === 'textValue') return { head: child, tail: null };
     const contentOwner = isContentControlNode(child) ? contentControlContentOf(child) : child;
@@ -2214,7 +2267,7 @@ function divideInline(
         if (divided.tail) tailChildren.push(divided.tail);
       }
     }
-    if (child.kind === 'hyperlink') {
+    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       return {
         head: headChildren.length > 0 ? withChildren(child, headChildren, null) : null,
         tail: tailChildren.length > 0 ? withChildren(child, tailChildren, nextId) : null,

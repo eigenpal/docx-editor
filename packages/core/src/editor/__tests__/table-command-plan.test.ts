@@ -1,4 +1,10 @@
 // Table command planning and editor execution (table-editing task 7).
+//
+// Targets are stamped from `layout().revision` and planner input from `packageRevision()`,
+// never from `session.revision()`. The fixtures here are body-only, where the body store's
+// counter happens to equal the package's, so a body-space stamp passes every test in this
+// file and refuses every real command the moment a header, footer or note edit moves the
+// two apart. `revision-space.test.ts` is what actually holds that line.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -312,7 +318,7 @@ describe('table command planner and editor parity', () => {
     const topo = readEditableTableTopology(surface.session.part().root, table.tableId);
     expect(topo.ok).toBe(true);
     if (!topo.ok) return;
-    const revision = surface.session.revision();
+    const revision = surface.layout().revision;
     const target = tableColumnDividerResizeTargetOf(
       surface.layout(),
       revision,
@@ -378,7 +384,7 @@ describe('table command planner and editor parity', () => {
       command: { type: 'insertColumn', where: 'right' },
       part: surface.session.part(),
       layout: surface.layout(),
-      storeRevision: surface.session.revision(),
+      storeRevision: surface.session.packageRevision(),
       selection: surface.state().selection,
       cellSelection: surface.state().cellSelection,
       themeColors: surface.session.documentThemeColors(),
@@ -420,7 +426,7 @@ describe('table command planner and editor parity', () => {
         command: { type: 'insertRow', where: 'below' },
         part: surface.session.part(),
         layout: surface.layout(),
-        storeRevision: surface.session.revision(),
+        storeRevision: surface.session.packageRevision(),
         selection: surface.state().selection,
         cellSelection: surface.state().cellSelection,
         themeColors: surface.session.documentThemeColors(),
@@ -473,7 +479,7 @@ describe('table command planner and editor parity', () => {
     let repeatTarget: ReturnType<typeof tableRowOccurrenceTargetFrom> | null = null;
     visitTableOccurrences(surface.layout(), (ref) => {
       if (ref.row.isHeaderRepeat) {
-        repeatTarget = tableRowOccurrenceTargetFrom(surface.session.revision(), ref);
+        repeatTarget = tableRowOccurrenceTargetFrom(surface.layout().revision, ref);
       }
     });
     expect(repeatTarget?.isHeaderRepeat).toBe(true);
@@ -524,14 +530,14 @@ describe('table command planner and editor parity', () => {
     const layoutRevision = surface.layout().revision;
     const target = tableColumnDividerResizeTargetOf(
       surface.layout(),
-      surface.session.revision(),
+      surface.layout().revision,
       table.tableId,
       table.rows[0]!.id,
       false,
       topo.topology.gridColumns[0]!.id,
       topo.topology.gridColumns[1]!.id
     );
-    expect(target?.sourceRevision).toBe(surface.session.revision());
+    expect(target?.sourceRevision).toBe(layoutRevision);
     expect(layoutRevision).toBeGreaterThanOrEqual(0);
     surface.type('X');
     const cmd = {
@@ -634,7 +640,7 @@ describe('color lowering for table commands', () => {
       command: { type: 'setTableBorders', scope: 'none', target: 'top' },
       part: surface.session.part(),
       layout: surface.layout(),
-      storeRevision: surface.session.revision(),
+      storeRevision: surface.session.packageRevision(),
       selection: surface.state().selection,
       cellSelection: surface.state().cellSelection,
       themeColors: surface.session.documentThemeColors(),
@@ -706,7 +712,7 @@ describe('occurrence targets and provenance', () => {
     if (!topo.ok) return;
     const ref = { table, row: table.rows[0]!, rowIndex: 0 };
     const bCell = table.rows[0]!.cells.find((c) => c.gridColumn === 1)!;
-    const target = tableColumnOccurrenceTargetFrom(surface.session.revision(), ref, bCell)!;
+    const target = tableColumnOccurrenceTargetFrom(surface.layout().revision, ref, bCell)!;
     expect(target.gridColumnId).toBe(topo.topology.gridColumns[1]!.id);
     const beforeB1 = paragraphByText('B1', surface);
     const cmd = { type: 'deleteColumn' as const, target };
@@ -736,7 +742,7 @@ describe('occurrence targets and provenance', () => {
     });
     expect(foreignGridColumnId).toBeTruthy();
     const target = {
-      sourceRevision: surface.session.revision(),
+      sourceRevision: surface.layout().revision,
       tableId: firstTable.tableId,
       gridColumnId: foreignGridColumnId,
       isHeaderRepeat: false,
@@ -765,7 +771,7 @@ describe('occurrence targets and provenance', () => {
             b.kind === 'paragraph' && b.lines.some((l) => l.spans.some((s) => s.text === 'inner'))
         )
       ) {
-        innerTarget = tableRowOccurrenceTargetFrom(surface.session.revision(), ref);
+        innerTarget = tableRowOccurrenceTargetFrom(surface.layout().revision, ref);
       }
     });
     expect(innerTarget).not.toBeNull();
@@ -779,7 +785,7 @@ describe('occurrence targets and provenance', () => {
     const surface = editor.surface!;
     const table = tableFragment(surface);
     const ref = { table, row: table.rows[0]!, rowIndex: 0 };
-    const target = tableRowOccurrenceTargetFrom(surface.session.revision(), ref);
+    const target = tableRowOccurrenceTargetFrom(surface.layout().revision, ref);
     surface.type('X');
     const cmd = { type: 'insertRow' as const, where: 'below' as const, target };
     const can = editor.can(cmd);
@@ -809,7 +815,7 @@ describe('merge and resource refusals at editor seam', () => {
     if (!topo.ok) return;
     const target = tableColumnDividerResizeTargetOf(
       surface.layout(),
-      surface.session.revision(),
+      surface.layout().revision,
       table.tableId,
       table.rows[0]!.id,
       false,
@@ -885,7 +891,7 @@ describe('transaction and selection preservation', () => {
     if (!topo.ok) throw new Error('topology failed');
     const target = tableColumnDividerResizeTargetOf(
       surface.layout(),
-      surface.session.revision(),
+      surface.layout().revision,
       table.tableId,
       table.rows[0]!.id,
       false,
@@ -907,7 +913,7 @@ describe('transaction and selection preservation', () => {
     const last = topo.topology.gridColumns[topo.topology.gridColumns.length - 1]!;
     const target = tableRightEdgeResizeTargetOf(
       surface.layout(),
-      surface.session.revision(),
+      surface.layout().revision,
       table.tableId,
       table.rows[0]!.id,
       false,

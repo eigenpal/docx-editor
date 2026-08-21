@@ -30,7 +30,7 @@ export function paragraphIdsWithin(node: OoxmlNode): string[] {
   return ids;
 }
 
-/** Body-order paragraph ids for caret recovery after a block removal. */
+/** Story-order paragraph ids for caret recovery after a block removal. */
 function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
   const ids: string[] = [];
   const walkBlocks = (children: readonly OoxmlNode[]): void => {
@@ -53,12 +53,18 @@ function paragraphIdsInDocumentOrder(part: OoxmlPart): string[] {
       }
     }
   };
-  const bodyNode =
+  // WHICHEVER STORY THIS PART IS. A header, a footer and a notes part are roots in their own
+  // right (`w:hdr`, `w:ftr`, `w:footnotes`), and looking only for a `w:body` handed back an
+  // empty order for every one of them — so no surviving caret could be found and EVERY block
+  // removal in furniture was refused as `block-required`. Word letterheads are built on
+  // layout tables, so that was most of them: select the table, press Delete, nothing happens,
+  // and the text half of the same deletion is vetoed with it.
+  const storyRoot =
     part.root.kind === 'body'
       ? part.root
-      : part.root.children.find((child) => child.kind === 'body');
-  if (!bodyNode || bodyNode.kind === 'textValue') return ids;
-  walkBlocks(bodyNode.children);
+      : (part.root.children.find((child) => child.kind === 'body') ?? part.root);
+  if (storyRoot.kind === 'textValue') return ids;
+  walkBlocks(storyRoot.children);
   return ids;
 }
 

@@ -121,6 +121,26 @@ describe('Editor header/footer lifecycle commands', () => {
     host.remove();
   });
 
+  test('typing into a created header keeps the caret after each character', () => {
+    const { editor, host } = mountEditor(blankDoc());
+    expect(editor.exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+
+    for (const character of ['a', 'b', 'c']) {
+      expect(editor.exec({ type: 'insertText', text: character }).ok).toBe(true);
+      // What a host does on every change, and what made this fail: reading the snapshot
+      // lays the pending revision out. A header part counts its own revisions, so the
+      // scope the keystroke scheduled used to be tagged BELOW the package revision and was
+      // discarded as stale — the commit painted the previous revision, the post-edit caret
+      // could not be written into pre-edit nodes, and this later pass read that stale DOM
+      // caret back. Every character then landed at the start of the story.
+      editor.snapshot();
+    }
+
+    expect(host.querySelector('[data-docx-hf-active]')?.textContent).toBe('abc');
+    editor.destroy();
+    host.remove();
+  });
+
   test('editHeaderFooter firstPage create+titlePg undoes/redoes as one unit', async () => {
     const { editor, host } = mountEditor(blankDoc());
     expect(editor.exec({ type: 'editHeaderFooter', position: 'header', firstPage: true }).ok).toBe(
