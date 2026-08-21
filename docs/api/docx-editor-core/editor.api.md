@@ -1380,7 +1380,7 @@ export interface PaginatedSurface {
             readonly numStart?: number;
         };
     }): boolean;
-    setParagraphFormat(update: ParagraphFormatUpdate): boolean;
+    setParagraphFormat(update: SurfaceParagraphFormat): boolean;
     setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
@@ -1464,7 +1464,7 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
-export interface ParagraphFlagFormatting {
+export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;
     // (undocumented)
@@ -1475,37 +1475,6 @@ export interface ParagraphFlagFormatting {
     readonly pageBreakBefore: boolean | null;
     // (undocumented)
     readonly widowControl: boolean | null;
-}
-
-// @public
-export interface ParagraphFormatUpdate {
-    // (undocumented)
-    readonly alignment?: 'left' | 'center' | 'right' | 'both';
-    // (undocumented)
-    readonly contextualSpacing?: boolean;
-    readonly indentFirstLineTwips?: number | null;
-    // (undocumented)
-    readonly indentLeftTwips?: number | null;
-    // (undocumented)
-    readonly indentRightTwips?: number | null;
-    // (undocumented)
-    readonly keepLines?: boolean;
-    // (undocumented)
-    readonly keepNext?: boolean;
-    // (undocumented)
-    readonly lineSpacing?: {
-        readonly rule: 'multiple' | 'exact' | 'atLeast';
-        readonly value: number;
-    } | null;
-    // (undocumented)
-    readonly pageBreakBefore?: boolean;
-    // (undocumented)
-    readonly spaceAfterPt?: number | null;
-    // (undocumented)
-    readonly spaceBeforePt?: number | null;
-    readonly tabStops?: readonly ParagraphTabStop[];
-    // (undocumented)
-    readonly widowControl?: boolean;
 }
 
 // @public
@@ -1886,7 +1855,7 @@ export interface SurfaceFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     } | null;
-    readonly paragraphFlags: ParagraphFlagFormatting;
+    readonly paragraphFlags: ParagraphFlags;
     // (undocumented)
     readonly spaceAfterPt: number | null;
     readonly spaceBeforePt: number | null;
@@ -1945,6 +1914,37 @@ export interface SurfaceOverlayCoordinates {
 
 // @public
 export function surfacePaintScale(zoom: number): number;
+
+// @public
+export interface SurfaceParagraphFormat {
+    // (undocumented)
+    readonly alignment?: 'left' | 'center' | 'right' | 'both';
+    // (undocumented)
+    readonly contextualSpacing?: boolean;
+    readonly indentFirstLineTwips?: number | null;
+    // (undocumented)
+    readonly indentLeftTwips?: number | null;
+    // (undocumented)
+    readonly indentRightTwips?: number | null;
+    // (undocumented)
+    readonly keepLines?: boolean;
+    // (undocumented)
+    readonly keepNext?: boolean;
+    // (undocumented)
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore?: boolean;
+    // (undocumented)
+    readonly spaceAfterPt?: number | null;
+    // (undocumented)
+    readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    readonly widowControl?: boolean;
+}
 
 // @public
 export const TABLE_BORDER_STYLE_OPTIONS: readonly TableBorderStyleOption[];

@@ -539,6 +539,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // inside both.
       if (!Array.isArray(op.stops) || op.stops.length > 64) return 'invalid-range';
       for (const stop of op.stops) {
+        // Refused, not thrown: this op is reachable from untyped JS, and validation is the
+        // layer that says no.
+        if (typeof stop !== 'object' || stop === null) return 'invalid-range';
         if (!Number.isInteger(stop.positionTwips) || Math.abs(stop.positionTwips) > 31680) {
           return 'invalid-range';
         }
@@ -551,6 +554,14 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         ) {
           return 'invalid-range';
         }
+      }
+      // Two stops at one position is markup Word never writes, and the reader keeps only
+      // the last — so accepting it would mean the file says one thing and the editor
+      // another. The dialog dedupes already; this covers the public command.
+      if (
+        new Set(op.stops.map((stop) => Math.round(stop.positionTwips))).size !== op.stops.length
+      ) {
+        return 'invalid-range';
       }
       // Bounded on the same terms: a clear is an element too, and both lists are
       // file-derived once a document round-trips through the editor.

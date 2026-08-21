@@ -248,6 +248,100 @@ describe('the Paragraph dialog', () => {
     expect(editor().surface!.formatting().paragraphFlags.keepNext).toBe(true);
   });
 
+  test('resolving a mixed flag BACK to its opening value still writes', async () => {
+    // Clicking a mixed box on and then off is how a user says "off, for all of them". The
+    // value now equals the seed, so a comparison on values alone sees no change — and the
+    // box is left reading as settled over paragraphs that still disagree.
+    const { view, editor, openDialog } = mountDialog(p('one', '<w:keepNext/>') + p('two'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(editor().surface!.formatting().paragraphFlags.keepNext).toBeNull();
+
+    const box = checkboxFor(view, 'Keep with next');
+    await act(async () => {
+      fireEvent.click(box);
+    });
+    await act(async () => {
+      fireEvent.click(box);
+    });
+    expect(box.checked).toBe(false);
+    expect(box.indeterminate).toBe(false);
+
+    await act(async () => {
+      okButton(view).click();
+    });
+    // The selection AGREES now, which is the whole job of the dialog.
+    expect(editor().surface!.formatting().paragraphFlags.keepNext).toBe(false);
+  });
+
+  test('Clear all works over a selection whose tab stops disagree', async () => {
+    // A mixed tab list reads as null, so the list shows empty. "Clear all" then leaves it
+    // equal to the seed while plainly being a decision.
+    const { view, editor, openDialog } = mountDialog(
+      p('one', '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs>') +
+        p('two', '<w:tabs><w:tab w:val="left" w:pos="2880"/></w:tabs>')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(editor().surface!.formatting().tabStops).toBeNull();
+
+    const clearAll = [...view.container.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === 'Clear all'
+    );
+    if (!clearAll) throw new Error('no Clear all button');
+    await act(async () => {
+      clearAll.click();
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().surface!.formatting().tabStops).toEqual([]);
+  });
+
+  test('a mixed tab list says so, instead of claiming there are no tab stops', async () => {
+    const { view, editor, openDialog } = mountDialog(
+      p('one', '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs>') +
+        p('two', '<w:tabs><w:tab w:val="left" w:pos="2880"/></w:tabs>')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(view.container.textContent).toContain('different tab stops');
+  });
+
+  test('changing the line rule and changing back restores the value it opened on', async () => {
+    // Otherwise a user who picks "Exactly" and reconsiders silently writes the hardcoded
+    // 1.08 over whatever their style supplies.
+    const { view, editor, openDialog } = mountDialog(
+      p('alpha', '<w:spacing w:line="276" w:lineRule="auto"/>')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(field(view, 'At').value).toBe('1.15');
+
+    await act(async () => {
+      fireEvent.change(field(view, 'Line spacing'), { target: { value: 'exact' } });
+    });
+    expect(field(view, 'At').value).toBe('12');
+    await act(async () => {
+      fireEvent.change(field(view, 'Line spacing'), { target: { value: 'multiple' } });
+    });
+    expect(field(view, 'At').value).toBe('1.15');
+
+    await act(async () => {
+      okButton(view).click();
+    });
+    // Nothing moved, so nothing was written over the style.
+    expect(editor().snapshot().canUndo).toBe(false);
+  });
+
   test('Tab stays inside the dialog rather than landing on the document behind it', async () => {
     // The page behind is the EDITABLE surface, so a Tab that escapes puts the caret back in
     // the text the dialog is about to format, and the next keystroke types into it.

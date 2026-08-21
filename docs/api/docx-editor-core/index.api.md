@@ -2138,7 +2138,7 @@ export interface ParagraphFormatCommand {
     spaceAfterPt?: number | null;
     // (undocumented)
     spaceBeforePt?: number | null;
-    tabStops?: readonly ParagraphTabStopValue[];
+    tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     widowControl?: boolean;
 }
@@ -2154,7 +2154,7 @@ export interface ParagraphSummary {
 }
 
 // @public
-export interface ParagraphTabStopValue {
+export interface ParagraphTabStop {
     // (undocumented)
     readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
     // (undocumented)
@@ -2459,7 +2459,7 @@ export interface RunFormatting {
     readonly subscript?: boolean;
     // (undocumented)
     readonly superscript?: boolean;
-    readonly tabStops?: readonly ParagraphTabStopValue[];
+    readonly tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     readonly underline?: boolean;
 }

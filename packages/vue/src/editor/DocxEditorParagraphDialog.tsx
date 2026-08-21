@@ -21,6 +21,7 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
+  restoreFocusTo,
   trapTabWithin,
   TAB_ALIGNMENT_LABELS,
   twipsToInches,
@@ -57,12 +58,18 @@ const dialogStyle: CSSProperties = {
   width: '100%',
   margin: '20px',
   maxHeight: '90vh',
-  overflowY: 'auto',
+  // The panel is a column with a scrolling middle, NOT one scrolling box. Scrolling the
+  // whole panel put OK and Cancel below the fold on an ordinary laptop viewport: the form
+  // simply ended mid-control with no button and no scrollbar cue that more existed.
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
 };
 
 const headerStyle: CSSProperties = {
   padding: '16px 20px 12px',
   borderBottom: '1px solid var(--doc-border)',
+  flexShrink: 0,
   fontSize: '16px',
   fontWeight: 600,
   color: 'var(--doc-text)',
@@ -73,6 +80,9 @@ const bodyStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '14px',
+  // The one part that scrolls, so the header and the buttons stay put.
+  overflowY: 'auto',
+  minHeight: 0,
 };
 
 const sectionLabelStyle: CSSProperties = {
@@ -114,8 +124,10 @@ const footerStyle: CSSProperties = {
   padding: '12px 20px 16px',
   borderTop: '1px solid var(--doc-border)',
   display: 'flex',
+  alignItems: 'center',
   justifyContent: 'flex-end',
   gap: '8px',
+  flexShrink: 0,
 };
 const btnStyle: CSSProperties = {
   padding: '6px 16px',
@@ -167,6 +179,8 @@ export const DocxEditorParagraphDialog = defineComponent({
     const seeded = ref(false);
     const seedRef = ref<ParagraphDialogFields | null>(null);
     const mixed = ref<ParagraphDialogMixed>(NO_MIXED_FIELDS);
+    /** What the selection disagreed about ON OPEN, against which `mixed` says what was resolved. */
+    const seedMixed = ref<ParagraphDialogMixed>(NO_MIXED_FIELDS);
     // Reached through the instance rather than a template ref: this component's vnodes are
     // hoistable, and Vue refuses a `ref` on a hoisted vnode ("Missing ref owner context"),
     // which left the dialog opening unfocused and Escape doing nothing.
@@ -177,6 +191,11 @@ export const DocxEditorParagraphDialog = defineComponent({
     };
     const opener = ref<Element | null>(null);
     const refused = ref(false);
+    // One prefix per mounted dialog, so a `<label for>` points at THIS dialog's input even
+    // when a host renders two. Clicking a visible label is how a pointer user hits a small
+    // control, and `aria-label` alone does not give them that. React uses `useId`; Vue has
+    // no equivalent, and the instance uid is already unique per component.
+    const fieldId = `docx-paragraph-${instance?.uid ?? 0}`;
     // Seed from the selection when the dialog OPENS — not on every tick, or a concurrent
     // edit would fight the user's typing.
     watch(
@@ -184,11 +203,12 @@ export const DocxEditorParagraphDialog = defineComponent({
       ([open, format]) => {
         if (!open) {
           seeded.value = false;
-          // Hand focus back to whatever opened the dialog. Leaving it on `<body>` strands a
-          // keyboard user at the top of the document.
+          // Hand focus back to whatever opened the dialog; leaving it on `<body>` strands a
+          // keyboard user. The OK path does this in `handleApply` instead, BEFORE the
+          // write — see `restoreFocusTo`.
           const previous = opener.value;
           opener.value = null;
-          if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+          restoreFocusTo(previous);
           return;
         }
         if (seeded.value || format === null) return;
@@ -211,6 +231,8 @@ export const DocxEditorParagraphDialog = defineComponent({
         pageBreakBefore.value = seed.pageBreakBefore;
         tabStops.value = seed.tabStops;
         mixed.value = mixedFieldsOf(format);
+        seedMixed.value = mixed.value;
+        refused.value = false;
         seedRef.value = seed;
         seeded.value = true;
         // Focus the panel so Escape reaches the overlay's key handler. Without it the
@@ -223,6 +245,7 @@ export const DocxEditorParagraphDialog = defineComponent({
 
     /** Add or replace the stop at this position — "Set" replaces one already there. */
     const setTabStop = (): void => {
+      mixed.value = { ...mixed.value, tabStops: false };
       tabStops.value = withTabStop(tabStops.value, {
         positionTwips: Math.round(newTabPosition.value),
         alignment: newTabAlignment.value,
@@ -235,28 +258,36 @@ export const DocxEditorParagraphDialog = defineComponent({
       const update =
         seed === null
           ? null
-          : changedFields(seed, {
-              alignment: alignment.value,
-              indentLeft: indentLeft.value,
-              indentRight: indentRight.value,
-              special: special.value,
-              specialBy: specialBy.value,
-              spaceBefore: spaceBefore.value,
-              spaceAfter: spaceAfter.value,
-              lineRule: lineRule.value,
-              lineValue: lineValue.value,
-              contextualSpacing: contextualSpacing.value,
-              keepNext: keepNext.value,
-              keepLines: keepLines.value,
-              widowControl: widowControl.value,
-              pageBreakBefore: pageBreakBefore.value,
-              tabStops: tabStops.value,
-            });
+          : changedFields(
+              seed,
+              {
+                alignment: alignment.value,
+                indentLeft: indentLeft.value,
+                indentRight: indentRight.value,
+                special: special.value,
+                specialBy: specialBy.value,
+                spaceBefore: spaceBefore.value,
+                spaceAfter: spaceAfter.value,
+                lineRule: lineRule.value,
+                lineValue: lineValue.value,
+                contextualSpacing: contextualSpacing.value,
+                keepNext: keepNext.value,
+                keepLines: keepLines.value,
+                widowControl: widowControl.value,
+                pageBreakBefore: pageBreakBefore.value,
+                tabStops: tabStops.value,
+              },
+              seedMixed.value,
+              mixed.value
+            );
       // Nothing moved, so there is nothing to write. Closing is the whole job.
       if (update === null) {
         props.onClose();
         return;
       }
+      // Focus goes back to the surface FIRST, so the commit's selection sync has somewhere
+      // to land. Restoring it after the write put the caret at the top of the document.
+      restoreFocusTo(opener.value);
       // A refused write keeps the dialog OPEN rather than claiming a success that did not
       // happen. It has to SAY so — a dialog that swallows the OK and sits there looks
       // broken rather than refused.
@@ -277,8 +308,11 @@ export const DocxEditorParagraphDialog = defineComponent({
         set: (twips: number) => void
       ) => (
         <div style={rowStyle}>
-          <label style={labelStyle}>{t(`dialogs.paragraph.${labelKey}`)}</label>
+          <label style={labelStyle} for={`${fieldId}-${labelKey}`}>
+            {t(`dialogs.paragraph.${labelKey}`)}
+          </label>
           <input
+            id={`${fieldId}-${labelKey}`}
             type="number"
             style={inputStyle}
             step="0.1"
@@ -298,8 +332,11 @@ export const DocxEditorParagraphDialog = defineComponent({
         set: (points: number) => void
       ) => (
         <div style={rowStyle}>
-          <label style={labelStyle}>{t(`dialogs.paragraph.${labelKey}`)}</label>
+          <label style={labelStyle} for={`${fieldId}-${labelKey}`}>
+            {t(`dialogs.paragraph.${labelKey}`)}
+          </label>
           <input
+            id={`${fieldId}-${labelKey}`}
             type="number"
             style={inputStyle}
             min="0"
@@ -370,8 +407,11 @@ export const DocxEditorParagraphDialog = defineComponent({
             <div style={bodyStyle}>
               <div style={sectionLabelStyle}>{t('dialogs.paragraph.general')}</div>
               <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.paragraph.alignment')}</label>
+                <label style={labelStyle} for={`${fieldId}-alignment`}>
+                  {t('dialogs.paragraph.alignment')}
+                </label>
                 <select
+                  id={`${fieldId}-alignment`}
                   style={inputStyle}
                   value={alignment.value}
                   onChange={(event) => {
@@ -395,8 +435,11 @@ export const DocxEditorParagraphDialog = defineComponent({
                 indentRight.value = twips;
               })}
               <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.paragraph.special')}</label>
+                <label style={labelStyle} for={`${fieldId}-special`}>
+                  {t('dialogs.paragraph.special')}
+                </label>
                 <select
+                  id={`${fieldId}-special`}
                   style={inputStyle}
                   value={special.value}
                   onChange={(event) => {
@@ -423,8 +466,11 @@ export const DocxEditorParagraphDialog = defineComponent({
                 spaceAfter.value = points;
               })}
               <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.paragraph.lineSpacing')}</label>
+                <label style={labelStyle} for={`${fieldId}-lineSpacing`}>
+                  {t('dialogs.paragraph.lineSpacing')}
+                </label>
                 <select
+                  id={`${fieldId}-lineSpacing`}
                   style={inputStyle}
                   value={lineRule.value}
                   onChange={(event) => {
@@ -432,7 +478,15 @@ export const DocxEditorParagraphDialog = defineComponent({
                     lineRule.value = next;
                     // The value means LINES under Multiple and POINTS otherwise, so carrying
                     // 1.08 into "Exactly" would ask for a 1pt line box.
-                    lineValue.value = next === 'multiple' ? 1.08 : 12;
+                    // Back to the rule it opened on means back to the value it opened
+                    // on, or a user who picked "Exactly" and changed their mind would
+                    // silently write 1.08 over the 1.15 their style supplies.
+                    lineValue.value =
+                      next === seedRef.value?.lineRule
+                        ? seedRef.value.lineValue
+                        : next === 'multiple'
+                          ? 1.08
+                          : 12;
                   }}
                   aria-label={t('dialogs.paragraph.lineSpacing')}
                 >
@@ -442,8 +496,11 @@ export const DocxEditorParagraphDialog = defineComponent({
                 </select>
               </div>
               <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.paragraph.at')}</label>
+                <label style={labelStyle} for={`${fieldId}-at`}>
+                  {t('dialogs.paragraph.at')}
+                </label>
                 <input
+                  id={`${fieldId}-at`}
                   type="number"
                   style={inputStyle}
                   min="0.01"
@@ -465,7 +522,13 @@ export const DocxEditorParagraphDialog = defineComponent({
               <div style={sectionLabelStyle}>{t('dialogs.paragraph.tabStops')}</div>
               {tabStops.value.length === 0 ? (
                 <div style={{ fontSize: '12px', color: 'var(--doc-text-muted)' }}>
-                  {t('dialogs.paragraph.tabEmpty')}
+                  {/* An empty list over a MIXED selection would read as "none of these
+                      paragraphs has a tab stop", which is the opposite of what is true. */}
+                  {t(
+                    mixed.value.tabStops
+                      ? 'dialogs.paragraph.tabMixed'
+                      : 'dialogs.paragraph.tabEmpty'
+                  )}
                 </div>
               ) : (
                 tabStops.value.map((stop) => (
@@ -497,8 +560,11 @@ export const DocxEditorParagraphDialog = defineComponent({
                 newTabPosition.value = Math.max(0, twips);
               })}
               <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.paragraph.tabAlignment')}</label>
+                <label style={labelStyle} for={`${fieldId}-tabAlignment`}>
+                  {t('dialogs.paragraph.tabAlignment')}
+                </label>
                 <select
+                  id={`${fieldId}-tabAlignment`}
                   style={inputStyle}
                   value={newTabAlignment.value}
                   onChange={(event) => {
@@ -517,8 +583,11 @@ export const DocxEditorParagraphDialog = defineComponent({
                 </select>
               </div>
               <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.paragraph.tabLeader')}</label>
+                <label style={labelStyle} for={`${fieldId}-tabLeader`}>
+                  {t('dialogs.paragraph.tabLeader')}
+                </label>
                 <select
+                  id={`${fieldId}-tabLeader`}
                   style={inputStyle}
                   value={newTabLeader.value}
                   onChange={(event) => {
@@ -540,6 +609,9 @@ export const DocxEditorParagraphDialog = defineComponent({
                   type="button"
                   style={btnStyle}
                   onClick={() => {
+                    // Over a MIXED list this is still a decision, even though the list already
+                    // shows empty — `changedFields` needs the disagreement marked resolved.
+                    mixed.value = { ...mixed.value, tabStops: false };
                     tabStops.value = [];
                   }}
                 >

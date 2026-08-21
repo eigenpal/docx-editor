@@ -18,11 +18,15 @@ export const twipsToInches = (twips: number): number =>
   Math.round((twips / TWIPS_PER_INCH) * 100) / 100;
 
 /**
- * Inches for DISPLAY, in the reader's number format.
+ * Inches for DISPLAY, in the BROWSER's number format.
  *
  * `0.5` and `0,5` are the same measurement, and roughly half the locales this ships with
  * write the second one. Interpolating a raw `Number` into a string picks the first for
  * everyone. The catalogue supplies the surrounding words; this supplies the number.
+ *
+ * Not the editor's locale: nothing in the i18n layer exposes one to read, so a German
+ * editor in an American browser still renders `0.5`. The browser's guess beats a hardcoded
+ * `.` for every reader whose browser matches their language, which is most of them.
  */
 export const formatInches = (twips: number): string =>
   twipsToInches(twips).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -117,6 +121,8 @@ export interface ParagraphDialogMixed {
   readonly keepLines: boolean;
   readonly widowControl: boolean;
   readonly pageBreakBefore: boolean;
+  /** The selection's paragraphs carry DIFFERENT tab stops, so the list shows none of them. */
+  readonly tabStops: boolean;
 }
 
 export const NO_MIXED_FIELDS: ParagraphDialogMixed = {
@@ -125,6 +131,7 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed = {
   keepLines: false,
   widowControl: false,
   pageBreakBefore: false,
+  tabStops: false,
 };
 
 /**
@@ -139,6 +146,7 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
     keepLines: format.keepLines === null,
     widowControl: format.widowControl === null,
     pageBreakBefore: format.pageBreakBefore === null,
+    tabStops: format.tabStops === null,
   };
 }
 
@@ -174,7 +182,11 @@ export function sameTabStops(
  */
 export function changedFields(
   seed: ParagraphDialogFields,
-  current: ParagraphDialogFields
+  current: ParagraphDialogFields,
+  /** What the selection disagreed about when the dialog opened. */
+  seedMixed: ParagraphDialogMixed = NO_MIXED_FIELDS,
+  /** What it still disagrees about now. A field that left this set was RESOLVED. */
+  currentMixed: ParagraphDialogMixed = seedMixed
 ): ParagraphFormatUpdate | null {
   const update: {
     -readonly [K in keyof ParagraphFormatUpdate]: ParagraphFormatUpdate[K];
@@ -187,6 +199,18 @@ export function changedFields(
     update[key] = value;
     moved = true;
   };
+  /**
+   * A setting the selection DISAGREED about, that it no longer disagrees about.
+   *
+   * Comparing values alone is not enough for these. The control opened on one of the two
+   * answers, so a user resolving the disagreement TO that answer — clicking a mixed box on
+   * and off again, which is how you say "off, for all of them" — leaves the value equal to
+   * the seed while the box now reads as settled. Writing nothing there would leave the
+   * paragraphs still disagreeing under a control claiming they agree, and making the
+   * selection agree is the whole job.
+   */
+  const resolved = (key: keyof ParagraphDialogMixed): boolean =>
+    seedMixed[key] && !currentMixed[key];
 
   if (seed.alignment !== current.alignment) take('alignment', current.alignment);
   if (seed.indentLeft !== current.indentLeft) take('indentLeftTwips', current.indentLeft);
@@ -200,14 +224,20 @@ export function changedFields(
   if (seed.spaceAfter !== current.spaceAfter) take('spaceAfterPt', current.spaceAfter);
   if (seed.lineRule !== current.lineRule || seed.lineValue !== current.lineValue)
     take('lineSpacing', { rule: current.lineRule, value: current.lineValue });
-  if (seed.contextualSpacing !== current.contextualSpacing)
+  if (seed.contextualSpacing !== current.contextualSpacing || resolved('contextualSpacing'))
     take('contextualSpacing', current.contextualSpacing);
-  if (seed.keepNext !== current.keepNext) take('keepNext', current.keepNext);
-  if (seed.keepLines !== current.keepLines) take('keepLines', current.keepLines);
-  if (seed.widowControl !== current.widowControl) take('widowControl', current.widowControl);
-  if (seed.pageBreakBefore !== current.pageBreakBefore)
+  if (seed.keepNext !== current.keepNext || resolved('keepNext'))
+    take('keepNext', current.keepNext);
+  if (seed.keepLines !== current.keepLines || resolved('keepLines'))
+    take('keepLines', current.keepLines);
+  if (seed.widowControl !== current.widowControl || resolved('widowControl'))
+    take('widowControl', current.widowControl);
+  if (seed.pageBreakBefore !== current.pageBreakBefore || resolved('pageBreakBefore'))
     take('pageBreakBefore', current.pageBreakBefore);
-  if (!sameTabStops(seed.tabStops, current.tabStops)) take('tabStops', current.tabStops);
+  // Same rule for the tab list: a mixed selection shows an EMPTY list, so "Clear all" over
+  // one leaves it equal to the seed while plainly being a decision.
+  if (!sameTabStops(seed.tabStops, current.tabStops) || resolved('tabStops'))
+    take('tabStops', current.tabStops);
 
   return moved ? update : null;
 }
@@ -253,4 +283,21 @@ export function trapTabWithin(panel: HTMLElement, event: KeyboardEvent): boolean
     return true;
   }
   return false;
+}
+
+/**
+ * Hand focus back to whatever opened the dialog.
+ *
+ * Order matters when that is the painted surface. The surface re-syncs the DOM selection
+ * after a commit, but only while it holds focus; focusing it AFTERWARDS lands on a
+ * repainted tree with no selection in it, and the browser puts the caret at offset zero —
+ * so pressing OK threw the user to the top of the document. Cancel never showed it,
+ * because nothing repaints. Call this BEFORE the write, not in an unmount cleanup.
+ *
+ * Returns false when there is nothing connected to focus.
+ */
+export function restoreFocusTo(opener: Element | null): boolean {
+  if (!(opener instanceof HTMLElement) || !opener.isConnected) return false;
+  opener.focus({ preventScroll: true });
+  return true;
 }

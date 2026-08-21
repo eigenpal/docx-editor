@@ -47,11 +47,11 @@ export interface ParagraphFormatCommand {
    * Replace the paragraph's custom tab stops. An empty list CLEARS them, which is what
    * "Clear All" does; omit the field to leave them as authored.
    */
-  tabStops?: readonly ParagraphTabStopValue[];
+  tabStops?: readonly ParagraphTabStop[];
 }
 
 /** One custom tab stop, as a command states it. @public */
-export interface ParagraphTabStopValue {
+export interface ParagraphTabStop {
   readonly positionTwips: number;
   readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
   readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
@@ -276,7 +276,7 @@ export interface RunFormatting {
    * The paragraph's custom tab stops at the selection, cascade included. Absent when the
    * selection disagrees or the paragraphs have none.
    */
-  readonly tabStops?: readonly ParagraphTabStopValue[];
+  readonly tabStops?: readonly ParagraphTabStop[];
   /**
    * The EFFECTIVE paragraph indent at the selection — cascade and numbering merge
    * included, so a numbered item that authors no `w:ind` reports the indent its list

@@ -233,10 +233,12 @@ function toggle() {
 </template>
 ```
 
-A field reads `null` when the selected paragraphs disagree about it, which a
-checkbox shows as indeterminate and a number field shows as empty. Omit a field
-to leave it as authored, and pass `null` to remove it so the style supplies it
-again.
+A field reads `null` when the selected paragraphs disagree about it. A checkbox
+shows that as indeterminate. A number field has no such state, so it opens on one
+of the values and stays there until you change it. Omit a field to leave it as
+authored. The spacing, line-spacing and indent fields also take `null`, which
+removes the setting so the style supplies it again. That isn't the same as
+writing a zero, which blocks the style.
 
 For the whole form, `DocxEditorParagraphDialog` is the Paragraph dialog over
 this composable.

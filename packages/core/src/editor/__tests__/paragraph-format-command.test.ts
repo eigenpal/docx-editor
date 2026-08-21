@@ -52,6 +52,9 @@ function mountStyled(body: string): DocxEditorInstance {
     '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
     '<w:style w:type="paragraph" w:styleId="Tabbed"><w:name w:val="Tabbed"/>' +
     '<w:pPr><w:tabs><w:tab w:val="center" w:pos="2160"/></w:tabs></w:pPr></w:style>' +
+    // Keeps with the next paragraph, and turns Word's ON-by-default widow control OFF.
+    '<w:style w:type="paragraph" w:styleId="Kept"><w:name w:val="Kept"/>' +
+    '<w:pPr><w:keepNext/><w:widowControl w:val="0"/></w:pPr></w:style>' +
     '</w:styles>';
   const bytes = zipSync({
     '[Content_Types].xml': strToU8(
@@ -315,6 +318,78 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(xml).not.toContain('w:tabs');
   });
 
+  test('repeated identical OKs converge, rather than flipping the document between two states', () => {
+    // A `clear` is STATE, not something to re-derive: a cleared stop is by definition absent
+    // from what is in force, so nothing downstream can tell the next write to keep clearing
+    // it. Dropping it made pass N and pass N+1 produce different documents, forever.
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Tabbed"/>' +
+        '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    // The dialog seeds from the read and sends it straight back, which is what pressing OK
+    // without touching a tab row does.
+    const pressOk = () => {
+      const stops = editor.surface!.formatting().tabStops ?? [];
+      editor.exec({ type: 'setParagraphFormat', tabStops: stops });
+      return xmlOf(editor);
+    };
+
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+    const settled = xmlOf(editor);
+    expect(settled).toContain('w:val="clear"');
+    for (let pass = 0; pass < 4; pass += 1) expect(pressOk()).toBe(settled);
+    // And the reading stays put too, not just the bytes.
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'left' },
+    ]);
+  });
+
+  test('a cleared style stop stays cleared through a LATER, unrelated tab edit', () => {
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Tabbed"/></w:pPr><w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    expect(editor.surface!.formatting().tabStops).toEqual([]);
+
+    // A separate session: the user comes back and adds a stop somewhere else entirely.
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+    // The deletion from the first session is NOT undone by the second.
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'left' },
+    ]);
+  });
+
+  test('clearing everything twice is idempotent', () => {
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Tabbed"/></w:pPr><w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    const once = xmlOf(editor);
+    editor.exec({ type: 'setParagraphFormat', tabStops: [] });
+    expect(xmlOf(editor)).toBe(once);
+    expect(editor.surface!.formatting().tabStops).toEqual([]);
+  });
+
+  test('a fractional w:pos the reader rounds away is preserved, like bar and num', () => {
+    const editor = mount(p('alpha', '<w:tabs><w:tab w:val="left" w:pos="1440.5"/></w:tabs>'));
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 2880, alignment: 'right' }],
+    });
+    expect(xmlOf(editor)).toContain('w:pos="1440.5"');
+  });
+
   test('a bar tab the reader cannot model survives an unrelated tab edit', () => {
     // `w:bar` draws a vertical rule; it is not a caret stop, so the reader that feeds this
     // write never reports it and no editor can name it. A wholesale replace would delete
@@ -419,10 +494,35 @@ describe('the dialog can read back what it wrote', () => {
   });
 
   test('a flag a STYLE sets reads as on, so the checkbox shows it', () => {
-    // The read goes through the cascade: a box that only saw direct formatting would show
-    // unchecked over a paragraph the page is visibly keeping with the next.
-    const editor = mount(p('alpha', '<w:keepNext/>'));
+    // Through the CASCADE, with the flag only in `styles.xml`: a box that saw direct
+    // formatting alone would show unchecked over a paragraph the page is visibly keeping
+    // with the next.
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Kept"/></w:pPr><w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
     editor.surface!.selectAll();
-    expect(editor.surface!.formatting().paragraphFlags.keepNext).toBe(true);
+    const flags = editor.surface!.formatting().paragraphFlags;
+    expect(flags.keepNext).toBe(true);
+    // And a style turning OFF what the spec defaults ON is read as off, not as the default.
+    expect(flags.widowControl).toBe(false);
+  });
+
+  test('a toggle the paragraph RESTATES beats the style that turned it off', () => {
+    // A toggle is stated by the PRESENCE of its element, so a level carrying `<w:keepNext/>`
+    // with no attributes has to override a lower level's `w:val="0"`. An attribute-wise
+    // merge of the cascade cannot see that: a level with no attributes contributes nothing.
+    const editor = mountStyled(
+      '<w:p><w:pPr><w:pStyle w:val="Kept"/><w:widowControl/></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().paragraphFlags.widowControl).toBe(true);
+  });
+
+  test('w:widowControl with nothing anywhere reads ON, which is the spec default', () => {
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().paragraphFlags.widowControl).toBe(true);
+    expect(editor.surface!.formatting().paragraphFlags.keepNext).toBe(false);
   });
 });

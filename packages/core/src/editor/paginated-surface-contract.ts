@@ -6,8 +6,8 @@
 
 import type { IndentFormatting } from '../contracts/types.ts';
 import type {
-  ParagraphFlagFormatting,
-  ParagraphFormatUpdate,
+  ParagraphFlags,
+  SurfaceParagraphFormat,
   ParagraphPropertyEdit,
   ParagraphTabStop,
 } from './paragraph-format-contract.ts';
@@ -242,7 +242,7 @@ export interface SurfaceFormatting {
    * other four are its Pagination block. Each is read from the cascade, so a flag a STYLE
    * sets reads as on — which is what a checkbox has to show.
    */
-  readonly paragraphFlags: ParagraphFlagFormatting;
+  readonly paragraphFlags: ParagraphFlags;
   /**
    * The paragraph's resolved custom tab stops, cascade included, or null when the selection
    * disagrees or nothing is loaded. Positions in TWIPS, like every other measurement a
@@ -591,7 +591,7 @@ export interface PaginatedSurface {
    * field is left as authored; `null` where the type allows it REMOVES the setting so the
    * style supplies it again. Returns whether anything was written.
    */
-  setParagraphFormat(update: ParagraphFormatUpdate): boolean;
+  setParagraphFormat(update: SurfaceParagraphFormat): boolean;
   /**
    * Word's Clear All Formatting: direct run properties off the selected text, and every
    * paragraph the selection touches back to the default style with its direct paragraph
@@ -962,8 +962,8 @@ export type OpenPaginatedResult =
   | { readonly ok: false; readonly reason: string; readonly detail?: string };
 
 export type {
-  ParagraphFlagFormatting,
-  ParagraphFormatUpdate,
+  ParagraphFlags,
+  SurfaceParagraphFormat,
   ParagraphPropertyEdit,
   ParagraphTabStop,
 } from './paragraph-format-contract.ts';

@@ -326,30 +326,48 @@ export function applySetParagraphTabStops(
   const existing = namedChild(pPr, 'tabs');
 
   const kept = new Set(stops.map((stop) => Math.round(stop.positionTwips)));
+  const existingTabs = (existing?.children ?? []).filter(
+    (child) => child.kind !== 'textValue' && child.localName === 'tab'
+  );
+  const positionOf = (child: (typeof existingTabs)[number]): number =>
+    Math.round(Number(attributeValueOf(child, 'pos')));
+  /** A `w:tab` this write cannot re-author, because the reader that feeds it never saw it. */
+  const isOpaque = (child: (typeof existingTabs)[number]): boolean =>
+    OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') ||
+    !Number.isInteger(Number(attributeValueOf(child, 'pos')));
   // `w:bar` and `w:num` are not caret stops — a bar tab draws a vertical rule and `num` is
-  // a legacy list artefact — so the reader that feeds this write does not report them and
-  // an editor cannot name them. A wholesale replace would therefore delete, on the next
-  // unrelated tab edit, markup the user never saw. Carry them through instead.
-  const opaque = (existing?.children ?? []).filter(
-    (child) =>
-      child.kind !== 'textValue' &&
-      child.localName === 'tab' &&
-      OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') &&
-      !kept.has(Math.round(Number(attributeValueOf(child, 'pos'))))
-  );
-  // What this paragraph authors ITSELF. Replacing `w:tabs` already removes these, so they
-  // need no `clear` — only a stop that survives the replace does.
+  // a legacy list artefact — and a fractional `w:pos` is legal but rounded away on read. The
+  // reader reports none of them and an editor cannot name them, so a wholesale replace would
+  // delete, on the next unrelated tab edit, markup the user never saw. Carry them through.
+  const opaque = existingTabs.filter((child) => isOpaque(child) && !kept.has(positionOf(child)));
+  // Clears the paragraph ALREADY carries. These are state, not something to re-derive: a
+  // cleared stop is by definition absent from what is in force, so nothing downstream can
+  // tell the write to keep clearing it. Dropping one silently undoes the user's deletion,
+  // and re-deriving it on the pass after that made the document alternate between two
+  // formattings on repeated identical OKs.
+  const standingClears = existingTabs
+    .filter((child) => attributeValueOf(child, 'val') === 'clear')
+    .map(positionOf)
+    .filter((position) => Number.isFinite(position) && !kept.has(position));
+  // Real stops this paragraph authors ITSELF. The replace already removes these, so they
+  // need no `clear` — only a stop that survives the replace does. Clears are excluded, or a
+  // standing one would block its own regeneration.
   const authored = new Set(
-    (existing?.children ?? [])
-      .filter((child) => child.kind !== 'textValue' && child.localName === 'tab')
-      .map((child) => Number(attributeValueOf(child, 'pos')))
-      .filter((position) => Number.isFinite(position))
+    existingTabs
+      .filter((child) => attributeValueOf(child, 'val') !== 'clear' && !isOpaque(child))
+      .map(positionOf)
+      .filter(Number.isFinite)
   );
-  // A stop that was in force, comes from a STYLE, and is no longer wanted. Without an
+  // A stop that is in force, comes from a STYLE, and is no longer wanted. Without an
   // explicit `clear` the style puts it straight back and the edit silently does nothing.
-  const cleared = [...new Set(inForcePositionsTwips ?? [])]
-    .map((position) => Math.round(position))
-    .filter((position) => !kept.has(position) && !authored.has(position));
+  const cleared = [
+    ...new Set([
+      ...standingClears,
+      ...(inForcePositionsTwips ?? [])
+        .map((position) => Math.round(position))
+        .filter((position) => !kept.has(position) && !authored.has(position)),
+    ]),
+  ];
 
   if (stops.length === 0 && cleared.length === 0 && opaque.length === 0) {
     if (!existing) return ok(part, effect);

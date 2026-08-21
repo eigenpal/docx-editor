@@ -32,7 +32,7 @@ import {
 } from './surface-formatting.ts';
 import type {
   PaginatedSurface,
-  ParagraphFormatUpdate,
+  SurfaceParagraphFormat,
   ParagraphPropertyEdit,
 } from './paginated-surface-contract.ts';
 
@@ -47,7 +47,7 @@ const PARAGRAPH_FLAG_PROPERTIES = [
   ['keepLines', 'keepLines'],
   ['widowControl', 'widowControl'],
   ['pageBreakBefore', 'pageBreakBefore'],
-] as const satisfies readonly (readonly [keyof ParagraphFormatUpdate, string])[];
+] as const satisfies readonly (readonly [keyof SurfaceParagraphFormat, string])[];
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
