@@ -90,14 +90,24 @@ export function resolveDocAnchor(
     return { ok: false, code: 'invalidArgs', reason: 'paraId must be a non-empty string' };
   }
   const canonical = anchor.paraId.toUpperCase();
+  let nodeId = anchors.nodeByParaId.get(canonical);
   if (anchors.ambiguousParaIds.has(canonical)) {
-    return {
-      ok: false,
-      code: 'ambiguous',
-      reason: `paraId '${anchor.paraId}' is claimed by more than one story`,
-    };
+    // The caller named a PART, so it is asking about that part. `w14:paraId` is minted unique
+    // per part and the contract's uniqueness is per document, so an authored file may repeat
+    // one — and refusing every clash would let a header that copies each body paragraph's id
+    // make the whole body unaddressable. Only a clash this part cannot settle is ambiguous.
+    const mine = (anchors.claimantsByParaId.get(canonical) ?? []).filter(
+      (candidate) => anchors.partByNode.get(candidate) === part
+    );
+    if (mine.length !== 1) {
+      return {
+        ok: false,
+        code: 'ambiguous',
+        reason: `paraId '${anchor.paraId}' is claimed by more than one story`,
+      };
+    }
+    nodeId = mine[0];
   }
-  const nodeId = anchors.nodeByParaId.get(canonical);
   if (nodeId === undefined) {
     return {
       ok: false,

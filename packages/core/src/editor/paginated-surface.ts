@@ -2743,6 +2743,7 @@ export function mountPaginatedSurface(
 
   noteOps = createNoteOps({
     session,
+    exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
     applyOps,
     commit,
     selection: () => selection,

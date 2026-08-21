@@ -61,6 +61,14 @@ export interface ParagraphAnchorIndex {
    * is what keeps the two in step.
    */
   readonly partByNode: ReadonlyMap<string, OoxmlPart>;
+  /**
+   * Every node claiming an ambiguous paraId, so a caller holding a part can disambiguate.
+   *
+   * Refusing outright would hand a hostile file a denial: a header repeating each body
+   * paragraph's `w14:paraId` would make the whole body unaddressable. A caller that names a
+   * part is asking about THAT part, and only a clash the caller cannot resolve is ambiguous.
+   */
+  readonly claimantsByParaId: ReadonlyMap<string, readonly string[]>;
 }
 
 /** Build the index over every editable paragraph of every story, in reading order. */
@@ -70,6 +78,7 @@ export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): Paragrap
   const ordinalByNode = new Map<string, number>();
   const ambiguousParaIds = new Set<string>();
   const partByNode = new Map<string, OoxmlPart>();
+  const claimantsByParaId = new Map<string, string[]>();
   let ordinal = 0;
   for (const part of parts) {
     for (const paragraph of allParagraphs(part)) {
@@ -88,9 +97,22 @@ export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): Paragrap
       // DOCUMENT. Nothing stops an authored file repeating one across `header1.xml` and
       // `document.xml`, and first-wins would then resolve such an anchor to the body twin
       // silently. Recorded instead, so the resolver can refuse it as ambiguous.
-      if (nodeByParaId.has(canonical)) ambiguousParaIds.add(canonical);
-      else nodeByParaId.set(canonical, paragraph.id);
+      const claimants = claimantsByParaId.get(canonical);
+      if (claimants) {
+        claimants.push(paragraph.id);
+        ambiguousParaIds.add(canonical);
+      } else {
+        claimantsByParaId.set(canonical, [paragraph.id]);
+        nodeByParaId.set(canonical, paragraph.id);
+      }
     }
   }
-  return Object.freeze({ paraIdByNode, nodeByParaId, ordinalByNode, ambiguousParaIds, partByNode });
+  return Object.freeze({
+    paraIdByNode,
+    nodeByParaId,
+    ordinalByNode,
+    ambiguousParaIds,
+    partByNode,
+    claimantsByParaId,
+  });
 }

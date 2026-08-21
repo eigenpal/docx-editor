@@ -106,18 +106,36 @@ describe('every story is addressable', () => {
     }
   });
 
-  test('a paraId two stories both claim is refused rather than guessed', () => {
-    const index = buildParagraphAnchorIndex([
-      twinPart('/word/document.xml'),
-      twinPart('/word/header1.xml'),
-    ]);
+  test('a paraId two stories claim resolves in the part the caller names', () => {
+    const body = twinPart('/word/document.xml');
+    const header = twinPart('/word/header1.xml');
+    const index = buildParagraphAnchorIndex([body, header]);
     expect([...index.ambiguousParaIds]).toEqual([TWIN_PARA_ID]);
+
+    // `w14:paraId` is minted unique per PART and the contract's uniqueness is per document, so
+    // an authored file may repeat one. Refusing every clash would hand a hostile file a denial:
+    // a header copying each body paragraph's id would make the whole body unaddressable. A
+    // caller that names a part is asking about that part, so its own claimant settles it.
+    for (const part of [body, header]) {
+      const resolved = resolveDocAnchor(part, index, { paraId: TWIN_PARA_ID });
+      expect(resolved.ok, `${part.name} could not resolve its own paragraph`).toBe(true);
+      if (!resolved.ok) continue;
+      expect(index.partByNode.get(resolved.span.nodeId)).toBe(part);
+    }
+  });
+
+  test('a paraId no named part can settle is refused, not guessed', () => {
+    const index = buildParagraphAnchorIndex([
+      twinPart('/word/header1.xml'),
+      twinPart('/word/header2.xml'),
+    ]);
+    // The caller's part holds no claimant at all, so there is nothing to prefer — and picking
+    // whichever story came first is the silent wrong answer this guard exists to stop.
     const resolved = resolveDocAnchor(twinPart('/word/document.xml'), index, {
       paraId: TWIN_PARA_ID,
     });
     expect(resolved.ok).toBe(false);
     if (resolved.ok) return;
-    // Refused, not resolved to whichever story happened to come first.
     expect(resolved.code).toBe('ambiguous');
   });
 });
