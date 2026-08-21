@@ -586,6 +586,15 @@ export interface PaginatedSurface {
    */
   sectionPropertiesAt(paragraphId: string): SectionProperties;
   /**
+   * A BODY paragraph in the same section as `paragraphId`, for a section-addressed op.
+   *
+   * `w:sectPr` lives on the body story, so an op that names a section by anchor can only name
+   * body content — and a caret in a header or a note is not body content. Passing that caret
+   * straight through made every section write from furniture fail `unknown-paragraph`.
+   * `null` when the document has one section, where an anchor names nothing extra.
+   */
+  sectionAnchorParagraphAt(paragraphId: string): string | null;
+  /**
    * Write section page-setup fields — size, orientation, margins — as ONE undoable
    * transaction. Twips throughout; omitted fields are left as authored. With
    * `anchorParagraphId` only that paragraph's governing section is written (Word's

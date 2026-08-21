@@ -167,8 +167,16 @@ export function execEditorCommand(
       break;
     }
     case 'setPageSetup': {
+      // The anchor must name BODY content: `w:sectPr` lives on the body story, so the op
+      // resolves its target section by walking the body tree. A caret in a header or a note is
+      // not in that tree, so passing it straight through refused the whole write as
+      // `unknown-paragraph` — Page Setup's Apply and a ruler margin drag both did nothing from
+      // any furniture caret, with the dialog still reading the correct section beside them.
       const anchor =
-        command.scope === 'section' ? mounted.state().selection.head.paragraphId : undefined;
+        command.scope === 'section'
+          ? (mounted.sectionAnchorParagraphAt(mounted.state().selection.head.paragraphId) ??
+            undefined)
+          : undefined;
       // When orientation arrives WITH explicit dimensions, the dimensions are
       // oriented here — Word stores landscape as swapped dimensions plus the
       // attribute. Orientation ALONE stays alone: the op swaps each written

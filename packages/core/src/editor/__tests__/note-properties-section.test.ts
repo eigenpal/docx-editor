@@ -14,6 +14,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
 import { notePropertiesStateOf } from '../surface-note-state.ts';
+import { sectionAnchorParagraphFor } from '../section-scope.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -94,6 +95,52 @@ function mount(): ReturnType<typeof createDocxEditor> {
   editor.attach(host);
   return editor;
 }
+
+describe('a section-addressed write anchors on body content', () => {
+  test('a header caret anchors on its own section’s body paragraph', () => {
+    const editor = mount();
+    const surface = editor.surface!;
+    expect(surface.enterHeaderFooter({ rId: HEADER_R_ID })).toBe(true);
+
+    // `w:sectPr` lives on the body story, so the op resolves its target by walking the BODY
+    // tree. Handing it the header caret named a paragraph that tree has never held, and the
+    // whole write came back `unknown-paragraph` — Page Setup applied nothing from a header.
+    const anchor = sectionAnchorParagraphFor(
+      surface.session,
+      surface.state().selection.head.paragraphId,
+      { kind: 'headerFooter', rId: HEADER_R_ID },
+      surface.headerFooterState()?.sectionIndex
+    );
+    expect(anchor).toBe(surface.session.paragraphIds()[0]!);
+  });
+
+  test('a footnote caret anchors on the section that cites it', () => {
+    const editor = mount();
+    const surface = editor.surface!;
+    expect(surface.enterNote('footnote:1')).toBe(true);
+
+    const anchor = sectionAnchorParagraphFor(
+      surface.session,
+      surface.state().selection.head.paragraphId,
+      { kind: 'notesPart', noteKind: 'footnote' }
+    );
+    // The reference sits in the second body paragraph, which is the second section.
+    expect(anchor).toBe(surface.session.paragraphIds()[1]!);
+  });
+
+  test('a multi-section page setup write reaches the caret’s own section', () => {
+    const editor = mount();
+    const surface = editor.surface!;
+    expect(surface.enterHeaderFooter({ rId: HEADER_R_ID })).toBe(true);
+
+    const result = editor.exec({ type: 'setPageSetup', scope: 'section', marginRight: 4321 });
+    expect(result.ok, result.ok ? '' : result.reason).toBe(true);
+    // The FIRST section owns this header, so its geometry moved and the second's did not.
+    const sections = surface.session.paragraphIds().map((id) => surface.sectionPropertiesAt(id));
+    expect(sections[0]!.margins.rightTwips).toBe(4321);
+    expect(sections[1]!.margins.rightTwips).not.toBe(4321);
+  });
+});
 
 describe('note properties follow the caret’s own section', () => {
   test('a footnote reports the section that cites it, not section 0', () => {

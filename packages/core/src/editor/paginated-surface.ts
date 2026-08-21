@@ -677,7 +677,13 @@ export function mountPaginatedSurface(
    */
   const gatedSession: TreeDocxSession = {
     ...session,
-    applyTreeOps: (ops, before, after) => applyOps(ops, before, after),
+    // The SCOPE has to travel. `applyOps` defaults it to the open story, so dropping the
+    // argument here silently rewrote every caller that named one — and the one caller that
+    // needs to is section geometry, which pins `{ kind: 'body' }` because `w:sectPr` lives on
+    // the body story and nowhere else. A header store has no `w:body`, so with the caret in a
+    // header every page-setup write was refused as `tree-invariant`: the ruler snapped back and
+    // Page Setup's Apply did nothing, with the dialog still reading the right section.
+    applyTreeOps: (ops, before, after, scope) => applyOps(ops, before, after, scope),
     applyPmDoc: (doc) => {
       if (editingMode === 'view') {
         return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };

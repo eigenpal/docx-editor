@@ -6,6 +6,8 @@ import {
   enumerateDocumentSections,
   paragraphSectionNode,
 } from '../layout/section-properties.ts';
+import { sectionIndexForCaret } from './section-scope.ts';
+import { storyScopeOfNodeId } from './surface-scope.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import {
   authoredDocumentEndnoteProperties,
@@ -27,7 +29,7 @@ import {
   findNoteById,
   type NoteKind,
 } from '../store/package/note-nodes.ts';
-import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
+import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -46,107 +48,6 @@ export type NotePropertiesStateSnapshot = {
 
 /** Hard cap for attacker-controlled note text exposed to hover chrome. */
 export const MAX_NOTE_PREVIEW_CHARS = 500;
-
-/**
- * Which section a paragraph belongs to, for any story the caret can be in.
- *
- * Sections are a BODY structure — `w:sectPr` lives in the body flow and nowhere else — so the
- * map below can only ever hold body paragraph ids. A caret in a note or a header therefore
- * misses it, and the old `?? 0` answered "section 0" for every one of them. That answer is not
- * merely displayed: the note-properties dialog writes back to the section it reports, so a
- * footnote in section 3 silently rewrote section 0's `w:sectPr`. Read and write agreed with
- * each other and were both wrong, which is why it produced no symptom.
- *
- * A note belongs to the section holding its REFERENCE mark, which is a body paragraph. A header
- * belongs to the section that names its relationship, which the open scope already knows.
- */
-function paragraphSectionIndexOf(
-  session: TreeDocxSessionView,
-  paragraphId: string,
-  openSectionIndex?: number
-): number {
-  const part = session.part();
-  const sections = enumerateDocumentSections(part);
-  const blocks = storyBlocks(part);
-  const map = new Map<string, number>();
-  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
-    const section = sections[sectionIndex]!;
-    for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
-      const block = blocks[i];
-      if (!block) continue;
-      if (block.kind === 'paragraph') {
-        map.set(block.id, sectionIndex);
-        continue;
-      }
-      const walk = (
-        node: { kind: string; id?: string; children?: readonly unknown[] },
-        depth: number
-      ): void => {
-        if (depth > 32) return;
-        if (node.kind === 'paragraph' && typeof node.id === 'string') {
-          map.set(node.id, sectionIndex);
-          return;
-        }
-        for (const child of node.children ?? []) {
-          walk(child as { kind: string; id?: string; children?: readonly unknown[] }, depth + 1);
-        }
-      };
-      walk(block, 0);
-    }
-  }
-  const own = map.get(paragraphId);
-  if (own !== undefined) return own;
-
-  // A header or footer: the open scope carries the section that names its relationship.
-  if (openSectionIndex !== undefined && openSectionIndex < sections.length) return openSectionIndex;
-
-  // A note: follow it back to the body paragraph that cites it.
-  const referencing = referencingBodyParagraph(session, paragraphId, part);
-  if (referencing !== null) {
-    const viaReference = map.get(referencing);
-    if (viaReference !== undefined) return viaReference;
-  }
-  return 0;
-}
-
-/**
- * The body paragraph whose `w:footnoteReference` / `w:endnoteReference` cites the note that
- * holds `paragraphId`, or `null` when the id is not note content or nothing cites it.
- *
- * An orphaned note — one no reference points at — legitimately answers `null`. Word treats it
- * as unreachable content, and guessing a section for it would be inventing one.
- */
-function referencingBodyParagraph(
-  session: TreeDocxSessionView,
-  paragraphId: string,
-  bodyPart: OoxmlPart
-): string | null {
-  const pkg = session.currentPackage();
-  for (const noteKind of ['footnote', 'endnote'] as const) {
-    const notesPart = resolveNotesPart(pkg, noteKind);
-    if (!notesPart || !paragraphId.startsWith(`${notesPart.name}#`)) continue;
-    for (const note of notesOf(notesPart.root)) {
-      const noteId = noteIdOf(note);
-      if (noteId === null || !holdsParagraph(note, paragraphId)) continue;
-      const hit = collectNoteReferences(bodyPart).find(
-        (candidate) => candidate.noteKind === noteKind && candidate.noteId === noteId
-      );
-      return hit?.paragraphId ?? null;
-    }
-  }
-  return null;
-}
-
-/** Whether a note body contains this paragraph id, within the shared depth cap. */
-function holdsParagraph(note: OoxmlNode, paragraphId: string): boolean {
-  const walk = (node: OoxmlNode, depth: number): boolean => {
-    if (node.kind === 'textValue' || depth > 32) return false;
-    if (node.kind === 'paragraph' && node.id === paragraphId) return true;
-    for (const child of node.children) if (walk(child, depth + 1)) return true;
-    return false;
-  };
-  return walk(note, 0);
-}
 
 function sectionSectPrNodes(
   session: TreeDocxSessionView,
@@ -180,9 +81,12 @@ export function notePropertiesStateOf(
   if (!surface) return null;
   const session = surface.session;
   const paragraphId = surface.state().selection.head.paragraphId;
-  const sectionIndex = paragraphSectionIndexOf(
+  const sectionIndex = sectionIndexForCaret(
     session,
     paragraphId,
+    surface.activeScope().kind === 'headerFooter'
+      ? { kind: 'headerFooter', rId: surface.headerFooterState()?.rId ?? '' }
+      : storyScopeOfNodeId(session, paragraphId, { kind: 'body' }),
     surface.headerFooterState()?.sectionIndex
   );
   const pkg = session.currentPackage();

@@ -17,6 +17,7 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
 import {
@@ -85,6 +86,7 @@ type StructureMethods = Pick<
   | 'exitListOnEmptyItem'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
+  | 'sectionAnchorParagraphAt'
   | 'setSectionProperties'
   | 'insertSectionBreak'
 >;
@@ -606,67 +608,39 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     sectionPropertiesAt(paragraphId) {
       const sections = enumerateDocumentSections(session.part());
-      if (sections.length === 1) return sections[0]!.properties;
-      // A furniture paragraph is in no body section, but the STORY it belongs to is: a header
-      // is declared by one or more `w:sectPr`, and the caret is looking at that section's page.
-      // Falling through to the tail section answered with another section's geometry, which is
-      // the page width `insertTableOp` sizes a grid from and the metrics the ruler clamps to.
-      const scope = deps.storyScope();
-      if (scope.kind === 'headerFooter') {
-        // The section the reader has OPEN, when the surface knows it. One header may be
-        // referenced by several sections — inheritance makes that the common shape — and the
-        // first to name it is not the page the caret is looking at. The geometry feeds the
-        // ruler's clamps and the grid `insertTableOp` sizes, so the wrong section gives a
-        // table sized for another page's width.
-        const openSection = deps.headerFooterSectionIndex?.();
-        if (openSection !== undefined && sections[openSection]) {
-          return sections[openSection]!.properties;
-        }
-        const owningSection = session
-          .headerFooterResolutionBySection()
-          .findIndex((section) =>
-            [section.headers, section.footers].some((slots) =>
-              [...slots.values()].some((slot) => slot.rId === scope.rId)
-            )
-          );
-        if (owningSection !== -1 && sections[owningSection])
-          return sections[owningSection]!.properties;
-      }
-      // A note belongs to the section its REFERENCE is in, which this cannot see from the note
-      // alone. The first section is the honest default: the tail is the document-wide answer
-      // and is wrong for every note that is not on the last page.
-      if (scope.kind === 'notesPart') return sections[0]!.properties;
-      const blocks = storyBlocks(session.part());
-      const contains = (node: (typeof blocks)[number], id: string): boolean => {
-        if (node.id === id) return true;
-        for (const child of node.children) {
-          if (child.kind !== 'textValue' && contains(child as (typeof blocks)[number], id)) {
-            return true;
-          }
-        }
-        return false;
-      };
-      const blockIndex = blocks.findIndex(
-        (block) => block.id === paragraphId || contains(block, paragraphId)
+      const index = sectionIndexForCaret(
+        session,
+        paragraphId,
+        deps.storyScope(),
+        deps.headerFooterSectionIndex?.()
       );
-      // An unknown id falls back to the tail section — the document-wide answer.
-      let owner = sections[sections.length - 1]!;
-      if (blockIndex !== -1) {
-        for (const section of sections) {
-          if (section.blockStart <= blockIndex) owner = section;
-          else break;
-        }
-      }
-      return owner.properties;
+      return (sections[index] ?? sections[sections.length - 1]!).properties;
+    },
+
+    sectionAnchorParagraphAt(paragraphId) {
+      return sectionAnchorParagraphFor(
+        session,
+        paragraphId,
+        deps.storyScope(),
+        deps.headerFooterSectionIndex?.()
+      );
     },
 
     setSectionProperties(update) {
       let committed = false;
       commit(() => {
         // Section geometry lives on the body story, never on an open furniture scope.
+        //
+        // The SELECTION MARK has to stay behind with it. A body-scoped write is validated
+        // against the body store, and a mark naming the header paragraph the caret is really
+        // in is a paragraph that store has never heard of — so the whole write came back
+        // `unknown-paragraph` and Page Setup silently did nothing from any furniture caret.
+        // Recording no mark costs an undo that does not restore the caret, which is the
+        // smaller loss and the honest one: the caret never moved to begin with.
+        const inBody = deps.storyScope().kind === 'body';
         const result = session.applyTreeOps(
           [{ op: 'setSectionProperties', ...update }],
-          selectionMark(),
+          inBody ? selectionMark() : undefined,
           undefined,
           { kind: 'body' }
         );
