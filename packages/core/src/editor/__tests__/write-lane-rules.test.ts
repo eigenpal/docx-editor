@@ -213,6 +213,25 @@ describe('#349 IME input in suggesting mode', () => {
     );
   });
 
+  test('composed text replacing a word lands after the words it strikes', () => {
+    withSurface(
+      p('alpha beta'),
+      (surface, container) => {
+        const id = surface.session.paragraphIds()[0]!;
+        surface.setSelection({
+          anchor: { paragraphId: id, offset: 0 },
+          head: { paragraphId: id, offset: 5 },
+        });
+        // The browser composes over the selected word: the painted text loses "alpha".
+        compose(container, id, '\u4e2d\u6587 beta');
+        expect(surface.state().lastRejection).toBeNull();
+        // Suggesting keeps the struck word, and the proposal goes after it — not in front.
+        expect(surface.session.bodyText()).toBe('alpha\u4e2d\u6587 beta');
+      },
+      { author: 'Ada Lovelace', mode: 'suggest' }
+    );
+  });
+
   test('and viewing mode refuses it, like every other lane', () => {
     withSurface(
       p('abc'),

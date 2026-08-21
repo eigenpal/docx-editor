@@ -2212,6 +2212,10 @@ export function mountPaginatedSurface(
       case 'setParagraphMarkRevision':
       case 'proposeParagraphMerge':
         return true;
+      // Paste proposes its breaks through the op itself, so a paste of newlines alone is a
+      // tracked edit with no `insertText` beside it to report for it.
+      case 'splitParagraphMany':
+        return op.revision !== undefined;
       default:
         return false;
     }
@@ -2525,12 +2529,6 @@ export function mountPaginatedSurface(
     // The raw take-up, without the mirror or the report `setSelection` performs: the render
     // this runs inside is about to do both.
     adoptSelection: (next) => {
-      // A GESTURE IS A CARET MOVE, AND EVERY CARET MOVE LANDS THE BUFFER FIRST. Typing is
-      // held on a zero-delay task, so a selection taken up before the flush makes those
-      // characters land wherever the gesture went — `rematerialize` says so at its own call.
-      // The engine pointer path flushes through `setSelection`, but touch and native pointer
-      // mode never reach it, so a tap after a burst moved the burst to the tap.
-      flushTypeBuffer();
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
@@ -2544,6 +2542,9 @@ export function mountPaginatedSurface(
     // mode landed untracked — the reviewer proposing a change was editing the document —
     // and forms protection and content-control locks did not apply to it either.
     applyOps: (ops, mark, scope) => applyOps(ops, mark, undefined, scope),
+    hasPendingInput: () => typeBuffer.length > 0,
+    replacementOffset: (paragraphId, from, to) =>
+      replacementOffset({ paragraphId, offset: from }, { paragraphId, offset: to }),
     render: () => render(),
     flushLayout: () => flushLayout(),
     updateCaret: () => {
@@ -2599,6 +2600,7 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     orderedStart: () => orderedStart(),
     deleteSelectionPlan: () => deleteSelectionPlan(),
+    undo: () => surface.undo(),
     activeScope: () => {
       const note = noteOps?.activeNoteScope();
       if (note) return note;
@@ -4646,6 +4648,20 @@ export function mountPaginatedSurface(
    * joined, so nothing shifts within the first one), and with no author configured, which is
    * the case where nothing is tracked at all.
    */
+  /**
+   * Where a replacement for `[from, to)` belongs, once suggesting has had its say.
+   *
+   * The struck characters STAY, so the new text goes after them — minus whatever of the range
+   * was this author's own pending insertion, which leaves. Identity in editing mode, where
+   * the range simply goes. Every lane that replaces a range has to ask: `type()` was fixed
+   * first, and the paste, the IME readback and the note reference each landed in front of the
+   * words they were replacing until they asked it too.
+   */
+  function replacementOffset(from: SemanticPosition, to: SemanticPosition): number {
+    if (editingMode !== 'suggest' || from.paragraphId !== to.paragraphId) return from.offset;
+    return to.offset - retractedByOwnInsertion(from, to);
+  }
+
   function retractedByOwnInsertion(from: SemanticPosition, to: SemanticPosition): number {
     const author = options.author?.trim();
     if (editingMode !== 'suggest' || !author) return 0;

@@ -86,6 +86,8 @@ export function createNoteOps(deps: {
     readonly ops: readonly TreeDocOp[];
     readonly collapseTo: { paragraphId: string; offset: number };
   };
+  /** Take the deletion back when the note it was making room for never arrived. */
+  undo: () => void;
   activeScope: () => ViewScope;
   setActiveScopeBodyOrHf: (scope: ViewScope) => boolean;
   setSelection: (next: SemanticSelection) => void;
@@ -182,14 +184,15 @@ export function createNoteOps(deps: {
       // one with story ops. That costs a second undo step for a replacement, which is the
       // cheaper of the two prices.
       const plan = deps.deleteSelectionPlan();
+      // The plan's survivor, in the note op's own offset space — which counts what a reader
+      // SEES, so struck text is not in it. That is what puts the reference after the words a
+      // suggested deletion keeps, and where the removed words were in editing mode: one
+      // answer for both, without the correction the text lanes need.
       const start = plan.collapseTo;
-      if (plan.ops.length > 0) {
-        const removed = commitLifecycle(plan.ops, () => ({
-          anchor: { ...start },
-          head: { ...start },
-        }));
-        if (!removed) return false;
-      }
+      const removed =
+        plan.ops.length === 0 ||
+        commitLifecycle(plan.ops, () => ({ anchor: { ...start }, head: { ...start } }));
+      if (!removed) return false;
       const beforeIds = normalNoteIds(deps.session.currentPackage(), noteKind);
       const inserted = commitLifecycle(
         {
@@ -205,7 +208,13 @@ export function createNoteOps(deps: {
           return { anchor: after, head: after };
         }
       );
-      if (!inserted) return false;
+      if (!inserted) {
+        // A note is a package-level op, so it cannot share a transaction with the deletion
+        // that made room for it. If it refuses, the words are already gone with nothing to
+        // show for them — so the deletion goes back.
+        if (plan.ops.length > 0) deps.undo();
+        return false;
+      }
       const afterIds = normalNoteIds(deps.session.currentPackage(), noteKind);
       const noteId = [...afterIds].find((id) => !beforeIds.has(id));
       return noteId === undefined ? true : enterNote(formatNoteScopeId(noteKind, noteId));

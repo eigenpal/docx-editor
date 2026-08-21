@@ -381,20 +381,30 @@ function columnOccurrenceTargetOf(command: EditorCommand): TableColumnOccurrence
  * dragging across two rows and deleting removed one of them and reported success. Answers a
  * single-element list for an ordinary caret, which is the same command with a smaller set.
  */
-function rowIdsOfSelection(part: OoxmlPart, anchor: ResolvedAnchor): readonly string[] {
+function rowIdsOfSelection(
+  part: OoxmlPart,
+  anchor: ResolvedAnchor
+): { readonly rowIds: readonly string[]; readonly wholeTable: boolean } {
   const topo = readEditableTableTopology(part.root, anchor.tableId);
-  if (!topo.ok) return [anchor.rowId];
+  if (!topo.ok) return { rowIds: [anchor.rowId], wholeTable: false };
   const selected = new Set(anchor.cellIds);
-  const rows = topo.topology.rows
+  const rowIds = topo.topology.rows
     .filter((entry) => entry.cells.some((cell) => selected.has(cell.id)))
     .map((entry) => entry.row.id);
-  return rows.length > 0 ? rows : [anchor.rowId];
+  if (rowIds.length === 0) return { rowIds: [anchor.rowId], wholeTable: false };
+  // A table has to keep one row (`CT_Tbl`), and `deleteTableRow` says so by refusing the
+  // last one — a refusal that takes the whole transaction, so selecting every row and
+  // pressing Delete Rows would delete NOTHING. Word deletes the table.
+  return { rowIds, wholeTable: rowIds.length === topo.topology.rows.length };
 }
 
 /** The grid columns a cell rectangle covers, by id, left to right. */
-function gridColumnIdsOfSelection(part: OoxmlPart, anchor: ResolvedAnchor): readonly string[] {
+function gridColumnIdsOfSelection(
+  part: OoxmlPart,
+  anchor: ResolvedAnchor
+): { readonly gridColumnIds: readonly string[]; readonly wholeTable: boolean } {
   const topo = readEditableTableTopology(part.root, anchor.tableId);
-  if (!topo.ok || !topo.topology.grid) return [];
+  if (!topo.ok || !topo.topology.grid) return { gridColumnIds: [], wholeTable: false };
   const selected = new Set(anchor.cellIds);
   const columns = new Set<string>();
   for (const entry of topo.topology.rows) {
@@ -412,7 +422,12 @@ function gridColumnIdsOfSelection(part: OoxmlPart, anchor: ResolvedAnchor): read
       cursor += span;
     }
   }
-  return [...columns];
+  // The last column is refused for the reason the last row is, and would veto the whole
+  // transaction with it. Word deletes the table.
+  return {
+    gridColumnIds: [...columns],
+    wholeTable: columns.size > 0 && columns.size === topo.topology.gridColumns.length,
+  };
 }
 
 function gridColumnIdAt(part: OoxmlPart, tableId: string, columnIndex: number): string | null {
@@ -760,12 +775,15 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
       // EVERY row the selection covers. One op named the anchor's row alone, so a rectangle
       // spanning two rows lost one of them and the command still answered `ok: true`.
-      const ops: TreeDocOp[] = rowIdsOfSelection(part, anchor).map((rowId) => ({
-        op: 'deleteTableRow',
-        tableId: anchor.tableId,
-        rowId,
-        ...(rowId === anchor.rowId ? { referenceCellId: anchor.cellId } : {}),
-      }));
+      const selectedRows = rowIdsOfSelection(part, anchor);
+      const ops: TreeDocOp[] = selectedRows.wholeTable
+        ? [{ op: 'deleteBlock', blockId: anchor.tableId }]
+        : selectedRows.rowIds.map((rowId) => ({
+            op: 'deleteTableRow',
+            tableId: anchor.tableId,
+            rowId,
+            ...(rowId === anchor.rowId ? { referenceCellId: anchor.cellId } : {}),
+          }));
       return planValidated(part, ops, { kind: 'adoptCommittedCaret' });
     }
     case 'insertColumn': {
@@ -798,13 +816,22 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
       }
       // Every column the rectangle covers, for the reason Delete Rows states above. An
       // explicit occurrence target names one column on purpose and keeps it.
-      const gridColumnIds =
+      const selectedColumns =
         columnTarget?.gridColumnId === undefined
           ? gridColumnIdsOfSelection(part, anchor)
-          : [gridColumnId];
-      const ops: TreeDocOp[] = (gridColumnIds.length > 0 ? gridColumnIds : [gridColumnId]).map(
-        (id) => ({ op: 'deleteTableColumn', tableId, gridColumnId: id })
-      );
+          : { gridColumnIds: [gridColumnId], wholeTable: false };
+      if (selectedColumns.wholeTable) {
+        return planValidated(part, [{ op: 'deleteBlock', blockId: tableId }], {
+          kind: 'adoptCommittedCaret',
+        });
+      }
+      const ids =
+        selectedColumns.gridColumnIds.length > 0 ? selectedColumns.gridColumnIds : [gridColumnId];
+      const ops: TreeDocOp[] = ids.map((id) => ({
+        op: 'deleteTableColumn',
+        tableId,
+        gridColumnId: id,
+      }));
       return planValidated(part, ops, { kind: 'adoptCommittedCaret' });
     }
     case 'deleteTable': {

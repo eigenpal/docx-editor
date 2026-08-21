@@ -315,7 +315,6 @@ function domPointFromPositionIn(
     const length = span.textContent?.length ?? 0;
     const end = identity.end;
     if (!text) continue;
-    painted = true;
     // A FIELD IS NOT A PLACE TO PUT A SELECTION END. `positionFromDomPoint` refuses every
     // endpoint under `[data-docx-field]`, and an atom is one model unit wide, so a position
     // at its START satisfied the `offset < end` test and was written inside it — where the
@@ -323,7 +322,12 @@ function domPointFromPositionIn(
     // its other end. Shift-extending onto a page number lost the selection before the next
     // command ran. Skipping the span keeps the boundary of the one before it, which reads
     // back as exactly this offset.
+    // Counted as painted only AFTER the skip: a paragraph whose first span is a field — a
+    // note citation, a page number — has no earlier boundary to fall back to, and calling it
+    // painted made the refusal below swallow offset 0 as well. The whole range then failed to
+    // map, so Select All inside a footnote drew no highlight at all.
     if ((span as HTMLElement).closest?.('[data-docx-field]')) continue;
+    painted = true;
     if (position.offset >= identity.start && position.offset <= end) {
       // A position on a boundary belongs to the span that STARTS there, so a caret between
       // two words sits before the second rather than after the first. The first match wins

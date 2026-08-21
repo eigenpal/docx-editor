@@ -166,6 +166,32 @@ describe('deleting over a cell rectangle', () => {
     }
   });
 
+  test('a rectangle over EVERY row deletes the table, as Word does', () => {
+    // A table must keep one row, so the last `deleteTableRow` is refused — and a refusal
+    // takes the whole transaction, which is how selecting every row came to delete nothing.
+    const editor = mountEditor(TABLE_2X2 + p('after'));
+    try {
+      const surface = editor.surface!;
+      selectRect(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      expect(editor.exec({ type: 'deleteRow' }).ok).toBe(true);
+      expect(allText(surface)).toEqual(['after']);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('and a rectangle over every COLUMN does the same', () => {
+    const editor = mountEditor(TABLE_2X2 + p('after'));
+    try {
+      const surface = editor.surface!;
+      selectRect(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      expect(editor.exec({ type: 'deleteColumn' }).ok).toBe(true);
+      expect(allText(surface)).toEqual(['after']);
+    } finally {
+      editor.destroy();
+    }
+  });
+
   test('and an ordinary caret still deletes exactly one row', () => {
     const editor = mountEditor(TABLE_3X2 + p('after'));
     try {

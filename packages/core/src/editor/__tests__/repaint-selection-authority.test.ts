@@ -231,3 +231,64 @@ describe('a selection ending at a field start', () => {
     }
   });
 });
+
+// A BURST IS OLDER THAN THE GESTURE THAT INTERRUPTS IT.
+//
+// Typing is held on a zero-delay task, and the position a gesture maps to is read from a DOM
+// those characters are not in yet. Every other caret mover lands the buffer first; the
+// render-time reader cannot, because it runs as the first statement of a render and a flush
+// commits — which renders. So it defers instead: the flush is the next task, and its own
+// render adopts the gesture with the provenance flag still armed.
+describe('a gesture during a typing burst', () => {
+  const twoParagraphs =
+    '<w:p><w:r><w:t xml:space="preserve">alpha</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t xml:space="preserve">beta</w:t></w:r></w:p>';
+
+  test('the typed characters stay where they were typed', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, docx(twoParagraphs), { scale: 1 });
+    if (!opened.ok) throw new Error(opened.reason);
+    const surface = opened.surface;
+    try {
+      const ids = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: ids[0]!, offset: 5 },
+        head: { paragraphId: ids[0]!, offset: 5 },
+      });
+      const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+      const keystroke = (data: string): void => {
+        pages.dispatchEvent(
+          new InputEvent('beforeinput', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertText',
+            data,
+          })
+        );
+      };
+      keystroke('X');
+      keystroke('Y');
+
+      // A touch tap in the other paragraph, arriving before the buffer flushes. Touch never
+      // reaches the engine pointer path, so nothing else lands the buffer for it.
+      const target = [
+        ...pages.querySelectorAll<HTMLElement>('[data-paragraph-id][data-start]'),
+      ].find((span) => span.dataset.paragraphId === ids[1])!;
+      pages.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'touch' })
+      );
+      const text = target.firstChild!;
+      document.getSelection()!.setBaseAndExtent(text, 2, text, 2);
+      surface.contentControls.setShowAll(true); // a render with no flush of its own
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(paragraphTextOf(surface.session.part(), ids[0]!)).toBe('alphaXY');
+      expect(paragraphTextOf(surface.session.part(), ids[1]!)).toBe('beta');
+    } finally {
+      surface.destroy();
+      container.remove();
+      document.getSelection()?.removeAllRanges();
+    }
+  });
+});

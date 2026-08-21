@@ -100,6 +100,24 @@ export interface SurfaceSelectionSyncDeps {
    * and every explicit gesture goes through `setSelection`, which clears it.
    */
   holdsCellSelection?(): boolean;
+  /**
+   * Whether typed characters are buffered and have not reached the tree yet.
+   *
+   * A burst is held on a zero-delay task, and the position a gesture maps to is read from a
+   * DOM those characters are not in — so adopting it would land the burst wherever the
+   * gesture went. The buffer cannot be flushed from here: this runs as the first statement of
+   * a render, and a flush commits, which renders. The gesture is not lost by waiting; the
+   * flush is the very next task, and its own render adopts it with the flag still armed.
+   */
+  hasPendingInput?(): boolean;
+  /**
+   * Where text replacing `[from, to)` of one paragraph belongs.
+   *
+   * In suggesting mode a deletion keeps the characters it strikes, so the replacement goes
+   * AFTER them; the diff this lane computes is against the painted text and knows nothing of
+   * that. Composed text landed in front of the word it replaced until it asked.
+   */
+  replacementOffset?(paragraphId: string, from: number, to: number): number;
 }
 
 export interface SurfaceSelectionSync {
@@ -256,21 +274,39 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // one undo step. Asked BEFORE the commit (which retires the armed state), and only for
     // an insert landing exactly on the armed anchor; a diff that resolved elsewhere simply
     // forgets the format. Story scope routes IME commits into an open HF/note part.
+    const remove = plan.ops.find(
+      (op): op is Extract<(typeof plan.ops)[number], { op: 'deleteText' }> => op.op === 'deleteText'
+    );
     const insert = plan.ops.find(
       (op): op is Extract<(typeof plan.ops)[number], { op: 'insertText' }> => op.op === 'insertText'
     );
+    // The diff's offset is the pre-delete one. Suggesting keeps the struck characters, so
+    // that offset now points in FRONT of them.
+    const landing =
+      insert && remove
+        ? deps.replacementOffset?.(paragraphId, remove.start, remove.end)
+        : undefined;
+    const ops =
+      insert && landing !== undefined && landing !== insert.offset
+        ? plan.ops.map((op) => (op === insert ? { ...insert, offset: landing } : op))
+        : plan.ops;
     const formatOps = insert
-      ? (deps.pendingFormatOps?.(paragraphId, insert.offset, insert.text.length) ?? [])
+      ? (deps.pendingFormatOps?.(paragraphId, landing ?? insert.offset, insert.text.length) ?? [])
       : [];
     const scope = deps.storyScope();
     deps.commit(() => {
-      const result = deps.applyOps([...plan.ops, ...formatOps], deps.selectionMark(), scope);
+      const result = deps.applyOps([...ops, ...formatOps], deps.selectionMark(), scope);
       // The composed text is not the armed format's hostage: a refused format op must not
       // take the IME's own edit down with it (the same rule `type()` follows).
       if (formatOps.length === 0 || !result.rejected) return result;
-      return deps.applyOps(plan.ops, deps.selectionMark(), scope);
+      return deps.applyOps(ops, deps.selectionMark(), scope);
     });
-    deps.setSelection(collapsedAt({ paragraphId, offset: plan.caret }));
+    deps.setSelection(
+      collapsedAt({
+        paragraphId,
+        offset: insert && landing !== undefined ? landing + insert.text.length : plan.caret,
+      })
+    );
   }
 
   /**
@@ -338,10 +374,16 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // The provenance is the whole test. A gesture arms `userSelectionGesture` on
       // pointerdown/selectstart before `selectionchange` is queued, which is exactly the
       // window this reader exists to close; a browser fix-up after a repaint arms nothing.
-      const holdOff = deps.holdsCellSelection?.() === true || deps.isGesturing?.() === true;
+      const holdOff =
+        deps.holdsCellSelection?.() === true ||
+        deps.isGesturing?.() === true ||
+        deps.hasPendingInput?.() === true;
       const adopted =
         modelMoved || holdOff || !userSelectionGesture ? false : adoptPendingDomSelection();
-      modelMoved = false;
+      // Spent only when the buffer is not holding the answer back: a repaint that deferred to
+      // the flush has not made the decision this flag records, and clearing it would let the
+      // NEXT repaint adopt a DOM the commit is about to move.
+      if (deps.hasPendingInput?.() !== true) modelMoved = false;
       return adopted;
     },
 

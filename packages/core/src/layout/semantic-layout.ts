@@ -416,6 +416,25 @@ interface PreparedBlockMemo {
   readonly entry: PreparedBlock;
 }
 
+/** Aggregate the list tokens of every paragraph a table contains, for its memo key. */
+function listTokenForTableBlock(
+  table: OoxmlNode,
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
+): string {
+  if (!listItems || listItems.size === 0) return '';
+  const tokens: string[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'paragraph') {
+      const token = listItems.get(node.id)?.cacheToken;
+      if (token) tokens.push(token);
+      return;
+    }
+    if ('children' in node) for (const child of node.children) visit(child);
+  };
+  visit(table);
+  return tokens.join(';');
+}
+
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
 const drawingSourceOrderByContext = new WeakMap<
   InlineDrawingLayoutContext,
@@ -851,7 +870,15 @@ function layoutBlocksPass(
         : block.kind === 'table' && options.drawingTokenForParagraph
           ? drawingTokenForTableBlock(block, options.drawingTokenForParagraph)
           : '';
-    const listToken = listItems?.get(block.id)?.cacheToken ?? '';
+    // A TABLE'S LIST STATE IS ITS CELLS'. `listItems` is keyed by PARAGRAPH, and a numbered
+    // list that continues inside a table cell has its markers there — so reading the table's
+    // own id gave an empty token, and a renumbering that left the table's flow key untouched
+    // reused the cell markers verbatim. The drawing token aggregates the same way, for the
+    // same reason.
+    const listToken =
+      block.kind === 'table'
+        ? listTokenForTableBlock(block, listItems)
+        : (listItems?.get(block.id)?.cacheToken ?? '');
     const memo = preparedBlocks.get(block);
     if (
       memo &&
