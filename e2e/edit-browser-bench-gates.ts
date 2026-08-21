@@ -25,8 +25,14 @@ export interface ExpectedLayoutWork {
  * single character.
  */
 export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
-  'tracked-editing-character': { placed: 3, total: 620, reusedPages: 145, fullPasses: 1 },
-  'tracked-suggesting-character': { placed: 3, total: 620, reusedPages: 145, fullPasses: 1 },
+  // Two, not three, since adjacent paragraph spacing started ADDING rather than collapsing
+  // to the larger gap: this fixture's `ClauseHeading` asks for 12pt before under a 6pt
+  // `w:docDefaults` after, so every heading opened 6pt further down, the page boundaries
+  // moved, and a one-character edit now settles one paragraph sooner. Fewer placements for
+  // the same edit — the counter moved because the GEOMETRY did, not because the incremental
+  // path started skipping work.
+  'tracked-editing-character': { placed: 2, total: 620, reusedPages: 145, fullPasses: 1 },
+  'tracked-suggesting-character': { placed: 2, total: 620, reusedPages: 145, fullPasses: 1 },
   // A 100-character tracked insert reflows roughly half the numbered clauses —
   // the going rate for a wrap in a dense review document, and exactly the load
   // this fixture exists to keep honest.
@@ -35,7 +41,10 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
 
 /** Pinned for the ~1,000-page stress fixture (synthetic-huge-tracked.docx). */
 export const HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
-  'huge-suggesting-character': { placed: 2, total: 4250, reusedPages: 995, fullPasses: 1 },
+  // `reusedPages` up by six for the same reason the tracked fixture's placements went down:
+  // additive paragraph spacing moved this fixture's page boundaries, so the edit's reflow
+  // settles inside pages that were already laid out.
+  'huge-suggesting-character': { placed: 2, total: 4250, reusedPages: 1001, fullPasses: 1 },
   'huge-suggesting-wrap': { placed: 6, total: 4250, reusedPages: 994, fullPasses: 1 },
   // A 50k-character paste re-places 2,126 paragraphs and reflows half the
   // thousand pages — the standing tough case this fixture exists to watch.

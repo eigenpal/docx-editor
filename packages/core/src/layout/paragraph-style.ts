@@ -471,19 +471,35 @@ export function paragraphBordersFingerprint(borders: ParagraphBorders): string {
 
 /**
  * Gap to insert before a paragraph once the previous paragraph's `after` is already in the
- * flow cursor — Word takes the larger of the two rather than summing them.
+ * flow cursor.
+ *
+ * The two ADD. This is the well-known way Word differs from CSS, where adjoining margins
+ * collapse: a paragraph with 12pt after followed by one with 12pt before opens 24pt, which is
+ * why Word carries a separate "don't add space between paragraphs of the same style" control
+ * (`w:contextualSpacing`) instead of relying on a collapse rule.
+ *
+ * This engine used to take the larger of the two. The visible effect was that adding space
+ * before a paragraph moved it by the DIFFERENCE — asking for 10pt above a paragraph whose
+ * predecessor already stated 8pt after moved the text 2pt, which reads as a control that does
+ * not work. Confirmed against an OOXML consumer: `w:after="240"` + `w:before="240"` lays out
+ * 24pt apart, not 12pt, and two auto-spaced paragraphs open 28pt, not 14pt.
+ *
+ * The second argument is taken and IGNORED — it is what is already in the flow cursor, and
+ * under an additive rule that no longer changes the answer. It stays in the signature
+ * because removing a `@public` export is a breaking change for a helper this small; the
+ * name is likewise kept and is now a misnomer worth retiring on the next major.
+ * Suppressing the gap entirely is {@link appliedSpaceBefore}'s job.
  */
-export function collapsedSpaceBefore(before: number, previousAfter: number): number {
-  return Math.max(before, previousAfter) - previousAfter;
+export function collapsedSpaceBefore(before: number, _previousAfter: number): number {
+  return before;
 }
 
 /**
  * Applied before-spacing for placement (Word 2013+ / compat mode 15).
  *
- * Adjacent before/after still collapse to the larger gap, but before is dropped entirely when
- * the paragraph begins at the top of a page mid-section. The first paragraph of a document or
- * section retains before. Callers publish this applied value on the fragment so shading, borders,
- * selection, and paint share one geometry.
+ * Before is dropped entirely when the paragraph begins at the top of a page mid-section; the
+ * first paragraph of a document or section retains it. Callers publish this applied value on
+ * the fragment so shading, borders, selection, and paint share one geometry.
  */
 export function appliedSpaceBefore(
   before: number,

@@ -296,7 +296,7 @@ export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 export function clampListValue(value: number): number;
 
 // @public
-export function collapsedSpaceBefore(before: number, previousAfter: number): number;
+export function collapsedSpaceBefore(before: number, _previousAfter: number): number;
 
 // @public
 export function collectFlowBlocks(children: readonly OoxmlNode[], depth?: number, accept?: (block: OoxmlElement) => boolean): OoxmlElement[];

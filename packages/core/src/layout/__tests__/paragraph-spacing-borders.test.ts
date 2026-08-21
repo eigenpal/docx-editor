@@ -63,16 +63,19 @@ describe('paragraphSpacing resolves w:spacing before/after', () => {
     ).toEqual({ before: 0, after: 0 });
   });
 
-  test('adjacent collapse takes the larger gap, not the sum', () => {
-    expect(collapsedSpaceBefore(12, 10)).toBe(2);
-    expect(collapsedSpaceBefore(8, 10)).toBe(0);
+  test('adjacent before and after ADD, the way Word differs from CSS', () => {
+    // Measured against an OOXML consumer: `w:after="240"` above `w:before="240"` lays the two
+    // paragraphs 24pt apart, not 12pt. Collapsing to the larger gap made "add space before"
+    // move a paragraph by the DIFFERENCE, which reads as a control that does nothing.
+    expect(collapsedSpaceBefore(12, 10)).toBe(12);
+    expect(collapsedSpaceBefore(8, 10)).toBe(8);
     expect(collapsedSpaceBefore(10, 0)).toBe(10);
   });
 
   test('appliedSpaceBefore suppresses mid-section top-of-page before', () => {
     expect(appliedSpaceBefore(18, 0, true, false)).toBe(0);
     expect(appliedSpaceBefore(18, 0, true, true)).toBe(18);
-    expect(appliedSpaceBefore(18, 10, false, false)).toBe(8);
+    expect(appliedSpaceBefore(18, 10, false, false)).toBe(18);
   });
 });
 
@@ -150,13 +153,16 @@ describe('layout applies Word’s auto spacing, not the twips beside the flag', 
   const AUTO_PPR =
     '<w:spacing w:after="100" w:afterAutospacing="1" w:before="100" w:beforeAutospacing="1"/>';
 
-  test('two body paragraphs sit 14pt apart, not 5pt', () => {
+  test('two body paragraphs open 14pt each, not the 5pt beside the flag', () => {
     const layout = lay(load(paragraph('one', AUTO_PPR) + paragraph('two', AUTO_PPR)));
     const [first, second] = layout.pages[0]!.fragments;
     if (first!.kind !== 'paragraph' || second!.kind !== 'paragraph') throw new Error('paragraphs');
     expect(first!.spacing.after).toBe(AUTO_PARAGRAPH_SPACING_PT);
-    // Collapsed against the previous after, so the gap is one 14pt band and not two.
-    expect(second!.lines[0]!.box.y - first!.lines[0]!.box.y).toBe(14 + AUTO_PARAGRAPH_SPACING_PT);
+    // The flag substitutes 14pt for the 5pt authored beside it, and the two bands ADD like
+    // any other pair — measured at 28pt against an OOXML consumer, not one 14pt band.
+    expect(second!.lines[0]!.box.y - first!.lines[0]!.box.y).toBe(
+      14 + AUTO_PARAGRAPH_SPACING_PT * 2
+    );
   });
 
   test('the same paragraphs in a table cell get no auto spacing at all', () => {
@@ -209,6 +215,31 @@ describe('paragraphBorders resolves w:pBdr bottom', () => {
 });
 
 describe('layout accounts for spacing in pagination and fragment geometry', () => {
+  test('the measured gaps: after alone, before alone, and both together', () => {
+    // Measured against an OOXML consumer (LibreOffice → PDF → `pdftotext -bbox`), single line
+    // spacing, 11pt Calibri, one word per paragraph, no inherited spacing:
+    //
+    //   w:after="240" alone            gap 25.45pt  = 13.45 pitch + 12
+    //   w:before="240" alone           gap 25.45pt  = 13.45 pitch + 12
+    //   both                           gap 37.45pt  = 13.45 pitch + 12 + 12
+    //   both auto-spaced (14pt each)   gap 41.45pt  = 13.45 pitch + 14 + 14
+    //
+    // The third line is the whole point: 37.45, not 25.45. Taking the larger of the two made
+    // "add space before paragraph" move a paragraph by the DIFFERENCE — 10pt asked for above a
+    // predecessor already stating 8pt after moved the text 2pt, which is indistinguishable
+    // from a control that does nothing.
+    const gap = (first: string, second: string): number => {
+      const layout = lay(load(paragraph('one', first) + paragraph('two', second)));
+      const [a, b] = layout.pages[0]!.fragments;
+      if (a!.kind !== 'paragraph' || b!.kind !== 'paragraph') throw new Error('paragraphs');
+      return b!.lines[0]!.box.y - a!.lines[0]!.box.y;
+    };
+    const pitch = gap('<w:spacing w:after="0"/>', '<w:spacing w:before="0"/>');
+    expect(gap('<w:spacing w:after="240"/>', '<w:spacing w:before="0"/>')).toBe(pitch + 12);
+    expect(gap('<w:spacing w:after="0"/>', '<w:spacing w:before="240"/>')).toBe(pitch + 12);
+    expect(gap('<w:spacing w:after="240"/>', '<w:spacing w:before="240"/>')).toBe(pitch + 24);
+  });
+
   test('before/after shift fragment boxes and the flow cursor', () => {
     const part = load(
       paragraph('one', '<w:spacing w:after="240"/>') +
@@ -219,11 +250,11 @@ describe('layout accounts for spacing in pagination and fragment geometry', () =
     expect(first!.kind).toBe('paragraph');
     expect(second!.kind).toBe('paragraph');
     if (first!.kind !== 'paragraph' || second!.kind !== 'paragraph') return;
-    // First ends with 12pt after; second asks for 6pt before → collapsed gap is 12pt.
+    // First ends with 12pt after; second asks for 6pt before → the gap is both, 18pt.
     expect(first!.spacing).toEqual({ before: 0, after: 12 });
-    expect(second!.spacing.before).toBe(0); // fully collapsed into the prior after
+    expect(second!.spacing.before).toBe(6);
     expect(second!.box.y).toBe(first!.box.y + first!.box.height);
-    expect(second!.lines[0]!.box.y - first!.lines[0]!.box.y).toBe(14 + 12);
+    expect(second!.lines[0]!.box.y - first!.lines[0]!.box.y).toBe(14 + 12 + 6);
   });
 
   test('explicit before is honoured on the first paragraph of a document/section', () => {
@@ -287,7 +318,7 @@ describe('comprehensive fixture: bottom border rule and vertical spacing', () =>
     expect(empty.box.height).toBe(empty.spacing.before + 14 + 2 + 2 + empty.spacing.after);
   });
 
-  test('vertical spacing collapses against the prior after and advances the next paragraph', () => {
+  test('vertical spacing adds to the prior after and advances the next paragraph', () => {
     const part = load(FIXTURE);
     const layout = lay(part);
     const fragments = layout.pages[0]!.fragments.filter((f) => f.kind === 'paragraph');
@@ -295,15 +326,15 @@ describe('comprehensive fixture: bottom border rule and vertical spacing', () =>
     if (above!.kind !== 'paragraph' || empty!.kind !== 'paragraph' || below!.kind !== 'paragraph')
       return;
 
-    // above after=10pt, empty before=5pt → empty's applied before collapses to 0.
+    // above after=10pt, empty before=5pt → 15pt between them, both applied.
     expect(above!.spacing.after).toBe(10);
-    expect(empty!.spacing.before).toBe(0);
-    // empty after=6pt, below before=2pt → below collapses to 0; gap is empty's after.
+    expect(empty!.spacing.before).toBe(5);
+    // empty after=6pt, below before=2pt → 8pt, likewise.
     expect(empty!.spacing.after).toBe(6);
-    expect(below!.spacing.before).toBe(0);
+    expect(below!.spacing.before).toBe(2);
     expect(below!.box.y).toBe(empty!.box.y + empty!.box.height);
     expect(below!.lines[0]!.box.y).toBe(
-      empty!.bottomBorder!.box.y + empty!.bottomBorder!.box.height + 6
+      empty!.bottomBorder!.box.y + empty!.bottomBorder!.box.height + 6 + 2
     );
   });
 
