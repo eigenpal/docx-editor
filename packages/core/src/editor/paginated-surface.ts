@@ -596,6 +596,7 @@ export function mountPaginatedSurface(
     producer,
     cache: layoutCache,
     styleCascade,
+    numberingIndex: numberingIndex(),
     defaultTabStopPt,
     // Furniture answers the document's display mode, like the body does — and it is named
     // even when it is the default, because a lane that says nothing is treated as saying
@@ -797,6 +798,7 @@ export function mountPaginatedSurface(
       producer,
       cache: layoutCache,
       styleCascade,
+      numberingIndex: numberingIndex(),
       defaultTabStopPt,
       inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
       drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -3141,7 +3143,7 @@ export function mountPaginatedSurface(
       cellSelection
         ? cellSelectionRects(currentLayout, cellSelection.cellIds)
         : retainedSelection
-          ? selectionRects(currentLayout, retainedSelection)
+          ? selectionRects(currentLayout, retainedSelection, paragraphOrder())
           : [],
       // Pages of differing width are centred individually, so the overlay has to carry the
       // same per-page offset the painter applied or a highlight in a landscape section would
@@ -3293,7 +3295,12 @@ export function mountPaginatedSurface(
   function canInsertTable(rows: number, cols: number): boolean {
     if (editingMode === 'view' || !session.editable) return false;
     const op = insertTableOp(rows, cols);
-    return op !== null && validateTreeOp(session.part(), op) === null;
+    // Validated against the part the CARET is in, the same part `applyOps` will write to.
+    // Against the body part, a caret in a header named a paragraph that part has never heard
+    // of, so the op was refused as `unknown-paragraph` before it was ever applied — and the
+    // refusal reached the toolbar as a message about where tables may go.
+    const part = session.partFor(storyScope()) ?? session.part();
+    return op !== null && validateTreeOp(part, op) === null;
   }
 
   function insertTable(rows: number, cols: number): boolean {
@@ -3507,14 +3514,22 @@ export function mountPaginatedSurface(
         // mount and gone by the next zoom resolves to the fixed grid, and the identity has to
         // say so.
         producer = producerIdentity();
+        // EVERY input the mount-time source is given, not a subset. Rebuilt without the three
+        // drawing hooks, a header's inline pictures lost their layout context for the rest of
+        // the session the first time the user zoomed.
         furnitureSource = createFurnitureSource({
           session,
           measurer,
           producer,
           cache: layoutCache,
           styleCascade,
+          numberingIndex: numberingIndex(),
           defaultTabStopPt,
           displayMode: options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+          inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
+          drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
+          drawingTokenForParagraphForPart: (partName, paragraph) =>
+            drawingBundle.drawingTokenForParagraph(paragraph, partName),
         });
         // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
         // flush that publishes nothing (a revision already superseded) would otherwise leave

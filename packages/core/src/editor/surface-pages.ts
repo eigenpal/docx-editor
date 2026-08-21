@@ -59,6 +59,16 @@ export function createFurnitureSource(env: {
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
   readonly styleCascade?: Parameters<typeof layoutHeaderFooterStory>[5];
   /**
+   * `numbering.xml`, so a `w:numPr` paragraph in a header or footer resolves a marker.
+   *
+   * Identity matters as much as the value. `numbering.xml` is a DIFFERENT part from
+   * `header1.xml`, so an edit to it leaves the header part, the geometry, the producer and the
+   * drawing token all unchanged — every key `hfStoryMemo` compares. Without the index in that
+   * key the memo serves the pre-edit story for the rest of the session, and nothing will ever
+   * invalidate it again.
+   */
+  readonly numberingIndex?: import('../layout/numbering-index.ts').NumberingIndex;
+  /**
    * `w:settings/w:defaultTabStop` in points. Furniture tabs on the document's grid, so a
    * page-number tab in a metric-locale footer lands where Word puts it.
    */
@@ -91,6 +101,7 @@ export function createFurnitureSource(env: {
     producer,
     cache,
     styleCascade,
+    numberingIndex,
     defaultTabStopPt,
     displayMode,
     inlineDrawingLayoutForPart,
@@ -118,6 +129,7 @@ export function createFurnitureSource(env: {
       marginRight: number;
       producer: string;
       drawingLayoutToken: string;
+      numberingIndex: import('../layout/numbering-index.ts').NumberingIndex | undefined;
       story: ReturnType<typeof layoutHeaderFooterStory>;
     }
   >();
@@ -155,7 +167,8 @@ export function createFurnitureSource(env: {
       memo.marginLeft === marginLeft &&
       memo.marginRight === marginRight &&
       memo.producer === producer &&
-      memo.drawingLayoutToken === partDrawingToken
+      memo.drawingLayoutToken === partDrawingToken &&
+      memo.numberingIndex === numberingIndex
     ) {
       return memo.story;
     }
@@ -187,7 +200,8 @@ export function createFurnitureSource(env: {
             marginBottom: sectionGeometry.margin.bottom,
           }
         : undefined,
-      session.documentProperties()
+      session.documentProperties(),
+      numberingIndex ? { numberingIndex } : undefined
     );
     const rId = rIdOfPart(part.name);
     const story = rId ? stampStoryRId(baseline, rId) : baseline;
@@ -200,6 +214,7 @@ export function createFurnitureSource(env: {
       marginRight,
       producer,
       drawingLayoutToken: partDrawingToken,
+      numberingIndex,
       story,
     });
     return story;
@@ -477,6 +492,8 @@ export function createNotesLayoutInput(env: {
   readonly producer: string;
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
   readonly styleCascade?: StyleCascadeTable;
+  /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
+  readonly numberingIndex?: import('../layout/numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
@@ -548,6 +565,7 @@ export function createNotesLayoutInput(env: {
     producer: env.producer,
     cache: env.cache,
     styleCascade: env.styleCascade,
+    numberingIndex: env.numberingIndex,
     defaultTabStopPt: env.defaultTabStopPt,
     ...(drawingsForPart ? { drawingsForPart } : {}),
     // One epoch over both notes parts: either part's drawing state moving must invalidate

@@ -6,6 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { documentOrder } from '../document-order.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import { type PageGeometry, type TextMeasurer } from '../semantic-records.ts';
 import {
@@ -168,7 +169,11 @@ describe('hit testing', () => {
 describe('selection geometry', () => {
   test('a selection within one line is one rectangle', () => {
     const layout = lay(load(paragraph('abcdef')));
-    const rects = selectionRects(layout, { anchor: at(P0, 1), head: at(P0, 4) });
+    const rects = selectionRects(
+      layout,
+      { anchor: at(P0, 1), head: at(P0, 4) },
+      documentOrder(layout)
+    );
     expect(rects).toHaveLength(1);
     expect(rects[0]!.x).toBe(6);
     expect(rects[0]!.width).toBe(18);
@@ -176,20 +181,34 @@ describe('selection geometry', () => {
 
   test('a backwards selection produces the same rectangles', () => {
     const layout = lay(load(paragraph('abcdef')));
-    const forward = selectionRects(layout, { anchor: at(P0, 1), head: at(P0, 4) });
-    const backward = selectionRects(layout, { anchor: at(P0, 4), head: at(P0, 1) });
+    const forward = selectionRects(
+      layout,
+      { anchor: at(P0, 1), head: at(P0, 4) },
+      documentOrder(layout)
+    );
+    const backward = selectionRects(
+      layout,
+      { anchor: at(P0, 4), head: at(P0, 1) },
+      documentOrder(layout)
+    );
     expect(backward).toEqual(forward);
   });
 
   test('a selection across paragraphs produces one rectangle per line', () => {
     const layout = lay(load(paragraph('abcd') + paragraph('efgh')));
-    const rects = selectionRects(layout, { anchor: at(P0, 2), head: at(P1, 2) });
+    const rects = selectionRects(
+      layout,
+      { anchor: at(P0, 2), head: at(P1, 2) },
+      documentOrder(layout)
+    );
     expect(rects).toHaveLength(2);
   });
 
   test('an empty selection covers nothing', () => {
     const layout = lay(load(paragraph('abc')));
-    expect(selectionRects(layout, { anchor: at(P0, 1), head: at(P0, 1) })).toEqual([]);
+    expect(
+      selectionRects(layout, { anchor: at(P0, 1), head: at(P0, 1) }, documentOrder(layout))
+    ).toEqual([]);
   });
 
   test('the spans a selection touches are reported, for active formatting', () => {

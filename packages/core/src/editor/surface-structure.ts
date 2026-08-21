@@ -605,6 +605,22 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     sectionPropertiesAt(paragraphId) {
       const sections = enumerateDocumentSections(session.part());
       if (sections.length === 1) return sections[0]!.properties;
+      // A furniture paragraph is in no body section, but the STORY it belongs to is: a header
+      // is declared by one or more `w:sectPr`, and the caret is looking at that section's page.
+      // Falling through to the tail section answered with another section's geometry, which is
+      // the page width `insertTableOp` sizes a grid from and the metrics the ruler clamps to.
+      const scope = deps.storyScope();
+      if (scope.kind === 'headerFooter') {
+        const owningSection = session
+          .headerFooterResolutionBySection()
+          .findIndex((section) =>
+            [section.headers, section.footers].some((slots) =>
+              [...slots.values()].some((slot) => slot.rId === scope.rId)
+            )
+          );
+        if (owningSection !== -1 && sections[owningSection])
+          return sections[owningSection]!.properties;
+      }
       const blocks = storyBlocks(session.part());
       const contains = (node: (typeof blocks)[number], id: string): boolean => {
         if (node.id === id) return true;

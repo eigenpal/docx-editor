@@ -41,6 +41,8 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
+import type { NumberingIndex } from './numbering-index.ts';
 import { layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
@@ -164,6 +166,24 @@ function createBoundedContextCache(maxEntries: number): {
  * on a constant. It sits at the tail because the parameters ahead of it are already
  * positional; new callers should keep passing `undefined` for what they do not set.
  */
+/**
+ * Story-level inputs the body path has always had and furniture never did.
+ *
+ * A BAG, not more positional parameters. The signature below already carries fifteen, and its
+ * own doc comment used to tell new callers to "keep passing `undefined` for what they do not
+ * set" — which is why `numberingIndex` was never added and a numbered paragraph in a header
+ * painted no marker for as long as headers have been editable. Everything new goes here.
+ */
+export interface HeaderFooterStoryInputs {
+  /**
+   * `numbering.xml`, so a `w:numPr` paragraph in this story resolves a marker.
+   *
+   * Absent, the story lays out exactly as before: no marker record, and no numbering indent
+   * merged into the paragraph's own.
+   */
+  readonly numberingIndex?: NumberingIndex;
+}
+
 export function layoutHeaderFooterStory(
   part: OoxmlPart,
   contentWidth: number,
@@ -179,7 +199,8 @@ export function layoutHeaderFooterStory(
   drawingTokenForParagraph?: (paragraph: import('@docx-editor.dev/core/store').OoxmlNode) => string,
   drawingLayoutToken?: string,
   hfPageContext?: HeaderFooterPageContext,
-  documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties
+  documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties,
+  inputs?: HeaderFooterStoryInputs
 ): HeaderFooterStoryLayout {
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
@@ -188,6 +209,16 @@ export function layoutHeaderFooterStory(
   // did not, so the paragraph a tracked mark merges away kept its own line, and a paragraph a
   // revision removed entirely kept a blank one. The cache is namespaced by mode below.
   const blocks = storyBlocks(part, displayMode);
+  // The story's own list-item map, resolved once per layout of this part.
+  //
+  // Per STORY, not continuing the body's counters: `createListCounterState` is created fresh
+  // per story walk, and a header repeats on every page, so a numbered header list restarts at
+  // `w:start` and shows the same number on page 3 as on page 1. That matches Word, which keeps
+  // furniture numbering independent of the body's.
+  const listItems: ReadonlyMap<string, ResolvedListItem> | undefined = withResolvedListItems(
+    { numberingIndex: inputs?.numberingIndex, styleCascade },
+    blocks
+  ).listItems;
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
   let baseline: HeaderFooterStoryLayout | undefined;
@@ -261,6 +292,7 @@ export function layoutHeaderFooterStory(
             (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
+          ...(listItems ? { listItems } : {}),
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
@@ -337,6 +369,7 @@ export function layoutHeaderFooterStory(
           (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
         nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
         styleCascade,
+        ...(listItems ? { listItems } : {}),
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
         displayMode,

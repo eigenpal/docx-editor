@@ -231,16 +231,13 @@ describe('selection formatting is the same in every story', () => {
     { label: 'at a caret in a numbered list item', paragraphIndex: PROBE.numbered },
     {
       // A MULTI-PARAGRAPH selection takes a different path from a caret: `spansInSelection`
-      // orders its endpoints through `orderPositions`, which falls back to the body's document
-      // order. Outside the body both endpoints rank -1, the walk gives up, and the run
-      // properties come back short: measured, the body reports `fontSizeHalfPoints` and a
-      // header omits it entirely. So the size box empties when you select two paragraphs in a
-      // header, and Bold cannot be toggled off there.
+      // orders its endpoints through `orderPositions`, which used to fall back to the body's
+      // document order. Outside the body both endpoints ranked -1, the walk gave up, and the
+      // run properties came back short — the size box emptied on a two-paragraph header
+      // selection, and Bold could not be toggled off there.
       label: 'over a two-paragraph range',
       paragraphIndex: PROBE.formatted,
       range: true,
-      knownBroken:
-        'run properties over a multi-paragraph range order through the body document order',
     },
   ] as const) {
     test(`${label}${knownBroken ? ' (known broken)' : ''}`, () => {

@@ -469,18 +469,25 @@ export function contentControlsInLayout(
   return contentControlsOfLayout(layout);
 }
 
+/**
+ * Order a selection's endpoints, against the order of the story they live in.
+ *
+ * `order` is REQUIRED, and deliberately so. It used to default to the body's `documentOrder`,
+ * which meant every new call site was body-blind unless its author remembered — and a
+ * two-paragraph selection in a header ranked both endpoints at -1, gave up, and returned null.
+ * The reads built on this then answered for the head paragraph alone. Making the caller state
+ * the order turns that from a silent wrong answer into a compile error.
+ */
 export function orderPositions(
-  layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  order: readonly string[]
 ): { from: SemanticPosition; to: SemanticPosition } | null {
-  // Same paragraph needs no document-wide order — furniture stories are absent from
-  // body `documentOrder` but still format within one paragraph.
+  // Same paragraph needs no document-wide order at all.
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return selection.anchor.offset <= selection.head.offset
       ? { from: selection.anchor, to: selection.head }
       : { from: selection.head, to: selection.anchor };
   }
-  const order = documentOrder(layout);
   const anchorIndex = order.indexOf(selection.anchor.paragraphId);
   const headIndex = order.indexOf(selection.head.paragraphId);
   if (anchorIndex === -1 || headIndex === -1) return null;
@@ -781,9 +788,11 @@ export function compositionAnchor(
 /** The style spans a selection touches, for reporting active formatting. */
 export function spansInSelection(
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  /** Reading order of the ACTIVE story. See {@link orderPositions}. */
+  order: readonly string[]
 ): StyleSpanRecord[] {
-  const ordered = orderPositions(layout, selection);
+  const ordered = orderPositions(selection, order);
   if (!ordered) return [];
   if (
     ordered.from.paragraphId === ordered.to.paragraphId &&
@@ -806,11 +815,11 @@ export function spansInSelection(
     }
     return spans;
   }
-  const order = documentOrder(layout);
-  const index = documentOrderIndex(layout);
   const lines = paragraphLinesIndex(layout);
-  const first = index.get(ordered.from.paragraphId) ?? -1;
-  const last = index.get(ordered.to.paragraphId) ?? -1;
+  // Positions WITHIN the given order, not the body index: the two agree for the body and
+  // nowhere else, and `paragraphLinesIndex` already covers every story.
+  const first = order.indexOf(ordered.from.paragraphId);
+  const last = order.indexOf(ordered.to.paragraphId);
   if (first === -1 || last === -1) return [];
   for (let at = first; at <= last; at += 1) {
     for (const { line } of lines.get(order[at]!) ?? []) {

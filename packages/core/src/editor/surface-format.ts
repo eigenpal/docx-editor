@@ -365,7 +365,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // twice at a caret must cancel, not double-arm.
       const active =
         pendingPropertyState(deps.pendingFormats(), localName, value) ??
-        isRunPropertyActive(currentLayout.value, selectionNow.value, localName, cells, value);
+        isRunPropertyActive(
+          currentLayout.value,
+          selectionNow.value,
+          localName,
+          cells,
+          value,
+          deps.paragraphOrder()
+        );
       // Toggling OFF sends an explicit off value rather than dropping the element: the
       // property may be inherited from a style, and removing the local override would let the
       // inherited value come back. Two of these are closed enumerations, not booleans, and
@@ -393,7 +400,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           selectionNow.value,
           localName,
           undefined,
-          value
+          value,
+          deps.paragraphOrder()
         );
         if (!active === documentActive) {
           const kept = pending.filter((property) => property.localName !== localName);

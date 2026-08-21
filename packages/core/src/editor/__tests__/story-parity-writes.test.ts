@@ -35,8 +35,10 @@ interface WriteProbe {
   /** Probe paragraph the caret starts in. */
   readonly paragraphIndex: number;
   readonly run: (open: OpenStory) => void;
-  /** The defect that makes this fail today, if it does. */
+  /** The defect that makes this write nothing outside the body today, if there is one. */
   readonly knownBroken?: string;
+  /** Legitimately writes nothing outside the body, with the reason it is body-only. */
+  readonly bodyOnly?: string;
   /**
    * Compare the RESULTING MARKUP across stories, not just which part changed.
    *
@@ -102,8 +104,6 @@ const WRITES: readonly WriteProbe[] = [
       o.surface.adjustIndent('increase');
     },
     comparesMarkup: true,
-    markupKnownBroken:
-      'the body demotes the list level; every other story shifts the paragraph instead',
   },
   {
     name: 'setIndent({ left: 360 })',
@@ -122,16 +122,15 @@ const WRITES: readonly WriteProbe[] = [
     comparesMarkup: true,
   },
   {
-    // Turning a list OFF. The body removes `w:numPr`; outside it `listKindOf` reads null, so
-    // `turningOff` is false and the gesture re-applies the numbering already there, changing
-    // nothing while reporting success.
+    // Turning a list OFF, which is the direction the body-only marker read used to make
+    // impossible: `listKindOf` answered null outside the body, `turningOff` was always false,
+    // and the gesture re-applied the numbering already there while reporting success.
     name: 'toggleList("ordered") on a numbered item',
     paragraphIndex: PROBE.numbered,
     run: (o) => {
       o.surface.toggleList('ordered');
     },
-    knownBroken:
-      'outside the body the list read is null, so the toggle can only ever turn a list on',
+    comparesMarkup: true,
   },
   {
     name: 'clearFormatting over a two-paragraph range',
@@ -147,25 +146,24 @@ const WRITES: readonly WriteProbe[] = [
     run: (o) => {
       o.surface.insertTable(2, 2);
     },
-    knownBroken: 'canInsertTable validates against the body part, so the op is refused elsewhere',
   },
   {
-    // The gate is real (`insertSectionBreak` refuses when the scope is not the body) but the
-    // toolbar never learns it, so the control looks live and silently does nothing.
     name: 'insertSectionBreak',
     paragraphIndex: PROBE.plain,
     run: (o) => {
       o.surface.insertSectionBreak();
     },
-    knownBroken: 'section breaks are body-only by design, but the refusal is never published',
+    bodyOnly: "a section break splits the body's own w:sectPr chain",
   },
 ];
 
 describe('a write lands in the story the caret is in', () => {
   for (const probe of WRITES) {
     for (const story of STORY_KINDS) {
-      const expectRefused = Boolean(probe.knownBroken) && story !== 'body';
-      const label = `${probe.name} in the ${story}${expectRefused ? ' (known broken)' : ''}`;
+      const outsideBody = story !== 'body';
+      const expectRefused = Boolean(probe.knownBroken ?? probe.bodyOnly) && outsideBody;
+      const known = Boolean(probe.knownBroken) && outsideBody;
+      const label = `${probe.name} in the ${story}${known ? ' (known broken)' : ''}`;
 
       test(label, async () => {
         const open = openStory(story);
@@ -209,8 +207,8 @@ describe('a write lands in the story the caret is in', () => {
 describe('a write puts the same markup in every story', () => {
   for (const probe of WRITES) {
     if (!probe.comparesMarkup) continue;
-    // A gesture refused outside the body writes nothing there, so there is no markup to compare.
-    if (probe.knownBroken) continue;
+    // A gesture that writes nothing outside the body has no markup there to compare.
+    if (probe.knownBroken ?? probe.bodyOnly) continue;
     const broken = probe.markupKnownBroken;
 
     test(`${probe.name}${broken ? ' (known broken)' : ''}`, async () => {

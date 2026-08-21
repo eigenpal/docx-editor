@@ -409,6 +409,23 @@ export function gateCommand(
       };
     }
   }
+  // A section break splits the body's `w:sectPr` chain, and `insertSectionBreak` already
+  // refuses outside the body. Without this arm the refusal was never PUBLISHED: `can` saw only
+  // the static break vocabulary, so the control rendered live in a header and pressing it did
+  // nothing at all. A gate the toolbar cannot see is a button that lies.
+  if (command.type === 'insertBreak' && command.kind === 'section') {
+    const active = surface.activeScope?.() ?? { kind: 'body' as const };
+    if (active.kind !== 'body') {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'a section break can only be inserted in the editable document body',
+        },
+      };
+    }
+  }
   if (command.type === 'linkHeaderFooterToPrevious') {
     const state = surface.headerFooterState?.();
     const sectionIndex = command.sectionIndex ?? state?.sectionIndex ?? 0;

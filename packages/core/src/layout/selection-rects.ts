@@ -6,21 +6,29 @@
 
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
-import { paragraphFragmentsOf } from './semantic-records.ts';
-import type { SemanticLayout } from './semantic-records.ts';
+import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
+import type { PageRecord, ParagraphFragmentRecord, SemanticLayout } from './semantic-records.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
 
-/** The rectangles covering a selection, one per line it spans. */
+/**
+ * The rectangles covering a selection, one per line it spans.
+ *
+ * `order` is the reading order of the story the selection lives in. Required for the reason
+ * {@link orderPositions} explains: with the body's order, a selection anywhere else ranked
+ * both endpoints at -1 and painted nothing, so a retained pin in a header showed no highlight
+ * and a comment anchored in one drew no band.
+ */
 export function selectionRects(
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  order: readonly string[]
 ): SelectionRect[] {
-  const ordered = orderPositions(layout, selection);
+  const ordered = orderPositions(selection, order);
   if (!ordered) return [];
   const rects: SelectionRect[] = [];
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
+    for (const fragment of paragraphFragmentsOnAnyStory(page)) {
       for (const line of fragment.lines) {
         for (const segment of lineSegments(line)) {
           const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
@@ -73,7 +81,7 @@ export function keyedRangeRects(
   if (ranges.length === 0) return found;
   for (const page of layout.pages) {
     if (pages && !pages.has(page.index)) continue;
-    for (const fragment of paragraphFragmentsOf(page)) {
+    for (const fragment of paragraphFragmentsOnAnyStory(page)) {
       for (const line of fragment.lines) {
         for (const segment of lineSegments(line))
           for (const range of ranges) {
@@ -93,6 +101,25 @@ export function keyedRangeRects(
           }
       }
     }
+  }
+  return found;
+}
+
+/**
+ * Every paragraph fragment a page draws, in any story.
+ *
+ * `page.fragments` is the body's. A comment anchored in a header, a footnote or an endnote is
+ * listed by the review queue and can be made active, so its band has to be measurable too —
+ * without this the card opened and nothing highlighted.
+ */
+function paragraphFragmentsOnAnyStory(page: PageRecord): ParagraphFragmentRecord[] {
+  const found = [...paragraphFragmentsOf(page)];
+  for (const story of [page.header, page.footer]) {
+    if (story) found.push(...paragraphFragmentsOfBlocks(story.fragments));
+  }
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    for (const note of area.notes) found.push(...paragraphFragmentsOfBlocks(note.fragments));
   }
   return found;
 }
