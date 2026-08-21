@@ -1657,6 +1657,29 @@ value?: unknown): ExecResult;
 export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
 
 // @public
+export type SectionAnchor =
+/** Name this body paragraph. Its section is the one the caret is in. */
+    {
+    readonly kind: 'anchor';
+    readonly paragraphId: string;
+}
+/** One section: an anchor names nothing extra, so the op may omit it. */
+| {
+    readonly kind: 'whole-document';
+}
+/**
+* Several sections, and the caret's holds no paragraph to name.
+*
+* An omitted anchor here would write EVERY section, which is what `scope: 'document'` is
+* for — so answering it to a `scope: 'section'` request changes sections nobody asked
+* about. There is no anchor that reaches an empty final section: one exists only when every
+* paragraph already closes an earlier section, so nothing sits at or after it.
+*/
+| {
+    readonly kind: 'unaddressable';
+};
+
+// @public
 export interface SectionProperties {
     readonly breakType: SectionBreakType;
     // (undocumented)

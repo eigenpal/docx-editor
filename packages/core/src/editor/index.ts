@@ -39,6 +39,13 @@ export { blankDocumentBytes } from './blank-document.ts';
  * a READ without opening — and permanently retaining — that story's store.
  */
 export { partOfNodeId } from './surface-scope.ts';
+/**
+ * How a section-addressed op names the section a caret is in.
+ *
+ * Published because `PaginatedSurface.sectionAnchorParagraphAt` returns it, and a host typing
+ * against that member could otherwise not name what it gets back.
+ */
+export type { SectionAnchor } from './section-scope.ts';
 export {
   createFontSource,
   loadFonts,
