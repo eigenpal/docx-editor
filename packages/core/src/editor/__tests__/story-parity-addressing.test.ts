@@ -106,21 +106,21 @@ describe('every story is addressable', () => {
     }
   });
 
-  test('a paraId two stories claim resolves in the part the caller names', () => {
+  test('a paraId two stories both claim is refused rather than guessed', () => {
     const body = twinPart('/word/document.xml');
     const header = twinPart('/word/header1.xml');
     const index = buildParagraphAnchorIndex([body, header]);
     expect([...index.ambiguousParaIds]).toEqual([TWIN_PARA_ID]);
-
-    // `w14:paraId` is minted unique per PART and the contract's uniqueness is per document, so
-    // an authored file may repeat one. Refusing every clash would hand a hostile file a denial:
-    // a header copying each body paragraph's id would make the whole body unaddressable. A
-    // caller that names a part is asking about that part, so its own claimant settles it.
+    // From EITHER part, because preferring the caller's own is not a way out: every production
+    // caller passes the main part, so the preference could only ever land on the body twin —
+    // and an automation caller that read a header paragraph's paraId out of `snapshot()` would
+    // be told `ok` with the caret in the body, then write to the wrong story. A refusal is the
+    // failure worth having, because it is visible.
     for (const part of [body, header]) {
       const resolved = resolveDocAnchor(part, index, { paraId: TWIN_PARA_ID });
-      expect(resolved.ok, `${part.name} could not resolve its own paragraph`).toBe(true);
-      if (!resolved.ok) continue;
-      expect(index.partByNode.get(resolved.span.nodeId)).toBe(part);
+      expect(resolved.ok, `${part.name} guessed instead of refusing`).toBe(false);
+      if (resolved.ok) continue;
+      expect(resolved.code).toBe('ambiguous');
     }
   });
 

@@ -16,6 +16,7 @@
 
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
+import { settingsPartOf } from '../package/note-properties.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship, type RelationshipRecord } from '../package/relationships.ts';
 import {
@@ -1021,7 +1022,12 @@ export class TreePackageStore {
       };
     }
     const normalized = normalizeParagraphIdentity(part);
-    const store = new TreeDocumentStore(normalized, { historyLimit: this.historyLimit });
+    const store = new TreeDocumentStore(normalized, {
+      historyLimit: this.historyLimit,
+      // A story store is built from a PART, whose synthetic package holds no `settings.xml`
+      // — so without this a protected document refused a body edit and accepted a header one.
+      settingsPart: () => settingsPartOf(this.pkg),
+    });
     const story: TreeStoryRef = {
       kind: 'notesPart',
       partName: normalized.name,
@@ -1074,7 +1080,12 @@ export class TreePackageStore {
     }
 
     const normalized = normalizeParagraphIdentity(located.part);
-    const store = new TreeDocumentStore(normalized, { historyLimit: this.historyLimit });
+    const store = new TreeDocumentStore(normalized, {
+      historyLimit: this.historyLimit,
+      // A story store is built from a PART, whose synthetic package holds no `settings.xml`
+      // — so without this a protected document refused a body edit and accepted a header one.
+      settingsPart: () => settingsPartOf(this.pkg),
+    });
     const story: TreeStoryRef = {
       kind: 'headerFooter',
       partName: normalized.name,

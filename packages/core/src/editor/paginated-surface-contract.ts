@@ -580,9 +580,13 @@ export interface PaginatedSurface {
    */
   sectionProperties(): SectionProperties;
   /**
-   * The section GOVERNING one paragraph — what a ruler or dialog reflects when the
-   * caret sits in a multi-section document. Falls back to the body-level section for
-   * an unknown id.
+   * The section GOVERNING one paragraph — what a ruler or dialog reflects when the caret sits
+   * in a multi-section document.
+   *
+   * Body content answers for itself, whatever story is open. A header or footer belongs to the
+   * section that names its relationship, and a note to the section holding its reference mark.
+   * An id nothing settles falls back to the FIRST section: the tail is the document-wide answer
+   * and is wrong for everything not on the last page.
    */
   sectionPropertiesAt(paragraphId: string): SectionProperties;
   /**

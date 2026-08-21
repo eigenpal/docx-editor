@@ -4211,6 +4211,7 @@ export class TreeDocumentStore {
 // @public
 export interface TreeDocumentStoreOptions {
     readonly historyLimit?: number;
+    readonly settingsPart?: () => OoxmlPart | null | undefined;
 }
 
 // @public

@@ -703,6 +703,9 @@ export function paintAnchoredDrawingsLayer(
   return Object.freeze(painted);
 }
 
+/** Nesting bound for text-box stories inside text-box stories. */
+const MAX_TEXTBOX_STORY_DEPTH = 16;
+
 /**
  * Every drawing a page paints, whatever story it is in.
  *
@@ -739,12 +742,17 @@ function forEachPaintedDrawing(
     story: {
       readonly fragments: readonly (ParagraphFragmentRecord | TableFragmentRecord)[];
       readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
-    }
+    },
+    depth = 0
   ): void => {
+    // Capped like every other walk over file-derived structure here. Layout builds these
+    // records, so a cycle should be impossible — which is the reason to bound it rather than
+    // to trust it, since the cost of the bound is nothing.
+    if (depth > MAX_TEXTBOX_STORY_DEPTH) return;
     for (const drawing of story.anchoredDrawings ?? []) {
       visitDrawing(pageIndex, drawing);
       // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) visitStory(pageIndex, drawing.textboxStory);
+      if (drawing.textboxStory) visitStory(pageIndex, drawing.textboxStory, depth + 1);
     }
     for (const fragment of story.fragments) visitBlock(pageIndex, fragment);
   };

@@ -83,7 +83,8 @@ export function sectionAnchorParagraphFor(
   const part = session.part();
   const sections = enumerateDocumentSections(part);
   if (sections.length <= 1) return null;
-  if (bodySectionIndexOf(session, paragraphId) !== null) return paragraphId;
+  const own = bodySectionIndexOf(session, paragraphId);
+  if (own !== null) return paragraphId;
 
   const index = sectionIndexForCaret(session, paragraphId, scope, openHeaderFooterSection);
   const section = sections[index];
@@ -91,6 +92,14 @@ export function sectionAnchorParagraphFor(
   const blocks = storyBlocks(part);
   for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
     const found = firstParagraphIn(blocks[i]);
+    if (found !== null) return found;
+  }
+  // A section holding no paragraph at all — a body of nothing but a table's worth of nothing,
+  // or an empty continuous section. Any body paragraph is a better anchor than none: an
+  // UNANCHORED section write targets the LAST section, which in a multi-section document is a
+  // different page's geometry from the one the caller is looking at.
+  for (const block of blocks) {
+    const found = firstParagraphIn(block);
     if (found !== null) return found;
   }
   return null;
@@ -117,6 +126,10 @@ export function bodySectionIndexOf(
   paragraphId: string
 ): number | null {
   const part = session.part();
+  // Node ids are part-qualified, so a paragraph from another story is answerable in constant
+  // time. Without this the walk below ran the whole body before returning `null` — and it sits
+  // on the `snapshot()` path, so a furniture caret paid a full-document scan per keystroke.
+  if (!paragraphId.startsWith(`${part.name}#`)) return null;
   const sections = enumerateDocumentSections(part);
   const blocks = storyBlocks(part);
   for (let index = 0; index < sections.length; index += 1) {

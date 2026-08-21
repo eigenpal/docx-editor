@@ -92,12 +92,16 @@ function textByParagraph(surface: PaginatedSurface, scope: StoryScope): Map<stri
  * slice into `paragraphIdsIn` is right for all five stories. Matching on text also means the
  * fixture can grow without silently re-pointing every caret.
  */
-export function openStory(story: StoryKind): OpenStory {
+export function openStory(story: StoryKind, bytes?: Uint8Array): OpenStory {
   const host = document.createElement('div');
   document.body.append(host);
   // An author is named because suggesting refuses a write without one, and a test that wants
   // a tracked change should get one rather than a silent refusal.
-  const editor = createDocxEditor({ document: storyParityDocx(), author: 'Parity' });
+  //
+  // `bytes` takes a VARIANT of the same fixture — the parity document plus something a suite
+  // needs, protection for one. It must keep the probe paragraphs and the control, because the
+  // lookups below are what make an `OpenStory` an `OpenStory`.
+  const editor = createDocxEditor({ document: bytes ?? storyParityDocx(), author: 'Parity' });
   // Everything after the mount can throw, and a host left on `document.body` outlives the test
   // that made it. The suite is sharded one process per file, which HIDES that from the parallel
   // run and surfaces it only in the serial one.

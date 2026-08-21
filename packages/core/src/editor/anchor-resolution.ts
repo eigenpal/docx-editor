@@ -90,24 +90,25 @@ export function resolveDocAnchor(
     return { ok: false, code: 'invalidArgs', reason: 'paraId must be a non-empty string' };
   }
   const canonical = anchor.paraId.toUpperCase();
-  let nodeId = anchors.nodeByParaId.get(canonical);
   if (anchors.ambiguousParaIds.has(canonical)) {
-    // The caller named a PART, so it is asking about that part. `w14:paraId` is minted unique
-    // per part and the contract's uniqueness is per document, so an authored file may repeat
-    // one — and refusing every clash would let a header that copies each body paragraph's id
-    // make the whole body unaddressable. Only a clash this part cannot settle is ambiguous.
-    const mine = (anchors.claimantsByParaId.get(canonical) ?? []).filter(
-      (candidate) => anchors.partByNode.get(candidate) === part
-    );
-    if (mine.length !== 1) {
-      return {
-        ok: false,
-        code: 'ambiguous',
-        reason: `paraId '${anchor.paraId}' is claimed by more than one story`,
-      };
-    }
-    nodeId = mine[0];
+    // REFUSED, not resolved to whichever story came first.
+    //
+    // `w14:paraId` is minted unique per PART and the contract's uniqueness is per document, so
+    // an authored file may repeat one across a header and the body. Preferring the caller's own
+    // part looks like a way out, and is not: every caller here passes the MAIN part, so the
+    // preference can only ever land on the body twin. An automation caller that read a header
+    // paragraph's paraId out of `snapshot()` and passed it straight back would be told `ok`
+    // with the caret in the body, and its next write would go to the wrong story.
+    //
+    // Refusing costs a hostile file's duplicates their addressability by paraId — node ids
+    // still reach them — and that is the failure worth having: it is visible.
+    return {
+      ok: false,
+      code: 'ambiguous',
+      reason: `paraId '${anchor.paraId}' is claimed by more than one story`,
+    };
   }
+  const nodeId = anchors.nodeByParaId.get(canonical);
   if (nodeId === undefined) {
     return {
       ok: false,

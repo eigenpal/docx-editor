@@ -21,7 +21,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { z } from 'zod';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { customNodesModule, defineCustomNode, insertCustomNode } from '../index.ts';
+import { customNodesModule, customNodesOf, defineCustomNode, insertCustomNode } from '../index.ts';
 import { reviewModule } from '../review/review-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -135,5 +135,40 @@ describe('a review card carries its chip’s data, in every story', () => {
     expect(dataFor(HEADER_DATA.sourceId), 'the header card lost its data').toEqual(HEADER_DATA);
     // The merged map is keyed by part-qualified control id, so the body chip is untouched.
     expect(dataFor(BODY_DATA.sourceId), 'the body card lost its data').toEqual(BODY_DATA);
+  });
+});
+
+describe('customNodesOf lists the whole document', () => {
+  test('a chip in a header is in the list', async () => {
+    const editor = mount(docx());
+    const surface = editor.surface!;
+
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: BODY_DATA.sourceId },
+      text: '(Body)',
+      at: { paragraphId: surface.state().selection.head.paragraphId, offset: 7 },
+      data: BODY_DATA,
+    });
+    expect(surface.enterHeaderFooter({ rId: HEADER_R_ID })).toBe(true);
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: HEADER_DATA.sourceId },
+      text: '(Header)',
+      at: { paragraphId: surface.state().selection.head.paragraphId, offset: 7 },
+      data: HEADER_DATA,
+    });
+
+    const reopened = mount(new Uint8Array(await editor.save()));
+    const found = customNodesOf(reopened)
+      .map((node) => node.attrs.sourceId)
+      .sort();
+    // Reading only the body reported a document with one chip in it, while the review queue
+    // beside it reported two. A host building a picker from this could not offer the chip the
+    // reader was looking at.
+    expect(found).toEqual([BODY_DATA.sourceId, HEADER_DATA.sourceId].sort());
+    // And each keeps its own payload: ids are part-qualified, so one merged map cannot collide.
+    const dataOf = (sourceId: string): unknown =>
+      customNodesOf(reopened).find((node) => node.attrs.sourceId === sourceId)?.data;
+    expect(dataOf(HEADER_DATA.sourceId)).toEqual(HEADER_DATA);
+    expect(dataOf(BODY_DATA.sourceId)).toEqual(BODY_DATA);
   });
 });

@@ -179,3 +179,71 @@ describe('a read-side mint is the mint the store will make', () => {
     expect(headerIds()).toEqual(before);
   });
 });
+
+/** The same paraId on a body paragraph and a header paragraph, which an authored file may do. */
+const TWIN_PARA_ID = '4C000001';
+
+function twinIdDocx(): Uint8Array {
+  const para = (text: string): string =>
+    `<w:p w14:paraId="${TWIN_PARA_ID}" w14:textId="${TWIN_PARA_ID}">` +
+    `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.' +
+        'relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.header+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/>` +
+        '</Relationships>'
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="${AWKWARD_R_ID}" Type="${R}/header" Target="header1.xml"/>` +
+        '</Relationships>'
+    ),
+    'word/header1.xml': strToU8(
+      `<w:hdr xmlns:w="${W}" xmlns:w14="${W14}">${para('Header')}</w:hdr>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}" xmlns:r="${R}"><w:body>${para('Body')}` +
+        `<w:sectPr><w:headerReference w:type="default" r:id="${AWKWARD_R_ID}"/></w:sectPr>` +
+        '</w:body></w:document>'
+    ),
+  });
+}
+
+describe('a paraId two stories claim is refused through the facade', () => {
+  test('setSelection by a clashing paraId does not land in the body twin', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const editor = createDocxEditor({ document: twinIdDocx(), author: 'Parity' });
+    cleanup = () => {
+      editor.destroy();
+      host.remove();
+      document.getSelection()?.removeAllRanges();
+    };
+    editor.attach(host);
+    const surface = editor.surface!;
+
+    const anchors = surface.session.paragraphAnchors();
+    expect([...anchors.ambiguousParaIds], 'the fixture does not clash').toEqual([TWIN_PARA_ID]);
+
+    // This is the shape production uses: `exec` resolves against the MAIN part. Preferring the
+    // caller's own part therefore could only ever pick the body twin — so an automation caller
+    // holding the HEADER paragraph's paraId would be told `ok` with the caret in the body, and
+    // its next write would go to the wrong story. Refusing is the visible failure.
+    const result = editor.exec({ type: 'setSelection', anchor: { paraId: TWIN_PARA_ID } });
+    expect(result.ok, 'a clashing paraId resolved instead of refusing').toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('ambiguous');
+    // And nothing moved: the caret is where it started, in the body.
+    expect(surface.activeScope()).toEqual({ kind: 'body' });
+  });
+});

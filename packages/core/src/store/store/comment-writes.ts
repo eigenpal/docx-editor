@@ -198,6 +198,33 @@ function relatedPartName(
   return conventional;
 }
 
+/**
+ * The package with the MAIN DOCUMENT relating `targetPartName`, added only if it is missing.
+ *
+ * Word resolves the comments part through the main document's relationship and through no
+ * other, so that is where this lane mints one. Two things make it a helper rather than a call:
+ * `withRelationship` appends unconditionally, so a second call would write a duplicate record;
+ * and the part may already exist because a STORY relates it, in which case the creation branch
+ * is skipped and the main document would otherwise never gain its own.
+ *
+ * `withRelationship` fails closed when the owner has no `.rels` part. The main document always
+ * has one, which is the other reason the relationship belongs there rather than on a header.
+ */
+function withMainDocumentRelationship(
+  pkg: OoxmlPackage,
+  relationshipType: string,
+  targetPartName: string,
+  rawTarget: string
+): OoxmlPackage {
+  const owner = pkg.mainDocumentPart;
+  for (const record of relationshipsOf(pkg, owner)) {
+    if (record.type !== relationshipType) continue;
+    const resolved = resolveInternalTarget(owner, record.rawTarget);
+    if (resolved.ok && resolved.partName === targetPartName) return pkg;
+  }
+  return withRelationship(pkg, owner, relationshipType, rawTarget).pkg;
+}
+
 /** The comment part this story points at, or the conventional name when it has none yet. */
 function commentsPartNameFor(pkg: OoxmlPackage, storyPartName: string): string {
   return relatedPartName(pkg, storyPartName, COMMENTS_REL, COMMENTS_TYPE, COMMENTS_PART);
@@ -546,24 +573,20 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
   const result = store.transact((ctx) => {
     // The comment part first, so the relationship the story needs already has a target.
     ctx.applyPackage((current) => {
-      if (current.parts.has(commentsName)) return current;
-      const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
-      if (!root) return current;
-      const withCommentsPart = withNewPart(current, commentsName, root, COMMENTS_TYPE);
-      // The relationship belongs to the MAIN DOCUMENT, not to the story the comment is in.
-      // `withRelationship` fails closed when the owner has no `.rels` part, and a header, a
-      // footer or a notes part normally has none — so a comment authored in furniture wrote
-      // `comments.xml` with nothing pointing at it. Word resolves the comments part only
-      // through the main document's relationship, so it never saw the comment at all, and the
-      // engine's own thread walk missed `commentsExtended.xml` and left replies orphaned when
-      // the thread was deleted.
-      // Both parts live in `/word/`, so the relative target is unchanged by the move.
-      return withRelationship(
+      const withCommentsPart = current.parts.has(commentsName)
+        ? current
+        : (() => {
+            const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
+            return root ? withNewPart(current, commentsName, root, COMMENTS_TYPE) : null;
+          })();
+      if (withCommentsPart === null) return current;
+      // Both parts live in `/word/`, so the relative target is what it always was.
+      return withMainDocumentRelationship(
         withCommentsPart,
-        current.mainDocumentPart,
         COMMENTS_REL,
+        commentsName,
         'comments.xml'
-      ).pkg;
+      );
     });
 
     if (parentTarget && mintedParentParaId) {
@@ -590,16 +613,22 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
     // which is what keeps an untouched round trip untouched.
     if (parentParaId !== null) {
       ctx.applyPackage((current) => {
-        if (current.parts.has(extendedName)) return current;
-        const root = emptyPart(extendedName, `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`);
-        if (!root) return current;
-        const withExtended = withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE);
-        return withRelationship(
+        const withExtended = current.parts.has(extendedName)
+          ? current
+          : (() => {
+              const root = emptyPart(
+                extendedName,
+                `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`
+              );
+              return root ? withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE) : null;
+            })();
+        if (withExtended === null) return current;
+        return withMainDocumentRelationship(
           withExtended,
-          current.mainDocumentPart,
           COMMENTS_EXTENDED_REL,
+          extendedName,
           'commentsExtended.xml'
-        ).pkg;
+        );
       });
 
       ctx.applyPackage((current) => {

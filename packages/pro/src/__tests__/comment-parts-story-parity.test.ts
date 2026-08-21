@@ -101,11 +101,11 @@ afterEach(() => {
 });
 
 /** Mount, enter `story`, and select the whole probe paragraph so a comment has a range. */
-function openStory(story: Story): DocxEditorInstance {
+function openStory(story: Story, bytes?: Uint8Array): DocxEditorInstance {
   const host = document.createElement('div');
   document.body.append(host);
   const editor = createDocxEditor({
-    document: fixture(),
+    document: bytes ?? fixture(),
     author: 'Parity',
     modules: [reviewModule()],
   });
@@ -151,6 +151,47 @@ async function savedParts(editor: DocxEditorInstance): Promise<Map<string, strin
   const entries = unzipSync(new Uint8Array(bytes));
   return new Map(Object.entries(entries).map(([name, data]) => [name, strFromU8(data)]));
 }
+
+/**
+ * A package where the HEADER already relates `comments.xml`, which is what an earlier version
+ * of this engine wrote. Reopening one and adding a comment must repair it rather than leave
+ * Word unable to see any of them.
+ */
+function headerOwnsCommentsRelDocx(): Uint8Array {
+  const entries = unzipSync(fixture());
+  entries['word/comments.xml'] = strToU8(`<w:comments xmlns:w="${W}"/>`);
+  entries['word/_rels/header1.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rId1" Type="${COMMENTS_REL_TYPE}" Target="comments.xml"/>` +
+      '</Relationships>'
+  );
+  entries['[Content_Types].xml'] = strToU8(
+    strFromU8(entries['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.comments+xml"/></Types>'
+    )
+  );
+  return zipSync(entries);
+}
+
+describe('a package that relates comments from a story is repaired', () => {
+  test('the main document gains the relationship it was missing', async () => {
+    const editor = openStory('header', headerOwnsCommentsRelDocx());
+    commentWithReply(editor);
+
+    const saved = await savedParts(editor);
+    // The comments part already existed, so the creation branch is skipped — and with the
+    // relationship minted only inside it, the main document never gained its own and Word
+    // still could not see a single comment in the file.
+    expect(saved.get(DOCUMENT_RELS) ?? '').toContain(COMMENTS_REL_TYPE);
+    // And the story's own relationship is left alone: it is not wrong, only insufficient.
+    expect(saved.get('word/_rels/header1.xml.rels') ?? '').toContain(COMMENTS_REL_TYPE);
+    // Exactly one, not a duplicate record appended on every comment.
+    const count = (saved.get(DOCUMENT_RELS) ?? '').split(COMMENTS_REL_TYPE).length - 1;
+    expect(count, 'duplicate comments relationships').toBe(1);
+  });
+});
 
 describe('a comment in any story is reachable from the main document', () => {
   for (const story of STORIES) {
