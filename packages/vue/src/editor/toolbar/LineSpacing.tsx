@@ -177,6 +177,11 @@ export const ToolbarLineSpacing = defineComponent({
             open={dialogOpen.value}
             onClose={() => {
               dialogOpen.value = false;
+              // Focus goes back to the control that opened it — the standard dialog
+              // contract, and the one mechanism here that touches neither the selection nor
+              // the scroll position. Leaving focus on `<body>` strands a keyboard user.
+              const trigger = rootRef.value?.querySelector('.docx-toolbar__line-spacing-trigger');
+              if (trigger instanceof HTMLElement) trigger.focus({ preventScroll: true });
             }}
           />
         </span>

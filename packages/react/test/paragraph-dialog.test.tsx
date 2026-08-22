@@ -88,6 +88,14 @@ const checkboxFor = (view: ReturnType<typeof render>, text: string) => {
   return wrapper?.querySelector('input[type="checkbox"]') as HTMLInputElement;
 };
 
+const cancelButton = (view: RenderResult): HTMLButtonElement => {
+  const found = [...view.container.querySelectorAll('button')].find(
+    (node) => node.textContent?.trim() === 'Cancel'
+  );
+  if (!found) throw new Error('no Cancel button');
+  return found;
+};
+
 const okButton = (view: ReturnType<typeof render>) =>
   [...view.container.querySelectorAll('button')].find(
     (node) => node.textContent === 'OK'
@@ -371,6 +379,24 @@ describe('the Paragraph dialog', () => {
       fireEvent.keyDown(panel, { key: 'Tab', shiftKey: true });
     });
     expect(document.activeElement).toBe(last);
+  });
+
+  test('Enter on a select commits the option, it does not submit the dialog', async () => {
+    // Enter is how you commit the option you have arrowed to. Submitting the whole form
+    // out from under that gesture closes the dialog before the user has finished choosing.
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    const alignment = field(view, 'Alignment');
+    await act(async () => {
+      fireEvent.keyDown(alignment, { key: 'Enter' });
+    });
+    // Still open, and nothing written.
+    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(editor().snapshot().canUndo).toBe(false);
   });
 
   test('a refused write says so instead of swallowing the OK', async () => {

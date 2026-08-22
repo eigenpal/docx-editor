@@ -394,7 +394,13 @@ export const DocxEditorParagraphDialog = defineComponent({
             // Enter is the form's default submit, EXCEPT on a control that owns the key: a
             // button acts on the Enter that focused it, and keydown here runs first, so
             // Cancel pressed from the keyboard would otherwise apply the form first.
-            if (event.key === 'Enter' && !(event.target instanceof HTMLButtonElement)) {
+            // Enter is the form's default submit, EXCEPT on a control that owns the key: a
+            // button acts on the Enter that focused it, and a `<select>` uses it to commit
+            // the option the user has arrowed to.
+            const ownsEnter =
+              event.target instanceof HTMLButtonElement ||
+              event.target instanceof HTMLSelectElement;
+            if (event.key === 'Enter' && !ownsEnter) {
               // Enter inside the tab-stop entry row means "Set", the way it does in Word.
               // Submitting the whole form there threw the pending row away without a word:
               // it is not part of `tabStops` yet, so OK closed and wrote nothing.

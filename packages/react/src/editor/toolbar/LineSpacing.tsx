@@ -67,6 +67,7 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   const [open, setOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -113,6 +114,7 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   return (
     <span ref={rootRef} className="docx-toolbar__line-spacing" data-slot="list.lineSpacing">
       <button
+        ref={triggerRef}
         type="button"
         className={`docx-toolbar__button docx-toolbar__line-spacing-trigger${className ? ` ${className}` : ''}`}
         disabled={!isEnabled}
@@ -200,7 +202,17 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
       {/* The rows above are Word's shortcuts — a fixed Add, a zeroing Remove. The dialog is
           the escape hatch for an exact value, which is what "Line spacing options…" opens
           in Word and what this menu had no answer for. */}
-      <DocxEditorParagraphDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <DocxEditorParagraphDialog
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false);
+          // Focus goes back to the control that opened it — the standard dialog contract,
+          // and the one mechanism here that touches neither the selection nor the scroll
+          // position. Leaving focus on `<body>` strands a keyboard user: arrow keys and
+          // typing both go nowhere, and it takes ten Tab presses to reach the document.
+          triggerRef.current?.focus({ preventScroll: true });
+        }}
+      />
     </span>
   );
 }

@@ -472,6 +472,40 @@ describe('the shaped parts', () => {
     }
   });
 
+  test('closing the Paragraph dialog hands focus back to the line-spacing trigger', async () => {
+    // Leaving focus on `<body>` strands a keyboard user: arrow keys and typing both go
+    // nowhere, and it is a long walk back to the document. Returning it to the control that
+    // opened the dialog is the standard contract, and the one mechanism that touches
+    // neither the document selection nor the scroll position.
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      trigger.click();
+    });
+    const options = [...root.querySelectorAll('[role="menuitem"]')].find((row) =>
+      row.textContent?.includes('Line spacing options')
+    ) as HTMLButtonElement;
+    expect(options).toBeTruthy();
+    await act(async () => {
+      options.click();
+    });
+    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+
+    const cancel = [...view.container.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === 'Cancel'
+    )!;
+    await act(async () => {
+      cancel.click();
+    });
+    expect(view.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   test('the line-spacing menu applies a multiple and ticks the one in force', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
     await act(async () => {

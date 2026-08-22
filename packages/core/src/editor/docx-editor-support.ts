@@ -424,7 +424,20 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             reason: 'setParagraphFormat accepts at most 64 tab stops',
           };
         }
+        // `can()` must agree with `exec()` and must never throw: a host calls it to decide
+        // whether to enable a control, and both a false yes and an exception there are
+        // worse than a refusal. Every rule the tree op enforces is enforced here too.
+        const positions = new Set<number>();
         for (const stop of command.tabStops) {
+          // Guarded before any member is read. `can()` is reachable from untyped JS, where
+          // a null entry used to throw out of the classifier rather than be refused.
+          if (typeof stop !== 'object' || stop === null) {
+            return {
+              supported: false,
+              code: 'invalidArgs',
+              reason: 'a tab stop must be an object',
+            };
+          }
           // Not `Math.abs`: a negative position is refused outright. The reader drops it
           // (`clampPositionTwips` returns null below zero), so accepting one wrote markup
           // the engine then reported as no stop at all — success that did nothing.
@@ -446,6 +459,22 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
           if (!['left', 'center', 'right', 'decimal'].includes(stop.alignment)) {
             return { supported: false, code: 'invalidArgs', reason: 'unknown tab alignment' };
           }
+          if (
+            stop.leader !== undefined &&
+            !['none', 'dot', 'hyphen', 'underscore', 'heavy', 'middleDot'].includes(stop.leader)
+          ) {
+            return { supported: false, code: 'invalidArgs', reason: 'unknown tab leader' };
+          }
+          // Two stops at one position is markup Word never writes, and the reader keeps
+          // only the last — so the file would say one thing and the editor another.
+          if (positions.has(stop.positionTwips)) {
+            return {
+              supported: false,
+              code: 'invalidArgs',
+              reason: 'two tab stops cannot share a position',
+            };
+          }
+          positions.add(stop.positionTwips);
         }
       }
       return { supported: true, mutating: true };

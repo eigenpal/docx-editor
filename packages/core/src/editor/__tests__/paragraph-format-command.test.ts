@@ -398,6 +398,39 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(editor.surface!.formatting().tabStops).toEqual([]);
   });
 
+  test('can() agrees with exec() about every tab payload, and never throws', () => {
+    // A host calls `can()` to decide whether to enable a control. A false yes there is a
+    // button that fails when pressed; an exception is worse still. These three used to be
+    // accepted (or thrown out of) by `can()` and refused by `exec()`.
+    const editor = mount(p('alpha'));
+    editor.surface!.selectAll();
+    const payloads: readonly unknown[][] = [
+      [{ positionTwips: 720, alignment: 'left', leader: 'nope' }],
+      [
+        { positionTwips: 720, alignment: 'left' },
+        { positionTwips: 720, alignment: 'right' },
+      ],
+      [null],
+      ['not an object'],
+      [{ positionTwips: -720, alignment: 'left' }],
+      [{ positionTwips: 720, alignment: 'bar' }],
+    ];
+    for (const tabStops of payloads) {
+      const command = { type: 'setParagraphFormat', tabStops } as never;
+      // Never throws — that is half the contract.
+      const can = editor.can(command);
+      expect(can.ok).toBe(false);
+      expect(editor.exec(command).ok).toBe(false);
+    }
+    // And the control case, so this is not just refusing everything.
+    const good = {
+      type: 'setParagraphFormat' as const,
+      tabStops: [{ positionTwips: 720, alignment: 'left' as const }],
+    };
+    expect(editor.can(good).ok).toBe(true);
+    expect(editor.exec(good).ok).toBe(true);
+  });
+
   test('values the reader would silently discard are refused, not written', () => {
     // Both used to return ok, write markup, and then read back as no stop at all — the
     // "reports success and does nothing" class this dialog exists to avoid.
