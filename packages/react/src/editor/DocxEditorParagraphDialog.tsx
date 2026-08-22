@@ -223,6 +223,11 @@ export function DocxEditorParagraphDialog({
     const openedMixed = mixedFieldsOf(format);
     setMixed(openedMixed);
     setIndentUnknown(format.indentUnknown);
+    // The entry row is a scratch pad, not a setting: leaving "Decimal" or a leader on it
+    // preloaded the next paragraph — and the next document — with a choice made elsewhere.
+    setNewTabPosition(0);
+    setNewTabAlignment('left');
+    setNewTabLeader('none');
     seedMixedRef.current = openedMixed;
     setRefused(false);
     seedRef.current = seed;
@@ -337,6 +342,7 @@ export function DocxEditorParagraphDialog({
       })
     );
     setNewTabPosition(0);
+    setNewTabAlignment('left');
     setNewTabLeader('none');
     return true;
   }, [tabStops, newTabPosition, newTabAlignment, newTabLeader]);
@@ -524,7 +530,7 @@ export function DocxEditorParagraphDialog({
               }}
               aria-label={t('dialogs.paragraph.special')}
             >
-              {mixed.special ? <option value="">{t('dialogs.paragraph.mixed')}</option> : null}
+              {mixed.special ? <option value="">{blankLabel('special')}</option> : null}
               <option value="none">{t('dialogs.paragraph.specialNone')}</option>
               <option value="firstLine">{t('dialogs.paragraph.specialFirstLine')}</option>
               <option value="hanging">{t('dialogs.paragraph.specialHanging')}</option>
@@ -603,8 +609,11 @@ export function DocxEditorParagraphDialog({
               // An empty box is not a zero. Select-all-then-retype is how a number field is
               // edited, and coercing the intermediate empty state to 0 made the whole dialog
               // refuse with a message that named no field.
+              // No `resolve` here: a number cannot say whether it means lines or points. The
+              // rule select owns that, so until a rule is picked this box is disabled —
+              // typing 16 into it over a mixed selection used to write sixteen line-heights.
+              disabled={mixed.lineSpacing}
               onChange={(event) => {
-                resolve('lineSpacing');
                 const next = event.target.value.trim();
                 setLineValue(
                   next === '' ? (lineRule === 'multiple' ? 1.08 : 12) : Number(next) || 0

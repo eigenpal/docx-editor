@@ -420,6 +420,38 @@ describe('the Paragraph dialog', () => {
     expect((field(view, 'Before') as HTMLInputElement).value).toBe('');
   });
 
+  test('a value typed over a mixed line spacing cannot be written without its rule', async () => {
+    // The rule and the value are ONE setting, and a value without its rule is meaningless.
+    // Typing 16 into "At" over a disagreement used to write sixteen LINE-HEIGHTS, because
+    // the seed's `multiple` fallback supplied a unit the user never chose. This is the
+    // second route to that bug — the rule select was fixed first, this one was not.
+    const { view, editor, openDialog } = mountDialog(
+      p('one', '<w:spacing w:line="320" w:lineRule="exact"/>') + p('two')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    expect(editor().surface!.formatting().disagrees.lineSpacing).toBe(true);
+    const at = field(view, 'At') as HTMLInputElement;
+    // Locked until a rule says what a number in it would mean.
+    expect(at.disabled).toBe(true);
+
+    // Pick the rule, and the pair unlocks and writes in the unit that was chosen.
+    await act(async () => {
+      fireEvent.change(field(view, 'Line spacing'), { target: { value: 'exact' } });
+    });
+    expect((field(view, 'At') as HTMLInputElement).disabled).toBe(false);
+    await act(async () => {
+      fireEvent.change(field(view, 'At'), { target: { value: '16' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().surface!.formatting().lineSpacing).toEqual({ rule: 'exact', value: 16 });
+  });
+
   test('a single paragraph is never told it disagrees with itself', async () => {
     // `spaceBefore` reads null when nothing in the cascade states it, which is most
     // paragraphs. Rendering that as "Mixed" put the placeholder on a lone caret.

@@ -180,6 +180,7 @@ export const DocxEditorParagraphDialog = defineComponent({
     const seeded = ref(false);
     const seedRef = ref<ParagraphDialogFields | null>(null);
     const mixed = ref<ParagraphDialogMixed>(NO_MIXED_FIELDS);
+    const indentUnknown = ref(false);
     /** What the selection disagreed about ON OPEN, against which `mixed` says what was resolved. */
     const seedMixed = ref<ParagraphDialogMixed>(NO_MIXED_FIELDS);
     // Reached through the instance rather than a template ref: this component's vnodes are
@@ -229,6 +230,13 @@ export const DocxEditorParagraphDialog = defineComponent({
         tabStops.value = seed.tabStops;
         clearedAllTabStops.value = false;
         mixed.value = mixedFieldsOf(format);
+        indentUnknown.value = format.indentUnknown;
+        // The entry row is a scratch pad, not a setting: leaving "Decimal" or a leader on
+        // it preloaded the next paragraph — and the next document — with a choice made
+        // elsewhere.
+        newTabPosition.value = 0;
+        newTabAlignment.value = 'left';
+        newTabLeader.value = 'none';
         seedMixed.value = mixed.value;
         refused.value = false;
         seedRef.value = seed;
@@ -257,6 +265,7 @@ export const DocxEditorParagraphDialog = defineComponent({
         ...(newTabLeader.value !== 'none' ? { leader: newTabLeader.value } : {}),
       });
       newTabPosition.value = 0;
+      newTabAlignment.value = 'left';
       newTabLeader.value = 'none';
       return true;
     };
@@ -316,6 +325,14 @@ export const DocxEditorParagraphDialog = defineComponent({
        * and `changedFields` has to be told, or setting a mixed selection to the value it
        * was already displaying writes nothing and the paragraphs stay disagreeing.
        */
+      // An indent the engine cannot place — a paragraph in a table cell — reads blank like
+      // a disagreement but is not one, so it says so rather than claiming the selection is
+      // mixed. The React twin carries the same helper; no gate compares the two dialogs.
+      const blankLabel = (key: keyof ParagraphDialogMixed): string =>
+        indentUnknown.value && (key === 'indentLeft' || key === 'indentRight' || key === 'special')
+          ? t('dialogs.paragraph.notShown')
+          : t('dialogs.paragraph.mixed');
+
       const resolve = (key: keyof ParagraphDialogMixed): void => {
         mixed.value = { ...mixed.value, [key]: false };
       };
@@ -338,9 +355,7 @@ export const DocxEditorParagraphDialog = defineComponent({
             step="0.1"
             {...(labelKey === 'tabPosition' ? { 'data-docx-tab-entry': '' } : {})}
             value={mixedKey && mixed.value[mixedKey] ? '' : twipsToInches(value)}
-            placeholder={
-              mixedKey && mixed.value[mixedKey] ? t('dialogs.paragraph.mixed') : undefined
-            }
+            placeholder={mixedKey && mixed.value[mixedKey] ? blankLabel(mixedKey) : undefined}
             onInput={(event) => {
               if (mixedKey) resolve(mixedKey);
               set(inchesToTwips(Number((event.target as HTMLInputElement).value) || 0));
@@ -368,7 +383,7 @@ export const DocxEditorParagraphDialog = defineComponent({
             min="0"
             step="1"
             value={mixed.value[mixedKey] ? '' : value}
-            placeholder={mixed.value[mixedKey] ? t('dialogs.paragraph.mixed') : undefined}
+            placeholder={mixed.value[mixedKey] ? blankLabel(mixedKey) : undefined}
             onInput={(event) => {
               resolve(mixedKey);
               set(Math.max(0, Number((event.target as HTMLInputElement).value) || 0));
@@ -504,9 +519,7 @@ export const DocxEditorParagraphDialog = defineComponent({
                   }}
                   aria-label={t('dialogs.paragraph.special')}
                 >
-                  {mixed.value.special ? (
-                    <option value="">{t('dialogs.paragraph.mixed')}</option>
-                  ) : null}
+                  {mixed.value.special ? <option value="">{blankLabel('special')}</option> : null}
                   <option value="none">{t('dialogs.paragraph.specialNone')}</option>
                   <option value="firstLine">{t('dialogs.paragraph.specialFirstLine')}</option>
                   <option value="hanging">{t('dialogs.paragraph.specialHanging')}</option>
@@ -581,11 +594,15 @@ export const DocxEditorParagraphDialog = defineComponent({
                   id={`${fieldId}-at`}
                   type="number"
                   style={inputStyle}
+                  // No `resolve` on this box: a number cannot say whether it means lines or
+                  // points. The rule select owns that, so until a rule is picked this is
+                  // disabled — typing 16 here over a mixed selection used to write sixteen
+                  // line-heights.
+                  disabled={mixed.value.lineSpacing}
                   min="0.01"
                   step={lineRule.value === 'multiple' ? '0.01' : '1'}
                   value={mixed.value.lineSpacing ? '' : lineValue.value}
                   onInput={(event) => {
-                    resolve('lineSpacing');
                     const next = (event.target as HTMLInputElement).value.trim();
                     lineValue.value =
                       next === '' ? (lineRule.value === 'multiple' ? 1.08 : 12) : Number(next) || 0;

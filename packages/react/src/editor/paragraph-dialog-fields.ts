@@ -281,10 +281,15 @@ export function changedFields(
     take('spaceBeforePt', current.spaceBefore);
   if (seed.spaceAfter !== current.spaceAfter || resolved('spaceAfter'))
     take('spaceAfterPt', current.spaceAfter);
+  // Never while the rule is still unknown. `lineSpacing` is a rule AND a value, and a value
+  // without its rule is meaningless: typing 16 into "At" over a mixed selection wrote
+  // sixteen line-heights, because the seed's `multiple` fallback supplied a unit the user
+  // never chose. Picking a rule clears the disagreement and unlocks the pair.
   if (
-    seed.lineRule !== current.lineRule ||
-    seed.lineValue !== current.lineValue ||
-    resolved('lineSpacing')
+    !currentMixed.lineSpacing &&
+    (seed.lineRule !== current.lineRule ||
+      seed.lineValue !== current.lineValue ||
+      resolved('lineSpacing'))
   )
     take('lineSpacing', { rule: current.lineRule, value: current.lineValue });
   if (seed.contextualSpacing !== current.contextualSpacing || resolved('contextualSpacing'))
