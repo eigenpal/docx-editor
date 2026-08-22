@@ -209,6 +209,59 @@ describe('the Vue Paragraph dialog', () => {
     }
   });
 
+  test('every mixed field can actually be RESOLVED, not just shown as mixed', async () => {
+    // Vue had tests that a mixed field survives an untouched OK, and none that resolving
+    // one writes. A missing `resolve('lineSpacing')` on the rule select therefore shipped:
+    // the select snapped back to blank, the value box stayed disabled, and a mixed line
+    // spacing could not be corrected at all. React had the same case covered; the mirror
+    // check does not compare the two dialogs, only the shared module.
+    const { container, app, open, editor } = mountDialog(
+      p('one', '<w:jc w:val="right"/><w:spacing w:line="400" w:lineRule="exact"/>') +
+        p('two', '<w:jc w:val="left"/><w:spacing w:line="280" w:lineRule="exact"/>')
+    );
+    try {
+      await flush();
+      editor().surface!.selectAll();
+      await flush();
+      open.value = true;
+      await flush();
+
+      const alignment = field(container, 'Alignment') as HTMLSelectElement;
+      const rule = field(container, 'Line spacing') as HTMLSelectElement;
+      const at = field(container, 'At') as HTMLInputElement;
+      expect(alignment.value).toBe('');
+      expect(rule.value).toBe('');
+      // Locked until a rule says what a number in it would mean.
+      expect(at.disabled).toBe(true);
+
+      const pick = (node: HTMLSelectElement, value: string) => {
+        node.value = value;
+        node.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      pick(alignment, 'center');
+      pick(rule, 'exact');
+      await flush();
+      // The rule was accepted, which is the half that was broken.
+      expect(rule.value).toBe('exact');
+      expect(at.disabled).toBe(false);
+
+      at.value = '16';
+      at.dispatchEvent(new Event('input', { bubbles: true }));
+      at.dispatchEvent(new Event('change', { bubbles: true }));
+      await flush();
+
+      okButton(container).click();
+      await flush();
+
+      const formatting = editor().snapshot().formatting;
+      expect(formatting?.alignment).toBe('center');
+      // POINTS, not sixteen line-heights.
+      expect(formatting?.lineSpacing).toEqual({ rule: 'exact', value: 16 });
+    } finally {
+      app.unmount();
+    }
+  });
+
   test('a changed field is written, and only that field', async () => {
     const { container, app, open, editor } = mountDialog(p('alpha'));
     try {

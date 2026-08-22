@@ -563,6 +563,10 @@ export const DocxEditorParagraphDialog = defineComponent({
                   value={mixed.value.lineSpacing ? '' : lineRule.value}
                   onChange={(event) => {
                     const next = (event.target as HTMLSelectElement).value as typeof lineRule.value;
+                    // Picking a rule RESOLVES the disagreement — without this the select
+                    // snapped back to blank and the value box stayed disabled forever, so a
+                    // mixed line spacing could not be corrected at all.
+                    resolve('lineSpacing');
                     lineRule.value = next;
                     // The value means LINES under Multiple and POINTS otherwise, so carrying
                     // 1.08 into "Exactly" would ask for a 1pt line box.

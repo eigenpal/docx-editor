@@ -978,6 +978,13 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'alignment.right' },
       { kind: 'item', slot: 'alignment.justify' },
       { kind: 'separator' },
+      // A SECOND route to the Paragraph dialog, the way `file.pageSetup` sits in the File
+      // menu. The line-spacing menu is its natural home, but that control collapses into
+      // the toolbar's overflow panel on a narrow window and its submenu opens clipped — so
+      // a feature with only that route disappears entirely at around 1100px. The menu bar
+      // does not collapse.
+      { kind: 'item', slot: 'paragraph.dialog' },
+      { kind: 'separator' },
       { kind: 'item', slot: 'format.clear' },
     ],
   },

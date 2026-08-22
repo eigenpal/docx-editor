@@ -385,25 +385,21 @@ const DocxEditorToolbarRoot = defineComponent({
           })
         : content;
 
-      // The host wraps the measured element rather than living inside it: the bar measures
-      // its own children to decide what collapses into the overflow panel, and a dialog
-      // counted among them fed that measurement.
-      return h(ParagraphDialogHost, null, {
-        default: () => [
-          h(
-            'div',
-            {
-              ref: (el: unknown) => attach(el as HTMLDivElement | null),
-              role: 'toolbar',
-              'data-testid': 'docx-toolbar',
-              class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
-              ...(measuring.value ? { 'data-overflow': '' } : {}),
-              onMousedown: guardToolbarMousedown,
-            },
-            [inner]
-          ),
-        ],
-      });
+      // The host sits INSIDE the toolbar element and teleports the dialog to the body. A
+      // host wrapping the element would make this component's root a fragment, and Vue
+      // then drops every fallthrough attribute the host passes — `class`, `style`, `id`.
+      return h(
+        'div',
+        {
+          ref: (el: unknown) => attach(el as HTMLDivElement | null),
+          role: 'toolbar',
+          'data-testid': 'docx-toolbar',
+          class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
+          ...(measuring.value ? { 'data-overflow': '' } : {}),
+          onMousedown: guardToolbarMousedown,
+        },
+        [h(ParagraphDialogHost, null, { default: () => [inner] })]
+      );
     };
   },
 });

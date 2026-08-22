@@ -462,6 +462,7 @@ export function DocxEditorContextMenu({
       onOpen: undefined,
       onSave: undefined,
       onPageSetup: undefined,
+      onParagraphDialog: undefined,
       onReportIssue: undefined,
       reportIssue: undefined,
     }),

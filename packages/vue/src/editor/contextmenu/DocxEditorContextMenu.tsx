@@ -374,6 +374,7 @@ export const DocxEditorContextMenu = defineComponent({
       onOpen: undefined,
       onSave: undefined,
       onPageSetup: undefined,
+      onParagraphDialog: undefined,
       onReportIssue: undefined,
       reportIssue: undefined,
     }));

@@ -3,10 +3,20 @@
 // Not the control that opens it. The line-spacing part moves between the formatting bar and
 // the overflow panel whenever the toolbar re-measures — a window resize, a browser zoom,
 // opening devtools — and a dialog mounted inside it is unmounted with it, mid-edit, with no
-// warning and nothing written. The toolbar owns it instead, OUTSIDE the element the bar
-// measures, because a dialog counted among the bar's own children fed that measurement.
+// warning and nothing written. The toolbar owns it instead, and the dialog is teleported to
+// the body — a dialog counted among the bar's own children fed the measurement that decides
+// what collapses.
 
-import { defineComponent, h, inject, provide, ref, type InjectionKey, type Ref } from 'vue';
+import {
+  defineComponent,
+  h,
+  inject,
+  provide,
+  ref,
+  Teleport,
+  type InjectionKey,
+  type Ref,
+} from 'vue';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 
 export interface ParagraphDialogHandle {
@@ -56,9 +66,18 @@ export const ParagraphDialogHost = defineComponent({
       if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
 
+    // ONE root, and the dialog teleported out of it.
+    //
+    // A fragment root would make Vue drop every fallthrough attribute on the public
+    // `DocxEditorToolbar` — `class`, `style`, `id`, `data-*`, listeners — because there is
+    // no single element to put them on. And leaving the dialog inline would put it back
+    // among the children the bar measures to decide what collapses. Teleporting satisfies
+    // both, and a modal belongs at the document level anyway.
     return () => [
       ...(slots.default?.() ?? []),
-      h(DocxEditorParagraphDialog, { open: open.value, onClose: close }),
+      h(Teleport, { to: 'body' }, [
+        h(DocxEditorParagraphDialog, { open: open.value, onClose: close }),
+      ]),
     ];
   },
 });

@@ -401,6 +401,57 @@ const MenuPageSetupImpl = defineComponent({
   },
 });
 
+/**
+ * The Paragraph dialog, from the menu bar. The Vue twin of the React row.
+ *
+ * A second route on purpose. Its natural home is the line-spacing menu, but that control
+ * collapses into the toolbar's overflow panel on a narrow window and its submenu opens
+ * clipped — so a feature reachable only from there disappears entirely at around 1100px.
+ * The menu bar does not collapse.
+ */
+const MenuParagraphDialogImpl = defineComponent({
+  name: 'MenuParagraphDialogImpl',
+  props: {
+    className: { type: String, default: undefined },
+    hidden: { type: Boolean, default: undefined },
+  },
+  setup(props) {
+    const editorRef = useDocxEditor();
+    const menuContext = useMenuContext();
+    const label = useMenuLabel();
+    return () => {
+      if (props.hidden) return null;
+      const context = menuContext.value;
+      const probe = chromeProbeForSlot('paragraph.dialog');
+      const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
+      const engineOk = allowed?.ok === true;
+      const engineReason = allowed && !allowed.ok ? allowed.reason : null;
+      const control = chromeControlForSlot('paragraph.dialog');
+      const text = label(control?.labelKey ?? 'lineSpacing.options');
+      const enabled = engineOk && !!context.onParagraphDialog;
+      return (
+        <MenuRow
+          {...menuRowSlot('paragraph.dialog')}
+          icon={chromeIcon(control?.paths) ?? undefined}
+          disabled={!enabled}
+          {...(engineReason ? { title: engineReason } : {})}
+          selectHandler={() => {
+            context.onParagraphDialog?.();
+            context.setOpenMenu(null);
+          }}
+          {...(props.className ? { className: props.className } : {})}
+        >
+          {text}
+        </MenuRow>
+      );
+    };
+  },
+});
+
+export const MenuParagraphDialog = Object.assign(MenuParagraphDialogImpl, {
+  docxSlot: 'paragraph.dialog' as const,
+});
+
 export const MenuPageSetup = Object.assign(MenuPageSetupImpl, {
   docxSlot: 'file.pageSetup' as ChromeSlotId,
 });
@@ -500,6 +551,7 @@ export const MenuEntry = defineComponent({
       if (entry.slot === 'file.open') return <MenuOpen />;
       if (entry.slot === 'file.save') return <MenuSave />;
       if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
+      if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
       if (entry.slot === 'image.insert') return <MenuImageInsert />;
       if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
       return (
