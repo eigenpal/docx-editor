@@ -27,6 +27,7 @@ import {
   withTabStop,
   type ParagraphDialogFields,
   type ParagraphDialogMixed,
+  type ParagraphFlagKey,
   type SpecialIndent,
   type TabAlignment,
   type TabLeaderName,
@@ -307,10 +308,23 @@ export const DocxEditorParagraphDialog = defineComponent({
     return () => {
       if (!props.open) return null;
 
+      /**
+       * Clear the mixed mark for one field, so what the control now shows is a decision.
+       *
+       * A number or select has no indeterminate state, so a disagreement renders as an
+       * empty box. The moment the user picks something, the control means what it says —
+       * and `changedFields` has to be told, or setting a mixed selection to the value it
+       * was already displaying writes nothing and the paragraphs stay disagreeing.
+       */
+      const resolve = (key: keyof ParagraphDialogMixed): void => {
+        mixed.value = { ...mixed.value, [key]: false };
+      };
+
       const inchRow = (
         labelKey: 'beforeText' | 'afterText' | 'by' | 'tabPosition',
         value: number,
-        set: (twips: number) => void
+        set: (twips: number) => void,
+        mixedKey?: keyof ParagraphDialogMixed
       ) => (
         <div style={rowStyle}>
           <label style={labelStyle} for={`${fieldId}-${labelKey}`}>
@@ -323,10 +337,14 @@ export const DocxEditorParagraphDialog = defineComponent({
             min="0"
             step="0.1"
             {...(labelKey === 'tabPosition' ? { 'data-docx-tab-entry': '' } : {})}
-            value={twipsToInches(value)}
-            onInput={(event) =>
-              set(inchesToTwips(Number((event.target as HTMLInputElement).value) || 0))
+            value={mixedKey && mixed.value[mixedKey] ? '' : twipsToInches(value)}
+            placeholder={
+              mixedKey && mixed.value[mixedKey] ? t('dialogs.paragraph.mixed') : undefined
             }
+            onInput={(event) => {
+              if (mixedKey) resolve(mixedKey);
+              set(inchesToTwips(Number((event.target as HTMLInputElement).value) || 0));
+            }}
             aria-label={t(`dialogs.paragraph.${labelKey}`)}
           />
           <span style={unitStyle}>{t('dialogs.paragraph.unitInches')}</span>
@@ -336,7 +354,8 @@ export const DocxEditorParagraphDialog = defineComponent({
       const pointRow = (
         labelKey: 'spaceBefore' | 'spaceAfter',
         value: number,
-        set: (points: number) => void
+        set: (points: number) => void,
+        mixedKey: keyof ParagraphDialogMixed
       ) => (
         <div style={rowStyle}>
           <label style={labelStyle} for={`${fieldId}-${labelKey}`}>
@@ -348,10 +367,12 @@ export const DocxEditorParagraphDialog = defineComponent({
             style={inputStyle}
             min="0"
             step="1"
-            value={value}
-            onInput={(event) =>
-              set(Math.max(0, Number((event.target as HTMLInputElement).value) || 0))
-            }
+            value={mixed.value[mixedKey] ? '' : value}
+            placeholder={mixed.value[mixedKey] ? t('dialogs.paragraph.mixed') : undefined}
+            onInput={(event) => {
+              resolve(mixedKey);
+              set(Math.max(0, Number((event.target as HTMLInputElement).value) || 0));
+            }}
             aria-label={t(`dialogs.paragraph.${labelKey}`)}
           />
           <span style={unitStyle}>{t('dialogs.paragraph.unitPoints')}</span>
@@ -359,7 +380,7 @@ export const DocxEditorParagraphDialog = defineComponent({
       );
 
       const checkbox = (
-        labelKey: keyof ParagraphDialogMixed,
+        labelKey: ParagraphFlagKey,
         checked: boolean,
         set: (next: boolean) => void
       ) => (
@@ -434,13 +455,17 @@ export const DocxEditorParagraphDialog = defineComponent({
                 <select
                   id={`${fieldId}-alignment`}
                   style={inputStyle}
-                  value={alignment.value}
+                  value={mixed.value.alignment ? '' : alignment.value}
                   onChange={(event) => {
+                    resolve('alignment');
                     alignment.value = (event.target as HTMLSelectElement)
                       .value as typeof alignment.value;
                   }}
                   aria-label={t('dialogs.paragraph.alignment')}
                 >
+                  {mixed.value.alignment ? (
+                    <option value="">{t('dialogs.paragraph.mixed')}</option>
+                  ) : null}
                   <option value="left">{t('dialogs.paragraph.alignLeft')}</option>
                   <option value="center">{t('dialogs.paragraph.alignCenter')}</option>
                   <option value="right">{t('dialogs.paragraph.alignRight')}</option>
@@ -449,12 +474,22 @@ export const DocxEditorParagraphDialog = defineComponent({
               </div>
 
               <div style={sectionLabelStyle}>{t('dialogs.paragraph.indentation')}</div>
-              {inchRow('beforeText', indentLeft.value, (twips) => {
-                indentLeft.value = twips;
-              })}
-              {inchRow('afterText', indentRight.value, (twips) => {
-                indentRight.value = twips;
-              })}
+              {inchRow(
+                'beforeText',
+                indentLeft.value,
+                (twips) => {
+                  indentLeft.value = twips;
+                },
+                'indentLeft'
+              )}
+              {inchRow(
+                'afterText',
+                indentRight.value,
+                (twips) => {
+                  indentRight.value = twips;
+                },
+                'indentRight'
+              )}
               <div style={rowStyle}>
                 <label style={labelStyle} for={`${fieldId}-special`}>
                   {t('dialogs.paragraph.special')}
@@ -480,12 +515,22 @@ export const DocxEditorParagraphDialog = defineComponent({
                 : null}
 
               <div style={sectionLabelStyle}>{t('dialogs.paragraph.spacing')}</div>
-              {pointRow('spaceBefore', spaceBefore.value, (points) => {
-                spaceBefore.value = points;
-              })}
-              {pointRow('spaceAfter', spaceAfter.value, (points) => {
-                spaceAfter.value = points;
-              })}
+              {pointRow(
+                'spaceBefore',
+                spaceBefore.value,
+                (points) => {
+                  spaceBefore.value = points;
+                },
+                'spaceBefore'
+              )}
+              {pointRow(
+                'spaceAfter',
+                spaceAfter.value,
+                (points) => {
+                  spaceAfter.value = points;
+                },
+                'spaceAfter'
+              )}
               <div style={rowStyle}>
                 <label style={labelStyle} for={`${fieldId}-lineSpacing`}>
                   {t('dialogs.paragraph.lineSpacing')}
@@ -528,7 +573,10 @@ export const DocxEditorParagraphDialog = defineComponent({
                   step={lineRule.value === 'multiple' ? '0.01' : '1'}
                   value={lineValue.value}
                   onInput={(event) => {
-                    lineValue.value = Number((event.target as HTMLInputElement).value) || 0;
+                    resolve('lineSpacing');
+                    const next = (event.target as HTMLInputElement).value.trim();
+                    lineValue.value =
+                      next === '' ? (lineRule.value === 'multiple' ? 1.08 : 12) : Number(next) || 0;
                   }}
                   aria-label={t('dialogs.paragraph.at')}
                 />

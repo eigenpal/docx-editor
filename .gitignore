@@ -109,3 +109,6 @@ e2e/fixtures/synthetic-massive-singlesection.docx
 
 # SARIF from `bun run check:shipped-advisories --sarif=...`
 *.sarif
+
+# `api:check` writes this beside the repo root while diffing snapshots.
+.snap-tmp.txt

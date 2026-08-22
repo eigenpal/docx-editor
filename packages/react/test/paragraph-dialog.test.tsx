@@ -310,6 +310,53 @@ describe('the Paragraph dialog', () => {
     expect(editor().surface!.formatting().tabStops).toEqual([]);
   });
 
+  test('a mixed VALUE field shows the disagreement, and can be set to what it shows', async () => {
+    // The trap this closes: a disagreement rendered as a plausible concrete value made the
+    // disagreement uncorrectable, because the value that would fix it is the one already on
+    // screen — so nothing "moved" and nothing was written. Four paragraphs at mixed
+    // alignments showed "Left" and could not be set to Left.
+    const { view, editor, openDialog } = mountDialog(
+      p('one', '<w:jc w:val="right"/>') + p('two', '<w:jc w:val="left"/>')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    // The read says they disagree, and the control says so too rather than picking one.
+    expect(editor().surface!.formatting().alignment).toBeNull();
+    const alignment = field(view, 'Alignment') as HTMLSelectElement;
+    expect(alignment.value).toBe('');
+
+    await act(async () => {
+      fireEvent.change(alignment, { target: { value: 'left' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    // Both paragraphs agree now, which is the whole point of opening the dialog.
+    expect(editor().surface!.formatting().alignment).toBe('left');
+  });
+
+  test('a mixed spacing field opens empty, and stays mixed if left alone', async () => {
+    const { view, editor, openDialog } = mountDialog(
+      p('one', '<w:spacing w:before="240"/>') + p('two', '<w:spacing w:before="120"/>')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    expect(editor().surface!.formatting().spaceBeforePt).toBeNull();
+    expect((field(view, 'Before') as HTMLInputElement).value).toBe('');
+
+    await act(async () => {
+      okButton(view).click();
+    });
+    // Untouched, so not written: the paragraphs keep their own values.
+    expect(editor().surface!.formatting().spaceBeforePt).toBeNull();
+  });
+
   test('a mixed tab list says so, instead of claiming there are no tab stops', async () => {
     const { view, editor, openDialog } = mountDialog(
       p('one', '<w:tabs><w:tab w:val="left" w:pos="1440"/></w:tabs>') +

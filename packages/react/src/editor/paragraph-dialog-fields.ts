@@ -120,7 +120,15 @@ export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields {
   };
 }
 
-/** Which settings the selection DISAGREES about, so a control can show it. */
+/**
+ * Which settings the selection DISAGREES about, so a control can show it.
+ *
+ * The value fields need this as much as the checkboxes do. A control that renders a
+ * disagreement as a plausible-looking number is not just unhelpful — it makes the
+ * disagreement uncorrectable, because the value that would fix it is the one already on
+ * screen, so `changedFields` sees nothing move and writes nothing. Four paragraphs at
+ * mixed alignments showed "Left" and could not be set to Left.
+ */
 export interface ParagraphDialogMixed {
   readonly contextualSpacing: boolean;
   readonly keepNext: boolean;
@@ -129,7 +137,22 @@ export interface ParagraphDialogMixed {
   readonly pageBreakBefore: boolean;
   /** The selection's paragraphs carry DIFFERENT tab stops, so the list shows none of them. */
   readonly tabStops: boolean;
+  readonly alignment: boolean;
+  readonly indentLeft: boolean;
+  readonly indentRight: boolean;
+  readonly special: boolean;
+  readonly spaceBefore: boolean;
+  readonly spaceAfter: boolean;
+  readonly lineSpacing: boolean;
 }
+
+/** The five members that are checkboxes, and so share a label key with their control. */
+export type ParagraphFlagKey =
+  | 'contextualSpacing'
+  | 'keepNext'
+  | 'keepLines'
+  | 'widowControl'
+  | 'pageBreakBefore';
 
 export const NO_MIXED_FIELDS: ParagraphDialogMixed = {
   contextualSpacing: false,
@@ -138,6 +161,13 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed = {
   widowControl: false,
   pageBreakBefore: false,
   tabStops: false,
+  alignment: false,
+  indentLeft: false,
+  indentRight: false,
+  special: false,
+  spaceBefore: false,
+  spaceAfter: false,
+  lineSpacing: false,
 };
 
 /**
@@ -153,6 +183,13 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
     widowControl: format.widowControl === null,
     pageBreakBefore: format.pageBreakBefore === null,
     tabStops: format.tabStops === null,
+    alignment: format.alignment === null,
+    indentLeft: format.indentLeftTwips === null,
+    indentRight: format.indentRightTwips === null,
+    special: format.indentFirstLineTwips === null,
+    spaceBefore: format.spaceBeforePt === null,
+    spaceAfter: format.spaceAfterPt === null,
+    lineSpacing: format.lineSpacing === null,
   };
 }
 
@@ -218,17 +255,30 @@ export function changedFields(
   const resolved = (key: keyof ParagraphDialogMixed): boolean =>
     seedMixed[key] && !currentMixed[key];
 
-  if (seed.alignment !== current.alignment) take('alignment', current.alignment);
-  if (seed.indentLeft !== current.indentLeft) take('indentLeftTwips', current.indentLeft);
-  if (seed.indentRight !== current.indentRight) take('indentRightTwips', current.indentRight);
+  if (seed.alignment !== current.alignment || resolved('alignment'))
+    take('alignment', current.alignment);
+  if (seed.indentLeft !== current.indentLeft || resolved('indentLeft'))
+    take('indentLeftTwips', current.indentLeft);
+  if (seed.indentRight !== current.indentRight || resolved('indentRight'))
+    take('indentRightTwips', current.indentRight);
   // The kind and the magnitude are two controls over ONE value, so either one moving
   // rewrites it. Note that `none` and a magnitude of zero fold to the same signed zero,
   // which is why the comparison is on the controls and not on the folded result.
-  if (seed.special !== current.special || seed.specialBy !== current.specialBy)
+  if (
+    seed.special !== current.special ||
+    seed.specialBy !== current.specialBy ||
+    resolved('special')
+  )
     take('indentFirstLineTwips', signedFirstLineOf(current.special, current.specialBy));
-  if (seed.spaceBefore !== current.spaceBefore) take('spaceBeforePt', current.spaceBefore);
-  if (seed.spaceAfter !== current.spaceAfter) take('spaceAfterPt', current.spaceAfter);
-  if (seed.lineRule !== current.lineRule || seed.lineValue !== current.lineValue)
+  if (seed.spaceBefore !== current.spaceBefore || resolved('spaceBefore'))
+    take('spaceBeforePt', current.spaceBefore);
+  if (seed.spaceAfter !== current.spaceAfter || resolved('spaceAfter'))
+    take('spaceAfterPt', current.spaceAfter);
+  if (
+    seed.lineRule !== current.lineRule ||
+    seed.lineValue !== current.lineValue ||
+    resolved('lineSpacing')
+  )
     take('lineSpacing', { rule: current.lineRule, value: current.lineValue });
   if (seed.contextualSpacing !== current.contextualSpacing || resolved('contextualSpacing'))
     take('contextualSpacing', current.contextualSpacing);

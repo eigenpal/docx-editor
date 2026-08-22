@@ -308,7 +308,8 @@
       "tabPositionLabel": null,
       "tabRemoveAt": null,
       "refused": null,
-      "tabMixed": null
+      "tabMixed": null,
+      "mixed": null
     }
   },
   "comments": {

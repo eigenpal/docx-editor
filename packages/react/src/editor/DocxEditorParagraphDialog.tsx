@@ -29,6 +29,7 @@ import {
   withTabStop,
   type ParagraphDialogFields,
   type ParagraphDialogMixed,
+  type ParagraphFlagKey,
   type SpecialIndent,
   type TabAlignment,
   type TabLeaderName,
@@ -334,10 +335,22 @@ export function DocxEditorParagraphDialog({
 
   if (!open) return null;
 
+  /**
+   * Clear the mixed mark for one field, so what the control now shows is a decision.
+   *
+   * A number or select has no indeterminate state, so a disagreement renders as an empty
+   * box. The moment the user picks something, the control means what it says — and
+   * `changedFields` has to be told, or setting a mixed selection to the value it was
+   * already displaying writes nothing and the paragraphs stay disagreeing.
+   */
+  const resolve = (key: keyof ParagraphDialogMixed): void =>
+    setMixed((previous) => ({ ...previous, [key]: false }));
+
   const inchRow = (
     labelKey: 'beforeText' | 'afterText',
     value: number,
-    set: (twips: number) => void
+    set: (twips: number) => void,
+    mixedKey: keyof ParagraphDialogMixed
   ) => (
     <div style={rowStyle}>
       <label style={labelStyle} htmlFor={`${fieldId}-${labelKey}`}>
@@ -349,8 +362,13 @@ export function DocxEditorParagraphDialog({
         style={inputStyle}
         min={0}
         step={0.1}
-        value={twipsToInches(value)}
-        onChange={(event) => set(inchesToTwips(Number(event.target.value) || 0))}
+        // Empty, not a fabricated number, when the selection disagrees.
+        value={mixed[mixedKey] ? '' : twipsToInches(value)}
+        placeholder={mixed[mixedKey] ? t('dialogs.paragraph.mixed') : undefined}
+        onChange={(event) => {
+          resolve(mixedKey);
+          set(inchesToTwips(Number(event.target.value) || 0));
+        }}
         aria-label={t(`dialogs.paragraph.${labelKey}`)}
       />
       <span style={unitStyle}>{t('dialogs.paragraph.unitInches')}</span>
@@ -360,7 +378,8 @@ export function DocxEditorParagraphDialog({
   const pointRow = (
     labelKey: 'spaceBefore' | 'spaceAfter',
     value: number,
-    set: (points: number) => void
+    set: (points: number) => void,
+    mixedKey: keyof ParagraphDialogMixed
   ) => (
     <div style={rowStyle}>
       <label style={labelStyle} htmlFor={`${fieldId}-${labelKey}`}>
@@ -372,19 +391,19 @@ export function DocxEditorParagraphDialog({
         style={inputStyle}
         min={0}
         step={1}
-        value={value}
-        onChange={(event) => set(Math.max(0, Number(event.target.value) || 0))}
+        value={mixed[mixedKey] ? '' : value}
+        placeholder={mixed[mixedKey] ? t('dialogs.paragraph.mixed') : undefined}
+        onChange={(event) => {
+          resolve(mixedKey);
+          set(Math.max(0, Number(event.target.value) || 0));
+        }}
         aria-label={t(`dialogs.paragraph.${labelKey}`)}
       />
       <span style={unitStyle}>{t('dialogs.paragraph.unitPoints')}</span>
     </div>
   );
 
-  const checkbox = (
-    labelKey: keyof ParagraphDialogMixed,
-    checked: boolean,
-    set: (next: boolean) => void
-  ) => (
+  const checkbox = (labelKey: ParagraphFlagKey, checked: boolean, set: (next: boolean) => void) => (
     <label style={checkRowStyle}>
       <input
         type="checkbox"
@@ -463,12 +482,16 @@ export function DocxEditorParagraphDialog({
             <select
               id={`${fieldId}-alignment`}
               style={inputStyle}
-              value={alignment}
-              onChange={(event) =>
-                setAlignment(event.target.value as 'left' | 'center' | 'right' | 'justify')
-              }
+              // Empty when the selection disagrees, so picking the value on screen is a
+              // real change rather than a no-op the user cannot tell from a broken button.
+              value={mixed.alignment ? '' : alignment}
+              onChange={(event) => {
+                resolve('alignment');
+                setAlignment(event.target.value as 'left' | 'center' | 'right' | 'justify');
+              }}
               aria-label={t('dialogs.paragraph.alignment')}
             >
+              {mixed.alignment ? <option value="">{t('dialogs.paragraph.mixed')}</option> : null}
               <option value="left">{t('dialogs.paragraph.alignLeft')}</option>
               <option value="center">{t('dialogs.paragraph.alignCenter')}</option>
               <option value="right">{t('dialogs.paragraph.alignRight')}</option>
@@ -477,8 +500,8 @@ export function DocxEditorParagraphDialog({
           </div>
 
           <div style={sectionLabelStyle}>{t('dialogs.paragraph.indentation')}</div>
-          {inchRow('beforeText', indentLeft, setIndentLeft)}
-          {inchRow('afterText', indentRight, setIndentRight)}
+          {inchRow('beforeText', indentLeft, setIndentLeft, 'indentLeft')}
+          {inchRow('afterText', indentRight, setIndentRight, 'indentRight')}
           <div style={rowStyle}>
             <label style={labelStyle} htmlFor={`${fieldId}-special`}>
               {t('dialogs.paragraph.special')}
@@ -517,8 +540,8 @@ export function DocxEditorParagraphDialog({
           ) : null}
 
           <div style={sectionLabelStyle}>{t('dialogs.paragraph.spacing')}</div>
-          {pointRow('spaceBefore', spaceBefore, setSpaceBefore)}
-          {pointRow('spaceAfter', spaceAfter, setSpaceAfter)}
+          {pointRow('spaceBefore', spaceBefore, setSpaceBefore, 'spaceBefore')}
+          {pointRow('spaceAfter', spaceAfter, setSpaceAfter, 'spaceAfter')}
           <div style={rowStyle}>
             <label style={labelStyle} htmlFor={`${fieldId}-lineSpacing`}>
               {t('dialogs.paragraph.lineSpacing')}
@@ -561,7 +584,16 @@ export function DocxEditorParagraphDialog({
               min={0.01}
               step={lineRule === 'multiple' ? 0.01 : 1}
               value={lineValue}
-              onChange={(event) => setLineValue(Number(event.target.value) || 0)}
+              // An empty box is not a zero. Select-all-then-retype is how a number field is
+              // edited, and coercing the intermediate empty state to 0 made the whole dialog
+              // refuse with a message that named no field.
+              onChange={(event) => {
+                resolve('lineSpacing');
+                const next = event.target.value.trim();
+                setLineValue(
+                  next === '' ? (lineRule === 'multiple' ? 1.08 : 12) : Number(next) || 0
+                );
+              }}
               aria-label={t('dialogs.paragraph.at')}
             />
             <span style={unitStyle}>
