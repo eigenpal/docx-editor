@@ -14,14 +14,10 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import {
-  everyStoryOrder,
-  selectionRects,
-  spansInSelection,
-} from '@docx-editor.dev/core/layout';
+import { everyStoryOrder, selectionRects, spansInSelection } from '@docx-editor.dev/core/layout';
 import { STORY_KINDS } from './story-parity-contract.ts';
 import { PROBE } from './story-parity-fixture.ts';
-import { openStory, partOfNodeId } from './story-parity-harness.ts';
+import { openStory, partOfNodeId, scopeOf } from './story-parity-harness.ts';
 
 describe('everyStoryOrder serves a selection in any story', () => {
   for (const story of STORY_KINDS) {
@@ -53,6 +49,30 @@ describe('everyStoryOrder serves a selection in any story', () => {
         // `selectionRects` is deliberately NOT asserted non-empty: bands do not paint in
         // furniture, which is a documented limit of the paint lane, not of this order.
         expect(() => selectionRects(layout, selection, every)).not.toThrow();
+      } finally {
+        open.destroy();
+      }
+    });
+  }
+});
+
+describe('the tree and the layout agree on what is selectable', () => {
+  for (const story of STORY_KINDS) {
+    test(`${story}: every paragraph the story holds is in the order`, () => {
+      const open = openStory(story);
+      try {
+        const order = new Set(everyStoryOrder(open.surface.publishedLayout()));
+        const held = open.surface.session.paragraphIdsIn(scopeOf(story));
+        expect(held.length, 'the story holds no paragraphs').toBeGreaterThan(0);
+
+        // A paragraph the tree offers but the layout never publishes ranks -1 in any order
+        // derived from the layout, and a selection ordered against -1 silently collapses to
+        // one paragraph. The `w:separator` and `w:continuationSeparator` notes were exactly
+        // that: the story walk counted them, the paint never did.
+        expect(
+          held.filter((id) => !order.has(id)),
+          'held but unorderable'
+        ).toEqual([]);
       } finally {
         open.destroy();
       }

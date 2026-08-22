@@ -80,8 +80,10 @@ function mount(inner: string): { surface: PaginatedSurface; destroy: () => void 
 
 /** Paragraphs the footnote part publishes, minus the two separator paragraphs. */
 function noteParagraphCount(surface: PaginatedSurface): number {
-  const ids = surface.session.paragraphIdsIn({ kind: 'notesPart', noteKind: 'footnote' });
-  return Math.max(0, ids.length - 2);
+  // No subtraction. This used to drop two for the `w:separator` and `w:continuationSeparator`
+  // notes, which the story walk counted as content — they are the rules drawn above a note
+  // area, hold no editable text, and are excluded now.
+  return surface.session.paragraphIdsIn({ kind: 'notesPart', noteKind: 'footnote' }).length;
 }
 
 const BOOKMARK = '<w:bookmarkStart w:id="1" w:name="mark"/><w:bookmarkEnd w:id="1"/>';

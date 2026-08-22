@@ -22,6 +22,7 @@ import {
   isContentControlWrapper,
 } from './content-control-nodes.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
+import { isNormalNote } from './note-nodes.ts';
 
 /** How deep block-level content controls may nest before the walk stops descending. */
 export const MAX_STORY_SDT_NESTING = 32;
@@ -39,7 +40,15 @@ export interface OoxmlStoryRoot {
 function storyKindOf(node: OoxmlNode): OoxmlStoryKind | null {
   if (node.kind === 'textValue') return null;
   if (node.kind === 'body') return 'body';
-  if (node.kind === 'note') return 'note';
+  // A NORMAL note only. `w:separator` and `w:continuationSeparator` are the rules drawn above
+  // a note area, not content: Word puts no caret in one, and layout paints them as a line
+  // rather than as paragraphs. Counting them as stories made the tree claim two paragraphs the
+  // layout never publishes, so anything ordering by layout ranked a caret in one at -1 — and a
+  // selection ordered against -1 silently collapses to a single paragraph.
+  //
+  // Returning null lets the walk descend, and a separator holds no story root, so its
+  // paragraph belongs to no story at all. That is the honest answer: it is not editable text.
+  if (node.kind === 'note') return isNormalNote(node) ? 'note' : null;
   if (node.localName === 'hdr') return 'header';
   if (node.localName === 'ftr') return 'footer';
   return null;
