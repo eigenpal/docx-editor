@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-`selectionRects` and `spansInSelection` take the story's paragraph order as an optional third argument. Omitted, they now read every story the layout paints instead of the body alone, so a selection in a header, footer or note returns its spans rather than nothing.
+`selectionRects` and `spansInSelection` now require the story's paragraph order as a third argument, so a two-argument call no longer compiles. Pass the new `everyStoryOrder(layout)` when you have no story in hand: the body-only order they used to assume is what made a selection in a header, footer or note read as empty.

@@ -2528,7 +2528,7 @@ export interface SelectionRect {
 
 // @public
 export function selectionRects(layout: SemanticLayout, selection: SemanticSelection,
-order?: readonly string[]): SelectionRect[];
+order: readonly string[]): SelectionRect[];
 
 // @public
 export interface SemanticHit {
@@ -2917,7 +2917,7 @@ export function spansInCells(layout: SemanticLayout, cellIds: readonly string[])
 
 // @public
 export function spansInSelection(layout: SemanticLayout, selection: SemanticSelection,
-order?: readonly string[]): StyleSpanRecord[];
+order: readonly string[]): StyleSpanRecord[];
 
 // @public
 export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode): OoxmlElement[];

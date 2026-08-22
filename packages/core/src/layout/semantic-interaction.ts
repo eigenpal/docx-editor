@@ -8,7 +8,6 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
-import { everyStoryOrder } from './document-order.ts';
 import { caretBoxOnLine, contentControlAtPoint, hitTestPage } from './semantic-hit-test.ts';
 import { documentOrder, documentOrderIndex } from './document-order.ts';
 export { documentOrder, everyStoryOrder } from './document-order.ts';
@@ -824,12 +823,15 @@ export function spansInSelection(
   /**
    * Reading order of the ACTIVE story. See {@link orderPositions}.
    *
-   * Omitted, every story the layout paints is used. That is correct rather than merely
-   * convenient: a selection cannot span two stories, so only the order within one is ever
-   * compared. Passing the caret's own story is still better where the caller knows it — the
-   * list is smaller and cannot match a paragraph the caret is not among.
+   * REQUIRED. A default here can only be one story's order, and whichever one it is will be
+   * wrong for every caret in another — which is exactly how this read came to answer about the
+   * body while the caret sat in a header. Requiring it is what makes the compiler find a call
+   * site that forgot, and it already found one.
+   *
+   * A caller with no story in hand passes {@link everyStoryOrder}, which covers all of them: a
+   * selection cannot span two stories, so only the order WITHIN one is ever compared.
    */
-  order: readonly string[] = everyStoryOrder(layout)
+  order: readonly string[]
 ): StyleSpanRecord[] {
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];

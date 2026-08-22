@@ -22,9 +22,9 @@ import { STORY_KINDS } from './story-parity-contract.ts';
 import { PROBE } from './story-parity-fixture.ts';
 import { openStory } from './story-parity-harness.ts';
 
-describe('the default paragraph order reaches every story', () => {
+describe('everyStoryOrder serves a selection in any story', () => {
   for (const story of STORY_KINDS) {
-    test(`${story}: a two-paragraph selection reads without being handed an order`, () => {
+    test(`${story}: a two-paragraph selection reads through the shared order`, () => {
       const open = openStory(story);
       try {
         const from = open.paragraphIds[PROBE.formatted]!;
@@ -36,21 +36,22 @@ describe('the default paragraph order reaches every story', () => {
         const layout = open.surface.publishedLayout();
         const selection = open.surface.state().selection;
 
-        // Two arguments, the shape an outside caller has. Against a body-only default this
-        // came back empty for every story but the body: both endpoints ranked -1 against a
-        // list they were not in and the walk gave up.
-        expect(spansInSelection(layout, selection).length, 'no spans').toBeGreaterThan(0);
+        // `everyStoryOrder` is what a caller with no story in hand passes. Against the body's
+        // order this came back empty for every story but the body: both endpoints ranked -1
+        // against a list they were not in and the walk gave up.
+        const every = everyStoryOrder(layout);
+        expect(spansInSelection(layout, selection, every).length, 'no spans').toBeGreaterThan(0);
 
-        // And it agrees with the story's own order, which is what makes the default correct
-        // rather than merely non-empty.
-        const scoped = everyStoryOrder(layout).filter((id) => id.startsWith(partOf(from)));
-        expect(spansInSelection(layout, selection)).toEqual(
+        // And it agrees with the story's OWN order, which is what makes the shared list
+        // correct rather than merely non-empty.
+        const scoped = every.filter((id) => id.startsWith(partOf(from)));
+        expect(spansInSelection(layout, selection, every)).toEqual(
           spansInSelection(layout, selection, scoped)
         );
 
-        // `selectionRects` is deliberately NOT asserted non-empty here: bands do not paint in
+        // `selectionRects` is deliberately NOT asserted non-empty: bands do not paint in
         // furniture, which is a documented limit of the paint lane, not of this order.
-        expect(() => selectionRects(layout, selection)).not.toThrow();
+        expect(() => selectionRects(layout, selection, every)).not.toThrow();
       } finally {
         open.destroy();
       }

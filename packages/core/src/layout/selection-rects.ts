@@ -4,7 +4,6 @@
 // this answers "which pixels does this range cover". They meet at `segmentOverlap`, which is
 // the one part of both that has to know a line can carry more than one paragraph.
 
-import { everyStoryOrder } from './document-order.ts';
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
@@ -32,12 +31,11 @@ export function selectionRects(
   /**
    * Reading order of the ACTIVE story.
    *
-   * Omitted, every story the layout paints is used. A selection cannot span two stories, so
-   * only the order within one is ever compared and that default is correct. The body-only
-   * order this used to fall back to was not: two paragraphs selected in a header both ranked
-   * -1, the walk gave up, and the read came back empty.
+   * REQUIRED, for the reason `spansInSelection` gives: any default is one story's order, and
+   * it is wrong for every caret outside that story. A caller with no story in hand passes
+   * {@link everyStoryOrder}.
    */
-  order: readonly string[] = everyStoryOrder(layout)
+  order: readonly string[]
 ): SelectionRect[] {
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];
