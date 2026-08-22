@@ -67,7 +67,6 @@ import {
   type HeaderFooterParts,
   type HeaderFooterSectionResolution,
   type OoxmlElement,
-  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
@@ -1650,13 +1649,5 @@ export function openTreeSession(
   };
 }
 
-/**
- * Paragraph text joined by newlines, read from the CANONICAL TREE.
- *
- * Read through `paragraphTextOf` rather than the projection's `textContent`, because a tab
- * and a hard break are ATOM nodes in ProseMirror and contribute nothing to `textContent` —
- * so body text silently disagreed with the offsets the ops and the layout use. A caret at
- * offset 12 and a `bodyText().slice(12)` have to mean the same place.
- */
 /** The origin a host should use when committing a reconciliation rather than a user edit. */
 export const PROJECTION_ORIGIN = ORIGIN_IDS.projection;

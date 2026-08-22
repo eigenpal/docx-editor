@@ -8,7 +8,12 @@ import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-
 import { allParagraphs } from './tree-binding.ts';
 
 /**
- * A story's text, every paragraph of it.
+ * A story's text, every paragraph of it, joined by newlines and read from the CANONICAL TREE.
+ *
+ * Read through `paragraphTextOf` rather than the projection's `textContent`, because a tab and
+ * a hard break are ATOM nodes in ProseMirror and contribute nothing to `textContent` — so the
+ * text silently disagreed with the offsets the ops and the layout use. A caret at offset 12 and
+ * a `bodyText().slice(12)` have to mean the same place.
  *
  * `allParagraphs`, not `bodyParagraphs`. The latter collects only DIRECT `w:p` children of
  * `w:body` because it exists to match the ProseMirror projection, so reading text through it

@@ -34,13 +34,13 @@ const LANDSCAPE_WIDTH = 15840;
  * only on section 1's page. "The first section that names this rId" is therefore section 0 — a
  * page the header never appears on, which is what makes the wrong answer visible.
  */
-function sharedHeaderDocx(): Uint8Array {
+function sharedHeaderDocx(titlePage = true): Uint8Array {
   const section = (width: number, height: number, extra = ''): string =>
     `<w:sectPr>${extra}<w:headerReference w:type="default" r:id="${SHARED_R_ID}"/>` +
     `<w:pgSz w:w="${width}" w:h="${height}"/>` +
     '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>';
   const body =
-    `<w:p><w:pPr>${section(PORTRAIT_WIDTH, 15840, '<w:titlePg/>')}</w:pPr>` +
+    `<w:p><w:pPr>${section(PORTRAIT_WIDTH, 15840, titlePage ? '<w:titlePg/>' : '')}</w:pPr>` +
     '<w:r><w:t>First section</w:t></w:r></w:p>' +
     '<w:p><w:r><w:t>Second section</w:t></w:r></w:p>';
   return zipSync({
@@ -74,16 +74,24 @@ function sharedHeaderDocx(): Uint8Array {
   });
 }
 
+/**
+ * The same two sections, but section 0 declares no `w:titlePg` — so the shared header paints on
+ * a page in EACH section. That is what makes "which page is the reader on" a real question.
+ */
+function sharedHeaderOnBothDocx(): Uint8Array {
+  return sharedHeaderDocx(false);
+}
+
 let cleanup: (() => void) | null = null;
 afterEach(() => {
   cleanup?.();
   cleanup = null;
 });
 
-function mount(): DocxEditorInstance {
+function mount(bytes: Uint8Array = sharedHeaderDocx()): DocxEditorInstance {
   const host = document.createElement('div');
   document.body.append(host);
-  const editor = createDocxEditor({ document: sharedHeaderDocx(), author: 'Parity' });
+  const editor = createDocxEditor({ document: bytes, author: 'Parity' });
   cleanup = () => {
     editor.destroy();
     host.remove();
@@ -128,6 +136,38 @@ describe('a shared header binds the section it is painted on', () => {
     expect(viaRId, 'the two entry routes disagree about the same header').toBe(viaPage);
     // And it is the page the header actually appears on, not the first section naming it.
     expect(viaRId).toBe(LANDSCAPE_WIDTH);
+  });
+
+  test('moving the story to a page in another section rebinds the section', () => {
+    const editor = mount(sharedHeaderOnBothDocx());
+    const surface = editor.surface!;
+
+    // Every page this header is PAINTED on, with the section each belongs to.
+    const hosting = surface
+      .layout()
+      .pages.map((page, index) => ({ index, hosts: (page.header?.fragments.length ?? 0) > 0 }))
+      .filter((entry) => entry.hosts)
+      .map((entry) => ({
+        index: entry.index,
+        section: surface.sectionAtPage(entry.index).sectionIndex,
+      }));
+    const first = hosting[0];
+    const other = hosting.find((entry) => first !== undefined && entry.section !== first.section);
+    expect(first, 'the header paints nowhere').toBeDefined();
+    expect(other, 'the fixture does not span two sections').toBeDefined();
+    if (!first || !other) return;
+
+    expect(surface.enterHeaderFooter({ rId: SHARED_R_ID, pageIndex: first.index })).toBe(true);
+    expect(surface.headerFooterState()?.sectionIndex).toBe(first.section);
+
+    // The bound PAGE moves when the reader scrolls or the document repaginates, and the
+    // section used to stay behind — leaving it pointing at a page the reader is no longer on,
+    // so Page Setup wrote the other section's `w:sectPr`. Naming the new page by hand is the
+    // same move.
+    expect(surface.enterHeaderFooter({ rId: SHARED_R_ID, pageIndex: other.index })).toBe(true);
+    expect(surface.headerFooterState()?.sectionIndex, 'the section did not follow').toBe(
+      other.section
+    );
   });
 
   test('page setup from that header writes its own section', async () => {

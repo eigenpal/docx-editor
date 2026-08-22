@@ -15,6 +15,7 @@ import {
   type TreeModelChange,
 } from '../store/tree-package-store.ts';
 import { readOoxmlPackage, withPart, writeOoxmlPackage } from '../package/ooxml-package.ts';
+import { withoutPart } from '../package/package-edit.ts';
 import { readOoxmlPart } from '../package/ooxml-tree.ts';
 import { resolveHeaderFooterPartsBySection } from '../package/hf-references.ts';
 import { openTreeSession } from '../../binding/tree-session.ts';
@@ -622,5 +623,34 @@ describe('forms protection follows a settings replacement', () => {
 
     expect(edits(store, HF, headerPart), 'the header still accepted an edit').toBe(false);
     expect(edits(store, BODY, store.body.part), 'the BODY still accepted an edit').toBe(false);
+  });
+});
+
+describe('the open-story token and parts come from one list', () => {
+  test('deleting an open story moves both together', () => {
+    const store = openPackage(
+      build({
+        references: `<w:headerReference w:type="default" r:id="rId10"/>`,
+        rels: `<Relationship Id="rId10" Type="${R}/header" Target="header1.xml"/>`,
+        headerParts: { 'word/header1.xml': HEADER_XML('letterhead') },
+        overrides: HEADER_OVERRIDE,
+      })
+    );
+    expect(store.openHeaderFooterStore('rId10').ok).toBe(true);
+    const partsBefore = store.openStoryParts().map((part) => part.name);
+    expect(partsBefore).toContain('/word/header1.xml');
+    expect(store.openStoryToken()).toBe(partsBefore.slice().sort().join(','));
+
+    // Park the store by removing its part. It stays in the map so undo keeps its identity.
+    store.replacePackageShell(withoutPart(store.currentPackage(), '/word/header1.xml').pkg);
+
+    // The TOKEN is the cache key for anything derived from the PARTS, so the two have to move
+    // together. Deriving the token from the store-map keys left it standing still while the
+    // parts list shrank, which is a stale answer nothing would report.
+    const partsAfter = store.openStoryParts().map((part) => part.name);
+    expect(partsAfter, 'the parked part is still listed').not.toContain('/word/header1.xml');
+    expect(store.openStoryToken(), 'the token did not follow the parts').toBe(
+      partsAfter.slice().sort().join(',')
+    );
   });
 });

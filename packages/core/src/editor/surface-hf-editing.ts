@@ -183,16 +183,22 @@ export function createHeaderFooterScopeController(deps: {
           head: { ...selection.head },
         };
 
+    // The PAGE the reader is on decides the section, and only a re-scope that names no new
+    // page keeps the prior one.
+    //
+    // Leaving this undefined for a painted story sent every downstream reader to "the first
+    // section naming this rId" — which, for a header shared by several sections, is not the
+    // page the reader is looking at. Page Setup then wrote that other section's `w:sectPr` and
+    // the ruler clamped to its geometry. Keeping the prior section when the caller DID name a
+    // new page is the same defect a step later: the page moves and the section it belongs to
+    // does not.
+    const staysOnPriorPage =
+      alreadyOpen && prior?.sectionIndex !== undefined && pageIndex === prior.pageIndex;
     const sectionIndex =
       args.sectionIndex ??
-      (alreadyOpen && prior?.sectionIndex !== undefined
+      (staysOnPriorPage
         ? prior.sectionIndex
-        : // The PAINTED page's section when the story is on the page set, and only then the
-          // package's guess. Leaving this undefined for a painted story sent every downstream
-          // reader to "the first section naming this rId" — which, for a header shared by
-          // several sections, is not the page the reader is looking at. Page Setup then wrote
-          // that other section's `w:sectPr`, and the ruler clamped to its geometry.
-          found
+        : found
           ? deps.sectionAtPage(pageIndex).sectionIndex
           : fromPackage?.sectionIndex);
 
