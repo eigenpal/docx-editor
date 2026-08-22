@@ -75,6 +75,28 @@ export function storyRootsOf(part: OoxmlPart): readonly OoxmlStoryRoot[] {
   return roots;
 }
 
+/**
+ * Whether a part is SHAPED to hold stories — a body, a header, a footer, or a notes part.
+ *
+ * A shape test, deliberately not `storyRootsOf(part).length > 0`. That counts EDITABLE stories,
+ * and a notes part holding nothing but `w:separator` and `w:continuationSeparator` has none —
+ * which is the footnotes part Word writes into every document that ever held a footnote. A
+ * caller asking "should I walk this part at all" that used the editable count skipped it
+ * entirely, and the two callers that ask are a payload sweep and an export strip: both DELETE
+ * what they conclude nothing names.
+ */
+export function isStoryPart(part: OoxmlPart): boolean {
+  const walk = (node: OoxmlNode): boolean => {
+    if (node.kind === 'textValue') return false;
+    // Any note, normal or furniture: the part is a notes part either way.
+    if (node.kind === 'body' || node.kind === 'note') return true;
+    if (node.localName === 'hdr' || node.localName === 'ftr') return true;
+    for (const child of node.children) if (walk(child)) return true;
+    return false;
+  };
+  return walk(part.root);
+}
+
 /** The main body story of a part, or null when the part holds none. */
 export function bodyStoryRoot(part: OoxmlPart): OoxmlNode | null {
   for (const story of storyRootsOf(part)) {

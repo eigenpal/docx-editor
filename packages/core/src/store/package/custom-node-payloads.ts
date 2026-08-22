@@ -21,7 +21,7 @@ import { isValidXmlText } from './sinks.ts';
 import { customXmlLabelXPath, customXmlPrefixMappings } from './custom-xml-nodes.ts';
 import type { CustomXmlDataPart } from './custom-xml-part.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
-import { storyRootsOf } from './story-blocks.ts';
+import { isStoryPart } from './story-blocks.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** The prefix every binding this library authors declares and quotes. */
@@ -136,7 +136,7 @@ export function boundCustomXmlNodeIdsInPackage(
 ): Set<string> {
   const found = new Set<string>();
   for (const part of pkg.parts.values()) {
-    if (storyRootsOf(part).length === 0) continue;
+    if (!isStoryPart(part)) continue;
     for (const id of boundCustomXmlNodeIds(part, storeItemId)) found.add(id);
   }
   return found;

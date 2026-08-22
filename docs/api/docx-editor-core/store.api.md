@@ -1834,6 +1834,9 @@ export function isSearchableQuery(query: unknown): query is string;
 export function isSeparatorNode(node: OoxmlNode): node is OoxmlSeparatorNode;
 
 // @public
+export function isStoryPart(part: OoxmlPart): boolean;
+
+// @public
 export function isValidId(id: string): boolean;
 
 // @public

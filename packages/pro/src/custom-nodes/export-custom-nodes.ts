@@ -28,7 +28,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   readOoxmlPackage,
-  storyRootsOf,
+  isStoryPart,
   withExportedCustomNodes,
   writeOoxmlPackage,
   type CustomNodeExportPolicy,
@@ -191,7 +191,7 @@ function storyPartNames(pkg: OoxmlPackage): readonly string[] {
   const names: string[] = [];
   for (const [name, part] of pkg.parts) {
     if (name === pkg.mainDocumentPart) continue;
-    if (storyRootsOf(part).length === 0) continue;
+    if (!isStoryPart(part)) continue;
     names.push(name);
   }
   return [pkg.mainDocumentPart, ...names];
