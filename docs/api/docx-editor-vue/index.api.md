@@ -4296,11 +4296,22 @@ export interface ParagraphFormatRead {
     readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
     // (undocumented)
     readonly contextualSpacing: ParagraphFlagState;
+    readonly disagrees: {
+        readonly alignment: boolean;
+        readonly spaceBeforePt: boolean;
+        readonly spaceAfterPt: boolean;
+        readonly lineSpacing: boolean;
+        readonly tabStops: boolean;
+        readonly indentLeft: boolean;
+        readonly indentRight: boolean;
+        readonly indentFirstLine: boolean;
+    };
     readonly indentFirstLineTwips: number | null;
     // (undocumented)
     readonly indentLeftTwips: number | null;
     // (undocumented)
     readonly indentRightTwips: number | null;
+    readonly indentUnknown: boolean;
     // (undocumented)
     readonly keepLines: ParagraphFlagState;
     // (undocumented)

@@ -182,14 +182,17 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
     keepLines: format.keepLines === null,
     widowControl: format.widowControl === null,
     pageBreakBefore: format.pageBreakBefore === null,
-    tabStops: format.tabStops === null,
-    alignment: format.alignment === null,
-    indentLeft: format.indentLeftTwips === null,
-    indentRight: format.indentRightTwips === null,
-    special: format.indentFirstLineTwips === null,
-    spaceBefore: format.spaceBeforePt === null,
-    spaceAfter: format.spaceAfterPt === null,
-    lineSpacing: format.lineSpacing === null,
+    tabStops: format.disagrees.tabStops,
+    // Asked, not guessed. A `null` value means BOTH "the paragraphs disagree" and "nothing
+    // states it", and treating the second as the first told a single paragraph — the
+    // commonest case in a real document — that it disagreed with itself.
+    alignment: format.disagrees.alignment,
+    indentLeft: format.disagrees.indentLeft,
+    indentRight: format.disagrees.indentRight,
+    special: format.disagrees.indentFirstLine,
+    spaceBefore: format.disagrees.spaceBeforePt,
+    spaceAfter: format.disagrees.spaceAfterPt,
+    lineSpacing: format.disagrees.lineSpacing,
   };
 }
 

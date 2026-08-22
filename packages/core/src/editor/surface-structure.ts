@@ -699,7 +699,14 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
             ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
           });
         }
-        ops.push({ op: 'setParagraphProperties', paragraphId, properties });
+        // Only when there is something to write. `setParagraphProperties` REPLACES the
+        // paragraph's authorable `w:pPr` children with what it is handed, so pushing it for
+        // a tab-stops-only edit put the whole of `w:pPr` at the mercy of the `direct` read
+        // — a wrong base there deletes `w:pStyle`, `w:jc` and everything else rather than
+        // doing nothing.
+        if (entries.length > 0 || wantsIndent) {
+          ops.push({ op: 'setParagraphProperties', paragraphId, properties });
+        }
         if (wantsTabStops) {
           // What the editor SAW, so the op can tell an inherited stop from an authored
           // one. The read resolves the cascade and the write lands on the paragraph, so

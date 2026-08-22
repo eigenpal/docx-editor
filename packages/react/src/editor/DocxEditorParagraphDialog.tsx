@@ -509,10 +509,14 @@ export function DocxEditorParagraphDialog({
             <select
               id={`${fieldId}-special`}
               style={inputStyle}
-              value={special}
-              onChange={(event) => setSpecial(event.target.value as SpecialIndent)}
+              value={mixed.special ? '' : special}
+              onChange={(event) => {
+                resolve('special');
+                setSpecial(event.target.value as SpecialIndent);
+              }}
               aria-label={t('dialogs.paragraph.special')}
             >
+              {mixed.special ? <option value="">{t('dialogs.paragraph.mixed')}</option> : null}
               <option value="none">{t('dialogs.paragraph.specialNone')}</option>
               <option value="firstLine">{t('dialogs.paragraph.specialFirstLine')}</option>
               <option value="hanging">{t('dialogs.paragraph.specialHanging')}</option>
@@ -529,10 +533,12 @@ export function DocxEditorParagraphDialog({
                 style={inputStyle}
                 min={0}
                 step={0.1}
-                value={twipsToInches(specialBy)}
-                onChange={(event) =>
-                  setSpecialBy(Math.max(0, inchesToTwips(Number(event.target.value) || 0)))
-                }
+                value={mixed.special ? '' : twipsToInches(specialBy)}
+                placeholder={mixed.special ? t('dialogs.paragraph.mixed') : undefined}
+                onChange={(event) => {
+                  resolve('special');
+                  setSpecialBy(Math.max(0, inchesToTwips(Number(event.target.value) || 0)));
+                }}
                 aria-label={t('dialogs.paragraph.by')}
               />
               <span style={unitStyle}>{t('dialogs.paragraph.unitInches')}</span>
@@ -549,9 +555,10 @@ export function DocxEditorParagraphDialog({
             <select
               id={`${fieldId}-lineSpacing`}
               style={inputStyle}
-              value={lineRule}
+              value={mixed.lineSpacing ? '' : lineRule}
               onChange={(event) => {
                 const next = event.target.value as 'multiple' | 'exact' | 'atLeast';
+                resolve('lineSpacing');
                 setLineRule(next);
                 // The value means different things per rule — LINES for multiple, POINTS
                 // otherwise — so carrying 1.08 into "Exactly" would ask for a 1pt line.
@@ -568,6 +575,7 @@ export function DocxEditorParagraphDialog({
               }}
               aria-label={t('dialogs.paragraph.lineSpacing')}
             >
+              {mixed.lineSpacing ? <option value="">{t('dialogs.paragraph.mixed')}</option> : null}
               <option value="multiple">{t('dialogs.paragraph.ruleMultiple')}</option>
               <option value="atLeast">{t('dialogs.paragraph.ruleAtLeast')}</option>
               <option value="exact">{t('dialogs.paragraph.ruleExactly')}</option>
@@ -583,7 +591,7 @@ export function DocxEditorParagraphDialog({
               style={inputStyle}
               min={0.01}
               step={lineRule === 'multiple' ? 0.01 : 1}
-              value={lineValue}
+              value={mixed.lineSpacing ? '' : lineValue}
               // An empty box is not a zero. Select-all-then-retype is how a number field is
               // edited, and coercing the intermediate empty state to 0 made the whole dialog
               // refuse with a message that named no field.

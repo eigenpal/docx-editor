@@ -497,21 +497,30 @@ export const DocxEditorParagraphDialog = defineComponent({
                 <select
                   id={`${fieldId}-special`}
                   style={inputStyle}
-                  value={special.value}
+                  value={mixed.value.special ? '' : special.value}
                   onChange={(event) => {
+                    resolve('special');
                     special.value = (event.target as HTMLSelectElement).value as SpecialIndent;
                   }}
                   aria-label={t('dialogs.paragraph.special')}
                 >
+                  {mixed.value.special ? (
+                    <option value="">{t('dialogs.paragraph.mixed')}</option>
+                  ) : null}
                   <option value="none">{t('dialogs.paragraph.specialNone')}</option>
                   <option value="firstLine">{t('dialogs.paragraph.specialFirstLine')}</option>
                   <option value="hanging">{t('dialogs.paragraph.specialHanging')}</option>
                 </select>
               </div>
               {special.value !== 'none'
-                ? inchRow('by', specialBy.value, (twips) => {
-                    specialBy.value = Math.max(0, twips);
-                  })
+                ? inchRow(
+                    'by',
+                    specialBy.value,
+                    (twips) => {
+                      specialBy.value = Math.max(0, twips);
+                    },
+                    'special'
+                  )
                 : null}
 
               <div style={sectionLabelStyle}>{t('dialogs.paragraph.spacing')}</div>
@@ -538,7 +547,7 @@ export const DocxEditorParagraphDialog = defineComponent({
                 <select
                   id={`${fieldId}-lineSpacing`}
                   style={inputStyle}
-                  value={lineRule.value}
+                  value={mixed.value.lineSpacing ? '' : lineRule.value}
                   onChange={(event) => {
                     const next = (event.target as HTMLSelectElement).value as typeof lineRule.value;
                     lineRule.value = next;
@@ -556,6 +565,9 @@ export const DocxEditorParagraphDialog = defineComponent({
                   }}
                   aria-label={t('dialogs.paragraph.lineSpacing')}
                 >
+                  {mixed.value.lineSpacing ? (
+                    <option value="">{t('dialogs.paragraph.mixed')}</option>
+                  ) : null}
                   <option value="multiple">{t('dialogs.paragraph.ruleMultiple')}</option>
                   <option value="atLeast">{t('dialogs.paragraph.ruleAtLeast')}</option>
                   <option value="exact">{t('dialogs.paragraph.ruleExactly')}</option>
@@ -571,7 +583,7 @@ export const DocxEditorParagraphDialog = defineComponent({
                   style={inputStyle}
                   min="0.01"
                   step={lineRule.value === 'multiple' ? '0.01' : '1'}
-                  value={lineValue.value}
+                  value={mixed.value.lineSpacing ? '' : lineValue.value}
                   onInput={(event) => {
                     resolve('lineSpacing');
                     const next = (event.target as HTMLInputElement).value.trim();

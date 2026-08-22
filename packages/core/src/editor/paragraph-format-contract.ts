@@ -11,7 +11,11 @@
 
 import type { ParagraphTabStop } from '../contracts/types.ts';
 
-export type { ParagraphFlags, ParagraphTabStop } from '../contracts/types.ts';
+export type {
+  ParagraphDisagreements,
+  ParagraphFlags,
+  ParagraphTabStop,
+} from '../contracts/types.ts';
 
 /**
  * Every field of the Paragraph dialog, in the units the rest of this contract uses:

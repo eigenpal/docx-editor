@@ -2099,6 +2099,20 @@ export interface Paragraph {
 }
 
 // @public
+export interface ParagraphDisagreements {
+    // (undocumented)
+    readonly alignment: boolean;
+    // (undocumented)
+    readonly lineSpacing: boolean;
+    // (undocumented)
+    readonly spaceAfterPt: boolean;
+    // (undocumented)
+    readonly spaceBeforePt: boolean;
+    // (undocumented)
+    readonly tabStops: boolean;
+}
+
+// @public (undocumented)
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;
@@ -2435,6 +2449,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;
     // (undocumented)

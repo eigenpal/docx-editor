@@ -6,6 +6,7 @@
 
 import type { IndentFormatting } from '../contracts/types.ts';
 import type {
+  ParagraphDisagreements,
   ParagraphFlags,
   SurfaceParagraphFormat,
   ParagraphPropertyEdit,
@@ -249,6 +250,11 @@ export interface SurfaceFormatting {
    * control writes back.
    */
   readonly tabStops: readonly ParagraphTabStop[] | null;
+  /**
+   * Which of the paragraph-level reads above are `null` because the selection DISAGREES,
+   * as opposed to because nothing states them. See {@link ParagraphDisagreements}.
+   */
+  readonly disagrees: ParagraphDisagreements;
 }
 
 /**
@@ -962,6 +968,7 @@ export type OpenPaginatedResult =
   | { readonly ok: false; readonly reason: string; readonly detail?: string };
 
 export type {
+  ParagraphDisagreements,
   ParagraphFlags,
   SurfaceParagraphFormat,
   ParagraphPropertyEdit,

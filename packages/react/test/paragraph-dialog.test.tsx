@@ -338,6 +338,75 @@ describe('the Paragraph dialog', () => {
     expect(editor().surface!.formatting().alignment).toBe('left');
   });
 
+  test('a mixed Special pair can be normalised, and does not claim "(none)"', async () => {
+    // One paragraph indents its first line, the other hangs. "(none)" is true of neither,
+    // and picking it wrote nothing because the control was already showing it.
+    const { view, editor, openDialog } = mountDialog(
+      p('one', '<w:ind w:firstLine="720"/>') + p('two', '<w:ind w:hanging="720"/>')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    const special = field(view, 'Special') as HTMLSelectElement;
+    expect(special.value).toBe('');
+
+    await act(async () => {
+      fireEvent.change(special, { target: { value: 'none' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    // Both agree now. Before this, both kept their own indent and OK was a no-op.
+    expect(editor().surface!.formatting().indent?.firstLine).toBe(0);
+    expect(editor().surface!.formatting().indent?.mixed.firstLine).toBe(false);
+  });
+
+  test('a mixed line-spacing RULE opens empty, so a point value is not read as lines', async () => {
+    // The rule fabricated "Multiple" over a disagreement. Typing 16 into "At" then meant
+    // sixteen line-heights instead of sixteen points — the unit came from a value the user
+    // never chose.
+    const { view, editor, openDialog } = mountDialog(
+      p('one', '<w:spacing w:line="280" w:lineRule="exact"/>') +
+        p('two', '<w:spacing w:line="360" w:lineRule="exact"/>')
+    );
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    const rule = field(view, 'Line spacing') as HTMLSelectElement;
+    expect(rule.value).toBe('');
+    expect((field(view, 'At') as HTMLInputElement).value).toBe('');
+
+    await act(async () => {
+      fireEvent.change(rule, { target: { value: 'exact' } });
+    });
+    await act(async () => {
+      fireEvent.change(field(view, 'At'), { target: { value: '16' } });
+    });
+    await act(async () => {
+      okButton(view).click();
+    });
+    expect(editor().surface!.formatting().lineSpacing).toEqual({ rule: 'exact', value: 16 });
+  });
+
+  test('a single paragraph is never told it disagrees with itself', async () => {
+    // `spaceBefore` reads null when nothing in the cascade states it, which is most
+    // paragraphs. Rendering that as "Mixed" put the placeholder on a lone caret.
+    const { view, editor, openDialog } = mountDialog(p('alpha'));
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+
+    expect(editor().surface!.formatting().spaceBeforePt).toBeNull();
+    // Absent, not disagreed: the box shows a number rather than the mixed placeholder.
+    expect((field(view, 'Before') as HTMLInputElement).value).toBe('0');
+    expect(view.container.textContent).not.toContain('Mixed');
+  });
+
   test('a mixed spacing field opens empty, and stays mixed if left alone', async () => {
     const { view, editor, openDialog } = mountDialog(
       p('one', '<w:spacing w:before="240"/>') + p('two', '<w:spacing w:before="120"/>')

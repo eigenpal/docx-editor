@@ -1463,7 +1463,7 @@ export interface PaginatedSurfaceState {
     readonly selection: SemanticSelection;
 }
 
-// @public
+// @public (undocumented)
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;
@@ -1843,6 +1843,7 @@ export interface SurfaceFormatting {
     readonly bold: boolean;
     // (undocumented)
     readonly color: string | null;
+    readonly disagrees: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily: string | null;
     readonly fontSizeHalfPoints: number | null;

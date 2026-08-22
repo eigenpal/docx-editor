@@ -427,7 +427,7 @@ export interface Paragraph {
     readonly styleId?: string;
 }
 
-// @public
+// @public (undocumented)
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;
@@ -490,6 +490,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;
     // (undocumented)

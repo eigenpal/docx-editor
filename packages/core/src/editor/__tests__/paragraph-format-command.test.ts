@@ -661,6 +661,29 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(editor.surface!.formatting().tabStops).toEqual([]);
   });
 
+  test('a HEADER write merges against the header part, not the body', () => {
+    // The previous header test sent only `tabStops`, so it passed even when the write read
+    // its property base from the WRONG part: an empty base strips `w:pStyle`, which removed
+    // the very style stop the test was asserting about. Sending a property as well is what
+    // makes the part identity observable.
+    const editor = mountWithHeader();
+    expect(editor.surface!.enterHeaderFooter({ rId: 'rIdHdr', kind: 'header' })).toBe(true);
+    editor.surface!.selectAll();
+
+    editor.exec({ type: 'setParagraphFormat', alignment: 'center' });
+
+    // The HEADER part, not the body: `session.part()` is always document.xml.
+    const headerPart = editor.surface!.session.partFor({ kind: 'headerFooter', rId: 'rIdHdr' });
+    if (!headerPart) throw new Error('the header part is not in the session');
+    const header = serializeOoxmlPart(headerPart);
+    expect(header).toContain('w:val="center"');
+    // The style survives, so the paragraph still resolves its stop through the cascade.
+    expect(header).toContain('w:val="Tabbed"');
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 2160, alignment: 'center' },
+    ]);
+  });
+
   test('a stop the STYLE sets reads through, so an editor shows what is in force', () => {
     // Read from the flat cascade this would be invisible: the projection carries the
     // `w:tabs` element and none of its children.

@@ -13,6 +13,15 @@
  *
  * @public
  */
+/** Which paragraph-level reads the selection disagrees about. @public */
+export interface ParagraphDisagreements {
+  readonly alignment: boolean;
+  readonly spaceBeforePt: boolean;
+  readonly spaceAfterPt: boolean;
+  readonly lineSpacing: boolean;
+  readonly tabStops: boolean;
+}
+
 export interface ParagraphFlags {
   readonly contextualSpacing: boolean | null;
   readonly keepNext: boolean | null;
@@ -272,6 +281,16 @@ export interface RunFormatting {
    * next. Absent on a `Run`, like every other selection-level field here.
    */
   readonly paragraphFlags?: ParagraphFlags;
+  /**
+   * Which paragraph-level fields above are absent because the selection DISAGREES, as
+   * opposed to because nothing states them.
+   *
+   * A `null`/absent value alone cannot tell those apart, and both readings have shipped as
+   * bugs: a disagreement rendered as a concrete value is uncorrectable, because the value
+   * that would fix it is the one already on screen; an absent value rendered as "mixed"
+   * tells a single paragraph it disagrees with itself.
+   */
+  readonly disagrees?: ParagraphDisagreements;
   /**
    * The paragraph's custom tab stops at the selection, cascade included. Absent when the
    * selection disagrees or the paragraphs have none.

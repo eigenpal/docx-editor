@@ -45,10 +45,24 @@ const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
   indent: true,
   paragraphFlags: true,
   tabStops: true,
+  disagrees: true,
 };
 void COMPARED_FORMATTING_KEYS;
 
 /** Value equality for the snapshot's `formatting` sub-object (color compared by value). */
+/** Field-by-field, because the object is rebuilt on every read. */
+function sameDisagreements(a: RunFormatting['disagrees'], b: RunFormatting['disagrees']): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.alignment === b.alignment &&
+    a.spaceBeforePt === b.spaceBeforePt &&
+    a.spaceAfterPt === b.spaceAfterPt &&
+    a.lineSpacing === b.lineSpacing &&
+    a.tabStops === b.tabStops
+  );
+}
+
 export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
@@ -85,6 +99,7 @@ export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null
     a.paragraphFlags?.keepLines !== b.paragraphFlags?.keepLines ||
     a.paragraphFlags?.widowControl !== b.paragraphFlags?.widowControl ||
     a.paragraphFlags?.pageBreakBefore !== b.paragraphFlags?.pageBreakBefore ||
+    !sameDisagreements(a.disagrees, b.disagrees) ||
     // By VALUE: a fresh array per derive, so a reference compare would report every tick as
     // a change and re-render every `snapshot().formatting` subscriber on each keystroke.
     a.tabStops?.length !== b.tabStops?.length ||

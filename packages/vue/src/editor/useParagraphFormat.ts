@@ -42,6 +42,33 @@ export interface ParagraphFormatRead {
   readonly pageBreakBefore: ParagraphFlagState;
   /** Custom tab stops, cascade included. Null when the selection disagrees. */
   readonly tabStops: readonly ParagraphTabStop[] | null;
+  /**
+   * Which fields are `null` because the selection DISAGREES, as opposed to because nothing
+   * states them.
+   *
+   * A `null` alone cannot tell those apart, and both readings shipped as bugs: a
+   * disagreement rendered as a concrete value is uncorrectable, because the value that
+   * would fix it is the one already on screen; an absent value rendered as "mixed" tells a
+   * single paragraph it disagrees with itself.
+   */
+  readonly disagrees: {
+    readonly alignment: boolean;
+    readonly spaceBeforePt: boolean;
+    readonly spaceAfterPt: boolean;
+    readonly lineSpacing: boolean;
+    readonly tabStops: boolean;
+    readonly indentLeft: boolean;
+    readonly indentRight: boolean;
+    readonly indentFirstLine: boolean;
+  };
+  /**
+   * Whether the indent reads are UNKNOWN rather than disagreed.
+   *
+   * The engine reports no indent at all for a paragraph inside a table — correct, but not
+   * placeable on a ruler. A control must not call that "mixed": one paragraph cannot
+   * disagree with itself, and the commonest paragraph in a real document is in a cell.
+   */
+  readonly indentUnknown: boolean;
 }
 
 /**
@@ -107,6 +134,21 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
     widowControl: flags.widowControl,
     pageBreakBefore: flags.pageBreakBefore,
     tabStops: formatting.tabStops ?? null,
+    indentUnknown: !indent,
+    disagrees: {
+      // Defaulted rather than spread: `disagrees` is optional on the snapshot, and an
+      // undefined member reads as false by accident rather than by decision.
+      alignment: formatting.disagrees?.alignment ?? false,
+      spaceBeforePt: formatting.disagrees?.spaceBeforePt ?? false,
+      spaceAfterPt: formatting.disagrees?.spaceAfterPt ?? false,
+      lineSpacing: formatting.disagrees?.lineSpacing ?? false,
+      tabStops: formatting.disagrees?.tabStops ?? false,
+      // The indents carry their own per-field mixed flags, which is a real disagreement
+      // signal rather than a null standing in for two things.
+      indentLeft: indent?.mixed.left ?? false,
+      indentRight: indent?.mixed.right ?? false,
+      indentFirstLine: indent?.mixed.firstLine ?? false,
+    },
   };
 };
 
