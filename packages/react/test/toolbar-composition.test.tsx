@@ -472,6 +472,33 @@ describe('the shaped parts', () => {
     }
   });
 
+  test('the Paragraph dialog outlives the part that opened it', async () => {
+    // The line-spacing part moves between the formatting bar and the overflow panel every
+    // time the toolbar re-measures — a window resize, a browser zoom, opening devtools. A
+    // dialog mounted inside it went with it, mid-edit, with nothing written and no warning.
+    // It lives above the toolbar now, so unmounting the part leaves it standing.
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    await act(async () => {
+      (root.querySelector('button') as HTMLButtonElement).click();
+    });
+    const options = [...root.querySelectorAll('[role="menuitem"]')].find((row) =>
+      row.textContent?.includes('Line spacing options')
+    ) as HTMLButtonElement;
+    await act(async () => {
+      options.click();
+    });
+    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+
+    // The dialog is NOT inside the part, which is what lets it survive the part going away.
+    const part = view.container.querySelector('[data-slot="list.lineSpacing"]');
+    expect(part?.querySelector('[role="dialog"]')).toBeNull();
+    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
   test('closing the Paragraph dialog hands focus back to the line-spacing trigger', async () => {
     // Leaving focus on `<body>` strands a keyboard user: arrow keys and typing both go
     // nowhere, and it is a long walk back to the document. Returning it to the control that

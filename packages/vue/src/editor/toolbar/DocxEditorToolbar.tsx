@@ -90,6 +90,7 @@ import {
   type TableBorderWidthNamespace,
   type TableCellFillNamespace,
 } from './TableControls';
+import { ParagraphDialogHost } from '../paragraph-dialog-host';
 import { TableChromeProvider } from './useTableChrome';
 import { ToolbarEditingMode } from './EditingMode';
 
@@ -384,18 +385,25 @@ const DocxEditorToolbarRoot = defineComponent({
           })
         : content;
 
-      return h(
-        'div',
-        {
-          ref: (el: unknown) => attach(el as HTMLDivElement | null),
-          role: 'toolbar',
-          'data-testid': 'docx-toolbar',
-          class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
-          ...(measuring.value ? { 'data-overflow': '' } : {}),
-          onMousedown: guardToolbarMousedown,
-        },
-        [inner]
-      );
+      // The host wraps the measured element rather than living inside it: the bar measures
+      // its own children to decide what collapses into the overflow panel, and a dialog
+      // counted among them fed that measurement.
+      return h(ParagraphDialogHost, null, {
+        default: () => [
+          h(
+            'div',
+            {
+              ref: (el: unknown) => attach(el as HTMLDivElement | null),
+              role: 'toolbar',
+              'data-testid': 'docx-toolbar',
+              class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
+              ...(measuring.value ? { 'data-overflow': '' } : {}),
+              onMousedown: guardToolbarMousedown,
+            },
+            [inner]
+          ),
+        ],
+      });
     };
   },
 });

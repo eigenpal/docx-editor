@@ -130,7 +130,10 @@ describe('the Vue Paragraph dialog', () => {
       new URL('../src/editor/toolbar/LineSpacing.tsx', import.meta.url)
     ).text();
     expect(source).toContain('lineSpacing.options');
-    expect(source).toContain('DocxEditorParagraphDialog');
+    // The row asks the host for the dialog rather than mounting it: the part moves between
+    // the bar and the overflow panel, and a dialog mounted inside it went with it mid-edit.
+    expect(source).toContain('useParagraphDialog');
+    expect(source).toContain("paragraphDialog?.open(");
   });
 
   test('seeds every field from the live selection when it opens', async () => {

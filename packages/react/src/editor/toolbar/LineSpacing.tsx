@@ -9,13 +9,12 @@
 // showing a fixed list of things to apply.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
-import { useParagraphFormat } from '../useParagraphFormat';
+import { useParagraphDialog } from '../paragraph-dialog-host';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
@@ -62,10 +61,12 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   // The row opens a `setParagraphFormat` editor, so THAT is the command whose availability
   // decides whether it works — not `list.lineSpacing`, whose gate it used to borrow. Asked
   // through the same hook the dialog itself uses, so there is still one answer.
-  const paragraphFormat = useParagraphFormat();
+  // Through the registry, so the row's enabled state has the same single source every
+  // other control does — `toolbarCommandState`, via the `paragraph.dialog` slot's probe.
+  const paragraphDialogCommand = useEditorCommand('paragraph.dialog');
+  const paragraphDialog = useParagraphDialog();
   const label = useToolbarLabel();
   const [open, setOpen] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -157,13 +158,20 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
             type="button"
             role="menuitem"
             className="docx-toolbar__menu-item"
-            // Its OWN slot, not line spacing's: the row opens a `setParagraphFormat`
-            // editor, so that is the command whose availability decides whether it works.
-            disabled={!paragraphFormat.isEnabled}
+            // Its own slot, so the row is addressable like any other control and its
+            // enabled state comes from `toolbarCommandState` rather than a second
+            // implementation beside it.
+            data-slot="paragraph.dialog"
+            disabled={!paragraphDialogCommand.isEnabled}
+            title={paragraphDialogCommand.disabledReason ?? undefined}
             onMouseDown={guardToolbarMousedown}
             onClick={() => {
               setOpen(false);
-              setDialogOpen(true);
+              // The dialog lives above the toolbar: this part moves between the bar and the
+              // overflow panel, and a dialog mounted inside it went with it, mid-edit.
+              // The trigger, not the menu item: the menu closes in this same gesture, so
+              // the row the user clicked is gone by the time the dialog does.
+              paragraphDialog?.open(triggerRef.current);
             }}
           >
             {label('lineSpacing.options')}
@@ -199,20 +207,6 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
           </button>
         </div>
       ) : null}
-      {/* The rows above are Word's shortcuts — a fixed Add, a zeroing Remove. The dialog is
-          the escape hatch for an exact value, which is what "Line spacing options…" opens
-          in Word and what this menu had no answer for. */}
-      <DocxEditorParagraphDialog
-        open={dialogOpen}
-        onClose={() => {
-          setDialogOpen(false);
-          // Focus goes back to the control that opened it — the standard dialog contract,
-          // and the one mechanism here that touches neither the selection nor the scroll
-          // position. Leaving focus on `<body>` strands a keyboard user: arrow keys and
-          // typing both go nowhere, and it takes ten Tab presses to reach the document.
-          triggerRef.current?.focus({ preventScroll: true });
-        }}
-      />
     </span>
   );
 }
