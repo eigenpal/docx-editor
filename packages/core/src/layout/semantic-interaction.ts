@@ -498,21 +498,20 @@ function positionIn(order: readonly string[], paragraphId: string): number {
 /**
  * Order a selection's endpoints, against the order of the story they live in.
  *
- * `order` is REQUIRED on this internal seam, and deliberately so. It used to default to the
- * body's `documentOrder`,
- * which meant every new call site was body-blind unless its author remembered — and a
- * two-paragraph selection in a header ranked both endpoints at -1, gave up, and returned null.
- * The reads built on this then answered for the head paragraph alone. Making the caller state
- * the order turns that from a silent wrong answer into a compile error.
+ * `order` is REQUIRED, here and on every public entry point that calls this. It used to
+ * default to the body's `documentOrder`, which meant every new call site was body-blind unless
+ * its author remembered — and a two-paragraph selection in a header ranked both endpoints at
+ * -1, gave up, and returned null. The reads built on this then answered for the head paragraph
+ * alone. Making the caller state the order turns that from a silent wrong answer into a
+ * compile error.
+ *
+ * A caller holding only a layout and a selection passes {@link everyStoryOrder}, published for
+ * exactly that: it covers every story, and a selection cannot span two of them.
  */
 export function orderPositions(
   selection: SemanticSelection,
   order: readonly string[]
 ): { from: SemanticPosition; to: SemanticPosition } | null {
-  // NOTE: still required here. This is the internal seam every selection read goes through,
-  // and the compiler finding a call site that forgot the story's order is the whole reason it
-  // is required. The PUBLIC entry points below default it instead, because a consumer holding
-  // only a layout and a selection has nothing else to pass.
   // Same paragraph needs no document-wide order at all.
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return selection.anchor.offset <= selection.head.offset
