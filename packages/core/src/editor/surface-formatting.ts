@@ -8,7 +8,7 @@
 // flattened cascade.
 
 import {
-  documentOrder,
+  everyStoryOrder,
   paragraphsInCells,
   spansInCells,
   spansInSelection,
@@ -458,7 +458,10 @@ function selectionSpans(
   paragraphOrder?: readonly string[]
 ): readonly StyleSpanRecord[] {
   if (cells && cells.length > 0) return spansInCells(layout, cells);
-  return spansInSelection(layout, selection, paragraphOrder ?? documentOrder(layout));
+  // `everyStoryOrder`, not `documentOrder`. The fallback is only reached by a caller that
+  // named no story, and the body's order is wrong for every caret outside it — which is the
+  // exact defect the parameter above exists to prevent, left standing in its own fallback.
+  return spansInSelection(layout, selection, paragraphOrder ?? everyStoryOrder(layout));
 }
 
 /** The run properties in force across the selection, taken from its first span. */
@@ -714,9 +717,11 @@ function paragraphsTouched(
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return [selection.head.paragraphId];
   }
-  // The ACTIVE story's order when the caller knows it; `documentOrder` is the body's, and a
-  // header selection resolves to -1 in it.
-  const order = paragraphOrder ?? documentOrder(layout);
+  // The ACTIVE story's order when the caller knows it, and every story when it does not.
+  // `documentOrder` is the body's, and a header selection resolves to -1 in it — so the
+  // fallback used to return the head paragraph alone and the caller saw a one-paragraph
+  // selection where the reader had made a two-paragraph one.
+  const order = paragraphOrder ?? everyStoryOrder(layout);
   const anchorIndex = order.indexOf(selection.anchor.paragraphId);
   const headIndex = order.indexOf(selection.head.paragraphId);
   if (anchorIndex === -1 || headIndex === -1) return [selection.head.paragraphId];

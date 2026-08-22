@@ -1,13 +1,14 @@
-// The order these public reads fall back to spans every story.
+// `everyStoryOrder` serves a selection in any story.
 //
-// `selectionRects` and `spansInSelection` take the ACTIVE story's paragraph order. Omitting it
-// used to mean the BODY's, and that is what made a multi-paragraph selection in a header come
-// back empty: both endpoints ranked -1 against a list they were not in, the walk gave up, and
-// the size box emptied on a two-paragraph header selection.
+// `selectionRects` and `spansInSelection` take the ACTIVE story's paragraph order, and it is
+// REQUIRED: any default is one story's order, and it is wrong for every caret outside that
+// story. It used to default to the BODY's, which is what made a multi-paragraph selection in a
+// header come back empty — both endpoints ranked -1 against a list they were not in, the walk
+// gave up, and the size box emptied on a two-paragraph header selection.
 //
-// The default is now every story the layout paints. A selection cannot span two stories, so
-// only the order within one is ever compared — which makes the shared list correct, not merely
-// convenient.
+// `everyStoryOrder` is what a caller with no story in hand PASSES. This asserts it is correct
+// for all five: a selection cannot span two stories, so only the order WITHIN one is ever
+// compared, and the shared list gets that right for each.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -20,7 +21,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { STORY_KINDS } from './story-parity-contract.ts';
 import { PROBE } from './story-parity-fixture.ts';
-import { openStory } from './story-parity-harness.ts';
+import { openStory, partOfNodeId } from './story-parity-harness.ts';
 
 describe('everyStoryOrder serves a selection in any story', () => {
   for (const story of STORY_KINDS) {
@@ -44,7 +45,7 @@ describe('everyStoryOrder serves a selection in any story', () => {
 
         // And it agrees with the story's OWN order, which is what makes the shared list
         // correct rather than merely non-empty.
-        const scoped = every.filter((id) => id.startsWith(partOf(from)));
+        const scoped = every.filter((id) => partOfNodeId(id) === partOfNodeId(from));
         expect(spansInSelection(layout, selection, every)).toEqual(
           spansInSelection(layout, selection, scoped)
         );
@@ -58,8 +59,3 @@ describe('everyStoryOrder serves a selection in any story', () => {
     });
   }
 });
-
-/** The part a node id belongs to, with its `#` separator, for a prefix match. */
-function partOf(nodeId: string): string {
-  return `${nodeId.slice(0, nodeId.indexOf('#'))}#`;
-}
