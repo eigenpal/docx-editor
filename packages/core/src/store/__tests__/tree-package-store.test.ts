@@ -14,7 +14,8 @@ import {
   type TreePackageStoreOptions,
   type TreeModelChange,
 } from '../store/tree-package-store.ts';
-import { readOoxmlPackage, writeOoxmlPackage } from '../package/ooxml-package.ts';
+import { readOoxmlPackage, withPart, writeOoxmlPackage } from '../package/ooxml-package.ts';
+import { readOoxmlPart } from '../package/ooxml-tree.ts';
 import { resolveHeaderFooterPartsBySection } from '../package/hf-references.ts';
 import { openTreeSession } from '../../binding/tree-session.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
@@ -563,5 +564,63 @@ describe('TreePackageStore — currentPackage identity memo', () => {
     const after = store.currentPackage();
     expect(after).not.toBe(before);
     expect(store.currentPackage()).toBe(after);
+  });
+});
+
+describe('forms protection follows a settings replacement', () => {
+  const SETTINGS_XML =
+    `<w:settings xmlns:w="${W}">` +
+    '<w:documentProtection w:edit="forms" w:enforcement="1"/>' +
+    '</w:settings>';
+
+  /** Type one character into a part's first paragraph. True when it landed. */
+  const edits = (
+    store: TreePackageStore,
+    scope: Parameters<TreePackageStore['transact']>[0],
+    part: OoxmlPart
+  ): boolean => {
+    const paragraphId = paragraphIds(part)[0];
+    if (paragraphId === undefined) throw new Error('no paragraph to edit');
+    return store.transact(scope, (ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId, offset: 0, text: 'X' });
+    }).ok;
+  };
+
+  const BODY = { kind: 'body' } as const;
+  const HF = { kind: 'headerFooter', rId: 'rId10' } as const;
+
+  test('a document that GAINS protection locks the body as well as its stories', () => {
+    const store = openPackage(
+      build({
+        references: `<w:headerReference w:type="default" r:id="rId10"/>`,
+        rels: `<Relationship Id="rId10" Type="${R}/header" Target="header1.xml"/>`,
+        headerParts: { 'word/header1.xml': HEADER_XML('letterhead') },
+        overrides: HEADER_OVERRIDE,
+      })
+    );
+    const opened = store.openHeaderFooterStore('rId10');
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const headerPart = opened.store.part;
+
+    // Unprotected: both stories accept an edit, which is the premise.
+    expect(edits(store, BODY, store.body.part), 'the body refused before protection').toBe(true);
+    expect(edits(store, HF, headerPart), 'the header refused before protection').toBe(true);
+
+    // Protection arrives through a SHELL REPLACEMENT — the path that moves a part without
+    // bumping the revision. Each store keeps its own working copy of the package, so the body
+    // read a stale `settings.xml` and stayed editable while the story stores locked.
+    // Protection that holds in a header and not in the body is worse than protection that
+    // holds nowhere, because it looks enforced.
+    const settings = readOoxmlPart(SETTINGS_XML, {
+      name: '/word/settings.xml',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml',
+    });
+    expect(settings.ok).toBe(true);
+    if (!settings.ok) return;
+    store.replacePackageShell(withPart(store.currentPackage(), settings.part));
+
+    expect(edits(store, HF, headerPart), 'the header still accepted an edit').toBe(false);
+    expect(edits(store, BODY, store.body.part), 'the BODY still accepted an edit').toBe(false);
   });
 });

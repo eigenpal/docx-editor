@@ -2722,6 +2722,7 @@ export function mountPaginatedSurface(
   hfScope = createHeaderFooterScopeController({
     session,
     layout: () => currentLayout,
+    sectionAtPage,
     selection: () => selection,
     setScopeSelection: (next) => {
       // Entering or leaving a header/footer moves the caret ACROSS STORIES;

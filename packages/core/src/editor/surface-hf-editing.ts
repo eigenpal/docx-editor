@@ -63,6 +63,15 @@ export interface HeaderFooterScopeController {
 export function createHeaderFooterScopeController(deps: {
   session: TreeDocxSessionView;
   layout(): SemanticLayout;
+  /**
+   * The section a painted page belongs to.
+   *
+   * One header part can be the default of SEVERAL sections, so "the first section that names
+   * this rId" is a different page's geometry from the one the reader is on. Binding the
+   * PAINTED page's section is what keeps a programmatic entry agreeing with a pointer entry,
+   * which already forwards it.
+   */
+  sectionAtPage(pageIndex: number): { sectionIndex: number; sectionStart: number };
   selection(): SemanticSelection;
   setScopeSelection(next: SemanticSelection): void;
   noteModelMoved(): void;
@@ -168,7 +177,14 @@ export function createHeaderFooterScopeController(deps: {
       args.sectionIndex ??
       (alreadyOpen && prior?.sectionIndex !== undefined
         ? prior.sectionIndex
-        : fromPackage?.sectionIndex);
+        : // The PAINTED page's section when the story is on the page set, and only then the
+          // package's guess. Leaving this undefined for a painted story sent every downstream
+          // reader to "the first section naming this rId" — which, for a header shared by
+          // several sections, is not the page the reader is looking at. Page Setup then wrote
+          // that other section's `w:sectPr`, and the ruler clamped to its geometry.
+          found
+          ? deps.sectionAtPage(pageIndex).sectionIndex
+          : fromPackage?.sectionIndex);
 
     activeHf = {
       scope: { kind: 'headerFooter', rId: args.rId },

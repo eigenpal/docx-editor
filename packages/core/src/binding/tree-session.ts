@@ -919,6 +919,17 @@ export function openTreeSession(
     // Keyed on the PACKAGE revision, because the index now spans every story: a split in a
     // header mints a paragraph the body revision knows nothing about, and against that key the
     // map would have kept answering for the document as it was before.
+    //
+    // COST, measured: ~3.8 ms to rebuild at 11k anchors, against 0.009 ms for a cached read.
+    // The walk is not where it goes — memoizing `allParagraphs` per part takes only ~7% off —
+    // it is the five maps this composes over every paragraph. A body edit therefore pays for
+    // re-indexing every story to answer, on the snapshot path, two `paraIdByNode` lookups.
+    //
+    // The fix is a composed index that resolves a lookup across per-part sub-maps instead of
+    // merging them, so a `.get` costs O(parts) rather than O(paragraphs). Every production
+    // caller only reads by key, so it would serve them all. Deliberately NOT done here: it
+    // changes the shape every consumer of `ParagraphAnchorIndex` sees, and this lane has
+    // already taken one regression per review round from smaller changes than that.
     const revision = packageStore.packageRevision;
     // AND which stories are open. Opening one mints its paraIds without publishing an edit, so
     // the package revision does not move and an index built a moment earlier would be served
@@ -1280,9 +1291,23 @@ export function openTreeSession(
       },
 
       bookmarks: () => {
-        const store = bodyStore();
-        if (!bookmarksCache || bookmarksCache.revision !== store.revision) {
-          bookmarksCache = { revision: store.revision, index: buildBookmarkIndex(store.part) };
+        // EVERY STORY, keyed on the PACKAGE revision. A bookmark in a header is a bookmark in
+        // the document: an internal hyperlink that names it has to reach it, and the reader
+        // navigating to one has to land there. Reading the body alone answered that neither
+        // existed — navigation returned false and the link sat inert — and keying on the body
+        // revision meant a bookmark added in a header never invalidated the answer either.
+        //
+        // BODY FIRST so it wins a name clash, which is the existing first-in-order rule and
+        // what Word does: a duplicate name resolves to the body's.
+        const revision = packageStore.packageRevision;
+        if (!bookmarksCache || bookmarksCache.revision !== revision) {
+          const merged = new Map(buildBookmarkIndex(bodyStore().part));
+          for (const part of furnitureAndNoteParts()) {
+            for (const [name, anchor] of buildBookmarkIndex(part)) {
+              if (!merged.has(name)) merged.set(name, anchor);
+            }
+          }
+          bookmarksCache = { revision, index: merged };
         }
         return bookmarksCache.index;
       },

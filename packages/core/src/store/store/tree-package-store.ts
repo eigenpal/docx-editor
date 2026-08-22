@@ -237,7 +237,16 @@ export class TreePackageStore {
     // unit — a comment's markers in the story plus its body in `comments.xml` plus the
     // relationship and content-type override — needs the package as its working set, and a
     // store handed one part rebuilds a stub package the invariant check then refuses.
-    this.body = new TreeDocumentStore(this.pkg, main.name, { historyLimit: this.historyLimit });
+    this.body = new TreeDocumentStore(this.pkg, main.name, {
+      historyLimit: this.historyLimit,
+      // The SAME live getter the story stores get. A store keeps its own working copy of the
+      // package, so a `settings.xml` replaced through the coordinator rather than through this
+      // store's own transaction left the body reading stale protection — and once the story
+      // stores read it live, the body was the one story a protected document still let you
+      // edit. Protection that holds in a header and not in the body is worse than protection
+      // that holds nowhere: it looks enforced.
+      settingsPart: () => settingsPartOf(this.pkg),
+    });
     this.body.setStoryRef({ kind: 'body', partName: main.name });
     // Body is always open; HF stores are opened lazily and count against the cap.
   }
@@ -770,7 +779,14 @@ export class TreePackageStore {
    * header, and a store whose part is still in the package is never evicted.
    */
   openStoryParts(): readonly OoxmlPart[] {
-    return [...this.stories.values()].map((store) => store.part);
+    // PARKED stores excluded. A deleted story's store stays in the map so undo and redo keep
+    // its identity, but its part is no longer in the package — and a caller asking which
+    // stories are open is asking about the document as it stands. Indexing a parked part left
+    // a deleted header's paragraphs addressable by paraId, so an anchor into a story the
+    // reader had removed still resolved.
+    return [...this.stories.values()]
+      .map((store) => store.part)
+      .filter((part) => this.pkg.parts.has(part.name));
   }
 
   /** How many story stores are open (body counts as one). */

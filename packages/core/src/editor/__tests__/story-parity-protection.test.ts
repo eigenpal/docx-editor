@@ -17,7 +17,6 @@ import { strToU8, unzipSync, zipSync, strFromU8 } from 'fflate';
 import { STORY_KINDS, type StoryKind } from './story-parity-contract.ts';
 import { PROBE, storyParityDocx } from './story-parity-fixture.ts';
 import { openStory, PART_OF_STORY, savedParts } from './story-parity-harness.ts';
-import type { DocxEditorInstance } from '../docx-editor.ts';
 
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
