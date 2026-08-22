@@ -8,7 +8,7 @@
 export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getDocument", "getBody", "getParagraphs", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getDocument", "getBody", "getParagraphs", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getResolvedNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
 export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
@@ -426,6 +426,18 @@ export type AutomationOperation =
 | {
     readonly op: 'getNoteText';
     readonly note: AutomationHandle;
+}
+/**
+* One note's text as a RESOLVED review display mode paints it.
+*
+* `proposed` answers what the note becomes if every tracked change is accepted; `original`
+* what it was before any of them. Unlike `getText`, this is display text rather than
+* model-offset authority, so paragraph marks a resolved view removes are absent here too.
+*/
+| {
+    readonly op: 'getResolvedNoteText';
+    readonly note: AutomationHandle;
+    readonly displayMode: AutomationResolvedDisplayMode;
 }
 /** Whether a note is a footnote or an endnote. */
 | {
