@@ -444,17 +444,6 @@ export interface CustomNodePayloadRead {
 }
 
 /**
- * The payload every control in a story binds to, keyed by the CONTROL's canonical node id.
- *
- * Keyed by the control rather than by the store node because that is the question a reader
- * actually has — "what does this chip carry" — and because two stores may each hold a `cx1`.
- * Resolved here rather than by a capability package: the stores are package parts, and a
- * derivation that only gets story parts has no way to reach them.
- *
- * Every store the story relates to, so a document carrying two definitions' payloads answers
- * for both without anyone naming a namespace.
- */
-/**
  * The customXml stores one part relates, with each store's nodes indexed by id.
  *
  * Memoized per package, because the owner is a constant and the readers under it are not
@@ -486,6 +475,17 @@ function customXmlStoreNodes(
   return built;
 }
 
+/**
+ * The payload every control in a story binds to, keyed by the CONTROL's canonical node id.
+ *
+ * Keyed by the control rather than by the store node because that is the question a reader
+ * actually has — "what does this chip carry" — and because two stores may each hold a `cx1`.
+ * Resolved here rather than by a capability package: the stores are package parts, and a
+ * derivation that only gets story parts has no way to reach them.
+ *
+ * Every store the story relates to, so a document carrying two definitions' payloads answers
+ * for both without anyone naming a namespace.
+ */
 export function customNodePayloadsByControl(
   pkg: OoxmlPackage,
   storyPartName: string,

@@ -848,7 +848,7 @@ export interface CustomNodePayloadRead {
     readonly nodeId: string;
 }
 
-// @public (undocumented)
+// @public
 export function customNodePayloadsByControl(pkg: OoxmlPackage, storyPartName: string,
 dataOwnerPartName?: string): ReadonlyMap<string, CustomNodePayloadRead>;
 

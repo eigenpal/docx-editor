@@ -37,6 +37,7 @@ import {
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   reviewItemKey,
   reviewItemsAt,
   reviewThreadRootOf,
@@ -804,6 +805,54 @@ export function mountPaginatedSurface(
     textOf: (paragraphId) => textOf(paragraphId),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
   });
+  /**
+   * Put the surface in the story that holds `paragraphId`, for a JUMP.
+   *
+   * A bookmark or an internal link can name a paragraph in any story, and moving the caret
+   * there while the scope stayed on the body left the two disagreeing: `activeScope` said
+   * body, the caret sat on a paragraph the body store has never heard of, and every keystroke
+   * after it was refused with nothing said. False means the story could not be opened, and the
+   * caller must not jump anyway.
+   */
+  const enterStoryHolding = (paragraphId: string): boolean => {
+    const scope = storyScopeOfNodeId(session, paragraphId, { kind: 'body' });
+    if (scope.kind === 'body') {
+      // Leaving is unconditional here, unlike entering: a body target is not somewhere
+      // staying in the open story could help.
+      noteOps?.exitNote();
+      hfScope?.exitHeaderFooter();
+      return true;
+    }
+    if (scope.kind === 'headerFooter') {
+      const active = hfScope?.activeScope();
+      if (active?.kind === 'headerFooter' && active.rId === scope.rId) return true;
+      noteOps?.exitNote();
+      return hfScope?.enterHeaderFooter({ rId: scope.rId }) ?? false;
+    }
+    // A notes PART holds every note, so the scope has to name the NOTE the paragraph is in,
+    // and only the painted layout knows which one that is.
+    const scopeId = noteScopeIdHolding(paragraphId);
+    if (!scopeId) return false;
+    if (noteOps?.activeNoteScope()?.id === scopeId) return true;
+    hfScope?.exitHeaderFooter();
+    return noteOps?.enterNote(scopeId) ?? false;
+  };
+
+  /** The note whose painted fragments hold this paragraph, or null. */
+  const noteScopeIdHolding = (paragraphId: string): string | null => {
+    for (const page of currentLayout.pages) {
+      for (const area of [page.footnotes, page.endnotes]) {
+        if (!area) continue;
+        for (const note of area.notes) {
+          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+            if (fragment.paragraphId === paragraphId) return note.scopeId;
+          }
+        }
+      }
+    }
+    return null;
+  };
+
   const navigation = createSurfaceNavigation({
     pagesLayer,
     container,
@@ -815,6 +864,7 @@ export function mountPaginatedSurface(
     linkById: (linkId) => fieldLinks.linkById(linkId) ?? hyperlinks.linkById(linkId),
     drawingLinkById: (drawingNodeId) => drawingLinkByIdFromLayout(currentLayout, drawingNodeId),
     setSelection: (position) => setSelection(collapsedAt(position)),
+    enterStoryFor: (paragraphId) => enterStoryHolding(paragraphId),
     isCollapsedSelection: () =>
       selection.anchor.paragraphId === selection.head.paragraphId &&
       selection.anchor.offset === selection.head.offset,

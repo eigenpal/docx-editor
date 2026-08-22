@@ -657,7 +657,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. Tracked note inserts and notes in headers and footers are out of scope.',
+      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks and page setup. Tracked note inserts and notes in headers and footers are out of scope.',
   },
   {
     id: 'layout.columns',
@@ -971,10 +971,11 @@ export const wordFeatures: WordFeature[] = [
     id: 'collab.find-replace',
     name: 'Find & replace',
     category: 'collaboration',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes: 'Searches the body story. Text in headers, footers and notes is not matched.',
   },
   {
     id: 'collab.clipboard',

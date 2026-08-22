@@ -132,6 +132,29 @@ describe('bookmarks cover every story', () => {
   });
 });
 
+describe('jumping to a bookmark enters the story it is in', () => {
+  for (const [name, part, scope] of [
+    ['BodyMark', '/word/document.xml', { kind: 'body' }],
+    ['HeaderMark', '/word/header1.xml', { kind: 'headerFooter', rId: HEADER_R_ID }],
+    ['NoteMark', '/word/footnotes.xml', { kind: 'note', id: 'footnote:1' }],
+  ] as const) {
+    test(`${name}: the caret lands there and a keystroke follows it`, () => {
+      const editor = mount();
+      const surface = editor.surface!;
+      expect(surface.navigation.goToBookmark(name), 'the jump was refused').toBe(true);
+      expect(surface.state().selection.head.paragraphId).toStartWith(`${part}#`);
+
+      // Widening the bookmark index without this made the jump SUCCEED into a story the
+      // scope had not opened: `activeScope` said body, the caret sat on a paragraph the body
+      // store has never heard of, and every keystroke after it was refused with nothing said.
+      expect(surface.activeScope(), 'the scope did not follow the caret').toEqual(scope);
+      const before = surface.session.packageRevision();
+      surface.type('Z');
+      expect(surface.session.packageRevision(), 'the keystroke vanished').not.toBe(before);
+    });
+  }
+});
+
 describe('a deleted story stops being addressable', () => {
   test('its paragraphs leave the anchor index', () => {
     const editor = mount();

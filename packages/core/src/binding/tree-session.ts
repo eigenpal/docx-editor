@@ -11,6 +11,7 @@
 // is a paragraph; unknown content survives because it is in the tree; so those fields
 // collapse to a single honest statement of what the part contains.
 
+import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
 import type { Node as PMNode } from 'prosemirror-model';
 import { paragraphOrderOfPart, type ReviewItem } from '../layout/review-support.ts';
 import {
@@ -1657,58 +1658,5 @@ export function openTreeSession(
  * so body text silently disagreed with the offsets the ops and the layout use. A caret at
  * offset 12 and a `bodyText().slice(12)` have to mean the same place.
  */
-/**
- * The body story's text, every paragraph of it.
- *
- * `allParagraphs`, not `bodyParagraphs`. The latter collects only DIRECT `w:p` children of
- * `w:body` because it exists to match the ProseMirror projection, so reading text through it
- * silently dropped every table cell and every paragraph inside a block content control — a
- * table-heavy document came back nearly empty. It also broke this read's own contract, which
- * says a caret at offset 12 and `bodyText().slice(12)` mean the same place: they cannot, once
- * a table precedes the caret.
- */
-function projectedText(part: OoxmlPart): string {
-  return allParagraphs(part)
-    .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
-    .join('\n');
-}
-
-/**
- * Whether the story contains a comment anchor (`w:commentRangeStart` /
- * `w:commentReference`), from STORE vocabulary alone.
- *
- * Deliberately not `commentAnchorsOfStory`: that is review-model derivation and
- * lives with the review module. This answers presence only, for
- * `hasReviewContent`, and must keep answering with no module registered.
- *
- * Memoized per immutable node, because `snapshot()` reads `hasReviewContent`
- * every tick: without the memo a comment-less document paid a full-tree walk
- * per keystroke (the answer only early-exits when an anchor IS found). An edit
- * replaces only the nodes on its path, so every untouched subtree answers from
- * the cache. Depth-capped like the sibling walks — nesting is the cheapest
- * unbounded axis in an attacker-controlled file.
- */
-const commentAnchorPresenceCache = new WeakMap<OoxmlElement, boolean>();
-
-function storyCarriesCommentAnchor(node: OoxmlElement, depth = 0): boolean {
-  if (depth > 64) return false;
-  const cached = commentAnchorPresenceCache.get(node);
-  if (cached !== undefined) return cached;
-  let present = false;
-  for (const child of node.children as readonly OoxmlNode[]) {
-    if (child.kind === 'textValue') continue;
-    if (
-      child.kind === 'commentRangeStart' ||
-      child.kind === 'commentReference' ||
-      storyCarriesCommentAnchor(child, depth + 1)
-    ) {
-      present = true;
-      break;
-    }
-  }
-  commentAnchorPresenceCache.set(node, present);
-  return present;
-}
-
 /** The origin a host should use when committing a reconciliation rather than a user edit. */
 export const PROJECTION_ORIGIN = ORIGIN_IDS.projection;

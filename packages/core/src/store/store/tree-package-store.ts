@@ -16,6 +16,7 @@
 
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
+import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship, type RelationshipRecord } from '../package/relationships.ts';
@@ -768,25 +769,9 @@ export class TreePackageStore {
     return store?.selectionForRedo() ?? null;
   }
 
-  /**
-   * The live part of every story store ALREADY open, body excluded.
-   *
-   * Already open, and never opening one. `w14:paraId` is minted when a story store opens, and
-   * the coordinator's package only learns of the minting on the first commit — so a header the
-   * reader has entered but not yet typed in carries none in the package copy, and anything
-   * indexing from there cannot address it. Reading the open stores closes that gap without
-   * paying the cost the cap exists for: resolving every scope in turn would open a store per
-   * header, and a store whose part is still in the package is never evicted.
-   */
+  /** See {@link openStoryPartsOf}. */
   openStoryParts(): readonly OoxmlPart[] {
-    // PARKED stores excluded. A deleted story's store stays in the map so undo and redo keep
-    // its identity, but its part is no longer in the package — and a caller asking which
-    // stories are open is asking about the document as it stands. Indexing a parked part left
-    // a deleted header's paragraphs addressable by paraId, so an anchor into a story the
-    // reader had removed still resolved.
-    return [...this.stories.values()]
-      .map((store) => store.part)
-      .filter((part) => this.pkg.parts.has(part.name));
+    return openStoryPartsOf(this.stories, this.pkg);
   }
 
   /** How many story stores are open (body counts as one). */
@@ -794,20 +779,9 @@ export class TreePackageStore {
     return 1 + this.stories.size;
   }
 
-  /**
-   * Which stories are open, as a value that changes whenever the set does.
-   *
-   * A cache key for anything derived from {@link TreePackageStore.openStoryParts}. Opening a
-   * story store deliberately does NOT bump the package revision — it publishes no edit — but it
-   * does mint `w14:paraId` for that story, so a paraId index built before the open is stale
-   * afterwards and nothing else would say so. Measured: a host that reads `snapshot()` on mount
-   * (every host does) poisoned that index with a body-only answer for the rest of the session,
-   * and a caret in a header reported no selection at all.
-   *
-   * The NAMES, not the count: closing one story and opening another leaves the count equal.
-   */
+  /** See {@link openStoryTokenOf}. */
   openStoryToken(): string {
-    return [...this.stories.keys()].sort().join(',');
+    return openStoryTokenOf(this.stories, this.pkg);
   }
 
   /**

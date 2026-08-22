@@ -108,7 +108,17 @@ export function createHeaderFooterScopeController(deps: {
     if (!activeHf) return;
     const next = resolvePreferredFurniturePage(deps.layout(), activeHf, deps.materializedPages?.());
     if (next === activeHf.pageIndex) return;
-    activeHf = { ...activeHf, pageIndex: next };
+    // The SECTION moves with the page. `resolvePreferredFurniturePage` scans every page
+    // hosting this story and takes the first materialized one, and for a header shared across
+    // sections that page can be in a different section from the one bound at entry. Carrying
+    // the old index over meant a repagination or a scroll left the bound section pointing at a
+    // page the reader is no longer on — the same wrong-section write the entry path was just
+    // fixed for, arriving by a different route.
+    activeHf = {
+      ...activeHf,
+      pageIndex: next,
+      sectionIndex: deps.sectionAtPage(next).sectionIndex,
+    };
   };
 
   const enterHeaderFooter = (args: {

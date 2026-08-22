@@ -800,12 +800,6 @@ export function contentControlRecordsInPart(
   return controls.map(recordWithoutGeometry);
 }
 
-/**
- * The innermost content control holding `paragraphId`, in `part`.
- *
- * Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside a
- * control is the one the caret is actually in.
- */
 /** Every paragraph id anywhere under a control, tables and nested controls included. */
 function paragraphsUnder(control: OoxmlElement): string[] {
   const found: string[] = [];
@@ -827,6 +821,12 @@ function paragraphsUnder(control: OoxmlElement): string[] {
   return found;
 }
 
+/**
+ * The innermost content control holding `paragraphId`, in `part`.
+ *
+ * Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside a
+ * control is the one the caret is actually in.
+ */
 export function contentControlHoldingParagraph(
   part: OoxmlPart,
   paragraphId: string

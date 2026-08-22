@@ -44,6 +44,16 @@ export interface NavigationDeps {
   /** Sanitized `a:hlinkClick` on a painted drawing, keyed by drawing node id. */
   readonly drawingLinkById?: (drawingNodeId: string) => SurfaceHyperlink | null;
   readonly setSelection: (position: { paragraphId: string; offset: number }) => void;
+  /**
+   * Put the surface in the story a jump target is in, before the caret moves there.
+   *
+   * A bookmark, and now an internal link, can name a paragraph in a header, a footer or a
+   * note. Moving the caret there while the scope stayed on the body left the two disagreeing:
+   * `activeScope` said body, the caret sat on a paragraph the body store has never heard of,
+   * and every keystroke after it was refused with nothing said. Returns false when the story
+   * cannot be opened, which is a refusal the caller must honour rather than jump anyway.
+   */
+  readonly enterStoryFor?: (paragraphId: string) => boolean;
   readonly isCollapsedSelection: () => boolean;
   /** Reconcile virtualization immediately after a programmatic jump. */
   readonly onScrolled?: () => void;
@@ -105,6 +115,9 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     // Geometry from the LAYOUT, not the DOM. The target of a cross-document jump is normally
     // on a virtualized page with no DOM at all, so `scrollIntoView` would resolve exactly the
     // jumps that did not need it and fail every one that did.
+    // BEFORE the geometry is read: entering re-scopes the layout this resolves against, so
+    // doing it afterwards would measure the target against the story the reader was leaving.
+    if (deps.enterStoryFor && !deps.enterStoryFor(position.paragraphId)) return false;
     const layout = deps.layout();
     const caret = caretAt(layout, position);
     if (!caret) return false;

@@ -269,7 +269,7 @@ describe('selection formatting is the same in every story', () => {
     return byStory;
   };
 
-  for (const { label, paragraphIndex, range, knownBroken } of [
+  for (const { label, paragraphIndex, range } of [
     { label: 'at a caret in a centred, indented, bold paragraph', paragraphIndex: PROBE.formatted },
     { label: 'at a caret in a plain paragraph', paragraphIndex: PROBE.plain },
     { label: 'at a caret in a numbered list item', paragraphIndex: PROBE.numbered },
@@ -284,7 +284,7 @@ describe('selection formatting is the same in every story', () => {
       range: true,
     },
   ] as const) {
-    test(`${label}${knownBroken ? ' (known broken)' : ''}`, () => {
+    test(label, () => {
       const byStory = formattingIn(paragraphIndex, range);
       const body = JSON.stringify(byStory.get('body'));
       // Not vacuous: the body read has to carry something before comparing to it means anything.
@@ -293,13 +293,6 @@ describe('selection formatting is the same in every story', () => {
       const differing = FURNITURE_AND_NOTE_STORIES.filter(
         (story) => JSON.stringify(byStory.get(story)) !== body
       );
-      if (knownBroken) {
-        expect(
-          differing.length,
-          'selection formatting now agrees in every story: drop the knownBroken'
-        ).toBeGreaterThan(0);
-        return;
-      }
       for (const story of differing) {
         expect(JSON.stringify(byStory.get(story)), `${story} disagrees with the body`).toBe(body);
       }
