@@ -309,7 +309,8 @@
       "tabRemoveAt": null,
       "refused": null,
       "tabMixed": null,
-      "mixed": null
+      "mixed": null,
+      "notShown": null
     }
   },
   "comments": {

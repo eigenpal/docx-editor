@@ -661,6 +661,30 @@ describe('tab stops, which a flat property write could never author', () => {
     expect(editor.surface!.formatting().tabStops).toEqual([]);
   });
 
+  test('a tab-stops-only edit leaves every other property alone', () => {
+    // `setParagraphProperties` REPLACES the paragraph's authorable `w:pPr` children with
+    // what it is handed, so an edit that names no property must not push it.
+    //
+    // Honest about its reach: this asserts the INVARIANT, not the guard. With the property
+    // base read correctly the unconditional push preserved everything too, so deleting the
+    // guard does not fail here — what fails is the header test, which is where a wrong base
+    // becomes observable. This is the belt to that pair of braces.
+    const editor = mount(
+      p('alpha', '<w:pStyle w:val="Quote"/><w:jc w:val="center"/><w:keepNext/>')
+    );
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+
+    const xml = xmlOf(editor);
+    expect(xml).toContain('w:val="Quote"');
+    expect(xml).toContain('w:val="center"');
+    expect(xml).toContain('<w:keepNext/>');
+    expect(xml).toContain('w:pos="1440"');
+  });
+
   test('a HEADER write merges against the header part, not the body', () => {
     // The previous header test sent only `tabStops`, so it passed even when the write read
     // its property base from the WRONG part: an empty base strips `w:pStyle`, which removed

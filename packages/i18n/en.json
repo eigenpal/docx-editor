@@ -329,7 +329,8 @@
       "tabRemoveAt": "Clear the tab stop at {position} inches",
       "refused": "Those values cannot be applied here.",
       "tabMixed": "The selected paragraphs have different tab stops.",
-      "mixed": "Mixed"
+      "mixed": "Mixed",
+      "notShown": "Not shown here"
     }
   },
   "comments": {

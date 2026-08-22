@@ -176,6 +176,13 @@ export function DocxEditorParagraphDialog({
   const [newTabAlignment, setNewTabAlignment] = useState<TabAlignment>('left');
   const [newTabLeader, setNewTabLeader] = useState<TabLeaderName>('none');
   const [mixed, setMixed] = useState<ParagraphDialogMixed>(NO_MIXED_FIELDS);
+  const [indentUnknown, setIndentUnknown] = useState(false);
+  // An indent the engine cannot place — a paragraph in a table cell — reads blank like a
+  // disagreement but is not one, so it says so rather than claiming the selection is mixed.
+  const blankLabel = (key: keyof ParagraphDialogMixed): string =>
+    indentUnknown && (key === 'indentLeft' || key === 'indentRight' || key === 'special')
+      ? t('dialogs.paragraph.notShown')
+      : t('dialogs.paragraph.mixed');
   /** What the selection disagreed about ON OPEN, against which `mixed` says what was resolved. */
   const seedMixedRef = useRef<ParagraphDialogMixed>(NO_MIXED_FIELDS);
   // One prefix per mounted dialog, so a `<label for>` points at THIS dialog's input even
@@ -215,6 +222,7 @@ export function DocxEditorParagraphDialog({
     setClearedAll(false);
     const openedMixed = mixedFieldsOf(format);
     setMixed(openedMixed);
+    setIndentUnknown(format.indentUnknown);
     seedMixedRef.current = openedMixed;
     setRefused(false);
     seedRef.current = seed;
@@ -364,7 +372,7 @@ export function DocxEditorParagraphDialog({
         step={0.1}
         // Empty, not a fabricated number, when the selection disagrees.
         value={mixed[mixedKey] ? '' : twipsToInches(value)}
-        placeholder={mixed[mixedKey] ? t('dialogs.paragraph.mixed') : undefined}
+        placeholder={mixed[mixedKey] ? blankLabel(mixedKey) : undefined}
         onChange={(event) => {
           resolve(mixedKey);
           set(inchesToTwips(Number(event.target.value) || 0));
@@ -392,7 +400,7 @@ export function DocxEditorParagraphDialog({
         min={0}
         step={1}
         value={mixed[mixedKey] ? '' : value}
-        placeholder={mixed[mixedKey] ? t('dialogs.paragraph.mixed') : undefined}
+        placeholder={mixed[mixedKey] ? blankLabel(mixedKey) : undefined}
         onChange={(event) => {
           resolve(mixedKey);
           set(Math.max(0, Number(event.target.value) || 0));
@@ -534,7 +542,7 @@ export function DocxEditorParagraphDialog({
                 min={0}
                 step={0.1}
                 value={mixed.special ? '' : twipsToInches(specialBy)}
-                placeholder={mixed.special ? t('dialogs.paragraph.mixed') : undefined}
+                placeholder={mixed.special ? blankLabel('special') : undefined}
                 onChange={(event) => {
                   resolve('special');
                   setSpecialBy(Math.max(0, inchesToTwips(Number(event.target.value) || 0)));

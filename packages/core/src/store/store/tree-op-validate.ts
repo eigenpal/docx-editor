@@ -542,7 +542,15 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         // Refused, not thrown: this op is reachable from untyped JS, and validation is the
         // layer that says no.
         if (typeof stop !== 'object' || stop === null) return 'invalid-range';
-        if (!Number.isInteger(stop.positionTwips) || Math.abs(stop.positionTwips) > 31680) {
+        // Not `Math.abs`: `clampPositionTwips` drops anything below zero, so a negative
+        // position writes markup the engine then reports as no stop at all. The command
+        // layer refuses it; a direct `TreeDocOp` caller — who these bounds exist for — must
+        // get the same answer.
+        if (
+          !Number.isInteger(stop.positionTwips) ||
+          stop.positionTwips < 0 ||
+          stop.positionTwips > 31680
+        ) {
           return 'invalid-range';
         }
         if (!['left', 'center', 'right', 'decimal', 'bar'].includes(stop.alignment)) {

@@ -245,7 +245,7 @@ export interface ParagraphDisagreements {
     readonly tabStops: boolean;
 }
 
-// @public (undocumented)
+// @public
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;

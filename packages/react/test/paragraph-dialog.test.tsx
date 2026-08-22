@@ -75,7 +75,12 @@ function mountDialog(body: string) {
       view.rerender(tree(true));
     });
   };
-  return { view, editor: () => instance!, closes: () => closed, openDialog };
+  const close = async () => {
+    await act(async () => {
+      view.rerender(tree(false));
+    });
+  };
+  return { view, editor: () => instance!, closes: () => closed, openDialog, close };
 }
 
 const field = (view: ReturnType<typeof render>, label: string) =>
@@ -390,6 +395,29 @@ describe('the Paragraph dialog', () => {
       okButton(view).click();
     });
     expect(editor().surface!.formatting().lineSpacing).toEqual({ rule: 'exact', value: 16 });
+  });
+
+  test('reopening on a DIFFERENT selection re-reads the disagreement', async () => {
+    // The values can be equal while the disagreements differ — every disagreeing field
+    // reads null on the value side — so a comparator that ignores them hands back the
+    // previous slice and the dialog renders a mixed selection as settled.
+    const { view, editor, openDialog, close } = mountDialog(
+      p('alpha') + p('two', '<w:spacing w:before="240"/>') + p('three', '<w:spacing w:before="480"/>')
+    );
+    // First: a lone paragraph that states no spacing. Not a disagreement.
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    await close();
+
+    // Then: two paragraphs that disagree, whose value also reads null.
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    await openDialog();
+    expect(editor().surface!.formatting().disagrees.spaceBeforePt).toBe(true);
+    expect((field(view, 'Before') as HTMLInputElement).value).toBe('');
   });
 
   test('a single paragraph is never told it disagrees with itself', async () => {

@@ -167,6 +167,25 @@ const selectFormat = (snapshot: EditorSnapshot): ParagraphFormatRead | null => {
   };
 };
 
+/**
+ * Field-by-field, and exhaustive by construction: the key list is typed against
+ * `ParagraphFormatRead['disagrees']`, so a member added there fails to compile until it is
+ * compared here. A comment asking the next author to remember is not a guarantee.
+ */
+const DISAGREEMENT_KEYS: readonly (keyof ParagraphFormatRead['disagrees'])[] = [
+  'alignment',
+  'spaceBeforePt',
+  'spaceAfterPt',
+  'lineSpacing',
+  'tabStops',
+  'indentLeft',
+  'indentRight',
+  'indentFirstLine',
+];
+
+const sameDisagreements = (a: ParagraphFormatRead, b: ParagraphFormatRead): boolean =>
+  DISAGREEMENT_KEYS.every((key) => a.disagrees[key] === b.disagrees[key]);
+
 const sameFormat = (a: ParagraphFormatRead | null, b: ParagraphFormatRead | null): boolean => {
   if (a === null || b === null) return a === b;
   return (
@@ -183,6 +202,12 @@ const sameFormat = (a: ParagraphFormatRead | null, b: ParagraphFormatRead | null
     a.keepLines === b.keepLines &&
     a.widowControl === b.widowControl &&
     a.pageBreakBefore === b.pageBreakBefore &&
+    // The disagreements too, or this comparator hands back a stale slice. Every member is
+    // `null`-shaped on the value side, so two different selections routinely produce equal
+    // VALUES and different disagreements — and a control then renders a mixed selection as
+    // settled, which is precisely the uncorrectable state the engine reports to prevent.
+    sameDisagreements(a, b) &&
+    a.indentUnknown === b.indentUnknown &&
     a.tabStops?.length === b.tabStops?.length &&
     (a.tabStops ?? []).every(
       (stop, index) =>

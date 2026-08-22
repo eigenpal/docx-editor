@@ -639,8 +639,13 @@ export function formattingAt(
     same: (a: T, b: T) => boolean = (a, b) => a === b
   ): boolean => {
     if (touchedParagraphs.length < 2) return false;
-    const values = touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id)));
-    return !values.every((value) => same(value, values[0]!));
+    const first = read(paragraphPropertiesOf(layout, touchedParagraphs[0]!));
+    // Short-circuits on the first difference, and reuses the per-paragraph property read
+    // the layout already memoizes. A Select All over a document whose paragraphs disagree
+    // stops at paragraph two rather than walking all of them five times over.
+    return touchedParagraphs.some(
+      (id, index) => index > 0 && !same(read(paragraphPropertiesOf(layout, id)), first)
+    );
   };
   // Normalized BEFORE agreement: `w:jc` absent and `w:jc val="left"` are the same
   // alignment, and comparing the raw attribute would call them a mixed selection.
@@ -773,13 +778,16 @@ export function formattingAt(
       spaceBeforePt: paragraphDisagrees((properties) => spacePtOf(properties, 'before')),
       spaceAfterPt: paragraphDisagrees((properties) => spacePtOf(properties, 'after')),
       lineSpacing: paragraphDisagrees(lineSpacingTextOf),
-      tabStops:
-        touchedParagraphs.length > 1 &&
-        !touchedParagraphs.every(
-          (id) =>
-            JSON.stringify(paragraphTabStopsOf(layout, id)?.stops ?? null) ===
-            JSON.stringify(paragraphTabStopsOf(layout, touchedParagraphs[0]!)?.stops ?? null)
-        ),
+      tabStops: ((): boolean => {
+        if (touchedParagraphs.length < 2) return false;
+        const first = JSON.stringify(
+          paragraphTabStopsOf(layout, touchedParagraphs[0]!)?.stops ?? null
+        );
+        return touchedParagraphs.some(
+          (id, index) =>
+            index > 0 && JSON.stringify(paragraphTabStopsOf(layout, id)?.stops ?? null) !== first
+        );
+      })(),
     },
     indent,
     // Compared by VALUE across the selection, not by reference: the stops are a fresh array

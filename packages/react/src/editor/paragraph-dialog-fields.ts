@@ -187,9 +187,13 @@ export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed
     // states it", and treating the second as the first told a single paragraph — the
     // commonest case in a real document — that it disagreed with itself.
     alignment: format.disagrees.alignment,
-    indentLeft: format.disagrees.indentLeft,
-    indentRight: format.disagrees.indentRight,
-    special: format.disagrees.indentFirstLine,
+    // `indentUnknown` is a table paragraph: the engine measures indents from the cell's
+    // content edge and reports none, because a ruler drawn against the page margin cannot
+    // place them. The control cannot show a value either, so it shows none — blank, and
+    // written only if the user types. It is not a disagreement, and the placeholder says so.
+    indentLeft: format.disagrees.indentLeft || format.indentUnknown,
+    indentRight: format.disagrees.indentRight || format.indentUnknown,
+    special: format.disagrees.indentFirstLine || format.indentUnknown,
     spaceBefore: format.disagrees.spaceBeforePt,
     spaceAfter: format.disagrees.spaceAfterPt,
     lineSpacing: format.disagrees.lineSpacing,

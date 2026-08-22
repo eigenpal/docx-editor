@@ -427,7 +427,7 @@ export interface Paragraph {
     readonly styleId?: string;
 }
 
-// @public (undocumented)
+// @public
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;

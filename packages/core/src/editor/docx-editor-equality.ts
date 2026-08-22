@@ -6,6 +6,7 @@
 // docx-editor-support.ts so importers keep one entry point.
 
 import type {
+  ParagraphDisagreements,
   DocAnchor,
   DocRange,
   EditorSnapshot,
@@ -50,17 +51,24 @@ const COMPARED_FORMATTING_KEYS: Record<keyof Required<RunFormatting>, true> = {
 void COMPARED_FORMATTING_KEYS;
 
 /** Value equality for the snapshot's `formatting` sub-object (color compared by value). */
-/** Field-by-field, because the object is rebuilt on every read. */
+/**
+ * Exhaustive by construction: the key list is typed against `ParagraphDisagreements`, so a
+ * member added there fails to compile until it is compared here. A comment asking the next
+ * author to remember is not a guarantee — the same argument `COMPARED_FORMATTING_KEYS`
+ * makes above.
+ */
+const COMPARED_DISAGREEMENT_KEYS: readonly (keyof ParagraphDisagreements)[] = [
+  'alignment',
+  'spaceBeforePt',
+  'spaceAfterPt',
+  'lineSpacing',
+  'tabStops',
+];
+
 function sameDisagreements(a: RunFormatting['disagrees'], b: RunFormatting['disagrees']): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  return (
-    a.alignment === b.alignment &&
-    a.spaceBeforePt === b.spaceBeforePt &&
-    a.spaceAfterPt === b.spaceAfterPt &&
-    a.lineSpacing === b.lineSpacing &&
-    a.tabStops === b.tabStops
-  );
+  return COMPARED_DISAGREEMENT_KEYS.every((key) => a[key] === b[key]);
 }
 
 export function formattingEqual(a: RunFormatting | null, b: RunFormatting | null): boolean {

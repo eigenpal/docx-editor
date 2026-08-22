@@ -1463,7 +1463,7 @@ export interface PaginatedSurfaceState {
     readonly selection: SemanticSelection;
 }
 
-// @public (undocumented)
+// @public
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;

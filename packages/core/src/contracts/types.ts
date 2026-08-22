@@ -5,14 +5,6 @@
  * `types-barrel.ts`. There is no `@docx-editor.dev/core/types` subpath.
  */
 
-/**
- * The five paragraph flags a Paragraph dialog shows as checkboxes.
- *
- * `contextualSpacing` is Word's "Don't add space between paragraphs of the same style";
- * the rest are its Pagination block. `null` means the selection disagrees.
- *
- * @public
- */
 /** Which paragraph-level reads the selection disagrees about. @public */
 export interface ParagraphDisagreements {
   readonly alignment: boolean;
@@ -22,6 +14,14 @@ export interface ParagraphDisagreements {
   readonly tabStops: boolean;
 }
 
+/**
+ * The five paragraph flags a Paragraph dialog shows as checkboxes.
+ *
+ * `contextualSpacing` is Word's "Don't add space between paragraphs of the same style";
+ * the rest are its Pagination block. `null` means the selection disagrees.
+ *
+ * @public
+ */
 export interface ParagraphFlags {
   readonly contextualSpacing: boolean | null;
   readonly keepNext: boolean | null;
