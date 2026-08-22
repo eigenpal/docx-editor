@@ -15,6 +15,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 
@@ -30,7 +31,7 @@ const BLOCK_SDT =
 const NOTE_PARAGRAPH = '<w:p><w:r><w:t>Note</w:t></w:r></w:p>';
 
 /** One footnote holding exactly `inner`, referenced from the body. */
-function docx(inner: string): Uint8Array {
+function docx(inner: string, noteType = ''): Uint8Array {
   const body =
     `<w:p><w:r><w:t>Alpha</w:t></w:r>` +
     `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
@@ -39,7 +40,7 @@ function docx(inner: string): Uint8Array {
     `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
     `<w:footnote w:type="continuationSeparator" w:id="0">` +
     `<w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
-    `<w:footnote w:id="1">${inner}</w:footnote>`;
+    `<w:footnote w:id="1"${noteType}>${inner}</w:footnote>`;
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -64,10 +65,13 @@ function docx(inner: string): Uint8Array {
   });
 }
 
-function mount(inner: string): { surface: PaginatedSurface; destroy: () => void } {
+function mount(
+  inner: string,
+  noteType = ''
+): { surface: PaginatedSurface; destroy: () => void } {
   const container = document.createElement('div');
   document.body.append(container);
-  const result = mountPaginatedSurface(container, docx(inner), { scale: 1 });
+  const result = mountPaginatedSurface(container, docx(inner, noteType), { scale: 1 });
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
   return {
     surface: result.surface,
@@ -99,6 +103,41 @@ describe('a note story is reachable whatever it holds', () => {
       try {
         expect(noteParagraphCount(surface)).toBe(paragraphs);
         expect(surface.enterNote('footnote:1')).toBe(true);
+      } finally {
+        destroy();
+      }
+    });
+  }
+});
+
+describe('a note type decides whether it is a story', () => {
+  for (const [what, type, reachable] of [
+    ['no type at all', '', true],
+    ['an explicit normal', ' w:type="normal"', true],
+    ['a separator', ' w:type="separator"', false],
+    ['a continuation separator', ' w:type="continuationSeparator"', false],
+    ['a continuation notice', ' w:type="continuationNotice"', false],
+    // An unrecognized type fails the typed-node check, so the element demotes to `generic` and
+    // is not a note at all. Not editable, and not a way to hide anything: the text round-trips
+    // untouched, which the assertion below checks rather than assuming.
+    ['a garbage type', ' w:type="zzz-not-a-type"', false],
+  ] as const) {
+    test(`${what}: reachable = ${String(reachable)}`, async () => {
+      const { surface, destroy } = mount(NOTE_PARAGRAPH, type);
+      try {
+        const ids = surface.session.paragraphIdsIn({ kind: 'notesPart', noteKind: 'footnote' });
+        expect(ids.length > 0, `expected reachable = ${String(reachable)}`).toBe(reachable);
+
+        // Unreachable is not the same as lost. Whatever the type says, the note's text and the
+        // type itself survive a save — an element the engine will not let you edit is still
+        // one it must hand back exactly as it found it.
+        const saved = strFromU8(
+          unzipSync(new Uint8Array(await surface.session.save()))['word/footnotes.xml']!
+        );
+        expect(saved, 'the note text did not survive the round trip').toContain(
+          '<w:t>Note</w:t>'
+        );
+        if (type !== '') expect(saved).toContain(type.trim());
       } finally {
         destroy();
       }
