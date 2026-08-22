@@ -42,6 +42,9 @@ export const TAB_ALIGNMENT_LABELS = {
   center: 'dialogs.paragraph.tabAlignCenter',
   right: 'dialogs.paragraph.tabAlignRight',
   decimal: 'dialogs.paragraph.tabAlignDecimal',
+  // Unreachable today — the reader never yields `bar`, the dialog does not offer it and
+  // `classifyCommand` refuses it — but `ParagraphTabStop` admits it, so the map that types
+  // itself against that union has to carry it. A row with no label is worse than a spare one.
   bar: 'dialogs.paragraph.tabAlignBar',
 } as const satisfies Record<TabAlignment, string>;
 

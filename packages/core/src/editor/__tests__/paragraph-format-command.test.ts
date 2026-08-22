@@ -78,6 +78,61 @@ function mountStyled(body: string): DocxEditorInstance {
   return editor;
 }
 
+/**
+ * A document whose HEADER carries a paragraph on the `Tabbed` style.
+ *
+ * Header, footer and note fragments hang off their own page roots rather than
+ * `page.fragments`, so a write that asks a body-only walk what is in force sees nothing
+ * there — and clearing a style-supplied stop in a header silently did nothing while
+ * reporting success.
+ */
+function mountWithHeader(): DocxEditorInstance {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const styles =
+    `<w:styles xmlns:w="${W}">` +
+    '<w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Tabbed"><w:name w:val="Tabbed"/>' +
+    '<w:pPr><w:tabs><w:tab w:val="center" w:pos="2160"/></w:tabs></w:pPr></w:style>' +
+    '</w:styles>';
+  const header =
+    `<w:hdr xmlns:w="${W}">` +
+    '<w:p><w:pPr><w:pStyle w:val="Tabbed"/></w:pPr><w:r><w:t>heading</w:t></w:r></w:p>' +
+    '</w:hdr>';
+  const body =
+    '<w:p><w:r><w:t>alpha</w:t></w:r></w:p>' +
+    '<w:sectPr><w:headerReference w:type="default" r:id="rIdHdr"/>' +
+    '<w:pgSz w:w="12240" w:h="15840"/>' +
+    '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>' +
+    '</w:sectPr>';
+  const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const bytes = zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+        '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rId9" Type="${REL_NS}/styles" Target="styles.xml"/>` +
+        `<Relationship Id="rIdHdr" Type="${REL_NS}/header" Target="header1.xml"/>` +
+        '</Relationships>'
+    ),
+    'word/styles.xml': strToU8(styles),
+    'word/header1.xml': strToU8(header),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${REL_NS}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+  const editor = createDocxEditor({ container, document: bytes });
+  if (!editor.surface) throw new Error('surface failed to mount');
+  return editor;
+}
+
 const xmlOf = (editor: DocxEditorInstance) => serializeOoxmlPart(editor.surface!.session.part());
 
 describe('setParagraphFormat writes the whole dialog at once', () => {
@@ -481,6 +536,30 @@ describe('tab stops, which a flat property write could never author', () => {
     ]);
   });
 
+  test('a file full of markup the reader cannot model cannot bury the stop we just wrote', () => {
+    // `w:tabs` children come from the file, so their count is attacker-controlled. Two
+    // hundred bar tabs is legal markup; carried through unbudgeted they sorted ahead of the
+    // real stop and pushed it past the reader's walk, leaving the paragraph reporting no
+    // stops at all — the state the budget exists to prevent, reachable from a document
+    // rather than from a long editing session.
+    const bars = Array.from(
+      { length: 200 },
+      (_unused, index) => `<w:tab w:val="bar" w:pos="${index + 1}"/>`
+    ).join('');
+    const editor = mount(p('alpha', `<w:tabs>${bars}</w:tabs>`));
+    editor.surface!.selectAll();
+    editor.exec({
+      type: 'setParagraphFormat',
+      tabStops: [{ positionTwips: 1440, alignment: 'left' }],
+    });
+
+    expect([...xmlOf(editor).matchAll(/<w:tab /g)].length).toBeLessThanOrEqual(64);
+    // The stop the user just set is readable, which is the whole point.
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 1440, alignment: 'left' },
+    ]);
+  });
+
   test('a real stop is never dropped to make room for a clear', () => {
     const editor = mount(p('alpha'));
     editor.surface!.selectAll();
@@ -564,6 +643,22 @@ describe('tab stops, which a flat property write could never author', () => {
     const xml = xmlOf(editor);
     expect(xml).not.toContain('w:val="bar"');
     expect(xml).toContain('w:val="center"');
+  });
+
+  test('clearing a style stop inside a HEADER really removes it', () => {
+    // The write asks what is in force through the same story-aware reader the dialog reads
+    // through. A body-only walk saw nothing in a header, emitted no `w:val="clear"`, and
+    // the style put its stop straight back — with the command still reporting success.
+    const editor = mountWithHeader();
+    const entered = editor.surface!.enterHeaderFooter({ rId: 'rIdHdr', kind: 'header' });
+    expect(entered).toBe(true);
+    editor.surface!.selectAll();
+    expect(editor.surface!.formatting().tabStops).toEqual([
+      { positionTwips: 2160, alignment: 'center' },
+    ]);
+
+    expect(editor.exec({ type: 'setParagraphFormat', tabStops: [] }).ok).toBe(true);
+    expect(editor.surface!.formatting().tabStops).toEqual([]);
   });
 
   test('a stop the STYLE sets reads through, so an editor shows what is in force', () => {

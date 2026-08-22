@@ -1,0 +1,1074 @@
+uid=1_0 RootWebArea "docx-editor — Vite Example" url="http://localhost:5173/"
+  uid=2_0 status atomic live="polite" relevant="additions text"
+    uid=2_1 StaticText "This is a "
+    uid=2_2 StaticText "preview deployment"
+    uid=2_3 StaticText ". The released editor lives at"
+    uid=2_4 link "docx-editor.dev ↗" url="https://docx-editor.dev/"
+      uid=2_5 StaticText "docx-editor.dev ↗"
+  uid=8_0 banner
+    uid=8_1 link "DOCX Editor by EigenPal" description="DOCX Editor by EigenPal" url="https://docx-editor.dev/"
+      uid=8_2 StaticText "DOCX Editor"
+      uid=8_3 StaticText "by"
+      uid=8_4 StaticText "EigenPal"
+    uid=8_5 tab "React" selectable selected
+    uid=8_6 tab "Vue" selectable
+    uid=8_7 textbox "Document title" value="sample"
+    uid=8_8 menubar "Menu bar" orientation="horizontal"
+      uid=8_9 menuitem "File" expandable haspopup="menu"
+      uid=8_10 menuitem "Format" expandable haspopup="menu"
+      uid=8_11 menuitem "Insert" expandable haspopup="menu"
+      uid=8_12 menuitem "Help" expandable haspopup="menu"
+      uid=8_13 menuitem "My Menu" expandable haspopup="menu"
+    uid=8_14 radio "Light mode" checked
+    uid=8_15 radio "Dark mode"
+    uid=8_16 button "Open DOCX"
+    uid=8_17 button "New"
+  uid=8_18 button "Undo (Ctrl+Z)" description="nothing to undo" disableable disabled
+  uid=8_19 button "Redo (Ctrl+Y)" description="Redo (Ctrl+Y)"
+  uid=8_20 button "Select paragraph style" description="Select paragraph style" expandable haspopup="listbox"
+  uid=8_21 button "Select font family" description="Select font family" expandable haspopup="listbox"
+  uid=8_22 button "Decrease font size"
+  uid=8_23 combobox "Font size" expandable haspopup="listbox" value="11"
+  uid=8_24 button "Increase font size"
+  uid=8_25 button "Bold (Ctrl+B)" description="Bold (Ctrl+B)"
+  uid=8_26 button "Italic (Ctrl+I)" description="Italic (Ctrl+I)"
+  uid=8_27 button "Underline (Ctrl+U)" description="Underline (Ctrl+U)"
+  uid=8_28 button "Strikethrough" description="Strikethrough"
+  uid=8_29 button "Font Color" description="Font Color"
+  uid=8_30 button "Font Color" description="Font Color" expandable haspopup="menu"
+  uid=8_31 button "Text Highlight Color" description="Text Highlight Color"
+  uid=8_32 button "Text Highlight Color" description="Text Highlight Color" expandable haspopup="menu"
+  uid=8_33 button "Insert link (Ctrl+K)" description="Insert link (Ctrl+K)"
+  uid=8_34 button "Align Left" description="Align Left" expandable haspopup="menu"
+  uid=14_0 button "Bullet List" description="Bullet List"
+  uid=14_1 button "Numbered List" description="Numbered List"
+  uid=14_2 button "Decrease Indent" description="the selection is already at the outermost level" disableable disabled
+  uid=14_3 button "Increase Indent" description="Increase Indent"
+  uid=14_4 button "Line spacing" description="Line spacing" expandable haspopup="menu"
+  uid=14_5 button "Clear formatting" description="Clear formatting"
+  uid=8_41 button "Comments & Changes" description="Comments & Changes"
+  uid=8_42 button "Editing mode" expandable haspopup="menu"
+  uid=8_43 button "More" description="More" expandable haspopup="dialog"
+  uid=8_44 StaticText "1"
+  uid=8_45 StaticText "2"
+  uid=8_46 StaticText "3"
+  uid=8_47 StaticText "4"
+  uid=8_48 StaticText "5"
+  uid=8_49 StaticText "6"
+  uid=8_50 StaticText "7"
+  uid=8_51 StaticText "8"
+  uid=11_0 slider "First line indent" orientation="horizontal" value="-360" valuemax="12240" valuemin="-12240" valuetext=""
+  uid=11_1 slider "Hanging indent" orientation="horizontal" value="720" valuemax="12240" valuemin="-12240" valuetext=""
+  uid=11_2 slider "Left indent" orientation="horizontal" value="720" valuemax="12240" valuemin="-12240" valuetext=""
+  uid=11_3 slider "Right indent" orientation="horizontal" value="0" valuemax="12240" valuemin="-12240" valuetext=""
+  uid=8_56 button "Open navigation" description="Navigation" expandable
+  uid=8_57 textbox multiline value="4. Lists
+4.1 Simple Bullet List
+•
+First bullet item
+•
+Second bullet item with longer text to test wrapping
+•
+Third bullet item
+•
+Fourth bullet item
+4.2 Multi-Level Bullet List
+•
+Level 0: Main category
+○
+Level 1: Sub-category
+▪
+Level 2: Detail
+–
+Level 3: Deepest
+▪
+Level 2: Another detail
+○
+Level 1: Second sub
+•
+Level 0: Another main
+4.3 Numbered Lists (Multiple Formats)
+Decimal with Sub-levels
+1.
+First numbered item
+2.
+Second numbered item
+a)
+Sub-item (lower-alpha)
+b)
+Another sub-item
+i.
+Sub-sub-item (lower-roman)
+3.
+Third numbered item
+Upper Roman
+I.
+Introduction
+II.
+Analysis
+III.
+Discussion
+IV.
+Conclusions
+Upper Letter
+A.
+Option Alpha
+B.
+Option Bravo
+C.
+Option Charlie
+Restarted Decimal
+1.
+Restarts at 1
+2.
+Continues to 2
+3.
+And 3
+
+docx-editor.dev	Sample document
+docx-editor.dev	Page 7 of 27
+5. Tables
+5.1 Simple Data Table
+ID
+Name
+Status
+Priority
+001
+Alpha Test
+Passed
+High
+002
+Beta Validation
+Failed
+Critical
+003
+Gamma Regression
+Pending
+Medium
+004
+Delta Integration
+Passed
+Low
+
+
+5.2 Table with Merged Cells
+Merged Header — 3 Columns
+Category
+Q1
+Q2
+Revenue (row span)
+$1.2M
+$1.5M
++12%
++25%
+
+
+5.3 Mixed Border Styles
+Double blue + dashed right
+Dotted green + dashed left
+Partial borders + yellow shading
+Triple purple bottom + green
+
+docx-editor.dev	Sample document
+docx-editor.dev	Page 8 of 27
+6. Nested Tables
+6.1 Table Inside a Table Cell
+The left cell contains a nested inner table. The right cell has mixed content.
+Cell with Nested Table
+Cell with Mixed Content
+Inner table below:
+A
+B
+C
+1
+2
+3
+4
+5
+6
+7
+8
+9
+Text after nested table.
+Bullet list in cell:
+•
+Item Alpha
+•
+Item Beta
+•
+Item Gamma
+Formatted: red, highlighted, italic.
+Image:  in cell.
+
+
+6.2 Triple-Nested Table (3 Levels Deep)
+LEVEL 1 (Outer Table)
+LEVEL 2 (Middle Table)
+LEVEL 3 – Cell A
+LEVEL 3 – Cell B
+
+
+
+
+
+docx-editor.dev	Sample document
+docx-editor.dev	Page 9 of 27"
+    uid=10_7 generic
+    uid=9_46 generic
+    uid=8_190 generic
+    uid=8_191 generic
+    uid=8_192 generic
+    uid=14_6 generic
+    uid=12_409 generic
+      uid=12_410 generic
+        uid=12_411 generic
+          uid=12_412 generic
+            uid=12_413 generic
+              uid=12_414 StaticText "4. "
+            uid=12_415 generic
+              uid=12_416 StaticText "Lists"
+        uid=12_417 generic
+          uid=12_418 generic
+            uid=12_419 generic
+              uid=12_420 StaticText "4.1 "
+            uid=12_421 generic
+              uid=12_422 StaticText "Simple "
+            uid=12_423 generic
+              uid=12_424 StaticText "Bullet "
+            uid=12_425 generic
+              uid=12_426 StaticText "List"
+        uid=12_427 generic
+          uid=12_428 generic
+            uid=12_429 generic
+              uid=12_430 StaticText "First "
+            uid=12_431 generic
+              uid=12_432 StaticText "bullet "
+            uid=12_433 generic
+              uid=12_434 StaticText "item"
+        uid=12_435 generic
+          uid=12_436 generic
+            uid=12_437 generic
+              uid=12_438 StaticText "Second "
+            uid=12_439 generic
+              uid=12_440 StaticText "bullet "
+            uid=12_441 generic
+              uid=12_442 StaticText "item "
+            uid=12_443 generic
+              uid=12_444 StaticText "with "
+            uid=12_445 generic
+              uid=12_446 StaticText "longer "
+            uid=12_447 generic
+              uid=12_448 StaticText "text "
+            uid=12_449 generic
+              uid=12_450 StaticText "to "
+            uid=12_451 generic
+              uid=12_452 StaticText "test "
+            uid=12_453 generic
+              uid=12_454 StaticText "wrapping"
+        uid=12_455 generic
+          uid=12_456 generic
+            uid=12_457 generic
+              uid=12_458 StaticText "Third "
+            uid=12_459 generic
+              uid=12_460 StaticText "bullet "
+            uid=12_461 generic
+              uid=12_462 StaticText "item"
+        uid=12_463 generic
+          uid=12_464 generic
+            uid=12_465 generic
+              uid=12_466 StaticText "Fourth "
+            uid=12_467 generic
+              uid=12_468 StaticText "bullet "
+            uid=12_469 generic
+              uid=12_470 StaticText "item"
+        uid=12_471 generic
+          uid=12_472 generic
+            uid=12_473 generic
+              uid=12_474 StaticText "4.2 "
+            uid=12_475 generic
+              uid=12_476 StaticText "Multi-"
+            uid=12_477 generic
+              uid=12_478 StaticText "Level "
+            uid=12_479 generic
+              uid=12_480 StaticText "Bullet "
+            uid=12_481 generic
+              uid=12_482 StaticText "List"
+        uid=12_483 generic
+          uid=12_484 generic
+            uid=12_485 generic
+              uid=12_486 StaticText "Level "
+            uid=12_487 generic
+              uid=12_488 StaticText "0: "
+            uid=12_489 generic
+              uid=12_490 StaticText "Main "
+            uid=12_491 generic
+              uid=12_492 StaticText "category"
+        uid=12_493 generic
+          uid=12_494 generic
+            uid=12_495 generic
+              uid=12_496 StaticText "Level "
+            uid=12_497 generic
+              uid=12_498 StaticText "1: "
+            uid=12_499 generic
+              uid=12_500 StaticText "Sub-"
+            uid=12_501 generic
+              uid=12_502 StaticText "category"
+        uid=12_503 generic
+          uid=12_504 generic
+            uid=12_505 generic
+              uid=12_506 StaticText "Level "
+            uid=12_507 generic
+              uid=12_508 StaticText "2: "
+            uid=12_509 generic
+              uid=12_510 StaticText "Detail"
+        uid=12_511 generic
+          uid=12_512 generic
+            uid=12_513 generic
+              uid=12_514 StaticText "Level "
+            uid=12_515 generic
+              uid=12_516 StaticText "3: "
+            uid=12_517 generic
+              uid=12_518 StaticText "Deepest"
+        uid=12_519 generic
+          uid=12_520 generic
+            uid=12_521 generic
+              uid=12_522 StaticText "Level "
+            uid=12_523 generic
+              uid=12_524 StaticText "2: "
+            uid=12_525 generic
+              uid=12_526 StaticText "Another "
+            uid=12_527 generic
+              uid=12_528 StaticText "detail"
+        uid=12_529 generic
+          uid=12_530 generic
+            uid=12_531 generic
+              uid=12_532 StaticText "Level "
+            uid=12_533 generic
+              uid=12_534 StaticText "1: "
+            uid=12_535 generic
+              uid=12_536 StaticText "Second "
+            uid=12_537 generic
+              uid=12_538 StaticText "sub"
+        uid=12_539 generic
+          uid=12_540 generic
+            uid=12_541 generic
+              uid=12_542 StaticText "Level "
+            uid=12_543 generic
+              uid=12_544 StaticText "0: "
+            uid=12_545 generic
+              uid=12_546 StaticText "Another "
+            uid=12_547 generic
+              uid=12_548 StaticText "main"
+        uid=12_549 generic
+          uid=12_550 generic
+            uid=12_551 generic
+              uid=12_552 StaticText "4.3 "
+            uid=12_553 generic
+              uid=12_554 StaticText "Numbered "
+            uid=12_555 generic
+              uid=12_556 StaticText "Lists "
+            uid=12_557 generic
+              uid=12_558 StaticText "(Multiple "
+            uid=12_559 generic
+              uid=12_560 StaticText "Formats)"
+        uid=12_561 generic
+          uid=12_562 generic
+            uid=12_563 generic
+              uid=12_564 StaticText "Decimal "
+            uid=12_565 generic
+              uid=12_566 StaticText "with "
+            uid=12_567 generic
+              uid=12_568 StaticText "Sub-"
+            uid=12_569 generic
+              uid=12_570 StaticText "levels"
+        uid=12_571 generic
+          uid=12_572 generic
+            uid=12_573 generic
+              uid=12_574 StaticText "First "
+            uid=12_575 generic
+              uid=12_576 StaticText "numbered "
+            uid=12_577 generic
+              uid=12_578 StaticText "item"
+        uid=12_579 generic
+          uid=12_580 generic
+            uid=12_581 generic
+              uid=12_582 StaticText "Second "
+            uid=12_583 generic
+              uid=12_584 StaticText "numbered "
+            uid=12_585 generic
+              uid=12_586 StaticText "item"
+        uid=12_587 generic
+          uid=12_588 generic
+            uid=12_589 generic
+              uid=12_590 StaticText "Sub-"
+            uid=12_591 generic
+              uid=12_592 StaticText "item "
+            uid=12_593 generic
+              uid=12_594 StaticText "(lower-"
+            uid=12_595 generic
+              uid=12_596 StaticText "alpha)"
+        uid=12_597 generic
+          uid=12_598 generic
+            uid=12_599 generic
+              uid=12_600 StaticText "Another "
+            uid=12_601 generic
+              uid=12_602 StaticText "sub-"
+            uid=12_603 generic
+              uid=12_604 StaticText "item"
+        uid=12_605 generic
+          uid=12_606 generic
+            uid=12_607 generic
+              uid=12_608 StaticText "Sub-"
+            uid=12_609 generic
+              uid=12_610 StaticText "sub-"
+            uid=12_611 generic
+              uid=12_612 StaticText "item "
+            uid=12_613 generic
+              uid=12_614 StaticText "(lower-"
+            uid=12_615 generic
+              uid=12_616 StaticText "roman)"
+        uid=12_617 generic
+          uid=12_618 generic
+            uid=12_619 generic
+              uid=12_620 StaticText "Third "
+            uid=12_621 generic
+              uid=12_622 StaticText "numbered "
+            uid=12_623 generic
+              uid=12_624 StaticText "item"
+        uid=12_625 generic
+          uid=12_626 generic
+            uid=12_627 generic
+              uid=12_628 StaticText "Upper "
+            uid=12_629 generic
+              uid=12_630 StaticText "Roman"
+        uid=12_631 generic
+          uid=12_632 generic
+            uid=12_633 StaticText "Introduction"
+        uid=12_634 generic
+          uid=12_635 generic
+            uid=12_636 StaticText "Analysis"
+        uid=12_637 generic
+          uid=12_638 generic
+            uid=12_639 StaticText "Discussion"
+        uid=12_640 generic
+          uid=12_641 generic
+            uid=12_642 StaticText "Conclusions"
+        uid=12_643 generic
+          uid=12_644 generic
+            uid=12_645 generic
+              uid=12_646 StaticText "Upper "
+            uid=12_647 generic
+              uid=12_648 StaticText "Letter"
+        uid=12_649 generic
+          uid=12_650 generic
+            uid=12_651 generic
+              uid=12_652 StaticText "Option "
+            uid=12_653 generic
+              uid=12_654 StaticText "Alpha"
+        uid=12_655 generic
+          uid=12_656 generic
+            uid=12_657 generic
+              uid=12_658 StaticText "Option "
+            uid=12_659 generic
+              uid=12_660 StaticText "Bravo"
+        uid=12_661 generic
+          uid=12_662 generic
+            uid=12_663 generic
+              uid=12_664 StaticText "Option "
+            uid=12_665 generic
+              uid=12_666 StaticText "Charlie"
+        uid=12_667 generic
+          uid=12_668 generic
+            uid=12_669 generic
+              uid=12_670 StaticText "Restarted "
+            uid=12_671 generic
+              uid=12_672 StaticText "Decimal"
+        uid=12_673 generic
+          uid=12_674 generic
+            uid=12_675 generic
+              uid=12_676 StaticText "Restarts "
+            uid=12_677 generic
+              uid=12_678 StaticText "at "
+            uid=12_679 generic
+              uid=12_680 StaticText "1"
+        uid=12_681 generic
+          uid=12_682 generic
+            uid=12_683 generic
+              uid=12_684 StaticText "Continues "
+            uid=12_685 generic
+              uid=12_686 StaticText "to "
+            uid=12_687 generic
+              uid=12_688 StaticText "2"
+        uid=12_689 generic
+          uid=12_690 generic
+            uid=12_691 generic
+              uid=12_692 StaticText "And "
+            uid=12_693 generic
+              uid=12_694 StaticText "3"
+        uid=12_695 generic
+          uid=12_696 generic
+            uid=12_697 StaticText ""
+    uid=12_698 generic
+      uid=12_699 generic
+        uid=12_700 generic
+          uid=12_701 generic
+            uid=12_702 generic
+              uid=12_703 StaticText "5. "
+            uid=12_704 generic
+              uid=12_705 StaticText "Tables"
+        uid=12_706 generic
+          uid=12_707 generic
+            uid=12_708 generic
+              uid=12_709 StaticText "5.1 "
+            uid=12_710 generic
+              uid=12_711 StaticText "Simple "
+            uid=12_712 generic
+              uid=12_713 StaticText "Data "
+            uid=12_714 generic
+              uid=12_715 StaticText "Table"
+        uid=12_716 generic
+          uid=12_717 generic
+            uid=12_718 generic
+              uid=12_719 generic
+                uid=12_720 generic
+                  uid=12_721 StaticText "ID"
+            uid=12_722 generic
+              uid=12_723 generic
+                uid=12_724 generic
+                  uid=12_725 StaticText "Name"
+            uid=12_726 generic
+              uid=12_727 generic
+                uid=12_728 generic
+                  uid=12_729 StaticText "Status"
+            uid=12_730 generic
+              uid=12_731 generic
+                uid=12_732 generic
+                  uid=12_733 StaticText "Priority"
+          uid=12_734 generic
+            uid=12_735 generic
+              uid=12_736 generic
+                uid=12_737 generic
+                  uid=12_738 StaticText "001"
+            uid=12_739 generic
+              uid=12_740 generic
+                uid=12_741 generic
+                  uid=12_742 generic
+                    uid=12_743 StaticText "Alpha "
+                  uid=12_744 generic
+                    uid=12_745 StaticText "Test"
+            uid=12_746 generic
+              uid=12_747 generic
+                uid=12_748 generic
+                  uid=12_749 StaticText "Passed"
+            uid=12_750 generic
+              uid=12_751 generic
+                uid=12_752 generic
+                  uid=12_753 StaticText "High"
+          uid=12_754 generic
+            uid=12_755 generic
+              uid=12_756 generic
+                uid=12_757 generic
+                  uid=12_758 StaticText "002"
+            uid=12_759 generic
+              uid=12_760 generic
+                uid=12_761 generic
+                  uid=12_762 generic
+                    uid=12_763 StaticText "Beta "
+                  uid=12_764 generic
+                    uid=12_765 StaticText "Validation"
+            uid=12_766 generic
+              uid=12_767 generic
+                uid=12_768 generic
+                  uid=12_769 StaticText "Failed"
+            uid=12_770 generic
+              uid=12_771 generic
+                uid=12_772 generic
+                  uid=12_773 StaticText "Critical"
+          uid=12_774 generic
+            uid=12_775 generic
+              uid=12_776 generic
+                uid=12_777 generic
+                  uid=12_778 StaticText "003"
+            uid=12_779 generic
+              uid=12_780 generic
+                uid=12_781 generic
+                  uid=12_782 generic
+                    uid=12_783 StaticText "Gamma "
+                  uid=12_784 generic
+                    uid=12_785 StaticText "Regression"
+            uid=12_786 generic
+              uid=12_787 generic
+                uid=12_788 generic
+                  uid=12_789 StaticText "Pending"
+            uid=12_790 generic
+              uid=12_791 generic
+                uid=12_792 generic
+                  uid=12_793 StaticText "Medium"
+          uid=12_794 generic
+            uid=12_795 generic
+              uid=12_796 generic
+                uid=12_797 generic
+                  uid=12_798 StaticText "004"
+            uid=12_799 generic
+              uid=12_800 generic
+                uid=12_801 generic
+                  uid=12_802 generic
+                    uid=12_803 StaticText "Delta "
+                  uid=12_804 generic
+                    uid=12_805 StaticText "Integration"
+            uid=12_806 generic
+              uid=12_807 generic
+                uid=12_808 generic
+                  uid=12_809 StaticText "Passed"
+            uid=12_810 generic
+              uid=12_811 generic
+                uid=12_812 generic
+                  uid=12_813 StaticText "Low"
+        uid=12_814 generic
+          uid=12_815 generic
+        uid=12_816 generic
+          uid=12_817 generic
+            uid=12_818 generic
+              uid=12_819 StaticText "5.2 "
+            uid=12_820 generic
+              uid=12_821 StaticText "Table "
+            uid=12_822 generic
+              uid=12_823 StaticText "with "
+            uid=12_824 generic
+              uid=12_825 StaticText "Merged "
+            uid=12_826 generic
+              uid=12_827 StaticText "Cells"
+        uid=12_828 generic
+          uid=12_829 generic
+            uid=12_830 generic
+              uid=12_831 generic
+                uid=12_832 generic
+                  uid=12_833 generic
+                    uid=12_834 StaticText "Merged "
+                  uid=12_835 generic
+                    uid=12_836 StaticText "Header "
+                  uid=12_837 generic
+                    uid=12_838 StaticText "— "
+                  uid=12_839 generic
+                    uid=12_840 StaticText "3 "
+                  uid=12_841 generic
+                    uid=12_842 StaticText "Columns"
+          uid=12_843 generic
+            uid=12_844 generic
+              uid=12_845 generic
+                uid=12_846 generic
+                  uid=12_847 StaticText "Category"
+            uid=12_848 generic
+              uid=12_849 generic
+                uid=12_850 generic
+                  uid=12_851 StaticText "Q1"
+            uid=12_852 generic
+              uid=12_853 generic
+                uid=12_854 generic
+                  uid=12_855 StaticText "Q2"
+          uid=12_856 generic
+            uid=12_857 generic
+              uid=12_858 generic
+                uid=12_859 generic
+                  uid=12_860 generic
+                    uid=12_861 StaticText "Revenue "
+                  uid=12_862 generic
+                    uid=12_863 StaticText "(row "
+                  uid=12_864 generic
+                    uid=12_865 StaticText "span)"
+            uid=12_866 generic
+              uid=12_867 generic
+                uid=12_868 generic
+                  uid=12_869 StaticText "$1.2M"
+            uid=12_870 generic
+              uid=12_871 generic
+                uid=12_872 generic
+                  uid=12_873 StaticText "$1.5M"
+          uid=12_874 generic
+            uid=12_875 generic
+            uid=12_876 generic
+              uid=12_877 generic
+                uid=12_878 generic
+                  uid=12_879 StaticText "+12%"
+            uid=12_880 generic
+              uid=12_881 generic
+                uid=12_882 generic
+                  uid=12_883 StaticText "+25%"
+        uid=12_884 generic
+          uid=12_885 generic
+        uid=12_886 generic
+          uid=12_887 generic
+            uid=12_888 generic
+              uid=12_889 StaticText "5.3 "
+            uid=12_890 generic
+              uid=12_891 StaticText "Mixed "
+            uid=12_892 generic
+              uid=12_893 StaticText "Border "
+            uid=12_894 generic
+              uid=12_895 StaticText "Styles"
+        uid=12_896 generic
+          uid=12_897 generic
+            uid=12_898 generic
+              uid=12_899 generic
+                uid=12_900 generic
+                  uid=12_901 generic
+                    uid=12_902 StaticText "Double "
+                  uid=12_903 generic
+                    uid=12_904 StaticText "blue "
+                  uid=12_905 generic
+                    uid=12_906 StaticText "+ "
+                  uid=12_907 generic
+                    uid=12_908 StaticText "dashed "
+                  uid=12_909 generic
+                    uid=12_910 StaticText "right"
+            uid=12_911 generic
+              uid=12_912 generic
+                uid=12_913 generic
+                  uid=12_914 generic
+                    uid=12_915 StaticText "Dotted "
+                  uid=12_916 generic
+                    uid=12_917 StaticText "green "
+                  uid=12_918 generic
+                    uid=12_919 StaticText "+ "
+                  uid=12_920 generic
+                    uid=12_921 StaticText "dashed "
+                  uid=12_922 generic
+                    uid=12_923 StaticText "left"
+          uid=12_924 generic
+            uid=12_925 generic
+              uid=12_926 generic
+                uid=12_927 generic
+                  uid=12_928 generic
+                    uid=12_929 StaticText "Partial "
+                  uid=12_930 generic
+                    uid=12_931 StaticText "borders "
+                  uid=12_932 generic
+                    uid=12_933 StaticText "+ "
+                  uid=12_934 generic
+                    uid=12_935 StaticText "yellow "
+                  uid=12_936 generic
+                    uid=12_937 StaticText "shading"
+            uid=12_938 generic
+              uid=12_939 generic
+                uid=12_940 generic
+                  uid=12_941 generic
+                    uid=12_942 StaticText "Triple "
+                  uid=12_943 generic
+                    uid=12_944 StaticText "purple "
+                  uid=12_945 generic
+                    uid=12_946 StaticText "bottom "
+                  uid=12_947 generic
+                    uid=12_948 StaticText "+ "
+                  uid=12_949 generic
+                    uid=12_950 StaticText "green"
+        uid=12_951 generic
+          uid=12_952 generic
+            uid=12_953 StaticText ""
+    uid=14_7 generic
+      uid=14_8 generic
+        uid=14_9 generic
+          uid=14_10 generic
+            uid=14_11 generic
+              uid=14_12 StaticText "6. "
+            uid=14_13 generic
+              uid=14_14 StaticText "Nested "
+            uid=14_15 generic
+              uid=14_16 StaticText "Tables"
+        uid=14_17 generic
+          uid=14_18 generic
+            uid=14_19 generic
+              uid=14_20 StaticText "6.1 "
+            uid=14_21 generic
+              uid=14_22 StaticText "Table "
+            uid=14_23 generic
+              uid=14_24 StaticText "Inside "
+            uid=14_25 generic
+              uid=14_26 StaticText "a "
+            uid=14_27 generic
+              uid=14_28 StaticText "Table "
+            uid=14_29 generic
+              uid=14_30 StaticText "Cell"
+        uid=14_31 generic
+          uid=14_32 generic
+            uid=14_33 generic
+              uid=14_34 StaticText "The "
+            uid=14_35 generic
+              uid=14_36 StaticText "left "
+            uid=14_37 generic
+              uid=14_38 StaticText "cell "
+            uid=14_39 generic
+              uid=14_40 StaticText "contains "
+            uid=14_41 generic
+              uid=14_42 StaticText "a "
+            uid=14_43 generic
+              uid=14_44 StaticText "nested "
+            uid=14_45 generic
+              uid=14_46 StaticText "inner "
+            uid=14_47 generic
+              uid=14_48 StaticText "table. "
+            uid=14_49 generic
+              uid=14_50 StaticText "The "
+            uid=14_51 generic
+              uid=14_52 StaticText "right "
+            uid=14_53 generic
+              uid=14_54 StaticText "cell "
+            uid=14_55 generic
+              uid=14_56 StaticText "has "
+            uid=14_57 generic
+              uid=14_58 StaticText "mixed "
+            uid=14_59 generic
+              uid=14_60 StaticText "content."
+        uid=14_61 generic
+          uid=14_62 generic
+            uid=14_63 generic
+              uid=14_64 generic
+                uid=14_65 generic
+                  uid=14_66 generic
+                    uid=14_67 StaticText "Cell "
+                  uid=14_68 generic
+                    uid=14_69 StaticText "with "
+                  uid=14_70 generic
+                    uid=14_71 StaticText "Nested "
+                  uid=14_72 generic
+                    uid=14_73 StaticText "Table"
+            uid=14_74 generic
+              uid=14_75 generic
+                uid=14_76 generic
+                  uid=14_77 generic
+                    uid=14_78 StaticText "Cell "
+                  uid=14_79 generic
+                    uid=14_80 StaticText "with "
+                  uid=14_81 generic
+                    uid=14_82 StaticText "Mixed "
+                  uid=14_83 generic
+                    uid=14_84 StaticText "Content"
+          uid=14_85 generic
+            uid=14_86 generic
+              uid=14_87 generic
+                uid=14_88 generic
+                  uid=14_89 generic
+                    uid=14_90 StaticText "Inner "
+                  uid=14_91 generic
+                    uid=14_92 StaticText "table "
+                  uid=14_93 generic
+                    uid=14_94 StaticText "below:"
+              uid=14_95 generic
+                uid=14_96 generic
+                  uid=14_97 generic
+                    uid=14_98 generic
+                      uid=14_99 generic
+                        uid=14_100 StaticText "A"
+                  uid=14_101 generic
+                    uid=14_102 generic
+                      uid=14_103 generic
+                        uid=14_104 StaticText "B"
+                  uid=14_105 generic
+                    uid=14_106 generic
+                      uid=14_107 generic
+                        uid=14_108 StaticText "C"
+                uid=14_109 generic
+                  uid=14_110 generic
+                    uid=14_111 generic
+                      uid=14_112 generic
+                        uid=14_113 StaticText "1"
+                  uid=14_114 generic
+                    uid=14_115 generic
+                      uid=14_116 generic
+                        uid=14_117 StaticText "2"
+                  uid=14_118 generic
+                    uid=14_119 generic
+                      uid=14_120 generic
+                        uid=14_121 StaticText "3"
+                uid=14_122 generic
+                  uid=14_123 generic
+                    uid=14_124 generic
+                      uid=14_125 generic
+                        uid=14_126 StaticText "4"
+                  uid=14_127 generic
+                    uid=14_128 generic
+                      uid=14_129 generic
+                        uid=14_130 StaticText "5"
+                  uid=14_131 generic
+                    uid=14_132 generic
+                      uid=14_133 generic
+                        uid=14_134 StaticText "6"
+                uid=14_135 generic
+                  uid=14_136 generic
+                    uid=14_137 generic
+                      uid=14_138 generic
+                        uid=14_139 StaticText "7"
+                  uid=14_140 generic
+                    uid=14_141 generic
+                      uid=14_142 generic
+                        uid=14_143 StaticText "8"
+                  uid=14_144 generic
+                    uid=14_145 generic
+                      uid=14_146 generic
+                        uid=14_147 StaticText "9"
+              uid=14_148 generic
+                uid=14_149 generic
+                  uid=14_150 generic
+                    uid=14_151 StaticText "Text "
+                  uid=14_152 generic
+                    uid=14_153 StaticText "after "
+                  uid=14_154 generic
+                    uid=14_155 StaticText "nested "
+                  uid=14_156 generic
+                    uid=14_157 StaticText "table."
+            uid=14_158 generic
+              uid=14_159 generic
+                uid=14_160 generic
+                  uid=14_161 generic
+                    uid=14_162 StaticText "Bullet "
+                  uid=14_163 generic
+                    uid=14_164 StaticText "list "
+                  uid=14_165 generic
+                    uid=14_166 StaticText "in "
+                  uid=14_167 generic
+                    uid=14_168 StaticText "cell:"
+              uid=14_169 generic
+                uid=14_170 generic
+                  uid=14_171 generic
+                    uid=14_172 StaticText "Item "
+                  uid=14_173 generic
+                    uid=14_174 StaticText "Alpha"
+              uid=14_175 generic
+                uid=14_176 generic
+                  uid=14_177 generic
+                    uid=14_178 StaticText "Item "
+                  uid=14_179 generic
+                    uid=14_180 StaticText "Beta"
+              uid=14_181 generic
+                uid=14_182 generic
+                  uid=14_183 generic
+                    uid=14_184 StaticText "Item "
+                  uid=14_185 generic
+                    uid=14_186 StaticText "Gamma"
+              uid=14_187 generic
+                uid=14_188 generic
+                  uid=14_189 generic
+                    uid=14_190 StaticText "Formatted: "
+                  uid=14_191 generic
+                    uid=14_192 StaticText "red"
+                  uid=14_193 generic
+                    uid=14_194 StaticText ", "
+                  uid=14_195 generic
+                    uid=14_196 StaticText "highlighted"
+                  uid=14_197 generic
+                    uid=14_198 StaticText ", "
+                  uid=14_199 generic
+                    uid=14_200 StaticText "italic"
+                  uid=14_201 generic
+                    uid=14_202 StaticText "."
+              uid=14_203 generic
+                uid=14_204 generic
+                  uid=14_205 generic
+                    uid=14_206 StaticText "Image: "
+                  uid=14_207 generic
+                    uid=14_208 StaticText " "
+                  uid=14_209 generic
+                    uid=14_210 StaticText "in "
+                  uid=14_211 generic
+                    uid=14_212 StaticText "cell."
+                  uid=14_213 image "Green square"
+        uid=14_214 generic
+          uid=14_215 generic
+        uid=14_216 generic
+          uid=14_217 generic
+            uid=14_218 generic
+              uid=14_219 StaticText "6.2 "
+            uid=14_220 generic
+              uid=14_221 StaticText "Triple-"
+            uid=14_222 generic
+              uid=14_223 StaticText "Nested "
+            uid=14_224 generic
+              uid=14_225 StaticText "Table "
+            uid=14_226 generic
+              uid=14_227 StaticText "(3 "
+            uid=14_228 generic
+              uid=14_229 StaticText "Levels "
+            uid=14_230 generic
+              uid=14_231 StaticText "Deep)"
+        uid=14_232 generic
+          uid=14_233 generic
+            uid=14_234 generic
+              uid=14_235 generic
+                uid=14_236 generic
+                  uid=14_237 generic
+                    uid=14_238 StaticText "LEVEL "
+                  uid=14_239 generic
+                    uid=14_240 StaticText "1 "
+                  uid=14_241 generic
+                    uid=14_242 StaticText "(Outer "
+                  uid=14_243 generic
+                    uid=14_244 StaticText "Table)"
+              uid=14_245 generic
+                uid=14_246 generic
+                  uid=14_247 generic
+                    uid=14_248 generic
+                      uid=14_249 generic
+                        uid=14_250 generic
+                          uid=14_251 StaticText "LEVEL "
+                        uid=14_252 generic
+                          uid=14_253 StaticText "2 "
+                        uid=14_254 generic
+                          uid=14_255 StaticText "(Middle "
+                        uid=14_256 generic
+                          uid=14_257 StaticText "Table)"
+                    uid=14_258 generic
+                      uid=14_259 generic
+                        uid=14_260 generic
+                          uid=14_261 generic
+                            uid=14_262 generic
+                              uid=14_263 generic
+                                uid=14_264 StaticText "LEVEL "
+                              uid=14_265 generic
+                                uid=14_266 StaticText "3 "
+                              uid=14_267 generic
+                                uid=14_268 StaticText "– "
+                              uid=14_269 generic
+                                uid=14_270 StaticText "Cell "
+                              uid=14_271 generic
+                                uid=14_272 StaticText "A"
+                        uid=14_273 generic
+                          uid=14_274 generic
+                            uid=14_275 generic
+                              uid=14_276 generic
+                                uid=14_277 StaticText "LEVEL "
+                              uid=14_278 generic
+                                uid=14_279 StaticText "3 "
+                              uid=14_280 generic
+                                uid=14_281 StaticText "– "
+                              uid=14_282 generic
+                                uid=14_283 StaticText "Cell "
+                              uid=14_284 generic
+                                uid=14_285 StaticText "B"
+                    uid=14_286 generic
+                      uid=14_287 generic
+              uid=14_288 generic
+                uid=14_289 generic
+        uid=14_290 generic
+          uid=14_291 generic
+            uid=14_292 StaticText ""
+    uid=8_197 generic
+    uid=8_198 generic
+    uid=8_199 generic
+    uid=8_200 generic
+    uid=8_201 generic
+    uid=8_202 generic
+    uid=8_203 generic
+    uid=8_204 generic
+    uid=8_205 generic
+    uid=8_206 generic
+    uid=8_207 generic
+    uid=8_208 generic
+    uid=8_209 generic
+    uid=8_210 generic
+    uid=8_211 generic
+    uid=8_212 generic
+    uid=8_213 generic
+    uid=8_214 generic
+  uid=8_215 complementary "Review"
+  uid=8_216 status atomic live="polite" relevant="additions text"
+    uid=8_217 StaticText "8 of 27"
+  uid=8_218 button "Show performance metrics" description="Show performance metrics" expandable

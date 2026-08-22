@@ -289,8 +289,10 @@ export function DocxEditorParagraphDialog({
     apply,
     onClose,
     // `mixed` decides which settings count as RESOLVED, so a stale copy would drop exactly
-    // the write that makes a disagreeing selection agree.
+    // the write that makes a disagreeing selection agree. `clearedAllTabStops` is named
+    // beside it rather than left to ride on `mixed` changing in the same handler.
     mixed,
+    clearedAllTabStops,
     alignment,
     indentLeft,
     indentRight,

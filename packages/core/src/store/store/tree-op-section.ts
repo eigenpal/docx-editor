@@ -394,10 +394,22 @@ export function applySetParagraphTabStops(
   // lowest positions first, and only in a document with more cleared positions than Word
   // allows tab stops. Losing a suppression there resurrects an inherited stop, which is
   // visible and fixable. The alternative is a paragraph nothing can edit.
-  const clearBudget = Math.max(0, MAX_TAB_STOP_CHILDREN - stops.length - opaque.length);
+  // Budgeted in priority order, because ALL THREE lists can outgrow the element.
+  //
+  // `opaque` comes straight out of the file, and a `w:tabs` carrying 200 bar tabs is a
+  // legal document: budgeting only the clears left the total unbounded, and 200 carried
+  // children sorted ahead of the stop the user just set pushed it past the reader's walk —
+  // the paragraph reporting no stops at all, which is exactly what the bound exists to
+  // prevent.
+  //
+  // Stops are what the user just asked for and are never dropped. Clears come next: losing
+  // one resurrects a stop they deleted, which moves text. Carried-through markup goes last
+  // — a lost bar tab is a missing vertical rule, the least harmful of the three.
+  const clearBudget = Math.max(0, MAX_TAB_STOP_CHILDREN - stops.length);
   const cleared = allClears.slice(0, clearBudget);
+  const carried = opaque.slice(0, Math.max(0, clearBudget - cleared.length));
 
-  if (stops.length === 0 && cleared.length === 0 && opaque.length === 0) {
+  if (stops.length === 0 && cleared.length === 0 && carried.length === 0) {
     if (!existing) return ok(part, effect);
     return fromEdit(removeNode(part, existing.id, options), effect);
   }
@@ -431,7 +443,7 @@ export function applySetParagraphTabStops(
     nextId(),
     'tabs',
     [],
-    [...authoredChildren, ...opaque.map((child) => cloneWithNewIds(child, nextId))].sort(
+    [...authoredChildren, ...carried.map((child) => cloneWithNewIds(child, nextId))].sort(
       (a, b) => Number(attributeValueOf(a, 'pos') ?? 0) - Number(attributeValueOf(b, 'pos') ?? 0)
     )
   );
