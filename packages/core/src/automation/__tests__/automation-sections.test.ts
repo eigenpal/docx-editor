@@ -74,6 +74,41 @@ function withFootnotes(): AutomationHost {
   );
 }
 
+/** A document whose footnotes carry tracked content and a tracked paragraph mark. */
+function withReviewedFootnotes(): AutomationHost {
+  return open(
+    richDocx({
+      body:
+        `<w:p><w:r><w:t>tracked</w:t></w:r>${noteReference('footnote', 2)}</w:p>` +
+        `<w:p><w:r><w:t>merged</w:t></w:r>${noteReference('footnote', 3)}</w:p>` +
+        sectionProperties([]),
+      rels: [{ id: 'rId20', type: REL_TYPES.footnotes, target: 'footnotes.xml' }],
+      parts: [
+        notesPart('footnote', [
+          {
+            id: 2,
+            xml:
+              '<w:p>' +
+              '<w:r><w:t>A</w:t></w:r>' +
+              '<w:ins w:id="10" w:author="Ada" w:date="2026-08-05T08:12:15Z">' +
+              '<w:r><w:t>B</w:t></w:r></w:ins>' +
+              '<w:del w:id="11" w:author="Grace" w:date="2026-08-05T09:15:00Z">' +
+              '<w:r><w:delText>C</w:delText></w:r></w:del>' +
+              '</w:p>',
+          },
+          {
+            id: 3,
+            xml:
+              '<w:p><w:pPr><w:rPr><w:del w:id="12" w:author="Ada" w:date="2026-08-05T10:00:00Z"/>' +
+              '</w:rPr></w:pPr><w:r><w:t xml:space="preserve">left </w:t></w:r></w:p>' +
+              '<w:p><w:r><w:t>right</w:t></w:r></w:p>',
+          },
+        ]),
+      ],
+    })
+  );
+}
+
 function documentOf(host: AutomationHost): AutomationHandle {
   return handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
 }
@@ -387,6 +422,56 @@ describe('a footnote is a story too', () => {
       return textAt(host.execute({ operations: [{ op: 'getText', target: body }] }), 0);
     });
     expect(direct).toEqual(throughBody);
+  });
+
+  test('a resolved note text read answers the proposed and original display text', () => {
+    const host = withReviewedFootnotes();
+    const [tracked] = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    ) as [AutomationHandle];
+    expect(textAt(host.execute({ operations: [{ op: 'getNoteText', note: tracked }] }), 0)).toBe(
+      'ABC'
+    );
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getResolvedNoteText', note: tracked, displayMode: 'proposed' }],
+        }),
+        0
+      )
+    ).toBe('AB');
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getResolvedNoteText', note: tracked, displayMode: 'original' }],
+        }),
+        0
+      )
+    ).toBe('AC');
+  });
+
+  test('a resolved note text read omits a paragraph mark the proposed view removes', () => {
+    const host = withReviewedFootnotes();
+    const [, merged] = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    ) as [AutomationHandle, AutomationHandle];
+    expect(textAt(host.execute({ operations: [{ op: 'getNoteText', note: merged }] }), 0)).toBe(
+      'left \rright'
+    );
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getResolvedNoteText', note: merged, displayMode: 'proposed' }],
+        }),
+        0
+      )
+    ).toBe('left right');
   });
 
   test('the reserved separators are not notes a caller can reach', () => {

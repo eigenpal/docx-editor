@@ -22,6 +22,7 @@ import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
 import type { AutomationPageSetupWrite } from './sections.ts';
 import type { HeaderFooterVariant } from '../store/package/hf-references.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
+import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /**
  * A position in a story.
@@ -92,6 +93,9 @@ export type AutomationContentControlRangeLocation =
   | 'end'
   | 'before'
   | 'after';
+
+/** Review display modes that resolve markup away rather than showing both halves. */
+export type AutomationResolvedDisplayMode = Exclude<RevisionDisplayMode, 'all-markup'>;
 
 /** The control types an insertion may author. Picture and repeating section are deferred. */
 export type AutomationContentControlSubtype =
@@ -323,6 +327,18 @@ export type AutomationOperation =
    * without requiring that intermediate handle: paragraphs joined by one `\r` paragraph mark.
    */
   | { readonly op: 'getNoteText'; readonly note: AutomationHandle }
+  /**
+   * One note's text as a RESOLVED review display mode paints it.
+   *
+   * `proposed` answers what the note becomes if every tracked change is accepted; `original`
+   * what it was before any of them. Unlike `getText`, this is display text rather than
+   * model-offset authority, so paragraph marks a resolved view removes are absent here too.
+   */
+  | {
+      readonly op: 'getResolvedNoteText';
+      readonly note: AutomationHandle;
+      readonly displayMode: AutomationResolvedDisplayMode;
+    }
   /** Whether a note is a footnote or an endnote. */
   | { readonly op: 'getNoteKind'; readonly note: AutomationHandle }
   /**
@@ -765,6 +781,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getNotes',
   'getNoteBody',
   'getNoteText',
+  'getResolvedNoteText',
   'getNoteKind',
   'getLists',
   'getListId',

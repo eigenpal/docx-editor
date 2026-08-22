@@ -29,6 +29,7 @@ import type { FieldLinkProjector, HyperlinkProjector } from './field-pieces.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { NoteMarkContext } from './note-projection.ts';
 import type { PendingLine } from './paragraph-flow.ts';
+import type { RevisionDisplayMode } from './revision-projection.ts';
 import { paragraphBorders } from './paragraph-style.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
@@ -134,6 +135,8 @@ export interface LayoutNoteStoryOptions {
   readonly producer: string;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
+  /** Resolved review display mode for this note story; defaults to `all-markup`. */
+  readonly displayMode?: RevisionDisplayMode;
   readonly defaultTabStopPt?: number;
   /**
    * Same projector seams the BODY walk uses. Without them a `w:hyperlink` or a HYPERLINK
@@ -208,7 +211,7 @@ export function layoutNoteStory(
   if (!noteKind || noteId === null) return null;
 
   const scopeId = formatNoteScopeId(noteKind, noteId);
-  const blocks = noteStoryBlocks(note);
+  const blocks = noteStoryBlocks(note, options.displayMode);
   const prefix = noteLineIdPrefix(noteKind, noteId);
   let lineCounter = 0;
   const width = Math.max(1, contentWidth);
@@ -238,6 +241,7 @@ export function layoutNoteStory(
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
+    ...(options.displayMode ? { displayMode: options.displayMode } : {}),
     ...(drawings
       ? {
           inlineDrawingLayout: drawings.inlineDrawingLayout,

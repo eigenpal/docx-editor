@@ -122,6 +122,10 @@ import {
   customNodeWriteOf,
 } from './custom-node-plan.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { createFixedMeasurer } from '../layout/index.ts';
+import { layoutNoteById } from '../layout/note-layout.ts';
+import { paragraphFragmentsOfBlocks, type BlockFragmentRecord } from '../layout/semantic-records.ts';
+import { lineSegments } from '../layout/line-segments.ts';
 
 /**
  * Characters that mean "a new paragraph" in a document but are merely characters in a run.
@@ -269,6 +273,83 @@ const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 
 function query(value: AutomationValue): PlannedOperation {
   return { ok: true, kind: 'query', value };
+}
+
+function noteDisplayParagraphGroups(
+  fragments: readonly BlockFragmentRecord[]
+): readonly { readonly paragraphId: string; readonly mergedWithPrevious: boolean }[] {
+  const groups: { paragraphId: string; mergedWithPrevious: boolean }[] = [];
+  const seen = new Set<string>();
+  for (const fragment of paragraphFragmentsOfBlocks(fragments)) {
+    let firstInFragment = true;
+    for (const line of fragment.lines) {
+      for (const segment of lineSegments(line)) {
+        if (seen.has(segment.paragraphId)) continue;
+        seen.add(segment.paragraphId);
+        groups.push({
+          paragraphId: segment.paragraphId,
+          mergedWithPrevious: !firstInFragment,
+        });
+        firstInFragment = false;
+      }
+    }
+    if (fragment.lines.length === 0 || seen.has(fragment.paragraphId)) continue;
+    seen.add(fragment.paragraphId);
+    groups.push({
+      paragraphId: fragment.paragraphId,
+      mergedWithPrevious: !firstInFragment,
+    });
+  }
+  return groups;
+}
+
+function visibleNoteParagraphText(
+  fragments: readonly BlockFragmentRecord[],
+  paragraphId: string
+): string {
+  const pieces: { start: number; text: string }[] = [];
+  const seen = new Set<string>();
+  for (const fragment of paragraphFragmentsOfBlocks(fragments)) {
+    for (const line of fragment.lines) {
+      for (const segment of lineSegments(line)) {
+        if (segment.paragraphId !== paragraphId) continue;
+        for (const span of segment.spans) {
+          if (span.range.end === span.range.start) continue;
+          const key = `${span.range.start}:${span.range.end}:${span.text}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          pieces.push({ start: span.range.start, text: span.text });
+        }
+      }
+    }
+  }
+  return pieces
+    .sort((left, right) => left.start - right.start)
+    .map((piece) => piece.text)
+    .join('');
+}
+
+function resolvedNoteText(reads: AutomationStoryReads, displayMode: 'proposed' | 'original'): string {
+  const story = reads.story;
+  if (story.kind !== 'note') return reads.text();
+  const laid = layoutNoteById(reads.part, story.noteId, 400, {
+    measurer: createFixedMeasurer(),
+    producer: 'automation:resolved-note-text',
+    displayMode,
+  });
+  if (!laid) return reads.text();
+  const groups = noteDisplayParagraphGroups(laid.fragments);
+  const [first] = groups;
+  if (!first) return '';
+  let text = visibleNoteParagraphText(laid.fragments, first.paragraphId);
+  for (let index = 1; index < groups.length; index += 1) {
+    const group = groups[index]!;
+    text += `${group.mergedWithPrevious ? '' : PARAGRAPH_MARK}${visibleNoteParagraphText(
+      laid.fragments,
+      group.paragraphId
+    )}`;
+  }
+  return text;
 }
 
 /**
@@ -1987,6 +2068,23 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return operation.op === 'getNoteText'
           ? query({ kind: 'text', text: reads.text() })
           : query({ kind: 'handle', handle: handles.body(story) });
+      }
+
+      case 'getResolvedNoteText': {
+        const target = handles.resolve(operation.note, 'note');
+        if (!target || target.kind !== 'note')
+          return refuse('invalid-handle', 'that handle does not name a note', 'note');
+        if (operation.displayMode !== 'proposed' && operation.displayMode !== 'original')
+          return refuse(
+            'unknown-operation',
+            'that is not a resolved review display mode',
+            String(operation.displayMode)
+          );
+        const story: AutomationStoryId = target;
+        const reads = packageReads.story(story);
+        if (!reads)
+          return refuse('invalid-handle', 'that note is not in this document', storyKey(story));
+        return query({ kind: 'text', text: resolvedNoteText(reads, operation.displayMode) });
       }
 
       case 'getNoteKind': {
