@@ -7,8 +7,8 @@
 // a selection anchored in it at the top of the document.
 
 import { lineSegments } from './line-segments.ts';
-import { paragraphFragmentsOf } from './semantic-records.ts';
-import type { PageRecord, SemanticLayout } from './semantic-records.ts';
+import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
+import type { BlockFragmentRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 
 // Memoized PER LAYOUT, which is sound because a published layout is immutable: a new revision
 // is a new object. Without this every selection walk recomputed the order — and `lineOverlap`
@@ -17,6 +17,7 @@ import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 // what turned that into seconds.
 const documentOrderCache = new WeakMap<SemanticLayout, string[]>();
 const documentOrderIndexCache = new WeakMap<SemanticLayout, Map<string, number>>();
+const everyStoryOrderCache = new WeakMap<SemanticLayout, string[]>();
 
 /**
  * Paragraph ids on ONE page, in order, remembered on the page record.
@@ -80,4 +81,60 @@ export function documentOrderIndex(layout: SemanticLayout): Map<string, number> 
   for (const [position, id] of documentOrder(layout).entries()) index.set(id, position);
   documentOrderIndexCache.set(layout, index);
   return index;
+}
+
+/**
+ * Paragraph ids of EVERY story the layout paints, in the order they sit on the page.
+ *
+ * Body, then each page's header and footer, then its note areas — per page, so a story's own
+ * paragraphs stay adjacent and in reading order. That is all any caller needs: a selection
+ * cannot span two stories (the engine refuses one), so only the order WITHIN a story is ever
+ * compared, and this gets that right for all of them at once.
+ *
+ * The default for callers that name no story. {@link documentOrder} is the body alone, and
+ * using it as a default is what let selection reads silently answer about the wrong story —
+ * two paragraphs selected in a header both ranked -1, the walk gave up, and the run properties
+ * came back short. A caller that DOES know its story should still pass that story's order:
+ * it is smaller, and it cannot match a paragraph the caret is not among.
+ */
+export function everyStoryOrder(layout: SemanticLayout): string[] {
+  const cached = everyStoryOrderCache.get(layout);
+  if (cached) return cached;
+  const seen = new Set<string>();
+  const order: string[] = [];
+  const take = (blocks: readonly BlockFragmentRecord[]): void => {
+    for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
+      for (const line of fragment.lines) {
+        for (const segment of lineSegments(line)) {
+          if (seen.has(segment.paragraphId)) continue;
+          seen.add(segment.paragraphId);
+          order.push(segment.paragraphId);
+        }
+      }
+      // A paragraph with no lines still has a position; without this it compares as before
+      // every other one, which puts a selection anchored in it at the top of its story.
+      if (fragment.lines.length === 0 && !seen.has(fragment.paragraphId)) {
+        seen.add(fragment.paragraphId);
+        order.push(fragment.paragraphId);
+      }
+    }
+  };
+  for (const page of layout.pages) {
+    // The body first, through the same page-level memo the body-only order uses.
+    for (const paragraphId of pageOrder(page)) {
+      if (seen.has(paragraphId)) continue;
+      seen.add(paragraphId);
+      order.push(paragraphId);
+    }
+    for (const story of [page.header, page.footer]) {
+      if (story) take(story.fragments);
+    }
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      if (area.separator) take(area.separator.fragments);
+      for (const note of area.notes) take(note.fragments);
+    }
+  }
+  everyStoryOrderCache.set(layout, order);
+  return order;
 }

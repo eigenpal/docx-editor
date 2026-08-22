@@ -8,9 +8,10 @@
 // take, so a click, a caret and an edit all speak one coordinate system: a hit test can be
 // handed straight to `insertText` without a translation step that could disagree.
 
+import { everyStoryOrder } from './document-order.ts';
 import { caretBoxOnLine, contentControlAtPoint, hitTestPage } from './semantic-hit-test.ts';
 import { documentOrder, documentOrderIndex } from './document-order.ts';
-export { documentOrder } from './document-order.ts';
+export { documentOrder, everyStoryOrder } from './document-order.ts';
 export { selectionRects, keyedRangeRects, type KeyedRange } from './selection-rects.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { lineSegmentFor, lineSegments, segmentOverlap, type LineSegment } from './line-segments.ts';
@@ -498,7 +499,8 @@ function positionIn(order: readonly string[], paragraphId: string): number {
 /**
  * Order a selection's endpoints, against the order of the story they live in.
  *
- * `order` is REQUIRED, and deliberately so. It used to default to the body's `documentOrder`,
+ * `order` is REQUIRED on this internal seam, and deliberately so. It used to default to the
+ * body's `documentOrder`,
  * which meant every new call site was body-blind unless its author remembered — and a
  * two-paragraph selection in a header ranked both endpoints at -1, gave up, and returned null.
  * The reads built on this then answered for the head paragraph alone. Making the caller state
@@ -508,6 +510,10 @@ export function orderPositions(
   selection: SemanticSelection,
   order: readonly string[]
 ): { from: SemanticPosition; to: SemanticPosition } | null {
+  // NOTE: still required here. This is the internal seam every selection read goes through,
+  // and the compiler finding a call site that forgot the story's order is the whole reason it
+  // is required. The PUBLIC entry points below default it instead, because a consumer holding
+  // only a layout and a selection has nothing else to pass.
   // Same paragraph needs no document-wide order at all.
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return selection.anchor.offset <= selection.head.offset
@@ -815,8 +821,15 @@ export function compositionAnchor(
 export function spansInSelection(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  /** Reading order of the ACTIVE story. See {@link orderPositions}. */
-  order: readonly string[]
+  /**
+   * Reading order of the ACTIVE story. See {@link orderPositions}.
+   *
+   * Omitted, every story the layout paints is used. That is correct rather than merely
+   * convenient: a selection cannot span two stories, so only the order within one is ever
+   * compared. Passing the caret's own story is still better where the caller knows it — the
+   * list is smaller and cannot match a paragraph the caret is not among.
+   */
+  order: readonly string[] = everyStoryOrder(layout)
 ): StyleSpanRecord[] {
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];

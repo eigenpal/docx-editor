@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': major
+'@docx-editor.dev/core': minor
 ---
 
-`PaginatedSurface` gains required `sectionAnchorParagraphAt` and `sectionAtPage`, and `TreeDocxSessionView` gains a required `storyParts`. An external implementor of either interface has to add them.
+`PaginatedSurface` gains `sectionAnchorParagraphAt` and `sectionAtPage`, and `TreeDocxSessionView` gains `storyParts`. Both interfaces are produced by the engine and consumed by hosts, so this is additive for callers.

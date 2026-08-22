@@ -4,6 +4,7 @@
 // this answers "which pixels does this range cover". They meet at `segmentOverlap`, which is
 // the one part of both that has to know a line can carry more than one paragraph.
 
+import { everyStoryOrder } from './document-order.ts';
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
@@ -28,7 +29,15 @@ import type { SemanticPosition, SemanticSelection, SelectionRect } from './seman
 export function selectionRects(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  order: readonly string[]
+  /**
+   * Reading order of the ACTIVE story.
+   *
+   * Omitted, every story the layout paints is used. A selection cannot span two stories, so
+   * only the order within one is ever compared and that default is correct. The body-only
+   * order this used to fall back to was not: two paragraphs selected in a header both ranked
+   * -1, the walk gave up, and the read came back empty.
+   */
+  order: readonly string[] = everyStoryOrder(layout)
 ): SelectionRect[] {
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];

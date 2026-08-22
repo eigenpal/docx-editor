@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': major
+'@docx-editor.dev/core': minor
 ---
 
-`selectionRects` and `spansInSelection` now require the story's paragraph order as a third argument. Passing only a layout and a selection no longer compiles, because a body-shaped default silently returned the wrong result for a caret in a header, footer or note.
+`selectionRects` and `spansInSelection` take the story's paragraph order as an optional third argument. Omitted, they now read every story the layout paints instead of the body alone, so a selection in a header, footer or note returns its spans rather than nothing.

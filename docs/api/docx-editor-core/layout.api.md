@@ -606,6 +606,9 @@ export function enumerateDocumentSections(part: OoxmlPart, displayMode?: Revisio
 export function enumerateDocumentSectionsBounded(part: OoxmlPart, displayMode?: RevisionDisplayMode): DocumentSectionsEnumeration;
 
 // @public
+export function everyStoryOrder(layout: SemanticLayout): string[];
+
+// @public
 export function expandLvlText(lvlText: string, counters: readonly number[], formats: readonly string[]): string;
 
 // @public
@@ -2524,7 +2527,8 @@ export interface SelectionRect {
 }
 
 // @public
-export function selectionRects(layout: SemanticLayout, selection: SemanticSelection, order: readonly string[]): SelectionRect[];
+export function selectionRects(layout: SemanticLayout, selection: SemanticSelection,
+order?: readonly string[]): SelectionRect[];
 
 // @public
 export interface SemanticHit {
@@ -2913,7 +2917,7 @@ export function spansInCells(layout: SemanticLayout, cellIds: readonly string[])
 
 // @public
 export function spansInSelection(layout: SemanticLayout, selection: SemanticSelection,
-order: readonly string[]): StyleSpanRecord[];
+order?: readonly string[]): StyleSpanRecord[];
 
 // @public
 export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode): OoxmlElement[];
