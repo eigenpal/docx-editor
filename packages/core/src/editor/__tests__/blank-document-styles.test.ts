@@ -197,6 +197,24 @@ describe('toggleList applies List Paragraph, as Word does', () => {
     expect(second! - first!).toBe(8);
   });
 
+  test('pressing Bullets FIRST and then typing closes the items up too', () => {
+    // The gesture a user actually makes, and the one the selection-then-toggle tests miss:
+    // every item after the first arrives by splitting the one above it, so the paragraph
+    // ABOVE has to lose the space-after it was laid out with when it was still the last.
+    const { surface } = mount(blankDocumentBytes());
+    expect(surface.toggleList('bullet')).toBe(true);
+    surface.type('one');
+    surface.splitParagraph();
+    surface.type('two');
+    surface.splitParagraph();
+    surface.type('three');
+
+    // Only the last item keeps the 8pt, because nothing of the same style follows it.
+    const [first, second, third] = blockHeights(surface);
+    expect(first).toBe(second);
+    expect(third! - second!).toBe(8);
+  });
+
   test('bulleting a heading leaves it a heading', async () => {
     const { editor, surface } = mount(blankDocumentBytes());
     surface.type('a heading');

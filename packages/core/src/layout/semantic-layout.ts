@@ -62,6 +62,7 @@ import {
   adjustedBreakIndex,
   keepNextFlowKeys,
   listMarkerFlowKeys,
+  contextualSpacingFlowKeys,
   keepNextGroupHeight,
   paragraphKeeps,
   MAX_KEEP_NEXT_CHAIN,
@@ -1035,6 +1036,12 @@ function layoutBlocksPass(
     const markerTexts = prepared.map((entry) =>
       entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
     );
+    // The two inputs `w:contextualSpacing` reads from the blocks on either side. A table
+    // answers null, which is what `sameStyleAs` means by "not a paragraph of this style".
+    const contextualSpacings = prepared.map(
+      (entry) => entry.kind === 'paragraph' && entry.contextualSpacing
+    );
+    const styleIds = prepared.map((entry) => (entry.kind === 'paragraph' ? entry.styleId : null));
     return {
       bodies,
       producer,
@@ -1053,9 +1060,15 @@ function layoutBlocksPass(
       keepsNext,
       markerTexts,
       // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
-      // stored under; only `w:keepNext` and list markers make the two differ (§17.3.1.15).
+      // stored under; the CROSS-BLOCK properties make the two differ: `w:keepNext`
+      // (§17.3.1.15), the list marker, and `w:contextualSpacing` (§17.3.1.9), each of which
+      // makes a block's placement depend on a block it does not contain.
       flowKeys: listMarkerFlowKeys(
-        keepNextFlowKeys(keys, (index) => keepsNext[index]!),
+        contextualSpacingFlowKeys(
+          keepNextFlowKeys(keys, (index) => keepsNext[index]!),
+          (index) => contextualSpacings[index]!,
+          (index) => styleIds[index] ?? null
+        ),
         (index) => markerTexts[index]
       ),
     };

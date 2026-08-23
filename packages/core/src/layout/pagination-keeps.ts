@@ -247,6 +247,42 @@ export function listMarkerFlowKeys(
   return flow;
 }
 
+/**
+ * Flow keys that also carry each block's `w:contextualSpacing` VERDICT.
+ *
+ * `w:contextualSpacing` (§17.3.1.9) drops a paragraph's space before or after when the
+ * neighbour on that side is a paragraph of the SAME style, so the block's own height is a
+ * function of two blocks it does not contain. Its content key cannot see that: inserting a
+ * list item under the last one has to change the last one's space-after from 8pt to zero,
+ * and with the key unmoved the incremental pass resumed past it and kept the stale height —
+ * a list whose items closed up on open, and stopped closing up as soon as it was edited.
+ *
+ * The same cross-block fold as {@link keepNextFlowKeys}, and folded for the same reason.
+ * Only the two booleans go in the key, not the neighbours' style ids: what the verdict
+ * depends on is whether each side matches, so a rename that moves both sides together must
+ * not re-place a block whose spacing is identical.
+ *
+ * `styleAt` answers null for a block that can never match — a table, or a paragraph with no
+ * style — which is what makes an unstyled run of paragraphs keep its spacing.
+ */
+export function contextualSpacingFlowKeys(
+  keys: string[],
+  contextualAt: (index: number) => boolean,
+  styleAt: (index: number) => string | null
+): string[] {
+  let flow = keys;
+  for (let index = 0; index < keys.length; index += 1) {
+    if (!contextualAt(index)) continue;
+    const style = styleAt(index);
+    if (style === null) continue;
+    const before = index > 0 && styleAt(index - 1) === style;
+    const after = index + 1 < keys.length && styleAt(index + 1) === style;
+    if (flow === keys) flow = [...keys];
+    flow[index] = `${flow[index]}~cs~${before ? 1 : 0}${after ? 1 : 0}`;
+  }
+  return flow;
+}
+
 export function keepNextFlowKeys(keys: string[], keepsNext: (index: number) => boolean): string[] {
   let flow = keys;
   let chain = 0;
