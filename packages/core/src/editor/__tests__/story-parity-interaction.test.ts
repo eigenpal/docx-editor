@@ -15,6 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { tableInteractionIndex } from '../../layout/semantic-table-interaction.ts';
+import { paragraphTextFromLayout } from '@docx-editor.dev/core/layout';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import type { OoxmlNode } from '../../store/package/ooxml-tree.ts';
 
@@ -37,6 +38,11 @@ const TABLE =
 const LINK =
   `<w:p><w:hyperlink r:id="${LINK_R_ID}"><w:r><w:t>Sample document</w:t></w:r>` +
   '</w:hyperlink></w:p>';
+
+/** A block content control, so the header carries one too. */
+const CONTROL =
+  '<w:sdt><w:sdtPr><w:tag w:val="hdrControl"/><w:id w:val="7"/></w:sdtPr>' +
+  '<w:sdtContent><w:p><w:r><w:t>Controlled</w:t></w:r></w:p></w:sdtContent></w:sdt>';
 
 function docx(): Uint8Array {
   return zipSync({
@@ -66,7 +72,9 @@ function docx(): Uint8Array {
         `<Relationship Id="${LINK_R_ID}" Type="${R}/hyperlink" Target="${LINK_URL}"` +
         ' TargetMode="External"/></Relationships>'
     ),
-    'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}" xmlns:r="${R}">${LINK}${TABLE}</w:hdr>`),
+    'word/header1.xml': strToU8(
+      `<w:hdr xmlns:w="${W}" xmlns:r="${R}">${LINK}${TABLE}${CONTROL}</w:hdr>`
+    ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
         `<w:p><w:r><w:t>Body</w:t></w:r></w:p>${TABLE}` +
@@ -149,3 +157,32 @@ function headerLinkId(editor: DocxEditorInstance): string | undefined {
   };
   return walk(part.root);
 }
+describe('content-control geometry is body-only, and says so', () => {
+  test('a control in a header publishes no boundary', () => {
+    const editor = mount();
+    const layout = editor.surface!.layout();
+
+    // KNOWN LIMIT, pinned so it is a decision rather than a surprise. The boundary derivation
+    // is a single-part pass over the body, and the layout only ever receives furniture as
+    // laid-out fragments plus a part NAME — it never holds the header's part object. So a
+    // control in a header has no geometry, and its outline cannot draw or hit-test.
+    //
+    // The behaviour built on it does work: `contentControlAt` resolves a furniture control
+    // through the tree rather than through geometry, which is why editing one is fine.
+    // Fixing the chrome means threading furniture parts into the layout's boundary pass.
+    expect((layout.contentControls ?? []).some((entry) => entry.tag === 'hdrControl')).toBe(false);
+    // And the control IS reachable, so this is a missing OUTLINE, not a missing control. That
+    // is what makes it a chrome limit rather than a functional one.
+    const surface = editor.surface!;
+    expect(surface.enterHeaderFooter({ rId: HEADER_R_ID })).toBe(true);
+    const inControl = surface.session
+      .paragraphIdsIn({ kind: 'headerFooter', rId: HEADER_R_ID })
+      .find((id) => paragraphTextFromLayout(surface.layout(), id) === 'Controlled');
+    expect(inControl, 'the header control holds no paragraph').toBeDefined();
+    surface.setSelection({
+      anchor: { paragraphId: inControl!, offset: 0 },
+      head: { paragraphId: inControl!, offset: 0 },
+    });
+    expect(editor.query({ type: 'contentControlAt' })?.tag).toBe('hdrControl');
+  });
+});
