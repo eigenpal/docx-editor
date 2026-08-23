@@ -15,7 +15,8 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { CONTROL_TAG, STORIES_WITH_CONTROL } from './story-parity-fixture.ts';
+import { CONTROL_TAG, PROBE, PROBE_TEXT, STORIES_WITH_CONTROL } from './story-parity-fixture.ts';
+import { STORY_KINDS } from './story-parity-contract.ts';
 import {
   caretInControl,
   changedParts,
@@ -158,6 +159,64 @@ describe('an explicit scope does not refuse a control the caret already resolves
         // The reason has to name the real limit. A generic "only the body scope is supported"
         // is what let a fixable gap read as a design decision for the length of this PR.
         expect(gate.ok === false && gate.reason).toContain('resolves in the body only');
+      } finally {
+        open.destroy();
+      }
+    });
+  }
+});
+
+// Authoring a NEW control is scoped the same way editing one is.
+//
+// The two verbs that came before it address a control by its part-qualified id, which carries
+// the story with it. An INSERTION has no id yet — it addresses a paragraph and two offsets —
+// so the story has to come from the paragraph, or the write lands in the body while the reader
+// is looking at a header.
+describe('insertContentControl writes the story the caret is in', () => {
+  for (const story of STORY_KINDS) {
+    test(`wrapping a probe in the ${story} touches only its part`, async () => {
+      const open = openStory(story);
+      try {
+        const paragraphId = open.paragraphIds[PROBE.plain]!;
+        open.surface.setSelection({
+          anchor: { paragraphId, offset: 0 },
+          head: { paragraphId, offset: PROBE_TEXT[PROBE.plain].length },
+        });
+        const before = await savedParts(open);
+        expect(
+          open.editor.exec({
+            type: 'insertContentControl',
+            subtype: 'plainText',
+            tag: 'Inserted',
+          })
+        ).toEqual({ ok: true, changed: true });
+        const after = await savedParts(open);
+
+        expect(changedParts(before, after)).toEqual([PART_OF_STORY[story]]);
+        expect(after.get(PART_OF_STORY[story])).toContain('Inserted');
+        for (const other of STORY_KINDS) {
+          if (other === story) continue;
+          expect(after.get(PART_OF_STORY[other])).not.toContain('Inserted');
+        }
+      } finally {
+        open.destroy();
+      }
+    });
+
+    test(`a caret insertion in the ${story} is undoable there`, () => {
+      const open = openStory(story);
+      try {
+        const paragraphId = open.paragraphIds[PROBE.plain]!;
+        open.surface.setSelection({
+          anchor: { paragraphId, offset: 0 },
+          head: { paragraphId, offset: 0 },
+        });
+        expect(
+          open.editor.exec({ type: 'insertContentControl', subtype: 'date', tag: 'Inserted' })
+        ).toEqual({ ok: true, changed: true });
+        expect(open.editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: true });
+        // Back to the story's own paragraph, not a body paragraph that happens to read the same.
+        expect(partOfNodeId(paragraphId)).toBe(PART_OF_STORY[story]);
       } finally {
         open.destroy();
       }

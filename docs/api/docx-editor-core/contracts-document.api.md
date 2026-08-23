@@ -171,6 +171,12 @@ export interface DocEdits {
         target: DocTarget;
         kind: 'page' | 'column' | 'line' | 'section';
     };
+    insertContentControl: {
+        target: DocTarget;
+        subtype: InsertableContentControlType;
+        tag?: string;
+        title?: string;
+    };
     // (undocumented)
     insertHyperlink: {
         target: DocTarget;
@@ -413,6 +419,9 @@ export interface IndentFormatting {
     };
     readonly right: number;
 }
+
+// @public
+export type InsertableContentControlType = Extract<ContentControlType, 'richText' | 'plainText' | 'dropdown' | 'comboBox' | 'date'> | 'dropDownList';
 
 // @public
 export interface Paragraph {

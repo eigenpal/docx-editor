@@ -33,6 +33,11 @@ import {
 } from '@docx-editor.dev/core/store';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
+import {
+  resolveContentControlInsertion,
+  type InsertContentControlCommand,
+  type InsertResolution,
+} from './content-control-insert.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 import { selectionMarkOf } from './surface-selection-ops.ts';
@@ -348,13 +353,18 @@ export function inlineContentControlsAt(
 // ─── Command dispatch ────────────────────────────────────────────────────────
 
 export type ContentControlEditorCommand =
+  | InsertContentControlCommand
   | { type: 'setContentControlValue'; target?: DocTarget; value: string }
   | { type: 'removeContentControl'; target?: DocTarget };
 
 export function isContentControlEditorCommand(command: {
   type: string;
 }): command is ContentControlEditorCommand {
-  return command.type === 'setContentControlValue' || command.type === 'removeContentControl';
+  return (
+    command.type === 'insertContentControl' ||
+    command.type === 'setContentControlValue' ||
+    command.type === 'removeContentControl'
+  );
 }
 
 type CommandGate = { ok: true } | { ok: false; refusal: Extract<ExecResult, { ok: false }> };
@@ -669,6 +679,13 @@ export function canContentControlCommand(
 ): CanResult {
   const gated = gateContentControlCommand(command, surface, mode, options);
   if (!gated.ok) return gated.refusal;
+  // An insertion has no control to resolve — it is about to create the one it addresses — so
+  // it builds its op from a RANGE and validates that, through the same store validator.
+  if (command.type === 'insertContentControl') {
+    const insertion = resolveContentControlInsertion(surface!, command);
+    if (!insertion.ok) return { ok: false, code: insertion.code, reason: insertion.reason };
+    return storeVerdict(surface!, insertion.op, insertion.span.paragraphId);
+  }
   const resolved = resolveContentControlTarget(surface!, command.target);
   if (!resolved.ok) {
     return { ok: false, code: resolved.code, reason: resolved.reason };
@@ -677,8 +694,13 @@ export function canContentControlCommand(
     command.type === 'setContentControlValue'
       ? { op: 'setContentControlValue', controlId: resolved.controlId, value: command.value }
       : { op: 'removeContentControl', controlId: resolved.controlId };
+  return storeVerdict(surface!, op, resolved.controlId);
+}
+
+/** What the store itself would say about this op, in the vocabulary `can` answers. */
+function storeVerdict(surface: PaginatedSurface, op: TreeDocOp, nodeId: string): CanResult {
   const rejection = validateTreeOp(
-    partOfNodeId(surface!.session, resolved.controlId) ?? surface!.session.part(),
+    partOfNodeId(surface.session, nodeId) ?? surface.session.part(),
     op
   );
   if (rejection) {
@@ -696,6 +718,7 @@ export function execContentControlCommand(
   surface: PaginatedSurface,
   command: ContentControlEditorCommand
 ): ExecResult {
+  if (command.type === 'insertContentControl') return execInsertContentControl(surface, command);
   const resolved = resolveContentControlTarget(surface, command.target);
   if (!resolved.ok) {
     const target = resolved.target ?? command.target;
@@ -734,5 +757,49 @@ export function execContentControlCommand(
   // store's clock, and a header, a footer and a notes part each count their own — so every
   // successful write outside the body compared equal and reported `changed: false`, which the
   // contract defines as a no-op. A caller was told its header write did nothing.
+  return { ok: true, changed: result.committed };
+}
+
+/**
+ * Commit an insertion, and leave the caret where the user can use it.
+ *
+ * A WRAP keeps the characters selected: nothing moved, and the selection is still the span the
+ * caller named. A CARET insertion collapses at the control's content start, which is where the
+ * prompt lives — typing there replaces the prompt whole rather than appending to it.
+ */
+function execInsertContentControl(
+  surface: PaginatedSurface,
+  command: InsertContentControlCommand
+): ExecResult {
+  // BEFORE the range is read, not after. An insertion addresses OFFSETS, and offsets taken
+  // against a paragraph that queued typing is about to rewrite point at the wrong characters.
+  // Its neighbours can resolve first because a control id survives a flush and an offset does
+  // not.
+  surface.flushPendingInput();
+  const insertion: InsertResolution = resolveContentControlInsertion(surface, command);
+  if (!insertion.ok) {
+    const target = insertion.target ?? command.target;
+    return {
+      ok: false,
+      code: insertion.code,
+      reason: insertion.reason,
+      ...(target !== undefined ? { target } : {}),
+    };
+  }
+
+  const { paragraphId, start, end } = insertion.span;
+  const before = selectionMarkOf(surface.state().selection);
+  const after = { paragraphId, start, end };
+  const result = surface.session.applyTreeOps(
+    [insertion.op],
+    before,
+    after,
+    storyScopeOfNodeId(surface.session, paragraphId, { kind: 'body' })
+  );
+  if (result.rejected) {
+    return treeOpRejectionToExecResult(result.reason ?? 'unsupported', command.target);
+  }
+
+  surface.layout();
   return { ok: true, changed: result.committed };
 }

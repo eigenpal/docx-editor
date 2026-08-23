@@ -46,12 +46,9 @@ import {
   parseCheckboxValue,
   runPropertiesNodeOf,
 } from './tree-op-nodes.ts';
-import { splitRunsAt } from './tree-op-apply.ts';
 import {
   insertionLandingNodeId,
-  paragraphLength,
   paragraphOffsetIndex,
-  splitsSurrogate,
   type OffsetSpan,
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
@@ -102,7 +99,7 @@ const DEFAULT_PROMPTS: Readonly<Record<string, string>> = {
 };
 const DEFAULT_TEXT_PROMPT = 'Click here to enter text.';
 
-function promptFor(type: ContentControlKind): string {
+export function promptFor(type: ContentControlKind): string {
   return DEFAULT_PROMPTS[type] ?? DEFAULT_TEXT_PROMPT;
 }
 
@@ -305,7 +302,13 @@ const TREE_OP_REACH: {
   insertNote: (op) => writingAt(op.paragraphId, op.offset),
   setRunProperties: (op) => over(op.paragraphId, op.start, op.end),
   insertHyperlink: (op) => over(op.paragraphId, op.start, op.end),
-  insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
+  // Wrapping a range only moves run boundaries around characters that are already there. A
+  // CARET insertion writes a prompt into the paragraph, so it reaches the way typing does and
+  // a lock that forbids writing at that point forbids it.
+  insertContentControl: (op) =>
+    op.start === op.end
+      ? writingAt(op.paragraphId, op.start)
+      : over(op.paragraphId, op.start, op.end),
   insertInlineContentControl: (op) => writingAt(op.paragraphId, op.offset),
   // A split at a control's edge moves the whole control to one side of the break and changes
   // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.
@@ -1041,7 +1044,7 @@ function sectionProtectsForms(part: OoxmlPart, nodeId: string): boolean {
 // Node construction
 // ---------------------------------------------------------------------------
 
-function element(
+export function wmlElement(
   nextId: () => string,
   localName: string,
   options: {
@@ -1068,7 +1071,11 @@ function element(
   } as unknown as OoxmlElement;
 }
 
-function textRun(nextId: () => string, text: string, properties: OoxmlNode | undefined): OoxmlNode {
+export function textRun(
+  nextId: () => string,
+  text: string,
+  properties: OoxmlNode | undefined
+): OoxmlNode {
   const value: OoxmlNode = { id: nextId(), kind: 'textValue', value: text };
   const textNode = {
     id: nextId(),
@@ -1102,7 +1109,7 @@ function firstRunProperties(
     if (node.kind === 'textValue' || depth > 8) return undefined;
     if (node.kind === 'run') {
       const properties = runPropertiesNodeOf(node);
-      return properties ? clone(properties, nextId) : undefined;
+      return properties ? cloneWithFreshIds(properties, nextId) : undefined;
     }
     for (const child of node.children) {
       const found = find(child, depth + 1);
@@ -1113,12 +1120,12 @@ function firstRunProperties(
   return find(content, 0);
 }
 
-function clone(node: OoxmlNode, nextId: () => string): OoxmlNode {
+export function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
   if (node.kind === 'textValue') return { id: nextId(), kind: 'textValue', value: node.value };
   return {
     ...node,
     id: nextId(),
-    children: node.children.map((child) => clone(child, nextId)),
+    children: node.children.map((child) => cloneWithFreshIds(child, nextId)),
   } as OoxmlNode;
 }
 
@@ -1381,13 +1388,13 @@ interface PropertyEdits {
  * {@link orderedContentControlProperties} rather than by appending, because `CT_SdtPr` is a
  * sequence and Word rejects one out of order.
  */
-function editedProperties(
+export function editedProperties(
   sdtPr: OoxmlElement | undefined,
   edits: PropertyEdits,
   nextId: () => string
 ): OoxmlElement {
   const base =
-    sdtPr ?? element(nextId, 'sdtPr', { kind: 'contentControlProperties' as OoxmlNode['kind'] });
+    sdtPr ?? wmlElement(nextId, 'sdtPr', { kind: 'contentControlProperties' as OoxmlNode['kind'] });
   let children = [...base.children] as OoxmlNode[];
 
   const setSimple = (localName: string, value: string | null): void => {
@@ -1401,7 +1408,7 @@ function editedProperties(
       if (index >= 0) children.splice(index, 1);
       return;
     }
-    const next = element(nextId, localName, { attributes: [['val', value]] });
+    const next = wmlElement(nextId, localName, { attributes: [['val', value]] });
     if (index >= 0) children[index] = next;
     else children.push(next);
   };
@@ -1416,7 +1423,7 @@ function editedProperties(
       if (index >= 0) children.splice(index, 1);
       return;
     }
-    if (index < 0) children.push(element(nextId, localName));
+    if (index < 0) children.push(wmlElement(nextId, localName));
   };
 
   if (edits.tag !== undefined) setSimple('tag', edits.tag);
@@ -1499,7 +1506,10 @@ function contentWithText(
   return [paragraph];
 }
 
-function contentControlEffect(controlId: string, impact: TreeOpEffect['impact']): TreeOpEffect {
+export function contentControlEffect(
+  controlId: string,
+  impact: TreeOpEffect['impact']
+): TreeOpEffect {
   return {
     dirty: [controlId],
     created: [],
@@ -1555,7 +1565,7 @@ export function applySetContentControlValue(
   );
   const nextContent = {
     ...(content ??
-      element(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
+      wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
     children: contentWithText(content, planned.text, nextId),
   } as OoxmlNode;
 
@@ -1646,118 +1656,6 @@ export function applyRemoveContentControl(
   );
 }
 
-export function applyInsertContentControl(
-  part: OoxmlPart,
-  op: Extract<TreeDocOp, { op: 'insertContentControl' }>,
-  options?: EditOptions
-): TreeOpResult {
-  const paragraph = findNode(part, op.paragraphId);
-  if (!paragraph) return { ok: false, reason: 'unknown-paragraph' };
-  if (paragraph.kind !== 'paragraph') return { ok: false, reason: 'not-a-paragraph' };
-  if (lockForbidsEdit(contentControlLockAt(part, op.paragraphId))) {
-    return { ok: false, reason: 'locked' };
-  }
-
-  if (op.start < 0 || op.end > paragraphLength(paragraph) || op.start >= op.end) {
-    return { ok: false, reason: 'invalid-range' };
-  }
-  if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
-    return { ok: false, reason: 'splits-surrogate-pair' };
-  }
-  // A control wraps WHOLE children — `w:sdt` is a sibling of runs in `EG_PContent`, never a
-  // thing inside one — so a range that ends mid-run only becomes wrappable once that run is
-  // two runs. Splitting at both edges first is the discipline a comment anchor already uses,
-  // and it keeps the characters and their formatting exactly as they were.
-  let current = part;
-  for (const edge of [op.end, op.start]) {
-    const target = findNode(current, op.paragraphId);
-    if (!target || target.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
-    const split = splitRunsAt(current, target, edge, options);
-    if (!split.ok) return { ok: false, reason: split.reason };
-    current = split.part;
-  }
-
-  const reloaded = findNode(current, op.paragraphId);
-  if (!reloaded || reloaded.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
-  const index = paragraphOffsetIndex(reloaded);
-  const wrapped: OoxmlNode[] = [];
-  let covered = false;
-  for (const child of reloaded.children) {
-    const span = index.spanOf(child);
-    if (!span || span.start === span.end) continue;
-    if (span.start >= op.start && span.end <= op.end) {
-      wrapped.push(child);
-      covered = true;
-      continue;
-    }
-    if (span.start < op.end && span.end > op.start) return { ok: false, reason: 'invalid-range' };
-  }
-  if (!covered) return { ok: false, reason: 'invalid-range' };
-
-  const nextId = createNodeIdAllocator(current);
-  const allocated = nextContentControlId(current);
-  const properties = editedProperties(
-    undefined,
-    {
-      ...(op.tag === undefined ? {} : { tag: op.tag }),
-      ...(op.alias === undefined ? {} : { alias: op.alias }),
-      ...(allocated === null ? {} : { id: allocated }),
-      ...(op.lock === undefined ? {} : { lock: op.lock }),
-    },
-    nextId
-  );
-  const typed = element(nextId, TYPE_ELEMENT_FOR[op.type]);
-  const withType = {
-    ...properties,
-    children: orderedContentControlProperties([...properties.children, typed]),
-  } as OoxmlElement;
-  const content = element(nextId, 'sdtContent', {
-    kind: 'contentControlContent' as OoxmlNode['kind'],
-    children: wrapped,
-  });
-  const control = element(nextId, 'sdt', {
-    kind: 'contentControl' as OoxmlNode['kind'],
-    children: [withType, content],
-  });
-
-  const wrappedIds = new Set(wrapped.map((child) => child.id));
-  let placed = false;
-  const children: OoxmlNode[] = [];
-  for (const child of reloaded.children) {
-    if (!wrappedIds.has(child.id)) {
-      children.push(child);
-      continue;
-    }
-    if (!placed) {
-      children.push(control);
-      placed = true;
-    }
-  }
-  return fromEdit(
-    replaceChildren(current, reloaded.id, children, options),
-    contentControlEffect(reloaded.id, 'flow-structural')
-  );
-}
-
-const TYPE_ELEMENT_FOR: Readonly<Record<InsertableContentControlType, string>> = {
-  richText: 'richText',
-  plainText: 'text',
-  dropDownList: 'dropDownList',
-  comboBox: 'comboBox',
-  date: 'date',
-};
-
-/** The next `w:id`, seeded from the part's own maximum. Null once the 32-bit bound is reached. */
-function nextContentControlId(part: OoxmlPart): number | null {
-  let max = 0;
-  for (const entry of contentControlsIn(part.root)) {
-    const id = contentControlPropertiesOf(entry.node).id;
-    if (id !== undefined && id > max) max = id;
-  }
-  if (max >= 0x7fffffff) return null;
-  return max + 1;
-}
-
 // ---------------------------------------------------------------------------
 // Placeholder replacement on an ordinary edit
 // ---------------------------------------------------------------------------
@@ -1809,7 +1707,7 @@ export function clearPlaceholder(
   );
   const emptied = {
     ...(content ??
-      element(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
+      wmlElement(nextId, 'sdtContent', { kind: 'contentControlContent' as OoxmlNode['kind'] })),
     children: contentWithText(content, '', nextId),
   } as OoxmlNode;
   const rebuilt = {

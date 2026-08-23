@@ -270,3 +270,215 @@ describe('removeContentControl command', () => {
     expect(editor.exec({ type: 'removeContentControl' })).toEqual(can);
   });
 });
+
+// ── insertContentControl ─────────────────────────────────────────────────────
+//
+// The verb that was missing: a mounted editor could set and remove a control but not create
+// one, so a host authoring template fields had to save, insert through a headless automation
+// host, and load the bytes back — which throws the undo stack away with them.
+
+describe('insertContentControl command', () => {
+  function selectRange(
+    surface: NonNullable<ReturnType<typeof createDocxEditor>['surface']>,
+    from: number,
+    to: number,
+    paragraphIndex = 0
+  ) {
+    const paragraphId = surface.session.paragraphIds()[paragraphIndex]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: from },
+      head: { paragraphId, offset: to },
+    });
+  }
+
+  test('wraps the selection in a new control carrying its tag and title', () => {
+    const editor = mount(p('Between ACME CORP and BUYER LTD'));
+    selectRange(editor.surface!, 8, 17);
+
+    const result = editor.exec({
+      type: 'insertContentControl',
+      subtype: 'plainText',
+      tag: 'party_name',
+      title: 'Party Name',
+    });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    // Read back through the query, which walks the tree from scratch: a wrapper that only
+    // existed in the op would not be here.
+    expect(editor.query({ type: 'contentControls' })).toMatchObject([
+      { tag: 'party_name', alias: 'Party Name', controlType: 'plainText' },
+    ]);
+    // Wrapping moves run boundaries. It does not rewrite text.
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('Between ACME CORP and BUYER LTD');
+  });
+
+  // The reason the command exists. `save()` → headless insert → `load()` reaches the same
+  // document and discards the history with it, so an insertion nobody can undo is the bug.
+  test('is one undo step, and undo puts the document back', () => {
+    const editor = mount(p('Between ACME CORP and BUYER LTD'));
+    selectRange(editor.surface!, 8, 17);
+
+    editor.exec({ type: 'insertContentControl', subtype: 'plainText', tag: 'party_name' });
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(1);
+
+    expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: true });
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('Between ACME CORP and BUYER LTD');
+  });
+
+  // Word's own gesture, and the one the reported use case needs: a host inserts a field where
+  // the user is looking, with nothing selected.
+  test('a caret inserts an empty control showing its prompt', () => {
+    const editor = mount(p('Between  and BUYER LTD'));
+    caretAt(editor.surface!, 8);
+
+    expect(
+      editor.exec({ type: 'insertContentControl', subtype: 'plainText', tag: 'party' })
+    ).toEqual({ ok: true, changed: true });
+    expect(editor.query({ type: 'contentControls' })).toMatchObject([{ tag: 'party' }]);
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe(
+      'Between Click here to enter text. and BUYER LTD'
+    );
+  });
+
+  test('a caret insertion is one undo step too', () => {
+    const editor = mount(p('Between  and BUYER LTD'));
+    caretAt(editor.surface!, 8);
+
+    editor.exec({ type: 'insertContentControl', subtype: 'date', tag: 'effective' });
+    expect(editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: true });
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('Between  and BUYER LTD');
+  });
+
+  // The caret is left where the prompt is, so the next keystroke replaces the whole prompt
+  // rather than appending to it.
+  test('typing after a caret insertion replaces the prompt', () => {
+    const editor = mount(p('Between  and BUYER LTD'));
+    caretAt(editor.surface!, 8);
+    editor.exec({ type: 'insertContentControl', subtype: 'plainText', tag: 'party' });
+
+    editor.exec({ type: 'insertText', text: 'ACME' });
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('Between ACME and BUYER LTD');
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(1);
+  });
+
+  test('refuses a selection that crosses paragraphs', () => {
+    const editor = mount(p('first') + p('second'));
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 1 },
+      head: { paragraphId: ids[1]!, offset: 3 },
+    });
+
+    const command = { type: 'insertContentControl' as const, subtype: 'richText' as const };
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'wrapping several paragraphs in one content control is not supported',
+    });
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+  });
+
+  // `picture` and `repeatingSection` are real `ContentControlType` values a reader returns, so
+  // an untyped caller can hand one straight back to this command.
+  test('refuses a control type an insertion cannot author, and can() agrees', () => {
+    const editor = mount(p('Between ACME CORP'));
+    selectRange(editor.surface!, 8, 17);
+
+    const command = { type: 'insertContentControl', subtype: 'picture' } as unknown as Parameters<
+      typeof editor.exec
+    >[0];
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'invalidArgs',
+      reason: 'that control type cannot be inserted (picture)',
+    });
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+  });
+
+  // The read vocabulary spells the list control `dropdown` and OOXML spells it `dropDownList`.
+  // Reading a control's type and authoring another like it is the commonest reason to call
+  // this, so both spellings mean the same kind.
+  test('takes either spelling of the dropdown kind', () => {
+    for (const subtype of ['dropdown', 'dropDownList'] as const) {
+      const editor = mount(p('choose one here'));
+      selectRange(editor.surface!, 0, 6);
+      expect(editor.exec({ type: 'insertContentControl', subtype, tag: 'pick' })).toEqual({
+        ok: true,
+        changed: true,
+      });
+      // What a READ answers is the same for both, which is what makes them one kind.
+      expect(editor.query({ type: 'contentControls' })).toMatchObject([
+        { tag: 'pick', controlType: 'dropdown' },
+      ]);
+    }
+  });
+
+  test('wraps a phrase named by a paraId anchor, wherever the caret is', () => {
+    const editor = mount(p('Between ACME CORP and BUYER LTD'));
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    const paraId = surface.session.paragraphAnchors().paraIdByNode.get(paragraphId)!;
+    expect(paraId).toBeDefined();
+    caretAt(surface, 0);
+
+    const result = editor.exec({
+      type: 'insertContentControl',
+      target: { paraId, search: 'BUYER LTD' },
+      subtype: 'plainText',
+      tag: 'buyer',
+    });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(editor.query({ type: 'contentControls' })).toMatchObject([{ tag: 'buyer' }]);
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('Between ACME CORP and BUYER LTD');
+  });
+
+  test('says so when the target addresses a paragraph that is not there', () => {
+    const editor = mount(p('Between ACME CORP'));
+    const can = editor.can({
+      type: 'insertContentControl',
+      target: { paraId: '0000DEAD' },
+      subtype: 'plainText',
+    });
+    expect(can).toEqual({
+      ok: false,
+      code: 'notFound',
+      reason: "no paragraph with paraId '0000DEAD'",
+    });
+  });
+
+  test('refuses inside a content-locked control, and can() agrees', () => {
+    const editor = mount(pMixed(sdt(`<w:lock w:val="sdtContentLocked"/>`, run('fixed text'))));
+    caretAt(editor.surface!, 3);
+
+    const command = { type: 'insertContentControl' as const, subtype: 'plainText' as const };
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'locked',
+      reason: 'the content control is locked',
+    });
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(1);
+  });
+
+  test('refuses while the document is open for viewing', () => {
+    const editor = mount(p('Between ACME CORP'));
+    selectRange(editor.surface!, 8, 17);
+    editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+
+    const command = { type: 'insertContentControl' as const, subtype: 'plainText' as const };
+    expect(editor.can(command)).toEqual({
+      ok: false,
+      code: 'locked',
+      reason: 'the document is read-only',
+    });
+    expect(editor.exec(command)).toEqual(editor.can(command));
+  });
+});

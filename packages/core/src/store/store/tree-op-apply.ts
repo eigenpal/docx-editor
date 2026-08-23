@@ -89,8 +89,8 @@ import {
   applySetSectionProperties,
 } from './tree-op-section.ts';
 import { pageFieldContentBuilders } from './tree-op-fields.ts';
+import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
 import {
-  applyInsertContentControl as applyAutomationInsertContentControl,
   applyRemoveContentControl as applyAutomationRemoveContentControl,
   applySetContentControlProperties as applyAutomationSetContentControlProperties,
   applySetContentControlValue as applyAutomationSetContentControlValue,
