@@ -148,7 +148,17 @@ function findTableOnPage(
     }
     return null;
   };
-  return visit(layout.pages[pageIndex]?.fragments ?? []);
+  const page = layout.pages[pageIndex];
+  if (!page) return null;
+  const inBody = visit(page.fragments);
+  if (inBody) return inBody;
+  // The header and footer stories. A table in one was never found here, so the drag preview
+  // bailed even once the hit test resolved it.
+  for (const story of [page.header, page.footer]) {
+    const found = story ? visit(story.fragments) : null;
+    if (found) return found;
+  }
+  return null;
 }
 
 function occurrenceRef(
@@ -257,19 +267,29 @@ export function createSurfaceTableInteraction(
     }
   }
 
+  /**
+   * A story-local point to CSS pixels on the sheet.
+   *
+   * `origin` is the box the coordinates are relative to. It defaults to the page's content
+   * box, which is right for the body and wrong for every other story: a header's fragments
+   * are laid out from the header's own box, so drawing their chrome against the page origin
+   * puts every handle down in the body.
+   */
   function cssPoint(
     pageIndex: number,
     contentX: number,
-    contentY: number
+    contentY: number,
+    origin?: { readonly x: number; readonly y: number }
   ): { left: number; top: number } {
     const input = host.read();
     const page = input.layout.pages[pageIndex];
     if (!page) return { left: 0, top: 0 };
+    const from = origin ?? page.contentBox;
     const scale = host.scale();
     const offsetX = host.pageOffsetX(pageIndex);
     return {
-      left: (page.contentBox.x + contentX + offsetX) * scale,
-      top: (page.contentBox.y + contentY) * scale,
+      left: (from.x + contentX + offsetX) * scale,
+      top: (from.y + contentY) * scale,
     };
   }
 

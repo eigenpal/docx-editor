@@ -14,7 +14,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { tableInteractionIndex } from '../../layout/semantic-table-interaction.ts';
+import {
+  findTableInteractionAt,
+  tableInteractionIndex,
+} from '../../layout/semantic-table-interaction.ts';
 import { paragraphTextFromLayout } from '@docx-editor.dev/core/layout';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import type { OoxmlNode } from '../../store/package/ooxml-tree.ts';
@@ -140,6 +143,42 @@ describe('the table hover index covers every story', () => {
   });
 });
 
+describe('the pointer resolves a header table where it actually is', () => {
+  test('a hit at the header table lands, and the body point below it does not', () => {
+    const editor = mount();
+    const layout = editor.surface!.layout();
+    const page = layout.pages[0]!;
+    const header = page.header!;
+
+    const occ = tableInteractionIndex(layout).occurrences.find(
+      (entry) => entry.pageContentBox === header.box
+    );
+    expect(occ, 'the header table was not indexed').toBeDefined();
+    const table = occ!.table;
+
+    // The table's REAL sheet position: its story-local box plus the header's own origin.
+    const atTable = {
+      x: header.box.x + table.box.x + table.columnEdges[1]!,
+      y: header.box.y + table.box.y + table.box.height / 2,
+    };
+    const index = tableInteractionIndex(layout);
+    const hit = findTableInteractionAt(index, atTable.x, atTable.y, layout);
+    expect(hit, 'hovering the header table resolved nothing').not.toBeNull();
+    expect(hit?.tableId).toBe(table.tableId);
+
+    // And the BODY point at the same story-local offset must NOT resolve it. Converting every
+    // occurrence through the page's content box did both wrongs at once: it missed the table
+    // above and matched a point down in the body, so a column handle for the header appeared
+    // over body text and dragging it resized the header.
+    const inBody = {
+      x: page.contentBox.x + table.box.x + table.columnEdges[1]!,
+      y: page.contentBox.y + table.box.y + table.box.height / 2,
+    };
+    const phantom = findTableInteractionAt(index, inBody.x, inBody.y, layout);
+    expect(phantom?.tableId, 'a header table answered a point in the body').not.toBe(table.tableId);
+  });
+});
+
 describe('a link resolves from the story it is in', () => {
   test('a header link is found while the caret is in the body', () => {
     const editor = mount();
@@ -223,6 +262,10 @@ describe('content-control geometry covers every story', () => {
     const layout = editor.surface!.layout();
     const body = (layout.contentControls ?? []).find((entry) => entry.tag === 'bodyControl');
     expect(body, 'the body control was lost').toBeDefined();
+    // GUARDED, unlike the loop alone: with no fragments the loop runs zero times and this
+    // passes while asserting nothing — which is the exact regression the header and footer
+    // halves exist to catch, sailing through on the body.
+    expect(body!.fragments.length, 'the body control got no geometry').toBeGreaterThan(0);
     for (const fragment of body!.fragments) {
       expect(fragment.box.y, 'the body control moved').toBeGreaterThanOrEqual(0);
     }

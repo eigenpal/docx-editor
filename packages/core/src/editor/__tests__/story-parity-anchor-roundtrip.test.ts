@@ -71,7 +71,13 @@ describe('a selection round-trips through setSelection', () => {
       });
       // There is no scope in which both endpoints are addressable, and a caret split across two
       // stores is the state that swallows input. Refusing says so.
+      //
+      // The REASON is pinned, not just the refusal: a refusal for some unrelated cause — an
+      // unresolvable paraId, a locked story — would satisfy `ok === false` while proving
+      // nothing about the cross-story guard.
       expect(applied.ok).toBe(false);
+      if (applied.ok) return;
+      expect(applied.reason).toBe('a selection cannot span two stories');
     } finally {
       open.destroy();
     }

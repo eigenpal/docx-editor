@@ -690,7 +690,7 @@ const wrappedPages = new WeakMap<
  * kept by reference so a no-change resume still satisfies `layout.pages` identity.
  */
 /**
- * Every part the layout draws a story from: the body's, then each distinct furniture part.
+ * The body's part, then each distinct HEADER and FOOTER part the layout draws.
  *
  * A control lives in the part that declares it, and a header is a different part from the
  * body. Deriving boundaries from the body alone meant a control in a header was never
@@ -698,6 +698,11 @@ const wrappedPages = new WeakMap<
  *
  * Deduplicated by part IDENTITY, because one header part is shared across every page it
  * appears on and across sections that inherit it.
+ *
+ * Not the note parts. A note's fragments hang off the page's note areas rather than off a page
+ * story, so this pass has no origin to place their controls with. Collecting them would publish
+ * boundaries the painter and the hit test cannot use. The same line bounds the table walks in
+ * `semantic-table-interaction.ts` and `table-interaction-targets.ts`.
  */
 function boundaryParts(layout: SemanticLayout, part: OoxmlPart): readonly OoxmlPart[] {
   const parts: OoxmlPart[] = [part];
@@ -718,14 +723,27 @@ function boundaryParts(layout: SemanticLayout, part: OoxmlPart): readonly OoxmlP
  * Each part's own index is memoized on the part, so this is a concat and two set unions —
  * the walks themselves are not repeated.
  */
+const mergedControlIndexes = new WeakMap<
+  OoxmlPart,
+  { readonly parts: readonly OoxmlPart[]; readonly index: CollectedControlIndex }
+>();
+
 function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): CollectedControlIndex {
   if (parts.length === 1) return collectedControlIndexOf(parts[0]!);
+  // Memoized on the BODY part, guarded by the exact part list. Each part's own index is
+  // already memoized, but the merge was not — and it runs on every layout pass, so a
+  // control-heavy template paid the set unions and the `sort().join()` per keystroke.
+  const cached = mergedControlIndexes.get(parts[0]!);
+  if (cached && sameParts(cached.parts, parts)) return cached.index;
+
   const controls: CollectedControl[] = [];
   const neededBlockIds = new Set<string>();
   const neededParagraphIds = new Set<string>();
   for (const storyPart of parts) {
     const index = collectedControlIndexOf(storyPart);
-    controls.push(...index.controls);
+    // A LOOP, not a spread: the control count comes from a file, and spreading an unbounded
+    // array into `push` throws `RangeError` once it is large enough.
+    for (const control of index.controls) controls.push(control);
     for (const id of index.neededBlockIds) neededBlockIds.add(id);
     for (const id of index.neededParagraphIds) neededParagraphIds.add(id);
   }
@@ -735,7 +753,21 @@ function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): CollectedC
   const neededToken = `${[...neededBlockIds].sort().join(',')};${[...neededParagraphIds]
     .sort()
     .join(',')}`;
-  return { controls, neededBlockIds, neededParagraphIds, neededToken };
+  const index: CollectedControlIndex = {
+    controls,
+    neededBlockIds,
+    neededParagraphIds,
+    neededToken,
+  };
+  mergedControlIndexes.set(parts[0]!, { parts, index });
+  return index;
+}
+
+/** Same parts, same order. Part objects are immutable, so identity is the whole comparison. */
+function sameParts(left: readonly OoxmlPart[], right: readonly OoxmlPart[]): boolean {
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) if (left[i] !== right[i]) return false;
+  return true;
 }
 
 export function attachContentControlBoundaries(
@@ -750,7 +782,11 @@ export function attachContentControlBoundaries(
   // cost a join rather than a walk.
   const parts = boundaryParts(layout, part);
   if (parts.length > 1) {
-    token = parts.map((storyPart) => contentControlContextToken(storyPart)).join('|');
+    const perPart = parts.map((storyPart) => contentControlContextToken(storyPart));
+    // EMPTY when no part holds a control, not `'|'`. A join of empty strings is truthy, which
+    // defeated the short-circuit below for every document that merely HAS a header — so the
+    // common case paid the full collect-and-index walk on every pass.
+    token = perPart.some((each) => each !== '') ? perPart.join('|') : '';
   }
   // The token includes every control id, so an empty token proves there are no controls.
   // Avoid both otherwise-unconditional full walks: collecting controls from the tree and
@@ -844,14 +880,10 @@ export function attachContentControlBoundaries(
 /**
  * Every content control a part declares, in document order, WITHOUT geometry.
  *
- * For the stories that have no boundary records. `attachContentControlBoundaries` publishes
- * records for the body alone, and page-content coordinates mean nothing without knowing whose
- * box they belong to: a header caret hit-tested against body rectangles and answered with a
- * body control, which `setValue` and `remove` then edited.
- *
- * `fragments` comes back empty. There are no page rectangles for a furniture control yet, and
- * an invented one is a rectangle a hit test would match. Chrome that paints from `fragments`
- * draws nothing, which is what it does today.
+ * For callers that want the ROSTER rather than the rectangles — the Tab walk through form
+ * fields is the one, and it needs story order, not boxes. `fragments` comes back empty here
+ * by design; a caller that needs geometry reads `layout.contentControls`, which covers every
+ * story the layout draws.
  */
 export function contentControlRecordsInPart(
   part: OoxmlPart,

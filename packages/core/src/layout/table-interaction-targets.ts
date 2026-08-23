@@ -65,8 +65,9 @@ export function visitTableOccurrences(
       }
     };
     visitTableBlocks(page.fragments, take);
-    // Every story the page draws. This walk carries no geometry — it resolves a table and a
-    // row by identity — so a story needs no origin here, only visiting.
+    // The header and footer stories, matching `tableInteractionIndex`. This walk carries no
+    // geometry — it resolves a table and a row by identity — so a story needs no origin here,
+    // only visiting.
     for (const story of [page.header, page.footer]) {
       if (story) visitTableBlocks(story.fragments, take);
     }

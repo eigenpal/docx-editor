@@ -599,10 +599,21 @@ function gateContentControlCommand(
   mode: 'edit' | 'view' | 'suggesting',
   options?: { scope?: EditorScope }
 ): CommandGate {
-  if (options?.scope && options.scope.kind !== 'body') {
+  // A control is addressed by its OWN id, and `resolveContentControlTarget` reads the part out
+  // of that id, so the caret path answers in whatever story the caret is in. A blanket non-body
+  // refusal here used to make an explicitly-scoped call fail on a control the caret path would
+  // have edited — and, because `exec` runs this same gate, refused the write too.
+  //
+  // What a non-body scope still cannot have is an EXPLICIT `DocLocation` or `DocAnchor` target:
+  // both resolve against `session.part()`, the body's. The refusal narrows to that, and says so.
+  if (options?.scope && options.scope.kind !== 'body' && command.target !== undefined) {
     return {
       ok: false,
-      refusal: { ok: false, code: 'unsupported', reason: 'only the body scope is supported' },
+      refusal: {
+        ok: false,
+        code: 'unsupported',
+        reason: 'a location or anchor target resolves in the body only; omit it to use the caret',
+      },
     };
   }
   if (!surface) {

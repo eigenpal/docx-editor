@@ -150,6 +150,10 @@ describe('a drawing in a note is not reconciled away', () => {
     expect(header.length, 'no header drawing in the layout').toBeGreaterThan(0);
     expect(note.length, 'no footnote drawing in the layout').toBeGreaterThan(0);
 
+    // Both collectors share ONE walk (`forEachPaintedDrawing`), so this covers the resource
+    // collector too. Asserting its output separately would prove nothing here: every
+    // relationship in this fixture is unresolvable on purpose, so its set is empty whatever
+    // the walk reaches.
     const keys = collectUsedDrawingElementKeys(layout);
     for (const [story, ids] of [
       ['body', body],
@@ -161,20 +165,5 @@ describe('a drawing in a note is not reconciled away', () => {
         expect(reached, `${story} drawing ${id} is missing from the used set`).toBe(true);
       }
     }
-  });
-
-  test('the resource collector walks the same stories', () => {
-    const { editor } = mount();
-    const layout = editor.surface!.layout();
-    const { body, header, note } = drawingsByStory(editor);
-    const total = body.length + header.length + note.length;
-
-    // The two collectors share one walk, so what one reaches the other reaches. Asserting it
-    // here is what stops them drifting apart again — they were separate walks, and only one of
-    // them was ever extended.
-    expect(collectUsedDrawingElementKeys(layout).size).toBe(total);
-    // Every resource in this fixture is unresolvable on purpose, so the READY set is empty —
-    // which is the honest expectation, not a missing assertion.
-    expect(collectUsedDrawingResourceKeys(layout).size).toBe(0);
   });
 });

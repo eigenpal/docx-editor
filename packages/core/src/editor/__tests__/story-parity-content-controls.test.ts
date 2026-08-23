@@ -23,6 +23,7 @@ import {
   PART_OF_STORY,
   partOfNodeId,
   savedParts,
+  scopeOf,
 } from './story-parity-harness.ts';
 
 describe('a content control resolves in the story the caret is in', () => {
@@ -107,6 +108,56 @@ describe('a content control resolves in the story the caret is in', () => {
           kind: 'headerFooter',
           rId: story === 'header' ? 'rId10' : 'rId11',
         });
+      } finally {
+        open.destroy();
+      }
+    });
+  }
+});
+
+// A control is addressed by its OWN part-qualified id, so an explicitly-scoped call can be
+// answered wherever the caret is. `gateContentControlCommand` refused every non-body scope
+// outright, and `exec` runs the same gate — so a host that told the truth about where its
+// caret was got refused on a control the caret path would have edited.
+//
+// The refusal that stays is the narrow one: an explicit `DocLocation` or `DocAnchor` target
+// resolves against `session.part()`, the body's, and cannot address a furniture control.
+describe('an explicit scope does not refuse a control the caret already resolves', () => {
+  for (const story of STORIES_WITH_CONTROL) {
+    if (story === 'body') continue;
+
+    test(`can(setContentControlValue) in the ${story} is not refused for its scope`, () => {
+      const open = openStory(story);
+      try {
+        caretInControl(open);
+        const at = open.surface.contentControls.atCaret();
+        expect(at).not.toBeNull();
+        const gate = open.editor.can(
+          { type: 'setContentControlValue', target: undefined, value: 'X' },
+          { scope: scopeOf(story) }
+        );
+        expect(gate.ok).toBe(true);
+      } finally {
+        open.destroy();
+      }
+    });
+
+    test(`an explicit target in the ${story} refuses, and says why`, () => {
+      const open = openStory(story);
+      try {
+        caretInControl(open);
+        const gate = open.editor.can(
+          {
+            type: 'setContentControlValue',
+            target: { paragraphId: 'nope', offset: 0 },
+            value: 'X',
+          },
+          { scope: scopeOf(story) }
+        );
+        expect(gate.ok).toBe(false);
+        // The reason has to name the real limit. A generic "only the body scope is supported"
+        // is what let a fixable gap read as a design decision for the length of this PR.
+        expect(gate.ok === false && gate.reason).toContain('resolves in the body only');
       } finally {
         open.destroy();
       }

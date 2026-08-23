@@ -46,9 +46,13 @@ describe('everyStoryOrder serves a selection in any story', () => {
           spansInSelection(layout, selection, scoped)
         );
 
-        // `selectionRects` is deliberately NOT asserted non-empty: bands do not paint in
-        // furniture, which is a documented limit of the paint lane, not of this order.
-        expect(() => selectionRects(layout, selection, every)).not.toThrow();
+        // `selectionRects` asserts EQUALITY with the story's own order, not non-emptiness:
+        // bands do not paint in furniture, so both sides are empty there and only the body
+        // proves anything. `not.toThrow()` stood here and proved nothing at all — the pre-fix
+        // failure was an empty return, never a throw.
+        expect(selectionRects(layout, selection, every)).toEqual(
+          selectionRects(layout, selection, scoped)
+        );
       } finally {
         open.destroy();
       }

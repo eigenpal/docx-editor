@@ -93,7 +93,6 @@ describe('a story nobody has opened is still addressable', () => {
     // in a store that has never heard of this paragraph.
     expect(surface.activeScope()).toEqual(scopeOf('footer'));
     expect(surface.state().selection.head.paragraphId).toBe(nodeId);
-    void FOOTER_R_ID;
   });
 });
 

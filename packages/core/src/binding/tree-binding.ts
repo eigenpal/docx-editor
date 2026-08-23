@@ -10,6 +10,7 @@
 // A shape it cannot explain is rejected outright (task 6.3): a silently-dropped edit is
 // worse than a refused one, because only the refusal can be reconciled.
 
+import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { Node as PMNode } from 'prosemirror-model';
 import {
   collectStoryParagraphs,
@@ -190,8 +191,13 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * paragraphs that had not moved. Entries die with their part.
  *
  * Callers treat the result as read-only; nothing in the tree mutates it.
+ *
+ * BOUNDED, not a bare `WeakMap`, for the reason `story-roots.ts` gives about its own cache:
+ * undo history retains up to 200 package snapshots by reference, and every part it keeps
+ * alive would keep an O(document) array alive with it. `paragraphAnchors` populates one per
+ * revision, so a bare map would grow with the history rather than with the document.
  */
-const paragraphsByPart = new WeakMap<OoxmlPart, OoxmlNode[]>();
+const paragraphsByPart = createRecentRootCache<OoxmlNode[]>(16);
 
 export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
   const cached = paragraphsByPart.get(part);
