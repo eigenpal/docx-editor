@@ -906,7 +906,15 @@ export function contentControlHoldingParagraph(
 ): ContentControlBoundaryRecord | null {
   let found: CollectedControl | null = null;
   for (const collected of collectedControlIndexOf(part).controls) {
-    const holds = collected.paragraphId === paragraphId || collected.blockIds.includes(paragraphId);
+    // `blockIds` carries a table's OWN id and stops there, so a paragraph inside a table
+    // inside a block control is in no `blockIds` list. `contentControlRecordsInPart` was
+    // given `paragraphsUnder` for exactly that; this reader was not, so the caret in such a
+    // cell reported no control at all — no outline, `remove()` answering `notFound`, and
+    // `navigate` stepping over it. Every scope but the body routes through here.
+    const holds =
+      collected.paragraphId === paragraphId ||
+      collected.blockIds.includes(paragraphId) ||
+      paragraphsUnder(collected.control).includes(paragraphId);
     if (!holds) continue;
     if (!found || collected.nestingDepth >= found.nestingDepth) found = collected;
   }

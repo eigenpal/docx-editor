@@ -706,11 +706,6 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         // paragraph's authorable `w:pPr` children with what it is handed, so pushing it for
         // a tab-stops-only edit put the whole of `w:pPr` at the mercy of the `direct` read
         // — a wrong base there deletes `w:pStyle`, `w:jc` and everything else rather than
-        // doing nothing.
-        // Only when there is something to write. `setParagraphProperties` REPLACES the
-        // paragraph's authorable `w:pPr` children with what it is handed, so pushing it for
-        // a tab-stops-only edit put the whole of `w:pPr` at the mercy of the `direct` read
-        // — a wrong base there deletes `w:pStyle`, `w:jc` and everything else rather than
         // doing nothing. Defence in depth: the header test pins the part identity, and this
         // makes a repeat of that mistake harmless for edits that name no property.
         if (entries.length > 0 || wantsIndent) {
