@@ -17,6 +17,8 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { cellSelectionRects, spansInCells } from '../../layout/semantic-cell-selection.ts';
+import { tableInteractionIndex } from '../../layout/semantic-table-interaction.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -145,4 +147,77 @@ describe('a table is a table in every story', () => {
       }
     });
   }
+});
+
+// The two readers of `tableIndex` that its widening left behind.
+//
+// `cellSelectionRects` promises page-content coordinates and the overlay painter places what
+// it returns against `page.contentBox`. A header's cells are laid out from the header's own
+// box, so returning them raw painted a header selection band 36pt down into the body text —
+// and a footer's up at the top of it.
+//
+// `spansInCells` read `page.fragments` alone, so a cell selection in a header reported NO
+// style spans: a fully bold selection with the Bold button showing inactive.
+describe('a cell selection in a header reports its own geometry and formatting', () => {
+  test('rects are shifted into the page content box, and spans are found', () => {
+    const open = openInCell('header');
+    try {
+      const layout = open.editor.surface!.layout();
+      const page = layout.pages[0]!;
+      const header = page.header!;
+      expect(header, 'the fixture painted no header').toBeDefined();
+      // The two origins must differ, or neither assertion below proves anything.
+      expect(header.box.y).not.toBe(page.contentBox.y);
+
+      const table = tableInteractionIndex(layout).occurrences.find(
+        (each) => each.pageContentBox === header.box
+      )?.table;
+      expect(table, 'the header table is not in the index').toBeDefined();
+      const cells = table!.rows[0]!.cells;
+      expect(cells.length).toBe(2);
+
+      const rects = cellSelectionRects(
+        layout,
+        cells.map((each) => each.id)
+      );
+      expect(rects.length, 'no rectangle for a selected header cell').toBe(2);
+      for (const rect of rects) {
+        // In the page content box's space, which is what the painter adds to. The raw cell box
+        // is what used to come back, and for this fixture that is a whole header height off.
+        expect(rect.y).toBeCloseTo(cells[0]!.box.y + (header.box.y - page.contentBox.y), 1);
+        expect(rect.y).not.toBeCloseTo(cells[0]!.box.y, 1);
+      }
+
+      const spans = spansInCells(
+        layout,
+        cells.map((each) => each.id)
+      );
+      expect(spans.length, 'a header cell selection reported no style spans').toBeGreaterThan(0);
+    } finally {
+      open.destroy();
+    }
+  });
+
+  test('a body cell selection is unchanged', () => {
+    const open = openInCell('body');
+    try {
+      const layout = open.editor.surface!.layout();
+      const table = tableInteractionIndex(layout).occurrences.find(
+        (each) => each.pageContentBox === layout.pages[0]!.contentBox
+      )?.table;
+      expect(table, 'the body table is not in the index').toBeDefined();
+      const cells = table!.rows[0]!.cells;
+
+      const rects = cellSelectionRects(
+        layout,
+        cells.map((each) => each.id)
+      );
+      expect(rects.length).toBe(2);
+      // Zero offset: the body IS the content box, so the raw box was already right and must
+      // stay exactly right.
+      for (const rect of rects) expect(rect.y).toBeCloseTo(cells[0]!.box.y, 5);
+    } finally {
+      open.destroy();
+    }
+  });
 });

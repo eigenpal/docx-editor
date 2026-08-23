@@ -156,8 +156,11 @@ export function hyperlinkAtOf(surface: PaginatedSurface | null): HyperlinkInfo |
 /**
  * The `paragraphs` query: every editable paragraph in reading order, addressed the way
  * the contract addresses paragraphs. Scope is the MAIN part — a `container` naming any
- * other story answers `[]` (queries carry no error channel; the paraId map does not
- * reach those stories yet).
+ * other story answers `[]`, because queries carry no error channel and an empty list is the
+ * only thing this shape can say.
+ *
+ * That is a scope decision, not a capability one: the paraId index spans every story now, so
+ * widening this is a matter of settling what a `container` naming a header should return.
  */
 export function paragraphSummaries(
   surface: PaginatedSurface | null,

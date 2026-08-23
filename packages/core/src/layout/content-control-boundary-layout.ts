@@ -111,7 +111,7 @@ function addressableInlineLength(node: OoxmlNode): number {
   return total;
 }
 
-interface CollectedControl {
+export interface CollectedControl {
   readonly control: OoxmlElement;
   readonly nestingDepth: number;
   readonly lockStack: readonly ContentControlLock[];
@@ -122,7 +122,7 @@ interface CollectedControl {
 }
 
 /** Collected controls plus the id sets their geometry needs, memoized per immutable part. */
-interface CollectedControlIndex {
+export interface CollectedControlIndex {
   readonly controls: readonly CollectedControl[];
   readonly neededBlockIds: ReadonlySet<string>;
   readonly neededParagraphIds: ReadonlySet<string>;
@@ -132,7 +132,7 @@ interface CollectedControlIndex {
 
 const collectedControlIndexes = new WeakMap<OoxmlPart, CollectedControlIndex>();
 
-function collectedControlIndexOf(part: OoxmlPart): CollectedControlIndex {
+export function collectedControlIndexOf(part: OoxmlPart): CollectedControlIndex {
   const cached = collectedControlIndexes.get(part);
   if (cached !== undefined) return cached;
   const controls = collectControls(part);
@@ -341,6 +341,21 @@ export interface ContentControlBoundaryWork {
 interface PlacedGeometryIndex {
   readonly blocksById: ReadonlyMap<string, readonly PlacedBlockBox[]>;
   readonly spansByParagraph: ReadonlyMap<string, readonly PlacedSpanBox[]>;
+  /**
+   * Paragraphs whose spans are NOT one ascending run, so the binary search below cannot be used.
+   *
+   * A body paragraph is emitted once, in source order, even when it wraps across a page: its
+   * later text is on the later page, so the array stays ascending. ONE HEADER STORY IS ATTACHED
+   * TO EVERY PAGE IT APPLIES TO, so a header paragraph's array is that ascending run repeated
+   * once per page. Binary-searching it lands arbitrarily and the `start >= end` break stops
+   * early — measured as an inline control in a repeated header getting geometry on page 1 and
+   * nowhere else, so its outline drew once and `contentControlAtPoint` missed it everywhere
+   * after.
+   *
+   * Recorded at build time rather than detected per lookup: the builder already walks every
+   * span in order, and a control-heavy template does many lookups per build.
+   */
+  readonly repeatedParagraphs: ReadonlySet<string>;
 }
 
 /** More lines than one page can carry; keeps composite line keys ordered across pages. */
@@ -472,6 +487,7 @@ function placedGeometryOf(
   const stamp = neededStampOf(index.neededToken);
   const blocksById = new Map<string, PlacedBlockBox[]>();
   const spansByParagraph = new Map<string, PlacedSpanBox[]>();
+  const repeatedParagraphs = new Set<string>();
   for (const page of layout.pages) {
     const contribution = pageContribution(page, index, stamp, work);
     for (const entry of contribution.blocks) {
@@ -481,11 +497,17 @@ function placedGeometryOf(
     }
     for (const entry of contribution.spans) {
       const entries = spansByParagraph.get(entry.paragraphId);
-      if (entries) entries.push(entry);
-      else spansByParagraph.set(entry.paragraphId, [entry]);
+      if (entries) {
+        // Strictly less: equal starts are ordinary within one run (a zero-width span beside a
+        // real one), and treating them as a repeat would only cost a linear scan.
+        if (entry.start < entries[entries.length - 1]!.start) {
+          repeatedParagraphs.add(entry.paragraphId);
+        }
+        entries.push(entry);
+      } else spansByParagraph.set(entry.paragraphId, [entry]);
     }
   }
-  return { blocksById, spansByParagraph };
+  return { blocksById, spansByParagraph, repeatedParagraphs };
 }
 
 function fragmentsForBlockControl(
@@ -527,9 +549,14 @@ function fragmentsForInlineControl(
   const byLine = new Map<number, { pageIndex: number; boxes: LayoutBox[] }>();
   // Paragraph spans are emitted in source-range order. Binary search skips all spans ending
   // before this control, so sibling controls do not repeatedly scan the paragraph prefix.
+  //
+  // Not for a paragraph the layout draws more than once — see `repeatedParagraphs`. There the
+  // array is several ascending runs, both the search and the `break` are wrong, and the only
+  // correct thing is to look at every span.
+  const repeated = geometry.repeatedParagraphs.has(paragraphId);
   let low = 0;
   let high = placed.length;
-  while (low < high) {
+  while (!repeated && low < high) {
     work && (work.spanCandidates += 1);
     const middle = low + ((high - low) >> 1);
     const beforeStart =
@@ -539,32 +566,50 @@ function fragmentsForInlineControl(
     if (beforeStart) low = middle + 1;
     else high = middle;
   }
+  if (repeated) low = 0;
   for (let index = low; index < placed.length; index += 1) {
     const span = placed[index]!;
     work && (work.spanCandidates += 1);
     if (span.end <= range.start) continue;
-    if (span.start >= range.end) break;
+    if (span.start >= range.end) {
+      if (repeated) continue;
+      break;
+    }
     const group = byLine.get(span.line);
     if (group) group.boxes.push(span.box);
     else byLine.set(span.line, { pageIndex: span.pageIndex, boxes: [span.box] });
   }
   // Empty range (empty control): fall back to a zero-width box at the caret when a span
   // touches the insertion point, otherwise leave fragments empty.
+  //
+  // One per PAGE the paragraph is drawn on. For a body paragraph that is one box and the loop
+  // stops at the first. For a repeated header it is one per page, which is what the outline
+  // needs to draw on each of them.
   if (byLine.size === 0 && range.start === range.end) {
+    const carets: ContentControlGeometryFragment[] = [];
+    const seenPages = new Set<number>();
     for (let index = low; index < placed.length; index += 1) {
       const span = placed[index]!;
       work && (work.spanCandidates += 1);
-      if (span.start > range.start) break;
+      if (span.start > range.start) {
+        if (repeated) continue;
+        break;
+      }
       if (range.start > span.end) continue;
+      if (seenPages.has(span.pageIndex)) continue;
+      seenPages.add(span.pageIndex);
       const x =
         span.start === span.end
           ? span.box.x
           : span.box.x +
             (span.box.width * (range.start - span.start)) / Math.max(1, span.end - span.start);
-      return [
-        { pageIndex: span.pageIndex, box: { x, y: span.box.y, width: 0, height: span.box.height } },
-      ];
+      carets.push({
+        pageIndex: span.pageIndex,
+        box: { x, y: span.box.y, width: 0, height: span.box.height },
+      });
+      if (!repeated) break;
     }
+    if (carets.length > 0) return carets;
   }
   // Line keys are page-major document order, so sorting by line also sorts by page.
   return [...byLine.entries()]
@@ -689,86 +734,7 @@ const wrappedPages = new WeakMap<
  * an identity-reused page. When no page wrapper needs rewriting, the prior `pages` array is
  * kept by reference so a no-change resume still satisfies `layout.pages` identity.
  */
-/**
- * The body's part, then each distinct HEADER and FOOTER part the layout draws.
- *
- * A control lives in the part that declares it, and a header is a different part from the
- * body. Deriving boundaries from the body alone meant a control in a header was never
- * collected — so it had no geometry, and its outline could neither draw nor hit-test.
- *
- * Deduplicated by part IDENTITY, because one header part is shared across every page it
- * appears on and across sections that inherit it.
- *
- * Not the note parts. A note's fragments hang off the page's note areas rather than off a page
- * story, so this pass has no origin to place their controls with. Collecting them would publish
- * boundaries the painter and the hit test cannot use. The same line bounds the table walks in
- * `semantic-table-interaction.ts` and `table-interaction-targets.ts`.
- */
-function boundaryParts(layout: SemanticLayout, part: OoxmlPart): readonly OoxmlPart[] {
-  const parts: OoxmlPart[] = [part];
-  const seen = new Set<OoxmlPart>([part]);
-  for (const page of layout.pages) {
-    for (const story of [page.header, page.footer]) {
-      if (!story?.part || seen.has(story.part)) continue;
-      seen.add(story.part);
-      parts.push(story.part);
-    }
-  }
-  return parts;
-}
-
-/**
- * The collected controls of every story part, as one index.
- *
- * Each part's own index is memoized on the part, so this is a concat and two set unions —
- * the walks themselves are not repeated.
- */
-const mergedControlIndexes = new WeakMap<
-  OoxmlPart,
-  { readonly parts: readonly OoxmlPart[]; readonly index: CollectedControlIndex }
->();
-
-function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): CollectedControlIndex {
-  if (parts.length === 1) return collectedControlIndexOf(parts[0]!);
-  // Memoized on the BODY part, guarded by the exact part list. Each part's own index is
-  // already memoized, but the merge was not — and it runs on every layout pass, so a
-  // control-heavy template paid the set unions and the `sort().join()` per keystroke.
-  const cached = mergedControlIndexes.get(parts[0]!);
-  if (cached && sameParts(cached.parts, parts)) return cached.index;
-
-  const controls: CollectedControl[] = [];
-  const neededBlockIds = new Set<string>();
-  const neededParagraphIds = new Set<string>();
-  for (const storyPart of parts) {
-    const index = collectedControlIndexOf(storyPart);
-    // A LOOP, not a spread: the control count comes from a file, and spreading an unbounded
-    // array into `push` throws `RangeError` once it is large enough.
-    for (const control of index.controls) controls.push(control);
-    for (const id of index.neededBlockIds) neededBlockIds.add(id);
-    for (const id of index.neededParagraphIds) neededParagraphIds.add(id);
-  }
-  // Recomputed over the MERGED sets, not concatenated from the parts. This token is the
-  // per-page geometry memo's key: if it did not move when a furniture control appeared, every
-  // page would keep serving the contribution it built before that control existed.
-  const neededToken = `${[...neededBlockIds].sort().join(',')};${[...neededParagraphIds]
-    .sort()
-    .join(',')}`;
-  const index: CollectedControlIndex = {
-    controls,
-    neededBlockIds,
-    neededParagraphIds,
-    neededToken,
-  };
-  mergedControlIndexes.set(parts[0]!, { parts, index });
-  return index;
-}
-
-/** Same parts, same order. Part objects are immutable, so identity is the whole comparison. */
-function sameParts(left: readonly OoxmlPart[], right: readonly OoxmlPart[]): boolean {
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i += 1) if (left[i] !== right[i]) return false;
-  return true;
-}
+import { boundaryParts, collectedControlIndexOverParts } from './content-control-boundary-parts.ts';
 
 export function attachContentControlBoundaries(
   layout: SemanticLayout,

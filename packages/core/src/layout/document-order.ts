@@ -91,7 +91,9 @@ export function documentOrderIndex(layout: SemanticLayout): Map<string, number> 
  * cannot span two stories (the engine refuses one), so only the order WITHIN a story is ever
  * compared, and this gets that right for all of them at once.
  *
- * The default for callers that name no story. {@link documentOrder} is the body alone, and
+ * What a caller passes when it has no story in hand — `selectionRects` and
+ * `spansInSelection` both REQUIRE an order rather than defaulting to one, deliberately.
+ * {@link documentOrder} is the body alone, and
  * using it as a default is what let selection reads silently answer about the wrong story —
  * two paragraphs selected in a header both ranked -1, the walk gave up, and the run properties
  * came back short. A caller that DOES know its story should still pass that story's order:
