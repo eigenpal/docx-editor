@@ -7,8 +7,9 @@
 // composition root.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
+import type { TreeDocOp, StoryScope, OoxmlElement } from '@docx-editor.dev/core/store';
 import {
+  buildStyleCascadeTable,
   enumerateDocumentSections,
   paragraphsInCells,
   readSectionProperties,
@@ -331,22 +332,40 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   /**
    * The document's List Paragraph style, or null when it defines none.
    *
-   * Matched on the built-in styleId first, then on the built-in NAME: a converted file
-   * commonly spells the id something else (`ListParagraph1`, `a3`) while keeping the name
-   * Word gave it. A document that defines neither gets no `w:pStyle` write at all —
-   * writing a dangling one would render as Normal here and as a missing style everywhere
-   * else.
+   * Matched on the built-in NAME first, then on the built-in styleId. Word identifies its
+   * built-ins by `w:name`, and a converter commonly spells the id its own way
+   * (`ListParagraph1`, `a3`) while keeping the name — while the reverse also happens, an
+   * unrelated style handed the `ListParagraph` id. Name-first lands on the right one in
+   * both files. A document that defines neither gets no `w:pStyle` write at all: writing a
+   * dangling one would render as Normal here and as a missing style everywhere else.
    */
   function listParagraphStyleId(): string | null {
-    let byName: string | null = null;
+    let byId: string | null = null;
     for (const style of session.documentStyles()) {
       if (style.type !== 'paragraph') continue;
-      if (style.styleId === 'ListParagraph') return style.styleId;
-      if (byName === null && style.name.trim().toLowerCase() === 'list paragraph') {
-        byName = style.styleId;
-      }
+      if (style.name.trim().toLowerCase() === 'list paragraph') return style.styleId;
+      if (byId === null && style.styleId === 'ListParagraph') byId = style.styleId;
     }
-    return byName;
+    return byId;
+  }
+
+  /**
+   * The document's `w:default="1"` paragraph style, memoized on the styles root.
+   *
+   * Read through the layout cascade's own resolver rather than by matching the attribute:
+   * `w:default` is `ST_OnOff`, so `on` and `true` are legal spellings of `1`, and defaults
+   * are last-wins. The styles part is immutable for the session, so this builds once.
+   */
+  let defaultStyleMemo: { readonly root: OoxmlElement | null; readonly styleId: string | null };
+  function defaultParagraphStyleId(): string | null {
+    const root = session.stylesRoot();
+    if (defaultStyleMemo === undefined || defaultStyleMemo.root !== root) {
+      defaultStyleMemo = {
+        root,
+        styleId: buildStyleCascadeTable(root, session.documentThemeFonts()).defaultParagraphStyleId,
+      };
+    }
+    return defaultStyleMemo.styleId;
   }
 
   /**
@@ -357,20 +376,27 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
    * defaults state `w:spacing w:after` — Word's own blank template does, at 8pt — sits a
    * full paragraph apart between every item.
    *
-   * Only paragraphs that author no style of their own are moved: bulleting a Heading 1 in
-   * Word leaves it a heading, and a list item already carrying List Paragraph needs no
-   * write. These ops go BEFORE the numbering ops, because `setParagraphProperties` replaces
-   * the authorable set it is handed and `setListNumbering` is surgical on `w:numPr` — the
-   * other order would drop the numbering the same transaction had just written.
+   * A paragraph in a NON-DEFAULT style keeps it: bulleting a Heading 1 in Word leaves it a
+   * heading. A paragraph in the default style does not, and that is not the same as
+   * authoring no style at all — a converter stamps `<w:pStyle w:val="Normal"/>` on every
+   * paragraph it writes, and reading that as "has a style of its own" left the whole class
+   * of converted files with 8pt between their list items.
+   *
+   * These ops go BEFORE the numbering ops, because `setParagraphProperties` replaces the
+   * authorable set it is handed and `setListNumbering` is surgical on `w:numPr` — the other
+   * order would drop the numbering the same transaction had just written.
    */
   function listParagraphStyleOps(touched: readonly string[]): TreeDocOp[] {
     const styleId = listParagraphStyleId();
     if (styleId === null) return [];
+    const defaultStyleId = defaultParagraphStyleId();
     const part = storyPart();
     const ops: TreeDocOp[] = [];
     for (const paragraphId of touched) {
       const properties = directParagraphProperties(part, paragraphId);
-      if (properties.some((property) => property.localName === 'pStyle')) continue;
+      const authored = properties.find((property) => property.localName === 'pStyle')?.attributes
+        ?.val;
+      if (authored !== undefined && authored !== defaultStyleId) continue;
       ops.push({
         op: 'setParagraphProperties',
         paragraphId,
@@ -381,6 +407,29 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       });
     }
     return ops;
+  }
+
+  /**
+   * The write that takes a paragraph OUT of List Paragraph, or null when it is not in it.
+   *
+   * Enter on an empty item is Word's "I am done with this list", and Word returns the text
+   * to the LEFT MARGIN. Dropping only `w:numPr` leaves the style's own `w:ind w:left="720"`
+   * standing, so the paragraph would keep sitting half an inch in with no marker to explain
+   * it. The toolbar toggle deliberately does NOT do this: clicking Bullets off in Word
+   * leaves the paragraph styled, and indented.
+   */
+  function clearListParagraphStyleOp(paragraphId: string): TreeDocOp | null {
+    const styleId = listParagraphStyleId();
+    if (styleId === null) return null;
+    const properties = directParagraphProperties(storyPart(), paragraphId);
+    const authored = properties.find((property) => property.localName === 'pStyle')?.attributes
+      ?.val;
+    if (authored !== styleId) return null;
+    return {
+      op: 'setParagraphProperties',
+      paragraphId,
+      properties: properties.filter((property) => property.localName !== 'pStyle'),
+    };
   }
 
   /**
@@ -516,12 +565,22 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       if (text.length > 0) return false;
 
       const outdented = marker.level > 0 && listLevelExists(marker, marker.level - 1);
-      const op: TreeDocOp = outdented
-        ? { op: 'setListLevel', paragraphId: from.paragraphId, level: marker.level - 1 }
-        : { op: 'setListNumbering', paragraphId: from.paragraphId, numId: null };
+      // Outdenting stays in the list, so it keeps the style. Leaving the list sheds it, or
+      // the paragraph keeps List Paragraph's half-inch indent with no marker beside it —
+      // see `clearListParagraphStyleOp`. The style write goes first for the same reason it
+      // does in `toggleList`: it carries the authored `w:numPr` forward, so running it
+      // after the numbering op would put back what that op had just removed.
+      const ops: TreeDocOp[] = [];
+      if (outdented) {
+        ops.push({ op: 'setListLevel', paragraphId: from.paragraphId, level: marker.level - 1 });
+      } else {
+        const cleared = clearListParagraphStyleOp(from.paragraphId);
+        if (cleared) ops.push(cleared);
+        ops.push({ op: 'setListNumbering', paragraphId: from.paragraphId, numId: null });
+      }
       let committed = false;
       commit(() => {
-        const result = applyOps([op], selectionMark());
+        const result = applyOps(ops, selectionMark());
         committed = result.committed;
         return result;
       });

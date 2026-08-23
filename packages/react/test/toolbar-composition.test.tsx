@@ -867,8 +867,10 @@ describe('the shaped parts', () => {
     // The selected row carries a ✓ glyph, so compare the label span rather than the row.
     const items = rows.map((row) => row.querySelector('span')?.textContent);
     // Word's gallery order, NOT the order the part lists them in, with the unranked style
-    // keeping its document position at the end.
-    expect(items).toEqual(['Normal', 'heading 1', 'Callout']);
+    // keeping its document position at the end. `Heading 1` is title-cased for display:
+    // Word writes the built-in name lowercase and title-cases it in its own UI. `Callout`
+    // is the document's own style, so its name is shown exactly as authored.
+    expect(items).toEqual(['Normal', 'Heading 1', 'Callout']);
     // The paragraph states no `w:pStyle` but IS written in the default style, so the tick
     // sits on it. Reading "no style" as "nothing selected" left every row unticked while
     // the trigger showed a placeholder for a style the list names.
@@ -899,7 +901,7 @@ describe('the shaped parts', () => {
       heading.click();
     });
     expect(editor().snapshot().formatting?.styleId).toBe('Heading1');
-    expect(trigger.textContent).toBe('heading 1');
+    expect(trigger.textContent).toBe('Heading 1');
   });
 
   test('save is NOT in the default bar (contextual slot); composed, it needs onSave to be live', async () => {

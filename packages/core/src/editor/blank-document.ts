@@ -53,12 +53,16 @@ const DOCUMENT_RELS =
   `<Relationship Id="rId1" Type="${STYLES_REL}" Target="styles.xml"/>` +
   `</Relationships>`;
 
-// The heading font. Word's built-in headings name the theme's MAJOR typeface, which the
-// Office theme sets to Calibri Light; with no theme part here the name is written out.
-const MAJOR_FONT = 'Calibri Light';
-const MAJOR_RFONTS =
-  `<w:rFonts w:ascii="${MAJOR_FONT}" w:hAnsi="${MAJOR_FONT}"` +
-  ` w:eastAsia="${MAJOR_FONT}" w:cs="${MAJOR_FONT}"/>`;
+// The headings state NO font, so they inherit Calibri from `w:docDefaults`.
+//
+// Word's own headings name the theme's MAJOR typeface, which the Office theme sets to
+// Calibri Light, and a faithful template would say so. It does not, for a reason that is
+// about this engine rather than about Word: no metric-compatible substitute for Calibri
+// Light exists in `packages/fonts`, so a heading measures and paints in Calibri anyway,
+// while the declared name lights the font-compatibility notice on a brand-new document —
+// a fidelity warning about a face nothing on the page uses. A template that says Calibri
+// says what it renders. Name Calibri Light here once the notice reports the families a
+// document RENDERS rather than the families it declares.
 
 /**
  * Heading 1-9 as Word's Office theme resolves them: the theme colors written out as the
@@ -90,7 +94,7 @@ const headingStyle = (heading: (typeof HEADINGS)[number]): string =>
   `<w:pPr><w:keepNext/><w:keepLines/>` +
   `<w:spacing w:before="${heading.before}" w:after="0"/>` +
   `<w:outlineLvl w:val="${heading.level - 1}"/></w:pPr>` +
-  `<w:rPr>${MAJOR_RFONTS}` +
+  `<w:rPr>` +
   (heading.italic ? `<w:i/><w:iCs/>` : ``) +
   `<w:color w:val="${heading.color}"/>` +
   (heading.halfPoints === null
@@ -145,19 +149,22 @@ const STYLES =
   `<w:uiPriority w:val="10"/><w:qFormat/>` +
   `<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>` +
   `<w:contextualSpacing/></w:pPr>` +
-  `<w:rPr>${MAJOR_RFONTS}<w:spacing w:val="-10"/><w:kern w:val="28"/>` +
+  `<w:rPr><w:spacing w:val="-10"/><w:kern w:val="28"/>` +
   `<w:sz w:val="56"/><w:szCs w:val="56"/></w:rPr>` +
   `</w:style>` +
+  // Subtitle states no spacing of its own: Word leaves it on the paragraph defaults, and
+  // stating the same 8pt here would override a Normal the user later changes.
   `<w:style w:type="paragraph" w:styleId="Subtitle">` +
   `<w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
   `<w:uiPriority w:val="11"/><w:qFormat/>` +
-  `<w:pPr><w:spacing w:after="160"/></w:pPr>` +
   `<w:rPr><w:color w:val="5A5A5A"/><w:spacing w:val="15"/></w:rPr>` +
   `</w:style>` +
+  // Quote is CENTRED and full width. The half-inch indent on both sides belongs to Intense
+  // Quote, which also carries top and bottom borders and is not part of this gallery.
   `<w:style w:type="paragraph" w:styleId="Quote">` +
   `<w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
   `<w:uiPriority w:val="29"/><w:qFormat/>` +
-  `<w:pPr><w:spacing w:before="160"/><w:ind w:left="720" w:right="720"/></w:pPr>` +
+  `<w:pPr><w:spacing w:before="160"/><w:jc w:val="center"/></w:pPr>` +
   `<w:rPr><w:i/><w:iCs/><w:color w:val="404040"/></w:rPr>` +
   `</w:style>` +
   // No Spacing is the one style that does NOT build on Normal: its whole purpose is to

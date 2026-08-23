@@ -11,7 +11,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { blankDocumentBytes } from '../blank-document.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
@@ -45,12 +45,28 @@ function docx(styles: string, body: string): Uint8Array {
   });
 }
 
+/** Torn down after each test: a container left on `document` leaks into the serial run. */
+const mounted: { editor: DocxEditorInstance; container: HTMLElement }[] = [];
+
+afterEach(() => {
+  for (const entry of mounted.splice(0)) {
+    entry.editor.destroy();
+    entry.container.remove();
+  }
+});
+
 function mount(bytes: Uint8Array): { editor: DocxEditorInstance; surface: PaginatedSurface } {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({ container, document: bytes });
+  mounted.push({ editor, container });
   if (!editor.surface) throw new Error('surface failed to mount');
   return { editor, surface: editor.surface };
+}
+
+/** The painted left edge of each block on page 1, in points. */
+function blockLefts(surface: PaginatedSurface): number[] {
+  return surface.layout().pages[0]!.fragments.map((fragment) => fragment.box.x);
 }
 
 /** Select from the start of one paragraph to the end of another, by document order. */
@@ -135,12 +151,12 @@ describe('toggleList applies List Paragraph, as Word does', () => {
     selectParagraphs(surface, 0, 1);
     expect(surface.toggleList('bullet')).toBe(true);
 
-    const document = await savedDocument(editor);
-    expect(document).toContain(
+    const saved = await savedDocument(editor);
+    expect(saved).toContain(
       '<w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>one</w:t></w:r>'
     );
     // The paragraph the list does NOT cover keeps the defaults, with no style of its own.
-    expect(document).toContain('<w:p w14:paraId="67A062B7" w14:textId="67A062B7"><w:r>');
+    expect(saved).toMatch(/<w:p [^>]*><w:r><w:t>after<\/w:t>/);
 
     // One line each. The first item drops its 8pt space-after because the item under it is
     // the same style; the last item keeps it, because "after" is not.
@@ -149,15 +165,62 @@ describe('toggleList applies List Paragraph, as Word does', () => {
     expect(third).toBe(second);
   });
 
+  test('a numbered list gets the style too', async () => {
+    const { editor, surface } = mount(blankDocumentBytes());
+    surface.type('one');
+    surface.splitParagraph();
+    surface.type('two');
+    selectParagraphs(surface, 0, 1);
+    expect(surface.toggleList('ordered')).toBe(true);
+
+    const saved = await savedDocument(editor);
+    expect(saved.match(/<w:pStyle w:val="ListParagraph"\/>/g)).toHaveLength(2);
+    const [first, second] = blockHeights(surface);
+    expect(second! - first!).toBe(8);
+  });
+
+  test('a paragraph explicitly in the DEFAULT style is restyled, as Word does', async () => {
+    // The shape a converter writes: every paragraph stamped `<w:pStyle w:val="Normal"/>`.
+    // Reading that as "authors a style of its own" left every converted file 8pt apart.
+    const { editor, surface } = mount(blankDocumentBytes());
+    surface.type('one');
+    surface.splitParagraph();
+    surface.type('two');
+    selectParagraphs(surface, 0, 1);
+    expect(editor.exec({ type: 'setParagraphStyle', styleId: 'Normal' }).ok).toBe(true);
+    expect(surface.toggleList('bullet')).toBe(true);
+
+    const saved = await savedDocument(editor);
+    expect(saved.match(/<w:pStyle w:val="ListParagraph"\/>/g)).toHaveLength(2);
+    expect(saved).not.toContain('<w:pStyle w:val="Normal"/>');
+    const [first, second] = blockHeights(surface);
+    expect(second! - first!).toBe(8);
+  });
+
   test('bulleting a heading leaves it a heading', async () => {
     const { editor, surface } = mount(blankDocumentBytes());
     surface.type('a heading');
     expect(editor.exec({ type: 'setParagraphStyle', styleId: 'Heading1' }).ok).toBe(true);
     expect(surface.toggleList('bullet')).toBe(true);
 
-    const document = await savedDocument(editor);
-    expect(document).toContain('<w:pStyle w:val="Heading1"/>');
-    expect(document).not.toContain('ListParagraph');
+    const saved = await savedDocument(editor);
+    expect(saved).toContain('<w:pStyle w:val="Heading1"/>');
+    expect(saved).not.toContain('ListParagraph');
+  });
+
+  test('Enter on an empty item leaves the list AND returns to the margin', async () => {
+    const { editor, surface } = mount(blankDocumentBytes());
+    surface.type('one');
+    expect(surface.toggleList('bullet')).toBe(true);
+    surface.splitParagraph();
+    // The second item is empty, so this is Word's "I am done with this list".
+    expect(surface.exitListOnEmptyItem()).toBe(true);
+
+    const saved = await savedDocument(editor);
+    // The item keeps the style; the paragraph that left the list sheds it, or it would sit
+    // half an inch in with no marker beside it.
+    expect(saved.match(/<w:pStyle w:val="ListParagraph"\/>/g)).toHaveLength(1);
+    expect(blockLefts(surface)).toEqual([36, 0]);
   });
 
   test('turning the list back off keeps the style, as Word does', async () => {
@@ -166,9 +229,9 @@ describe('toggleList applies List Paragraph, as Word does', () => {
     expect(surface.toggleList('bullet')).toBe(true);
     expect(surface.toggleList('bullet')).toBe(true);
 
-    const document = await savedDocument(editor);
-    expect(document).toContain('<w:pStyle w:val="ListParagraph"/>');
-    expect(document).not.toContain('<w:numPr>');
+    const saved = await savedDocument(editor);
+    expect(saved).toContain('<w:pStyle w:val="ListParagraph"/>');
+    expect(saved).not.toContain('<w:numPr>');
   });
 
   test('a document defining no List Paragraph style still bullets, with no dangling pStyle', async () => {
@@ -180,9 +243,9 @@ describe('toggleList applies List Paragraph, as Word does', () => {
     );
     expect(surface.toggleList('bullet')).toBe(true);
 
-    const document = await savedDocument(editor);
-    expect(document).toContain('<w:numPr>');
-    expect(document).not.toContain('<w:pStyle');
+    const saved = await savedDocument(editor);
+    expect(saved).toContain('<w:numPr>');
+    expect(saved).not.toContain('<w:pStyle');
   });
 
   test('the style is found by NAME when the file spells the id its own way', async () => {

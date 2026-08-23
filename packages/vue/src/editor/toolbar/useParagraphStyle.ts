@@ -4,6 +4,7 @@ import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
+import { paragraphStyleDisplayName } from '../../lib/stylePreview';
 
 /** @public */
 export interface ParagraphStyleOption {
@@ -42,7 +43,7 @@ export function useParagraphStyle(): UseParagraphStyleResult {
           .filter((style) => style.type === 'paragraph')
           .map((style) => ({
             styleId: style.styleId,
-            name: style.name,
+            name: paragraphStyleDisplayName(style.name, style.styleId),
             preview: style.preview,
           }))
       : EMPTY_OPTIONS

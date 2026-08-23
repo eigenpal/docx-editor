@@ -99,6 +99,27 @@ export function getStylePreviewProps(input: {
   return props;
 }
 
+/** Word's own `w:name` for a built-in heading: lowercase, with the level after it. */
+const BUILT_IN_HEADING_NAME = /^heading ([1-9])$/;
+
+/**
+ * The label a picker shows for one paragraph style.
+ *
+ * Word writes its built-in headings with a LOWERCASE `w:name` — `heading 4`, never
+ * `Heading 4` — and title-cases them in its own UI. A picker printing `w:name` verbatim
+ * reads `Heading 1, Heading 2, Heading 3, heading 4, heading 5` on any document defining
+ * more than three, because only the first three have a localized label of their own.
+ *
+ * Built-in headings only. Every other name belongs to the document and is shown exactly
+ * as it was authored, because a custom style's name is the user's own words.
+ * @public
+ */
+export function paragraphStyleDisplayName(name: string, styleId: string): string {
+  const label = name || styleId;
+  const heading = BUILT_IN_HEADING_NAME.exec(label);
+  return heading ? `Heading ${heading[1]}` : label;
+}
+
 /**
  * Filter the engine's document-style summaries to the paragraph styles and
  * shape them for the picker, keeping the catalog's own order. The summary
@@ -117,7 +138,7 @@ export function resolveParagraphStyleOptions(
     .filter((s) => s.type === 'paragraph')
     .map((s) => ({
       styleId: s.styleId,
-      name: s.name || s.styleId,
+      name: paragraphStyleDisplayName(s.name, s.styleId),
       priority: 99,
     }));
 }

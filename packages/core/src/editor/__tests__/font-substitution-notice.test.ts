@@ -5,12 +5,9 @@
 // end, on a platform where nothing the document names is installed:
 //
 // - a brand-new blank document reports nothing. It DECLARES Calibri (Word's blank-template
-//   `w:docDefaults`) and Calibri Light (its built-in headings) over a single empty
-//   paragraph, and a declaration paints no glyph.
-// - the first typed character reports them. The gate is "no text rendered", never "this
-//   document is exempt", so a real fidelity loss is never hidden. It is one gate for the
-//   whole document, not one per family: the notice reports what is DECLARED, which for
-//   any real Word file includes faces its styles part names and its body never uses.
+//   `w:docDefaults`) over a single empty paragraph, and a declaration paints no glyph.
+// - the first typed character reports it. The gate is "no text rendered", never "this
+//   document is exempt", so a real fidelity loss is never hidden.
 // - a family whose metric-compatible twin IS installed reports nothing, because the stack
 //   both measurement and paint use falls through to it and the metrics are identical.
 
@@ -81,11 +78,7 @@ describe('font substitution notice', () => {
     });
     expect(editor.snapshot().fontSubstitutions ?? []).toEqual([]);
     expect(editor.exec({ type: 'insertText', text: 'X' })).toEqual({ ok: true, changed: true });
-    // BOTH families the template declares: Calibri from `w:docDefaults`, and the Calibri
-    // Light its built-in headings name. What the notice reports is what the document
-    // DECLARES, gated on whether it renders anything at all — the same answer it gives
-    // for a real Word file, whose styles part declares faces the body text never uses.
-    expect(editor.snapshot().fontSubstitutions ?? []).toEqual(['Calibri', 'Calibri Light']);
+    expect(editor.snapshot().fontSubstitutions ?? []).toEqual(['Calibri']);
     editor.destroy();
   });
 
