@@ -329,6 +329,61 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   }
 
   /**
+   * The document's List Paragraph style, or null when it defines none.
+   *
+   * Matched on the built-in styleId first, then on the built-in NAME: a converted file
+   * commonly spells the id something else (`ListParagraph1`, `a3`) while keeping the name
+   * Word gave it. A document that defines neither gets no `w:pStyle` write at all —
+   * writing a dangling one would render as Normal here and as a missing style everywhere
+   * else.
+   */
+  function listParagraphStyleId(): string | null {
+    let byName: string | null = null;
+    for (const style of session.documentStyles()) {
+      if (style.type !== 'paragraph') continue;
+      if (style.styleId === 'ListParagraph') return style.styleId;
+      if (byName === null && style.name.trim().toLowerCase() === 'list paragraph') {
+        byName = style.styleId;
+      }
+    }
+    return byName;
+  }
+
+  /**
+   * The `w:pStyle` writes that turning a list ON carries, the way Word's own gesture does.
+   *
+   * Word does not just add `w:numPr`: it puts the paragraph in List Paragraph, and THAT
+   * style is what states `w:contextualSpacing`. Without it a list on a document whose
+   * defaults state `w:spacing w:after` — Word's own blank template does, at 8pt — sits a
+   * full paragraph apart between every item.
+   *
+   * Only paragraphs that author no style of their own are moved: bulleting a Heading 1 in
+   * Word leaves it a heading, and a list item already carrying List Paragraph needs no
+   * write. These ops go BEFORE the numbering ops, because `setParagraphProperties` replaces
+   * the authorable set it is handed and `setListNumbering` is surgical on `w:numPr` — the
+   * other order would drop the numbering the same transaction had just written.
+   */
+  function listParagraphStyleOps(touched: readonly string[]): TreeDocOp[] {
+    const styleId = listParagraphStyleId();
+    if (styleId === null) return [];
+    const part = storyPart();
+    const ops: TreeDocOp[] = [];
+    for (const paragraphId of touched) {
+      const properties = directParagraphProperties(part, paragraphId);
+      if (properties.some((property) => property.localName === 'pStyle')) continue;
+      ops.push({
+        op: 'setParagraphProperties',
+        paragraphId,
+        properties: mergedProperties(properties, {
+          localName: 'pStyle',
+          attributes: { val: styleId },
+        }),
+      });
+    }
+    return ops;
+  }
+
+  /**
    * Whether a list paragraph could move to `level` WITHOUT touching `numbering.xml`.
    *
    * A `w:abstractNum` need not declare all nine levels — plenty of real documents declare
@@ -497,19 +552,22 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         ? null
         : (adjacentListNumId(touched, kind) ?? session.ensureListDefinition(kind));
       if (!turningOff && numId === null) return false;
-      const ops: TreeDocOp[] = touched.map((paragraphId) => {
+      // Turning a list OFF leaves the style alone, as Word does: an outdented item stays
+      // in List Paragraph until the user picks another style.
+      const ops: TreeDocOp[] = turningOff ? [] : listParagraphStyleOps(touched);
+      for (const paragraphId of touched) {
         // `w:numPr` carries the level AND the definition, and the op mints a fresh one, so
         // a call that names no level silently resets `w:ilvl` to 0. Word converts a bullet
         // to a number IN PLACE: pressing Numbered on a level-2 item left it at level 2,
         // where this flattened it to the left margin two levels out.
         const level = listLevelOf(paragraphId);
-        return {
-          op: 'setListNumbering' as const,
+        ops.push({
+          op: 'setListNumbering',
           paragraphId,
           numId,
           ...(level !== null ? { level } : {}),
-        };
-      });
+        });
+      }
       return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 

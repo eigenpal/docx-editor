@@ -11,6 +11,17 @@
 // no theme part ships here, and layout's theme-font resolution is a separate lane. The
 // name is the Word name; rendering resolves through the host's font configuration
 // (metric substitutes or real bytes) like any other document.
+//
+// The BUILT-IN STYLE GALLERY ships with the template for the same reason the defaults do.
+// Word keeps Heading 1-9, Title, Subtitle, Quote, No Spacing and List Paragraph LATENT in
+// a new document: `styles.xml` does not define them, and Word writes the definition the
+// first time one is used. Nothing here can materialize a latent style, so a template that
+// omits them gives a New document a style picker holding one entry, and no way to make a
+// heading. Shipping the definitions is what makes the gallery match Word's.
+//
+// List Paragraph is the one with a visible second job: it carries `w:contextualSpacing`,
+// which is what drops the 8pt gap BETWEEN consecutive list items while keeping it around
+// the list. `toggleList` applies the style the way Word's list gesture does.
 
 import { strToU8, zipSync } from 'fflate';
 
@@ -42,9 +53,56 @@ const DOCUMENT_RELS =
   `<Relationship Id="rId1" Type="${STYLES_REL}" Target="styles.xml"/>` +
   `</Relationships>`;
 
+// The heading font. Word's built-in headings name the theme's MAJOR typeface, which the
+// Office theme sets to Calibri Light; with no theme part here the name is written out.
+const MAJOR_FONT = 'Calibri Light';
+const MAJOR_RFONTS =
+  `<w:rFonts w:ascii="${MAJOR_FONT}" w:hAnsi="${MAJOR_FONT}"` +
+  ` w:eastAsia="${MAJOR_FONT}" w:cs="${MAJOR_FONT}"/>`;
+
+/**
+ * Heading 1-9 as Word's Office theme resolves them: the theme colors written out as the
+ * hex Word paints (accent1 darker 25% and 50%, then near-black for the last pair), and
+ * only Heading 1 opening with a full line of space above it.
+ *
+ * Sizes are half-points, and a level with none inherits the 11pt run default — which is
+ * what Word's Heading 4 to Heading 7 do.
+ */
+const HEADINGS = [
+  { level: 1, before: 240, color: '2F5496', halfPoints: 32, italic: false },
+  { level: 2, before: 40, color: '2F5496', halfPoints: 26, italic: false },
+  { level: 3, before: 40, color: '1F3763', halfPoints: 24, italic: false },
+  { level: 4, before: 40, color: '2F5496', halfPoints: null, italic: true },
+  { level: 5, before: 40, color: '2F5496', halfPoints: null, italic: false },
+  { level: 6, before: 40, color: '1F3763', halfPoints: null, italic: false },
+  { level: 7, before: 40, color: '1F3763', halfPoints: null, italic: true },
+  { level: 8, before: 40, color: '272727', halfPoints: 21, italic: false },
+  { level: 9, before: 40, color: '272727', halfPoints: 21, italic: true },
+] as const;
+
+// `w:outlineLvl` is zero-based, so Heading 1 is level 0 — the value the navigation pane
+// and a table of contents both read.
+const headingStyle = (heading: (typeof HEADINGS)[number]): string =>
+  `<w:style w:type="paragraph" w:styleId="Heading${heading.level}">` +
+  `<w:name w:val="heading ${heading.level}"/>` +
+  `<w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
+  `<w:uiPriority w:val="9"/><w:qFormat/>` +
+  `<w:pPr><w:keepNext/><w:keepLines/>` +
+  `<w:spacing w:before="${heading.before}" w:after="0"/>` +
+  `<w:outlineLvl w:val="${heading.level - 1}"/></w:pPr>` +
+  `<w:rPr>${MAJOR_RFONTS}` +
+  (heading.italic ? `<w:i/><w:iCs/>` : ``) +
+  `<w:color w:val="${heading.color}"/>` +
+  (heading.halfPoints === null
+    ? ``
+    : `<w:sz w:val="${heading.halfPoints}"/><w:szCs w:val="${heading.halfPoints}"/>`) +
+  `</w:rPr></w:style>`;
+
 // Word's blank-template defaults: Calibri 11pt run defaults, and the Normal paragraph
 // rhythm (8pt space after, 1.08-line spacing) in the paragraph defaults — the values
-// Word writes, so a save/reopen in Word shows the same text metrics.
+// Word writes, so a save/reopen in Word shows the same text metrics. Then the built-in
+// gallery, in Word's own order: Normal, the headings, the three defaults every part
+// kind needs, and the styles the picker offers under them.
 const STYLES =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
   `<w:styles xmlns:w="${W}">` +
@@ -59,6 +117,63 @@ const STYLES =
   `</w:docDefaults>` +
   `<w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
   `<w:name w:val="Normal"/><w:qFormat/>` +
+  `</w:style>` +
+  HEADINGS.map(headingStyle).join('') +
+  // The three default styles a Word part carries one of each: the character style every
+  // run falls back to, the table style every table falls back to, and the numbering style
+  // that means "no list". Word writes all three into every document it saves.
+  `<w:style w:type="character" w:default="1" w:styleId="DefaultParagraphFont">` +
+  `<w:name w:val="Default Paragraph Font"/>` +
+  `<w:uiPriority w:val="1"/><w:semiHidden/><w:unhideWhenUsed/>` +
+  `</w:style>` +
+  `<w:style w:type="table" w:default="1" w:styleId="TableNormal">` +
+  `<w:name w:val="Normal Table"/>` +
+  `<w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/>` +
+  `<w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar>` +
+  `<w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/>` +
+  `<w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/>` +
+  `</w:tblCellMar></w:tblPr>` +
+  `</w:style>` +
+  `<w:style w:type="numbering" w:default="1" w:styleId="NoList">` +
+  `<w:name w:val="No List"/>` +
+  `<w:uiPriority w:val="99"/><w:semiHidden/><w:unhideWhenUsed/>` +
+  `</w:style>` +
+  // Title sets its own line spacing rather than inheriting the 1.08 default, and states
+  // the tight character spacing Word gives a 28pt title.
+  `<w:style w:type="paragraph" w:styleId="Title">` +
+  `<w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
+  `<w:uiPriority w:val="10"/><w:qFormat/>` +
+  `<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/>` +
+  `<w:contextualSpacing/></w:pPr>` +
+  `<w:rPr>${MAJOR_RFONTS}<w:spacing w:val="-10"/><w:kern w:val="28"/>` +
+  `<w:sz w:val="56"/><w:szCs w:val="56"/></w:rPr>` +
+  `</w:style>` +
+  `<w:style w:type="paragraph" w:styleId="Subtitle">` +
+  `<w:name w:val="Subtitle"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
+  `<w:uiPriority w:val="11"/><w:qFormat/>` +
+  `<w:pPr><w:spacing w:after="160"/></w:pPr>` +
+  `<w:rPr><w:color w:val="5A5A5A"/><w:spacing w:val="15"/></w:rPr>` +
+  `</w:style>` +
+  `<w:style w:type="paragraph" w:styleId="Quote">` +
+  `<w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
+  `<w:uiPriority w:val="29"/><w:qFormat/>` +
+  `<w:pPr><w:spacing w:before="160"/><w:ind w:left="720" w:right="720"/></w:pPr>` +
+  `<w:rPr><w:i/><w:iCs/><w:color w:val="404040"/></w:rPr>` +
+  `</w:style>` +
+  // No Spacing is the one style that does NOT build on Normal: its whole purpose is to
+  // drop the defaults' space-after and 1.08 lines, which `w:basedOn` would reinstate.
+  `<w:style w:type="paragraph" w:styleId="NoSpacing">` +
+  `<w:name w:val="No Spacing"/><w:uiPriority w:val="1"/><w:qFormat/>` +
+  `<w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>` +
+  `</w:style>` +
+  // `w:contextualSpacing` is the point of this one: it suppresses the 8pt before and
+  // after BETWEEN neighbours of the same style, so a list closes up between its items and
+  // still keeps its space against the paragraphs above and below it. The 0.5" indent is
+  // the style's own; every list level states its own `w:ind`, which supersedes it.
+  `<w:style w:type="paragraph" w:styleId="ListParagraph">` +
+  `<w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/>` +
+  `<w:uiPriority w:val="34"/><w:qFormat/>` +
+  `<w:pPr><w:ind w:left="720"/><w:contextualSpacing/></w:pPr>` +
   `</w:style>` +
   `</w:styles>`;
 
@@ -78,8 +193,9 @@ const DOCUMENT =
 /**
  * A Word-faithful blank document, freshly zipped per call (the caller may hand the
  * bytes to a loader that takes ownership). Calibri 11pt and Word's Normal paragraph
- * spacing are authored in `w:docDefaults`, US Letter geometry in the section — a New
- * document behaves like Word's, and saving it produces a file Word opens identically.
+ * spacing are authored in `w:docDefaults`, Word's built-in style gallery in `styles.xml`,
+ * US Letter geometry in the section — a New document behaves like Word's, and saving it
+ * produces a file Word opens identically.
  *
  * @public
  */
