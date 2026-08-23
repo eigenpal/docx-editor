@@ -118,6 +118,14 @@ export interface SurfaceSelectionSyncDeps {
    * that. Composed text landed in front of the word it replaced until it asked.
    */
   replacementOffset?(paragraphId: string, from: number, to: number): number;
+  /**
+   * Delete a selection spanning more than one paragraph, so a composition can start inside
+   * one. Returns whether the composition's range is now addressable — false only when the
+   * deletion was refused and the range still crosses a paragraph boundary.
+   *
+   * A collapsed or same-paragraph selection is left untouched and reports true.
+   */
+  collapseSelectionForComposition?(): boolean;
 }
 
 export interface SurfaceSelectionSync {
@@ -195,6 +203,18 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let composing = false;
   /** The paragraph the composition started in, so the right one is reconciled. */
   let composingParagraph: string | null = null;
+  /**
+   * Whether this composition began over a range the readback cannot address.
+   *
+   * A selection spanning two paragraphs is replaced by a JOIN, and the reconcile below
+   * describes ONE paragraph. `onCompositionStart` deletes such a range up front so the
+   * composition starts collapsed; when that deletion is refused — a rectangle of table
+   * cells, a locked control, protected content — the range is still there and nothing here
+   * can explain what the browser does to it. Reconciling anyway committed one half of the
+   * edit and dropped the other, leaving a document that matched neither what the user had
+   * nor what they saw (#383).
+   */
+  let compositionUnaddressable = false;
 
   /**
    * Take up a selection the user has made but the queued `selectionchange` has not delivered.
@@ -485,6 +505,20 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     },
 
     onCompositionStart: (): void => {
+      // TYPING OVER A SELECTION DELETES IT, and doing that HERE is what keeps the readback
+      // answerable. A range spanning two paragraphs is replaced by a join, which one
+      // paragraph's diff cannot express — so the deletion goes through the ordinary write
+      // lane now, attribution and refusals included, and the composition then starts at a
+      // collapsed caret inside a single paragraph: the case the readback does handle.
+      //
+      // Before `composing`, deliberately: this commit must repaint. That is not a new risk
+      // to the IME's anchor — a buffered typing burst already commits and repaints at this
+      // same point, ahead of this handler.
+      //
+      // Same-paragraph ranges are left alone. The existing lane already reads those back
+      // correctly, and in suggesting mode it keeps the struck characters and lands the
+      // replacement AFTER them (`replacementOffset`) — a rule an eager delete would lose.
+      compositionUnaddressable = deps.collapseSelectionForComposition?.() === false;
       composing = true;
       composingParagraph = deps.selection().head.paragraphId;
       session.beginComposition(deps.storyScope());
@@ -494,10 +528,17 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composing = false;
       const paragraphId = composingParagraph ?? deps.selection().head.paragraphId;
       composingParagraph = null;
+      const unaddressable = compositionUnaddressable;
+      compositionUnaddressable = false;
       // The composed text is in the DOM and nowhere else. Read it back, diff it against what
       // the model holds for that paragraph, and commit the difference — the only route by
       // which an IME edit can reach the tree, since it could not be intercepted.
-      reconcileParagraphFromDom(paragraphId);
+      //
+      // Unless the range it began over was never addressable. Then the repaint below is the
+      // whole answer: it discards what the browser wrote and puts the model's own text back
+      // on screen. The user loses the composition, which the refused deletion already told
+      // them about — and a refusal is recoverable in a way half an edit is not.
+      if (!unaddressable) reconcileParagraphFromDom(paragraphId);
       session.endComposition();
       deps.flushLayout();
       deps.render();

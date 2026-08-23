@@ -2771,6 +2771,17 @@ export function mountPaginatedSurface(
     isGesturing: () => pointer?.dragging() ?? false,
     domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
     holdsCellSelection: () => cellSelection !== null,
+    collapseSelectionForComposition: () => {
+      // Only a range crossing a paragraph boundary. A same-paragraph one is read back
+      // correctly as it is, and deleting it here would lose suggesting mode's rule that the
+      // struck characters stay and the replacement follows them.
+      if (selection.anchor.paragraphId === selection.head.paragraphId) return true;
+      // `surface` is assigned below; a composition can only start once a caller holds it.
+      surface.deleteSelection();
+      // Refused — protected content, a locked control, a rectangle of cells that cannot
+      // join. The range is still there, and nothing downstream can describe it.
+      return selection.anchor.paragraphId === selection.head.paragraphId;
+    },
   });
 
   hfScope = createHeaderFooterScopeController({

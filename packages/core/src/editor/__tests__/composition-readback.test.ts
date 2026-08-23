@@ -5,7 +5,7 @@
 // reaches the tree. Everything that route cannot see is an edit the user made and the document
 // never got.
 //
-// Two ways it could not see one:
+// Three ways it could not see one:
 //
 //   - The text is not inside a `[data-start]` span. An empty paragraph paints a line holding
 //     nothing but a `<br>`, so the browser is handed the LINE as the selection node and
@@ -14,6 +14,11 @@
 //   - The paragraph is painted MORE THAN ONCE. A shared header or footer repaints the same
 //     paragraph ids on every page, so a document-wide scan read a three-page header back as
 //     three concatenated copies of itself and then wrote the extra two into the part.
+//   - The composition began over a range spanning TWO paragraphs, which the browser replaces
+//     with a join. One paragraph's diff cannot express that, so half the edit committed and
+//     half did not (#383). The range is deleted at `compositionstart` instead, which is what
+//     typing over a selection means anyway, and the composition then starts inside one
+//     paragraph — the case everything below is about.
 //
 // The other half of the contract is what must NEVER reach the model: a list marker's bullet,
 // a tab leader's dots, the revision pilcrow, and a field's painted result are all painted
@@ -146,6 +151,21 @@ function composeIntoLine(scope: Element, paragraphId: string, text: string): voi
   line.insertBefore(document.createTextNode(text), line.firstChild);
 }
 
+/**
+ * Rewrite what a paragraph paints, the way a browser rewrites it during a composition.
+ *
+ * A paragraph is more than one span whenever it holds more than one run or breaks over more
+ * than one line, so the whole text goes into the first and the rest are emptied.
+ */
+function repaintParagraphAs(scope: Element, paragraphId: string, text: string): void {
+  const spans = [...scope.querySelectorAll('[data-paragraph-id][data-start]')].filter(
+    (element) => (element as HTMLElement).dataset.paragraphId === paragraphId
+  ) as HTMLElement[];
+  if (spans.length === 0) throw new Error(`no painted span for ${paragraphId}`);
+  spans[0]!.textContent = text;
+  for (const extra of spans.slice(1)) extra.textContent = '';
+}
+
 describe('#190 composition at offset 0 of an empty paragraph', () => {
   test('the composed text is committed', () => {
     withSurface(docx('<w:p/>'), (surface, container) => {
@@ -256,6 +276,53 @@ describe('the ordinary case still holds', () => {
         span.textContent = `abc${COMPOSED}`;
       });
       expect(surface.session.bodyText()).toBe(`abc${COMPOSED}`);
+    });
+  });
+});
+
+describe('#383 a composition begun over a range spanning two paragraphs', () => {
+  test('replaces the whole range, rather than committing half of it', () => {
+    // The browser replaces a cross-paragraph selection with a JOIN, and the readback
+    // describes ONE paragraph. Reconciling the head alone committed `beta` -> `ta` and left
+    // `alpha` untouched, so the document matched neither what the user had nor what the
+    // screen showed, and the composed characters went with the next repaint.
+    //
+    // The range is deleted at `compositionstart` instead, through the ordinary write lane,
+    // so the composition begins collapsed inside one paragraph.
+    withSurface(docx(`${p('alpha')}${p('beta')}`), (surface, container) => {
+      const [first, second] = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: first!, offset: 2 },
+        head: { paragraphId: second!, offset: 2 },
+      });
+      const pages = container.querySelector('.docx-pages')!;
+      pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      // The two paragraphs are one by now, and the caret sits between "al" and "ta".
+      expect(surface.session.bodyText()).toBe('alta');
+      const joined = surface.state().selection.head.paragraphId;
+      repaintParagraphAs(container, joined, `al${COMPOSED}ta`);
+      pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      expect(surface.state().lastRejection).toBeNull();
+      expect(surface.session.bodyText()).toBe(`al${COMPOSED}ta`);
+    });
+  });
+
+  test('a same-paragraph range is still left to the readback', () => {
+    // Deleting eagerly here would lose suggesting mode's rule that a deletion keeps the
+    // characters it strikes and the replacement lands after them.
+    withSurface(docx(p('alpha beta')), (surface, container) => {
+      const id = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 0 },
+        head: { paragraphId: id, offset: 5 },
+      });
+      const pages = container.querySelector('.docx-pages')!;
+      pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      // Untouched by compositionstart: the browser still owns this replacement.
+      expect(surface.session.bodyText()).toBe('alpha beta');
+      repaintParagraphAs(container, id, `${COMPOSED} beta`);
+      pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      expect(surface.session.bodyText()).toBe(`${COMPOSED} beta`);
     });
   });
 });
