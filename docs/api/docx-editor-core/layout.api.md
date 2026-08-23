@@ -997,6 +997,7 @@ export interface HeaderFooterStoryRecord {
         readonly sectionPageCount?: number;
         readonly format?: string;
     }) => HeaderFooterStoryRecord;
+    readonly part?: OoxmlPart;
     // (undocumented)
     readonly partName: string;
     readonly rId?: string;

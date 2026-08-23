@@ -76,6 +76,14 @@ export interface HeaderFooterPageContext {
 
 export interface HeaderFooterStoryLayout {
   readonly partName: string;
+  /**
+   * The part this story was laid out from.
+   *
+   * Carried because a derivation that runs over the finished layout cannot reach it otherwise:
+   * the layout receives furniture as fragments plus a NAME, and a name is not a tree. The
+   * content-control boundary pass needs the tree to know which controls exist at all.
+   */
+  readonly part?: OoxmlPart;
   /** Main-document relationship id when the furniture source knows it. */
   readonly rId?: string;
   /**
@@ -382,6 +390,7 @@ export function layoutHeaderFooterStory(
 
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
+      part,
       contentKey,
       fragments: flow.blocks,
       flowHeight: flow.bottom,

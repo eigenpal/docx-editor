@@ -1265,6 +1265,7 @@ function layoutBlocksPass(
         kind,
         variant,
         partName: laid.partName,
+        ...(laid.part ? { part: laid.part } : {}),
         ...(laid.rId ? { rId: laid.rId } : {}),
         box: {
           x: box.x + geometry.margin.left,

@@ -385,11 +385,21 @@ function pageContribution(
   const blocks: PlacedBlockBox[] = [];
   const spans: PlacedSpanBox[] = [];
   let lineOrdinal = page.index * PAGE_LINE_ORDINAL_SPAN;
+  // Boxes are stored in the BODY's content-box space, because that is the space the painter
+  // and the hit test read them in. A story's fragments are laid out relative to the story's
+  // own box, so a story is walked with the offset that carries it into that shared space.
+  // Recording a header control's raw box would draw its boundary chrome at the body's origin.
+  let offsetX = 0;
+  let offsetY = 0;
+  const shift = (box: LayoutBox): LayoutBox =>
+    offsetX === 0 && offsetY === 0
+      ? box
+      : { x: box.x + offsetX, y: box.y + offsetY, width: box.width, height: box.height };
   const visit = (pageIndex: number, fragment: BlockFragmentRecord): void => {
     if (fragment.kind === 'paragraph') {
       if (index.neededBlockIds.has(fragment.paragraphId)) {
         work && (work.geometryEntries += 1);
-        blocks.push({ pageIndex, blockId: fragment.paragraphId, box: fragment.box });
+        blocks.push({ pageIndex, blockId: fragment.paragraphId, box: shift(fragment.box) });
       }
       const needSpans = index.neededParagraphIds.has(fragment.paragraphId);
       for (const line of fragment.lines) {
@@ -419,8 +429,8 @@ function pageContribution(
             end: span.range.end,
             line: lineKey,
             box: {
-              x: span.box.x,
-              y: span.box.y + line.leading,
+              x: span.box.x + offsetX,
+              y: span.box.y + line.leading + offsetY,
               width: span.box.width,
               height: textHeight,
             },
@@ -431,7 +441,7 @@ function pageContribution(
     }
     if (index.neededBlockIds.has(fragment.tableId)) {
       work && (work.geometryEntries += 1);
-      blocks.push({ pageIndex, blockId: fragment.tableId, box: fragment.box });
+      blocks.push({ pageIndex, blockId: fragment.tableId, box: shift(fragment.box) });
     }
     for (const row of fragment.rows) {
       if (row.isHeaderRepeat) continue;
@@ -441,6 +451,14 @@ function pageContribution(
     }
   };
   for (const fragment of page.fragments) visit(page.index, fragment);
+  for (const story of [page.header, page.footer]) {
+    if (!story) continue;
+    offsetX = story.box.x - page.contentBox.x;
+    offsetY = story.box.y - page.contentBox.y;
+    for (const fragment of story.fragments) visit(page.index, fragment);
+  }
+  offsetX = 0;
+  offsetY = 0;
   const contribution: PageGeometryContribution = { neededStamp: stamp, blocks, spans };
   pageGeometryContributions.set(page, contribution);
   return contribution;
@@ -671,12 +689,69 @@ const wrappedPages = new WeakMap<
  * an identity-reused page. When no page wrapper needs rewriting, the prior `pages` array is
  * kept by reference so a no-change resume still satisfies `layout.pages` identity.
  */
+/**
+ * Every part the layout draws a story from: the body's, then each distinct furniture part.
+ *
+ * A control lives in the part that declares it, and a header is a different part from the
+ * body. Deriving boundaries from the body alone meant a control in a header was never
+ * collected — so it had no geometry, and its outline could neither draw nor hit-test.
+ *
+ * Deduplicated by part IDENTITY, because one header part is shared across every page it
+ * appears on and across sections that inherit it.
+ */
+function boundaryParts(layout: SemanticLayout, part: OoxmlPart): readonly OoxmlPart[] {
+  const parts: OoxmlPart[] = [part];
+  const seen = new Set<OoxmlPart>([part]);
+  for (const page of layout.pages) {
+    for (const story of [page.header, page.footer]) {
+      if (!story?.part || seen.has(story.part)) continue;
+      seen.add(story.part);
+      parts.push(story.part);
+    }
+  }
+  return parts;
+}
+
+/**
+ * The collected controls of every story part, as one index.
+ *
+ * Each part's own index is memoized on the part, so this is a concat and two set unions —
+ * the walks themselves are not repeated.
+ */
+function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): CollectedControlIndex {
+  if (parts.length === 1) return collectedControlIndexOf(parts[0]!);
+  const controls: CollectedControl[] = [];
+  const neededBlockIds = new Set<string>();
+  const neededParagraphIds = new Set<string>();
+  for (const storyPart of parts) {
+    const index = collectedControlIndexOf(storyPart);
+    controls.push(...index.controls);
+    for (const id of index.neededBlockIds) neededBlockIds.add(id);
+    for (const id of index.neededParagraphIds) neededParagraphIds.add(id);
+  }
+  // Recomputed over the MERGED sets, not concatenated from the parts. This token is the
+  // per-page geometry memo's key: if it did not move when a furniture control appeared, every
+  // page would keep serving the contribution it built before that control existed.
+  const neededToken = `${[...neededBlockIds].sort().join(',')};${[...neededParagraphIds]
+    .sort()
+    .join(',')}`;
+  return { controls, neededBlockIds, neededParagraphIds, neededToken };
+}
+
 export function attachContentControlBoundaries(
   layout: SemanticLayout,
   part: OoxmlPart,
   token = contentControlContextToken(part),
   work?: ContentControlBoundaryWork
 ): SemanticLayout {
+  // The token the CALLER passes is the body part's. A control in a header lives in a different
+  // part, whose token the body's does not move with — so the authority is derived here, over
+  // every story part the layout draws. Each part's own token is memoized, so the extra parts
+  // cost a join rather than a walk.
+  const parts = boundaryParts(layout, part);
+  if (parts.length > 1) {
+    token = parts.map((storyPart) => contentControlContextToken(storyPart)).join('|');
+  }
   // The token includes every control id, so an empty token proves there are no controls.
   // Avoid both otherwise-unconditional full walks: collecting controls from the tree and
   // indexing every placed fragment/span across every page.
@@ -706,7 +781,7 @@ export function attachContentControlBoundaries(
     };
   }
 
-  const index = collectedControlIndexOf(part);
+  const index = collectedControlIndexOverParts(parts);
   const geometry = placedGeometryOf(layout, index, work);
   const contentControls = index.controls.map((entry) => boundaryRecordOf(entry, geometry, work));
   const byPage = new Map<number, ContentControlBoundaryRecord[]>();

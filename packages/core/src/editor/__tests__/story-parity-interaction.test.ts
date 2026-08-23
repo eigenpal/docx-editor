@@ -39,6 +39,11 @@ const LINK =
   `<w:p><w:hyperlink r:id="${LINK_R_ID}"><w:r><w:t>Sample document</w:t></w:r>` +
   '</w:hyperlink></w:p>';
 
+/** A block content control in the body, to prove its geometry did not move. */
+const BODY_CONTROL =
+  '<w:sdt><w:sdtPr><w:tag w:val="bodyControl"/><w:id w:val="8"/></w:sdtPr>' +
+  '<w:sdtContent><w:p><w:r><w:t>BodyControlled</w:t></w:r></w:p></w:sdtContent></w:sdt>';
+
 /** A block content control, so the header carries one too. */
 const CONTROL =
   '<w:sdt><w:sdtPr><w:tag w:val="hdrControl"/><w:id w:val="7"/></w:sdtPr>' +
@@ -77,7 +82,7 @@ function docx(): Uint8Array {
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
-        `<w:p><w:r><w:t>Body</w:t></w:r></w:p>${TABLE}` +
+        `<w:p><w:r><w:t>Body</w:t></w:r></w:p>${TABLE}${BODY_CONTROL}` +
         `<w:sectPr><w:headerReference w:type="default" r:id="${HEADER_R_ID}"/></w:sectPr>` +
         '</w:body></w:document>'
     ),
@@ -157,22 +162,41 @@ function headerLinkId(editor: DocxEditorInstance): string | undefined {
   };
   return walk(part.root);
 }
-describe('content-control geometry is body-only, and says so', () => {
-  test('a control in a header publishes no boundary', () => {
+
+describe('content-control geometry covers every story', () => {
+  test('a control in a header gets a box, in the shared space', () => {
     const editor = mount();
     const layout = editor.surface!.layout();
+    const page = layout.pages[0]!;
+    const header = page.header!;
 
-    // KNOWN LIMIT, pinned so it is a decision rather than a surprise. The boundary derivation
-    // is a single-part pass over the body, and the layout only ever receives furniture as
-    // laid-out fragments plus a part NAME — it never holds the header's part object. So a
-    // control in a header has no geometry, and its outline cannot draw or hit-test.
-    //
-    // The behaviour built on it does work: `contentControlAt` resolves a furniture control
-    // through the tree rather than through geometry, which is why editing one is fine.
-    // Fixing the chrome means threading furniture parts into the layout's boundary pass.
-    expect((layout.contentControls ?? []).some((entry) => entry.tag === 'hdrControl')).toBe(false);
-    // And the control IS reachable, so this is a missing OUTLINE, not a missing control. That
-    // is what makes it a chrome limit rather than a functional one.
+    const control = (layout.contentControls ?? []).find((entry) => entry.tag === 'hdrControl');
+    expect(control, 'the header control was not published').toBeDefined();
+    // Without geometry the outline cannot draw or hit-test, which is what a control in a
+    // header had: it was in the document and its boundary was nowhere.
+    expect(control!.fragments.length, 'the header control got no geometry').toBeGreaterThan(0);
+
+    // Boxes live in the BODY's content-box space, which is what the painter and the hit test
+    // read. A header sits ABOVE that origin, so a correctly shifted box is negative in y; the
+    // raw story-local box would be positive and would draw the outline down in the body.
+    expect(header.box.y - page.contentBox.y, 'the fixture header is not above').toBeLessThan(0);
+    for (const fragment of control!.fragments) {
+      expect(fragment.box.y, 'the header control was placed at the body origin').toBeLessThan(0);
+    }
+  });
+
+  test('the body control still gets its own box', () => {
+    const editor = mount();
+    const layout = editor.surface!.layout();
+    const body = (layout.contentControls ?? []).find((entry) => entry.tag === 'bodyControl');
+    expect(body, 'the body control was lost').toBeDefined();
+    for (const fragment of body!.fragments) {
+      expect(fragment.box.y, 'the body control moved').toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test('the caret still reaches a header control', () => {
+    const editor = mount();
     const surface = editor.surface!;
     expect(surface.enterHeaderFooter({ rId: HEADER_R_ID })).toBe(true);
     const inControl = surface.session

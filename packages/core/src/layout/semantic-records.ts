@@ -577,6 +577,14 @@ export interface HeaderFooterStoryRecord {
   readonly variant: 'default' | 'first' | 'even';
   readonly partName: string;
   /**
+   * The part this story was laid out from. See {@link HeaderFooterStoryLayout.part}.
+   *
+   * Present when the furniture source supplied it. A pass that needs the story's TREE — the
+   * content-control boundary derivation is the one — reads it here rather than resolving a
+   * name against a package it does not have.
+   */
+  readonly part?: import('../store/package/ooxml-tree.ts').OoxmlPart;
+  /**
    * Main-document relationship id that resolves to this part (`EditorScope.rId`).
    *
    * Present when the furniture source could name the relationship; scoped editing binds
