@@ -106,6 +106,24 @@ const WRITES: readonly WriteProbe[] = [
     comparesMarkup: true,
   },
   {
+    // The Paragraph dialog's write, which sets several properties as ONE undo step. Its own
+    // suite covers the body and a header; this puts footer, footnote and endnote under the
+    // same part-identity and markup assertions as every other write.
+    //
+    // Routed through `editor.exec` rather than a surface method, because the dialog is an
+    // editor command and there is no surface twin to call.
+    name: 'setParagraphFormat({ alignment, spaceAfterPt })',
+    paragraphIndex: PROBE.plain,
+    run: (o) => {
+      o.editor.exec({
+        type: 'setParagraphFormat',
+        alignment: 'center',
+        spaceAfterPt: 12,
+      });
+    },
+    comparesMarkup: true,
+  },
+  {
     name: 'setIndent({ left: 360 })',
     paragraphIndex: PROBE.plain,
     run: (o) => {
@@ -243,4 +261,48 @@ describe('a write puts the same markup in every story', () => {
       }
     });
   }
+});
+
+// The gate has to stop the WRITE, not only the probe. `can` and `exec` are separate entry
+// points and a host is not required to ask before it acts, so a refusal that lives in `can`
+// alone leaves the damage exactly where it was.
+//
+// Page break is the case: only the body paginates, so `w:br w:type="page"` in `header1.xml` or
+// `footnotes.xml` changes the part and changes nothing on screen. Before the gate, exec
+// returned ok and the bytes moved.
+describe('a page break is refused outside the body, and writes nothing there', () => {
+  for (const story of STORY_KINDS) {
+    if (story === 'body') continue;
+
+    test(`exec in the ${story} refuses and leaves its part unchanged`, async () => {
+      const open = openStory(story);
+      try {
+        caretIn(open, 0);
+        const before = await savedParts(open);
+        const result = open.editor.exec({ type: 'insertBreak', kind: 'page' });
+        expect(result.ok).toBe(false);
+        expect(result.ok === false && result.reason).toContain('editable document body');
+        const after = await savedParts(open);
+        // No part at all, not merely "not this story's" — a refused command must not move
+        // the body either.
+        expect(changedParts(before, after)).toEqual([]);
+      } finally {
+        open.destroy();
+      }
+    });
+  }
+
+  test('the body still takes one', async () => {
+    const open = openStory('body');
+    try {
+      caretIn(open, 0);
+      const before = await savedParts(open);
+      expect(open.editor.exec({ type: 'insertBreak', kind: 'page' }).ok).toBe(true);
+      const after = await savedParts(open);
+      expect(changedParts(before, after)).toEqual([PART_OF_STORY.body]);
+      expect(after.get(PART_OF_STORY.body)).toContain('w:type="page"');
+    } finally {
+      open.destroy();
+    }
+  });
 });

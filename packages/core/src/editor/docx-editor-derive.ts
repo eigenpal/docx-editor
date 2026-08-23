@@ -435,6 +435,25 @@ export function gateCommand(
       };
     }
   }
+  // A page break is body structure for the same reason, and the sibling arm above missed it.
+  // Only the body paginates: a header is laid out ONCE per variant at flow height and attached
+  // to every page, and a note flows inside the note area. So `w:br w:type="page"` written into
+  // `header1.xml` or `footnotes.xml` is markup nothing reads. The command reported `ok`, the
+  // part changed, and the screen did not — which is the failure mode this gate exists to stop.
+  // Word disables the gesture in those stories for the same reason.
+  if (command.type === 'insertBreak' && command.kind === 'page') {
+    const active = surface.activeScope?.() ?? { kind: 'body' as const };
+    if (active.kind !== 'body') {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'a page break can only be inserted in the editable document body',
+        },
+      };
+    }
+  }
   if (command.type === 'linkHeaderFooterToPrevious') {
     const state = surface.headerFooterState?.();
     const sectionIndex = command.sectionIndex ?? state?.sectionIndex ?? 0;

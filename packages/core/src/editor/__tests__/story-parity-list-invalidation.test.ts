@@ -28,11 +28,41 @@ function headerMarkers(open: ReturnType<typeof openStory>): (string | null)[] {
     .map((block) => (block.kind === 'paragraph' ? (block.marker?.text ?? null) : null));
 }
 
+/** The same read for the body's own fragments. */
+function bodyMarkers(open: ReturnType<typeof openStory>): (string | null)[] {
+  return open.surface
+    .publishedLayout()
+    .pages[0]!.fragments.filter((block) => block.kind === 'paragraph')
+    .map((block) => (block.kind === 'paragraph' ? (block.marker?.text ?? null) : null));
+}
+
 describe("a header's markers follow numbering.xml", () => {
   test('the header paints its own list marker', () => {
     const open = openStory('header');
     try {
       expect(headerMarkers(open).filter(Boolean).length).toBeGreaterThan(0);
+    } finally {
+      open.destroy();
+    }
+  });
+
+  // The counter rule, asserted on the marker TEXT rather than on a count.
+  //
+  // The header and footer spec requires a header list to start at the level's `w:start` and to
+  // leave the body's own sequence alone, even when the two share a `numId` - which this
+  // fixture makes them do. A count cannot see the difference: a header that CONTINUED the body
+  // would paint just as many markers, reading `2.` where it should read `1.`.
+  // `list-counters.ts` gives each story its own counter state, and this is what pins it.
+  test('the header restarts the shared numId, and the body is unaffected', () => {
+    const open = openStory('header');
+    try {
+      const header = headerMarkers(open).filter((each): each is string => each !== null);
+      const body = bodyMarkers(open).filter((each): each is string => each !== null);
+      // Guard the comparison: two empty lists agree about nothing.
+      expect(header.length).toBeGreaterThan(0);
+      expect(body.length).toBeGreaterThan(0);
+      expect(header[0]).toBe('1.');
+      expect(body[0]).toBe('1.');
     } finally {
       open.destroy();
     }

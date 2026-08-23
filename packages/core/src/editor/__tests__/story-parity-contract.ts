@@ -16,7 +16,11 @@
 // engine against it by running the same operation on an identical paragraph in every story.
 //
 // `SLOT_PARITY` is a `Record<ChromeSlotId, ...>`, so a slot added to `CHROME_GROUPS` without a
-// declared rule is a compile error rather than an untested control.
+// declared rule has no rule to satisfy. That is caught by the `every chrome slot declares a
+// rule` test, NOT by the compiler: `packages/core/tsconfig.json` excludes every `__tests__`
+// directory, so nothing here is typechecked. If that exclusion is ever lifted, the `Record`
+// annotation starts failing the build too, which is strictly better — but do not rely on it
+// today, and do not repeat the claim that it already happens.
 
 import type { ChromeSlotId } from '../chrome-controls.ts';
 
@@ -125,7 +129,6 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'file.open': { parity: 'same' },
   'file.save': { parity: 'same' },
   'file.pageSetup': { parity: 'same' },
-  'insert.pageBreak': { parity: 'same' },
 
   // A note reference is a body-story concept: `w:footnoteReference` lives in the main document
   // part, and Word refuses a note inside a note for the same reason.
@@ -141,6 +144,15 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
     // there talks about the body while the caret IS in the body — misleading, and the reason
     // this is an exemption rather than a passing assertion.
     bodyRefusedAt: ['a block content control'],
+  },
+
+  // Only the body paginates. A header is laid out once per variant at flow height and attached
+  // to every page; a note flows inside the note area. A `w:br w:type="page"` in either is markup
+  // nothing reads, so the command used to report `ok`, change the part, and change nothing on
+  // screen. Declaring it `same` would have ratified that.
+  'insert.pageBreak': {
+    parity: 'bodyOnly',
+    reason: 'a page break can only be inserted in the editable document body',
   },
 
   // A section break splits the body's `w:sectPr` chain, and `insertSectionBreak` refuses

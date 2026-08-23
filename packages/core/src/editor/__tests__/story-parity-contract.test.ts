@@ -68,8 +68,8 @@ type Sweep = Map<StoryKind, Map<ChromeSlotId, SlotState>>;
 /**
  * Every slot's state in every story, for one probe paragraph.
  *
- * Mounted once per story and reused across all 54 slots: `toolbarCommandState` is a pure read,
- * and mounting 5 stories x 54 slots would be 270 documents for no extra signal.
+ * Mounted once per story and reused across every slot: `toolbarCommandState` is a pure read,
+ * and mounting one document per story-and-slot pair would be hundreds for no extra signal.
  */
 /**
  * `paragraphIndex`, or the content-control paragraph when it is `IN_CONTROL`.
@@ -102,6 +102,9 @@ function sweep(paragraphIndex: number): Sweep {
 /** Whether one slot satisfies its declared rule, and in which dimension it does not. */
 function violationsOf(slot: ChromeSlotId, states: Sweep, probe: string): Violation[] {
   const rule = SLOT_PARITY[slot];
+  // An undeclared slot is a missing rule, not a crash. Without this the four probe suites each
+  // died on `rule.parity` with a raw TypeError, and only the roster test named the real cause.
+  if (!rule) return [{ dimension: 'enabled', detail: `${slot} declares no parity rule` }];
   const body = states.get('body')!.get(slot)!;
   const found: Violation[] = [];
   const say = (dimension: ParityDimension, detail: string): void => {
@@ -190,13 +193,16 @@ describe('the story-parity contract', () => {
   // examining nothing at all.
   //
   // The floors are close to what the fixture actually produces, not `> 0`, which a fixture
-  // collapsed to a single working control would still clear. Measured at this probe: about 150
-  // of the 270 cells enabled and 15 active.
+  // collapsed to a single working control would still clear. Deliberately stated as floors
+  // rather than exact counts, because the slot roster grows and an exact count would make
+  // every new slot a failing test for no reason.
   //
-  // Be clear about what that leaves. Roughly a third of the 54 slots are disabled in EVERY
-  // story here — undo and redo with no history, the image and table-border slots with nothing
-  // selected, the unwired ones — so for those the sweep asserts only that the same refusal
-  // reason appears everywhere. That is worth having and is less than whole-toolbar coverage.
+  // Be clear about what that leaves. Roughly a third of the slots are disabled in EVERY story
+  // at this probe — undo and redo with no history, the image and table-border slots with
+  // nothing selected, the ones not wired to an editor command — so for those the sweep asserts
+  // only that the same refusal reason appears everywhere. That is worth having and is less
+  // than whole-toolbar coverage. `file.pageSetup` is in that group, and its real behavior is
+  // covered by `story-parity-page-setup.test.ts` instead.
   test('the sweep is not vacuous', () => {
     const states = sweep(PROBE.formatted);
     const all = STORY_KINDS.flatMap((story) => [...states.get(story)!.values()]);
