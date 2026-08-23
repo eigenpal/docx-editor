@@ -17,6 +17,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   ObjectPath,
+  ClientResult,
+  clientResult,
   fail,
   hydratedHandle,
   hydratedHandles,
@@ -33,6 +35,7 @@ import { ModelObject } from './model-object.ts';
 
 /** Which kind of note: Word's own two. */
 export type NoteItemType = 'Footnote' | 'Endnote';
+export type NoteTextDisplayMode = 'Proposed' | 'Original';
 
 /** The engine says `footnote`; this API says `Footnote`. One place says which is which. */
 function kindOf(answer: string): NoteItemType {
@@ -96,6 +99,30 @@ export class NoteItem extends ModelObject implements PromisedItem {
    */
   get text(): string {
     return this.loadedProperty<string>('text');
+  }
+
+  /**
+   * The note's text in a resolved review mode.
+   *
+   * `Proposed` answers what the note becomes if every tracked change is accepted; `Original`
+   * answers what it was before any of them.
+   */
+  getReviewedText(displayMode: NoteTextDisplayMode): ClientResult<string> {
+    const label = `${this.path.label}.getReviewedText(${displayMode})`;
+    const { result, fill } = clientResult<string>(label);
+    const note = this.#handle();
+    this.read(
+      label,
+      () => ({
+        op: 'getResolvedNoteText',
+        note,
+        displayMode: displayMode === 'Original' ? 'original' : 'proposed',
+      }),
+      (value) => {
+        fill(hydratedText(value, label));
+      }
+    );
+    return result;
   }
 
   /** The note's own story. */

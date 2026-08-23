@@ -91,6 +91,35 @@ const NOTE_AND_BODY_REVISIONS: Uint8Array = zipSync({
   ),
 });
 
+const REVIEWED_NOTE_TEXT: Uint8Array = zipSync({
+  '[Content_Types].xml': strToU8(
+    `<Types xmlns="${CT}">` +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+      '</Types>'
+  ),
+  '_rels/.rels': strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+  ),
+  'word/_rels/document.xml.rels': strToU8(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="rId9" Type="${OFFICE}/footnotes" Target="footnotes.xml"/>` +
+      '</Relationships>'
+  ),
+  'word/document.xml': strToU8(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:footnoteReference w:id="2"/></w:r></w:p></w:body></w:document>`
+  ),
+  'word/footnotes.xml': strToU8(
+    `<w:footnotes xmlns:w="${W}">` +
+      '<w:footnote w:id="2">' +
+      '<w:p><w:r><w:footnoteRef/></w:r><w:r><w:t xml:space="preserve">A</w:t></w:r>' +
+      '<w:ins w:id="30" w:author="Ada" w:date="2026-08-06T09:00:00Z"><w:r><w:t>B</w:t></w:r></w:ins>' +
+      '<w:del w:id="31" w:author="Ada" w:date="2026-08-06T09:01:00Z"><w:r><w:delText>C</w:delText></w:r></w:del>' +
+      '</w:p></w:footnote></w:footnotes>'
+  ),
+});
+
 const DUPLICATE_ENDNOTE_IDS: Uint8Array = zipSync({
   '[Content_Types].xml': strToU8(
     `<Types xmlns="${CT}">` +
@@ -520,6 +549,21 @@ describe('a section is the page a story is laid out on', () => {
       ['', ''],
       ['first\t<unsafe>\nline\rsecond', 'first\t<unsafe>\nline\rsecond'],
     ]);
+  });
+
+  test('a note can answer reviewed text through the object model', async () => {
+    const runtime = await createServer(REVIEWED_NOTE_TEXT);
+    const found = await runtime.run(async (context) => {
+      const notes = context.document.footnotes;
+      notes.load('items');
+      await context.sync();
+      const note = notes.items[0]!;
+      const proposed = note.getReviewedText('Proposed');
+      const original = note.getReviewedText('Original');
+      await context.sync();
+      return { proposed: proposed.value, original: original.value };
+    });
+    expect(found).toEqual({ proposed: 'AB', original: 'AC' });
   });
 
   test('a note revision collection accepts its own story rather than the main body', async () => {

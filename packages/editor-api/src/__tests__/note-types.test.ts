@@ -11,4 +11,5 @@ test('both public entries expose read-only note text', () => {
   expectTypeOf<BrowserNoteItem>().toEqualTypeOf<ServerNoteItem>();
   expectTypeOf<ServerNoteItem['text']>().toEqualTypeOf<string>();
   expectTypeOf<ServerNoteItem['body']['text']>().toEqualTypeOf<string>();
+  expectTypeOf<ReturnType<ServerNoteItem['getReviewedText']>['value']>().toEqualTypeOf<string>();
 });

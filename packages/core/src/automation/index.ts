@@ -84,6 +84,7 @@ export {
   type AutomationOperationKind,
   type AutomationParagraphRef,
   type AutomationPoint,
+  type AutomationResolvedDisplayMode,
   type AutomationSearchOptions,
   type AutomationSelectionMode,
   type AutomationSpanRef,

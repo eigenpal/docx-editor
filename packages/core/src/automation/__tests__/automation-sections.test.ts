@@ -109,6 +109,60 @@ function withReviewedFootnotes(): AutomationHost {
   );
 }
 
+/** Notes covering resolved-text edge cases: hidden text, note marks, chained merges, and tables. */
+function withResolvedNoteTextCases(): AutomationHost {
+  return open(
+    richDocx({
+      body:
+        `<w:p><w:r><w:t>mark</w:t></w:r>${noteReference('footnote', 2)}</w:p>` +
+        `<w:p><w:r><w:t>chain</w:t></w:r>${noteReference('footnote', 3)}</w:p>` +
+        `<w:p><w:r><w:t>empty</w:t></w:r>${noteReference('footnote', 4)}</w:p>` +
+        `<w:p><w:r><w:t>table</w:t></w:r>${noteReference('footnote', 5)}</w:p>` +
+        sectionProperties([]),
+      rels: [{ id: 'rId20', type: REL_TYPES.footnotes, target: 'footnotes.xml' }],
+      parts: [
+        notesPart('footnote', [
+          {
+            id: 2,
+            xml:
+              '<w:p>' +
+              '<w:r><w:footnoteRef/></w:r>' +
+              '<w:r><w:t xml:space="preserve"> </w:t></w:r>' +
+              '<w:r><w:t>A</w:t></w:r>' +
+              '<w:r><w:rPr><w:vanish/></w:rPr><w:t>HIDDEN</w:t></w:r>' +
+              '<w:r><w:t>B</w:t></w:r>' +
+              '</w:p>',
+          },
+          {
+            id: 3,
+            xml:
+              '<w:p><w:pPr><w:rPr><w:del w:id="20" w:author="Ada" w:date="2026-08-06T08:00:00Z"/>' +
+              '</w:rPr></w:pPr><w:r><w:t xml:space="preserve">one </w:t></w:r></w:p>' +
+              '<w:p><w:pPr><w:rPr><w:del w:id="21" w:author="Ada" w:date="2026-08-06T08:01:00Z"/>' +
+              '</w:rPr></w:pPr><w:r><w:t xml:space="preserve">two </w:t></w:r></w:p>' +
+              '<w:p><w:r><w:t xml:space="preserve">three</w:t></w:r></w:p>' +
+              '<w:p><w:r><w:t>four</w:t></w:r></w:p>',
+          },
+          {
+            id: 4,
+            xml:
+              '<w:p><w:pPr><w:rPr><w:del w:id="22" w:author="Ada" w:date="2026-08-06T08:02:00Z"/>' +
+              '</w:rPr></w:pPr></w:p>' +
+              '<w:p><w:r><w:t>tail</w:t></w:r></w:p>',
+          },
+          {
+            id: 5,
+            xml:
+              '<w:p><w:r><w:t xml:space="preserve">a </w:t></w:r></w:p>' +
+              '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+              '<w:p><w:r><w:t>b</w:t></w:r></w:p>',
+          },
+        ]),
+      ],
+    })
+  );
+}
+
 function documentOf(host: AutomationHost): AutomationHandle {
   return handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
 }
@@ -472,6 +526,101 @@ describe('a footnote is a story too', () => {
         0
       )
     ).toBe('left right');
+  });
+
+  test('a resolved note text read hides note marks and hidden runs', () => {
+    const host = withResolvedNoteTextCases();
+    const [marked] = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    ) as [AutomationHandle];
+    expect(textAt(host.execute({ operations: [{ op: 'getNoteText', note: marked }] }), 0)).toBe(
+      '\uFFFC AHIDDENB'
+    );
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getResolvedNoteText', note: marked, displayMode: 'proposed' }],
+        }),
+        0
+      )
+    ).toBe(' AB');
+  });
+
+  test('a resolved note text read merges chained deleted paragraph marks', () => {
+    const host = withResolvedNoteTextCases();
+    const [, chained] = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    ) as [AutomationHandle, AutomationHandle];
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getResolvedNoteText', note: chained, displayMode: 'proposed' }],
+        }),
+        0
+      )
+    ).toBe('one two three\rfour');
+  });
+
+  test('a resolved note text read removes an empty merged paragraph', () => {
+    const host = withResolvedNoteTextCases();
+    const [, , empty] = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    ) as [AutomationHandle, AutomationHandle, AutomationHandle];
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getResolvedNoteText', note: empty, displayMode: 'proposed' }],
+        }),
+        0
+      )
+    ).toBe('tail');
+  });
+
+  test('a resolved note text read keeps table paragraph breaks in document order', () => {
+    const host = withResolvedNoteTextCases();
+    const [, , , table] = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    ) as [AutomationHandle, AutomationHandle, AutomationHandle, AutomationHandle];
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getResolvedNoteText', note: table, displayMode: 'proposed' }],
+        }),
+        0
+      )
+    ).toBe('a \rcell\rb');
+  });
+
+  test('a resolved note text read refuses an unknown display mode as unsupported content', () => {
+    const host = withReviewedFootnotes();
+    const [tracked] = handlesAt(
+      host.execute({
+        operations: [{ op: 'getNotes', document: documentOf(host), noteKind: 'footnote' }],
+      }),
+      0
+    ) as [AutomationHandle];
+    expect(
+      errorAt(
+        host.execute({
+          operations: [
+            { op: 'getResolvedNoteText', note: tracked, displayMode: 'sideways' as never },
+          ],
+        }),
+        0
+      )
+    ).toBe('unsupported-content');
   });
 
   test('the reserved separators are not notes a caller can reach', () => {

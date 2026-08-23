@@ -108,9 +108,7 @@ import {
   contentControlText,
   type AutomationContentControlRead,
 } from './content-controls.ts';
-import {
-  contentControlPropertiesOf,
-} from '../store/package/content-control-nodes.ts';
+import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import type { ContentControlValueInput } from '../store/store/tree-op-content-controls.ts';
 import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import {
@@ -1975,7 +1973,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return refuse('invalid-handle', 'that handle does not name a note', 'note');
         if (operation.displayMode !== 'proposed' && operation.displayMode !== 'original')
           return refuse(
-            'unknown-operation',
+            'unsupported-content',
             'that is not a resolved review display mode',
             String(operation.displayMode)
           );

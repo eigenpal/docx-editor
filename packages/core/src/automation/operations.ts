@@ -22,7 +22,6 @@ import type { AutomationEndpoint, AutomationHandle } from './protocol.ts';
 import type { AutomationPageSetupWrite } from './sections.ts';
 import type { HeaderFooterVariant } from '../store/package/hf-references.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
-import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 
 /**
  * A position in a story.
@@ -95,7 +94,7 @@ export type AutomationContentControlRangeLocation =
   | 'after';
 
 /** Review display modes that resolve markup away rather than showing both halves. */
-export type AutomationResolvedDisplayMode = Exclude<RevisionDisplayMode, 'all-markup'>;
+export type AutomationResolvedDisplayMode = 'proposed' | 'original';
 
 /** The control types an insertion may author. Picture and repeating section are deferred. */
 export type AutomationContentControlSubtype =
@@ -328,11 +327,11 @@ export type AutomationOperation =
    */
   | { readonly op: 'getNoteText'; readonly note: AutomationHandle }
   /**
-   * One note's text as a RESOLVED review display mode paints it.
+   * One note's text with resolved review visibility applied.
    *
    * `proposed` answers what the note becomes if every tracked change is accepted; `original`
-   * what it was before any of them. Unlike `getText`, this is display text rather than
-   * model-offset authority, so paragraph marks a resolved view removes are absent here too.
+   * what it was before any of them. Paragraph marks a resolved view removes are absent here,
+   * and so are note reference marks and hidden (`w:vanish`) runs the resolved view suppresses.
    */
   | {
       readonly op: 'getResolvedNoteText';
