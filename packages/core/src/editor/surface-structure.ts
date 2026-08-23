@@ -7,9 +7,8 @@
 // composition root.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { TreeDocOp, StoryScope, OoxmlElement } from '@docx-editor.dev/core/store';
+import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
 import {
-  buildStyleCascadeTable,
   enumerateDocumentSections,
   paragraphsInCells,
   readSectionProperties,
@@ -31,6 +30,7 @@ import {
   mergedProperties,
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
+import { createListStyleWrites } from './surface-list-style.ts';
 import type {
   PaginatedSurface,
   SurfaceParagraphFormat,
@@ -213,6 +213,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
     after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
   ): TreeApplyResult => session.applyTreeOps(ops, before, after, deps.storyScope());
+  // Word's list gesture is two writes: the numbering, and the List Paragraph style that
+  // carries `w:contextualSpacing`. The style half lives in its own lane.
+  const listStyle = createListStyleWrites({ session, storyPart });
   const orderOf = () => deps.paragraphOrder();
   const currentLayout = {
     get value(): SemanticLayout {
@@ -327,109 +330,6 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       if ((marker.numFmt === 'bullet' ? 'bullet' : 'ordered') === kind) return marker.numId;
     }
     return null;
-  }
-
-  /**
-   * The document's List Paragraph style, or null when it defines none.
-   *
-   * Matched on the built-in NAME first, then on the built-in styleId. Word identifies its
-   * built-ins by `w:name`, and a converter commonly spells the id its own way
-   * (`ListParagraph1`, `a3`) while keeping the name — while the reverse also happens, an
-   * unrelated style handed the `ListParagraph` id. Name-first lands on the right one in
-   * both files. A document that defines neither gets no `w:pStyle` write at all: writing a
-   * dangling one would render as Normal here and as a missing style everywhere else.
-   */
-  function listParagraphStyleId(): string | null {
-    let byId: string | null = null;
-    for (const style of session.documentStyles()) {
-      if (style.type !== 'paragraph') continue;
-      if (style.name.trim().toLowerCase() === 'list paragraph') return style.styleId;
-      if (byId === null && style.styleId === 'ListParagraph') byId = style.styleId;
-    }
-    return byId;
-  }
-
-  /**
-   * The document's `w:default="1"` paragraph style, memoized on the styles root.
-   *
-   * Read through the layout cascade's own resolver rather than by matching the attribute:
-   * `w:default` is `ST_OnOff`, so `on` and `true` are legal spellings of `1`, and defaults
-   * are last-wins. The styles part is immutable for the session, so this builds once.
-   */
-  let defaultStyleMemo: { readonly root: OoxmlElement | null; readonly styleId: string | null };
-  function defaultParagraphStyleId(): string | null {
-    const root = session.stylesRoot();
-    if (defaultStyleMemo === undefined || defaultStyleMemo.root !== root) {
-      defaultStyleMemo = {
-        root,
-        styleId: buildStyleCascadeTable(root, session.documentThemeFonts()).defaultParagraphStyleId,
-      };
-    }
-    return defaultStyleMemo.styleId;
-  }
-
-  /**
-   * The `w:pStyle` writes that turning a list ON carries, the way Word's own gesture does.
-   *
-   * Word does not just add `w:numPr`: it puts the paragraph in List Paragraph, and THAT
-   * style is what states `w:contextualSpacing`. Without it a list on a document whose
-   * defaults state `w:spacing w:after` — Word's own blank template does, at 8pt — sits a
-   * full paragraph apart between every item.
-   *
-   * A paragraph in a NON-DEFAULT style keeps it: bulleting a Heading 1 in Word leaves it a
-   * heading. A paragraph in the default style does not, and that is not the same as
-   * authoring no style at all — a converter stamps `<w:pStyle w:val="Normal"/>` on every
-   * paragraph it writes, and reading that as "has a style of its own" left the whole class
-   * of converted files with 8pt between their list items.
-   *
-   * These ops go BEFORE the numbering ops, because `setParagraphProperties` replaces the
-   * authorable set it is handed and `setListNumbering` is surgical on `w:numPr` — the other
-   * order would drop the numbering the same transaction had just written.
-   */
-  function listParagraphStyleOps(touched: readonly string[]): TreeDocOp[] {
-    const styleId = listParagraphStyleId();
-    if (styleId === null) return [];
-    const defaultStyleId = defaultParagraphStyleId();
-    const part = storyPart();
-    const ops: TreeDocOp[] = [];
-    for (const paragraphId of touched) {
-      const properties = directParagraphProperties(part, paragraphId);
-      const authored = properties.find((property) => property.localName === 'pStyle')?.attributes
-        ?.val;
-      if (authored !== undefined && authored !== defaultStyleId) continue;
-      ops.push({
-        op: 'setParagraphProperties',
-        paragraphId,
-        properties: mergedProperties(properties, {
-          localName: 'pStyle',
-          attributes: { val: styleId },
-        }),
-      });
-    }
-    return ops;
-  }
-
-  /**
-   * The write that takes a paragraph OUT of List Paragraph, or null when it is not in it.
-   *
-   * Enter on an empty item is Word's "I am done with this list", and Word returns the text
-   * to the LEFT MARGIN. Dropping only `w:numPr` leaves the style's own `w:ind w:left="720"`
-   * standing, so the paragraph would keep sitting half an inch in with no marker to explain
-   * it. The toolbar toggle deliberately does NOT do this: clicking Bullets off in Word
-   * leaves the paragraph styled, and indented.
-   */
-  function clearListParagraphStyleOp(paragraphId: string): TreeDocOp | null {
-    const styleId = listParagraphStyleId();
-    if (styleId === null) return null;
-    const properties = directParagraphProperties(storyPart(), paragraphId);
-    const authored = properties.find((property) => property.localName === 'pStyle')?.attributes
-      ?.val;
-    if (authored !== styleId) return null;
-    return {
-      op: 'setParagraphProperties',
-      paragraphId,
-      properties: properties.filter((property) => property.localName !== 'pStyle'),
-    };
   }
 
   /**
@@ -574,7 +474,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       if (outdented) {
         ops.push({ op: 'setListLevel', paragraphId: from.paragraphId, level: marker.level - 1 });
       } else {
-        const cleared = clearListParagraphStyleOp(from.paragraphId);
+        const cleared = listStyle.clearOp(from.paragraphId);
         if (cleared) ops.push(cleared);
         ops.push({ op: 'setListNumbering', paragraphId: from.paragraphId, numId: null });
       }
@@ -613,7 +513,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       if (!turningOff && numId === null) return false;
       // Turning a list OFF leaves the style alone, as Word does: an outdented item stays
       // in List Paragraph until the user picks another style.
-      const ops: TreeDocOp[] = turningOff ? [] : listParagraphStyleOps(touched);
+      const ops: TreeDocOp[] = turningOff ? [] : listStyle.applyOps(touched);
       for (const paragraphId of touched) {
         // `w:numPr` carries the level AND the definition, and the op mints a fresh one, so
         // a call that names no level silently resets `w:ilvl` to 0. Word converts a bullet

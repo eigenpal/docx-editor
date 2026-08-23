@@ -69,6 +69,11 @@ const DOCUMENT_RELS =
  * hex Word paints (accent1 darker 25% and 50%, then near-black for the last pair), and
  * only Heading 1 opening with a full line of space above it.
  *
+ * Literal hex, not `w:themeColor`, for the same reason the fonts are literal: no theme
+ * part ships here, so a theme reference would resolve to nothing. The cost is that these
+ * headings do not follow a theme the user picks after opening the file in Word. Write them
+ * as theme references once this template carries a `theme1.xml`.
+ *
  * Sizes are half-points, and a level with none inherits the 11pt run default — which is
  * what Word's Heading 4 to Heading 7 do.
  */

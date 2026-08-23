@@ -11,6 +11,8 @@ import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import {
   adjustedBreakIndex,
+  contextualSpacingFlowKeys,
+  keepNextFlowKeys,
   paragraphKeeps,
   DEFAULT_PARAGRAPH_KEEPS,
 } from '../pagination-keeps.ts';
@@ -358,5 +360,85 @@ describe('ISO 29500 Strict tab alignments (B12)', () => {
     expect(tabs('<w:tab w:val="sideways" w:pos="720"/>').stops).toHaveLength(0);
     // `bar` and `num` are not stops.
     expect(tabs('<w:tab w:val="bar" w:pos="720"/>').stops).toHaveLength(0);
+  });
+});
+
+// `w:contextualSpacing` (§17.3.1.9) is a CROSS-BLOCK property: it drops a paragraph's space
+// on the side where the neighbour is a paragraph of the same style, so a block's height is a
+// function of two blocks it does not contain. Incremental resume compares flow keys and
+// re-places from the first that moved, which makes the fold the whole mechanism — a verdict
+// that changes without moving a key is a paragraph that keeps its old spacing until the
+// document is reopened.
+//
+// These pin the fold's boundary answers, and the correspondence between `styleAt` here and
+// `sameStyleAs` in `semantic-layout.ts`. Everything else about the property rests on it.
+describe('contextualSpacingFlowKeys — the cross-block fold', () => {
+  const KEYS = ['a', 'b', 'c'];
+  const all = () => true;
+
+  test('nothing contextual returns the SAME array, not a copy', () => {
+    // Identity is the contract: the prepass memo and the unchanged-document exit both lean
+    // on flow keys not churning when no block reads across a boundary.
+    expect(
+      contextualSpacingFlowKeys(
+        KEYS,
+        () => false,
+        () => 'Tight'
+      )
+    ).toBe(KEYS);
+  });
+
+  test('a run of one style records which SIDES match', () => {
+    const flow = contextualSpacingFlowKeys(KEYS, all, () => 'Tight');
+    // First has no block before it, last has none after it; the middle matches on both.
+    expect(flow).toEqual(['a~cs~01', 'b~cs~11', 'c~cs~10']);
+  });
+
+  test('a neighbour of a DIFFERENT style does not match', () => {
+    const styles = ['Tight', 'Other', 'Tight'];
+    const flow = contextualSpacingFlowKeys(KEYS, all, (index) => styles[index]!);
+    expect(flow).toEqual(['a~cs~00', 'b~cs~00', 'c~cs~00']);
+  });
+
+  test('a null style is never a match on either side, and takes no token', () => {
+    // `styleAt` answers null for a table, and for a paragraph with no resolved style. That
+    // mirrors `sameStyleAs`, whose `styleId !== null` guard makes both sides false.
+    const styles: (string | null)[] = ['Tight', null, 'Tight'];
+    const flow = contextualSpacingFlowKeys(KEYS, all, (index) => styles[index]!);
+    expect(flow).toEqual(['a~cs~00', 'b', 'c~cs~00']);
+  });
+
+  test('only the contextual blocks are keyed', () => {
+    const flow = contextualSpacingFlowKeys(
+      KEYS,
+      (index) => index === 1,
+      () => 'Tight'
+    );
+    expect(flow).toEqual(['a', 'b~cs~11', 'c']);
+  });
+
+  test('the verdict MOVES when a same-style neighbour arrives — the bug this exists for', () => {
+    const before = contextualSpacingFlowKeys(['a', 'b'], all, () => 'Tight');
+    const after = contextualSpacingFlowKeys(['a', 'b', 'c'], all, () => 'Tight');
+    // `b` was last and carried its space-after; now a same-style block follows it.
+    expect(before[1]).toBe('b~cs~10');
+    expect(after[1]).toBe('b~cs~11');
+    expect(after[1]).not.toBe(before[1]);
+  });
+});
+
+// `keepNextFlowKeys` splices a neighbour's WHOLE key in, so it has to fold last or a chain
+// head carries its members' pre-fold keys.
+describe('keepNextFlowKeys folds over the other folds', () => {
+  test('a chain head carries the successor key INCLUDING its contextual verdict', () => {
+    const folded = contextualSpacingFlowKeys(
+      ['h', 'p'],
+      (index) => index === 1,
+      () => 'Tight'
+    );
+    const flow = keepNextFlowKeys(folded, (index) => index === 0);
+    // The head splices in the AUGMENTED successor key, so a verdict flip under it moves
+    // the head's own key too. Folded the other way round the head would carry a bare `p`.
+    expect(flow[0]).toBe('h~kn~p~cs~10');
   });
 });

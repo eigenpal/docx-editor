@@ -295,7 +295,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The toolbar toggle creates the numbering definition on first use, so a document that never carried a list can start one. It also applies the List Paragraph style, the way Word does, which is what closes the space between consecutive items. Tab and the indent buttons change the level, and the marker changes with it.',
+      'The toolbar toggle creates the numbering definition on first use, so a document that never carried a list can start one. It also applies the List Paragraph style, the way Word does, which is what closes the space between consecutive items. Turning the list off leaves the paragraph in List Paragraph, and indented, as Word does; pressing Enter on an empty item leaves the list and returns to the margin. Tab and the indent buttons change the level, and the marker changes with it.',
   },
   {
     id: 'lists.numbered',
@@ -305,6 +305,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Numbered lists take the List Paragraph style on the same terms as bulleted ones, so consecutive items close up.',
   },
   {
     id: 'lists.custom-numbering',

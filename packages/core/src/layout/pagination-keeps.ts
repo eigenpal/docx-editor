@@ -283,6 +283,14 @@ export function contextualSpacingFlowKeys(
   return flow;
 }
 
+/**
+ * Flow keys that carry a `w:keepNext` chain's SUCCESSOR KEY.
+ *
+ * RUN THIS FOLD LAST. It is the only one that splices a neighbour's whole key into a
+ * block's own, so every other fold has to have finished: run it first and a chain head
+ * carries its members' pre-fold keys, and a head that never re-places when a member's
+ * marker text or contextual verdict moves is a stale keep-next group.
+ */
 export function keepNextFlowKeys(keys: string[], keepsNext: (index: number) => boolean): string[] {
   let flow = keys;
   let chain = 0;
