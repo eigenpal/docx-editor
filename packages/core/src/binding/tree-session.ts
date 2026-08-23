@@ -920,16 +920,20 @@ export function openTreeSession(
     // header mints a paragraph the body revision knows nothing about, and against that key the
     // map would have kept answering for the document as it was before.
     //
-    // COST, measured: ~3.8 ms to rebuild at 11k anchors, against 0.009 ms for a cached read.
-    // The walk is not where it goes — memoizing `allParagraphs` per part takes only ~7% off —
-    // it is the five maps this composes over every paragraph. A body edit therefore pays for
-    // re-indexing every story to answer, on the snapshot path, two `paraIdByNode` lookups.
+    // COST, measured: ~0.9 ms to rebuild at 7k anchors, against ~0.002 ms for a cached read.
+    // Spanning every story costs nothing measurable on top of the body alone — the two builds
+    // time the same, and whichever runs second in a bench looks slower, which is warm-up. The
+    // furniture and note parts are a handful of paragraphs beside a body's thousands.
     //
-    // The fix is a composed index that resolves a lookup across per-part sub-maps instead of
-    // merging them, so a `.get` costs O(parts) rather than O(paragraphs). Every production
-    // caller only reads by key, so it would serve them all. Deliberately NOT done here: it
-    // changes the shape every consumer of `ParagraphAnchorIndex` sees, and this lane has
-    // already taken one regression per review round from smaller changes than that.
+    // So the ~0.9 ms is the body index, and it is what a body edit paid before this spanned
+    // anything. It is not free: it lands on the snapshot path, and it goes on composing maps
+    // over every paragraph rather than on the walk (memoizing `allParagraphs` per part takes
+    // only ~7% off).
+    //
+    // If it ever needs to come down, the fix is a composed index that resolves a lookup across
+    // per-part sub-maps instead of merging them, so a `.get` costs O(parts) rather than
+    // O(paragraphs), and every production caller reads by key. Not done here: it changes the
+    // shape every consumer of `ParagraphAnchorIndex` sees, for a cost this branch did not add.
     const revision = packageStore.packageRevision;
     // AND which stories are open. Opening one mints its paraIds without publishing an edit, so
     // the package revision does not move and an index built a moment earlier would be served
