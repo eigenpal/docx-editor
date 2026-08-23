@@ -340,6 +340,37 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   }
 
   /**
+   * Take up a selection the user made whose `selectionchange` has not been delivered yet.
+   *
+   * Shared by `adoptBeforeInput` and `onCompositionStart`, which need the same thing for the
+   * same reason: both are about to decide what a command edits, and `selectionchange` is
+   * queued, so the model can still hold the range from before a click or a drag.
+   */
+  function adoptPendingUserSelection(): void {
+    // Engine-owned pointer drags and cell rectangles deliberately outrank the browser's
+    // native selection. A composition already in flight has its own DOM readback.
+    if (applyingSelection || composing) return;
+    if (deps.isGesturing?.()) return;
+    if (deps.holdsCellSelection?.()) return;
+    // Same window `onSelectionChange` guards: a deferred paint leaves the DOM caret at
+    // the last mirrored (pre-edit) offset. Adopting it here — so a click that has not
+    // yet produced `selectionchange` still edits the clicked point — would otherwise
+    // insert the next character at that stale offset and reorder a typing burst.
+    // A genuine pointer/touch/selectstart gesture still wins, even if it lands on that
+    // same pre-edit offset; a queued echo has no such provenance and is skipped.
+    // `adoptDomSelection` spends the one-shot once it sees a mapped caret, so a click on
+    // the already-current caret cannot authorize a later stale echo.
+    if (isStaleMirroredCaret()) return;
+    // A KEYSTROKE IS NOT A SELECTION GESTURE. This reader exists for one case — a click or
+    // a drag whose `selectionchange` is still queued when the next key arrives — and that
+    // case always arms the flag first. Without the check, every keystroke re-read a browser
+    // selection nobody had moved, so a caret the DOM had resolved onto a container after a
+    // repaint pulled the model to the paragraph start on key after key.
+    if (!userSelectionGesture) return;
+    adoptDomSelection();
+  }
+
+  /**
    * Whether the DOM caret is still the last value this surface wrote, while the model has
    * already moved on, AND no unused user-selection gesture is authorizing this check.
    *
@@ -463,29 +494,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       });
     },
 
-    adoptBeforeInput() {
-      // Engine-owned pointer drags and cell rectangles deliberately outrank the browser's
-      // native selection. Composition has its own DOM readback when it ends.
-      if (applyingSelection || composing) return;
-      if (deps.isGesturing?.()) return;
-      if (deps.holdsCellSelection?.()) return;
-      // Same window `onSelectionChange` guards: a deferred paint leaves the DOM caret at
-      // the last mirrored (pre-edit) offset. Adopting it here — so a click that has not
-      // yet produced `selectionchange` still edits the clicked point — would otherwise
-      // insert the next character at that stale offset and reorder a typing burst.
-      // A genuine pointer/touch/selectstart gesture still wins, even if it lands on that
-      // same pre-edit offset; a queued echo has no such provenance and is skipped.
-      // `adoptDomSelection` spends the one-shot once it sees a mapped caret, so a click on
-      // the already-current caret cannot authorize a later stale echo.
-      if (isStaleMirroredCaret()) return;
-      // A KEYSTROKE IS NOT A SELECTION GESTURE. This reader exists for one case — a click or
-      // a drag whose `selectionchange` is still queued when the next key arrives — and that
-      // case always arms the flag first. Without the check, every keystroke re-read a browser
-      // selection nobody had moved, so a caret the DOM had resolved onto a container after a
-      // repaint pulled the model to the paragraph start on key after key.
-      if (!userSelectionGesture) return;
-      adoptDomSelection();
-    },
+    adoptBeforeInput: adoptPendingUserSelection,
 
     isComposing: () => composing,
 
@@ -516,6 +525,17 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // mid-composition — replacing the nodes the IME is composing into and rewriting the
       // selection under it. That is the "repaint mid-composition destroys the IME's anchor"
       // hazard this flag exists to prevent, and it would fire on every such composition.
+      // WHICH LANE this composition takes is decided from the selection, so it has to be the
+      // selection the USER has — not the one the model held before their click or drag, whose
+      // `selectionchange` may still be queued. Reading the model alone chose the readback lane
+      // for a range the browser had already extended across two paragraphs, and #383 came
+      // straight back. A keydown ahead of `compositionstart` happens to close that window on
+      // desktop; a touch drag on Android produces no keydown at all.
+      //
+      // NOT COVERED BY THE SUITE, deliberately noted rather than quietly assumed: happy-dom
+      // dispatches `selectionchange` synchronously, so the model is never stale there and a
+      // test of this would pass with the call removed.
+      adoptPendingUserSelection();
       composing = true;
       const selection = deps.selection();
       composingAcrossParagraphs = selection.anchor.paragraphId !== selection.head.paragraphId;
@@ -529,7 +549,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       composingParagraph = null;
       const acrossParagraphs = composingAcrossParagraphs;
       composingAcrossParagraphs = false;
-      const before = session.revisionFor(deps.storyScope());
+      // ONE scope, sampled once. `type()` can move the active story (a note released by the
+      // post-edit caret), and two reads either side would then compare two different stores'
+      // clocks — a number that means nothing, and a rebuild that does not happen.
+      const scope = deps.storyScope();
+      const before = session.revisionFor(scope);
 
       if (acrossParagraphs) {
         // THE EVENT CARRIES THE ANSWER, so the painted DOM never has to be asked. `data` on
@@ -556,7 +580,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // nothing by design, so those characters would simply stay on screen, and in a document
       // nobody can edit nothing would ever remove them. Forget the retained paint so the
       // render below rebuilds from records.
-      if (session.revisionFor(deps.storyScope()) === before) deps.discardPaint?.();
+      if (session.revisionFor(scope) === before) deps.discardPaint?.();
       deps.flushLayout();
       deps.render();
     },
