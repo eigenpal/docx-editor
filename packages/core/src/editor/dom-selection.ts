@@ -69,7 +69,7 @@ function identityOf(element: Element): SpanIdentity | null {
   return { paragraphId, start, end };
 }
 
-function paragraphElements(
+export function paragraphElements(
   root: Element,
   paragraphId: string,
   suffix: string
@@ -105,7 +105,7 @@ function activeHeaderFooterRoot(root: Element): Element | null {
  * Shared header/footer parts paint the same paragraph ids on every page; the active
  * container is the caret target the user entered.
  */
-function spanSearchRoots(root: Element): readonly Element[] {
+export function spanSearchRoots(root: Element): readonly Element[] {
   const active = activeHeaderFooterRoot(root);
   return active ? [active, root] : [root];
 }

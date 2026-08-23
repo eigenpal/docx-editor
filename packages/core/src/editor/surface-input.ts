@@ -11,6 +11,7 @@ import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
+import { paragraphElements, spanSearchRoots } from './dom-selection.ts';
 
 type SelectionMark = { paragraphId: string; start: number; end: number };
 const NAVIGATION: Record<string, NavigationCommand> = {
@@ -407,6 +408,115 @@ export function createBeforeInputHandler(
   };
 }
 
+/** One contribution to the readback, addressed by the model offset it starts at. */
+interface PaintedPiece {
+  readonly start: number;
+  readonly text: string;
+}
+
+/** State threaded through the walk below, so a stray text node knows where it landed. */
+interface ReadbackWalk {
+  readonly paragraphId: string;
+  readonly modelText: string;
+  readonly pieces: PaintedPiece[];
+  /** Model ranges already contributed by a projected span, keyed by start. */
+  readonly projectedRanges: Set<number>;
+  /** The model offset just past the last span walked, which is where a stray text sits. */
+  end: number;
+}
+
+/**
+ * Furniture painted INSIDE a paragraph, which is never model text.
+ *
+ * A list marker's bullet, a tab leader's dots, the revision pilcrow, the inline-drawing and
+ * float-wrap advance spacers, and a zero-width `w:ptab`'s painted `\t` all carry glyphs the
+ * model does not have. Every one of them is a `data-docx-marker`, a `data-docx-tab-leader`
+ * or `aria-hidden` — the same exclusion class the selection reader uses — so the walk skips
+ * the subtree rather than naming each shape.
+ */
+const PAINTED_FURNITURE = '[data-docx-marker],[data-docx-tab-leader],[aria-hidden="true"]';
+
+/** A `data-end` is only believed when it is a plausible model end for its own start. */
+function modelEndOf(element: HTMLElement, start: number, fallback: number): number {
+  const rawEnd = element.dataset.end;
+  if (rawEnd === undefined || !/^\d{1,9}$/.test(rawEnd)) return fallback;
+  const end = Number(rawEnd);
+  return end >= start ? end : fallback;
+}
+
+/**
+ * Walk one painted container in DOM order, collecting what the browser now shows.
+ *
+ * DOM order is what places text the IME wrote OUTSIDE any span. An empty paragraph paints a
+ * line holding nothing but a `<br>`, and a paragraph whose only content is a field paints
+ * spans the caret is refused inside — so in both cases the browser is handed the LINE as the
+ * selection node and composes a bare text node into it. Reading only `[data-start]` spans
+ * saw nothing there, the diff had nothing to explain, and the composed text was dropped:
+ * Chinese could not be typed at the start of an empty paragraph at all (#190). A stray text
+ * node contributes at the model offset the walk has reached, so it lands before or after the
+ * spans exactly as the browser placed it.
+ */
+function collectPaintedPieces(container: Element, walk: ReadbackWalk): void {
+  for (const node of container.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent ?? '';
+      if (text.length > 0) walk.pieces.push({ start: walk.end, text });
+      continue;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    const element = node as HTMLElement;
+    if (element.matches?.(PAINTED_FURNITURE)) continue;
+    const rawStart = element.dataset?.start;
+    if (rawStart === undefined) {
+      // A line, a hyperlink anchor, a decoration wrapper: not a span, so descend.
+      collectPaintedPieces(element, walk);
+      continue;
+    }
+    // A span published for ANOTHER paragraph. A resolved-display join line paints two
+    // paragraphs side by side, so this is not a malformed page — it is simply not ours,
+    // and its subtree is not ours to read either.
+    if (element.dataset.paragraphId !== walk.paragraphId) continue;
+    const start = Number(rawStart);
+    if (!Number.isInteger(start)) continue;
+    if (element.dataset.docxField !== undefined) {
+      // ONCE per range, not once per span. Line breaking splits a field's result at its
+      // spaces and every resulting span republishes the SAME model range, so emitting the
+      // slice per span repeated the field's model characters — a four-word result read back
+      // as four `￼` where the model has one, and the diff then inserted the extras as
+      // literal object-replacement characters.
+      const end = modelEndOf(element, start, start);
+      walk.end = Math.max(walk.end, end);
+      if (walk.projectedRanges.has(start)) continue;
+      walk.projectedRanges.add(start);
+      walk.pieces.push({ start, text: walk.modelText.slice(start, end) });
+      continue;
+    }
+    const text = element.textContent ?? '';
+    // The published range, not the painted length: the IME has just rewritten the text, so
+    // its length says where the CARET is, not where the next model offset begins.
+    walk.end = Math.max(walk.end, modelEndOf(element, start, start + text.length));
+    walk.pieces.push({ start, text });
+  }
+}
+
+/** The outermost painted containers for a paragraph, in page order. */
+function paragraphContainers(root: Element, paragraphId: string): readonly Element[] {
+  const containers: Element[] = [];
+  // Through the selection reader's own lookup, which carries the guard against an id that
+  // cannot be interpolated into a CSS selector: the id comes from the model but crosses a
+  // parser here, and only one copy of that rule should exist.
+  for (const candidate of paragraphElements(root, paragraphId, '')) {
+    const element = candidate as HTMLElement;
+    if (element.dataset.paragraphId !== paragraphId) continue;
+    // A span is content, not a container, and a line lives inside the fragment that already
+    // covers it — walking both would read every character twice.
+    if (element.dataset.start !== undefined) continue;
+    if (containers.some((outer) => outer.contains(element))) continue;
+    containers.push(element);
+  }
+  return containers;
+}
+
 /**
  * The text the browser currently shows for a paragraph, IN THE MODEL'S OWN OFFSET SPACE.
  *
@@ -427,6 +537,12 @@ export function createBeforeInputHandler(
  * and the wrong one: a browser edit is ALSO a length disagreement, so inferring it that way
  * would swallow the very keystrokes this exists to recover.
  *
+ * ONE PAINTED COPY, never every copy on the sheet. A shared header or footer repaints the
+ * same paragraph ids on every page it appears on, so a document-wide scan read a three-page
+ * header back as three concatenated copies of itself — and the diff then wrote the extra two
+ * into the part. The active header/footer container is the copy the caret entered, which is
+ * the same preference the selection reader applies.
+ *
  * `modelText` is the paragraph's current model text, which the caller already holds.
  */
 export function paintedTextOf(
@@ -434,35 +550,28 @@ export function paintedTextOf(
   paragraphId: string,
   modelText: string
 ): string | null {
-  const spans = pagesLayer.querySelectorAll('[data-paragraph-id][data-start]');
-  const pieces: { start: number; text: string }[] = [];
-  /** Model ranges already contributed by a projected span, keyed by start. */
-  const projectedRanges = new Set<number>();
-  for (const span of spans) {
-    const element = span as HTMLElement;
-    if (element.dataset.paragraphId !== paragraphId) continue;
-    const start = Number(element.dataset.start);
-    if (!Number.isInteger(start)) continue;
-    if (element.dataset.docxField !== undefined) {
-      // ONCE per range, not once per span. Line breaking splits a field's result at its
-      // spaces and every resulting span republishes the SAME model range, so emitting the
-      // slice per span repeated the field's model characters — a four-word result read back
-      // as four `￼` where the model has one, and the diff then inserted the extras as
-      // literal object-replacement characters.
-      if (projectedRanges.has(start)) continue;
-      projectedRanges.add(start);
-      const rawEnd = element.dataset.end;
-      const end =
-        rawEnd !== undefined && /^\d{1,9}$/.test(rawEnd) && Number(rawEnd) >= start
-          ? Number(rawEnd)
-          : start;
-      pieces.push({ start, text: modelText.slice(start, end) });
-      continue;
-    }
-    pieces.push({ start, text: element.textContent ?? '' });
+  for (const root of spanSearchRoots(pagesLayer)) {
+    const painted = paintedTextIn(root, paragraphId, modelText);
+    if (painted !== null) return painted;
   }
-  if (pieces.length === 0) return null;
-  pieces.sort((a, b) => a.start - b.start);
+  return null;
+}
+
+function paintedTextIn(root: Element, paragraphId: string, modelText: string): string | null {
+  const containers = paragraphContainers(root, paragraphId);
+  if (containers.length === 0) return null;
+  const walk: ReadbackWalk = {
+    paragraphId,
+    modelText,
+    pieces: [],
+    projectedRanges: new Set<number>(),
+    end: 0,
+  };
+  for (const container of containers) collectPaintedPieces(container, walk);
+  if (walk.pieces.length === 0) return null;
+  // Stable, so a stray text node keeps the side of a span the browser put it on — both
+  // address the same model offset, and only DOM order says which came first.
+  const pieces = [...walk.pieces].sort((a, b) => a.start - b.start);
   return pieces.map((piece) => piece.text).join('');
 }
 
