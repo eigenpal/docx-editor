@@ -65,10 +65,7 @@ function docx(inner: string, noteType = ''): Uint8Array {
   });
 }
 
-function mount(
-  inner: string,
-  noteType = ''
-): { surface: PaginatedSurface; destroy: () => void } {
+function mount(inner: string, noteType = ''): { surface: PaginatedSurface; destroy: () => void } {
   const container = document.createElement('div');
   document.body.append(container);
   const result = mountPaginatedSurface(container, docx(inner, noteType), { scale: 1 });
@@ -134,9 +131,7 @@ describe('a note type decides whether it is a story', () => {
         const saved = strFromU8(
           unzipSync(new Uint8Array(await surface.session.save()))['word/footnotes.xml']!
         );
-        expect(saved, 'the note text did not survive the round trip').toContain(
-          '<w:t>Note</w:t>'
-        );
+        expect(saved, 'the note text did not survive the round trip').toContain('<w:t>Note</w:t>');
         if (type !== '') expect(saved).toContain(type.trim());
       } finally {
         destroy();

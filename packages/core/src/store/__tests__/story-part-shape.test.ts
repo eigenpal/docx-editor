@@ -24,8 +24,7 @@ function part(xml: string, name: string, contentType: string): OoxmlPart {
   return read.part;
 }
 
-const NOTES_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
+const NOTES_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
 const HEADER_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
 const MAIN_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
