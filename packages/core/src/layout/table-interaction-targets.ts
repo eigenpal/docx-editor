@@ -59,11 +59,17 @@ export function visitTableOccurrences(
   visit: (ref: TableOccurrenceRef) => void
 ): void {
   for (const page of layout.pages) {
-    visitTableBlocks(page.fragments, (table) => {
+    const take = (table: TableFragmentRecord): void => {
       for (let rowIndex = 0; rowIndex < table.rows.length; rowIndex += 1) {
         visit({ table, row: table.rows[rowIndex]!, rowIndex });
       }
-    });
+    };
+    visitTableBlocks(page.fragments, take);
+    // Every story the page draws. This walk carries no geometry — it resolves a table and a
+    // row by identity — so a story needs no origin here, only visiting.
+    for (const story of [page.header, page.footer]) {
+      if (story) visitTableBlocks(story.fragments, take);
+    }
   }
 }
 

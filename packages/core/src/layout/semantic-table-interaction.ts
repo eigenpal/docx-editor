@@ -190,9 +190,20 @@ export function tableInteractionIndex(layout: SemanticLayout): TableInteractionI
   const occurrences: TableInteractionOccurrence[] = [];
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
     const page = layout.pages[pageIndex]!;
-    visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, (occ) => {
+    const take = (occ: TableInteractionOccurrence): void => {
       occurrences.push(occ);
-    });
+    };
+    visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, take);
+    // EVERY story the page draws. A table in a header was never indexed, so hovering it
+    // offered no row or column handles at all — the table was there and inert.
+    //
+    // Each story carries its OWN origin. A story's fragments are laid out relative to its own
+    // box, not the page content box, so indexing them against the body's origin would place
+    // every handle at the wrong point on the page rather than fixing anything.
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      visitTableBlocks(story.fragments, pageIndex, story.box, 0, take);
+    }
   }
 
   const index: TableInteractionIndex = Object.freeze({
