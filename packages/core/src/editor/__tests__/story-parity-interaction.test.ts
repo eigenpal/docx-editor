@@ -25,6 +25,7 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 
 const HEADER_R_ID = 'rId10';
+const FOOTER_R_ID = 'rId11';
 const LINK_R_ID = 'rId30';
 const LINK_URL = 'https://example.test/from-a-header';
 
@@ -44,6 +45,11 @@ const BODY_CONTROL =
   '<w:sdt><w:sdtPr><w:tag w:val="bodyControl"/><w:id w:val="8"/></w:sdtPr>' +
   '<w:sdtContent><w:p><w:r><w:t>BodyControlled</w:t></w:r></w:p></w:sdtContent></w:sdt>';
 
+/** A block content control in the FOOTER: it sits BELOW the content box, so the shift flips sign. */
+const FOOTER_CONTROL =
+  '<w:sdt><w:sdtPr><w:tag w:val="ftrControl"/><w:id w:val="9"/></w:sdtPr>' +
+  '<w:sdtContent><w:p><w:r><w:t>Footed</w:t></w:r></w:p></w:sdtContent></w:sdt>';
+
 /** A block content control, so the header carries one too. */
 const CONTROL =
   '<w:sdt><w:sdtPr><w:tag w:val="hdrControl"/><w:id w:val="7"/></w:sdtPr>' +
@@ -59,6 +65,8 @@ function docx(): Uint8Array {
         'officedocument.wordprocessingml.document.main+xml"/>' +
         '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-' +
         'officedocument.wordprocessingml.header+xml"/>' +
+        '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.footer+xml"/>' +
         '</Types>'
     ),
     '_rels/.rels': strToU8(
@@ -69,6 +77,7 @@ function docx(): Uint8Array {
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${REL}">` +
         `<Relationship Id="${HEADER_R_ID}" Type="${R}/header" Target="header1.xml"/>` +
+        `<Relationship Id="${FOOTER_R_ID}" Type="${R}/footer" Target="footer1.xml"/>` +
         '</Relationships>'
     ),
     // The header carries BOTH a table and an external link.
@@ -80,10 +89,12 @@ function docx(): Uint8Array {
     'word/header1.xml': strToU8(
       `<w:hdr xmlns:w="${W}" xmlns:r="${R}">${LINK}${TABLE}${CONTROL}</w:hdr>`
     ),
+    'word/footer1.xml': strToU8(`<w:ftr xmlns:w="${W}">${FOOTER_CONTROL}</w:ftr>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
         `<w:p><w:r><w:t>Body</w:t></w:r></w:p>${TABLE}${BODY_CONTROL}` +
-        `<w:sectPr><w:headerReference w:type="default" r:id="${HEADER_R_ID}"/></w:sectPr>` +
+        `<w:sectPr><w:headerReference w:type="default" r:id="${HEADER_R_ID}"/>` +
+        `<w:footerReference w:type="default" r:id="${FOOTER_R_ID}"/></w:sectPr>` +
         '</w:body></w:document>'
     ),
   });
@@ -182,6 +193,28 @@ describe('content-control geometry covers every story', () => {
     expect(header.box.y - page.contentBox.y, 'the fixture header is not above').toBeLessThan(0);
     for (const fragment of control!.fragments) {
       expect(fragment.box.y, 'the header control was placed at the body origin').toBeLessThan(0);
+    }
+  });
+
+  test('a control in a footer shifts the other way', () => {
+    const editor = mount();
+    const layout = editor.surface!.layout();
+    const page = layout.pages[0]!;
+    const footer = page.footer!;
+
+    const control = (layout.contentControls ?? []).find((entry) => entry.tag === 'ftrControl');
+    expect(control, 'the footer control was not published').toBeDefined();
+    expect(control!.fragments.length, 'the footer control got no geometry').toBeGreaterThan(0);
+
+    // A footer sits BELOW the content box, so its shift is POSITIVE and lands past the content
+    // height. The header case alone would pass with a sign error; this is what pins it.
+    expect(footer.box.y - page.contentBox.y, 'the fixture footer is not below').toBeGreaterThan(
+      page.contentBox.height
+    );
+    for (const fragment of control!.fragments) {
+      expect(fragment.box.y, 'the footer control was placed inside the body').toBeGreaterThan(
+        page.contentBox.height
+      );
     }
   });
 
