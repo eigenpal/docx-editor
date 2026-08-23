@@ -2643,6 +2643,20 @@ interface RetainedPaint {
 
 const retainedPaints = new WeakMap<HTMLElement, RetainedPaint>();
 
+/**
+ * Forget what a container currently shows, so the next paint rebuilds it from records.
+ *
+ * Paint reuse assumes the DOM still holds what this module last put there — it keeps a page
+ * whose record is identical, and an unchanged layout therefore repaints nothing at all. An
+ * IME breaks that assumption: composed text lands in the painted DOM whatever the model
+ * does, so a composition that ends up changing nothing (it was cancelled, or its edit was
+ * refused) leaves the browser's characters on screen with no later pass that would remove
+ * them. In a read-only document nothing ever heals it.
+ */
+export function discardRetainedPaint(container: HTMLElement): void {
+  retainedPaints.delete(container);
+}
+
 function sameBox(left: PageRecord['box'], right: PageRecord['box']): boolean {
   return (
     left.x === right.x &&

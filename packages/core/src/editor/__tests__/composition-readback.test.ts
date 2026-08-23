@@ -16,9 +16,9 @@
 //     three concatenated copies of itself and then wrote the extra two into the part.
 //   - The composition began over a range spanning TWO paragraphs, which the browser replaces
 //     with a join. One paragraph's diff cannot express that, so half the edit committed and
-//     half did not (#383). The range is deleted at `compositionstart` instead, which is what
-//     typing over a selection means anyway, and the composition then starts inside one
-//     paragraph — the case everything below is about.
+//     half did not (#383). Those compositions do not read the painted DOM at all: the
+//     finished string arrives on `compositionend` itself, and replacing the still-untouched
+//     selection with it is the same call typing over a selection makes.
 //
 // The other half of the contract is what must NEVER reach the model: a list marker's bullet,
 // a tab leader's dots, the revision pilcrow, and a field's painted result are all painted
@@ -121,6 +121,18 @@ function caretAt(surface: PaginatedSurface, paragraphId: string, offset: number)
     anchor: { paragraphId, offset },
     head: { paragraphId, offset },
   });
+}
+
+/**
+ * A `compositionend` carrying the finished composed string, which is where a browser puts it.
+ *
+ * Assigned rather than passed to the constructor: happy-dom accepts `data` in the init dict
+ * and then reports `undefined`, so a test built the ordinary way would assert nothing.
+ */
+function compositionEnd(data: string): CompositionEvent {
+  const event = new CompositionEvent('compositionend', { bubbles: true });
+  Object.defineProperty(event, 'data', { value: data, configurable: true });
+  return event;
 }
 
 /**
@@ -281,35 +293,90 @@ describe('the ordinary case still holds', () => {
 });
 
 describe('#383 a composition begun over a range spanning two paragraphs', () => {
-  test('replaces the whole range, rather than committing half of it', () => {
-    // The browser replaces a cross-paragraph selection with a JOIN, and the readback
-    // describes ONE paragraph. Reconciling the head alone committed `beta` -> `ta` and left
-    // `alpha` untouched, so the document matched neither what the user had nor what the
-    // screen showed, and the composed characters went with the next repaint.
-    //
-    // The range is deleted at `compositionstart` instead, through the ordinary write lane,
-    // so the composition begins collapsed inside one paragraph.
-    withSurface(docx(`${p('alpha')}${p('beta')}`), (surface, container) => {
-      const [first, second] = surface.session.paragraphIds();
-      surface.setSelection({
-        anchor: { paragraphId: first!, offset: 2 },
-        head: { paragraphId: second!, offset: 2 },
-      });
-      const pages = container.querySelector('.docx-pages')!;
-      pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
-      // The two paragraphs are one by now, and the caret sits between "al" and "ta".
-      expect(surface.session.bodyText()).toBe('alta');
-      const joined = surface.state().selection.head.paragraphId;
-      repaintParagraphAs(container, joined, `al${COMPOSED}ta`);
-      pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  /** Drive a composition whose text the browser reports on the event, as browsers do. */
+  function composeOverRange(container: HTMLElement, data: string): void {
+    const pages = container.querySelector('.docx-pages')!;
+    pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    pages.dispatchEvent(compositionEnd(data));
+  }
+
+  /** Select from offset 2 of the first paragraph through offset 2 of the second. */
+  function selectAcross(surface: PaginatedSurface): void {
+    const [first, second] = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: first!, offset: 2 },
+      head: { paragraphId: second!, offset: 2 },
+    });
+  }
+
+  const TWO = `${p('alpha')}${p('beta')}`;
+
+  test('replaces the whole range, in one transaction', () => {
+    // Reconciling the head paragraph alone committed `beta` -> `ta` and left `alpha`
+    // untouched, so the document matched neither what the user had nor what the screen
+    // showed, and the composed characters went with the next repaint.
+    withSurface(docx(TWO), (surface, container) => {
+      selectAcross(surface);
+      composeOverRange(container, COMPOSED);
       expect(surface.state().lastRejection).toBeNull();
       expect(surface.session.bodyText()).toBe(`al${COMPOSED}ta`);
     });
   });
 
+  test('and it is ONE undo, like typing over the same range', () => {
+    // Deleting the range at compositionstart put it OUTSIDE the composition's own history
+    // entry, so the first undo landed on `alta` — a document the user never asked for.
+    withSurface(docx(TWO), (surface, container) => {
+      selectAcross(surface);
+      composeOverRange(container, COMPOSED);
+      surface.undo();
+      expect(surface.session.bodyText()).toBe('alpha\nbeta');
+    });
+  });
+
+  test('nothing is touched at compositionstart', () => {
+    // The tempting fix deletes the range there. `commit` may DEFER its paint, so the browser
+    // would still hold the two-paragraph selection on return, and the paint would then land
+    // mid-composition on the very nodes the IME is composing into.
+    withSurface(docx(TWO), (surface, container) => {
+      selectAcross(surface);
+      const pages = container.querySelector('.docx-pages')!;
+      pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      expect(surface.session.bodyText()).toBe('alpha\nbeta');
+      pages.dispatchEvent(compositionEnd(COMPOSED));
+    });
+  });
+
+  test('an abandoned composition leaves the range alone', () => {
+    // Escape, a click away, an app switch: `compositionend` arrives with no text. Deleting
+    // the range up front destroyed the selection for every one of those.
+    withSurface(docx(TWO), (surface, container) => {
+      selectAcross(surface);
+      composeOverRange(container, '');
+      expect(surface.session.bodyText()).toBe('alpha\nbeta');
+    });
+  });
+
+  test('a composition that changes nothing does not leave its text on the page', () => {
+    // An unchanged layout repaints nothing by design, so the browser's characters would stay
+    // on screen — and in a document nobody can edit, no later pass would ever remove them.
+    withSurface(docx(TWO), (surface, container) => {
+      surface.setEditingMode('view');
+      const [first] = surface.session.paragraphIds();
+      selectAcross(surface);
+      const pages = container.querySelector('.docx-pages')!;
+      pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      // The browser writes into the page whatever the model does.
+      repaintParagraphAs(container, first!, `al${COMPOSED}`);
+      pages.dispatchEvent(compositionEnd(COMPOSED));
+      expect(surface.session.bodyText()).toBe('alpha\nbeta');
+      expect(container.textContent).not.toContain(COMPOSED);
+    });
+  });
+
   test('a same-paragraph range is still left to the readback', () => {
-    // Deleting eagerly here would lose suggesting mode's rule that a deletion keeps the
-    // characters it strikes and the replacement lands after them.
+    // That lane keeps suggesting mode's rule that a deletion holds on to the characters it
+    // strikes and the replacement lands after them.
     withSurface(docx(p('alpha beta')), (surface, container) => {
       const id = surface.session.paragraphIds()[0]!;
       surface.setSelection({
@@ -318,7 +385,6 @@ describe('#383 a composition begun over a range spanning two paragraphs', () => 
       });
       const pages = container.querySelector('.docx-pages')!;
       pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
-      // Untouched by compositionstart: the browser still owns this replacement.
       expect(surface.session.bodyText()).toBe('alpha beta');
       repaintParagraphAs(container, id, `${COMPOSED} beta`);
       pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));

@@ -73,6 +73,9 @@ import {
   paintSemanticLayout,
   type OverlayRect,
 } from '@docx-editor.dev/core/output';
+// By module path, like the roster walk below: dropping a retained paint is an engine
+// internal for the IME lane, not something the output barrel should offer consumers.
+import { discardRetainedPaint } from '../output/semantic-paint.ts';
 // By module path: the roster walk is an engine internal, not part of the output barrel's
 // public surface. See the note there.
 import {
@@ -2771,17 +2774,9 @@ export function mountPaginatedSurface(
     isGesturing: () => pointer?.dragging() ?? false,
     domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
     holdsCellSelection: () => cellSelection !== null,
-    collapseSelectionForComposition: () => {
-      // Only a range crossing a paragraph boundary. A same-paragraph one is read back
-      // correctly as it is, and deleting it here would lose suggesting mode's rule that the
-      // struck characters stay and the replacement follows them.
-      if (selection.anchor.paragraphId === selection.head.paragraphId) return true;
-      // `surface` is assigned below; a composition can only start once a caller holds it.
-      surface.deleteSelection();
-      // Refused — protected content, a locked control, a rectangle of cells that cannot
-      // join. The range is still there, and nothing downstream can describe it.
-      return selection.anchor.paragraphId === selection.head.paragraphId;
-    },
+    // `surface` is assigned below; a composition can only end once a caller holds it.
+    replaceSelectionWith: (text) => surface.type(text),
+    discardPaint: () => discardRetainedPaint(pagesLayer),
   });
 
   hfScope = createHeaderFooterScopeController({
