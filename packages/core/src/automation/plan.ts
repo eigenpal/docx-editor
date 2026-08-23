@@ -109,9 +109,7 @@ import {
   type AutomationContentControlRead,
 } from './content-controls.ts';
 import {
-  contentControlContentNodeOf,
   contentControlPropertiesOf,
-  contentControlsIn,
 } from '../store/package/content-control-nodes.ts';
 import type { ContentControlValueInput } from '../store/store/tree-op-content-controls.ts';
 import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
@@ -121,14 +119,9 @@ import {
   customNodeRequestRefusal,
   customNodeWriteOf,
 } from './custom-node-plan.ts';
+import { allControlsUnder, CONTENT_CONTROL_LOCKS } from './content-control-helpers.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
-import { createFixedMeasurer } from '../layout/index.ts';
-import { layoutNoteById } from '../layout/note-layout.ts';
-import {
-  paragraphFragmentsOfBlocks,
-  type BlockFragmentRecord,
-} from '../layout/semantic-records.ts';
-import { lineSegments } from '../layout/line-segments.ts';
+import { resolvedNoteText } from './resolved-note-text.ts';
 
 /**
  * Characters that mean "a new paragraph" in a document but are merely characters in a run.
@@ -277,106 +270,6 @@ const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 function query(value: AutomationValue): PlannedOperation {
   return { ok: true, kind: 'query', value };
 }
-
-function noteDisplayParagraphGroups(
-  fragments: readonly BlockFragmentRecord[]
-): readonly { readonly paragraphId: string; readonly mergedWithPrevious: boolean }[] {
-  const groups: { paragraphId: string; mergedWithPrevious: boolean }[] = [];
-  const seen = new Set<string>();
-  for (const fragment of paragraphFragmentsOfBlocks(fragments)) {
-    let firstInFragment = true;
-    for (const line of fragment.lines) {
-      for (const segment of lineSegments(line)) {
-        if (seen.has(segment.paragraphId)) continue;
-        seen.add(segment.paragraphId);
-        groups.push({
-          paragraphId: segment.paragraphId,
-          mergedWithPrevious: !firstInFragment,
-        });
-        firstInFragment = false;
-      }
-    }
-    if (fragment.lines.length === 0 || seen.has(fragment.paragraphId)) continue;
-    seen.add(fragment.paragraphId);
-    groups.push({
-      paragraphId: fragment.paragraphId,
-      mergedWithPrevious: !firstInFragment,
-    });
-  }
-  return groups;
-}
-
-function visibleNoteParagraphText(
-  fragments: readonly BlockFragmentRecord[],
-  paragraphId: string
-): string {
-  const pieces: { start: number; text: string }[] = [];
-  const seen = new Set<string>();
-  for (const fragment of paragraphFragmentsOfBlocks(fragments)) {
-    for (const line of fragment.lines) {
-      for (const segment of lineSegments(line)) {
-        if (segment.paragraphId !== paragraphId) continue;
-        for (const span of segment.spans) {
-          if (span.range.end === span.range.start) continue;
-          const key = `${span.range.start}:${span.range.end}:${span.text}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          pieces.push({ start: span.range.start, text: span.text });
-        }
-      }
-    }
-  }
-  return pieces
-    .sort((left, right) => left.start - right.start)
-    .map((piece) => piece.text)
-    .join('');
-}
-
-function resolvedNoteText(
-  reads: AutomationStoryReads,
-  displayMode: 'proposed' | 'original'
-): string {
-  const story = reads.story;
-  if (story.kind !== 'note') return reads.text();
-  const laid = layoutNoteById(reads.part, story.noteId, 400, {
-    measurer: createFixedMeasurer(),
-    producer: 'automation:resolved-note-text',
-    displayMode,
-  });
-  if (!laid) return reads.text();
-  const groups = noteDisplayParagraphGroups(laid.fragments);
-  const [first] = groups;
-  if (!first) return '';
-  let text = visibleNoteParagraphText(laid.fragments, first.paragraphId);
-  for (let index = 1; index < groups.length; index += 1) {
-    const group = groups[index]!;
-    text += `${group.mergedWithPrevious ? '' : PARAGRAPH_MARK}${visibleNoteParagraphText(
-      laid.fragments,
-      group.paragraphId
-    )}`;
-  }
-  return text;
-}
-
-/**
- * Every control under a scope, nested ones included, in document order.
- *
- * For the lookups that search what the FILE wrote — an id, a tag, a title. Word's own numbering
- * is not scoped to a nesting level, so a lookup restricted to a scope's direct children would
- * report a control that plainly exists as absent.
- */
-function allControlsUnder(scope: OoxmlNode): readonly OoxmlNode[] {
-  const root = scope.kind === 'contentControl' ? contentControlContentNodeOf(scope) : scope;
-  if (!root) return [];
-  return contentControlsIn(root).map((entry) => entry.node);
-}
-
-const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
-  'unlocked',
-  'sdtLocked',
-  'contentLocked',
-  'sdtContentLocked',
-]);
 
 const CONTENT_CONTROL_RANGE_LOCATIONS: ReadonlySet<string> = new Set([
   'whole',
