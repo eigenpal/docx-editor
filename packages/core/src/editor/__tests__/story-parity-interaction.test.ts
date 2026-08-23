@@ -286,3 +286,88 @@ describe('content-control geometry covers every story', () => {
     expect(editor.query({ type: 'contentControlAt' })?.tag).toBe('hdrControl');
   });
 });
+
+/** The surface's default: CSS pixels per point. Painted chrome is scaled by it. */
+const SCALE = 96 / 72;
+
+/** Hovers a sheet point, in the client coordinates the surface converts back from. */
+function hoverSheet(x: number, y: number): void {
+  const pages = document.querySelector('.docx-pages');
+  expect(pages, 'the surface painted no pages layer').not.toBeNull();
+  pages!.dispatchEvent(
+    new window.PointerEvent('pointermove', {
+      bubbles: true,
+      clientX: x * SCALE,
+      clientY: y * SCALE,
+      pointerId: 1,
+    })
+  );
+}
+
+/** The header table on page 0, with the origin its coordinates are relative to. */
+function headerTableOf(editor: DocxEditorInstance) {
+  const layout = editor.surface!.layout();
+  const page = layout.pages[0]!;
+  const header = page.header!;
+  expect(header, 'the fixture painted no header').toBeDefined();
+  // The two origins must actually differ, or the comparisons below prove nothing.
+  expect(header.box.y).not.toBe(page.contentBox.y);
+  const occ = tableInteractionIndex(layout).occurrences.find(
+    (each) => each.pageContentBox === header.box
+  );
+  expect(occ, 'the header table is not in the index').toBeDefined();
+  return { page, header, table: occ!.table };
+}
+
+// Where the chrome is PAINTED, and WHETHER it is painted at all.
+//
+// The index and the paint are two separate coordinate conversions, and fixing the first left
+// the second wrong: `cssPoint` grew an `origin` argument that no call site ever passed, so
+// every handle was still drawn from `page.contentBox`. A header's box sits above it and a
+// footer's below it, which put a header's col-resize strip down over the first body line —
+// `pointer-events: auto`, over text it does not resize.
+//
+// Asserting the painted pixel against the story's own box is the only thing that catches it.
+// An index assertion cannot: by then the index was already right.
+describe('table chrome paints against the story it belongs to', () => {
+  test("a header divider handle is drawn at the header's box, not the body's", () => {
+    const editor = mount();
+    expect(editor.surface!.enterHeaderFooter({ rId: HEADER_R_ID })).toBe(true);
+    const { page, header, table } = headerTableOf(editor);
+
+    hoverSheet(
+      header.box.x + table.box.x + table.box.width / 2,
+      header.box.y + table.box.y + table.box.height / 2
+    );
+
+    const handle = document.querySelector<HTMLElement>(
+      '.docx-table-furniture .docx-table-divider-handle'
+    );
+    expect(handle, 'hovering the header divider painted no handle').not.toBeNull();
+    // The col-resize strip: `pointer-events: auto`, so a wrong position is not cosmetic.
+    expect(handle!.style.cursor).toBe('col-resize');
+
+    const top = Number.parseFloat(handle!.style.top);
+    expect(top).toBeCloseTo((header.box.y + table.box.y) * SCALE, 1);
+    // Named explicitly: this is where it used to land, and that is body text.
+    expect(top).not.toBeCloseTo((page.contentBox.y + table.box.y) * SCALE, 1);
+  });
+
+  // The other half. A write commits under the OPEN scope, so chrome for a story the reader is
+  // not in can only ever plan against one part and commit against another. Word makes you
+  // enter the header first, and so does this.
+  test('the same handle is not offered while the caret is in the body', () => {
+    const editor = mount();
+    const { header, table } = headerTableOf(editor);
+
+    hoverSheet(
+      header.box.x + table.box.x + table.box.width / 2,
+      header.box.y + table.box.y + table.box.height / 2
+    );
+
+    expect(
+      document.querySelector('.docx-table-furniture .docx-table-divider-handle'),
+      'a header handle was offered to a reader standing in the body'
+    ).toBeNull();
+  });
+});
