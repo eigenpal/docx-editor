@@ -970,8 +970,15 @@ function layoutBlocksPass(
         contextualSpacing,
         styleId,
         borders,
-        borderGroupKey:
-          bordersToken === '' ? '' : `${bordersToken}@${indent.left},${indent.left + available}`,
+        // The box's own INSETS, not its resolved edges. `available` is
+        // `contentWidth - indent.left - indent.right`, so keying on `indent.left + available`
+        // folded the CONTENT WIDTH into the group's identity — and a multi-column section
+        // prepares the prepass at column 0's width while placing each block at the width of
+        // the column it lands in. With unequal columns those two never agreed, so grouping
+        // collapsed outside column 0 and every paragraph there drew its own box. Which
+        // column a paragraph lands in is a layout outcome; the group is an authored
+        // relationship between neighbours, and only the authored insets may decide it.
+        borderGroupKey: bordersToken === '' ? '' : `${bordersToken}@${indent.left},${indent.right}`,
         shading,
         inheritedRunProperties,
         markRunProperties,
