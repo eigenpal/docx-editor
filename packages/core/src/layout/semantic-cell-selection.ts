@@ -66,6 +66,7 @@ export interface PlacedCell {
    * header's selection band down in the body text.
    */
   readonly offsetX: number;
+  /** The vertical half of the same offset. See {@link PlacedCell.offsetX}. */
   readonly offsetY: number;
 }
 

@@ -1963,6 +1963,8 @@ export interface PlacedCell {
     readonly cell: TableCellFragmentRecord;
     // (undocumented)
     readonly isHeaderRepeat: boolean;
+    readonly offsetX: number;
+    readonly offsetY: number;
     // (undocumented)
     readonly pageIndex: number;
     // (undocumented)
