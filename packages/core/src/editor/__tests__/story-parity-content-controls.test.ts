@@ -203,7 +203,7 @@ describe('insertContentControl writes the story the caret is in', () => {
       }
     });
 
-    test(`a caret insertion in the ${story} is undoable there`, () => {
+    test(`a caret insertion in the ${story} is undoable there`, async () => {
       const open = openStory(story);
       try {
         const paragraphId = open.paragraphIds[PROBE.plain]!;
@@ -211,12 +211,17 @@ describe('insertContentControl writes the story the caret is in', () => {
           anchor: { paragraphId, offset: 0 },
           head: { paragraphId, offset: 0 },
         });
+        const before = await savedParts(open);
         expect(
           open.editor.exec({ type: 'insertContentControl', subtype: 'date', tag: 'Inserted' })
         ).toEqual({ ok: true, changed: true });
+        expect(await savedParts(open)).not.toEqual(before);
+
         expect(open.editor.exec({ type: 'undo' })).toEqual({ ok: true, changed: true });
-        // Back to the story's own paragraph, not a body paragraph that happens to read the same.
-        expect(partOfNodeId(paragraphId)).toBe(PART_OF_STORY[story]);
+        // Byte-for-byte back to where it started, in EVERY part — an undo that restored the
+        // body while leaving the header's control behind is the failure this is for.
+        const undone = await savedParts(open);
+        expect(changedParts(before, undone)).toEqual([]);
       } finally {
         open.destroy();
       }

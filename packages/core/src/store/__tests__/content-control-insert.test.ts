@@ -18,16 +18,18 @@ import {
   type OoxmlPart,
 } from '../index.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
+import { formsProtectionRefusal } from '../store/tree-op-content-controls.ts';
 import { isShowingPlaceholder } from '../store/tree-op-nodes.ts';
 import type { TreeDocOp, TreeOpRejection } from '../store/tree-op-types.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 function parseDoc(bodyInner: string): OoxmlPart {
   const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${bodyInner}</w:body></w:document>`,
+    `<w:document xmlns:w="${W}" xmlns:w14="${W14}" xmlns:r="${R}"><w:body>${bodyInner}</w:body></w:document>`,
     {
       name: '/word/document.xml',
       contentType:
@@ -132,6 +134,20 @@ describe('insertContentControl at a caret', () => {
     expect(control).not.toContain('<w:i/>');
   });
 
+  test('at paragraph start the prompt inherits the run on its right', () => {
+    const part = parseDoc(`<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>italic</w:t></w:r></w:p>`);
+    const next = apply(part, {
+      op: 'insertContentControl',
+      paragraphId: paragraphs(part)[0]!.id,
+      start: 0,
+      end: 0,
+      type: 'plainText',
+      tag: 'field',
+    });
+    const xml = serializeOoxmlPart(next);
+    expect(xml.slice(xml.indexOf('<w:sdt>'), xml.indexOf('</w:sdt>'))).toContain('<w:i/>');
+  });
+
   test('typing into it replaces the prompt whole', () => {
     const inserted = insertAt(8);
     const paragraphId = paragraphs(inserted)[0]!.id;
@@ -177,5 +193,114 @@ describe('insertContentControl at a caret', () => {
         refusal(SENTENCE, { op: 'insertContentControl', paragraphId, ...span, type: 'plainText' })
       ).toBe('invalid-range');
     }
+  });
+});
+
+// A control is a SIBLING of runs. Every position where that sentence stops being true is a
+// position an insertion refuses, rather than one where it puts the control somewhere else.
+describe('insertContentControl refuses a position nothing can divide', () => {
+  const container = (inner: string) => parseDoc(`<w:p><w:r><w:t>ab</w:t></w:r>${inner}</w:p>`);
+
+  const CONTAINERS: readonly (readonly [string, string])[] = [
+    [
+      'an inline content control',
+      `<w:sdt><w:sdtContent><w:r><w:t>MIDDLE</w:t></w:r></w:sdtContent></w:sdt>`,
+    ],
+    ['a hyperlink', `<w:hyperlink r:id="rId1"><w:r><w:t>MIDDLE</w:t></w:r></w:hyperlink>`],
+    ['a tracked insertion', `<w:ins w:id="1" w:author="A"><w:r><w:t>MIDDLE</w:t></w:r></w:ins>`],
+  ];
+
+  for (const [name, inner] of CONTAINERS) {
+    test(`a caret inside ${name} is refused, not relocated`, () => {
+      const part = container(inner);
+      const paragraphId = paragraphs(part)[0]!.id;
+      // Offset 5 is three characters into MIDDLE. Splitting the run inside the container leaves
+      // the container whole, so a partition by paragraph child would emit the control in front
+      // of the WHOLE container — five characters from where the caller pointed.
+      expect(
+        refusal(part, {
+          op: 'insertContentControl',
+          paragraphId,
+          start: 5,
+          end: 5,
+          type: 'plainText',
+        })
+      ).toBe('indivisible-content');
+    });
+
+    test(`a range crossing the edge of ${name} is refused`, () => {
+      const part = container(inner);
+      const paragraphId = paragraphs(part)[0]!.id;
+      expect(
+        refusal(part, {
+          op: 'insertContentControl',
+          paragraphId,
+          start: 1,
+          end: 4,
+          type: 'plainText',
+        })
+      ).toBe('indivisible-content');
+    });
+
+    test(`both edges of ${name} are places`, () => {
+      const part = container(inner);
+      const paragraphId = paragraphs(part)[0]!.id;
+      for (const offset of [2, 8]) {
+        const next = apply(part, {
+          op: 'insertContentControl',
+          paragraphId,
+          start: offset,
+          end: offset,
+          type: 'plainText',
+          tag: 'edge',
+        });
+        const text = paragraphTextOf(next, paragraphs(next)[0]!.id) ?? '';
+        expect(text.indexOf('Click here to enter text.')).toBe(offset);
+      }
+    });
+  }
+
+  test('a caret at the far edge of an atomic field keeps the field whole', () => {
+    const part = parseDoc(
+      `<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+        `<w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
+        `<w:r><w:t>1</w:t></w:r>` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r>` +
+        `<w:r><w:t>ab</w:t></w:r></w:p>`
+    );
+    const next = apply(part, {
+      op: 'insertContentControl',
+      paragraphId: paragraphs(part)[0]!.id,
+      start: 1,
+      end: 1,
+      type: 'plainText',
+      tag: 'after-field',
+    });
+    const xml = serializeOoxmlPart(next);
+    // Every node the field is spelt with stays on the same side of the control, in order.
+    expect(xml.indexOf('fldCharType="end"')).toBeLessThan(xml.indexOf('<w:sdt>'));
+    expect(xml.indexOf('instrText')).toBeLessThan(xml.indexOf('<w:sdt>'));
+  });
+
+  test('forms protection refuses an insertion, which is not filling in a field', () => {
+    const part = parseDoc(`<w:p><w:r><w:t>plain text here</w:t></w:r></w:p>`);
+    const settings = readOoxmlPart(
+      `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="forms" w:enforcement="1"/></w:settings>`,
+      {
+        name: '/word/settings.xml',
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml',
+      }
+    );
+    if (!settings.ok) throw new Error(settings.reason);
+    expect(
+      formsProtectionRefusal(part, settings.part, {
+        op: 'insertContentControl',
+        paragraphId: paragraphs(part)[0]!.id,
+        start: 4,
+        end: 4,
+        type: 'plainText',
+      })
+    ).toBe('locked');
   });
 });

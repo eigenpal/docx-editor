@@ -221,10 +221,17 @@ editor.exec({
 
 You can author `richText`, `plainText`, `dropdown` (also spelled `dropDownList`, as OOXML
 spells it), `comboBox`, and `date` controls. Checkbox, picture, and repeating-section controls
-carry content an insertion would have to invent, so they aren't authored here. One control
-cannot span two paragraphs, and the command refuses rather than guessing which wrapper you
-meant. `editor.can()` answers the same refusal before you run it, so a button can disable
-itself and show the reason.
+carry content an insertion would have to invent, so they aren't authored here. A dropdown or
+combo box starts with no items: add them in Word, or design the template there and fill it
+from code.
+
+`editor.can()` answers the same refusal `exec` would, so a button can disable itself and show
+the reason. The command refuses rather than guessing when:
+
+- The selection crosses two paragraphs. A control over several paragraphs is a block wrapper,
+  which is a different element.
+- The position sits inside a hyperlink, a field, or another inline control. A control is a
+  sibling of the text around it, so those positions have no place to put one.
 
 ## Typed control chrome
 
@@ -235,6 +242,7 @@ In the editor, typed controls get an interactive trigger at the top-right of the
 - A control that _wraps_ a whole table cell or row is not supported (controls _inside_ a cell are).
 - A control inside a hyperlink is not surfaced.
 - `dataBinding` and repeating sections round-trip but have no live behavior: no bound-value resolution, no automatic repeat expansion.
+- Creating, filling, and removing a control are not recorded as tracked changes, even in suggesting mode. A reviewer sees the result, not a revision to accept or reject.
 
 ## Next steps
 

@@ -4093,7 +4093,7 @@ export type TreeDocOp = {
     readonly paragraphId: string;
     readonly start: number;
     readonly end: number;
-    readonly type: InsertableContentControlType;
+    readonly type: InsertableContentControlKind;
     readonly tag?: string;
     readonly alias?: string;
     readonly lock?: ContentControlLock;
@@ -4294,7 +4294,16 @@ export interface TreeOpEffect {
 }
 
 // @public
-export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragraph' | 'offset-out-of-range' | 'invalid-range' | 'not-a-list-paragraph' | 'splits-surrogate-pair' | 'invalid-text' | 'unsupported-property' | 'invalid-property-value' | 'not-adjacent-siblings' | 'unknown-block' | 'not-a-block' | 'block-required' | 'carries-section-mark'
+export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragraph' | 'offset-out-of-range' | 'invalid-range' | 'not-a-list-paragraph' | 'splits-surrogate-pair' | 'invalid-text' | 'unsupported-property' | 'invalid-property-value' | 'not-adjacent-siblings'
+/**
+* The addressed position is strictly inside content nothing can divide: a hyperlink, an
+* inline content control, a revision wrapper, or an atomic field.
+*
+* Distinct from `invalid-range`, which is an offset the paragraph does not have. This one is
+* a real offset that is not a PLACE — refused rather than resolved to the nearest one, so a
+* caller learns the node would not have landed where they asked.
+*/
+| 'indivisible-content' | 'unknown-block' | 'not-a-block' | 'block-required' | 'carries-section-mark'
 /** The transaction named a part the package does not hold. */
 | 'unknown-part'
 /**

@@ -36,21 +36,26 @@ export type InsertResolution =
  * The OOXML spelling of each insertable kind, keyed by every spelling a caller may hold.
  *
  * `ContentControlType` — what a READ answers — spells the list control `dropdown`, while the
- * tree op and the automation protocol spell it `dropDownList`. Both are accepted here rather
- * than making a caller translate between the two vocabularies this package already ships:
- * reading a control's type and handing it straight back is the commonest way to author a
- * second field like the first, and it must not be the one call that fails.
+ * tree op spells it `dropDownList`. Both are accepted here rather than making a caller
+ * translate between two vocabularies this package already ships: reading a control's type and
+ * handing it straight back is the commonest way to author a second field like the first, and it
+ * must not be the one call that fails.
+ *
+ * A MAP, not an object literal: the lookup key comes from the caller, and an object would
+ * answer `constructor` and `__proto__` with something inherited and truthy, which would walk
+ * straight past the refusal below.
  */
-const OOXML_SUBTYPE: Readonly<
-  Record<string, 'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date'>
-> = {
-  richText: 'richText',
-  plainText: 'plainText',
-  dropdown: 'dropDownList',
-  dropDownList: 'dropDownList',
-  comboBox: 'comboBox',
-  date: 'date',
-};
+const OOXML_SUBTYPE: ReadonlyMap<
+  string,
+  'richText' | 'plainText' | 'dropDownList' | 'comboBox' | 'date'
+> = new Map([
+  ['richText', 'richText'],
+  ['plainText', 'plainText'],
+  ['dropdown', 'dropDownList'],
+  ['dropDownList', 'dropDownList'],
+  ['comboBox', 'comboBox'],
+  ['date', 'date'],
+]);
 
 /** `DocRange` by shape, whatever its endpoints are addressed with. */
 function isDocRange(target: DocTarget): target is DocRange {
@@ -104,8 +109,12 @@ function spanOfTarget(surface: PaginatedSurface, target: DocTarget): SpanResolut
         target,
       };
     }
-    const start = Math.min(from.span.start, to.span.end);
-    const end = Math.max(from.span.start, to.span.end);
+    // The span COVERS both endpoints, whichever order they were named in. Pairing one
+    // endpoint's start with the other's end is what a selection does, and for a selection it is
+    // right; for a WRAPPER it would quietly wrap the gap between two reversed matches and
+    // neither of the phrases the caller named.
+    const start = Math.min(from.span.start, to.span.start);
+    const end = Math.max(from.span.end, to.span.end);
     return { ok: true, span: { paragraphId: from.span.nodeId, start, end } };
   }
   return {
@@ -125,7 +134,7 @@ export function resolveContentControlInsertion(
   surface: PaginatedSurface,
   command: InsertContentControlCommand
 ): InsertResolution {
-  const type = OOXML_SUBTYPE[command.subtype as string];
+  const type = OOXML_SUBTYPE.get(command.subtype as string);
   // The contract type narrows this at compile time; the runtime check is what answers an
   // untyped caller — the same reason the gate re-checks `value` for `setContentControlValue`.
   if (!type) {

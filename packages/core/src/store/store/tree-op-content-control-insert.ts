@@ -35,19 +35,21 @@ import {
   promptFor,
   textRun,
   wmlElement,
-  type InsertableContentControlType,
+  type InsertableContentControlKind,
 } from './tree-op-content-controls.ts';
 import { fromEdit, isParagraphPropertiesNode, runPropertiesNodeOf } from './tree-op-nodes.ts';
 import {
+  indivisibleAt,
   paragraphLength,
   paragraphOffsetIndex,
   splitsSurrogate,
+  type OffsetSpan,
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
 import type { TreeDocOp, TreeOpResult } from './tree-op-types.ts';
 
 /** The ECMA-376 `CT_SdtPr` type element each insertable kind writes. */
-const TYPE_ELEMENT_FOR: Readonly<Record<InsertableContentControlType, string>> = {
+const TYPE_ELEMENT_FOR: Readonly<Record<InsertableContentControlKind, string>> = {
   richText: 'richText',
   plainText: 'text',
   dropDownList: 'dropDownList',
@@ -128,6 +130,12 @@ export function applyInsertContentControl(
   }
   if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
     return { ok: false, reason: 'splits-surrogate-pair' };
+  }
+  // `validateTreeOp` answers this too, which is what lets `can` predict the refusal. Repeated
+  // here because the applier is reachable on its own and must fail closed rather than emit the
+  // control beside the container the caller pointed into.
+  if (indivisibleAt(paragraph, op.start) || indivisibleAt(paragraph, op.end)) {
+    return { ok: false, reason: 'indivisible-content' };
   }
   return op.start === op.end
     ? insertEmptyContentControl(part, paragraph, op, options)
@@ -219,6 +227,33 @@ function inheritedRunProperties(
 }
 
 /**
+ * The span of the ATOM a paragraph child belongs to, for the chrome an atom is spelt with.
+ *
+ * `removeNodeIds` names the elements — `w:fldChar`, `w:instrText` — rather than the runs
+ * holding them, so a paragraph child is matched by itself or by what it holds. One level is
+ * enough: field chrome is a run wrapping exactly one of those elements.
+ */
+function atomSpanLookup(index: ParagraphOffsetIndex): (child: OoxmlNode) => OffsetSpan | null {
+  const byNodeId = new Map<string, OffsetSpan>();
+  for (const segment of index.segments) {
+    if (!segment.removeNodeIds) continue;
+    const span = { start: segment.start, end: segment.end };
+    for (const id of segment.removeNodeIds) byNodeId.set(id, span);
+  }
+  if (byNodeId.size === 0) return () => null;
+  return (child) => {
+    const own = byNodeId.get(child.id);
+    if (own) return own;
+    if (child.kind === 'textValue') return null;
+    for (const inner of child.children) {
+      const found = byNodeId.get(inner.id);
+      if (found) return found;
+    }
+    return null;
+  };
+}
+
+/**
  * Insert an EMPTY control at a caret, holding its type's prompt.
  *
  * Word's own gesture: the control arrives showing "Click here to enter text." with
@@ -247,9 +282,17 @@ function insertEmptyContentControl(
   );
   const control = controlElement(propertiesFor(current, op, nextId), [prompt], nextId);
 
-  // Nothing straddles the offset after the split, so each child lands whole on one side of
-  // it. A zero-length node — a bookmark, a comment marker — takes the bucket its POSITION
-  // puts it in, exactly as the inline insert divides them.
+  // Nothing straddles the offset: the run was split, and `indivisibleAt` already refused an
+  // offset inside anything a split cannot divide. So each child lands whole on one side.
+  //
+  // A field's chrome — its instruction, its separator, its end marker — sits at ZERO LENGTH at
+  // the field's own offset, because the field is one addressable unit and its begin run carries
+  // the whole of it. A running cursor alone would therefore leave all of that chrome on the far
+  // side of a caret at the field's trailing edge, putting the new control between
+  // `w:fldChar begin` and the instruction it belongs to. The offset model already records which
+  // nodes spell one atom, so the ATOM's span answers for each of them instead.
+  const atomSpanOf = atomSpanLookup(index);
+
   const before: OoxmlNode[] = [];
   const after: OoxmlNode[] = [];
   let cursor = 0;
@@ -258,7 +301,10 @@ function insertEmptyContentControl(
       before.push(child);
       continue;
     }
-    const span = index.spanOf(child);
+    const own = index.spanOf(child);
+    const span = own && own.start !== own.end ? own : (atomSpanOf(child) ?? own);
+    // A truly zero-length node — a bookmark, a comment marker — takes the bucket its POSITION
+    // puts it in, exactly as the inline insert divides them.
     if (!span || span.start === span.end) {
       (cursor < offset ? before : after).push(child);
       continue;

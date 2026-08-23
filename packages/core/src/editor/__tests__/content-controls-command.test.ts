@@ -6,6 +6,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
+import {
+  contentControlPropertiesOf,
+  contentControlTextOf,
+  findNode,
+} from '@docx-editor.dev/core/store';
 import { createDocxEditor } from '../docx-editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -13,6 +18,7 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -24,7 +30,7 @@ function docx(body: string): Uint8Array {
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${body}</w:body></w:document>`
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`
     ),
   });
 }
@@ -480,5 +486,207 @@ describe('insertContentControl command', () => {
       reason: 'the document is read-only',
     });
     expect(editor.exec(command)).toEqual(editor.can(command));
+  });
+});
+
+// `can` is what chrome disables a button by, so every refusal `exec` can make has to be one
+// `can` already made. These are the shapes where the two used to disagree: the wrappability
+// rules lived in the applier, which `can` never reaches.
+describe('insertContentControl can() agrees with exec()', () => {
+  function selectRange(
+    surface: NonNullable<ReturnType<typeof createDocxEditor>['surface']>,
+    from: number,
+    to: number
+  ) {
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: from },
+      head: { paragraphId, offset: to },
+    });
+  }
+
+  const command = { type: 'insertContentControl' as const, subtype: 'plainText' as const };
+
+  test('a selection crossing an existing control edge refuses in both', () => {
+    const editor = mount(pMixed(run('ab') + inlineSdt(`<w:text/>`, run('OLD')) + run('cd')));
+    selectRange(editor.surface!, 1, 4);
+
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason:
+        'a content control cannot start or end inside a hyperlink, a field, or another inline control',
+    });
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(1);
+  });
+
+  test('a caret inside a hyperlink refuses in both, rather than landing beside the link', () => {
+    const editor = mount(
+      pMixed(run('ab') + `<w:hyperlink r:id="rId9">${run('LINK')}</w:hyperlink>` + run('cd'))
+    );
+    caretAt(editor.surface!, 4);
+
+    const can = editor.can(command);
+    expect(can.ok).toBe(false);
+    expect(editor.exec(command)).toEqual(can);
+    // The document is untouched: no control, and the text as authored.
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('abLINKcd');
+  });
+
+  test('a selection that would split a surrogate pair refuses in both', () => {
+    const editor = mount(p('a\u{1F600}b'));
+    selectRange(editor.surface!, 1, 2);
+
+    const can = editor.can(command);
+    expect(can.ok).toBe(false);
+    expect(editor.exec(command)).toEqual(can);
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+  });
+
+  test('the gate reads the same document the write does, with typing still queued', () => {
+    const editor = mount(p('hello world'));
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    const paraId = surface.session.paragraphAnchors().paraIdByNode.get(paragraphId)!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 5 },
+    });
+    // A burst the surface has not committed yet. The gate used to resolve against the paragraph
+    // as it was, while the write resolved against the paragraph as it became — so `exec` could
+    // refuse for a reason its own gate had just approved, and vice versa.
+    surface.enqueueType('bye');
+
+    const result = editor.exec({
+      type: 'insertContentControl',
+      target: { paraId, search: 'bye' },
+      subtype: 'plainText',
+      tag: 'typed',
+    });
+
+    expect(result).toEqual({ ok: true, changed: true });
+    expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe('bye world');
+    expect(editor.query({ type: 'contentControls' })).toMatchObject([{ tag: 'typed' }]);
+  });
+});
+
+// Targeting: everything a caller can put in `target`, and what each one wraps.
+describe('insertContentControl target addressing', () => {
+  const SENTENCE = 'Between ACME CORP and BUYER LTD';
+
+  function anchored() {
+    const editor = mount(p(SENTENCE));
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    const paraId = surface.session.paragraphAnchors().paraIdByNode.get(paragraphId)!;
+    return { editor, paraId };
+  }
+
+  /** The characters the one control ended up holding, read back off the tree. */
+  function wrappedText(editor: ReturnType<typeof mount>): string {
+    const control = editor.query({ type: 'contentControls' })[0];
+    if (!control) throw new Error('no control was inserted');
+    const part = editor.surface!.session.part();
+    const node = findNode(part, control.id);
+    if (!node) throw new Error('the control is not in the tree');
+    return contentControlTextOf(node);
+  }
+
+  test('a range covers both endpoints, whichever order they are named in', () => {
+    for (const [from, to] of [
+      ['ACME', 'BUYER'],
+      ['BUYER', 'ACME'],
+    ] as const) {
+      const { editor, paraId } = anchored();
+      const result = editor.exec({
+        type: 'insertContentControl',
+        target: { from: { paraId, search: from }, to: { paraId, search: to } },
+        subtype: 'plainText',
+        tag: 'span',
+      });
+      expect(result).toEqual({ ok: true, changed: true });
+      // Both phrases are inside it. Pairing one endpoint's start with the other's end would
+      // wrap the gap between them and neither of the phrases the caller named.
+      expect(wrappedText(editor)).toBe('ACME CORP and BUYER');
+      expect(editor.query({ type: 'paragraphs' })[0]?.text).toBe(SENTENCE);
+    }
+  });
+
+  test('a range whose endpoints are in different paragraphs is refused', () => {
+    const editor = mount(p('first here') + p('second here'));
+    const surface = editor.surface!;
+    const anchors = surface.session.paragraphAnchors();
+    const [one, two] = surface.session.paragraphIds();
+    const command = {
+      type: 'insertContentControl' as const,
+      target: {
+        from: { paraId: anchors.paraIdByNode.get(one!)!, search: 'first' },
+        to: { paraId: anchors.paraIdByNode.get(two!)!, search: 'second' },
+      },
+      subtype: 'plainText' as const,
+    };
+    const can = editor.can(command);
+    expect(can).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'wrapping several paragraphs in one content control is not supported',
+    });
+    expect(editor.exec(command).ok).toBe(false);
+  });
+
+  test('a DocLocation endpoint is refused, and says what to use instead', () => {
+    const { editor, paraId } = anchored();
+    for (const target of [
+      { container: { part: 'body' as const }, path: [0] },
+      { from: { container: { part: 'body' as const }, path: [0] }, to: { paraId } },
+    ]) {
+      const can = editor.can({ type: 'insertContentControl', target, subtype: 'plainText' });
+      expect(can.ok).toBe(false);
+      expect(can.ok === false && can.reason).toContain('paraId');
+    }
+    expect(editor.query({ type: 'contentControls' })).toHaveLength(0);
+  });
+
+  test('an anchor with no search phrase wraps the whole paragraph', () => {
+    const { editor, paraId } = anchored();
+    expect(
+      editor.exec({ type: 'insertContentControl', target: { paraId }, subtype: 'richText' })
+    ).toEqual({ ok: true, changed: true });
+    expect(wrappedText(editor)).toBe(SENTENCE);
+  });
+
+  test('an ambiguous search phrase is refused rather than resolved to the first match', () => {
+    const editor = mount(p('one and one'));
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    const paraId = surface.session.paragraphAnchors().paraIdByNode.get(paragraphId)!;
+    const command = {
+      type: 'insertContentControl' as const,
+      target: { paraId, search: 'one' },
+      subtype: 'plainText' as const,
+    };
+    const can = editor.can(command);
+    expect(can.ok).toBe(false);
+    expect(can.ok === false && can.code).toBe('ambiguous');
+    expect(editor.exec(command).ok).toBe(false);
+  });
+
+  test('the new control takes a file id above every id already in the document', () => {
+    const editor = mount(pMixed(inlineSdt(`<w:id w:val="41"/><w:text/>`, run('OLD'))) + p('tail'));
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[1]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 4 },
+    });
+    editor.exec({ type: 'insertContentControl', subtype: 'plainText', tag: 'fresh' });
+
+    const part = surface.session.part();
+    const summary = editor.query({ type: 'contentControls' }).find((c) => c.tag === 'fresh')!;
+    const node = findNode(part, summary.id)!;
+    expect(contentControlPropertiesOf(node).id).toBe(42);
   });
 });

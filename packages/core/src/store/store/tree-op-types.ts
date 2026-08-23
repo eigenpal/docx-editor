@@ -15,7 +15,7 @@ import type {
 } from '../package/drawing-projection.ts';
 import type {
   ContentControlValueInput,
-  InsertableContentControlType,
+  InsertableContentControlKind,
 } from './tree-op-content-controls.ts';
 import type { TableBorderStyle } from '../table-border-style.ts';
 
@@ -827,7 +827,7 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly start: number;
       readonly end: number;
-      readonly type: InsertableContentControlType;
+      readonly type: InsertableContentControlKind;
       readonly tag?: string;
       readonly alias?: string;
       readonly lock?: ContentControlLock;
@@ -1094,6 +1094,15 @@ export type TreeOpRejection =
   | 'unsupported-property'
   | 'invalid-property-value'
   | 'not-adjacent-siblings'
+  /**
+   * The addressed position is strictly inside content nothing can divide: a hyperlink, an
+   * inline content control, a revision wrapper, or an atomic field.
+   *
+   * Distinct from `invalid-range`, which is an offset the paragraph does not have. This one is
+   * a real offset that is not a PLACE — refused rather than resolved to the nearest one, so a
+   * caller learns the node would not have landed where they asked.
+   */
+  | 'indivisible-content'
   | 'unknown-block'
   | 'not-a-block'
   | 'block-required'

@@ -140,10 +140,10 @@ import { setReviewCommentResolved } from './docx-editor-comment-resolution.ts';
 import { reviewReplyRefusal } from './review-reply.ts';
 import {
   canContentControlCommand,
+  runContentControlCommand,
   gateModeOf,
   contentControlAtOf,
   contentControlsOf,
-  execContentControlCommand,
   isContentControlEditorCommand,
 } from './content-controls.ts';
 import {
@@ -1894,9 +1894,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       if (isContentControlEditorCommand(command)) {
         // The LIVE mode, not the constructed one — see `gateModeOf`.
-        const gated = canContentControlCommand(command, surface, gateModeOf(editingMode), options);
-        if (!gated.ok) return gated;
-        return execContentControlCommand(surface!, command);
+        return runContentControlCommand(command, surface, gateModeOf(editingMode), options);
       }
       // Viewing refuses every EDIT, reversibly — the reader chose it and can choose again.
       // Checked HERE as well as in `can`, because a host that calls `exec` directly is not

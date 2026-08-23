@@ -567,6 +567,8 @@ function mapTreeOpRejection(reason: string): ExecErrorCode {
       return reason;
     case 'unknown-control':
       return 'notFound';
+    case 'indivisible-content':
+      return 'unsupported';
     default:
       return 'unsupported';
   }
@@ -586,6 +588,8 @@ function treeOpRejectionMessage(reason: string): string {
       return 'this control type is not supported';
     case 'unknown-control':
       return 'the content control was not found';
+    case 'indivisible-content':
+      return 'a content control cannot start or end inside a hyperlink, a field, or another inline control';
     default:
       return `the edit was refused (${reason})`;
   }
@@ -713,6 +717,27 @@ function storeVerdict(surface: PaginatedSurface, op: TreeDocOp, nodeId: string):
   return { ok: true };
 }
 
+/**
+ * Gate, then commit — the whole `exec` path for a content-control command.
+ *
+ * The FLUSH is here rather than inside the write. The gate resolves the command against the
+ * tree, and an insertion resolves OFFSETS: with a typing burst still queued, the gate read the
+ * paragraph as it was while the write read it as it became, so `exec` could refuse for a reason
+ * its own gate had just approved. Queued input is committed either way; this decides only
+ * whether both halves read the same document.
+ */
+export function runContentControlCommand(
+  command: ContentControlEditorCommand,
+  surface: PaginatedSurface | null,
+  mode: 'edit' | 'view' | 'suggesting',
+  options?: { scope?: EditorScope }
+): ExecResult {
+  surface?.flushPendingInput();
+  const gated = canContentControlCommand(command, surface, mode, options);
+  if (!gated.ok) return gated;
+  return execContentControlCommand(surface!, command);
+}
+
 /** Commit a content-control tree op through the surface session and refresh layout. */
 export function execContentControlCommand(
   surface: PaginatedSurface,
@@ -774,7 +799,7 @@ function execInsertContentControl(
   // BEFORE the range is read, not after. An insertion addresses OFFSETS, and offsets taken
   // against a paragraph that queued typing is about to rewrite point at the wrong characters.
   // Its neighbours can resolve first because a control id survives a flush and an offset does
-  // not.
+  // not. The facade flushes ahead of the gate for the same reason; this is idempotent.
   surface.flushPendingInput();
   const insertion: InsertResolution = resolveContentControlInsertion(surface, command);
   if (!insertion.ok) {

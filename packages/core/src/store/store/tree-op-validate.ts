@@ -50,6 +50,7 @@ import {
 import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection.ts';
 import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
 import {
+  indivisibleAt,
   isParagraph,
   paragraphLength,
   paragraphOffsetIndex,
@@ -243,7 +244,24 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     const paragraph = findNode(part, op.paragraphId);
     if (!paragraph) return 'unknown-paragraph';
     if (!isParagraph(paragraph)) return 'not-a-paragraph';
-    return null;
+    if (op.start < 0 || op.end > paragraphLength(paragraph) || op.start > op.end) {
+      return 'invalid-range';
+    }
+    if (splitsSurrogate(paragraph, op.start) || splitsSurrogate(paragraph, op.end)) {
+      return 'splits-surrogate-pair';
+    }
+    // BOTH EDGES, and here rather than in the applier: a control is a sibling of runs, so an
+    // edge strictly inside a hyperlink, an inline control or an atomic field is not a place one
+    // can start or stop. The applier refused these too, but only after `can` had already told a
+    // caller the command was live — a disabled button that runs, or an enabled one that fails.
+    if (indivisibleAt(paragraph, op.start) || indivisibleAt(paragraph, op.end)) {
+      return 'indivisible-content';
+    }
+    // The same restriction check every other range op runs: a locked or bound control the span
+    // touches, and forms protection. The applier answered it, so the write was refused — but
+    // only after `can` had already told chrome the command was live, on exactly the document
+    // class this verb is for.
+    return rejectContentEdit(part, paragraph, op.start, op.end);
   }
 
   // Package-level furniture ops cannot run against a single part. Shape-check here so

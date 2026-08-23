@@ -80,7 +80,14 @@ export const INSERTABLE_CONTENT_CONTROL_TYPES = [
   'date',
 ] as const satisfies readonly ContentControlKind[];
 
-export type InsertableContentControlType = (typeof INSERTABLE_CONTENT_CONTROL_TYPES)[number];
+/**
+ * The OOXML spellings the store writes.
+ *
+ * NOT the contract's `InsertableContentControlType`, which is the same set of kinds in the
+ * READ vocabulary (`dropdown`) plus this lane's spelling of it (`dropDownList`). The editor
+ * maps between the two; the names differ so a reader can tell which vocabulary a value is in.
+ */
+export type InsertableContentControlKind = (typeof INSERTABLE_CONTENT_CONTROL_TYPES)[number];
 
 /** Longest tag/alias an op may write, so a hostile caller cannot author an unbounded attribute. */
 const MAX_METADATA_LENGTH = 4_096;
@@ -302,13 +309,13 @@ const TREE_OP_REACH: {
   insertNote: (op) => writingAt(op.paragraphId, op.offset),
   setRunProperties: (op) => over(op.paragraphId, op.start, op.end),
   insertHyperlink: (op) => over(op.paragraphId, op.start, op.end),
-  // Wrapping a range only moves run boundaries around characters that are already there. A
-  // CARET insertion writes a prompt into the paragraph, so it reaches the way typing does and
-  // a lock that forbids writing at that point forbids it.
-  insertContentControl: (op) =>
-    op.start === op.end
-      ? writingAt(op.paragraphId, op.start)
-      : over(op.paragraphId, op.start, op.end),
+  // An insertion AUTHORS a control beside the runs, and never writes into one. `writes` is
+  // what marks an edit as "filling in a field", which is the one thing forms protection lets
+  // through — and this is the opposite of filling: under `w:edit="forms"` a new control in the
+  // body must be refused however unlocked the field beside it is. So the caret shape reaches
+  // like the range shape, and a caret at a control's EDGE lands outside that control, which is
+  // exactly where the applier puts it.
+  insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
   insertInlineContentControl: (op) => writingAt(op.paragraphId, op.offset),
   // A split at a control's edge moves the whole control to one side of the break and changes
   // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.

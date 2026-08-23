@@ -394,9 +394,10 @@ export type ContentControlType =
  * whose items have their own verbs. Reading still answers the wider type; a document may hold
  * kinds this cannot create.
  *
- * `dropDownList` is the same kind as `dropdown`, spelt as OOXML and the automation protocol
- * spell it. Both are accepted so a caller moving between the two surfaces never has to
- * translate.
+ * `dropDownList` is the same kind as `dropdown`, spelt as OOXML spells it. Both are accepted,
+ * so a type read off a control can be handed back without translating it — and the OOXML
+ * spelling is the one the automation protocol takes, so a caller who uses both surfaces can
+ * write that one everywhere.
  */
 export type InsertableContentControlType =
   | Extract<ContentControlType, 'richText' | 'plainText' | 'dropdown' | 'comboBox' | 'date'>
