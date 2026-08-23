@@ -1,5 +1,28 @@
 # @docx-editor.dev/core
 
+## 2.8.0
+
+### Minor Changes
+
+- 5ae7f4d: A blank document now ships Word's built-in style gallery, so the style picker offers Heading 1 through Heading 9, Title, Subtitle, Quote, No Spacing, and List Paragraph. Turning a list on applies List Paragraph the way Word does, which closes the space between consecutive items and leaves the paragraph indented when you turn the list back off.
+- 91fc4c8: Add `insertContentControl`, so an open editor can create a content control as well as fill and remove one, as a single undoable step.
+
+  A collapsed selection inserts an empty control showing its type's prompt, the way Word does, and the first character typed replaces the prompt whole. The same position now works through the automation protocol, which refused it before.
+
+- 91cb3e0: Added the Paragraph dialog, which sets alignment, indentation, spacing, line spacing, tab stops and the pagination flags by value as one undo step. Open it from **Line spacing options…** on the line-spacing menu, or drive it yourself with the new `setParagraphFormat` command and `useParagraphFormat` hook.
+- dab6700: `selectionRects` and `spansInSelection` now require the story's paragraph order as a third argument, so a two-argument call no longer compiles. Pass the new `everyStoryOrder(layout)` when you have no story in hand: the body-only order they used to assume is what made `spansInSelection` read a selection in a header, footer or note as empty. `selectionRects` still walks body fragments only, so it returns no rectangles outside the body whichever order you give it.
+- dab6700: `PaginatedSurface` gains `sectionAnchorParagraphAt` and `sectionAtPage`, `TreeDocxSessionView` gains `storyParts`, and `PlacedCell` gains `offsetX` and `offsetY`. All three are produced by the engine and consumed by hosts, so this is additive for callers.
+- dab6700: Editing in a header, footer, footnote or endnote now behaves as it does in the body: lists, tables, content controls, page setup, formatting and indent all act on the story the caret is in, and every story's paragraphs are addressable by anchor. A comment authored in one of those stories is now related from the main document, so Word can see it. Pointer chrome follows too: content control outlines and the hyperlink popover resolve in the story they are painted in, and table row and column handles are offered in the story you are editing.
+
+### Patch Changes
+
+- ac5ec3f: Fixed bordered paragraphs drawing a separate box each instead of one box, in a section whose columns have different widths.
+- 130ba52: Fixed bordered paragraphs drawing the wrong edges, and pages breaking in the wrong place, after you edited a bordered run. Fixed a refreshed table of contents losing its empty-TOC placeholder line until you reopened the document.
+- 5ae7f4d: Fixed list items and other same-style paragraphs not closing up until you reopened the document.
+- 7a58fb2: Fixed IME text being dropped when you compose into an empty paragraph, and fixed a composition deleting an inline image or hidden text elsewhere in the same paragraph. Composing over a selection that spans two paragraphs now replaces the whole range in one step. Text in a header, a repeating table header row, or a footnote referenced twice no longer duplicates when you compose into it.
+- dab6700: A document protected with `w:documentProtection w:edit="forms"` now refuses edits in headers, footers and notes as it already did in the body. Form fields in those stories stay fillable.
+  - @docx-editor.dev/i18n@2.8.0
+
 ## 2.7.0
 
 ### Minor Changes
