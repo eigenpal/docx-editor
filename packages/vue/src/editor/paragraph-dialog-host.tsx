@@ -7,16 +7,7 @@
 // the body — a dialog counted among the bar's own children fed the measurement that decides
 // what collapses.
 
-import {
-  defineComponent,
-  h,
-  inject,
-  provide,
-  ref,
-  Teleport,
-  type InjectionKey,
-  type Ref,
-} from 'vue';
+import { defineComponent, h, inject, provide, ref, type InjectionKey, type Ref } from 'vue';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 
 export interface ParagraphDialogHandle {
@@ -66,18 +57,13 @@ export const ParagraphDialogHost = defineComponent({
       if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
 
-    // ONE root, and the dialog teleported out of it.
-    //
-    // A fragment root would make Vue drop every fallthrough attribute on the public
-    // `DocxEditorToolbar` — `class`, `style`, `id`, `data-*`, listeners — because there is
-    // no single element to put them on. And leaving the dialog inline would put it back
-    // among the children the bar measures to decide what collapses. Teleporting satisfies
-    // both, and a modal belongs at the document level anyway.
+    // The dialog teleports itself to the body, so it is not counted among the children the
+    // toolbar measures to decide what collapses — and rendering it here inline keeps this
+    // component's root single, so the public `DocxEditorToolbar` still inherits its
+    // fallthrough attributes (`class`, `style`, `id`).
     return () => [
       ...(slots.default?.() ?? []),
-      h(Teleport, { to: 'body' }, [
-        h(DocxEditorParagraphDialog, { open: open.value, onClose: close }),
-      ]),
+      h(DocxEditorParagraphDialog, { open: open.value, onClose: close }),
     ];
   },
 });

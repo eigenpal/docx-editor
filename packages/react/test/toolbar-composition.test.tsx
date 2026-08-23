@@ -491,12 +491,13 @@ describe('the shaped parts', () => {
     await act(async () => {
       options.click();
     });
-    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
 
-    // The dialog is NOT inside the part, which is what lets it survive the part going away.
+    // The dialog is NOT inside the part — it portals to the body — which is what lets it
+    // survive the part going away.
     const part = view.container.querySelector('[data-slot="list.lineSpacing"]');
     expect(part?.querySelector('[role="dialog"]')).toBeNull();
-    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
   });
 
   test('closing the Paragraph dialog hands focus back to the line-spacing trigger', async () => {
@@ -521,15 +522,15 @@ describe('the shaped parts', () => {
     await act(async () => {
       options.click();
     });
-    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
 
-    const cancel = [...view.container.querySelectorAll('button')].find(
+    const cancel = [...document.body.querySelectorAll('button')].find(
       (node) => node.textContent?.trim() === 'Cancel'
     )!;
     await act(async () => {
       cancel.click();
     });
-    expect(view.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
 

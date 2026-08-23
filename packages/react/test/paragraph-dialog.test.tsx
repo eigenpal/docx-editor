@@ -83,26 +83,34 @@ function mountDialog(body: string) {
   return { view, editor: () => instance!, closes: () => closed, openDialog, close };
 }
 
-const field = (view: ReturnType<typeof render>, label: string) =>
-  view.container.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLSelectElement;
+/**
+ * Where to look for the dialog's controls.
+ *
+ * The dialog portals to `document.body`, so `view.container` no longer holds it. The whole
+ * document does, and each test mounts one dialog, so `document` is the honest root.
+ */
+const root = (): Document => document;
 
-const checkboxFor = (view: ReturnType<typeof render>, text: string) => {
-  const wrapper = [...view.container.querySelectorAll('label')].find((node) =>
+const field = (_view: ReturnType<typeof render>, label: string) =>
+  root().querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLSelectElement;
+
+const checkboxFor = (_view: ReturnType<typeof render>, text: string) => {
+  const wrapper = [...root().querySelectorAll('label')].find((node) =>
     node.textContent?.includes(text)
   );
   return wrapper?.querySelector('input[type="checkbox"]') as HTMLInputElement;
 };
 
-const cancelButton = (view: RenderResult): HTMLButtonElement => {
-  const found = [...view.container.querySelectorAll('button')].find(
+const cancelButton = (_view: RenderResult): HTMLButtonElement => {
+  const found = [...root().querySelectorAll('button')].find(
     (node) => node.textContent?.trim() === 'Cancel'
   );
   if (!found) throw new Error('no Cancel button');
   return found;
 };
 
-const okButton = (view: ReturnType<typeof render>) =>
-  [...view.container.querySelectorAll('button')].find(
+const okButton = (_view: ReturnType<typeof render>) =>
+  [...root().querySelectorAll('button')].find(
     (node) => node.textContent === 'OK'
   ) as HTMLButtonElement;
 
@@ -302,7 +310,7 @@ describe('the Paragraph dialog', () => {
     await openDialog();
     expect(editor().surface!.formatting().tabStops).toBeNull();
 
-    const clearAll = [...view.container.querySelectorAll('button')].find(
+    const clearAll = [...root().querySelectorAll('button')].find(
       (node) => node.textContent?.trim() === 'Clear all'
     );
     if (!clearAll) throw new Error('no Clear all button');
@@ -464,7 +472,7 @@ describe('the Paragraph dialog', () => {
     expect(editor().surface!.formatting().spaceBeforePt).toBeNull();
     // Absent, not disagreed: the box shows a number rather than the mixed placeholder.
     expect((field(view, 'Before') as HTMLInputElement).value).toBe('0');
-    expect(view.container.textContent).not.toContain('Mixed');
+    expect(document.body.textContent).not.toContain('Mixed');
   });
 
   test('a mixed spacing field opens empty, and stays mixed if left alone', async () => {
@@ -495,7 +503,7 @@ describe('the Paragraph dialog', () => {
       editor().surface!.selectAll();
     });
     await openDialog();
-    expect(view.container.textContent).toContain('different tab stops');
+    expect(document.body.textContent).toContain('different tab stops');
   });
 
   test('changing the line rule and changing back restores the value it opened on', async () => {
@@ -535,7 +543,7 @@ describe('the Paragraph dialog', () => {
     });
     await openDialog();
 
-    const panel = view.container.querySelector('[role="dialog"]');
+    const panel = root().querySelector('[role="dialog"]');
     if (!panel) throw new Error('the dialog did not render');
     const focusable = [...panel.querySelectorAll<HTMLElement>('button, input, select')].filter(
       (node) => !node.hasAttribute('disabled')
@@ -571,7 +579,7 @@ describe('the Paragraph dialog', () => {
       fireEvent.keyDown(alignment, { key: 'Enter' });
     });
     // Still open, and nothing written.
-    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(root().querySelector('[role="dialog"]')).not.toBeNull();
     expect(editor().snapshot().canUndo).toBe(false);
   });
 
@@ -593,10 +601,10 @@ describe('the Paragraph dialog', () => {
       okButton(view).click();
     });
 
-    const alert = view.container.querySelector('[role="alert"]');
+    const alert = root().querySelector('[role="alert"]');
     expect(alert).not.toBeNull();
     // Still open, because nothing was written.
-    expect(view.container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(root().querySelector('[role="dialog"]')).not.toBeNull();
   });
 
   test('a no-change OK writes nothing, so it cannot detach a paragraph from its style', async () => {

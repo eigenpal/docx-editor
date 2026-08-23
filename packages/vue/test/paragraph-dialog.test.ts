@@ -84,9 +84,14 @@ function mountDialog(body: string) {
   return { container, app, open, editor };
 }
 
-/** One labelled control inside the dialog, found the way a user finds it. */
+/**
+ * One labelled control inside the dialog, found the way a user finds it.
+ *
+ * Searches the whole document, not the mount container: the dialog teleports to the body.
+ */
 function field(container: HTMLElement, label: string): HTMLInputElement | HTMLSelectElement {
-  const found = [...container.querySelectorAll('input, select')].find(
+  void container;
+  const found = [...document.querySelectorAll('input, select')].find(
     (node) => node.getAttribute('aria-label') === label
   );
   if (!found) throw new Error(`no control labelled ${label}`);
@@ -95,7 +100,8 @@ function field(container: HTMLElement, label: string): HTMLInputElement | HTMLSe
 
 /** A checkbox, found by the visible text of the label that wraps it. */
 function checkboxFor(container: HTMLElement, text: string): HTMLInputElement {
-  const found = [...container.querySelectorAll('label')].find((node) =>
+  void container;
+  const found = [...document.querySelectorAll('label')].find((node) =>
     node.textContent?.includes(text)
   );
   const box = found?.querySelector('input[type="checkbox"]');
@@ -111,7 +117,8 @@ function flagsOf(editor: DocxEditorInstance) {
 }
 
 const okButton = (container: HTMLElement): HTMLButtonElement => {
-  const found = [...container.querySelectorAll('button')].find((node) =>
+  void container;
+  const found = [...document.querySelectorAll('button')].find((node) =>
     /^(OK|Apply)$/i.test(node.textContent?.trim() ?? '')
   );
   if (!found) throw new Error('no OK button');
@@ -185,7 +192,7 @@ describe('the Vue Paragraph dialog', () => {
   test('opens focused, so Escape closes it without the user tabbing in first', async () => {
     // Escape is bound on the overlay, so it only fires once focus is inside the dialog.
     // A dialog that opens with focus left on the document cannot be dismissed by keyboard.
-    const { container, app, open, editor } = mountDialog(p('alpha'));
+    const { app, open, editor } = mountDialog(p('alpha'));
     try {
       await flush();
       editor().surface!.selectAll();
@@ -193,7 +200,7 @@ describe('the Vue Paragraph dialog', () => {
       open.value = true;
       await flush();
 
-      const panel = container.querySelector('[role="dialog"]');
+      const panel = document.querySelector('[role="dialog"]');
       expect(panel).not.toBeNull();
       expect(document.activeElement === panel || panel!.contains(document.activeElement)).toBe(
         true
