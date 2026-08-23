@@ -284,6 +284,84 @@ export function contextualSpacingFlowKeys(
 }
 
 /**
+ * Flow keys that also carry each block's PARAGRAPH BORDER GROUP membership.
+ *
+ * Consecutive paragraphs with identical border settings are ONE bordered block in Word
+ * (`w:between`, §17.3.1.24): the box opens above the first and closes below the last, and
+ * every interior boundary carries the `between` rule instead of a top and a bottom. So a
+ * paragraph's own bottom edge — which rule is drawn, how much vertical extent it claims, and
+ * whether it publishes a `bottomBorder` record at all — is a function of the block AFTER it.
+ *
+ * Nothing about that reaches the block's content key, so the incremental pass resumed past a
+ * paragraph that had just stopped being the last of its group and kept the closing edge it no
+ * longer owned. The extent is real height, so the error compounds down the flow: a
+ * three-paragraph group edited on its last member laid out over three pages where the same
+ * bytes reopened took two.
+ *
+ * Both bits go in, not only the forward one. Incremental RESUME is a prefix cut, where a
+ * backward dependency is safe because the earlier block moving re-places everything after it.
+ * The convergence tail is a SUFFIX cut, where backward is the exposed direction: a block can
+ * sit inside the common suffix while the paragraph above it joins or leaves its group.
+ *
+ * No repro is known for that, and the reason is worth writing down: the tail's guard compares
+ * fragment SIGNATURES, and `semantic-fragment-signature.ts` hashes every `w:pBdr` stroke, so
+ * even a height-neutral group change (a different `w:color` on the same `w:sz`) moves the
+ * signature of the paragraph that changed. `above` is folded anyway. That guard only sees a
+ * changed paragraph still pending on the page being built, it is not the guard that owns this
+ * question, and the bit is free — one string comparison the fold already has in hand.
+ *
+ * `groupKeyAt` answers `''` for a block that can never group: a table, or a paragraph with no
+ * borders at all. Two paragraphs group only when their keys are EQUAL, which is what makes an
+ * indent change split a group — the key carries the box geometry as well as the rules.
+ */
+export function borderGroupFlowKeys(
+  keys: string[],
+  groupKeyAt: (index: number) => string
+): string[] {
+  let flow = keys;
+  for (let index = 0; index < keys.length; index += 1) {
+    const group = groupKeyAt(index);
+    if (group === '') continue;
+    const above = index > 0 && groupKeyAt(index - 1) === group;
+    const below = index + 1 < keys.length && groupKeyAt(index + 1) === group;
+    if (flow === keys) flow = [...keys];
+    flow[index] = `${flow[index]}~bg~${above ? 1 : 0}${below ? 1 : 0}`;
+  }
+  return flow;
+}
+
+/**
+ * Flow keys that also carry each block's TOC FIELD verdict.
+ *
+ * A TOC is a complex field spanning paragraphs: a begin paragraph holding `fldChar begin` and
+ * the `TOC` instruction, cached result paragraphs, an end paragraph. Layout answers three
+ * questions per paragraph from that shape — suppress the field chrome, keep one placeholder
+ * line on the begin paragraph because the TOC resolved to nothing, suppress a blank cached
+ * result row — and each answer is read from the OTHER paragraphs of the same field.
+ *
+ * The begin paragraph is the sharp case: whether it keeps a placeholder line depends on
+ * whether any RESULT paragraph after it still carries visible text. Refreshing a TOC that
+ * comes back empty rewrites the result paragraphs and leaves the begin paragraph untouched,
+ * so resume started at the first result and reused a begin paragraph that had just gone from
+ * "emits nothing" to "emits a placeholder line" — the line simply vanished for the life of
+ * the session, and reopening the same bytes brought it back.
+ *
+ * The three raw membership bits go in rather than the two booleans layout derives from them,
+ * so the fold stays correct whatever the derivation grows into. `verdictAt` answers `''` for
+ * a block no TOC touches, which is every block of a document that has no TOC.
+ */
+export function tocFieldFlowKeys(keys: string[], verdictAt: (index: number) => string): string[] {
+  let flow = keys;
+  for (let index = 0; index < keys.length; index += 1) {
+    const verdict = verdictAt(index);
+    if (verdict === '') continue;
+    if (flow === keys) flow = [...keys];
+    flow[index] = `${flow[index]}~toc~${verdict}`;
+  }
+  return flow;
+}
+
+/**
  * Flow keys that carry a `w:keepNext` chain's SUCCESSOR KEY.
  *
  * RUN THIS FOLD LAST. It is the only one that splices a neighbour's whole key into a

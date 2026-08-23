@@ -60,9 +60,11 @@ import {
 import { resolveParagraphBorders } from './paragraph-border-resolve.ts';
 import {
   adjustedBreakIndex,
+  borderGroupFlowKeys,
   keepNextFlowKeys,
   listMarkerFlowKeys,
   contextualSpacingFlowKeys,
+  tocFieldFlowKeys,
   keepNextGroupHeight,
   paragraphKeeps,
   MAX_KEEP_NEXT_CHAIN,
@@ -447,6 +449,61 @@ function listTokenForTableBlock(
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
 
+/** The three TOC id sets {@link tocFieldFlowKeys} folds, as one argument. */
+interface TocIdSets {
+  readonly chrome: ReadonlySet<string> | undefined;
+  readonly placeholder: ReadonlySet<string> | undefined;
+  readonly suppressed: ReadonlySet<string> | undefined;
+}
+
+/**
+ * A CONTENT token for one TOC id set, memoized per set object.
+ *
+ * The prepass memo needs to know when the sets moved, and identity cannot answer that: the
+ * sets are derived per `OoxmlPart` and every edit publishes a new part, so a set is a new
+ * object after every keystroke while holding exactly the same ids. Comparing by identity
+ * would rebuild the prepass of every section that holds a TOC paragraph on every keystroke.
+ *
+ * Content is what the verdicts actually read, and it is cheap: a set holds a TOC's begin, end
+ * and result paragraph ids — dozens, not thousands — and the token is computed once per set
+ * object, so a whole pass over a many-section document pays for it once. Iteration order is
+ * document order out of `detectBodyTocs`, and node ids survive an edit, so the token is
+ * stable exactly while the TOCs are.
+ *
+ * `''` for an absent or empty set, which is every set of every document with no TOC.
+ */
+const tocIdSetTokens = new WeakMap<ReadonlySet<string>, string>();
+function tocIdSetToken(ids: ReadonlySet<string> | undefined): string {
+  if (ids === undefined || ids.size === 0) return '';
+  const cached = tocIdSetTokens.get(ids);
+  if (cached !== undefined) return cached;
+  const token = [...ids].join(',');
+  tocIdSetTokens.set(ids, token);
+  return token;
+}
+
+/**
+ * One token for all three sets, or `''` when the part holds no TOC at all.
+ *
+ * Compared WHOLE by the prepass memo rather than per section, which is what makes the
+ * straddling case work in BOTH directions. A TOC field can span a section break, so a
+ * section's own blocks can sit still while a paragraph in it gains or loses a verdict
+ * decided in another section — and a section that reads the sets today may have read
+ * nothing yesterday. Keying the check on whether THIS section currently reads them closes
+ * only the first of those; keying it on the part's whole TOC shape closes both.
+ *
+ * The conservative half of that trade is that a real TOC change invalidates every section's
+ * prepass. Ordinary typing does not move the token — the ids are the same paragraphs — so
+ * what pays is a refresh or an insert, which rewrites the body anyway.
+ */
+function tocIdsToken(ids: TocIdSets): string {
+  const chrome = tocIdSetToken(ids.chrome);
+  const placeholder = tocIdSetToken(ids.placeholder);
+  const suppressed = tocIdSetToken(ids.suppressed);
+  if (chrome === '' && placeholder === '' && suppressed === '') return '';
+  return `${chrome}|${placeholder}|${suppressed}`;
+}
+
 /**
  * One section's whole prepass — prepared entries, cache keys, flow keys and document
  * order — kept on the section's {@link LayoutSession} and reused verbatim while every
@@ -464,7 +521,22 @@ interface SectionPrepass {
   readonly paragraphDocumentOrder: ReadonlyMap<string, number>;
   readonly keepsNext: boolean[];
   readonly markerTexts: (string | undefined)[];
+  readonly tocToken: string;
   readonly flowKeys: string[];
+}
+
+/**
+ * One paragraph's three raw TOC id-set memberships, as {@link tocFieldFlowKeys} folds them.
+ *
+ * Raw membership rather than the two booleans `breakBlock` derives from them, so the fold
+ * stays correct if the derivation changes. `''` means no TOC touches this paragraph.
+ */
+function tocVerdictFor(paragraphId: string, ids: TocIdSets): string {
+  const chrome = ids.chrome?.has(paragraphId) ?? false;
+  const placeholder = ids.placeholder?.has(paragraphId) ?? false;
+  const suppressed = ids.suppressed?.has(paragraphId) ?? false;
+  if (!chrome && !placeholder && !suppressed) return '';
+  return `${chrome ? 1 : 0}${placeholder ? 1 : 0}${suppressed ? 1 : 0}`;
 }
 const drawingSourceOrderByContext = new WeakMap<
   InlineDrawingLayoutContext,
@@ -791,6 +863,13 @@ function layoutBlocksPass(
   const tocChromeParagraphIds = options.tocFieldChromeParagraphIds;
   const emptyTocPlaceholderIds = options.emptyTocPlaceholderParagraphIds;
   const emptyTocSuppressedResultIds = options.emptyTocSuppressedResultParagraphIds;
+  const tocIds: TocIdSets = {
+    chrome: tocChromeParagraphIds,
+    placeholder: emptyTocPlaceholderIds,
+    suppressed: emptyTocSuppressedResultIds,
+  };
+  /** `''` for a part with no TOC, which skips the per-block verdict scan entirely. */
+  const tocToken = tocIdsToken(tocIds);
   const producer =
     (options.producer ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
@@ -1026,6 +1105,7 @@ function layoutBlocksPass(
     prepassMemo.contentWidth === contentWidth &&
     prepassMemo.styleCascade === styleCascade &&
     prepassMemo.listItems === listItems &&
+    prepassMemo.tocToken === tocToken &&
     prepassMemo.bodies.length === bodies.length &&
     prepassMemo.bodies.every((block, index) => block === bodies[index]);
   const prepass: SectionPrepass = prepassValid ? prepassMemo : buildSectionPrepass();
@@ -1042,6 +1122,45 @@ function layoutBlocksPass(
       (entry) => entry.kind === 'paragraph' && entry.contextualSpacing
     );
     const styleIds = prepared.map((entry) => (entry.kind === 'paragraph' ? entry.styleId : null));
+    // A paragraph's bottom edge belongs to its border GROUP, which the block after it can
+    // join or leave. A table never groups, and neither does a paragraph with no borders.
+    const borderGroupKeys = prepared.map((entry) =>
+      entry.kind === 'paragraph' ? entry.borderGroupKey : ''
+    );
+    // Which lines a TOC field's paragraphs emit at all, decided by the OTHER paragraphs of
+    // the same field. A part with no TOC skips the scan outright rather than asking three
+    // empty sets about every block it holds.
+    const tocVerdicts =
+      tocToken === ''
+        ? []
+        : prepared.map((entry) =>
+            entry.kind === 'paragraph' ? tocVerdictFor(entry.paragraph.id, tocIds) : ''
+          );
+
+    // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
+    // stored under; the CROSS-BLOCK properties make the two differ: `w:keepNext`
+    // (§17.3.1.15), the list marker, `w:contextualSpacing` (§17.3.1.9), paragraph border
+    // groups (§17.3.1.24) and the TOC field verdicts — each of which makes a block's
+    // placement depend on a block it does not contain.
+    //
+    // Each fold returns its input BY IDENTITY when nothing folds, so a document that reads
+    // across no boundary at all reaches the end holding the array it started with.
+    let flow = contextualSpacingFlowKeys(
+      keys,
+      (index) => contextualSpacings[index]!,
+      (index) => styleIds[index] ?? null
+    );
+    flow = borderGroupFlowKeys(flow, (index) => borderGroupKeys[index]!);
+    if (tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => tocVerdicts[index]!);
+    flow = listMarkerFlowKeys(flow, (index) => markerTexts[index]);
+    // LAST, and the order is load-bearing. `keepNextFlowKeys` is the only fold that splices
+    // a NEIGHBOUR'S WHOLE KEY into a block's own, so whatever it reads has to be finished:
+    // run it first and a chain head carries its members' pre-fold keys, which is a head that
+    // never re-places when a member's marker, contextual or border verdict moves. That is
+    // latent rather than live today only because `keepNextGroupHeight` prices AUTHORED
+    // spacing; folding last makes the composition correct whatever that lookahead grows into.
+    flow = keepNextFlowKeys(flow, (index) => keepsNext[index]!);
+
     return {
       bodies,
       producer,
@@ -1059,29 +1178,8 @@ function layoutBlocksPass(
       ),
       keepsNext,
       markerTexts,
-      // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
-      // stored under; the CROSS-BLOCK properties make the two differ: `w:keepNext`
-      // (§17.3.1.15), the list marker, and `w:contextualSpacing` (§17.3.1.9), each of which
-      // makes a block's placement depend on a block it does not contain.
-      //
-      // ORDER IS LOAD-BEARING, and `keepNextFlowKeys` is OUTERMOST for a reason. It is the
-      // only fold that splices a NEIGHBOUR'S WHOLE KEY into a block's own, so whatever it
-      // reads has to be finished: run it first and a chain head carries its members'
-      // pre-fold keys, which is a head that never re-places when a member's marker or
-      // contextual verdict moves. That is latent rather than live today only because
-      // `keepNextGroupHeight` prices AUTHORED spacing; folding last makes the composition
-      // correct whatever that lookahead grows into.
-      flowKeys: keepNextFlowKeys(
-        listMarkerFlowKeys(
-          contextualSpacingFlowKeys(
-            keys,
-            (index) => contextualSpacings[index]!,
-            (index) => styleIds[index] ?? null
-          ),
-          (index) => markerTexts[index]
-        ),
-        (index) => keepsNext[index]!
-      ),
+      tocToken,
+      flowKeys: flow,
     };
   }
   if (session && drawingEpoch !== null && !prepassValid) session.prepass = prepass;
