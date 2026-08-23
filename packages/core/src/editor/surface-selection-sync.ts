@@ -266,7 +266,15 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    */
   function reconcileParagraphFromDom(paragraphId: string): void {
     const modelText = deps.textOf(paragraphId);
-    const painted = paintedTextOf(pagesLayer, paragraphId, modelText);
+    // The browser's own selection says WHICH painted copy was composed into, for a paragraph
+    // the page repeats: a shared header, a `w:tblHeader` row, a twice-referenced note. The IME
+    // leaves the caret in the text it just committed, so this is that copy.
+    const painted = paintedTextOf(
+      pagesLayer,
+      paragraphId,
+      modelText,
+      document.getSelection()?.anchorNode ?? null
+    );
     if (painted === null) return;
     const plan = paragraphReplacePlan(paragraphId, modelText, painted);
     if (!plan) return;
