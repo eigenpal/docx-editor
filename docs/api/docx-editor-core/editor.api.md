@@ -411,6 +411,18 @@ export const CHROME_GROUPS: readonly [{
         };
     }];
 }, {
+    readonly id: "paragraph";
+    readonly labelKey: "dialogs.paragraph.title";
+    readonly contextual: true;
+    readonly controls: readonly [{
+        readonly id: "dialog";
+        readonly labelKey: "lineSpacing.options";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }];
+}, {
     readonly id: "file";
     readonly labelKey: "toolbar.file";
     readonly contextual: true;
@@ -592,7 +604,7 @@ export interface ChromeGroup<Id extends string = string, ControlId extends strin
 }
 
 // @public
-export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'file' | 'insert';
+export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'paragraph' | 'file' | 'insert';
 
 // @public
 export interface ChromeMenu {
@@ -646,7 +658,7 @@ export interface ChromeMenuSubmenuEntry {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1385,6 +1397,8 @@ export interface PaginatedSurface {
             readonly numStart?: number;
         };
     }): boolean;
+    setParagraphFormat(update: SurfaceParagraphFormat): boolean;
+    setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
     }): void;
@@ -1464,6 +1478,38 @@ export interface PaginatedSurfaceState {
     readonly revision: number;
     // (undocumented)
     readonly selection: SemanticSelection;
+}
+
+// @public
+export interface ParagraphFlags {
+    // (undocumented)
+    readonly contextualSpacing: boolean | null;
+    // (undocumented)
+    readonly keepLines: boolean | null;
+    // (undocumented)
+    readonly keepNext: boolean | null;
+    // (undocumented)
+    readonly pageBreakBefore: boolean | null;
+    // (undocumented)
+    readonly widowControl: boolean | null;
+}
+
+// @public
+export interface ParagraphPropertyEdit {
+    readonly attributes?: Record<string, string | null>;
+    // (undocumented)
+    readonly localName: string;
+    readonly mergeAttributes?: boolean;
+}
+
+// @public
+export interface ParagraphTabStop {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
 }
 
 // @public
@@ -1840,6 +1886,7 @@ export interface SurfaceFormatting {
     readonly bold: boolean;
     // (undocumented)
     readonly color: string | null;
+    readonly disagrees: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily: string | null;
     readonly fontSizeHalfPoints: number | null;
@@ -1852,6 +1899,7 @@ export interface SurfaceFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     } | null;
+    readonly paragraphFlags: ParagraphFlags;
     // (undocumented)
     readonly spaceAfterPt: number | null;
     readonly spaceBeforePt: number | null;
@@ -1863,6 +1911,7 @@ export interface SurfaceFormatting {
     readonly subscript: boolean;
     // (undocumented)
     readonly superscript: boolean;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
     // (undocumented)
     readonly underline: boolean;
 }
@@ -1909,6 +1958,37 @@ export interface SurfaceOverlayCoordinates {
 
 // @public
 export function surfacePaintScale(zoom: number): number;
+
+// @public
+export interface SurfaceParagraphFormat {
+    // (undocumented)
+    readonly alignment?: 'left' | 'center' | 'right' | 'both';
+    // (undocumented)
+    readonly contextualSpacing?: boolean;
+    readonly indentFirstLineTwips?: number | null;
+    // (undocumented)
+    readonly indentLeftTwips?: number | null;
+    // (undocumented)
+    readonly indentRightTwips?: number | null;
+    // (undocumented)
+    readonly keepLines?: boolean;
+    // (undocumented)
+    readonly keepNext?: boolean;
+    // (undocumented)
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore?: boolean;
+    // (undocumented)
+    readonly spaceAfterPt?: number | null;
+    // (undocumented)
+    readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    readonly widowControl?: boolean;
+}
 
 // @public
 export const TABLE_BORDER_STYLE_OPTIONS: readonly TableBorderStyleOption[];

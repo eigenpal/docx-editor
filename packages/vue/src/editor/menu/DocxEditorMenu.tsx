@@ -15,6 +15,7 @@ import { useDocxEditor } from '../context';
 import { editorScopeFor } from '../editor-scope';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
+import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
@@ -114,6 +115,7 @@ const DocxEditorMenuRoot = defineComponent({
     const openedName = ref<string | null>(null);
     const activeMenu = ref<MenuId | null>(null);
     const pageSetupOpen = ref(false);
+    const paragraphDialogOpen = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
     const fileInputRef = ref<HTMLInputElement | null>(null);
 
@@ -157,6 +159,12 @@ const DocxEditorMenuRoot = defineComponent({
 
     const packagedPageSetup = () => {
       pageSetupOpen.value = true;
+    };
+
+    // The menu bar owns its own Paragraph dialog, the way it owns Page Setup's. It does not
+    // collapse, so this route survives the narrow window that hides the line-spacing menu.
+    const packagedParagraphDialog = () => {
+      paragraphDialogOpen.value = true;
     };
 
     const resolvedOpen = computed(() =>
@@ -204,6 +212,7 @@ const DocxEditorMenuRoot = defineComponent({
       onOpen: resolvedOpen.value,
       onSave: resolvedSave.value,
       onPageSetup: resolvedPageSetup.value,
+      onParagraphDialog: editorRef.value ? packagedParagraphDialog : undefined,
       onReportIssue: props.onReportIssue,
       reportIssue: props.reportIssue,
     }));
@@ -299,6 +308,12 @@ const DocxEditorMenuRoot = defineComponent({
             open={pageSetupOpen.value}
             onClose={() => {
               pageSetupOpen.value = false;
+            }}
+          />
+          <DocxEditorParagraphDialog
+            open={paragraphDialogOpen.value}
+            onClose={() => {
+              paragraphDialogOpen.value = false;
             }}
           />
         </>

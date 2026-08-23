@@ -347,6 +347,50 @@ function MenuPageSetupImpl({ className, hidden }: MenuActionProps) {
   );
 }
 
+/**
+ * The Paragraph dialog, from the menu bar.
+ *
+ * A second route on purpose. Its natural home is the line-spacing menu, but that control
+ * collapses into the toolbar's overflow panel on a narrow window and its submenu opens
+ * clipped — so a feature reachable only from there disappears entirely at around 1100px.
+ * The menu bar does not collapse.
+ *
+ * Same shape as page setup: no fixed command to dispatch, so the row asks through the
+ * slot's probe and is disabled with the engine's own words on a document it cannot rewrite.
+ */
+function MenuParagraphDialogImpl({ className, hidden }: MenuActionProps) {
+  const editor = useDocxEditor();
+  const context = useMenuContext();
+  const label = useMenuLabel();
+  const probe = chromeProbeForSlot('paragraph.dialog');
+  const allowed = editor && probe ? editor.can(probe) : null;
+  const engineOk = allowed?.ok === true;
+  const engineReason = allowed && !allowed.ok ? allowed.reason : null;
+  if (hidden) return null;
+  const control = chromeControlForSlot('paragraph.dialog');
+  const text = label(control?.labelKey ?? 'lineSpacing.options');
+  const enabled = engineOk && !!context.onParagraphDialog;
+  return (
+    <MenuRow
+      slot="paragraph.dialog"
+      icon={chromeIcon(control?.paths)}
+      disabled={!enabled}
+      {...(engineReason ? { title: engineReason } : {})}
+      onSelect={() => {
+        context.onParagraphDialog?.();
+        context.setOpenMenu(null);
+      }}
+      {...(className ? { className } : {})}
+    >
+      {text}
+    </MenuRow>
+  );
+}
+
+export const MenuParagraphDialog = Object.assign(MenuParagraphDialogImpl, {
+  docxSlot: 'paragraph.dialog' as const,
+});
+
 export const MenuPageSetup = Object.assign(MenuPageSetupImpl, {
   docxSlot: 'file.pageSetup' as ChromeSlotId,
 });
@@ -745,6 +789,7 @@ export function MenuEntry({ entry }: { entry: ChromeMenuEntry }) {
   if (entry.slot === 'file.open') return <MenuOpen />;
   if (entry.slot === 'file.save') return <MenuSave />;
   if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
+  if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
   if (entry.slot === 'image.insert') return <MenuImageInsert />;
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (

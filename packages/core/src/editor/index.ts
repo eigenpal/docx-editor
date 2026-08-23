@@ -145,6 +145,10 @@ export {
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
+  type ParagraphFlags,
+  type SurfaceParagraphFormat,
+  type ParagraphPropertyEdit,
+  type ParagraphTabStop,
   type SurfaceFormatting,
 } from './paginated-surface.ts';
 export {

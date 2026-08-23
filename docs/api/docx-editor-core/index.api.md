@@ -411,6 +411,18 @@ export const CHROME_GROUPS: readonly [{
         };
     }];
 }, {
+    readonly id: "paragraph";
+    readonly labelKey: "dialogs.paragraph.title";
+    readonly contextual: true;
+    readonly controls: readonly [{
+        readonly id: "dialog";
+        readonly labelKey: "lineSpacing.options";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }];
+}, {
     readonly id: "file";
     readonly labelKey: "toolbar.file";
     readonly contextual: true;
@@ -565,7 +577,7 @@ export interface ChromeMenuSubmenuEntry {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
@@ -1396,6 +1408,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         orientation?: 'portrait' | 'landscape';
         scope?: 'document' | 'section';
     };
+    setParagraphFormat: ParagraphFormatCommand;
     setParagraphSpacing: {
         beforePt?: number | null;
         afterPt?: number | null;
@@ -2098,6 +2111,65 @@ export interface Paragraph {
 }
 
 // @public
+export interface ParagraphDisagreements {
+    // (undocumented)
+    readonly alignment: boolean;
+    // (undocumented)
+    readonly lineSpacing: boolean;
+    // (undocumented)
+    readonly spaceAfterPt: boolean;
+    // (undocumented)
+    readonly spaceBeforePt: boolean;
+    // (undocumented)
+    readonly tabStops: boolean;
+}
+
+// @public
+export interface ParagraphFlags {
+    // (undocumented)
+    readonly contextualSpacing: boolean | null;
+    // (undocumented)
+    readonly keepLines: boolean | null;
+    // (undocumented)
+    readonly keepNext: boolean | null;
+    // (undocumented)
+    readonly pageBreakBefore: boolean | null;
+    // (undocumented)
+    readonly widowControl: boolean | null;
+}
+
+// @public
+export interface ParagraphFormatCommand {
+    // (undocumented)
+    alignment?: 'left' | 'center' | 'right' | 'justify';
+    // (undocumented)
+    contextualSpacing?: boolean;
+    indentFirstLineTwips?: number | null;
+    // (undocumented)
+    indentLeftTwips?: number | null;
+    // (undocumented)
+    indentRightTwips?: number | null;
+    // (undocumented)
+    keepLines?: boolean;
+    // (undocumented)
+    keepNext?: boolean;
+    // (undocumented)
+    lineSpacing?: {
+        rule: 'multiple' | 'exact' | 'atLeast';
+        value: number;
+    } | null;
+    // (undocumented)
+    pageBreakBefore?: boolean;
+    // (undocumented)
+    spaceAfterPt?: number | null;
+    // (undocumented)
+    spaceBeforePt?: number | null;
+    tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    widowControl?: boolean;
+}
+
+// @public
 export interface ParagraphSummary {
     // (undocumented)
     readonly paraId?: string;
@@ -2105,6 +2177,16 @@ export interface ParagraphSummary {
     readonly styleId?: string;
     // (undocumented)
     readonly text: string;
+}
+
+// @public
+export interface ParagraphTabStop {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
 }
 
 // @public
@@ -2379,6 +2461,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;
     // (undocumented)
@@ -2392,6 +2475,7 @@ export interface RunFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     };
+    readonly paragraphFlags?: ParagraphFlags;
     // (undocumented)
     readonly spaceAfterPt?: number;
     readonly spaceBeforePt?: number;
@@ -2402,6 +2486,7 @@ export interface RunFormatting {
     readonly subscript?: boolean;
     // (undocumented)
     readonly superscript?: boolean;
+    readonly tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     readonly underline?: boolean;
 }

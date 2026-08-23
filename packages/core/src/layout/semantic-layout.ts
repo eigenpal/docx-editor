@@ -2489,6 +2489,7 @@ function layoutBlocksPass(
                     }
                   : paragraphShadingBox(pending, regionX + indent.left, available)!,
             }),
+        tabStops: entry.tabStops,
         ...(marker ? { marker } : {}),
         // Final fragment only — a paragraph split across pages must not draw two pilcrows —
         // and `all-markup` only, as Word draws attribution in All Markup alone. The record's

@@ -77,7 +77,12 @@ export interface SurfaceFormatDeps {
 
 type FormatMethods = Pick<
   PaginatedSurface,
-  'setRunProperty' | 'setParagraphProperty' | 'toggleRunProperty' | 'formatting' | 'clearFormatting'
+  | 'setRunProperty'
+  | 'setParagraphProperty'
+  | 'setParagraphProperties'
+  | 'toggleRunProperty'
+  | 'formatting'
+  | 'clearFormatting'
 >;
 
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
@@ -259,6 +264,72 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     deps.setPendingFormats(mergedProperties(deps.pendingFormats() ?? [], incoming));
   };
 
+  /**
+   * Write paragraph properties over every paragraph the selection touches, in ONE commit.
+   *
+   * Shared by `setParagraphProperty` (one entry) and `setParagraphProperties` (a dialog's
+   * worth), so both answer the same questions about rectangles, story scope and what a
+   * write merges against.
+   */
+  const writeParagraphProperties = (
+    entries: readonly import('./paginated-surface-contract.ts').ParagraphPropertyEdit[]
+  ): void => {
+    if (entries.length === 0) return;
+    // A RECTANGLE IS NOT THE RANGE IT STANDS IN FOR. Read as a range, a selected column
+    // runs through every cell between its corners in document order, so centring the left
+    // column of a 2x2 table also centred the cell beside it — content the user did not
+    // select. Every run-property write already asks this question; this one did not.
+    const cells = deps.selectedCells?.();
+    const rectangle =
+      cells && cells.length > 0 ? [...paragraphsInCells(currentLayout.value, cells)] : null;
+    const { from, to } = orderedRange();
+    const order = rectangle ?? deps.paragraphOrder();
+    const firstIndex = rectangle ? 0 : order.indexOf(from.paragraphId);
+    const lastIndex = rectangle ? order.length - 1 : order.indexOf(to.paragraphId);
+    if (firstIndex === -1 || lastIndex === -1) return;
+    // EVERY paragraph the selection touches, not just the one the caret is in: selecting
+    // three paragraphs and pressing centre must centre three paragraphs.
+    //
+    // Merged against what each paragraph ITSELF authors, never the cascade the layout
+    // publishes: the op replaces the properties it names and drops the ones it does not,
+    // so its base has to be the paragraph's own `w:pPr` — see `directParagraphProperties`.
+    const part = storyPart();
+    const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => {
+      // Folded in order over the paragraph's OWN properties, so a batch that names the
+      // same element twice ends with the last word and every entry sees the ones before it.
+      let properties = directParagraphProperties(part, paragraphId);
+      for (const entry of entries) {
+        // `mergeAttributes` is for the properties that carry SEVERAL independent settings
+        // in one element. `w:spacing` holds the line rule, the space before and the space
+        // after; replacing it wholesale meant picking a line spacing deleted the
+        // paragraph's space-before, and adding space after deleted the line spacing. A
+        // null-valued attribute REMOVES that one, which is how Word's "Remove space before
+        // paragraph" differs from setting it to zero.
+        const merged = entry.mergeAttributes
+          ? {
+              ...(properties.find((property) => property.localName === entry.localName)
+                ?.attributes ?? {}),
+              ...entry.attributes,
+            }
+          : (entry.attributes ?? {});
+        const kept = Object.fromEntries(
+          Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
+        ) as Record<string, string>;
+        properties = mergedProperties(properties, {
+          localName: entry.localName,
+          ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
+        });
+      }
+      return { op: 'setParagraphProperties' as const, paragraphId, properties };
+    });
+    if (ops.length === 0) return;
+    // Word leaves the cells selected after a paragraph command, exactly as it does after
+    // Bold — the run-property writes above already say so.
+    commit(() => applyOps(ops, selectionMark()), undefined, {
+      keepCellSelection: rectangle !== null,
+    });
+  };
+
   return {
     setRunProperty(localName, attributes) {
       const incoming = { localName, ...(attributes ? { attributes } : {}) };
@@ -278,58 +349,12 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     },
 
     setParagraphProperty(localName, attributes, options) {
-      // A RECTANGLE IS NOT THE RANGE IT STANDS IN FOR. Read as a range, a selected column
-      // runs through every cell between its corners in document order, so centring the left
-      // column of a 2x2 table also centred the cell beside it — content the user did not
-      // select. Every run-property write already asks this question; this one did not.
-      const cells = deps.selectedCells?.();
-      const rectangle =
-        cells && cells.length > 0 ? [...paragraphsInCells(currentLayout.value, cells)] : null;
-      const { from, to } = orderedRange();
-      const order = rectangle ?? deps.paragraphOrder();
-      const firstIndex = rectangle ? 0 : order.indexOf(from.paragraphId);
-      const lastIndex = rectangle ? order.length - 1 : order.indexOf(to.paragraphId);
-      if (firstIndex === -1 || lastIndex === -1) return;
-      // EVERY paragraph the selection touches, not just the one the caret is in: selecting
-      // three paragraphs and pressing centre must centre three paragraphs.
-      //
-      // Merged against what each paragraph ITSELF authors, never the cascade the layout
-      // publishes: the op replaces the properties it names and drops the ones it does not,
-      // so its base has to be the paragraph's own `w:pPr` — see `directParagraphProperties`.
-      const part = storyPart();
-      const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => {
-        const own = directParagraphProperties(part, paragraphId);
-        // `mergeAttributes` is for the properties that carry SEVERAL independent settings
-        // in one element. `w:spacing` holds the line rule, the space before and the space
-        // after; replacing it wholesale meant picking a line spacing deleted the paragraph's
-        // space-before, and adding space after deleted the line spacing. A null-valued
-        // attribute REMOVES that one, which is how Word's "Remove space before paragraph"
-        // differs from setting it to zero.
-        const merged = options?.mergeAttributes
-          ? {
-              ...(own.find((property) => property.localName === localName)?.attributes ?? {}),
-              ...attributes,
-            }
-          : (attributes ?? {});
-        const kept = Object.fromEntries(
-          Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
-        ) as Record<string, string>;
-        return {
-          op: 'setParagraphProperties' as const,
-          paragraphId,
-          properties: mergedProperties(own, {
-            localName,
-            ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
-          }),
-        };
-      });
-      if (ops.length === 0) return;
-      // Word leaves the cells selected after a paragraph command, exactly as it does after
-      // Bold — the run-property writes above already say so.
-      commit(() => applyOps(ops, selectionMark()), undefined, {
-        keepCellSelection: rectangle !== null,
-      });
+      writeParagraphProperties([
+        { localName, ...(attributes ? { attributes } : {}), ...(options ?? {}) },
+      ]);
     },
+
+    setParagraphProperties: writeParagraphProperties,
 
     formatting: () =>
       // Pending caret formatting overlays the document's answer, so the toolbar shows what

@@ -5,6 +5,13 @@
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { IndentFormatting } from '../contracts/types.ts';
+import type {
+  ParagraphDisagreements,
+  ParagraphFlags,
+  SurfaceParagraphFormat,
+  ParagraphPropertyEdit,
+  ParagraphTabStop,
+} from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
@@ -228,6 +235,26 @@ export interface SurfaceFormatting {
    * must draw its handles somewhere and Word draws them at the first selected paragraph.
    */
   readonly indent: IndentFormatting | null;
+  /**
+   * The paragraph flags the Paragraph dialog shows as checkboxes, or null when the
+   * selection's paragraphs disagree about that one.
+   *
+   * `contextualSpacing` is "Don't add space between paragraphs of the same style"; the
+   * other four are its Pagination block. Each is read from the cascade, so a flag a STYLE
+   * sets reads as on — which is what a checkbox has to show.
+   */
+  readonly paragraphFlags: ParagraphFlags;
+  /**
+   * The paragraph's resolved custom tab stops, cascade included, or null when the selection
+   * disagrees or nothing is loaded. Positions in TWIPS, like every other measurement a
+   * control writes back.
+   */
+  readonly tabStops: readonly ParagraphTabStop[] | null;
+  /**
+   * Which of the paragraph-level reads above are `null` because the selection DISAGREES,
+   * as opposed to because nothing states them. See {@link ParagraphDisagreements}.
+   */
+  readonly disagrees: ParagraphDisagreements;
 }
 
 /**
@@ -554,6 +581,23 @@ export interface PaginatedSurface {
     attributes?: Record<string, string | null>,
     options?: { readonly mergeAttributes?: boolean }
   ): void;
+  /**
+   * Several paragraph properties in ONE transaction, so a dialog is one undo step.
+   *
+   * `setParagraphProperty` is this with a single entry. A dialog that fired one call per
+   * field would leave the user pressing Ctrl+Z five times to undo one OK, and would paint
+   * four intermediate layouts on the way.
+   */
+  setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
+  /**
+   * The Paragraph dialog as ONE write: alignment, indents, spacing, line spacing and the
+   * five paragraph flags, over every paragraph the selection touches.
+   *
+   * One transaction, so pressing OK is one undo step and the page repaints once. An omitted
+   * field is left as authored; `null` where the type allows it REMOVES the setting so the
+   * style supplies it again. Returns whether anything was written.
+   */
+  setParagraphFormat(update: SurfaceParagraphFormat): boolean;
   /**
    * Word's Clear All Formatting: direct run properties off the selected text, and every
    * paragraph the selection touches back to the default style with its direct paragraph
@@ -943,3 +987,11 @@ export interface PaginatedSurface {
 export type OpenPaginatedResult =
   | { readonly ok: true; readonly surface: PaginatedSurface }
   | { readonly ok: false; readonly reason: string; readonly detail?: string };
+
+export type {
+  ParagraphDisagreements,
+  ParagraphFlags,
+  SurfaceParagraphFormat,
+  ParagraphPropertyEdit,
+  ParagraphTabStop,
+} from './paragraph-format-contract.ts';

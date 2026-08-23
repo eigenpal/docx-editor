@@ -97,6 +97,11 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'alignment.justify': { parity: 'same' },
   'list.bullet': { parity: 'same' },
   'list.numbered': { parity: 'same' },
+
+  // The Paragraph dialog writes paragraph formatting, which is the whole subject of this
+  // contract: alignment, indents and spacing mean the same thing in a header as in the body.
+  // Declared `same` and left to the sweep to prove rather than assumed.
+  'paragraph.dialog': { parity: 'same' },
   'list.outdent': { parity: 'same' },
   'list.indent': { parity: 'same' },
   'list.lineSpacing': { parity: 'same' },

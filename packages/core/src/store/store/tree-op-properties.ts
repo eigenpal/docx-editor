@@ -19,7 +19,7 @@ import {
  * order is not merely untidy — Word reports the file as unreadable — and the flat property
  * list an op carries has no order of its own, so the merge imposes this one.
  */
-const CT_PPR_SEQUENCE: readonly string[] = [
+export const CT_PPR_SEQUENCE: readonly string[] = [
   'pStyle',
   'keepNext',
   'keepLines',
@@ -233,6 +233,31 @@ export function mergedPropertyChildren(
     }
   }
   return inSchemaOrder(children, vocabulary.sequence);
+}
+
+/**
+ * Where a new child belongs in an `xsd:sequence` container: BEFORE the first modelled
+ * child that outranks it.
+ *
+ * `CT_PPrBase` is a strict sequence, so an element dropped in the wrong slot makes the
+ * file unreadable in Word even though every value in it is correct. Children the sequence
+ * does not model (a `w14:` effect, an `mc:AlternateContent`) are skipped rather than
+ * ranked — their position is not ours to decide, the same rule {@link inSchemaOrder} follows.
+ */
+export function schemaInsertIndex(
+  children: readonly OoxmlNode[],
+  sequence: readonly string[],
+  localName: string
+): number {
+  const rank = sequence.indexOf(localName);
+  if (rank < 0) return children.length;
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
+    if (!child || child.kind === 'textValue') continue;
+    const childRank = sequence.indexOf(child.localName);
+    if (childRank >= 0 && childRank > rank) return index;
+  }
+  return children.length;
 }
 
 /**

@@ -53,6 +53,7 @@ const EXPECTED_GROUPS = [
   'contentControl',
   'image',
   'table',
+  'paragraph',
   'file',
   'insert',
 ];
@@ -100,6 +101,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'table.borderStyle',
   'table.borderWidth',
   'table.cellFill',
+  'paragraph.dialog',
   'file.open',
   'file.save',
   'file.pageSetup',
@@ -269,7 +271,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(54);
+    expect(chromeControlCount()).toBe(55);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {

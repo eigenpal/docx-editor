@@ -29,16 +29,28 @@ import {
   sectionChild,
   targetSectionNodes,
 } from './tree-op-section-address.ts';
-import type { OoxmlProperty, TreeDocOp, TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
+import type {
+  OoxmlProperty,
+  TabStopWrite,
+  TreeDocOp,
+  TreeOpEffect,
+  TreeOpResult,
+} from './tree-op-types.ts';
 import {
   TEXT_DEPS,
+  attributeValueOf,
   cloneWithNewIds,
   fromEdit,
   namedChild,
   ok,
   paragraphPropertiesNodeOf,
 } from './tree-op-nodes.ts';
-import { RUN_VOCABULARY, mergedPropertyChildren } from './tree-op-properties.ts';
+import {
+  CT_PPR_SEQUENCE,
+  RUN_VOCABULARY,
+  mergedPropertyChildren,
+  schemaInsertIndex,
+} from './tree-op-properties.ts';
 
 /**
  * A `w:pPr` without its `w:sectPr`, keeping identity when there is none. `undefined`
@@ -276,6 +288,186 @@ export function applySetListNumbering(
     children: [numPr],
   } as unknown as OoxmlNode;
   // `w:pPr` must be the paragraph's FIRST child per the schema.
+  return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
+}
+
+/**
+ * Replace a paragraph's custom tab stops (`w:tabs`), or remove them entirely.
+ *
+ * A DEDICATED op, for the same reason `setListNumbering` is one: `w:tabs` carries its meaning
+ * in CHILDREN (`w:tab`), and `OoxmlProperty` is flat — a name and attributes. `propertyElement`
+ * keeps the children of the node it replaces, so a property write can PRESERVE tab stops but
+ * can never author one. The whole list is replaced rather than merged, because that is what a
+ * tab-stop editor hands back: the rows as they now stand.
+ *
+ * Stops are written in ascending position, which is the order `w:tabs` is read in and the one
+ * a reader placing them expects.
+ */
+/** `w:tab` values the tab-stop reader does not model, and a write must therefore preserve. */
+const OPAQUE_TAB_VALUES: ReadonlySet<string> = new Set(['bar', 'num']);
+
+/**
+ * The most `w:tab` children one `w:tabs` may carry.
+ *
+ * Half what `applyTabsElement` is willing to walk, so a document this write produces is
+ * always fully readable by the reader that feeds it.
+ */
+const MAX_TAB_STOP_CHILDREN = 64;
+
+export function applySetParagraphTabStops(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  stops: readonly TabStopWrite[],
+  inForcePositionsTwips: readonly number[] | undefined,
+  options: EditOptions | undefined,
+  nextId: () => string
+): TreeOpResult {
+  const effect: TreeOpEffect = {
+    dirty: [paragraph.id],
+    created: [],
+    deleted: [],
+    dependencyKeys: TEXT_DEPS,
+    // A tab stop moves where text lands on the line, so the paragraph re-breaks.
+    impact: 'flow-structural',
+  };
+  const pPr = paragraphPropertiesNodeOf(paragraph);
+  const existing = namedChild(pPr, 'tabs');
+
+  const kept = new Set(stops.map((stop) => Math.round(stop.positionTwips)));
+  const existingTabs = (existing?.children ?? []).filter(
+    (child) => child.kind !== 'textValue' && child.localName === 'tab'
+  );
+  const positionOf = (child: (typeof existingTabs)[number]): number =>
+    Math.round(Number(attributeValueOf(child, 'pos')));
+  /**
+   * A `w:tab` this write cannot re-author, because the reader that feeds it never saw it.
+   *
+   * A `clear` is never opaque even at a fractional position: it is regenerated below from
+   * `standingClears`, and counting it here too emitted the same suppression twice — once
+   * carried through at `1440.5` and once regenerated at `1441`, inventing a clear the
+   * document never had at a position an inherited stop might occupy.
+   */
+  const isOpaque = (child: (typeof existingTabs)[number]): boolean =>
+    attributeValueOf(child, 'val') !== 'clear' &&
+    (OPAQUE_TAB_VALUES.has(attributeValueOf(child, 'val') ?? '') ||
+      !Number.isInteger(Number(attributeValueOf(child, 'pos'))));
+  // `w:bar` and `w:num` are not caret stops — a bar tab draws a vertical rule and `num` is
+  // a legacy list artefact — and a fractional `w:pos` is legal but rounded away on read. The
+  // reader reports none of them and an editor cannot name them, so a wholesale replace would
+  // delete, on the next unrelated tab edit, markup the user never saw. Carry them through.
+  const opaque = existingTabs.filter((child) => isOpaque(child) && !kept.has(positionOf(child)));
+  // Clears the paragraph ALREADY carries. These are state, not something to re-derive: a
+  // cleared stop is by definition absent from what is in force, so nothing downstream can
+  // tell the write to keep clearing it. Dropping one silently undoes the user's deletion,
+  // and re-deriving it on the pass after that made the document alternate between two
+  // formattings on repeated identical OKs.
+  const standingClears = existingTabs
+    .filter((child) => attributeValueOf(child, 'val') === 'clear')
+    .map(positionOf)
+    .filter((position) => Number.isFinite(position) && !kept.has(position));
+  // A stop that is in force and is no longer wanted needs an explicit `clear`, or whatever
+  // supplies it puts it straight back and the edit silently does nothing.
+  //
+  // Every unwanted in-force position gets one, including positions this paragraph authors
+  // itself. Excluding those looked right — the replace removes them anyway — but it is only
+  // safe when the position is EXCLUSIVELY direct: where the paragraph and its style both
+  // set a stop at 2160, dropping the direct one let the style's take its place, so "Clear
+  // All" reported success and the stop stayed (with a different alignment). A `clear` at a
+  // position nothing inherits is inert markup, which is the cheaper mistake.
+  const allClears = [
+    ...new Set([
+      ...standingClears,
+      ...(inForcePositionsTwips ?? [])
+        .map((position) => Math.round(position))
+        .filter((position) => !kept.has(position)),
+    ]),
+  ].sort((a, b) => a - b);
+  // Bounded, because a clear can never be retired: nothing downstream can say whether a
+  // suppressed position would come back without it, so `standingClears` re-emits every one
+  // forever. Left unbounded the element grew by one inert child per position the user had
+  // ever deleted, and the READER walks at most `MAX_TAB_STOPS * 2` children — so past that
+  // the real stops sorted off the end and the engine could no longer see the stops it had
+  // itself just written. A paragraph in that state is dead: the stop is in the file, and
+  // layout, paint and the dialog all report none.
+  //
+  // Real stops and carried-through markup are never sacrificed; only clears are dropped,
+  // lowest positions first, and only in a document with more cleared positions than Word
+  // allows tab stops. Losing a suppression there resurrects an inherited stop, which is
+  // visible and fixable. The alternative is a paragraph nothing can edit.
+  // Budgeted in priority order, because ALL THREE lists can outgrow the element.
+  //
+  // `opaque` comes straight out of the file, and a `w:tabs` carrying 200 bar tabs is a
+  // legal document: budgeting only the clears left the total unbounded, and 200 carried
+  // children sorted ahead of the stop the user just set pushed it past the reader's walk —
+  // the paragraph reporting no stops at all, which is exactly what the bound exists to
+  // prevent.
+  //
+  // Stops are what the user just asked for and are never dropped. Clears come next: losing
+  // one resurrects a stop they deleted, which moves text. Carried-through markup goes last
+  // — a lost bar tab is a missing vertical rule, the least harmful of the three.
+  const clearBudget = Math.max(0, MAX_TAB_STOP_CHILDREN - stops.length);
+  const cleared = allClears.slice(0, clearBudget);
+  const carried = opaque.slice(0, Math.max(0, clearBudget - cleared.length));
+
+  if (stops.length === 0 && cleared.length === 0 && carried.length === 0) {
+    if (!existing) return ok(part, effect);
+    return fromEdit(removeNode(part, existing.id, options), effect);
+  }
+
+  const authoredChildren = [
+    ...stops.map((stop) => ({ ...stop, positionTwips: Math.round(stop.positionTwips) })),
+    ...cleared.map((positionTwips) => ({ positionTwips, alignment: 'clear' as const })),
+  ]
+    .sort((a, b) => a.positionTwips - b.positionTwips)
+    .map((stop) =>
+      sectionElement(
+        nextId(),
+        'tab',
+        [
+          wmlAttribute('val', stop.alignment),
+          wmlAttribute('pos', String(stop.positionTwips)),
+          // `w:leader` defaults to `none`, so the common stop stays as Word writes it rather
+          // than carrying a redundant attribute. A `clear` never carries one: it removes a
+          // stop, and the leader travelled with the stop it is removing.
+          ...('leader' in stop && stop.leader && stop.leader !== 'none'
+            ? [wmlAttribute('leader', stop.leader)]
+            : []),
+        ],
+        []
+      )
+    );
+  // `w:tabs` is a bare sequence of `w:tab`, unordered by the schema, but the reader merges
+  // by position and a document is easier to read in order. The carried-through stops sort
+  // in with the rest on `w:pos`.
+  const tabs = sectionElement(
+    nextId(),
+    'tabs',
+    [],
+    [...authoredChildren, ...carried.map((child) => cloneWithNewIds(child, nextId))].sort(
+      (a, b) => Number(attributeValueOf(a, 'pos') ?? 0) - Number(attributeValueOf(b, 'pos') ?? 0)
+    )
+  );
+  if (existing) return fromEdit(replaceNode(part, existing.id, tabs, options), effect);
+  if (pPr) {
+    // `CT_PPrBase` is a strict `xsd:sequence`, and `w:tabs` sits at slot 11 — after
+    // `keepNext`, `keepLines`, `pageBreakBefore`, `framePr`, `widowControl`, `numPr`,
+    // `suppressLineNumbers`, `pBdr` and `shd`, not just after `pStyle` and `numPr`. Ranking
+    // against the whole sequence is the only way to land in a slot Word will read: a
+    // `w:pPr` that already carried `w:keepNext` otherwise came out with `w:tabs` in front
+    // of it, which `xmllint --schema wml.xsd` rejects and Word reports as unreadable.
+    const index = schemaInsertIndex(pPr.children, CT_PPR_SEQUENCE, 'tabs');
+    return fromEdit(insertChildren(part, pPr.id, index, [tabs], options), effect);
+  }
+  const created = {
+    id: nextId(),
+    kind: 'paragraphProperties',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'pPr',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children: [tabs],
+  } as unknown as OoxmlNode;
   return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
 }
 

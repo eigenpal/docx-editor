@@ -1809,6 +1809,7 @@ export interface ParagraphFragmentRecord {
     readonly shading?: string;
     readonly shadingBox?: LayoutBox;
     readonly spacing: ParagraphSpacing;
+    readonly tabStops: ResolvedTabStops;
 }
 
 // @public

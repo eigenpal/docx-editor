@@ -19,12 +19,35 @@ import {
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
+import { paragraphTabStopsOf } from './surface-formatting.ts';
+import {
+  lineSpacingAttributes,
+  paragraphFlagAttributes,
+  spacingSideAttributes,
+} from './paragraph-format-write.ts';
 import {
   directParagraphProperties,
   mergedProperties,
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
-import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import type {
+  PaginatedSurface,
+  SurfaceParagraphFormat,
+  ParagraphPropertyEdit,
+} from './paginated-surface-contract.ts';
+
+/**
+ * The dialog's checkbox fields, and the `w:pPr` element each writes.
+ *
+ * One table so the update shape and the write cannot drift apart.
+ */
+const PARAGRAPH_FLAG_PROPERTIES = [
+  ['contextualSpacing', 'contextualSpacing'],
+  ['keepNext', 'keepNext'],
+  ['keepLines', 'keepLines'],
+  ['widowControl', 'widowControl'],
+  ['pageBreakBefore', 'pageBreakBefore'],
+] as const satisfies readonly (readonly [keyof SurfaceParagraphFormat, string])[];
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
@@ -81,6 +104,7 @@ type StructureMethods = Pick<
   | 'toggleList'
   | 'adjustIndent'
   | 'setIndent'
+  | 'setParagraphFormat'
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
   | 'sectionProperties'
@@ -598,6 +622,129 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
             ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
           }),
         });
+      }
+      if (ops.length === 0) return false;
+      return commitOverTarget(() => applyOps(ops, selectionMark()));
+    },
+
+    setParagraphFormat(update) {
+      const touched = targetParagraphs();
+      if (touched === null || touched.length === 0) return false;
+      // ONE op per paragraph carrying EVERY field the dialog changed, so OK is one undo
+      // step and the page repaints once. Firing a command per field would leave the user
+      // pressing Ctrl+Z five times and would paint four intermediate layouts on the way.
+      const entries: ParagraphPropertyEdit[] = [];
+      if (update.alignment !== undefined) {
+        entries.push({ localName: 'jc', attributes: { val: update.alignment } });
+      }
+      const spacing: Record<string, string | null> = {
+        ...spacingSideAttributes('before', update.spaceBeforePt),
+        ...spacingSideAttributes('after', update.spaceAfterPt),
+        ...lineSpacingAttributes(update.lineSpacing),
+      };
+      if (Object.keys(spacing).length > 0) {
+        entries.push({ localName: 'spacing', attributes: spacing, mergeAttributes: true });
+      }
+      for (const [field, localName] of PARAGRAPH_FLAG_PROPERTIES) {
+        const on = update[field];
+        if (on !== undefined) {
+          entries.push({ localName, attributes: paragraphFlagAttributes(on) });
+        }
+      }
+      // Tab stops ride the SAME transaction as the properties above, so the dialog is still
+      // one undo step. They are a separate op because `w:tabs` carries `w:tab` children and
+      // a property is flat — see `applySetParagraphTabStops`.
+      const wantsTabStops = update.tabStops !== undefined;
+      const wantsIndent =
+        update.indentLeftTwips !== undefined ||
+        update.indentRightTwips !== undefined ||
+        update.indentFirstLineTwips !== undefined;
+      if (entries.length === 0 && !wantsIndent && !wantsTabStops) return false;
+
+      const ops: TreeDocOp[] = [];
+      for (const paragraphId of touched) {
+        const direct = directParagraphProperties(storyPart(), paragraphId);
+        // `w:ind` is built here rather than as another entry: its four settings are two
+        // pairs of mutually exclusive SPELLINGS, so the attributes depend on what the
+        // paragraph already authored — the same reason `setIndent` does it this way.
+        let properties = direct;
+        if (wantsIndent) {
+          const authored =
+            direct.find((property) => property.localName === 'ind')?.attributes ?? {};
+          let attributes: Record<string, string> = { ...authored };
+          if (update.indentLeftTwips !== undefined) {
+            attributes = writeIndentSide(attributes, 'left', 'start', update.indentLeftTwips);
+          }
+          if (update.indentRightTwips !== undefined) {
+            attributes = writeIndentSide(attributes, 'right', 'end', update.indentRightTwips);
+          }
+          if (update.indentFirstLineTwips !== undefined) {
+            attributes = writeFirstLine(attributes, update.indentFirstLineTwips);
+          }
+          properties = mergedProperties(properties, {
+            localName: 'ind',
+            ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+          });
+        }
+        for (const entry of entries) {
+          const merged = entry.mergeAttributes
+            ? {
+                ...(properties.find((property) => property.localName === entry.localName)
+                  ?.attributes ?? {}),
+                ...entry.attributes,
+              }
+            : (entry.attributes ?? {});
+          const kept = Object.fromEntries(
+            Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
+          ) as Record<string, string>;
+          properties = mergedProperties(properties, {
+            localName: entry.localName,
+            ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
+          });
+        }
+        // Only when there is something to write. `setParagraphProperties` REPLACES the
+        // paragraph's authorable `w:pPr` children with what it is handed, so pushing it for
+        // a tab-stops-only edit put the whole of `w:pPr` at the mercy of the `direct` read
+        // — a wrong base there deletes `w:pStyle`, `w:jc` and everything else rather than
+        // doing nothing.
+        // Only when there is something to write. `setParagraphProperties` REPLACES the
+        // paragraph's authorable `w:pPr` children with what it is handed, so pushing it for
+        // a tab-stops-only edit put the whole of `w:pPr` at the mercy of the `direct` read
+        // — a wrong base there deletes `w:pStyle`, `w:jc` and everything else rather than
+        // doing nothing. Defence in depth: the header test pins the part identity, and this
+        // makes a repeat of that mistake harmless for edits that name no property.
+        if (entries.length > 0 || wantsIndent) {
+          ops.push({ op: 'setParagraphProperties', paragraphId, properties });
+        }
+        if (wantsTabStops) {
+          // What the editor SAW, so the op can tell an inherited stop from an authored
+          // one. The read resolves the cascade and the write lands on the paragraph, so
+          // without this a style's stop survives a "Clear All" and the command still
+          // reports success — see `applySetParagraphTabStops`.
+          //
+          // Through `paragraphTabStopsOf`, which is the SAME walk the read uses. A
+          // page-fragment walk sees the body only: header, footer and note fragments hang
+          // off `page.header`/`page.footer`/`page.footnotes` and were never visited, so
+          // every paragraph in those stories cleared nothing and the style put its stop
+          // straight back — with the command still reporting success.
+          const inForce = paragraphTabStopsOf(deps.layout(), paragraphId);
+          ops.push({
+            op: 'setParagraphTabStops',
+            paragraphId,
+            stops: update.tabStops!.map((stop) => ({
+              positionTwips: Math.round(stop.positionTwips),
+              alignment: stop.alignment,
+              ...(stop.leader && stop.leader !== 'none' ? { leader: stop.leader } : {}),
+            })),
+            ...(inForce
+              ? {
+                  inForcePositionsTwips: inForce.stops.map((stop) =>
+                    Math.round(stop.positionPt * 20)
+                  ),
+                }
+              : {}),
+          });
+        }
       }
       if (ops.length === 0) return false;
       return commitOverTarget(() => applyOps(ops, selectionMark()));

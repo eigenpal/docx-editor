@@ -31,6 +31,7 @@ import type {
   ContentControlFilter,
   DocAnchor,
   DocRange,
+  ParagraphFormatCommand,
   Rect,
   Revision,
   RunFormatting,
@@ -954,82 +955,33 @@ export type ReviewItemPlacement =
  */
 export type DocumentEditingMode = 'editing' | 'suggesting' | 'viewing';
 
-/** Which cell edges a table border command targets. */
-export type TableBorderTarget =
-  | 'all'
-  | 'outside'
-  | 'inside'
-  | 'none'
-  | 'top'
-  | 'bottom'
-  | 'left'
-  | 'right';
-
-/** Concrete scopes that apply a complete border spec. */
-export type TableBorderEdgeTarget = Exclude<TableBorderTarget, 'none'>;
+import type {
+  TableBorderEdgeTarget,
+  TableBorderSpec,
+  TableCellVerticalAlignment,
+  TableColumnDividerResizeTarget,
+  TableColumnOccurrenceTarget,
+  TableRightEdgeResizeTarget,
+  TableRowOccurrenceTarget,
+} from './table-targets.ts';
 
 /**
- * Allowlisted OOXML table border line styles.
+ * Table addressing — border targets and row/column/divider references.
  *
- * Kept identical to `store/table-border-style.ts`; `table-border-style-parity.test-d.ts`
- * fails if the contract and store vocabularies drift.
+ * Re-exported rather than declared here so `editor.ts` stays under its line cap; see
+ * `table-targets.ts`.
  */
-export type TableBorderStyle = 'single' | 'dashed' | 'dotted' | 'double' | 'triple' | 'thick';
-
-/** Complete border spec for {@link EditorCommands.setTableBorders}. Size is in eighths of a point. */
-export interface TableBorderSpec {
-  readonly style: TableBorderStyle;
-  readonly size: number;
-  readonly color: ColorValue;
-}
-
-/** Vertical placement of content inside selected table cells. @public */
-export type TableCellVerticalAlignment = 'top' | 'center' | 'bottom';
-
-/**
- * Adjacent grid columns addressed by an internal divider resize gesture.
- *
- * `sourceRevision` is the PACKAGE revision of the layout the target was read from — the number
- * `getDocumentHandle()` reports, never one story's own. Commit MUST refuse when it no longer
- * equals the current one, even if an older layout remains published for geometry.
- */
-export interface TableColumnDividerResizeTarget {
-  readonly sourceRevision: number;
-  readonly tableId: string;
-  readonly leftGridColumnId: string;
-  readonly rightGridColumnId: string;
-  readonly isHeaderRepeat: boolean;
-}
-
-/**
- * Last grid column and table width addressed by an outer-right-edge resize gesture.
- *
- * `sourceRevision` follows the same rule as {@link TableColumnDividerResizeTarget}: the package
- * revision of the layout the target was read from, and commit refuses once it no longer equals
- * the current one.
- */
-export interface TableRightEdgeResizeTarget {
-  readonly sourceRevision: number;
-  readonly tableId: string;
-  readonly gridColumnId: string;
-  readonly isHeaderRepeat: boolean;
-}
-
-/** Explicit row occurrence. `sourceRevision` per {@link TableColumnDividerResizeTarget}. */
-export interface TableRowOccurrenceTarget {
-  readonly sourceRevision: number;
-  readonly tableId: string;
-  readonly rowId: string;
-  readonly isHeaderRepeat: boolean;
-}
-
-/** Explicit column occurrence. `sourceRevision` per {@link TableColumnDividerResizeTarget}. */
-export interface TableColumnOccurrenceTarget {
-  readonly sourceRevision: number;
-  readonly tableId: string;
-  readonly gridColumnId: string;
-  readonly isHeaderRepeat: boolean;
-}
+export type {
+  TableBorderEdgeTarget,
+  TableBorderSpec,
+  TableBorderStyle,
+  TableBorderTarget,
+  TableCellVerticalAlignment,
+  TableColumnDividerResizeTarget,
+  TableColumnOccurrenceTarget,
+  TableRightEdgeResizeTarget,
+  TableRowOccurrenceTarget,
+} from './table-targets.ts';
 
 /**
  * Every command the editor accepts, keyed by name with its payload as the value.
@@ -1104,6 +1056,16 @@ export interface EditorCommands
     right?: number | null;
     firstLine?: number | null;
   };
+  /**
+   * The Paragraph dialog as one command: alignment, indents, spacing, line spacing and
+   * the five paragraph flags, applied to every paragraph the selection touches.
+   *
+   * ONE undo step, because a dialog is one gesture. The single-purpose commands beside it
+   * (`setAlignment`, `setIndent`, `setLineSpacing`, `setParagraphSpacing`) stay the right
+   * choice for a toolbar button; this is for chrome that changes several at once.
+   */
+  setParagraphFormat: ParagraphFormatCommand;
+
   toggleList: { kind: 'bullet' | 'ordered' };
 
   insertRow: { where: 'above' | 'below'; target?: TableRowOccurrenceTarget };

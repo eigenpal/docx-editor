@@ -959,6 +959,7 @@ function placeCellParagraph(
     props,
     spacing: { before: appliedBefore, after: appliedAfter },
     indent,
+    tabStops,
     ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
     ...(strokes.length > 0 ? { borders: strokes } : {}),
     ...(shading === undefined ? {} : { shading }),
