@@ -124,7 +124,10 @@ import {
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { createFixedMeasurer } from '../layout/index.ts';
 import { layoutNoteById } from '../layout/note-layout.ts';
-import { paragraphFragmentsOfBlocks, type BlockFragmentRecord } from '../layout/semantic-records.ts';
+import {
+  paragraphFragmentsOfBlocks,
+  type BlockFragmentRecord,
+} from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 
 /**
@@ -329,7 +332,10 @@ function visibleNoteParagraphText(
     .join('');
 }
 
-function resolvedNoteText(reads: AutomationStoryReads, displayMode: 'proposed' | 'original'): string {
+function resolvedNoteText(
+  reads: AutomationStoryReads,
+  displayMode: 'proposed' | 'original'
+): string {
   const story = reads.story;
   if (story.kind !== 'note') return reads.text();
   const laid = layoutNoteById(reads.part, story.noteId, 400, {
