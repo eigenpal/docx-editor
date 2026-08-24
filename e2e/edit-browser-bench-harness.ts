@@ -15,6 +15,14 @@ export const EDIT_BROWSER_TRACKED_FIXTURE = 'synthetic-tracked-numbered.docx';
  * uncommitted — regenerate with `bun scripts/create-synthetic-tracked-fixture.mjs --huge`.
  */
 export const EDIT_BROWSER_HUGE_FIXTURE = 'synthetic-huge-tracked.docx';
+/**
+ * The pinned 521-page reported reproduction (SHA-256 in
+ * `e2e/fixtures/typing-perf-521pp.manifest.json`) — 12,820 paragraphs, 81 sections, tables,
+ * drawings, notes and TOCs. The synthetic fixtures above are sized for deterministic gates;
+ * this is the shape where per-keystroke costs that scale with the document actually show,
+ * and its rows lead the typing-latency table.
+ */
+export const EDIT_BROWSER_PINNED_HUGE_FIXTURE = 'typing-perf-521pp.docx';
 export const REVIEW_RAIL_ENABLED = process.env.EDIT_BROWSER_BENCH_REVIEW_RAIL !== '0';
 
 export function editBrowserBenchUrl(fixture: string = FIXTURE): string {

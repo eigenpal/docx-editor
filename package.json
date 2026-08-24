@@ -30,6 +30,8 @@
     "build:vue": "cd examples/vue && USE_PUBLISHED_PACKAGES=true ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true VITE_BASE_PATH=/vue/ vite build",
     "bench:edit": "bun scripts/bench/edit-bench.ts",
     "bench:edit:browser": "playwright test --config e2e/edit-browser-bench.config.ts",
+    "bench:huge": "bun scripts/bench/settle-bench.ts",
+    "bench:huge:browser": "bun scripts/bench/typing-url-audit.mjs",
     "bench:scope-waste": "bun scripts/bench/scope-waste-bench.ts",
     "changeset": "changeset",
     "check:adapter-css-thin": "node scripts/check-adapter-css-thin.mjs",

@@ -167,14 +167,17 @@ describe('browser typing-latency section', () => {
     expect(body).toContain('### Typing latency (browser)');
     expect(body).toContain('### Engine layout (headless)');
     expect(body.indexOf('Typing latency')).toBeLessThan(body.indexOf('Engine layout'));
-    expect(body).toContain('| editing-character | 40.00 ms | 30.00 ms | 🟢 -25.0% |');
+    // FRAME medians lead the row (48 = base input 40 + 8, 38 = head input 30 + 8): the
+    // input-task median pinned at the clock floor once typing buffered its work off the
+    // input task, so a table led by it colored nothing.
+    expect(body).toContain('| editing-character | 48.00 ms | 38.00 ms | 🟢 -20.8% |');
   });
 
   test('head-only browser report renders without deltas', () => {
     const body = renderComment(report({}), undefined, { headUx: uxReport({}) });
     expect(body).toContain('### Typing latency (browser)');
-    expect(body).toContain('| editing-character | 40.00 ms |');
-    expect(body).not.toContain('| Base median | Head median | Δ | Head p95 | Frame p95 |');
+    expect(body).toContain('| editing-character | 48.00 ms |');
+    expect(body).not.toContain('| Base frame | Head frame | Δ | Frame p95 | Input p95 |');
   });
 
   test('a browser fixture mismatch degrades that section to head-only', () => {
@@ -196,7 +199,7 @@ describe('browser typing-latency section', () => {
     const head = uxReport({});
     (head.scenarios as Array<{ name: string }>)[0]!.name = 'renamed-ux-scenario';
     const body = renderComment(report({}), report({}), { headUx: head, baseUx: base });
-    expect(body).toContain('| editing-character | 40.00 ms | — | n/a | — | — |');
+    expect(body).toContain('| editing-character | 48.00 ms | — | n/a | — | — |');
   });
 
   test('four oversized reports stay under the GitHub comment cap', () => {

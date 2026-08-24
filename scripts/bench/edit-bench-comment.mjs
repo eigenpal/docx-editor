@@ -164,8 +164,12 @@ function legendBlock() {
     '',
     '- **Base**: the `main` commit this PR builds on. **Head**: this PR.',
     '- **Median**: the typical sample. **p95**: 95 of 100 samples were faster than this.',
-    '- Browser table: **median/p95** time the keystroke handler blocks the page;',
-    '  **Frame p95** time until the edit is visible on screen.',
+    '- Browser table: **frame** is the time from the keystroke until the edit is',
+    '  visible on screen — the number a typing user feels. **Input p95** is how long',
+    '  the keystroke handler blocked the page (typing buffers its work off the input',
+    '  task, so this stays near zero by design).',
+    '- `521pp-*` rows run the pinned 521-page reproduction; the other rows run the',
+    '  small synthetic fixtures that exist for deterministic work-counter gates.',
     '- **Δ**: 🟢 faster, 🔴 slower, ⚪ inside the noise. Each side runs interleaved',
     '  rounds; a delta smaller than the run-to-run spread renders neutral.',
     '- **Work counters**: exact counts of layout work (paragraphs placed, pages',
@@ -237,32 +241,34 @@ function renderUxSection(headUx, baseUx) {
   if (!headUx) return [];
   const lines = ['### Typing latency (browser)', ''];
   const comparable = baseUx && baseUx.fixtureSha256 === headUx.fixtureSha256;
+  // FRAME latency leads every row: the time until the edit is visible. The input-task
+  // median used to lead, and the type buffer moved typing's work off the input task, so
+  // it pinned at the clock floor (0.00–0.05 ms) and colored nothing — a table of noise.
+  const frameOf = (scenario) => scenario.frame ?? scenario.inputTask;
   if (comparable) {
     lines.push(
-      '| Scenario | Base median | Head median | Δ | Head p95 | Frame p95 |',
+      '| Scenario | Base frame | Head frame | Δ | Frame p95 | Input p95 |',
       '| --- | --- | --- | --- | --- | --- |'
     );
     const baseByName = new Map(baseUx.scenarios.map((scenario) => [scenario.name, scenario]));
     for (const scenario of headUx.scenarios) {
       const baseScenario = baseByName.get(scenario.name);
       lines.push(
-        `| ${scenario.name} | ${formatMs(baseScenario?.inputTask.medianMs)} | ${formatMs(scenario.inputTask.medianMs)} | ${baseScenario ? formatDelta(baseScenario.inputTask.medianMs, scenario.inputTask.medianMs, spreadFloor(headUx, baseUx, scenario.name)) : 'n/a'} | ${formatMs(scenario.inputTask.p95Ms)} | ${formatMs(scenario.frame?.p95Ms)} |`
+        `| ${scenario.name} | ${formatMs(baseScenario ? frameOf(baseScenario).medianMs : undefined)} | ${formatMs(frameOf(scenario).medianMs)} | ${baseScenario ? formatDelta(frameOf(baseScenario).medianMs, frameOf(scenario).medianMs, spreadFloor(headUx, baseUx, scenario.name)) : 'n/a'} | ${formatMs(frameOf(scenario).p95Ms)} | ${formatMs(scenario.inputTask.p95Ms)} |`
       );
     }
     const headNames = new Set(headUx.scenarios.map((scenario) => scenario.name));
     for (const scenario of baseUx.scenarios) {
       if (headNames.has(scenario.name)) continue;
-      lines.push(
-        `| ${scenario.name} | ${formatMs(scenario.inputTask.medianMs)} | — | n/a | — | — |`
-      );
+      lines.push(`| ${scenario.name} | ${formatMs(frameOf(scenario).medianMs)} | — | n/a | — | — |`);
     }
     lines.push('');
   } else {
     if (baseUx) lines.push('> Browser baseline not comparable (fixture differs).', '');
-    lines.push('| Scenario | Median | p95 | Frame p95 |', '| --- | --- | --- | --- |');
+    lines.push('| Scenario | Frame median | Frame p95 | Input p95 |', '| --- | --- | --- | --- |');
     for (const scenario of headUx.scenarios) {
       lines.push(
-        `| ${scenario.name} | ${formatMs(scenario.inputTask.medianMs)} | ${formatMs(scenario.inputTask.p95Ms)} | ${formatMs(scenario.frame?.p95Ms)} |`
+        `| ${scenario.name} | ${formatMs(frameOf(scenario).medianMs)} | ${formatMs(frameOf(scenario).p95Ms)} | ${formatMs(scenario.inputTask.p95Ms)} |`
       );
     }
     lines.push('');
@@ -359,7 +365,9 @@ function readAll(paths, reader, label) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const engine = (scenario) => scenario.total;
-  const input = (scenario) => scenario.inputTask;
+  // Spread (and therefore delta coloring) keys on the FRAME median — the headline
+  // metric — not the input task, whose medians sit at the clock floor.
+  const input = (scenario) => scenario.frame ?? scenario.inputTask;
   const headRuns = readAll(args.head, readReport, 'head report');
   if (headRuns.length === 0) throw new Error('no readable --head report');
   const head = aggregateReports(headRuns, engine);

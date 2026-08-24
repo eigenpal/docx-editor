@@ -61,6 +61,51 @@ when validating those layers.
 Run timing comparisons sequentially. Concurrent benchmark processes compete for CPU and can hide
 or exaggerate timing changes; the structural work counters remain deterministic either way.
 
+## Huge-document benchmarks
+
+Prefer these when the question is typing latency. The synthetic fixtures above are built for
+deterministic work-counter gates; they are small enough that a whole-document regression
+hides inside their noise floor. The huge-document section runs the pinned 521-page
+reproduction (`e2e/fixtures/typing-perf-521pp.docx`, SHA-256 in
+`e2e/fixtures/typing-perf-521pp.manifest.json`): 12,820 paragraphs, 81 sections, tables,
+drawings, notes and TOCs — the shape where per-keystroke costs that scale with the document
+actually show. A change that looks flat on a 5-page example and saves 50 ms per keystroke
+here is a change worth landing; the reverse is a regression the small fixtures cannot see.
+
+```bash
+# Headless: keystroke-to-settled latency through the FULL mounted surface —
+# input, flush, layout, paint, selection — on the pinned huge fixture.
+bun run bench:huge
+
+# Capture before/after results
+bun run bench:huge --json > /tmp/settle-before.json
+bun run bench:huge --compare /tmp/settle-before.json
+
+# Any other document, or shorter runs
+bun run bench:huge path/to/document.docx --keystrokes 10 --warmup 1
+
+# Browser: the same fixture through the real demo UI (needs `bun run dev` on :5173).
+# Fail-closed — latency prints only when the structural evidence validates.
+bun run bench:huge:browser
+```
+
+The headless half runs under happy-dom with the fixed measurer, so its absolute paint
+milliseconds are inflated relative to a browser: compare runs on the same machine and read
+the work counters as the hardware-independent evidence. Pagination is deterministic, so
+`settle-bench-gates.test.ts` pins the per-keystroke work (placed paragraphs, reused pages,
+full passes) inside `bun run test` — a regression on the huge document fails CI even though
+the wall-clock numbers stay a manual comparison. The browser half is
+`typing-url-audit.mjs`, which validates that trusted input reached a painted revision before
+it reports anything.
+
+The same fixture also leads the CI browser benchmark: `edit-browser.bench.spec.ts` runs a
+`521pp-*` scenario pass on it and lists those rows FIRST in the PR-comment typing-latency
+table, with its work counters pinned in `edit-browser-bench-gates.ts`
+(`PINNED_HUGE_EXPECTED_LAYOUT_WORK`). The table itself leads with the FRAME median — the
+time from the keystroke until the edit is visible — because the input-task median it used
+to lead with pinned at the clock floor (0.00–0.05 ms) once typing buffered its work off the
+input task, and a table led by it colored nothing.
+
 ## Wasted-layout-work benchmark
 
 ```bash

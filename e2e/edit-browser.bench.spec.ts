@@ -9,11 +9,13 @@ import {
   assertScenarioLatencyGates,
   assertSustainedLatencyGates,
   HUGE_EXPECTED_LAYOUT_WORK,
+  PINNED_HUGE_EXPECTED_LAYOUT_WORK,
   TRACKED_EXPECTED_LAYOUT_WORK,
 } from './edit-browser-bench-gates.js';
 import {
   EDIT_BROWSER_FIXTURE,
   EDIT_BROWSER_HUGE_FIXTURE,
+  EDIT_BROWSER_PINNED_HUGE_FIXTURE,
   EDIT_BROWSER_TRACKED_FIXTURE,
   REPO_ROOT,
   REVIEW_RAIL_ENABLED,
@@ -199,7 +201,31 @@ test('browser editing latency is measurable and structurally stable', async ({
   // distinct so both sets share one report; work counters are pinned to this
   // fixture's own values. Skipped in the injected-delay self-test, which
   // validates the measurement itself, not the document.
+  const pinnedHugeReports: ScenarioReport[] = [];
   if (INJECTED_DELAY_MS === 0) {
+    // ---- The pinned huge-document pass FIRST in the report: the 521-page reported
+    // reproduction (12,820 paragraphs, 81 sections, tables, drawings, notes, TOCs).
+    // The synthetic fixtures are sized for deterministic gates and their keystroke
+    // numbers sit near the clock floor; this is the shape where a per-keystroke cost
+    // that scales with the document reads as milliseconds instead of noise, so its
+    // rows lead the typing-latency table.
+    await loadHarness(
+      page,
+      (benchPage) => installMeasurementProbe(benchPage, 0),
+      true,
+      EDIT_BROWSER_PINNED_HUGE_FIXTURE
+    );
+    const pinnedHugeScenarios = [
+      { name: '521pp-editing-character', mode: 'edit' as const, text: 'X' },
+      { name: '521pp-editing-wrap', mode: 'edit' as const, text: 'word '.repeat(20) },
+      { name: '521pp-suggesting-character', mode: 'suggest' as const, text: 'X' },
+    ];
+    for (const scenario of pinnedHugeScenarios) {
+      const report = await measureScenario(scenario);
+      pinnedHugeReports.push(report);
+      assertScenarioLatencyGates(report, PINNED_HUGE_EXPECTED_LAYOUT_WORK[scenario.name]!);
+    }
+
     await loadHarness(
       page,
       (benchPage) => installMeasurementProbe(benchPage, 0),
@@ -321,7 +347,9 @@ test('browser editing latency is measurable and structurally stable', async ({
       viewport: '1440x1000@1x',
       injectedDelayMs: INJECTED_DELAY_MS,
     },
-    scenarios: reports,
+    // Pinned-huge rows first: they are the headline typing latency; the synthetic
+    // rows below them are the deterministic-gate detail.
+    scenarios: [...pinnedHugeReports, ...reports],
     sustained,
   };
 

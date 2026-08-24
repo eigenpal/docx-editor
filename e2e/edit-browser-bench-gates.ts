@@ -33,6 +33,17 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
   'tracked-suggesting-wrap': { placed: 311, total: 620, reusedPages: 72, fullPasses: 1 },
 };
 
+/**
+ * Pinned per scenario for the 521-page reported reproduction (typing-perf-521pp.docx).
+ * Bootstrapped from a local Chromium run; a change means the engine performs different
+ * work on the huge document, which is exactly what these exist to catch.
+ */
+export const PINNED_HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
+  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
+  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
+  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
+};
+
 /** Pinned for the ~1,000-page stress fixture (synthetic-huge-tracked.docx). */
 export const HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
   'huge-suggesting-character': { placed: 2, total: 4250, reusedPages: 995, fullPasses: 1 },
