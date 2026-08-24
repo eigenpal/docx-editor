@@ -94,14 +94,14 @@ export function WriterPanel({
     <aside className="agent-panel">
       <header className="agent-panel-title">
         <strong>Writer agent</strong>
-        <span>Interviews, creates, then suggests revisions</span>
+        <span>Drafts from a short request, then suggests revisions</span>
       </header>
       <div className="agent-log">
         {chat.messages.length === 0 ? (
           <div className="agent-empty">
             <p>
-              Choose a starting point. The writer asks for document details before replacing the
-              seeded draft.
+              Describe the document in one line. The writer fills safe gaps with placeholders and
+              starts the draft.
             </p>
             {SUGGESTIONS.map((suggestion) => (
               <button

@@ -5,7 +5,7 @@ const paragraphId = z.string().min(1).describe('The stable paragraph id from rea
 const exactPhrase = z
   .string()
   .min(1)
-  .describe('An exact, case-sensitive phrase copied from the vanilla document.');
+  .describe('An exact, case-sensitive phrase copied from the current document.');
 
 export const briefSchema = z.object({
   documentType: z.string().min(2),
@@ -75,7 +75,7 @@ export const writeHeaderFooterSchema = z.object({
 export const WRITER_TOOLS = {
   read_document: tool({
     description:
-      'Read the current document through the vanilla revision projection. Returns stable paragraph ids and text.',
+      'Read the current document as the reader sees it. Returns stable paragraph ids and text.',
     inputSchema: z.object({}),
   }),
   create_document: tool({
@@ -128,7 +128,7 @@ export const WRITER_TOOLS = {
 } as const;
 
 const LABELS: Record<string, string> = {
-  read_document: 'Reading the vanilla document',
+  read_document: 'Reading the document',
   create_document: 'Writing styled paragraphs',
   format_lists: 'Formatting lists',
   insert_table: 'Inserting and filling a table',

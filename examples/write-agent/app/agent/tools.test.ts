@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createDocumentSchema, hasEnoughBrief, WRITER_TOOLS } from './tools';
+import { createDocumentSchema, hasEnoughBrief, toolLabel, WRITER_TOOLS } from './tools';
 
 const brief = {
   documentType: 'mutual NDA',
@@ -50,5 +50,9 @@ describe('writer agent tools', () => {
       'read_document',
       'write_header_footer',
     ]);
+  });
+
+  test('uses reader-facing language for document reads', () => {
+    expect(toolLabel('read_document')).toBe('Reading the document');
   });
 });

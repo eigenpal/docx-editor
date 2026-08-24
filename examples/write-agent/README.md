@@ -21,8 +21,10 @@ The editor and direct tool tests still work.
 
 ## Flow
 
-The writer asks for the document type, parties or audience, purpose, rules, tone, and length.
-The `create_document` schema requires all six answers.
+The writer starts from a short request and infers safe defaults for audience, tone, and length.
+It uses placeholders for missing names, dates, amounts, jurisdictions, and private facts.
+It asks one question only when a missing detail prevents a useful draft.
+The `create_document` schema records the resulting six-field brief.
 The agent then uses five visible tool calls:
 
 1. Write styled paragraphs with `create_document`.
@@ -55,7 +57,7 @@ The example uses workspace packages through `workspace:*`.
 
 - Fresh atomic body replacement through the core automation protocol.
 - Title, heading, and normal paragraph styles through editor-api.
-- Explicit vanilla reads and search anchors through editor-api.
+- Reader-visible document reads and search anchors through editor-api.
 - Bullet and numbered lists through browser editor commands.
 - Populated tables through browser editor commands and editor-api paragraph targeting.
 - Header, footer, and page fields through browser editor commands.

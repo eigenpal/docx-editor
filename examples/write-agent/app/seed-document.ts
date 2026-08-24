@@ -9,7 +9,7 @@ const STYLES = 'http://schemas.openxmlformats.org/officeDocument/2006/relationsh
 const SEED_PARAGRAPHS = [
   'Draft project proposal',
   'Prepared for Example Client',
-  'This seeded document makes replacement visible. The writer will replace every block after the interview.',
+  'This seeded document makes replacement visible. The writer will replace every block after your request.',
   'Project goals',
   'Describe the desired outcome, audience, constraints, tone, and expected length.',
 ];
