@@ -13,7 +13,12 @@
 // full styles material — layout embeds it in every paragraph key, so an unbounded string
 // would be quadratic in memory.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import {
+  twipsToPoints,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlProperty,
+} from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { isDangerousKey } from '../store/package/safe-record.ts';
 import {
@@ -745,12 +750,12 @@ export function resolveParagraphLayoutInputs(
         property.attributes?.firstLine !== undefined
       ) {
         // `w:hanging` is `ST_TwipsMeasure`, unsigned: a negative one is not a measurement.
-        hanging = h !== null ? Math.max(0, h) / 20 : 0;
+        hanging = h !== null ? Math.max(0, twipsToPoints(h)) : 0;
         // `w:firstLine` is DECLARED unsigned, but Word's model keeps one SIGNED first-line
         // indent and the numbering reader already reads it that way (`numbering-index.ts`).
         // Flattening a negative to zero here rendered a body paragraph flush where Word
         // renders a hanging, and made the two readers disagree about the same attribute.
-        firstLine = f !== null ? f / 20 : 0;
+        firstLine = f !== null ? twipsToPoints(f) : 0;
       }
     }
   }

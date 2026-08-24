@@ -3076,6 +3076,17 @@ export function planTocEntries(part: OoxmlPart, outline: readonly TocOutlineHead
 };
 
 // @public
+export type Points = number & {
+    readonly [POINTS]: true;
+};
+
+// @public
+export const points: (value: number) => Points;
+
+// @public
+export const pointsToTwips: (value: Points) => Twips;
+
+// @public
 export class PortRegistry {
     availablePorts(): string[];
     // (undocumented)
@@ -3810,7 +3821,7 @@ export interface TextOccurrences {
 export function threadStateOfPart(part: OoxmlPart): Map<string, CommentThreadState>;
 
 // @public
-export const TOC_LEVEL_INDENT_TWIPS = 240;
+export const TOC_LEVEL_INDENT_TWIPS: Twips;
 
 // @public
 export const TOC_MAX_BOOKMARKS_PER_REFRESH = 512;
@@ -3858,7 +3869,7 @@ export interface TocInstruction {
 }
 
 // @public
-export function tocLeftIndentTwips(level: number): number;
+export function tocLeftIndentTwips(level: number): Twips;
 
 // @public
 export interface TocOutlineHeading {
@@ -4589,6 +4600,20 @@ export type TreeTransactResult = {
     readonly reason: TreeOpRejection;
     readonly detail?: string;
 };
+
+// @public
+export type Twips = number & {
+    readonly [TWIPS]: true;
+};
+
+// @public
+export const twips: (value: number) => Twips;
+
+// @public
+export const TWIPS_PER_POINT = 20;
+
+// @public
+export const twipsToPoints: (value: Twips) => Points;
 
 // @public
 export function usedParaIds(root: OoxmlElement): ReadonlySet<string>;

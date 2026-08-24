@@ -1,3 +1,4 @@
+import { twips, twipsToPoints } from '@docx-editor.dev/core/store';
 import type { SectionColumns } from './section-properties.ts';
 
 export interface ResolvedSectionColumns {
@@ -8,7 +9,6 @@ export interface ResolvedSectionColumns {
   readonly separator: boolean;
 }
 
-const TWIPS_PER_POINT = 20;
 const MIN_COLUMN_WIDTH_PT = 1;
 
 /**
@@ -33,11 +33,11 @@ export function resolveSectionColumns(
   let gaps: number[];
   if (completeUnequal) {
     widths = definitions.map((definition) =>
-      Math.max(MIN_COLUMN_WIDTH_PT, definition.widthTwips / TWIPS_PER_POINT)
+      Math.max(MIN_COLUMN_WIDTH_PT, twipsToPoints(twips(definition.widthTwips)))
     );
     gaps = definitions
       .slice(0, -1)
-      .map((definition) => Math.max(0, definition.gapTwips / TWIPS_PER_POINT));
+      .map((definition) => Math.max(0, twipsToPoints(twips(definition.gapTwips))));
     const gapTotal = gaps.reduce((sum, gap) => sum + gap, 0);
     const availableForWidths = Math.max(count * MIN_COLUMN_WIDTH_PT, width - gapTotal);
     const statedWidth = widths.reduce((sum, columnWidth) => sum + columnWidth, 0);
@@ -46,7 +46,7 @@ export function resolveSectionColumns(
       widths = widths.map((columnWidth) => Math.max(MIN_COLUMN_WIDTH_PT, columnWidth * scale));
     }
   } else {
-    const requestedGap = Math.max(0, columns.gapTwips / TWIPS_PER_POINT);
+    const requestedGap = Math.max(0, twipsToPoints(twips(columns.gapTwips)));
     const gap = Math.min(
       requestedGap,
       Math.max(0, (width - count * MIN_COLUMN_WIDTH_PT) / (count - 1 || 1))

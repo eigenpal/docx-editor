@@ -7,9 +7,12 @@
 
 import {
   PAGE_BREAK_CHAR,
+  twips,
+  twipsToPoints,
   type DocumentProperties,
   type OoxmlNode,
   type OoxmlProperty,
+  type Twips,
 } from '@docx-editor.dev/core/store';
 import {
   piecesOfParagraph,
@@ -465,16 +468,16 @@ export function frozenLine(line: PendingLine): PendingLine {
  */
 export const MAX_PARAGRAPH_INDENT_TWIPS = 31_680;
 
-export function indentTwips(raw: string | undefined): number | null {
+export function indentTwips(raw: string | undefined): Twips | null {
   // Up to 9 digits so an oversized authored value reaches the clamp rather than being read
   // as a measurement; a longer digit string is garbage, and `Number` turns enough of them
   // into `Infinity`, which then poisons every width derived from it.
   if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return null;
-  const twips = Number(raw);
-  if (!Number.isFinite(twips)) return null;
-  if (twips > MAX_PARAGRAPH_INDENT_TWIPS) return MAX_PARAGRAPH_INDENT_TWIPS;
-  if (twips < -MAX_PARAGRAPH_INDENT_TWIPS) return -MAX_PARAGRAPH_INDENT_TWIPS;
-  return twips;
+  const authored = Number(raw);
+  if (!Number.isFinite(authored)) return null;
+  if (authored > MAX_PARAGRAPH_INDENT_TWIPS) return twips(MAX_PARAGRAPH_INDENT_TWIPS);
+  if (authored < -MAX_PARAGRAPH_INDENT_TWIPS) return twips(-MAX_PARAGRAPH_INDENT_TWIPS);
+  return twips(authored);
 }
 
 export function paragraphIndent(props: readonly OoxmlProperty[]): {
@@ -491,8 +494,8 @@ export function paragraphIndent(props: readonly OoxmlProperty[]): {
     const rawRight = property.attributes?.right ?? property.attributes?.end;
     const twipsLeft = indentTwips(rawLeft);
     const twipsRight = indentTwips(rawRight);
-    if (twipsLeft !== null) left = twipsLeft / 20;
-    if (twipsRight !== null) right = twipsRight / 20;
+    if (twipsLeft !== null) left = twipsToPoints(twipsLeft);
+    if (twipsRight !== null) right = twipsToPoints(twipsRight);
   }
   return { left, right };
 }

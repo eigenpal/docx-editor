@@ -17,6 +17,9 @@
 
 import {
   readOnOffChild,
+  // Aliased: this file's own `twips` is the bounded attribute parser below.
+  twips as asTwips,
+  twipsToPoints,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
@@ -133,8 +136,6 @@ export interface DocumentSection {
   readonly blockStart: number;
   readonly blockEndExclusive: number;
 }
-
-const TWIPS_PER_POINT = 20;
 
 /** US Letter, portrait, one-inch margins: Word's own default when a section says nothing. */
 export const DEFAULT_SECTION_PROPERTIES: SectionProperties = Object.freeze({
@@ -566,12 +567,12 @@ function enumerateSectionsUncached(
  * edge, and folding it into the content width instead would silently narrow every line.
  */
 export function geometryOfSection(section: SectionProperties): PageGeometry {
-  const width = section.pageSize.widthTwips / TWIPS_PER_POINT;
-  const height = section.pageSize.heightTwips / TWIPS_PER_POINT;
-  const left = (section.margins.leftTwips + section.margins.gutterTwips) / TWIPS_PER_POINT;
-  const right = section.margins.rightTwips / TWIPS_PER_POINT;
-  const top = section.margins.topTwips / TWIPS_PER_POINT;
-  const bottom = section.margins.bottomTwips / TWIPS_PER_POINT;
+  const width = twipsToPoints(asTwips(section.pageSize.widthTwips));
+  const height = twipsToPoints(asTwips(section.pageSize.heightTwips));
+  const left = twipsToPoints(asTwips(section.margins.leftTwips + section.margins.gutterTwips));
+  const right = twipsToPoints(asTwips(section.margins.rightTwips));
+  const top = twipsToPoints(asTwips(section.margins.topTwips));
+  const bottom = twipsToPoints(asTwips(section.margins.bottomTwips));
 
   // A page whose margins exceed it has no content area at all, and paginating into a
   // zero-height column never terminates. Fall back rather than hang.
@@ -580,7 +581,7 @@ export function geometryOfSection(section: SectionProperties): PageGeometry {
     width,
     height,
     margin: { top, right, bottom, left },
-    headerDistance: Math.max(0, section.margins.headerTwips) / TWIPS_PER_POINT,
-    footerDistance: Math.max(0, section.margins.footerTwips) / TWIPS_PER_POINT,
+    headerDistance: twipsToPoints(asTwips(Math.max(0, section.margins.headerTwips))),
+    footerDistance: twipsToPoints(asTwips(Math.max(0, section.margins.footerTwips))),
   };
 }

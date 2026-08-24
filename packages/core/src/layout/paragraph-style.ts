@@ -4,7 +4,13 @@
 // only draws them. Unrecognised or hostile values are dropped or clamped rather than
 // guessed — a wrong before-spacing moves every subsequent page break.
 
-import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import {
+  twips,
+  twipsToPoints,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlProperty,
+} from '@docx-editor.dev/core/store';
 import { borderStrokeWidthPt } from './border-metrics.ts';
 
 /**
@@ -193,10 +199,11 @@ function clampNonNegative(value: number, max: number): number {
   return value > max ? max : value;
 }
 
-function twipsToPoints(raw: string | undefined): number {
-  const twips = integer(raw, true);
-  if (twips === null) return 0;
-  return clampNonNegative(twips / 20, MAX_PARAGRAPH_SPACING_PT);
+/** Authored twips attribute to clamped spacing points, through the one conversion pair. */
+function spacingPoints(raw: string | undefined): number {
+  const authored = integer(raw, true);
+  if (authored === null) return 0;
+  return clampNonNegative(twipsToPoints(twips(authored)), MAX_PARAGRAPH_SPACING_PT);
 }
 
 /** `ST_OnOff` carried as an attribute value: anything but an explicit off is on (§17.17.4). */
@@ -275,8 +282,8 @@ export function paragraphSpacing(
     // that `w:docDefaults` set, which is exactly the shape Word's own Heading styles have.
     const authoredBefore = property.attributes?.before;
     const authoredAfter = property.attributes?.after;
-    if (authoredBefore !== undefined) before = twipsToPoints(authoredBefore);
-    if (authoredAfter !== undefined) after = twipsToPoints(authoredAfter);
+    if (authoredBefore !== undefined) before = spacingPoints(authoredBefore);
+    if (authoredAfter !== undefined) after = spacingPoints(authoredAfter);
     // The autospacing flags merge per attribute too, and independently of the measurement
     // beside them: a style may turn auto spacing OFF while leaving the `@before` it inherited
     // in place, and that paragraph must then use the measurement, not 0.

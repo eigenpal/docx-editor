@@ -40,9 +40,8 @@ import {
 } from '../store/store/tree-op-nodes.ts';
 import { paragraphStyleName, styleIdFor, type AutomationStyleIndex } from './styles.ts';
 import type { OoxmlProperty } from '../store/store/tree-ops.ts';
+import { points, pointsToTwips, twips, twipsToPoints } from '../store/units.ts';
 
-/** Twips per point (ECMA-376 measures most lengths in twentieths of a point). */
-const TWIPS_PER_POINT = 20;
 /** Widest value `w:ind`/`w:spacing` will be authored with, in twips — 22 inches of slack. */
 const MAX_TWIPS = 31680;
 /** Half-points, so 1..999 points. `w:sz` is a half-point measure (17.3.2.38). */
@@ -186,7 +185,7 @@ function pointsFromTwips(value: string | null): number | null {
   if (value === null) return null;
   const parsed = Number(value.trim());
   if (!Number.isFinite(parsed)) return null;
-  return parsed / TWIPS_PER_POINT;
+  return twipsToPoints(twips(parsed));
 }
 
 /** One value if every voice agrees on it, else null. An empty set of voices agrees on nothing. */
@@ -312,12 +311,12 @@ function firstLineIndentOf(indent: OoxmlElement | undefined): number | null {
   return hanging === null ? null : -hanging;
 }
 
-function twipsFor(points: number, field: string): FormattingPlan<number> {
-  if (typeof points !== 'number' || !Number.isFinite(points))
+function twipsFor(value: number, field: string): FormattingPlan<number> {
+  if (typeof value !== 'number' || !Number.isFinite(value))
     return { ok: false, detail: `${field}: not a measurement` };
-  const twips = Math.round(points * TWIPS_PER_POINT);
-  if (Math.abs(twips) > MAX_TWIPS) return { ok: false, detail: `${field}: out of range` };
-  return { ok: true, value: twips };
+  const authored = pointsToTwips(points(value));
+  if (Math.abs(authored) > MAX_TWIPS) return { ok: false, detail: `${field}: out of range` };
+  return { ok: true, value: authored };
 }
 
 /**

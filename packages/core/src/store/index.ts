@@ -39,3 +39,14 @@ export * from './package/index.ts';
 export * from './store/index.ts';
 
 export { TABLE_BORDER_STYLES, type TableBorderStyle } from './table-border-style.ts';
+
+// Branded length units and the one twips/points conversion pair.
+export {
+  TWIPS_PER_POINT,
+  points,
+  pointsToTwips,
+  twips,
+  twipsToPoints,
+  type Points,
+  type Twips,
+} from './units.ts';

@@ -23,9 +23,13 @@ import { collectSectionPropertyNodes } from '../store/package/hf-references.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { metricsOfSection } from '../store/store/tree-op-section-address.ts';
-
-/** Twips in one point. Word's own ratio, and the only place this lane spells it. */
-const TWIPS_PER_POINT = 20;
+import {
+  points as asPoints,
+  pointsToTwips,
+  twips as asTwips,
+  twipsToPoints,
+  type Twips,
+} from '../store/units.ts';
 
 /** The largest page or margin this lane will write, in twips — `w:pgSz`'s own ceiling. */
 const MAX_TWIPS = 63360;
@@ -81,8 +85,8 @@ export interface AutomationSectionRead {
 }
 
 /** Points from twips, rounded to the hundredth so a read is stable and legible. */
-function points(twips: number): number {
-  return Math.round((twips / TWIPS_PER_POINT) * 100) / 100;
+function points(value: number): number {
+  return Math.round(twipsToPoints(asTwips(value)) * 100) / 100;
 }
 
 /**
@@ -92,13 +96,13 @@ function points(twips: number): number {
  * ceiling is refused rather than clamped: clamping would report a page set to a size it was not
  * set to, and the caller has no way to notice.
  */
-export function twipsFromPoints(value: unknown, allowZero: boolean): number | null {
+export function twipsFromPoints(value: unknown, allowZero: boolean): Twips | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const twips = Math.round(value * TWIPS_PER_POINT);
-  if (twips > MAX_TWIPS) return null;
-  if (twips < 0) return null;
-  if (twips === 0 && !allowZero) return null;
-  return twips;
+  const authored = pointsToTwips(asPoints(value));
+  if (authored > MAX_TWIPS) return null;
+  if (authored < 0) return null;
+  if (authored === 0 && !allowZero) return null;
+  return authored;
 }
 
 /** The `setSectionProperties` fields a page-setup write turns into. */

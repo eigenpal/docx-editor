@@ -3,6 +3,7 @@
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { buildBookmarkIndex } from './bookmarks.ts';
+import { twips, type Twips } from '../units.ts';
 /** Outline heading shape consumed by TOC planning (mirrors DocumentOutlineEntry). */
 export interface TocOutlineHeading {
   readonly text: string;
@@ -13,13 +14,13 @@ import type { TocInstruction } from './toc-instruction.ts';
 import { TOC_MAX_BOOKMARKS_PER_REFRESH, TOC_MAX_ENTRIES } from './toc-instruction.ts';
 
 /** Left-indent step between TOC levels, in twips (matches `scripts/demo-doc/toc-block.xml`). */
-export const TOC_LEVEL_INDENT_TWIPS = 240;
+export const TOC_LEVEL_INDENT_TWIPS: Twips = twips(240);
 
 /** Bounded left-indent twips for a TOC entry level (0-based heading depth). */
-export function tocLeftIndentTwips(level: number): number {
-  if (!Number.isFinite(level)) return 0;
+export function tocLeftIndentTwips(level: number): Twips {
+  if (!Number.isFinite(level)) return twips(0);
   const bounded = Math.max(0, Math.min(8, Math.trunc(level)));
-  return bounded * TOC_LEVEL_INDENT_TWIPS;
+  return twips(bounded * TOC_LEVEL_INDENT_TWIPS);
 }
 
 /** One planned TOC entry: its level, its text, and the heading it points at. */
