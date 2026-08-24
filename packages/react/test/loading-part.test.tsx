@@ -323,26 +323,25 @@ describe('DocxEditor.Loading', () => {
     );
   });
 
-  test('renders one packaged document scaffold when the host supplies no children', () => {
+  test('renders one packaged loading page when the host supplies no children', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
 
     expect(el.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
-    expect(el.querySelectorAll('.docx-editor__loading-lines > span')).toHaveLength(11);
-    expect(el.querySelector(SPINNER)).toBeNull();
+    expect(el.querySelector('.docx-editor__loading-lines')).toBeNull();
+    expect(el.querySelector(SPINNER)).not.toBeNull();
     expect(el.getAttribute('role')).toBe('status');
     expect(el.getAttribute('aria-live')).toBe('polite');
   });
 
-  test('the default screen announces localized text without showing a label', () => {
+  test('the default screen shows localized loading text inside the document page', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
     const page = el.querySelector('.docx-editor__loading-page')!;
-    const lines = el.querySelector('.docx-editor__loading-lines')!;
 
-    expect(page.textContent).toContain('Loading');
-    expect(page.querySelector('.docx-editor-sr-only')).not.toBeNull();
-    expect(lines.getAttribute('aria-hidden')).toBe('true');
+    expect(page.textContent).toContain('Loading…');
+    expect(page.querySelector('.docx-editor__loading-page-status')).not.toBeNull();
+    expect(el.querySelector(SPINNER)!.getAttribute('aria-hidden')).toBe('true');
   });
 
   test('carries its own token scope, so it is styled wherever it is composed', () => {
@@ -415,7 +414,7 @@ describe('DocxEditor.Loading', () => {
 });
 
 describe('packaged DocxEditor loading screen', () => {
-  test('mounts the default page scaffold while no document is available', () => {
+  test('mounts the default loading page while no document is available', () => {
     const view = render(<DocxEditor />);
     const loading = view.container.querySelector('.docx-editor__loading--overlay');
 
@@ -423,7 +422,7 @@ describe('packaged DocxEditor loading screen', () => {
     expect(loading!.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
   });
 
-  test('keeps the default page scaffold up while a large document opens', async () => {
+  test('keeps the default loading page up while a large document opens', async () => {
     const view = render(<DocxEditor document={LARGE_SOURCE} />);
 
     await act(async () => {});

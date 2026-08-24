@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('DocxEditor sugar host', () => {
-  test('mounts the default page scaffold while no document is available', async () => {
+  test('mounts the default loading page while no document is available', async () => {
     const view = await mountSugarAsync({ document: undefined });
     await nextTick();
     const loading = view.container.querySelector('.docx-editor__loading--overlay');
@@ -29,7 +29,7 @@ describe('DocxEditor sugar host', () => {
     view.unmount();
   });
 
-  test('keeps the default page scaffold up while a large document opens', async () => {
+  test('keeps the default loading page up while a large document opens', async () => {
     const view = await mountSugarAsync({ document: LARGE_SOURCE });
     await nextTick();
     expect(view.container.querySelector('.docx-editor__loading-page')).not.toBeNull();
@@ -305,9 +305,11 @@ describe('DocxEditorLoading composition', () => {
     await nextTick();
     expect(container.querySelector('.docx-editor__loading')).not.toBeNull();
     expect(container.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
-    expect(container.querySelectorAll('.docx-editor__loading-lines > span')).toHaveLength(11);
-    expect(container.querySelector('.docx-editor__loading-spinner')).toBeNull();
-    expect(container.querySelector('.docx-editor-sr-only')?.textContent).toBe('Loading');
+    expect(container.querySelector('.docx-editor__loading-lines')).toBeNull();
+    expect(container.querySelector('.docx-editor__loading-spinner')).not.toBeNull();
+    expect(container.querySelector('.docx-editor__loading-page-status')?.textContent).toContain(
+      'Loading…'
+    );
     app.unmount();
     container.remove();
   });

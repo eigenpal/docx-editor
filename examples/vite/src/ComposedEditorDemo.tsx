@@ -728,7 +728,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
       ) : (
         // The library's loading surface rather than a hand-rolled div: rendered outside
         // a `Root` it always shows, which is exactly this branch's condition. Its default
-        // page scaffold uses the active locale and the same paper tokens as the editor.
+        // loading page uses the active locale and the same paper tokens as the editor.
         <DocxEditor.Loading className="demo-loading" />
       )}
     </div>

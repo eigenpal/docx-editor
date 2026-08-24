@@ -69,9 +69,9 @@ export interface DocxEditorLoadingProps {
   /** Inline styles for the loading container, as on `DocxEditor.Viewport`. */
   style?: CSSProperties;
   /**
-   * The loading screen. Omitted, a document-page scaffold rendered from the `--doc-*`
-   * tokens is used. Compose your own around `DocxEditor.Loading.Spinner` to keep the
-   * packaged indicator beside your own copy.
+   * The loading screen. Omitted, a full-size document page with the packaged indicator
+   * and localized status is used. Compose your own around `DocxEditor.Loading.Spinner`
+   * to keep the packaged indicator beside your own copy.
    */
   children?: DocxEditorChildren;
 }
@@ -126,19 +126,9 @@ function DocxEditorLoadingImpl({
     <div className={classes} style={loadingStyle} role="status" aria-live="polite">
       {children ?? (
         <div className="docx-editor__loading-page">
-          <span className="docx-editor-sr-only">{t('loading.label')}</span>
-          <div className="docx-editor__loading-lines" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
+          <div className="docx-editor__loading-page-status">
+            <DocxEditorLoadingSpinner />
+            <span>{t('loading.label')}…</span>
           </div>
         </div>
       )}

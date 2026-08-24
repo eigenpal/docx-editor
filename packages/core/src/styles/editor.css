@@ -4690,57 +4690,16 @@ a.docx-hyperlink:focus-visible {
   box-shadow: 0 1px 3px var(--doc-shadow);
 }
 
-/* Restrained paragraph shapes make the page read as a document, not a generic card.
-   The whole scaffold breathes together instead of sending separate waves through it. */
-.docx-editor__loading-lines {
+.docx-editor__loading-page-status {
+  position: absolute;
+  top: min(50%, calc(50cqh - 32px));
+  right: 0;
+  left: 0;
   display: flex;
-  flex-direction: column;
-  gap: clamp(7px, 1.25cqw, 12px);
-  animation: docx-editor-loading-pulse 1.8s ease-in-out infinite;
-}
-
-.docx-editor__loading-lines > span {
-  display: block;
-  width: 100%;
-  height: clamp(5px, 0.74cqw, 8px);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--doc-text-muted) 14%, var(--doc-page-bg-rendered));
-}
-
-.docx-editor__loading-lines > span:nth-child(1) {
-  width: 48%;
-  height: clamp(8px, 1.1cqw, 12px);
-  margin-bottom: clamp(7px, 1.25cqw, 12px);
-}
-
-.docx-editor__loading-lines > span:nth-child(3),
-.docx-editor__loading-lines > span:nth-child(8) {
-  width: 91%;
-}
-
-.docx-editor__loading-lines > span:nth-child(4) {
-  width: 73%;
-  margin-bottom: clamp(32px, 7cqw, 64px);
-}
-
-.docx-editor__loading-lines > span:nth-child(6),
-.docx-editor__loading-lines > span:nth-child(10) {
-  width: 84%;
-}
-
-.docx-editor__loading-lines > span:nth-child(11) {
-  width: 62%;
-}
-
-@keyframes docx-editor-loading-pulse {
-  0%,
-  100% {
-    opacity: 0.42;
-  }
-
-  50% {
-    opacity: 0.82;
-  }
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transform: translateY(-50%);
 }
 
 /* `display` and `box-sizing` are explicit rather than inherited from Tailwind's
@@ -4765,10 +4724,9 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
-/* Respect a reduced-motion preference by keeping both indicators still. */
+/* Respect a reduced-motion preference by keeping the indicator still. */
 @media (prefers-reduced-motion: reduce) {
-  .docx-editor__loading-spinner,
-  .docx-editor__loading-lines {
+  .docx-editor__loading-spinner {
     animation: none;
   }
 }
