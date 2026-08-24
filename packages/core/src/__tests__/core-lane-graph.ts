@@ -14,6 +14,7 @@
 export type LaneName =
   | 'contracts'
   | 'store'
+  | 'collaboration'
   | 'binding'
   | 'layout'
   | 'output'
@@ -91,20 +92,27 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     environment: 'neutral',
     subpath: './store',
   },
+  collaboration: {
+    directory: 'src/collaboration',
+    package: null,
+    nativeToCore: true,
+    mayImport: ['store'],
+    environment: 'neutral',
+    subpath: './collaboration',
+  },
   binding: {
     directory: 'src/binding',
     package: null,
-    mayImport: ['contracts', 'store'],
+    mayImport: ['contracts', 'store', 'collaboration'],
     environment: 'browser',
     subpath: './binding',
   },
-  // The sync, server, and clients lanes were deleted with the legacy PackageModel store
-  // (legacy-lane retirement, phase 4): they were built entirely on DocumentStore/DocOps
-  // and the deferred collaboration/server-binding slices own any future replacements.
+  // The legacy sync, server, and clients lanes were deleted with PackageModel. The
+  // collaboration lane is its provider-neutral replacement and contains no CRDT or transport.
   layout: {
     directory: 'src/layout',
     package: null,
-    mayImport: ['store'],
+    mayImport: ['store', 'collaboration'],
     environment: 'neutral',
     subpath: './layout',
   },
@@ -120,17 +128,17 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     // Born in `packages/core`: there is no `engine-automation` package and never was.
     package: null,
     nativeToCore: true,
-    // The store lane and nothing else. This lane is the transport-neutral host port an
-    // automation object model programs against, and a server has to be able to run it —
-    // reaching into binding, output or editor would put a DOM in the headless host.
-    mayImport: ['store'],
+    // The store plus its provider-neutral collaboration capability. This lane is the
+    // transport-neutral host port an automation object model programs against, and a server
+    // has to run it without binding, output, editor, or any CRDT/network implementation.
+    mayImport: ['store', 'collaboration'],
     environment: 'neutral',
     subpath: './automation',
   },
   editor: {
     directory: 'src/editor',
     package: null,
-    mayImport: ['contracts', 'store', 'binding', 'layout', 'output', 'automation'],
+    mayImport: ['contracts', 'store', 'collaboration', 'binding', 'layout', 'output', 'automation'],
     environment: 'browser',
     subpath: './editor',
   },
@@ -146,6 +154,7 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
 export const BROWSER_REACHABLE: readonly LaneName[] = [
   'contracts',
   'store',
+  'collaboration',
   'binding',
   'layout',
   'output',

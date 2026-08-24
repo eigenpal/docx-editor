@@ -76,6 +76,7 @@ export type {
   RunCallback,
 } from './runtime.ts';
 export type {
+  CreateCollaborativeOptions,
   CreateServerOptions,
   DocumentLimits,
   DocumentXmlLimits,

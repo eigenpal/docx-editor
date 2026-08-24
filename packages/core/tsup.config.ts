@@ -66,7 +66,7 @@ const harfBuzzWasmUrlEscapeHatch: NonNullable<Options['esbuildPlugins']>[number]
       if (applied !== 1) {
         throw new Error(
           `harfbuzz-wasm-url-escape-hatch patched ${applied} files, expected exactly 1. ` +
-            "The glue is no longer at harfbuzzjs/dist/harfbuzz.js, so setHarfBuzzWasmUrl " +
+            'The glue is no longer at harfbuzzjs/dist/harfbuzz.js, so setHarfBuzzWasmUrl ' +
             'would ship wired to nothing; re-point the onLoad filter.'
         );
       }
@@ -112,6 +112,7 @@ const shared = {
     index: 'src/index.ts',
     automation: 'src/automation/index.ts',
     binding: 'src/binding/index.ts',
+    collaboration: 'src/collaboration/index.ts',
     'contracts/editor': 'src/contracts/editor.ts',
     'contracts/document': 'src/contracts/document.ts',
     'contracts/interaction': 'src/contracts/interaction.ts',
@@ -153,6 +154,7 @@ const shared = {
       '@docx-editor.dev/core': resolve(here, 'src/index.ts'),
       '@docx-editor.dev/core/automation': resolve(here, 'src/automation/index.ts'),
       '@docx-editor.dev/core/binding': resolve(here, 'src/binding/index.ts'),
+      '@docx-editor.dev/core/collaboration': resolve(here, 'src/collaboration/index.ts'),
       '@docx-editor.dev/core/contracts/editor': resolve(here, 'src/contracts/editor.ts'),
       '@docx-editor.dev/core/contracts/document': resolve(here, 'src/contracts/document.ts'),
       '@docx-editor.dev/core/contracts/interaction': resolve(here, 'src/contracts/interaction.ts'),

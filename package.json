@@ -8,6 +8,7 @@
     "examples/astro",
     "examples/automation",
     "examples/custom-nodes",
+    "examples/collaboration",
     "examples/happy-path",
     "examples/igloo",
     "examples/nextjs",
@@ -22,9 +23,9 @@
     "api:extract": "node scripts/api-extractor.mjs --local",
     "build": "bun run build:packages:demo && bun run build:react && bun run build:vue && bun run build:assemble",
     "build:assemble": "rm -rf examples/parity/dist && mkdir -p examples/parity/dist && cp -R examples/vite/dist examples/parity/dist/react && cp -R examples/vue/dist examples/parity/dist/vue && cp examples/parity/index.html examples/parity/dist/index.html",
-    "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/editor-api' build && bun run --filter '@docx-editor.dev/pro' build",
+    "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/collaboration-yjs' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/editor-api' build && bun run --filter '@docx-editor.dev/pro' build",
     "build:packages:vue": "bun run build:packages && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/nuxt' build",
-    "build:packages:demo": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/pro' build",
+    "build:packages:demo": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/collaboration-yjs' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/pro' build",
     "build:react": "cd examples/vite && USE_PUBLISHED_PACKAGES=true ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true VITE_BASE_PATH=/react/ vite build",
     "check:app-build": "cd examples/vite && vite build --logLevel warn --outDir dist-check --emptyOutDir",
     "build:vue": "cd examples/vue && USE_PUBLISHED_PACKAGES=true ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true VITE_BASE_PATH=/vue/ vite build",
@@ -65,6 +66,7 @@
     "dev:agent": "cd examples/agent && npm run dev",
     "dev:astro": "cd examples/astro && npm run dev",
     "dev:custom-nodes": "bun run --filter './examples/custom-nodes' dev",
+    "dev:collaboration": "bun run --filter './examples/collaboration' dev",
     "dev:demo": "bash examples/dev-all.sh",
     "dev:happypath": "bun run --filter './examples/happy-path' dev",
     "dev:igloo": "bun run --filter './examples/igloo' dev",
@@ -157,13 +159,19 @@
     "prosemirror-view": "1.41.8",
     "prosemirror-state": "1.4.4",
     "prosemirror-model": "1.25.4",
-    "prosemirror-transform": "1.12.0"
+    "prosemirror-transform": "1.12.0",
+    "@happy-dom/global-registrator": "20.9.0",
+    "happy-dom": "20.9.0",
+    "vue": "3.5.33"
   },
   "resolutions": {
     "prosemirror-view": "1.41.8",
     "prosemirror-state": "1.4.4",
     "prosemirror-model": "1.25.4",
-    "prosemirror-transform": "1.12.0"
+    "prosemirror-transform": "1.12.0",
+    "@happy-dom/global-registrator": "20.9.0",
+    "happy-dom": "20.9.0",
+    "vue": "3.5.33"
   },
   "dependencies": {
     "prosemirror-commands": "^1.7.1",

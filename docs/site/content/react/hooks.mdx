@@ -134,6 +134,19 @@ function SaveButton() {
 Calling `editor.snapshot()` during render does not subscribe your component.
 Use `useEditorState` for reactive state.
 
+## `useCollaborationStatus`
+
+Use `useCollaborationStatus` with an externally owned collaboration session.
+The hook returns `inactive` when you pass `null`:
+
+```tsx
+import { useCollaborationStatus } from '@docx-editor.dev/react';
+
+const { status } = useCollaborationStatus(session);
+```
+
+The experimental Yjs proof supports text edits in existing body paragraphs only.
+
 ## `useEditorEvent`
 
 Use `useEditorEvent` to subscribe for the component's lifetime:

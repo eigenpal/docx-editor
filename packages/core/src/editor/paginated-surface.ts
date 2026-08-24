@@ -13,6 +13,7 @@ import {
   inlineControlEndingAt,
   inlineControlStartingAt,
   isContentControl,
+  ORIGIN_IDS,
   parentNodeOf,
   parseTocInstruction,
   planTocEntries,
@@ -321,6 +322,15 @@ export function mountPaginatedSurface(
   commentLayer.style.top = '0';
   commentLayer.style.pointerEvents = 'none';
 
+  const remoteSelectionLayer = document.createElement('div');
+  remoteSelectionLayer.className = 'docx-remote-selection-overlay';
+  remoteSelectionLayer.contentEditable = 'false';
+  remoteSelectionLayer.setAttribute('aria-hidden', 'true');
+  remoteSelectionLayer.style.position = 'absolute';
+  remoteSelectionLayer.style.left = '0';
+  remoteSelectionLayer.style.top = '0';
+  remoteSelectionLayer.style.pointerEvents = 'none';
+
   const tableFurnitureLayer = document.createElement('div');
   tableFurnitureLayer.className = 'docx-table-furniture';
   tableFurnitureLayer.contentEditable = 'false';
@@ -330,7 +340,13 @@ export function mountPaginatedSurface(
   tableFurnitureLayer.style.pointerEvents = 'none';
 
   container.style.position = 'relative';
-  container.replaceChildren(pagesLayer, tableFurnitureLayer, commentLayer, overlayLayer);
+  container.replaceChildren(
+    pagesLayer,
+    tableFurnitureLayer,
+    commentLayer,
+    remoteSelectionLayer,
+    overlayLayer
+  );
 
   const caret = createSurfaceCaret(
     pagesLayer,
@@ -687,16 +703,18 @@ export function mountPaginatedSurface(
    */
   const gatedSession: TreeDocxSession = {
     ...session,
-    // The SCOPE has to travel. `applyOps` defaults it to the open story, so dropping the
-    // argument here silently rewrote every caller that named one — and the one caller that
-    // needs to is section geometry, which pins `{ kind: 'body' }` because `w:sectPr` lives on
-    // the body story and nowhere else. A header store has no `w:body`, so with the caret in a
-    // header every page-setup write was refused as `tree-invariant`: the ruler snapped back and
-    // Page Setup's Apply did nothing, with the dialog still reading the right section.
     applyTreeOps: (ops, before, after, scope) => applyOps(ops, before, after, scope),
     applyPmDoc: (doc) => {
       if (editingMode === 'view') {
         return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
+      }
+      if (options.collaboration) {
+        return {
+          committed: false,
+          rejected: true,
+          opCount: 0,
+          reason: 'experimental-collaboration-text-only',
+        };
       }
       if (selectionTouchesToc()) {
         return { committed: false, rejected: true, opCount: 0, reason: TOC_READ_ONLY_REFUSAL };
@@ -1099,6 +1117,19 @@ export function mountPaginatedSurface(
     pendingFormats = null;
     scheduler.notify(modelChange);
   });
+  const collaborationPort = options.collaboration
+    ? session.collaborationPort(options.collaboration.documentId)
+    : null;
+  const detachCollaboration =
+    options.collaboration && collaborationPort
+      ? options.collaboration.attach(collaborationPort)
+      : () => {};
+  let remoteSelectionRenderingReady = false;
+  const unsubscribeRemoteSelections = options.collaboration
+    ? options.collaboration.subscribeRemoteSelections(() => {
+        if (remoteSelectionRenderingReady) renderRemoteSelections();
+      })
+    : () => {};
 
   function visiblePages(): ReadonlySet<number> | undefined {
     const set = visiblePageSet(container, currentLayout, selection, scale);
@@ -2105,8 +2136,8 @@ export function mountPaginatedSurface(
       pageCount: currentLayout.pages.length,
       selection,
       cellSelection,
-      canUndo: session.canUndo(),
-      canRedo: session.canRedo(),
+      canUndo: options.collaboration?.canUndo() ?? session.canUndo(),
+      canRedo: options.collaboration?.canRedo() ?? session.canRedo(),
       lastRejection,
       // Reference-stable while unchanged: `pendingAtCaret` hands back the stored array,
       // so a host can compare states to see whether the armed format moved.
@@ -2214,6 +2245,8 @@ export function mountPaginatedSurface(
     overlayLayer.style.height = `${materializedExtent.height * scale}px`;
     commentLayer.style.width = overlayLayer.style.width;
     commentLayer.style.height = overlayLayer.style.height;
+    remoteSelectionLayer.style.width = overlayLayer.style.width;
+    remoteSelectionLayer.style.height = overlayLayer.style.height;
     tableFurnitureLayer.style.width = overlayLayer.style.width;
     tableFurnitureLayer.style.height = overlayLayer.style.height;
     tableInteraction.update();
@@ -2222,6 +2255,7 @@ export function mountPaginatedSurface(
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
     renderOverlay();
+    renderRemoteSelections();
     renderCommentHighlights(true);
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
@@ -2324,6 +2358,7 @@ export function mountPaginatedSurface(
 
   /** The main story. Named once so the automation entry cannot drift from the session default. */
   const BODY_STORY: StoryScope = Object.freeze({ kind: 'body' as const });
+  let collaborationOperationCounter = 0;
 
   /**
    * Commit ops, attributing them when the surface is suggesting.
@@ -2349,11 +2384,34 @@ export function mountPaginatedSurface(
     flushTypeBuffer();
     const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
+    const collaborationRefusal = options.collaboration?.gateOperations(ops, scope);
+    if (collaborationRefusal) {
+      return {
+        committed: false,
+        rejected: true,
+        opCount: 0,
+        reason: collaborationRefusal,
+      };
+    }
 
     // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
     // header, a footer or a note is applied to that story rather than to the body.
     const attributed = trackedOps(ops);
-    const result = session.applyTreeOps(attributed, selectionBefore, selectionAfter, scope);
+    collaborationOperationCounter += 1;
+    const result = session.applyTreeOps(
+      attributed,
+      selectionBefore,
+      selectionAfter,
+      scope,
+      options.collaboration
+        ? {
+            origin: ORIGIN_IDS.mutationHuman,
+            actorId: options.collaboration.identity.actorId,
+            operationId: `${options.collaboration.identity.actorId}:browser:${collaborationOperationCounter}`,
+            recordsHistory: false,
+          }
+        : undefined
+    );
     if (result.committed && editingMode === 'suggest' && attributed.some(isTrackedEdit)) {
       runtimeOptions.onTrackedChange?.();
     }
@@ -2728,6 +2786,19 @@ export function mountPaginatedSurface(
     if (previousActive !== nextActive || previousToc !== nextToc) {
       render(false);
     }
+    const awarenessParagraph =
+      selection.anchor.paragraphId === selection.head.paragraphId
+        ? collaborationPort?.paragraphByNodeId(selection.head.paragraphId)
+        : null;
+    options.collaboration?.setLocalSelection(
+      awarenessParagraph
+        ? {
+            paragraphId: awarenessParagraph.paragraphId,
+            start: selection.anchor.offset,
+            end: selection.head.offset,
+          }
+        : null
+    );
     options.onChange?.(currentState());
   }
 
@@ -3340,6 +3411,93 @@ export function mountPaginatedSurface(
     );
   }
 
+  /** Draw ephemeral remote selections from semantic layout geometry. */
+  function renderRemoteSelections(): void {
+    if (!remoteSelectionRenderingReady) {
+      remoteSelectionLayer.replaceChildren();
+      return;
+    }
+    const collaboration = options.collaboration;
+    if (!collaboration) {
+      remoteSelectionLayer.replaceChildren();
+      return;
+    }
+    const rects: OverlayRect[] = [];
+    const rectColors: (string | undefined)[] = [];
+    const labels: {
+      readonly name: string;
+      readonly color?: string;
+      readonly pageIndex: number;
+      readonly x: number;
+      readonly y: number;
+    }[] = [];
+    for (const remote of collaboration.remoteSelections()) {
+      const labelGeometry = caretAt(currentLayout, {
+        paragraphId: remote.nodeId,
+        offset: remote.end,
+      });
+      if (labelGeometry) {
+        labels.push({
+          name: remote.name,
+          ...(remote.color ? { color: remote.color } : {}),
+          pageIndex: labelGeometry.pageIndex,
+          x: labelGeometry.x,
+          y: labelGeometry.y,
+        });
+      }
+      if (remote.start === remote.end) {
+        const geometry = caretAt(currentLayout, {
+          paragraphId: remote.nodeId,
+          offset: remote.start,
+        });
+        if (!geometry) continue;
+        rects.push({
+          pageIndex: geometry.pageIndex,
+          x: geometry.x,
+          y: geometry.y,
+          width: Math.max(1 / scale, 1),
+          height: geometry.height,
+          className: 'docx-remote-caret',
+        });
+        rectColors.push(remote.color);
+        continue;
+      }
+      const selection: SemanticSelection = {
+        anchor: { paragraphId: remote.nodeId, offset: remote.start },
+        head: { paragraphId: remote.nodeId, offset: remote.end },
+      };
+      for (const rect of selectionRects(currentLayout, selection, paragraphOrder())) {
+        rects.push({ ...rect, className: 'docx-remote-selection-rect' });
+        rectColors.push(remote.color);
+      }
+    }
+    paintSelectionOverlay(remoteSelectionLayer, currentLayout, rects, {
+      scale,
+      pageOffsetX: materializedExtent?.pageOffsetX,
+    });
+    [...remoteSelectionLayer.children].forEach((element, index) => {
+      const color = rectColors[index];
+      if (!color || !(element instanceof HTMLElement)) return;
+      element.style.setProperty('--doc-remote-color', color);
+    });
+    for (const label of labels) {
+      const page = currentLayout.pages[label.pageIndex];
+      if (!page) continue;
+      const element = document.createElement('div');
+      element.className = 'docx-remote-caret-label';
+      element.textContent = label.name;
+      element.style.left = `${
+        (page.contentBox.x +
+          label.x +
+          (materializedExtent?.pageOffsetX.get(label.pageIndex) ?? 0)) *
+        scale
+      }px`;
+      element.style.top = `${(page.contentBox.y + label.y) * scale}px`;
+      if (label.color) element.style.setProperty('--doc-remote-color', label.color);
+      remoteSelectionLayer.append(element);
+    }
+  }
+
   function targetToc(tocId?: string) {
     const tocs = detectBodyTocs(session.part());
     if (tocId) return tocs.find((toc) => toc.id === tocId) ?? null;
@@ -3434,7 +3592,7 @@ export function mountPaginatedSurface(
   }
 
   function canRefreshToc(tocId?: string): boolean {
-    if (editingMode === 'view' || !session.editable) return false;
+    if (editingMode === 'view' || !session.editable || options.collaboration) return false;
     const toc = targetToc(tocId);
     if (!toc) return false;
     return (
@@ -3551,7 +3709,13 @@ export function mountPaginatedSurface(
   }
 
   function canInsertToc(): boolean {
-    if (editingMode === 'view' || !session.editable || selectionTouchesToc()) return false;
+    if (
+      editingMode === 'view' ||
+      !session.editable ||
+      options.collaboration ||
+      selectionTouchesToc()
+    )
+      return false;
     const op = insertTocOp();
     return op !== null && validateTreeOp(session.part(), op) === null;
   }
@@ -4257,6 +4421,14 @@ export function mountPaginatedSurface(
           if (editingMode === 'view') {
             return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
           }
+          if (options.collaboration) {
+            return {
+              committed: false,
+              rejected: true,
+              opCount: 0,
+              reason: 'experimental-collaboration-body-text-only',
+            };
+          }
           const result = run();
           return {
             committed: result.committed,
@@ -4492,6 +4664,10 @@ export function mountPaginatedSurface(
       // Batched typing becomes its own undo step BEFORE the rewind, so undo
       // first removes what was just typed rather than skipping past it.
       flushTypeBuffer();
+      if (options.collaboration) {
+        if (options.collaboration.undo()) restoreSelection(null);
+        return;
+      }
       restoreSelection(session.undo());
     },
     redo: () => {
@@ -4501,6 +4677,10 @@ export function mountPaginatedSurface(
         return;
       }
       flushTypeBuffer();
+      if (options.collaboration) {
+        if (options.collaboration.redo()) restoreSelection(null);
+        return;
+      }
       restoreSelection(session.redo());
     },
     sectionAtPage,
@@ -4682,6 +4862,8 @@ export function mountPaginatedSurface(
       drawingBundle.dispose();
       detachDrawingUrlRegistry(pagesLayer);
       caret.destroy();
+      unsubscribeRemoteSelections();
+      detachCollaboration();
       unsubscribe();
       container.replaceChildren();
     },
@@ -5226,6 +5408,20 @@ export function mountPaginatedSurface(
   });
 
   render();
+  remoteSelectionRenderingReady = true;
+  renderRemoteSelections();
+  const initialAwarenessParagraph = collaborationPort?.paragraphByNodeId(
+    selection.head.paragraphId
+  );
+  options.collaboration?.setLocalSelection(
+    initialAwarenessParagraph
+      ? {
+          paragraphId: initialAwarenessParagraph.paragraphId,
+          start: selection.anchor.offset,
+          end: selection.head.offset,
+        }
+      : null
+  );
   // The pages layer is created `contenteditable` unconditionally, so a surface OPENED in
   // viewing came up writable — a caret, an IME and a screen reader told the document takes
   // input. `setEditingMode` was the only path that re-derived it; opening is the other one.

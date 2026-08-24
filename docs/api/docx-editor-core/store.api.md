@@ -4227,6 +4227,7 @@ export interface TreeDocumentStoreOptions {
 
 // @public
 export interface TreeModelChange {
+    readonly actorId?: string;
     readonly caret?: SelectionMark;
     // (undocumented)
     readonly change: 'model-change';
@@ -4243,6 +4244,7 @@ export interface TreeModelChange {
     // (undocumented)
     readonly fromRevision: number;
     readonly impact: ImpactClass;
+    readonly operationId?: string;
     // (undocumented)
     readonly origin: string;
     // (undocumented)
@@ -4463,9 +4465,12 @@ export interface TreeTransactionContext {
 
 // @public
 export interface TreeTransactOptions {
+    readonly actorId?: string;
     readonly minimumImpact?: ImpactClass;
+    readonly operationId?: string;
     // (undocumented)
     readonly origin?: string;
+    readonly recordsHistory?: boolean;
     readonly scope?: 'transaction' | 'command';
     readonly story?: TreeStoryRef;
 }

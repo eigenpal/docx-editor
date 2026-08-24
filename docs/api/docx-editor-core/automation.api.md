@@ -1199,6 +1199,7 @@ export const SERVER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 
 // @public
 export interface ServerAutomationHostOptions {
+    readonly collaboration?: EditorCollaborationSession;
     readonly limits?: OoxmlPackageLimits;
 }
 

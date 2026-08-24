@@ -39,8 +39,8 @@ const REMOVED = [
 ];
 
 describe('the root entry', () => {
-  test('is the namespace, with the byte factory only', () => {
-    expect(Object.keys(root.DocxEditor).sort()).toEqual(['createServer']);
+  test('is the namespace with server and collaborative byte factories', () => {
+    expect(Object.keys(root.DocxEditor).sort()).toEqual(['createCollaborative', 'createServer']);
     expect(typeof root.DocxEditor.createServer).toBe('function');
   });
 
@@ -84,7 +84,11 @@ describe('the root entry', () => {
 
 describe('the browser entry', () => {
   test('is a superset: both factories, one namespace', () => {
-    expect(Object.keys(browser.DocxEditor).sort()).toEqual(['createBrowser', 'createServer']);
+    expect(Object.keys(browser.DocxEditor).sort()).toEqual([
+      'createBrowser',
+      'createCollaborative',
+      'createServer',
+    ]);
     expect(typeof browser.DocxEditor.createBrowser).toBe('function');
   });
 

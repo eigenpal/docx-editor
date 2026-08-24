@@ -107,10 +107,10 @@ export const DocxEditorReview: {
         asChild: boolean;
         gap: number;
         preset: boolean;
+        stack: boolean;
         card: {
             className?: string;
         };
-        stack: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
         P: {};
         B: {};
@@ -176,10 +176,10 @@ export const DocxEditorReview: {
         asChild: boolean;
         gap: number;
         preset: boolean;
+        stack: boolean;
         card: {
             className?: string;
         };
-        stack: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
@@ -242,10 +242,10 @@ export const DocxEditorReview: {
     asChild: boolean;
     gap: number;
     preset: boolean;
+    stack: boolean;
     card: {
         className?: string;
     };
-    stack: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     List: vue.DefineComponent<vue.ExtractPropTypes<{
         stack: {

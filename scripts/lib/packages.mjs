@@ -91,6 +91,12 @@ export const PACKAGES = [
     tsconfigPath: 'packages/core/tsconfig.api.json',
   },
   {
+    name: '@docx-editor.dev/collaboration-yjs',
+    root: 'packages/collaboration-yjs',
+    pkgSlug: 'docx-editor-collaboration-yjs',
+    tsconfigPath: 'packages/collaboration-yjs/tsconfig.api.json',
+  },
+  {
     name: '@docx-editor.dev/pro',
     root: 'packages/pro',
     pkgSlug: 'docx-editor-pro',

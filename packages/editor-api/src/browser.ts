@@ -31,8 +31,10 @@ import {
   type CreateBrowserOptions,
   type DocxEditorInstance,
 } from './runtime/browser.ts';
-import { createServer } from './runtime/server.ts';
+import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { createCollaborative, createServer } from './runtime/server.ts';
 import type {
+  CreateCollaborativeOptions,
   CreateServerOptions,
   DocxEditorRuntime,
   DocxEditorServerRuntime,
@@ -56,6 +58,12 @@ export interface DocxEditorNamespace {
   createBrowser(editor: DocxEditorInstance, options?: CreateBrowserOptions): DocxEditorRuntime;
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
+  /** A DOM-free runtime over one experimental collaboration replica. */
+  createCollaborative(
+    bytes: Uint8Array,
+    collaboration: EditorCollaborationSession,
+    options?: CreateCollaborativeOptions
+  ): Promise<DocxEditorServerRuntime>;
 }
 
 /**
@@ -87,4 +95,6 @@ export const DocxEditor: DocxEditorNamespace = Object.freeze({
   createBrowser,
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer,
+  /** A DOM-free runtime over one experimental collaboration replica. */
+  createCollaborative,
 });

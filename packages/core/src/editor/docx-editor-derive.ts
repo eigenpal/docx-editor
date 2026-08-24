@@ -353,13 +353,13 @@ export function gateCommand(
       },
     };
   }
-  if (command.type === 'undo' && !surface.session.canUndo()) {
+  if (command.type === 'undo' && !surface.state().canUndo) {
     return {
       ok: false,
       refusal: { ok: false, code: 'unsupported', reason: 'nothing to undo' },
     };
   }
-  if (command.type === 'redo' && !surface.session.canRedo()) {
+  if (command.type === 'redo' && !surface.state().canRedo) {
     return {
       ok: false,
       refusal: { ok: false, code: 'unsupported', reason: 'nothing to redo' },

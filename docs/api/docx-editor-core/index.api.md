@@ -1014,6 +1014,7 @@ export interface DocxDocumentJSON {
 export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
+    collaboration?: EditorCollaborationSession;
     container?: HTMLElement;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;

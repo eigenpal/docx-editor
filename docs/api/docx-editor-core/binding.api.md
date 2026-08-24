@@ -90,6 +90,9 @@ export type StoryScope = {
 export type StoryTargetRejection = 'unknown-scope' | 'dangling-relationship' | 'wrong-relationship-type' | 'external-relationship' | 'bad-relationship-target' | 'missing-part' | 'not-a-story-part' | 'too-many-story-stores';
 
 // @public
+export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory'>;
+
+// @public
 export interface TreeApplyResult {
     // (undocumented)
     readonly committed: boolean;
@@ -114,7 +117,7 @@ export interface TreeDocxSession extends TreeDocxSessionView {
 // @public
 export interface TreeDocxSessionView {
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
-    applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
+    applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
     // (undocumented)
     beginComposition(scope?: StoryScope): void;
     bodyText(): string;
@@ -123,6 +126,7 @@ export interface TreeDocxSessionView {
     canRedo(): boolean;
     // (undocumented)
     canUndo(): boolean;
+    collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
     deleteComments(comments: readonly {

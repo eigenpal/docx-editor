@@ -972,13 +972,14 @@ export const wordFeatures: WordFeature[] = [
   // --- Collaboration, i18n & editing UX ---------------------------------------
   {
     id: 'collab.realtime',
-    name: 'Realtime collaboration (Yjs)',
+    name: 'Realtime collaboration',
     category: 'collaboration',
-    editing: 'full',
-    rendering: 'full',
-    roundTrip: 'full',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Live cursors, presence, comment sync, per-author tracked-change attribution.',
+    notes:
+      'Experimental Yjs proof synchronizes insertions and deletions in existing body paragraphs, presence, remote selections, and actor-local undo. Structural edits, formatting, review data, tables, headers, footers, notes, and drawings do not synchronize.',
   },
   {
     id: 'collab.find-replace',

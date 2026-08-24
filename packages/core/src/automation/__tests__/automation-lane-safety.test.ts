@@ -87,7 +87,7 @@ function withoutComments(source: string): string {
 describe('the lane imports nothing that assumes a browser', () => {
   const files = laneFiles();
 
-  test('the only lane it reaches by relative import is the store lane', () => {
+  test('it reaches only the store and provider-neutral collaboration lanes', () => {
     // Every assertion below is over this list. Keep its setup guard on the actual graph test.
     expect(files.length).toBeGreaterThanOrEqual(6);
     expect(files.map((file) => file.split('/').pop())).toContain('server-host.ts');
@@ -100,6 +100,7 @@ describe('the lane imports nothing that assumes a browser', () => {
         const target = resolve(dirname(file), specifier);
         if (target.startsWith(LANE)) continue;
         if (target.startsWith(join(CORE_SRC, 'store'))) continue;
+        if (target.startsWith(join(CORE_SRC, 'collaboration'))) continue;
         foreign.push(`${file.split('/').pop()} -> ${specifier}`);
       }
     }

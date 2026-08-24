@@ -3395,6 +3395,33 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-selection);
 }
 
+.docx-paginated-surface .docx-remote-selection-rect {
+  background-color: color-mix(in srgb, var(--doc-remote-color, var(--doc-accent)) 28%, transparent);
+  border-radius: 2px;
+}
+
+.docx-paginated-surface .docx-remote-caret {
+  background-color: var(--doc-remote-color, var(--doc-accent));
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px var(--doc-surface);
+}
+
+.docx-paginated-surface .docx-remote-caret-label {
+  position: absolute;
+  max-width: 180px;
+  overflow: hidden;
+  padding: 2px 6px;
+  transform: translateY(calc(-100% - 2px));
+  border-radius: 5px 5px 5px 1px;
+  background: var(--doc-remote-color, var(--doc-accent));
+  color: var(--doc-on-primary);
+  font:
+    600 11px/1.4 system-ui,
+    sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ========================================================================
  * COMPOUND TOOLBAR (`docx-toolbar` family) — the composition API's default
  * chrome bar, the chrome spec's visual recipe:

@@ -10,6 +10,7 @@ import { AutomationHost } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
 import { AutomationSpan } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
+import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 
 // @public
 export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
@@ -245,8 +246,12 @@ export type ContentControlValue = {
 };
 
 // @public
+export type CreateCollaborativeOptions = Omit<CreateServerOptions, 'collaboration'>;
+
+// @public
 export interface CreateServerOptions {
     readonly author?: string;
+    readonly collaboration?: EditorCollaborationSession;
     readonly limits?: DocumentLimits;
 }
 
@@ -370,6 +375,7 @@ export interface DocxEditorErrorInit {
 
 // @public
 export interface DocxEditorNamespace {
+    createCollaborative(bytes: Uint8Array, collaboration: EditorCollaborationSession, options?: CreateCollaborativeOptions): Promise<DocxEditorServerRuntime>;
     createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 

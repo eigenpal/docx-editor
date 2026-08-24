@@ -12,7 +12,7 @@
 // The library chrome's styling comes from the CORE stylesheet (`docx-toolbar` and
 // `docx-menubar` families); this demo styles only its own header.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   DocxEditor,
   useDocxEditor,
@@ -34,7 +34,10 @@ import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
-import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
+import { keepCaret } from './demoButtons';
+import { DemoHeaderButton } from './DemoHeaderButton';
+import { CollaborationControl } from './CollaborationDemo';
+import type { WebrtcCollaborationRoom } from '@docx-editor.dev/collaboration-yjs/webrtc';
 import {
   citationCardAt,
   CitationCardActions,
@@ -367,6 +370,8 @@ function EditorChrome({
   onColorModeChange,
   onInsertCitation,
   showAdapterSwitcher,
+  collaborating,
+  collaborationControl,
 }: {
   title: string;
   onTitleChange: (next: string) => void;
@@ -374,6 +379,8 @@ function EditorChrome({
   onColorModeChange: (next: 'light' | 'dark') => void;
   onInsertCitation: (at: EditorCaret | null) => void;
   showAdapterSwitcher: boolean;
+  collaborating: boolean;
+  collaborationControl: ReactNode;
 }) {
   const editor = useDocxEditor();
   // Where the caret is, as a paragraph and an offset — the shape the write APIs take as
@@ -386,6 +393,7 @@ function EditorChrome({
   const [showPageSetup, setShowPageSetup] = useState(false);
 
   const openFile = (file: File) => {
+    if (collaborating) return;
     // The title follows the opened file, so the header names the document actually
     // on screen — and the download the Save button writes names itself after it too.
     onTitleChange(file.name.replace(/\.docx$/i, ''));
@@ -393,7 +401,9 @@ function EditorChrome({
       editor?.load(new Uint8Array(buffer));
     });
   };
-  const newDocument = () => editor?.load(blankDocumentBytes());
+  const newDocument = () => {
+    if (!collaborating) editor?.load(blankDocumentBytes());
+  };
   const saveDocument = () => {
     void editor?.save().then((buffer) => {
       const base = title.trim() || 'document';
@@ -435,7 +445,7 @@ function EditorChrome({
             spellCheck={false}
           />
           <DocxEditor.Menu
-            onOpen={() => fileInputRef.current?.click()}
+            onOpen={collaborating ? undefined : () => fileInputRef.current?.click()}
             onSave={saveDocument}
             onPageSetup={() => setShowPageSetup(true)}
           >
@@ -443,7 +453,7 @@ function EditorChrome({
                 order is clearer than merging into it. */}
             <DocxEditor.Menu.File preset={false}>
               <DocxEditor.Menu.Open />
-              <DocxEditor.Menu.Row onSelect={newDocument} disabled={!editor}>
+              <DocxEditor.Menu.Row onSelect={newDocument} disabled={!editor || collaborating}>
                 New
               </DocxEditor.Menu.Row>
               <DocxEditor.Menu.Save />
@@ -499,24 +509,17 @@ function EditorChrome({
 
         <div className="demo-header__right">
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
-          <button
-            type="button"
-            style={DEMO_PRIMARY_BUTTON}
-            disabled={!editor}
-            onMouseDown={keepCaret}
+          <DemoHeaderButton
+            variant="primary"
+            disabled={!editor || collaborating}
             onClick={() => fileInputRef.current?.click()}
           >
             Open DOCX
-          </button>
-          <button
-            type="button"
-            style={DEMO_SECONDARY_BUTTON}
-            disabled={!editor}
-            onMouseDown={keepCaret}
-            onClick={newDocument}
-          >
+          </DemoHeaderButton>
+          <DemoHeaderButton disabled={!editor || collaborating} onClick={newDocument}>
             New
-          </button>
+          </DemoHeaderButton>
+          {collaborationControl}
         </div>
       </header>
 
@@ -578,7 +581,7 @@ function RulerRow() {
 
 export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const showAdapterSwitcher =
-    import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
+    Boolean(import.meta.env.DEV) || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   // Named after the document it opens with, and after whichever file is opened later.
   const [title, setTitle] = useState(
@@ -589,6 +592,9 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         ?.replace(/\.docx$/i, '') ?? 'Document'
   );
   const [showOutline, setShowOutline] = useState(false);
+  const [workingDocument, setWorkingDocument] = useState<Uint8Array | null>(null);
+  const [collaborationRoom, setCollaborationRoom] = useState<WebrtcCollaborationRoom | null>(null);
+  const [collaborationIntent, setCollaborationIntent] = useState<'share' | 'join' | null>(null);
   // The citation details card, owned HERE so both openers share it: a click on the chip
   // (`CustomNodeChrome.onNodeClick`) and the context menu's Edit row (`onEditNode`).
   const [citationCard, setCitationCard] = useState<CitationCard | null>(null);
@@ -613,17 +619,28 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
     error: loadError,
   } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
 
+  useEffect(
+    () => () => {
+      collaborationRoom?.destroy();
+    },
+    [collaborationRoom]
+  );
+
+  const activeDocument = collaborationRoom?.document ?? workingDocument ?? bytes;
+
   return (
     <div
       className={`docx-editor demo-app${colorMode === 'dark' ? ' dark' : ''}`}
       data-testid="composed-mount"
     >
-      {bytes ? (
+      {activeDocument ? (
         // Authoring is ambient: comments and tracked changes take their `@w:author` from
         // `author`, the way the Office JS API sources it from context. A real app supplies
         // the signed-in user; a demo supplies a name so replies can be written at all.
         <DocxEditor.Root
-          document={bytes}
+          key={collaborationRoom?.session.documentId ?? 'local-document'}
+          document={activeDocument}
+          collaboration={collaborationRoom?.session}
           author="Demo Reviewer"
           // The demo always opens ready to type: without an explicit mode, a document
           // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
@@ -639,6 +656,23 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             onColorModeChange={setColorMode}
             onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}
             showAdapterSwitcher={showAdapterSwitcher}
+            collaborating={collaborationRoom !== null}
+            collaborationControl={
+              <CollaborationControl
+                room={collaborationRoom}
+                connectionIntent={collaborationIntent}
+                onStart={(room, intent) => {
+                  setWorkingDocument(room.document);
+                  setCollaborationIntent(intent);
+                  setCollaborationRoom(room);
+                }}
+                onLeave={(document) => {
+                  setWorkingDocument(document);
+                  setCollaborationIntent(null);
+                  setCollaborationRoom(null);
+                }}
+              />
+            }
           />
           <RulerRow />
           {/* The viewport stays FULL-WIDTH so the vertical ruler (an absolute

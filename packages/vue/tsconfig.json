@@ -31,6 +31,7 @@
       "@docx-editor.dev/core": ["../core/src/index.ts"],
       "@docx-editor.dev/core/automation": ["../core/src/automation/index.ts"],
       "@docx-editor.dev/core/binding": ["../core/src/binding/index.ts"],
+      "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
       "@docx-editor.dev/core/contracts/editor": ["../core/src/contracts/editor.ts"],
       "@docx-editor.dev/core/contracts/document": ["../core/src/contracts/document.ts"],
       "@docx-editor.dev/core/contracts/interaction": ["../core/src/contracts/interaction.ts"],

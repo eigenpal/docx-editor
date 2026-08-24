@@ -73,6 +73,7 @@ import {
   type SelectionMark,
   type StoryScope,
   type StoryTargetRejection,
+  type TreeTransactOptions,
   type TreeDocOp,
   type TreeDocumentStore,
   type TreeModelChange,
@@ -116,6 +117,10 @@ import {
   readDocumentProperties,
   type DocumentProperties,
 } from '../store/package/document-properties.ts';
+import {
+  createCollaborationDocumentPort,
+  type CollaborationDocumentPort,
+} from '../collaboration/index.ts';
 
 /**
  * What applying ops produced: whether it committed, and why not when it did not.
@@ -130,6 +135,12 @@ export interface TreeApplyResult {
   /** Present when the edit was refused, so a host can report WHY rather than a silent no-op. */
   readonly reason?: TreeBindingRejection | StoryTargetRejection | string;
 }
+
+/** Optional collaboration attribution for a direct tree-op transaction. */
+export type TreeApplyOptions = Pick<
+  TreeTransactOptions,
+  'origin' | 'actorId' | 'operationId' | 'recordsHistory'
+>;
 
 /**
  * One open document: the canonical tree, and the only write path into it.
@@ -175,7 +186,8 @@ export interface TreeDocxSessionView {
     ops: readonly TreeDocOp[],
     selectionBefore?: SelectionMark | null,
     selectionAfter?: SelectionMark | null,
-    scope?: StoryScope
+    scope?: StoryScope,
+    options?: TreeApplyOptions
   ): TreeApplyResult;
   /**
    * Every part that holds a story, body first, then headers, footers and note parts.
@@ -211,6 +223,8 @@ export interface TreeDocxSessionView {
   beginComposition(scope?: StoryScope): void;
   endComposition(): void;
   subscribe(onChange: (change: TreeModelChange) => void): () => void;
+  /** Narrow provider-neutral attachment over this session's canonical package store. */
+  collaborationPort(documentId: string): CollaborationDocumentPort;
   /** Serialize the whole package back to DOCX bytes. */
   save(): Uint8Array;
   /**
@@ -1055,7 +1069,10 @@ export function openTreeSession(
 
       currentPackage,
 
-      applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE) {
+      collaborationPort: (documentId) =>
+        createCollaborationDocumentPort(packageStore, { documentId }),
+
+      applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE, options = {}) {
         if (ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
         const lifecycleCount = ops.filter(
           (op) => isHeaderFooterLifecycleOp(op) || isNoteLifecycleOp(op)
@@ -1084,16 +1101,20 @@ export function openTreeSession(
           }
           return { committed: true, rejected: false, opCount: 1 };
         }
-        const result = packageStore.transact(scope, (ctx) => {
-          // Recorded BEFORE the ops run, so undo restores where the caret was when the user
-          // made the edit rather than where it ended up afterwards.
-          if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
-          // And where it ends up, so REDO has somewhere to put it. No caller supplied this,
-          // so `selectionForRedo` was always null and redo left the caret addressing the
-          // tree the undo had discarded — offsets past the end of a paragraph it re-shortened.
-          if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
-          for (const op of ops) ctx.apply(op);
-        });
+        const result = packageStore.transact(
+          scope,
+          (ctx) => {
+            // Recorded BEFORE the ops run, so undo restores where the caret was when the user
+            // made the edit rather than where it ended up afterwards.
+            if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
+            // And where it ends up, so REDO has somewhere to put it. No caller supplied this,
+            // so `selectionForRedo` was always null and redo left the caret addressing the
+            // tree the undo had discarded — offsets past the end of a paragraph it re-shortened.
+            if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
+            for (const op of ops) ctx.apply(op);
+          },
+          options
+        );
         if (!result.ok) {
           return { committed: false, rejected: true, opCount: ops.length, reason: result.reason };
         }

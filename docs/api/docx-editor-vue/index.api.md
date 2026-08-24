@@ -14,6 +14,7 @@ import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { CollaborationStatus } from '@docx-editor.dev/core/collaboration';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
@@ -30,6 +31,7 @@ import * as _docx_editor_dev_i18n from '@docx-editor.dev/i18n';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
+import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
@@ -2673,6 +2675,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<ImageDecodePort>;
         default: undefined;
     };
+    collaboration: {
+        type: PropType<EditorCollaborationSession>;
+        default: undefined;
+    };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
@@ -2724,6 +2730,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: PropType<ImageDecodePort>;
         default: undefined;
     };
+    collaboration: {
+        type: PropType<EditorCollaborationSession>;
+        default: undefined;
+    };
 }>> & Readonly<{
     onChange?: ((_change: DocumentChange) => any) | undefined;
     onReady?: ((_editor: Editor) => any) | undefined;
@@ -2736,6 +2746,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     author: string;
     mode: "suggesting" | "edit" | "view";
     imageDecodePort: ImageDecodePort;
+    collaboration: EditorCollaborationSession;
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
@@ -2758,6 +2769,8 @@ export interface DocxEditorRootProps {
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
+    // (undocumented)
+    collaboration?: EditorCollaborationSession;
     // (undocumented)
     document?: DocumentSource;
     // (undocumented)
@@ -5017,6 +5030,15 @@ export { TranslationKey }
 
 // @public (undocumented)
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ComputedRef<ChromeTranslate>;
+
+// @public
+export function useCollaborationStatus(session: MaybeRefOrGetter_2<EditorCollaborationSession | null>): UseCollaborationStatusReturn;
+
+// @public
+export interface UseCollaborationStatusReturn {
+    // (undocumented)
+    readonly status: Readonly<Ref<CollaborationStatus | 'inactive'>>;
+}
 
 // @public (undocumented)
 export function useContentControl(): UseContentControlResult;

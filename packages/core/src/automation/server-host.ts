@@ -29,6 +29,11 @@ import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts'
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
+import {
+  createCollaborationDocumentPort,
+  type EditorCollaborationSession,
+} from '../collaboration/index.ts';
 import { addComment, setCommentResolved } from '../store/store/comment-writes.ts';
 import {
   deleteCommentReply,
@@ -87,6 +92,8 @@ export interface ServerAutomationHostOptions {
    * may want smaller limits than the defaults. Omitted means the engine's own defaults.
    */
   readonly limits?: OoxmlPackageLimits;
+  /** Optional provider-neutral collaboration replica attached to this headless host. */
+  readonly collaboration?: EditorCollaborationSession;
 }
 
 const BODY: StoryScope = Object.freeze({ kind: 'body' as const });
@@ -118,12 +125,22 @@ export function createServerAutomationHost(
     };
   }
   const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  let detachCollaboration = (): void => {};
+  const port = packageStorePort(store, options.collaboration, () => detachCollaboration());
+  const host = createAutomationHost({
+    port,
+    capabilities: SERVER_AUTOMATION_CAPABILITIES,
+  });
+  if (options.collaboration) {
+    detachCollaboration = options.collaboration.attach(
+      createCollaborationDocumentPort(store, {
+        documentId: options.collaboration.documentId,
+      })
+    );
+  }
   return {
     ok: true,
-    host: createAutomationHost({
-      port: packageStorePort(store),
-      capabilities: SERVER_AUTOMATION_CAPABILITIES,
-    }),
+    host,
   };
 }
 
@@ -156,8 +173,26 @@ function mintExternalTarget(
  * not from anything the host layer does: the store stages ops against a working package and
  * publishes nothing until every one of them has been accepted.
  */
-function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
+function packageStorePort(
+  store: TreePackageStore,
+  collaboration?: EditorCollaborationSession,
+  detachCollaboration: () => void = () => {}
+): AutomationDocumentPort {
   let live = true;
+  let operationCounter = 0;
+  const mutationOptions = () => {
+    if (!collaboration) return {};
+    operationCounter += 1;
+    return {
+      origin:
+        collaboration.identity.role === 'agent'
+          ? ORIGIN_IDS.mutationAgent
+          : ORIGIN_IDS.mutationHuman,
+      actorId: collaboration.identity.actorId,
+      operationId: `${collaboration.identity.actorId}:automation:${operationCounter}`,
+      recordsHistory: false,
+    };
+  };
   return {
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
@@ -168,9 +203,15 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
       // batch that was refused while planning has already left without touching anything.
       const ops = staged((url) => mintExternalTarget(store, url, scope));
       if (ops === null) return { ok: false, reason: 'unsupported-target' };
-      const result = store.transact(scope, (ctx) => {
-        for (const op of ops) ctx.apply(op);
-      });
+      const collaborationRefusal = collaboration?.gateOperations(ops, scope);
+      if (collaborationRefusal) return { ok: false, reason: collaborationRefusal };
+      const result = store.transact(
+        scope,
+        (ctx) => {
+          for (const op of ops) ctx.apply(op);
+        },
+        mutationOptions()
+      );
       if (!result.ok) {
         return {
           ok: false,
@@ -181,6 +222,8 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
     },
     applyLifecycle(op: TreeDocOp): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
+      const collaborationRefusal = collaboration?.gateOperations([op], BODY);
+      if (collaborationRefusal) return { ok: false, reason: collaborationRefusal };
       // The store's own package transaction: parts, relationships, content types and settings
       // restored together on undo. Routed here rather than through `transact` because a story
       // transaction cannot carry a part it does not own.
@@ -195,6 +238,7 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
     },
     applyCommentWrites(writes, scope): AutomationCommentWriteResult {
       if (!live) return { ok: false, reason: 'disposed' };
+      if (collaboration) return { ok: false, reason: 'experimental-collaboration-text-only' };
       if (writes.length === 0) return { ok: true, changed: false };
       const story = store.resolveStory(scope);
       if (!story.ok) return { ok: false, reason: story.reason };
@@ -265,6 +309,7 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
     },
     applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
+      if (collaboration) return { ok: false, reason: 'experimental-collaboration-text-only' };
       const story = store.resolveStory(scope);
       if (!story.ok) return { ok: false, reason: story.reason };
       // Grafted before and republished after, exactly as the comment path is: the story store's
@@ -284,6 +329,7 @@ function packageStorePort(store: TreePackageStore): AutomationDocumentPort {
     save: () => (live ? writeOoxmlPackage(store.currentPackage()) : null),
     subscribe: (listener) => store.subscribe(() => listener()),
     dispose() {
+      detachCollaboration();
       live = false;
     },
   };

@@ -552,6 +552,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? { tableInteractionLabel: config.tableInteractionLabel }
         : {}),
       ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
+      ...(config.collaboration ? { collaboration: config.collaboration } : {}),
       // Read through the holder rather than captured: the popover mounts AFTER the editor
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
