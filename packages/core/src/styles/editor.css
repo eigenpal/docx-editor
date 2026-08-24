@@ -3423,6 +3423,9 @@ a.docx-hyperlink:focus-visible {
 .docx-toolbar {
   display: flex;
   align-items: center;
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
   /* NOT overflow-scroll like the chrome spec's pill: this toolbar hosts LIVE popups
    * (font menu, swatch grids) positioned absolutely inside their parts, and any
    * overflow clipping on the bar would cut them off. A bar that does not measure
@@ -4698,7 +4701,6 @@ a.docx-hyperlink:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
   transform: translateY(-50%);
 }
 

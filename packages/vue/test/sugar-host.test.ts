@@ -26,6 +26,9 @@ describe('DocxEditor sugar host', () => {
     const loading = view.container.querySelector('.docx-editor__loading--overlay');
     expect(loading).not.toBeNull();
     expect(loading?.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
+    expect(
+      (view.container.querySelector('[data-testid="docx-toolbar"]') as HTMLFieldSetElement).disabled
+    ).toBe(true);
     view.unmount();
   });
 
@@ -37,6 +40,9 @@ describe('DocxEditor sugar host', () => {
     await view.flush();
     expect(view.container.querySelector('.docx-editor__loading')).toBeNull();
     expect(view.container.textContent).toContain('large body');
+    expect(
+      (view.container.querySelector('[data-testid="docx-toolbar"]') as HTMLFieldSetElement).disabled
+    ).toBe(false);
     view.unmount();
   });
 
@@ -307,9 +313,7 @@ describe('DocxEditorLoading composition', () => {
     expect(container.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
     expect(container.querySelector('.docx-editor__loading-lines')).toBeNull();
     expect(container.querySelector('.docx-editor__loading-spinner')).not.toBeNull();
-    expect(container.querySelector('.docx-editor__loading-page-status')?.textContent).toContain(
-      'Loading…'
-    );
+    expect(container.querySelector('.docx-editor-sr-only')?.textContent).toBe('Loading');
     app.unmount();
     container.remove();
   });

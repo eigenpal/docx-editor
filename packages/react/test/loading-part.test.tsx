@@ -334,12 +334,12 @@ describe('DocxEditor.Loading', () => {
     expect(el.getAttribute('aria-live')).toBe('polite');
   });
 
-  test('the default screen shows localized loading text inside the document page', () => {
+  test('the default screen announces loading without a visible label', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
     const page = el.querySelector('.docx-editor__loading-page')!;
 
-    expect(page.textContent).toContain('Loading…');
+    expect(page.querySelector('.docx-editor-sr-only')?.textContent).toBe('Loading');
     expect(page.querySelector('.docx-editor__loading-page-status')).not.toBeNull();
     expect(el.querySelector(SPINNER)!.getAttribute('aria-hidden')).toBe('true');
   });
@@ -420,6 +420,9 @@ describe('packaged DocxEditor loading screen', () => {
 
     expect(loading).not.toBeNull();
     expect(loading!.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
+    expect(
+      (view.container.querySelector('[data-testid="docx-toolbar"]') as HTMLFieldSetElement).disabled
+    ).toBe(true);
   });
 
   test('keeps the default loading page up while a large document opens', async () => {
@@ -433,5 +436,8 @@ describe('packaged DocxEditor loading screen', () => {
       expect(view.container.textContent).toContain('large body');
     });
     expect(view.container.querySelector('.docx-editor__loading')).toBeNull();
+    expect(
+      (view.container.querySelector('[data-testid="docx-toolbar"]') as HTMLFieldSetElement).disabled
+    ).toBe(false);
   });
 });

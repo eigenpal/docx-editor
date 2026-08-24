@@ -41,7 +41,7 @@ const NONE: ReadonlySet<string> = new Set<string>();
 
 export interface UseToolbarOverflowResult {
   /** Attach to the bar element. */
-  readonly attach: (element: HTMLDivElement | null) => void;
+  readonly attach: (element: HTMLFieldSetElement | null) => void;
   /** Group ids that must render in the "⋯" menu instead of the bar. */
   readonly overflow: ReadonlySet<string>;
 }
@@ -57,7 +57,7 @@ export function useToolbarOverflow(
   groups: readonly string[],
   order: readonly string[]
 ): UseToolbarOverflowResult {
-  const barRef = useRef<HTMLDivElement | null>(null);
+  const barRef = useRef<HTMLFieldSetElement | null>(null);
   // Widths SURVIVE a group leaving the bar. A group in the overflow menu renders nothing to
   // measure, and forgetting its width would mean never knowing whether it could come back.
   const widths = useRef(new Map<string, number>());
@@ -129,7 +129,7 @@ export function useToolbarOverflow(
     }
   }, [enabled]);
 
-  const attach = useCallback((element: HTMLDivElement | null) => {
+  const attach = useCallback((element: HTMLFieldSetElement | null) => {
     barRef.current = element;
   }, []);
 

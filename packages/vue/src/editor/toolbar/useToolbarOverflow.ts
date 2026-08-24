@@ -22,7 +22,7 @@ const ASSUMED_MORE_WIDTH = 34;
 const NONE: ReadonlySet<string> = new Set<string>();
 
 export interface UseToolbarOverflowResult {
-  readonly attach: (element: HTMLDivElement | null) => void;
+  readonly attach: (element: HTMLFieldSetElement | null) => void;
   readonly overflow: Ref<ReadonlySet<string>>;
 }
 
@@ -31,7 +31,7 @@ export function useToolbarOverflow(
   groups: Ref<readonly string[]> | (() => readonly string[]),
   order: Ref<readonly string[]> | (() => readonly string[])
 ): UseToolbarOverflowResult {
-  const barRef = shallowRef<HTMLDivElement | null>(null);
+  const barRef = shallowRef<HTMLFieldSetElement | null>(null);
   const widths = shallowRef(new Map<string, number>());
   const moreWidth = shallowRef(ASSUMED_MORE_WIDTH);
   const overflow = ref<ReadonlySet<string>>(NONE);
@@ -95,7 +95,7 @@ export function useToolbarOverflow(
     }
   };
 
-  const attach = (element: HTMLDivElement | null) => {
+  const attach = (element: HTMLFieldSetElement | null) => {
     barRef.value = element;
   };
 

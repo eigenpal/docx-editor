@@ -128,7 +128,7 @@ function DocxEditorLoadingImpl({
         <div className="docx-editor__loading-page">
           <div className="docx-editor__loading-page-status">
             <DocxEditorLoadingSpinner />
-            <span>{t('loading.label')}…</span>
+            <span className="docx-editor-sr-only">{t('loading.label')}</span>
           </div>
         </div>
       )}

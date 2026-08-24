@@ -219,6 +219,8 @@ function buildDefaultGroups(image: EditorSnapshot['image']): readonly DefaultGro
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
+const selectToolbarDisabled = (snapshot: EditorSnapshot) =>
+  snapshot.isLoading || snapshot.isOpening === true;
 
 /** Slots whose panel row is the CONTROL itself, because it shows a value. */
 function isValueSlot(slot: ArrangementKey): boolean {
@@ -292,6 +294,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
   // use. It runs above `ToolbarContext.Provider`, so it takes the host `t` directly.
   const label = useToolbarLabelFor(t);
   const image = useEditorState(selectToolbarImage);
+  const toolbarDisabled = useEditorState(selectToolbarDisabled);
   const defaultGroups = useMemo(() => buildDefaultGroups(image), [image]);
   const defaultSlots = useMemo(
     () => new Set(defaultGroups.flatMap((group) => group.entries.map((entry) => entry.slot))),
@@ -396,8 +399,9 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
           decide what collapses into the overflow panel, and a dialog counted among them
           fed that measurement — the panel re-measured, the dialog re-rendered, forever. */}
       <ParagraphDialogHost>
-        <div
+        <fieldset
           ref={attach}
+          disabled={toolbarDisabled}
           role="toolbar"
           data-testid="docx-toolbar"
           // `docx-editor` self-emitted: chrome CSS and --doc-* tokens are scoped under it, and
@@ -418,7 +422,7 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
           ) : (
             content
           )}
-        </div>
+        </fieldset>
       </ParagraphDialogHost>
     </ToolbarContext.Provider>
   );

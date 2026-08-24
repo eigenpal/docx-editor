@@ -176,6 +176,8 @@ function buildDefaultGroups(image: EditorSnapshot['image']): readonly DefaultGro
 }
 
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
+const selectToolbarDisabled = (snapshot: EditorSnapshot) =>
+  snapshot.isLoading || snapshot.isOpening === true;
 
 function isValueSlot(slot: ArrangementKey): boolean {
   return slot === 'alignment' || slot in SHAPED_PARTS;
@@ -289,6 +291,7 @@ const DocxEditorToolbarRoot = defineComponent({
     );
     const label = useToolbarLabel();
     const image = useEditorState(selectToolbarImage);
+    const toolbarDisabled = useEditorState(selectToolbarDisabled);
     const defaultGroups = computed(() => buildDefaultGroups(image.value));
     const defaultSlots = computed(
       () =>
@@ -389,9 +392,10 @@ const DocxEditorToolbarRoot = defineComponent({
       // host wrapping the element would make this component's root a fragment, and Vue
       // then drops every fallthrough attribute the host passes — `class`, `style`, `id`.
       return h(
-        'div',
+        'fieldset',
         {
-          ref: (el: unknown) => attach(el as HTMLDivElement | null),
+          ref: (el: unknown) => attach(el as HTMLFieldSetElement | null),
+          disabled: toolbarDisabled.value,
           role: 'toolbar',
           'data-testid': 'docx-toolbar',
           class: `${scopeClassName}docx-toolbar${props.className ? ` ${props.className}` : ''}`,
