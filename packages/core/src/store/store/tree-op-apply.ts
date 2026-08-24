@@ -870,12 +870,18 @@ function applyPlaceholderReplace(
   let nextControl = replaceControlContent(control, contentChildren, nextId);
   nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
 
+  // A BLOCK placeholder replace deletes the prompt's paragraph(s) and mints a fresh one, so
+  // the paragraph set changes and the effect must say so. Reporting it as 'text-local' with
+  // empty created/deleted told paragraph-keyed caches they could keep their answer, and a
+  // retained review order index then had no entry for the minted paragraph — an item anchored
+  // in it listed in the rail but never activated from a caret. The inline branch really is
+  // text-local: the owner paragraph survives, only its runs are replaced.
   const effect: TreeOpEffect = {
     dirty: owner ? [owner.id] : [control.id],
-    created: [],
-    deleted: [],
+    created: inline ? [] : contentChildren.map((child) => child.id),
+    deleted: inline ? [] : placeholderParagraphIdsOf(control),
     dependencyKeys: TEXT_DEPS,
-    impact: isTemporaryControl(control) ? 'flow-structural' : 'text-local',
+    impact: !inline || isTemporaryControl(control) ? 'flow-structural' : 'text-local',
   };
 
   if (isTemporaryControl(control)) {
@@ -891,6 +897,24 @@ function applyPlaceholderReplace(
   }
 
   return fromEdit(replaceNode(part, control.id, nextControl, options), effect);
+}
+
+/** Paragraph ids a block placeholder replace removes along with the prompt content. */
+function placeholderParagraphIdsOf(control: OoxmlNode): string[] {
+  if (control.kind === 'textValue') return [];
+  const content = contentControlContentOf(control);
+  if (!content) return [];
+  const ids: string[] = [];
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 32) return;
+    if (node.kind === 'paragraph') {
+      ids.push(node.id);
+      return;
+    }
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  for (const child of content.children) walk(child, 0);
+  return ids;
 }
 
 function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {

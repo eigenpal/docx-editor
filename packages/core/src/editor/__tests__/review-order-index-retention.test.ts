@@ -81,14 +81,58 @@ describe('review activation across the retained order index', () => {
     expect(activeKey(editor)).toBe(key);
 
     // A keystroke-shaped commit: insert one character into the OTHER paragraph.
-    const [firstParagraph] = surface.session.paragraphIds();
+    const [firstParagraph, trackedParagraph] = surface.session.paragraphIds();
     const edited = surface.session.applyTreeOps([
       { op: 'insertText', paragraphId: firstParagraph!, offset: 3, text: 'x' },
     ]);
     expect(edited.committed).toBe(true);
 
+    // Through the CARET, not the activation pin: a caret move clears the pin, so this read
+    // classifies the position against the re-stamped order index. The pin path never reads
+    // the index, so asserting through it would pass even against a broken retention.
+    surface.setSelection({
+      anchor: { paragraphId: trackedParagraph!, offset: 9 },
+      head: { paragraphId: trackedParagraph!, offset: 9 },
+    });
+    expect(activeKey(editor)).toBe(key);
+
     expect(editor.setActiveReviewItem(key).ok).toBe(true);
     expect(activeKey(editor)).toBe(key);
+    editor.destroy();
+  });
+
+  test('a split that moves the tracked run into the minted tail still classifies it', () => {
+    // The sharpest probe of drop-on-structural-edit: split the TRACKED paragraph before the
+    // `w:ins` run, so the tracked range lands in the paragraph the split just minted. A
+    // wrongly retained index has no entry for that paragraph and the caret inside the tracked
+    // text classifies to nothing.
+    const editor = mount();
+    const surface = editor.surface!;
+    const key = editor.getReviewItems().find((entry) => entry.activatable)?.key;
+    if (!key) throw new Error('the tracked insertion produced no card');
+    expect(editor.setActiveReviewItem(key).ok).toBe(true);
+
+    const trackedParagraph = surface.session.paragraphIds()[1];
+    const split = surface.session.applyTreeOps([
+      { op: 'splitParagraph', paragraphId: trackedParagraph!, offset: 7 },
+    ]);
+    expect(split.committed).toBe(true);
+
+    const tail = surface.session.paragraphIds()[2];
+    expect(tail).toBeDefined();
+    // "tracked" now starts the tail; offset 2 is inside it.
+    surface.setSelection({
+      anchor: { paragraphId: tail!, offset: 2 },
+      head: { paragraphId: tail!, offset: 2 },
+    });
+    const active = activeKey(editor);
+    expect(active).not.toBeNull();
+    expect(
+      editor
+        .getReviewItems()
+        .filter((entry) => entry.activatable)
+        .map((entry) => entry.key)
+    ).toContain(active);
     editor.destroy();
   });
 
