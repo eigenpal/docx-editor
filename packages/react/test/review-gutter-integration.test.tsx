@@ -20,6 +20,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading.tsx';
 import { ReviewRailContext } from '../src/editor/context.ts';
+import { useNavigationLayoutStore } from '../src/editor/navigation/navigation-layout.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -57,6 +58,12 @@ const REVIEW_MODULE: EditorModule = {
 function RailStub() {
   const registry = useContext(ReviewRailContext);
   useEffect(() => registry?.register(), [registry]);
+  return null;
+}
+
+function ShiftWriter() {
+  const store = useNavigationLayoutStore();
+  useEffect(() => store?.setShift(128), [store]);
   return null;
 }
 
@@ -136,6 +143,7 @@ describe('the viewport’s review gutter', () => {
           <DocxEditorContent />
         </DocxEditorViewport>
         <RailStub />
+        <ShiftWriter />
         <DocxEditorLoading when overlay />
       </DocxEditorRoot>
     );

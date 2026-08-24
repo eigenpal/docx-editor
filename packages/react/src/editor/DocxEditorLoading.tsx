@@ -32,7 +32,6 @@ import type { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
-import { useNavigationShift } from './navigation/navigation-layout';
 import { useEditorState } from './useEditorState';
 
 /**
@@ -108,7 +107,6 @@ function DocxEditorLoadingImpl({
   children,
 }: DocxEditorLoadingProps) {
   const showLoading = useEditorState(selectShowLoading);
-  const navigationShift = useNavigationShift();
   const { t } = useTranslation();
   if (!when && !showLoading) return null;
 
@@ -116,7 +114,7 @@ function DocxEditorLoadingImpl({
     overlay ? ' docx-editor__loading--overlay' : ''
   }${className ? ` ${className}` : ''}`;
   const loadingStyle = {
-    ['--docx-loading-inline-start' as string]: `${navigationShift}px`,
+    ['--docx-loading-inline-start' as string]: '0px',
     ['--docx-loading-right' as string]: '0px',
     ...style,
   } as CSSProperties;

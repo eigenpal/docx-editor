@@ -115,13 +115,19 @@ describe('DocxEditorViewport review rail', () => {
     view.unmount();
   });
 
-  test('applies nav shift from the layout store outside render', async () => {
-    const view = mountEditorTree(() => h(ShiftWriter));
+  test('applies nav shift to the viewport but keeps the loading page centred', async () => {
+    const view = mountEditorTree(() => [
+      h(ShiftWriter),
+      h(DocxEditorLoading, { when: true, overlay: true }),
+    ]);
     await flush();
     const scroller = view.container.querySelector(
       '[data-testid="docx-editor-scroll"]'
     ) as HTMLElement;
     expect(scroller.style.getPropertyValue('--docx-nav-shift')).toBe('128px');
+    const loading = view.container.querySelector('.docx-editor__loading') as HTMLElement;
+    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
+    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
     view.unmount();
   });
 });
