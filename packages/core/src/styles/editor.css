@@ -2703,6 +2703,13 @@ a.docx-hyperlink:focus-visible {
   transition: padding-inline-start 0.2s ease;
 }
 
+/* A deferred open gives the loading overlay one frame before parsing. The parse blocks
+   layout transitions, so snap both ruler reservations before that frame or the right edge
+   moves while the start edge remains frozen, leaving the ruler half a strip off the page. */
+.docx-ruler-frame--opening {
+  transition: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .docx-ruler-frame {
     transition: none;

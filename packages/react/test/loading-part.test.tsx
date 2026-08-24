@@ -19,11 +19,13 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { renderToString } from 'react-dom/server';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading.tsx';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { DocxEditorHorizontalRuler } from '../src/editor/DocxEditorRulers.tsx';
 import { useEditorState } from '../src/editor/useEditorState.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -287,6 +289,37 @@ describe('DocxEditor.Loading', () => {
     await waitFor(() => {
       expect(view.container.querySelector(LOADING)).toBeNull();
     });
+  });
+
+  test('a ruler snaps to the centred loading page before a deferred replacement', async () => {
+    let editor: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorHorizontalRuler />
+        <DocxEditorLoading />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+
+    act(() => {
+      editor!.load(LARGE_SOURCE);
+    });
+    expect(editor!.snapshot().isOpening).toBe(true);
+    await act(async () => {});
+
+    expect(view.container.querySelector('.docx-ruler-frame--opening')).not.toBeNull();
+    await waitFor(() => {
+      expect(view.container.textContent).toContain('large body');
+    });
+    expect(view.container.querySelector('.docx-ruler-frame--opening')).toBeNull();
   });
 
   test('onReady waits for a LARGE document to mount, so it can scroll a real document', async () => {

@@ -21,6 +21,7 @@ import { useReviewGutter, useViewportClientWidth } from './review-gutter';
 import { formatPx, twipsToPixels } from '../lib/units';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
+const selectOpening = (snapshot: EditorSnapshot): boolean => snapshot.isOpening === true;
 
 /** @public */
 export interface DocxEditorRulerProps {
@@ -120,6 +121,7 @@ export const DocxEditorHorizontalRuler = defineComponent({
   },
   setup(props) {
     const documentAbsent = useEditorState(selectDocumentAbsent);
+    const opening = useEditorState(selectOpening);
     const { pageSetup, isEnabled } = usePageSetup();
     const zoom = useEditorState(selectZoom);
     const marginDrag = useMarginDrag();
@@ -149,7 +151,7 @@ export const DocxEditorHorizontalRuler = defineComponent({
       if (documentAbsent.value) return null;
       return (
         <div
-          class="docx-ruler-frame"
+          class={`docx-ruler-frame${opening.value ? ' docx-ruler-frame--opening' : ''}`}
           style={{
             paddingInlineStart: formatPx(shift.value + reserved.value.inlineStart),
             paddingRight: formatPx(reserved.value.inlineEnd),

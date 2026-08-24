@@ -33,6 +33,7 @@ import { useNavigationShift, useNavigationViewportElement } from './navigation/n
 import { useReviewGutter, useViewportClientWidth } from './review-gutter';
 
 const selectZoom = (snapshot: EditorSnapshot): number => snapshot.zoom;
+const selectOpening = (snapshot: EditorSnapshot): boolean => snapshot.isOpening === true;
 
 /** Props for the context-fed ruler parts. @public */
 export interface DocxEditorRulerProps {
@@ -190,6 +191,7 @@ function useViewportScrollLeft(): number {
  */
 export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement | null {
   const documentAbsent = useEditorState(selectDocumentAbsent);
+  const opening = useEditorState(selectOpening);
   const { pageSetup, isEnabled } = usePageSetup();
   const zoom = useEditorState(selectZoom);
   const { pending, preview, commit } = useMarginDrag();
@@ -210,7 +212,7 @@ export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactEle
     // the viewport's own padding moves the centred page by. The class carries the glide
     // (and its reduced-motion opt-out) so the ruler moves with the page rather than snaps.
     <div
-      className="docx-ruler-frame"
+      className={`docx-ruler-frame${opening ? ' docx-ruler-frame--opening' : ''}`}
       style={{
         // The review gutter's inline-start half composes with the navigation shift, the
         // same way the scroll container adds the two into one `padding-inline-start`.

@@ -2,13 +2,14 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { defineComponent, h, onMounted, onUnmounted } from 'vue';
+import { defineComponent, h, nextTick, onMounted, onUnmounted } from 'vue';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
 import { DocxEditorNavigation } from '../src/editor/navigation';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading';
+import { DocxEditorHorizontalRuler } from '../src/editor/DocxEditorRulers';
 import { useReviewRailRegistry } from '../src/editor/context';
 import { useNavigationLayoutStore } from '../src/editor/navigation/navigation-layout';
-import { SOURCE } from './helpers/fixtures';
+import { LARGE_SOURCE, SOURCE } from './helpers/fixtures';
 import { flush, mountEditorTree } from './helpers/mount';
 
 afterEach(() => {
@@ -128,6 +129,24 @@ describe('DocxEditorViewport review rail', () => {
     const loading = view.container.querySelector('.docx-editor__loading') as HTMLElement;
     expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
     expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
+    view.unmount();
+  });
+
+  test('snaps the ruler reservation while a replacement document opens', async () => {
+    const view = mountEditorTree(() => [
+      h(DocxEditorHorizontalRuler),
+      h(DocxEditorLoading, { overlay: true }),
+    ]);
+    await flush();
+
+    view.editor().load(LARGE_SOURCE);
+    expect(view.editor().snapshot().isOpening).toBe(true);
+    await nextTick();
+    await nextTick();
+
+    expect(view.container.querySelector('.docx-ruler-frame--opening')).not.toBeNull();
+    await flush();
+    expect(view.container.querySelector('.docx-ruler-frame--opening')).toBeNull();
     view.unmount();
   });
 });
