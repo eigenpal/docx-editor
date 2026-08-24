@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Internal restructuring moves the review-item types and their pure helpers into the store lane; no behavior change.
+The store entry point now exports the full review-item vocabulary: `ReviewCustomItem` joins the `ReviewItem` union, and `ReviewModelInput` carries the custom-node inputs.
