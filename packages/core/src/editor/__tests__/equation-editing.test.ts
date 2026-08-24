@@ -118,6 +118,17 @@ describe('atomic equation editing', () => {
     expect(editor.surface!.session.packageRevision()).toBe(revision);
   });
 
+  test('reuses equation metadata without exposing the cached paragraph array', () => {
+    const { editor } = mounted();
+    const first = editor.surface!.equations.equationsInCaretParagraph();
+    const second = editor.surface!.equations.equationsInCaretParagraph();
+
+    expect(second).not.toBe(first);
+    expect(second[0]).toBe(first[0]);
+    first.splice(0);
+    expect(editor.surface!.equations.equationsInCaretParagraph()).toHaveLength(1);
+  });
+
   test('a painted equation click selects its atom and requests chrome', () => {
     const { editor, paragraphId, container } = mounted();
     const seen: string[] = [];

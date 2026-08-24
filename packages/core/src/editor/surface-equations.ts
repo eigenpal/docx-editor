@@ -10,6 +10,7 @@ import {
   projectOmmlEquation,
   segmentsOf,
   type OoxmlNode,
+  type OoxmlParagraphNode,
   type OoxmlPart,
   type StoryScope,
   type EquationExpression,
@@ -17,6 +18,7 @@ import {
 
 const SUGGESTING_EQUATION_REFUSAL =
   'equation replacement and removal are not supported in suggesting mode';
+const paragraphEquationCache = new WeakMap<OoxmlParagraphNode, readonly SurfaceEquation[]>();
 
 /** One addressable inline equation and its compact editable projection. */
 export interface SurfaceEquation {
@@ -41,9 +43,11 @@ export interface EquationActivation {
   };
 }
 
-function equationsInParagraph(part: OoxmlPart, paragraphId: string): SurfaceEquation[] {
+function equationsInParagraph(part: OoxmlPart, paragraphId: string): readonly SurfaceEquation[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  const cached = paragraphEquationCache.get(paragraph);
+  if (cached) return cached;
   const equations: SurfaceEquation[] = [];
   for (const segment of segmentsOf(paragraph)) {
     const node = segment.node;
@@ -57,17 +61,21 @@ function equationsInParagraph(part: OoxmlPart, paragraphId: string): SurfaceEqua
     }
     const projection = projectOmmlEquation(node);
     if (!projection) continue;
-    equations.push({
-      id: node.id,
-      paragraphId,
-      start: segment.start,
-      end: segment.end,
-      linear: equationExpressionToLinearMath(projection.expression),
-      fallbackText: projection.fallbackText,
-      supported: expressionIsSupported(projection.expression),
-    });
+    equations.push(
+      Object.freeze({
+        id: node.id,
+        paragraphId,
+        start: segment.start,
+        end: segment.end,
+        linear: equationExpressionToLinearMath(projection.expression),
+        fallbackText: projection.fallbackText,
+        supported: expressionIsSupported(projection.expression),
+      })
+    );
   }
-  return equations;
+  const result = Object.freeze(equations);
+  paragraphEquationCache.set(paragraph, result);
+  return result;
 }
 
 function expressionIsSupported(expression: EquationExpression): boolean {
@@ -227,7 +235,7 @@ export function createEquationInteraction(deps: {
 
 export function createEquationOps(deps: EquationOpsDeps): EquationOps {
   const activePart = (): OoxmlPart | null => deps.session.partFor(deps.storyScope());
-  const equationsIn = (paragraphId: string): SurfaceEquation[] => {
+  const equationsIn = (paragraphId: string): readonly SurfaceEquation[] => {
     const part = activePart();
     return part ? equationsInParagraph(part, paragraphId) : [];
   };
@@ -306,7 +314,7 @@ export function createEquationOps(deps: EquationOpsDeps): EquationOps {
   };
 
   return {
-    equationsInCaretParagraph: () => equationsIn(deps.selection().head.paragraphId),
+    equationsInCaretParagraph: () => [...equationsIn(deps.selection().head.paragraphId)],
     equationAtCaret: atCaret,
     equationById: byId,
     can: capability,

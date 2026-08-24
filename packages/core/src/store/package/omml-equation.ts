@@ -77,6 +77,7 @@ export interface OmmlEquationProjection {
 const defaultProjectionCache = new WeakMap<OoxmlGenericElementNode, OmmlEquationProjection>();
 const DEFAULT_LINEAR_CACHE_LIMIT = 64;
 const defaultLinearMathCache = new Map<string, LinearMathParseResult>();
+const reversibleLinearMathCache = new WeakMap<EquationExpression, string>();
 
 export type LinearMathRejection =
   | 'empty'
@@ -759,7 +760,11 @@ export function parseLinearMath(input: string, limits?: OmmlLimits): LinearMathP
  * Returns an empty string when parsing the result would change the projected meaning.
  */
 export function equationExpressionToLinearMath(expression: EquationExpression): string {
-  return renderReversibleLinearMath(expression, parseLinearMath);
+  const cached = reversibleLinearMathCache.get(expression);
+  if (cached !== undefined) return cached;
+  const linear = renderReversibleLinearMath(expression, parseLinearMath);
+  reversibleLinearMathCache.set(expression, linear);
+  return linear;
 }
 
 type NextNodeId = () => string;
