@@ -132,6 +132,340 @@
   background: var(--doc-bg-subtle);
 }
 
+/* Every product-owned header action uses one box, focus, and disabled-state contract. */
+.demo-header-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  line-height: normal;
+}
+
+.demo-header-action:focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+
+.demo-header-action:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.demo-collaboration-avatars {
+  display: flex;
+  padding-left: 4px;
+}
+
+.demo-collaboration-avatar {
+  box-sizing: border-box;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  margin-left: -5px;
+  place-items: center;
+  border: 2px solid var(--doc-surface);
+  border-radius: 50%;
+  background: var(--demo-participant-color, var(--doc-primary));
+  color: var(--doc-on-primary);
+  font-size: 9px;
+}
+
+.demo-collaboration-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  padding: 16px;
+  place-items: center;
+  background: color-mix(in srgb, var(--doc-text) 34%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.demo-collaboration-dialog {
+  width: min(520px, 100%);
+  max-height: min(720px, calc(100vh - 32px));
+  overflow: auto;
+  border: 1px solid var(--doc-border);
+  border-radius: 16px;
+  background: var(--doc-surface);
+  box-shadow: 0 24px 70px color-mix(in srgb, var(--doc-text) 28%, transparent);
+  color: var(--doc-text);
+}
+
+.demo-collaboration-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid var(--doc-border-light);
+}
+
+.demo-collaboration-dialog__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.demo-collaboration-dialog__icon,
+.demo-collaboration-choice__icon {
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--doc-accent-bg);
+  color: var(--doc-accent);
+}
+
+.demo-collaboration-dialog h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.demo-collaboration-dialog p {
+  margin: 4px 0 0;
+  color: var(--doc-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.demo-collaboration-close {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+}
+
+.demo-collaboration-close:hover {
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text);
+}
+
+.demo-collaboration-body {
+  padding: 20px 22px 22px;
+}
+
+.demo-collaboration-field {
+  display: grid;
+  gap: 7px;
+  color: var(--doc-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.demo-collaboration-field + .demo-collaboration-field {
+  margin-top: 16px;
+}
+
+.demo-collaboration-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 8px;
+  outline: 0;
+  background: var(--doc-bg-input);
+  color: var(--doc-text);
+  font:
+    400 13px/1.4 system-ui,
+    sans-serif;
+}
+
+.demo-collaboration-field input:focus {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--doc-primary) 18%, transparent);
+}
+
+.demo-collaboration-choices {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.demo-collaboration-choice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid var(--doc-border);
+  border-radius: 12px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    transform 0.15s;
+}
+
+.demo-collaboration-choice:hover {
+  transform: translateY(-1px);
+  border-color: var(--doc-primary);
+  background: color-mix(in srgb, var(--doc-primary) 5%, var(--doc-surface));
+}
+
+.demo-collaboration-choice strong,
+.demo-collaboration-choice small {
+  display: block;
+}
+
+.demo-collaboration-choice strong {
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+
+.demo-collaboration-choice small {
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.demo-collaboration-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--doc-success-bg);
+  color: var(--doc-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.demo-collaboration-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--doc-success);
+}
+
+.demo-collaboration-status__count {
+  margin-left: auto;
+  color: var(--doc-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.demo-collaboration-people {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.demo-collaboration-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.demo-collaboration-person__avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--demo-participant-color, var(--doc-primary));
+  color: var(--doc-on-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.demo-collaboration-person small {
+  margin-left: auto;
+  color: var(--doc-text-muted);
+}
+
+.demo-collaboration-copy-row {
+  display: flex;
+  gap: 8px;
+}
+
+.demo-collaboration-copy-row button,
+.demo-collaboration-actions button,
+.demo-collaboration-back {
+  padding: 8px 12px;
+  border: 1px solid var(--doc-border);
+  border-radius: 8px;
+  background: var(--doc-bg-subtle);
+  color: var(--doc-text);
+  font:
+    600 13px/1.2 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+
+.demo-collaboration-copy-row button {
+  flex: none;
+}
+
+.demo-collaboration-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.demo-collaboration-actions button.is-primary {
+  border-color: var(--doc-primary);
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+
+.demo-collaboration-actions button.is-danger {
+  margin-right: auto;
+  border-color: color-mix(in srgb, var(--doc-danger) 45%, var(--doc-border));
+  color: var(--doc-danger);
+}
+
+.demo-collaboration-back {
+  margin-top: 10px;
+  padding-left: 0;
+  border: 0;
+  background: transparent;
+  color: var(--doc-text-muted);
+}
+
+.demo-collaboration-note {
+  margin-top: 16px !important;
+  padding-top: 14px;
+  border-top: 1px solid var(--doc-border-light);
+  font-size: 11px !important;
+}
+
+.demo-collaboration-progress,
+.demo-collaboration-error {
+  margin-top: 12px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.demo-collaboration-progress {
+  background: var(--doc-primary-light);
+  color: var(--doc-primary);
+}
+
+.demo-collaboration-error {
+  background: color-mix(in srgb, var(--doc-danger) 10%, transparent);
+  color: var(--doc-danger);
+}
+
 /* Demo dropdown menus (File / Format) */
 .demo-menu {
   position: relative;

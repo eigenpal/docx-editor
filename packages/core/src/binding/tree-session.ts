@@ -67,6 +67,7 @@ import {
   type OoxmlPackageRejection,
   type OoxmlPart,
   type StoryScope,
+  type TreeDocOp,
   type TreeDocumentStore,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
@@ -107,12 +108,20 @@ import {
   readDocumentProperties,
   type DocumentProperties,
 } from '../store/package/document-properties.ts';
+import {
+  createCollaborationDocumentPort,
+  type CollaborationDocumentPort,
+} from '../collaboration/index.ts';
 
 // The session view contract (TreeApplyResult + TreeDocxSessionView) lives in
 // tree-session-contract.ts; re-exported so every existing import through this module stays
 // stable.
-import type { TreeApplyResult, TreeDocxSessionView } from './tree-session-contract.ts';
-export type { TreeApplyResult, TreeDocxSessionView };
+import type {
+  TreeApplyOptions,
+  TreeApplyResult,
+  TreeDocxSessionView,
+} from './tree-session-contract.ts';
+export type { TreeApplyOptions, TreeApplyResult, TreeDocxSessionView };
 
 /**
  * Binding-only session methods that exchange ProseMirror projections.
@@ -668,7 +677,10 @@ export function openTreeSession(
 
       currentPackage,
 
-      applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE) {
+      collaborationPort: (documentId) =>
+        createCollaborationDocumentPort(packageStore, { documentId }),
+
+      applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE, options = {}) {
         if (ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
         const lifecycleCount = ops.filter(
           (op) => isHeaderFooterLifecycleOp(op) || isNoteLifecycleOp(op)
@@ -697,16 +709,20 @@ export function openTreeSession(
           }
           return { committed: true, rejected: false, opCount: 1 };
         }
-        const result = packageStore.transact(scope, (ctx) => {
-          // Recorded BEFORE the ops run, so undo restores where the caret was when the user
-          // made the edit rather than where it ended up afterwards.
-          if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
-          // And where it ends up, so REDO has somewhere to put it. No caller supplied this,
-          // so `selectionForRedo` was always null and redo left the caret addressing the
-          // tree the undo had discarded — offsets past the end of a paragraph it re-shortened.
-          if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
-          for (const op of ops) ctx.apply(op);
-        });
+        const result = packageStore.transact(
+          scope,
+          (ctx) => {
+            // Recorded BEFORE the ops run, so undo restores where the caret was when the user
+            // made the edit rather than where it ended up afterwards.
+            if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
+            // And where it ends up, so REDO has somewhere to put it. No caller supplied this,
+            // so `selectionForRedo` was always null and redo left the caret addressing the
+            // tree the undo had discarded — offsets past the end of a paragraph it re-shortened.
+            if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
+            for (const op of ops) ctx.apply(op);
+          },
+          options
+        );
         if (!result.ok) {
           return { committed: false, rejected: true, opCount: ops.length, reason: result.reason };
         }

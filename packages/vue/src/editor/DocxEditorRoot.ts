@@ -16,6 +16,7 @@ import type {
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule, ImageDecodePort } from '@docx-editor.dev/core/editor';
+import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { HyperlinkPopupContext, useHyperlinkPopupInstance } from './useHyperlinkPopup';
 import { ContentControlContext, useContentControlInstance } from './useContentControl';
 import { ImageInsertProvider } from './images/ImageInsert';
@@ -121,6 +122,10 @@ export const DocxEditorRoot = defineComponent({
       default: undefined,
     },
     imageDecodePort: { type: Object as PropType<ImageDecodePort>, default: undefined },
+    collaboration: {
+      type: Object as PropType<EditorCollaborationSession>,
+      default: undefined,
+    },
   },
   emits: {
     ready: (_editor: Editor) => true,

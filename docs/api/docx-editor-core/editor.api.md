@@ -780,6 +780,7 @@ export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
 export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
+    collaboration?: EditorCollaborationSession;
     container?: HTMLElement;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
@@ -1499,6 +1500,7 @@ export interface PaginatedSurface {
 // @public
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
+    readonly collaboration?: EditorCollaborationSession;
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
@@ -2205,7 +2207,7 @@ export interface TreeApplyResult {
 export interface TreeDocxSessionView {
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
-    applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
+    applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
     // (undocumented)
     beginComposition(scope?: StoryScope): void;
     bodyText(): string;
@@ -2214,6 +2216,7 @@ export interface TreeDocxSessionView {
     canRedo(): boolean;
     // (undocumented)
     canUndo(): boolean;
+    collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
     deleteComments(comments: readonly {

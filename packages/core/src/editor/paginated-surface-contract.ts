@@ -16,6 +16,7 @@ import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
+import type { EditorCollaborationSession } from '../collaboration/index.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationActivation, EquationOps } from './surface-equations.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
@@ -87,6 +88,8 @@ export interface ContentControlOps {
  * on a server, or leave it off in a browser to get the canvas measurer.
  */
 export interface PaginatedSurfaceOptions {
+  /** Optional provider-neutral collaboration replica for this canonical session. */
+  readonly collaboration?: EditorCollaborationSession;
   readonly measurer?: TextMeasurer;
   /** Ambient author for tracked edits. Required before suggesting can write anything. */
   readonly author?: string;

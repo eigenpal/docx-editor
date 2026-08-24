@@ -29,6 +29,7 @@ import {
   sameZoomMode,
 } from '@docx-editor.dev/core/editor';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
+import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import type {
   DocxEditorInstance,
   FontConfigurationFragment,
@@ -64,6 +65,8 @@ export interface DocxEditorRootProps {
    * Identity change remounts; `'blank'` is a constant, so holding it across renders does
    * not. Omitting this mounts NO document, which is not the same as an empty one. */
   document?: DocumentSource;
+  /** Experimental collaboration replica. Identity change remounts the editor. */
+  collaboration?: EditorCollaborationSession;
   /**
    * Font bytes for Word-accurate (HarfBuzz-shaped) wrap and pagination. Omitted, layout
    * uses a fixed-width estimate; fonts embedded in the document are wired automatically
@@ -202,6 +205,7 @@ export { useProvidedDocxEditor as provideDocxEditor };
 export function DocxEditorRoot(props: DocxEditorRootProps) {
   const {
     document: doc,
+    collaboration,
     fonts,
     zoom,
     zoomMode,
@@ -245,6 +249,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     const declaredStyles = revisionStyleRegistry.current();
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
+      ...(p.collaboration !== undefined ? { collaboration: p.collaboration } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
@@ -266,7 +271,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry]);
+  }, [doc, collaboration, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree

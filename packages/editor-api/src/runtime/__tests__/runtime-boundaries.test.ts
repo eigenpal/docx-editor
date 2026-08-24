@@ -118,8 +118,11 @@ function readProject(path: string): { compilerOptions?: { lib?: string[] }; incl
 describe('what the runtime imports', () => {
   const files = runtimeFiles();
 
-  test('the neutral modules import the automation protocol and nothing else', () => {
-    expect(bareSpecifiers(files.filter(isNeutral))).toEqual(['@docx-editor.dev/core/automation']);
+  test('the neutral modules import only provider-neutral core capabilities', () => {
+    expect(bareSpecifiers(files.filter(isNeutral))).toEqual([
+      '@docx-editor.dev/core/automation',
+      '@docx-editor.dev/core/collaboration',
+    ]);
   });
 
   test('exactly one module names the editor lane', () => {

@@ -29,6 +29,7 @@ export {
   PROJECTION_ORIGIN,
   type DocumentStyleEntry,
   type OpenTreeSessionResult,
+  type TreeApplyOptions,
   type TreeApplyResult,
   type TreeDocxSession,
   type TreeDocxSessionView,

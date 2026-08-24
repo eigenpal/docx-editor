@@ -261,7 +261,7 @@ describe('the per-lane environment boundary is structurally enforced (task 10.1)
   //
   // `contracts` is excluded on purpose: it is declaration-only and its public API names
   // HTMLElement for host-element accessors, which is a type reference, not a runtime need.
-  const NEUTRAL_WITH_PROJECT = ['store', 'layout', 'automation'] as const;
+  const NEUTRAL_WITH_PROJECT = ['store', 'layout', 'automation', 'collaboration'] as const;
 
   test('every runtime-neutral lane in core has its own DOM-free project', () => {
     for (const lane of NEUTRAL_WITH_PROJECT) {
@@ -323,10 +323,10 @@ describe('the automation lane is a neutral host port (Office-compatible automati
     }).toEqual({ directory: 'src/automation', environment: 'neutral', subpath: './automation' });
   });
 
-  test('it may reach the store lane and nothing that assumes a browser', () => {
+  test('it may reach only neutral document capabilities', () => {
     // The whole point of the lane: one document-operation implementation that a server can
     // run. A dependency on binding, output or editor would put a DOM in the server host.
-    expect([...CORE_LANES.automation.mayImport].sort()).toEqual(['store']);
+    expect([...CORE_LANES.automation.mayImport].sort()).toEqual(['collaboration', 'store']);
     for (const forbidden of ['binding', 'output', 'editor'] as LaneName[]) {
       expect(CORE_LANES.automation.mayImport).not.toContain(forbidden);
     }

@@ -120,6 +120,20 @@ async function save() {
 Use the instance for actions and one-time reads. A direct `snapshot()` call
 does not create a Vue subscription. Use `useEditorState` for reactive state.
 
+## useCollaborationStatus
+
+Pass an externally owned collaboration session to `useCollaborationStatus`.
+The composable returns a read-only `status` ref:
+
+```ts
+import { useCollaborationStatus } from '@docx-editor.dev/vue';
+
+const { status } = useCollaborationStatus(session);
+```
+
+The ref contains `inactive` when the session value is `null`.
+The experimental Yjs proof supports text edits in existing body paragraphs only.
+
 ## useEditorEvent
 
 Subscribe to an editor event for the component lifetime:

@@ -19,6 +19,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // learn about the reader's limits.
 
 import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
+import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { fail } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } from './runtime.ts';
 
@@ -67,6 +68,8 @@ export interface DocumentLimits {
  * @public
  */
 export interface CreateServerOptions {
+  /** Experimental provider-neutral collaboration replica for this headless runtime. */
+  readonly collaboration?: EditorCollaborationSession;
   /**
    * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.
    *
@@ -96,6 +99,7 @@ export async function createServer(
 ): Promise<DocxEditorServerRuntime> {
   const opened = createServerAutomationHost(bytes, {
     ...(options.limits === undefined ? {} : { limits: options.limits }),
+    ...(options.collaboration === undefined ? {} : { collaboration: options.collaboration }),
   });
   if (!opened.ok) fail({ code: 'InvalidArgument', target: 'createServer' });
   return createRuntime({
@@ -106,4 +110,20 @@ export async function createServer(
       ? {}
       : { revisionTextView: options.revisionTextView }),
   });
+}
+
+/** Options for {@link createCollaborative}; the session is a required positional value. @public */
+export type CreateCollaborativeOptions = Omit<CreateServerOptions, 'collaboration'>;
+
+/**
+ * Open one DOM-free canonical replica and attach it to an experimental collaboration session.
+ *
+ * @public
+ */
+export function createCollaborative(
+  bytes: Uint8Array,
+  collaboration: EditorCollaborationSession,
+  options: CreateCollaborativeOptions = {}
+): Promise<DocxEditorServerRuntime> {
+  return createServer(bytes, { ...options, collaboration });
 }

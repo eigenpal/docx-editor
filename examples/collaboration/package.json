@@ -1,0 +1,26 @@
+{
+  "name": "@docx-editor.dev/example-collaboration",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "build": "vite build",
+    "headless": "bun headless-agent.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@docx-editor.dev/collaboration-yjs": "workspace:*",
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/editor-api": "workspace:*",
+    "@docx-editor.dev/i18n": "workspace:*",
+    "fflate": "^0.8.3",
+    "y-protocols": "^1.0.7",
+    "y-webrtc": "^10.3.0",
+    "yjs": "^13.6.32"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^8.0.10"
+  }
+}
