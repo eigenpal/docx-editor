@@ -117,7 +117,6 @@ describe('the review sidebar', () => {
     const editor = instance!;
     await act(async () => {
       editor.surface!.selectAll();
-      editor.exec({ type: 'toggleReviewPane' });
     });
     expect(editor.isReviewPaneOpen()).toBe(false);
 
@@ -204,7 +203,6 @@ describe('the review sidebar', () => {
     const editor = instance!;
     await act(async () => {
       editor.surface!.selectAll();
-      editor.exec({ type: 'toggleReviewPane' });
     });
     expect(editor.isReviewPaneOpen()).toBe(false);
 
@@ -834,8 +832,8 @@ describe('DocxEditor.Review while the document is loading', () => {
     });
 
     expect(view.getByTestId('review-rail')).toBeDefined();
-    expect(view.getByTestId('review-empty')).toBeDefined();
-    expect(view.getByTestId('host-furniture')).toBeDefined();
+    expect(view.queryByTestId('review-empty')).toBeNull();
+    expect(view.queryByTestId('host-furniture')).toBeNull();
 
     // A parse failure clears `isLoading` (so a host can put its error screen up) while
     // still leaving no document. The rail must read that as "nothing to review", not as

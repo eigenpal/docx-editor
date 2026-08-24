@@ -3,15 +3,26 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { defineComponent, h, onMounted, onUnmounted } from 'vue';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
 import { DocxEditorNavigation } from '../src/editor/navigation';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading';
 import { useReviewRailRegistry } from '../src/editor/context';
 import { useNavigationLayoutStore } from '../src/editor/navigation/navigation-layout';
+import { SOURCE } from './helpers/fixtures';
 import { flush, mountEditorTree } from './helpers/mount';
 
 afterEach(() => {
   document.body.innerHTML = '';
 });
+
+const REVIEW_MODULE: EditorModule = {
+  id: 'review',
+  review: {
+    displayModes: ['all-markup', 'proposed', 'original'],
+    collectReviewItems: () => [],
+    revisionItemsOfParagraph: () => [],
+  },
+};
 
 const RailRegistrar = defineComponent({
   setup() {
@@ -62,11 +73,18 @@ describe('DocxEditorViewport review rail', () => {
   });
 
   test('sets data-review-pane and nav shift when a rail mounts', async () => {
-    const view = mountEditorTree(() => [
-      h(RailRegistrar),
-      h(DocxEditorNavigation, { t: (key: string) => key }),
-      h(DocxEditorLoading, { when: true, overlay: true }),
-    ]);
+    const view = mountEditorTree(
+      () => [
+        h(RailRegistrar),
+        h(DocxEditorNavigation, { t: (key: string) => key }),
+        h(DocxEditorLoading, { when: true, overlay: true }),
+      ],
+      SOURCE,
+      () => [],
+      [REVIEW_MODULE]
+    );
+    await flush();
+    view.editor().exec({ type: 'toggleReviewPane' });
     await flush();
     const scroller = view.container.querySelector(
       '[data-testid="docx-editor-scroll"]'
@@ -80,7 +98,7 @@ describe('DocxEditorViewport review rail', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
     const loading = view.container.querySelector('.docx-editor__loading') as HTMLElement;
     expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
-    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('316px');
+    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
     view.unmount();
   });
 

@@ -14,6 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { useContext, useEffect } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
+import type { DocxEditorInstance, EditorModule } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
@@ -43,6 +44,14 @@ function docx(body: string): Uint8Array {
 }
 
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
+const REVIEW_MODULE: EditorModule = {
+  id: 'review',
+  review: {
+    displayModes: ['all-markup', 'proposed', 'original'],
+    collectReviewItems: () => [],
+    revisionItemsOfParagraph: () => [],
+  },
+};
 
 /** A rail with no UI: claims the gutter exactly the way `DocxEditor.Review` does. */
 function RailStub() {
@@ -114,8 +123,15 @@ describe('the viewport’s review gutter', () => {
     // Letter page (816px at 100%) in a 1000px scroller: 184px leftover against the 364
     // the column and the clearance need together, so the strip mirrors onto both edges.
     scrollerWidth = 1000;
+    let editor: DocxEditorInstance | null = null;
     const { container } = render(
-      <DocxEditorRoot document={SOURCE}>
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[REVIEW_MODULE]}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
         <DocxEditorViewport>
           <DocxEditorContent />
         </DocxEditorViewport>
@@ -124,19 +140,30 @@ describe('the viewport’s review gutter', () => {
       </DocxEditorRoot>
     );
     await settle();
+    act(() => {
+      editor!.exec({ type: 'toggleReviewPane' });
+    });
+    await settle();
     const scroller = container.querySelector('.docx-editor__scroll-container') as HTMLElement;
     expect(scroller.getAttribute('data-review-pane')).toBe('open');
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
     const loading = container.querySelector('.docx-editor__loading') as HTMLElement;
-    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('44px');
-    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('44px');
+    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
+    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
   });
 
   test('a rail on a wide viewport keeps the full column, with nothing at the start', async () => {
     scrollerWidth = 1728;
+    let editor: DocxEditorInstance | null = null;
     const { container } = render(
-      <DocxEditorRoot document={SOURCE}>
+      <DocxEditorRoot
+        document={SOURCE}
+        modules={[REVIEW_MODULE]}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
         <DocxEditorViewport>
           <DocxEditorContent />
         </DocxEditorViewport>
@@ -144,6 +171,10 @@ describe('the viewport’s review gutter', () => {
         <DocxEditorLoading when overlay />
       </DocxEditorRoot>
     );
+    await settle();
+    act(() => {
+      editor!.exec({ type: 'toggleReviewPane' });
+    });
     await settle();
     const scroller = container.querySelector('.docx-editor__scroll-container') as HTMLElement;
     expect(scroller.getAttribute('data-review-pane')).toBe('open');
@@ -151,6 +182,6 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
     const loading = container.querySelector('.docx-editor__loading') as HTMLElement;
     expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
-    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('316px');
+    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
   });
 });

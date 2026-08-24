@@ -599,7 +599,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface = result.surface;
     // Keep the loading page centred and its comments control inactive until the review
     // model exists. Once open completes, show the pane only when the model found content.
-    reviewPaneOpen = reviewEnabled && surface.session.hasReviewContent();
+    reviewPaneOpen = reviewEnabled && surface.session.reviewItems().length > 0;
     adoptDocumentTracking();
     sweepCustomNodePayloadsOnOpen(surface, modules);
     mountGeneration += 1;

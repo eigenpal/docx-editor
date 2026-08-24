@@ -174,8 +174,15 @@ describe('review compound composition', () => {
   });
 
   test('uses a List Empty override and preserves legacy root render children', () => {
+    let emptyEditor: DocxEditorInstance | null = null;
     const empty = render(
-      <DocxEditorRoot document={PLAIN} modules={[reviewModule()]}>
+      <DocxEditorRoot
+        document={PLAIN}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          emptyEditor = editor as DocxEditorInstance;
+        }}
+      >
         <DocxEditorViewport>
           <DocxEditorContent />
           <DocxEditorReview>
@@ -186,6 +193,9 @@ describe('review compound composition', () => {
         </DocxEditorViewport>
       </DocxEditorRoot>
     );
+    act(() => {
+      emptyEditor!.exec({ type: 'toggleReviewPane' });
+    });
     expect(empty.getByTestId('review-empty').textContent).toBe('All clear');
     empty.unmount();
 

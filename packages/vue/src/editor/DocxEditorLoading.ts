@@ -3,7 +3,6 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { useNavigationShift } from './navigation/navigation-layout';
-import { useReviewGutter } from './review-gutter';
 import { useEditorState } from './useEditorState';
 
 const selectShowLoading = (snapshot: EditorSnapshot) =>
@@ -49,7 +48,6 @@ const DocxEditorLoadingImpl = defineComponent({
   setup(props, { slots }) {
     const showLoading = useEditorState(selectShowLoading);
     const navigationShift = useNavigationShift();
-    const reviewGutter = useReviewGutter();
     const { t } = useTranslation();
 
     return () => {
@@ -58,10 +56,8 @@ const DocxEditorLoadingImpl = defineComponent({
         props.overlay ? ' docx-editor__loading--overlay' : ''
       }${props.className ? ` ${props.className}` : ''}`;
       const loadingStyle: CSSProperties = {
-        '--docx-loading-inline-start': `${
-          navigationShift.value + reviewGutter.value.inlineStart
-        }px`,
-        '--docx-loading-right': `${reviewGutter.value.inlineEnd}px`,
+        '--docx-loading-inline-start': `${navigationShift.value}px`,
+        '--docx-loading-right': '0px',
         ...props.style,
       };
       return h(

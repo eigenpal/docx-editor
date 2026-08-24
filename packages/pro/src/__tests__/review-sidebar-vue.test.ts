@@ -193,7 +193,6 @@ describe('DocxEditorReview (Vue)', () => {
       await waitFor(() => mounted.container.querySelector('.docx-page') !== null);
       const editor = mounted.editor();
       editor.surface!.selectAll();
-      editor.exec({ type: 'toggleReviewPane' });
       expect(editor.isReviewPaneOpen()).toBe(false);
       await flush();
       await waitFor(
