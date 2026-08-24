@@ -97,6 +97,7 @@ describe('atomic equation paragraph layout', () => {
     expect(line!.spans.map((span) => span.text)).toEqual(['A', '\uFFFC', 'Z']);
     expect(equation.range).toMatchObject({ start: 1, end: 2 });
     expect(equation.projected).toBe(true);
+    expect(equation.style.fontFamily).toBe('Cambria Math');
     expect(equation.equation?.sourceNodeId).toBe('/word/document.xml#0.0.0.1');
     expect(equation.caretEdges).toEqual([0, equation.box.width]);
     expect(equation.equation?.geometry).toEqual(

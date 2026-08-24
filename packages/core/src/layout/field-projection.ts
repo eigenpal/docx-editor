@@ -111,6 +111,7 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
+import { equationRunStyle } from './equation-layout.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import {
   contentControlContentChildren,
@@ -940,7 +941,7 @@ export function piecesOfParagraph(
       const start = offset++;
       if (revisionsAreDeletion(revisions) && deletedRanges)
         appendModelRange(deletedRanges, start, offset);
-      const style = resolveRunStyle(inheritedRunProperties, themeFonts);
+      const style = equationRunStyle(resolveRunStyle(inheritedRunProperties, themeFonts));
       if (style.hidden || !revisionsVisible(revisions, displayMode)) return;
       return push('\uFFFC', inheritedRunProperties, style, true, start, offset, { equation });
     }

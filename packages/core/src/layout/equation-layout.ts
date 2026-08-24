@@ -6,6 +6,14 @@ import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 
 const SCRIPT_SCALE = 0.7;
 const NARY_OPERATOR_SCALE = 1.25;
+const EQUATION_FONT_FAMILY = 'Cambria Math';
+
+/** Use Word's math face when installed while retaining the measurer's safe fallback stack. */
+export function equationRunStyle(style: ResolvedRunStyle): ResolvedRunStyle {
+  return style.fontFamily === EQUATION_FONT_FAMILY
+    ? style
+    : Object.freeze({ ...style, fontFamily: EQUATION_FONT_FAMILY });
+}
 
 interface EquationGeometryBase {
   readonly box: LayoutBox;
@@ -336,10 +344,11 @@ export function layoutEquation(
   measurer: TextMeasurer,
   style: ResolvedRunStyle
 ): EquationSpanRecord {
+  const mathStyle = equationRunStyle(style);
   const cache: EquationLayoutCache = { styles: new Map(), metrics: new Map() };
   return Object.freeze({
     sourceNodeId: projection.sourceNodeId,
-    geometry: layoutExpression(projection.expression, measurer, style, 1, cache),
+    geometry: layoutExpression(projection.expression, measurer, mathStyle, 1, cache),
     fallbackText: projection.fallbackText,
     truncated: projection.truncated,
   });

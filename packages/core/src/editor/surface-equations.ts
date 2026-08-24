@@ -167,29 +167,61 @@ export function createEquationInteraction(deps: {
   readonly setSelection: (selection: SemanticSelection) => void;
   readonly onPopover?: (activation: EquationActivation) => void;
 }): EquationInteraction {
-  const onClick = (event: MouseEvent): void => {
+  let pressed: { readonly equationId: string; readonly rect: EquationActivation['rect'] } | null =
+    null;
+  const targetFrom = (value: EventTarget | null): HTMLElement | null => {
     const view = deps.pagesLayer.ownerDocument.defaultView;
-    if (!view || !(event.target instanceof view.Element)) return;
-    const target = event.target.closest<HTMLElement>('[data-docx-equation]');
-    if (!target || !deps.pagesLayer.contains(target)) return;
-    event.preventDefault();
-    const equationId = target.dataset.docxEquation;
-    if (!equationId) return;
+    if (!view || !(value instanceof view.Element)) return null;
+    const target = value.closest<HTMLElement>('[data-docx-equation]');
+    return target && deps.pagesLayer.contains(target) ? target : null;
+  };
+  const activate = (equationId: string, rect: EquationActivation['rect']): void => {
     const equation = deps.equationById(equationId);
     if (!equation) return;
     deps.setSelection({
       anchor: { paragraphId: equation.paragraphId, offset: equation.start },
       head: { paragraphId: equation.paragraphId, offset: equation.end },
     });
+    deps.onPopover?.({ equation, rect });
+  };
+  const onPointerDown = (event: PointerEvent): void => {
+    pressed = null;
+    const target = targetFrom(event.target);
+    const equationId = target?.dataset.docxEquation;
+    if (!target || !equationId) return;
     const rect = target.getBoundingClientRect();
-    deps.onPopover?.({
-      equation,
+    pressed = {
+      equationId,
       rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+    };
+  };
+  const onClick = (event: MouseEvent): void => {
+    const target = targetFrom(event.target);
+    const equationId = target?.dataset.docxEquation;
+    const remembered = pressed;
+    pressed = null;
+    if (!target || !equationId) {
+      if (!remembered) return;
+      event.preventDefault();
+      activate(remembered.equationId, remembered.rect);
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    event.preventDefault();
+    activate(equationId, {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
     });
   };
+  deps.pagesLayer.addEventListener('pointerdown', onPointerDown, true);
   deps.pagesLayer.addEventListener('click', onClick);
   return {
-    destroy: () => deps.pagesLayer.removeEventListener('click', onClick),
+    destroy: () => {
+      deps.pagesLayer.removeEventListener('pointerdown', onPointerDown, true);
+      deps.pagesLayer.removeEventListener('click', onClick);
+    },
   };
 }
 

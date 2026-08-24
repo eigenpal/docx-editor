@@ -134,4 +134,21 @@ describe('atomic equation editing', () => {
       head: { paragraphId, offset: 2 },
     });
   });
+
+  test('a press survives the selection repaint before click activation', () => {
+    const { editor, container } = mounted();
+    const seen: string[] = [];
+    editor.setEquationChrome({
+      onPopover: (activation) => seen.push(activation.equation.id),
+    });
+    const equation = editor.surface!.equations.equationAtCaret()!;
+    const painted = container.querySelector<HTMLElement>('[data-docx-equation]')!;
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+
+    painted.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+    painted.remove();
+    pages.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(seen).toEqual([equation.id]);
+  });
 });
