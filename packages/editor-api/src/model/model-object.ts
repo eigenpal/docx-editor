@@ -29,7 +29,7 @@ import {
 
 export abstract class ModelObject extends ClientObject {
   /** Runtime-wide revision view behind standard Office-compatible text reads and searches. */
-  protected revisionTextView(): 'all' | 'vanilla' {
+  protected revisionTextView(): 'allMarkup' | 'original' {
     return internalsOf(this.context).revisionTextView;
   }
 

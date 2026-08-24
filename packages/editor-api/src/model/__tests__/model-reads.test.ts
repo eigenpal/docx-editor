@@ -69,7 +69,7 @@ describe('revision text projections', () => {
       '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>'
   );
 
-  test('keeps the Office shape while a runtime selects a consistent vanilla view', async () => {
+  test('keeps the Office shape while a runtime selects a consistent original view', async () => {
     const compatibilityRuntime = await serverRuntime(document);
     const compatibility = await compatibilityRuntime.run(async (context) => {
       const body = context.document.body;
@@ -78,7 +78,7 @@ describe('revision text projections', () => {
       return body.text;
     });
 
-    const runtime = await createServer(document, { revisionTextView: 'vanilla' });
+    const runtime = await createServer(document, { revisionTextView: 'original' });
     const result = await runtime.run(async (context) => {
       const body = context.document.body;
       body.load('text');
@@ -123,7 +123,7 @@ describe('revision text projections', () => {
         '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins>' +
         '</w:sdtContent></w:sdt></w:p>'
     );
-    const runtime = await createServer(controlled, { revisionTextView: 'vanilla' });
+    const runtime = await createServer(controlled, { revisionTextView: 'original' });
     const text = await runtime.run(async (context) => {
       const controls = context.document.body.contentControls;
       controls.load();
@@ -138,7 +138,7 @@ describe('revision text projections', () => {
   });
 
   test('uses the runtime revision view for note text and its body', async () => {
-    const runtime = await createServer(WITH_REVISION_FOOTNOTE, { revisionTextView: 'vanilla' });
+    const runtime = await createServer(WITH_REVISION_FOOTNOTE, { revisionTextView: 'original' });
     const text = await runtime.run(async (context) => {
       const notes = context.document.footnotes;
       notes.load();

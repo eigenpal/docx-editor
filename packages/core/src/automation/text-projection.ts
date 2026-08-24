@@ -38,7 +38,7 @@ export function projectParagraphText(
   rawText: string,
   projection: AutomationTextProjection
 ): ProjectedParagraphText {
-  if (projection === 'all') return identityProjection(rawText);
+  if (projection === 'allMarkup') return identityProjection(rawText);
 
   const hidden = hiddenInsertionSpans(paragraph);
   if (hidden.length === 0) return identityProjection(rawText);
@@ -128,7 +128,7 @@ function projectionFromPieces(
   };
 }
 
-/** Pending insertions and move destinations are absent from the vanilla document. */
+/** Pending insertions and move destinations are absent from Word's Original review view. */
 function hiddenInsertionSpans(
   paragraph: OoxmlParagraphNode
 ): readonly { readonly start: number; readonly end: number }[] {

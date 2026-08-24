@@ -103,12 +103,14 @@ export interface DocxEditorServerRuntime extends DocxEditorRuntime {
 /**
  * The tracked-revision view used by this runtime's ordinary Office-compatible text reads.
  *
- * `all` preserves the historical behavior. `vanilla` keeps pending deletions visible and hides
- * pending insertions, so text returned to an agent remains a valid edit anchor.
+ * `allMarkup` preserves the historical behavior. `original` matches Word's Original review view:
+ * pending deletions remain visible and pending insertions stay hidden.
+ *
+ * This is a DocxEditor runtime option. It is not part of the Office.js object model.
  *
  * @public
  */
-export type RevisionTextView = 'all' | 'vanilla';
+export type RevisionTextView = 'allMarkup' | 'original';
 
 export interface CreateRuntimeOptions {
   readonly host: AutomationHost;
@@ -129,7 +131,7 @@ export interface CreateRuntimeOptions {
    * (`NotSupported`) instead of inventing a name that would end up in the file.
    */
   readonly author?: string;
-  /** Revision view for standard `text` loads and `search()` calls. Omitted means `all`. */
+  /** Revision view for standard `text` loads and `search()` calls. Omitted means `allMarkup`. */
   readonly revisionTextView?: RevisionTextView;
 }
 
@@ -147,8 +149,8 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     typeof options.author === 'string' && options.author.trim().length > 0
       ? options.author
       : undefined;
-  const revisionTextView = options.revisionTextView ?? 'all';
-  if (revisionTextView !== 'all' && revisionTextView !== 'vanilla') {
+  const revisionTextView = options.revisionTextView ?? 'allMarkup';
+  if (revisionTextView !== 'allMarkup' && revisionTextView !== 'original') {
     fail({ code: 'InvalidArgument', target: 'revisionTextView' });
   }
   let disposed = false;

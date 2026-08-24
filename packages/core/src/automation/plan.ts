@@ -44,6 +44,7 @@ import type {
   AutomationOperation,
   AutomationSearchOptions,
   AutomationSelectionMode,
+  AutomationTextProjection,
 } from './operations.ts';
 import { createBatchCommandPolicy } from './batch-command-policy.ts';
 import type {
@@ -714,17 +715,16 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   const storyReadsOf = (span: ResolvedSpan): AutomationStoryReads | null =>
     span === null ? null : packageReads.story(span.start.story);
 
+  const isTextProjection = (value: unknown): value is AutomationTextProjection | undefined =>
+    value === undefined || value === 'allMarkup' || value === 'original';
+
   const searchScope = (
     reads: AutomationStoryReads,
     scope: ResolvedSpan,
     text: string,
     options: AutomationSearchOptions | undefined
   ): PlannedOperation => {
-    if (
-      options?.projection !== undefined &&
-      options.projection !== 'all' &&
-      options.projection !== 'vanilla'
-    )
+    if (!isTextProjection(options?.projection))
       return refuse('unsupported-content', 'unknown text projection', 'projection');
     if (options?.matchWildcards === true)
       return refuse(
@@ -1728,11 +1728,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'getText': {
-        if (
-          operation.projection !== undefined &&
-          operation.projection !== 'all' &&
-          operation.projection !== 'vanilla'
-        )
+        if (!isTextProjection(operation.projection))
           return refuse('unsupported-content', 'unknown text projection', 'projection');
         const body = handles.resolve(operation.target, 'body');
         if (body) {
@@ -1741,7 +1737,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             return refuse(story.code, 'that handle does not name a body', story.detail);
           return query({
             kind: 'text',
-            text: story.value.text(operation.projection ?? 'all'),
+            text: story.value.text(operation.projection ?? 'allMarkup'),
           });
         }
         const paragraph = resolveParagraphHandle(operation.target, handles, packageReads);
@@ -1755,16 +1751,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return query({
           kind: 'text',
           text:
-            story?.paragraphText(paragraph.value.paragraphId, operation.projection ?? 'all') ?? '',
+            story?.paragraphText(
+              paragraph.value.paragraphId,
+              operation.projection ?? 'allMarkup'
+            ) ?? '',
         });
       }
-
       case 'getSpanText': {
-        if (
-          operation.projection !== undefined &&
-          operation.projection !== 'all' &&
-          operation.projection !== 'vanilla'
-        )
+        if (!isTextProjection(operation.projection))
           return refuse('unsupported-content', 'unknown text projection', 'projection');
         const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
@@ -1776,7 +1770,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             resolved.value,
             story.value,
             PARAGRAPH_MARK,
-            operation.projection ?? 'all'
+            operation.projection ?? 'allMarkup'
           ),
         });
       }

@@ -1132,7 +1132,7 @@ export type AutomationStoryId = {
 };
 
 // @public
-export type AutomationTextProjection = 'all' | 'vanilla';
+export type AutomationTextProjection = 'allMarkup' | 'original';
 
 // @public
 export type AutomationUnsubscribe = () => void;

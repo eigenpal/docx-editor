@@ -25,7 +25,7 @@ export function projectedSearchSpans(
   const last = ids.length - 1;
   for (const [position, paragraphId] of ids.entries()) {
     if (budget <= 0) break;
-    const projected = reads.projectedText(paragraphId, options?.projection ?? 'all');
+    const projected = reads.projectedText(paragraphId, options?.projection ?? 'allMarkup');
     if (!projected) continue;
     const found = findOccurrences(projected.text, text, budget, {
       matchCase: options?.matchCase === true,

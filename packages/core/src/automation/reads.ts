@@ -257,7 +257,7 @@ function storyReadsOver(
   const projections = new Map<string, ProjectedParagraphText>();
   const projectionOf = (
     paragraphId: string,
-    projection: AutomationTextProjection = 'all'
+    projection: AutomationTextProjection = 'allMarkup'
   ): ProjectedParagraphText | null => {
     const node = byId.get(paragraphId);
     if (!node || node.kind !== 'paragraph') return null;

@@ -36,8 +36,8 @@ The agent then uses five visible tool calls:
 `create_document` calls the lower-level `replaceStoryBlocks` automation operation in one
 transaction. Every generated document uses all five calls.
 
-The browser runtime uses `revisionTextView: 'vanilla'`, while the Word-compatible object model
-keeps the Office.js API shape.
+The browser runtime uses `revisionTextView: 'original'`. This DocxEditor runtime option matches
+Word's Original review view. It does not belong to the Office.js object model.
 Later turns call `read_document` through the standard `text` properties and `search()` methods.
 The three proposal tools call `proposeReplacement`, `proposeInsertion`, and `proposeDeletion`.
 Insertion anchors call `range.select('End')` before the browser command.

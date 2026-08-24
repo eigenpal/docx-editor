@@ -14,7 +14,7 @@ describe('projected text offset mapping', () => {
       attributes: [],
       children: [],
     };
-    const projected = projectParagraphText(paragraph, 'alpha', 'all');
+    const projected = projectParagraphText(paragraph, 'alpha', 'allMarkup');
 
     expect(projected.rawRange(1, 4)).toEqual({ start: 1, end: 4 });
     expect(projected.rawRange(0, 0)).toBeNull();

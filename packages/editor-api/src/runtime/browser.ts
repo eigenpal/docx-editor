@@ -37,7 +37,7 @@ export interface CreateBrowserOptions {
   /**
    * Revision view for ordinary Office-compatible `text` loads and `search()` calls.
    *
-   * Omitted means `all`.
+   * Omitted means `allMarkup`.
    */
   readonly revisionTextView?: RevisionTextView;
 }

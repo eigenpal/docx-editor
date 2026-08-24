@@ -259,7 +259,7 @@ describe('the two hosts read the same document identically', () => {
 });
 
 describe('revision projections use one automation contract in both hosts', () => {
-  test('vanilla read, search, range read, and edit agree', () => {
+  test('original-view read, search, range read, and edit agree', () => {
     const revisionDocument =
       `<w:document xmlns:w="${W}"><w:body><w:p>` +
       '<w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
@@ -272,23 +272,23 @@ describe('revision projections use one automation contract in both hosts', () =>
       const reads = host.execute({
         operations: [
           { op: 'getText', target: body },
-          { op: 'getText', target: body, projection: 'vanilla' },
+          { op: 'getText', target: body, projection: 'original' },
           {
             op: 'search',
             scope: { body },
             text: 'keep gone',
-            options: { projection: 'vanilla' },
+            options: { projection: 'original' },
           },
-          { op: 'search', scope: { body }, text: 'added', options: { projection: 'vanilla' } },
+          { op: 'search', scope: { body }, text: 'added', options: { projection: 'original' } },
         ],
       });
       const hit = reads.results[2];
       if (hit?.status !== 'ok' || hit.value.kind !== 'spans' || !hit.value.spans[0]) {
-        throw new Error('expected one vanilla search result');
+        throw new Error('expected one original-view search result');
       }
       const span = hit.value.spans[0];
       const rangeRead = host.execute({
-        operations: [{ op: 'getSpanText', span, projection: 'vanilla' }],
+        operations: [{ op: 'getSpanText', span, projection: 'original' }],
       });
       const write = host.execute({
         operations: [{ op: 'replaceSpan', span, text: 'kept' }],

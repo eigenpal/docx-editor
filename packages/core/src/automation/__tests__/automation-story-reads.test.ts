@@ -87,15 +87,15 @@ describe('revision text projections', () => {
     '<w:del w:id="1" w:author="Ada"><w:r><w:delText>gone</w:delText></w:r></w:del>' +
     '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>';
 
-  test('preserves all revision text by default and exposes the vanilla document explicitly', () => {
+  test('preserves all revision text by default and exposes the original document explicitly', () => {
     const host = open(docx(revisions));
     const { body } = roots(host);
     const paragraph = paragraphsOf(host, body)[0]!;
     const response = host.execute({
       operations: [
         { op: 'getText', target: body },
-        { op: 'getText', target: body, projection: 'vanilla' },
-        { op: 'getText', target: paragraph, projection: 'vanilla' },
+        { op: 'getText', target: body, projection: 'original' },
+        { op: 'getText', target: paragraph, projection: 'original' },
       ],
     });
     expect(textAt(response, 0)).toBe('keep goneadded');
@@ -103,7 +103,7 @@ describe('revision text projections', () => {
     expect(textAt(response, 2)).toBe('keep gone');
   });
 
-  test('searches, reads, and edits through one vanilla offset mapping', () => {
+  test('searches, reads, and edits through one original-view offset mapping', () => {
     const replacement =
       '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
       '<w:del w:id="1" w:author="Ada"><w:r><w:delText>old</w:delText></w:r></w:del>' +
@@ -117,9 +117,9 @@ describe('revision text projections', () => {
           op: 'search',
           scope: { body },
           text: 'before old after',
-          options: { projection: 'vanilla' },
+          options: { projection: 'original' },
         },
-        { op: 'search', scope: { body }, text: 'new', options: { projection: 'vanilla' } },
+        { op: 'search', scope: { body }, text: 'new', options: { projection: 'original' } },
       ],
     });
     const [span] = spansAt(searched, 0);
@@ -128,7 +128,7 @@ describe('revision text projections', () => {
     expect(
       textAt(
         host.execute({
-          operations: [{ op: 'getSpanText', span: span!, projection: 'vanilla' }],
+          operations: [{ op: 'getSpanText', span: span!, projection: 'original' }],
         }),
         0
       )
@@ -149,7 +149,7 @@ describe('revision text projections', () => {
           op: 'search',
           scope: { body },
           text: 'gone',
-          options: { projection: 'resolved' as 'all' },
+          options: { projection: 'resolved' as 'allMarkup' },
         },
       ],
     });

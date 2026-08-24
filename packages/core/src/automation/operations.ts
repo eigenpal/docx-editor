@@ -123,7 +123,7 @@ export type AutomationParagraphRef =
 export interface AutomationSearchOptions {
   readonly matchCase?: boolean;
   readonly matchWholeWord?: boolean;
-  /** Text view to search. `all` preserves the historical behavior. */
+  /** Text view to search. `allMarkup` preserves the historical behavior. */
   readonly projection?: AutomationTextProjection;
   /** Not supported; `true` is refused. Punctuation-insensitive matching is not implemented. */
   readonly ignorePunct?: boolean;
@@ -138,11 +138,10 @@ export interface AutomationSearchOptions {
 /**
  * Which revision text an automation read exposes.
  *
- * `all` includes pending insertions, deletions, and both sides of replacements. `vanilla`
- * describes the document before pending changes are accepted: deletions remain and insertions
- * are hidden.
+ * `allMarkup` includes pending insertions, deletions, and both sides of replacements. `original`
+ * matches Word's Original review view: deletions remain visible and insertions are hidden.
  */
-export type AutomationTextProjection = 'all' | 'vanilla';
+export type AutomationTextProjection = 'allMarkup' | 'original';
 
 /** Where a selection lands. `start`/`end` collapse it to one edge of the span. */
 export type AutomationSelectionMode = 'select' | 'start' | 'end';

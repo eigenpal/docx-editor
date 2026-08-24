@@ -705,7 +705,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
 }
 
 // @public
-export type RevisionTextView = 'all' | 'vanilla';
+export type RevisionTextView = 'allMarkup' | 'original';
 
 // @public
 export type RevisionType = 'None' | 'Insert' | 'Delete' | 'Property' | 'ParagraphNumber' | 'DisplayField' | 'Reconcile' | 'Conflict' | 'Style' | 'Replace' | 'ParagraphProperty' | 'TableProperty' | 'SectionProperty' | 'StyleDefinition' | 'MovedFrom' | 'MovedTo' | 'CellInsertion' | 'CellDeletion' | 'CellMerge' | 'CellSplit' | 'ConflictInsert' | 'ConflictDelete';

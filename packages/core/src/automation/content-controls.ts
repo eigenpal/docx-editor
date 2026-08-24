@@ -136,10 +136,10 @@ export function contentControlSpan(
 export function contentControlText(
   reads: AutomationStoryReads,
   node: OoxmlNode,
-  projection: AutomationTextProjection = 'all'
+  projection: AutomationTextProjection = 'allMarkup'
 ): string {
   // Preserve the existing content-control value semantics for ordinary reads.
-  if (projection === 'all') return contentControlTextOf(node);
+  if (projection === 'allMarkup') return contentControlTextOf(node);
   const span = contentControlSpan(reads, node);
   if (!span) return '';
   const first = reads.indexOf(span.start.paragraphId);

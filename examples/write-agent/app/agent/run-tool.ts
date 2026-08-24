@@ -54,7 +54,7 @@ function handlesAt(response: AutomationBatchResponse, index: number): readonly A
 export function createWriterRuntime(editor: DocxEditorInstance): DocxEditorRuntime {
   return EditorApi.createBrowser(editor, {
     author: WRITER_AUTHOR,
-    revisionTextView: 'vanilla',
+    revisionTextView: 'original',
   });
 }
 

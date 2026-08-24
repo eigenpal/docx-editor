@@ -287,7 +287,7 @@ export function spanText(
   span: ResolvedSpan,
   reads: AutomationStoryReads,
   paragraphMark: string,
-  projection: AutomationTextProjection = 'all'
+  projection: AutomationTextProjection = 'allMarkup'
 ): string {
   if (!span) return '';
   const ids = spanParagraphIds(span, reads);
