@@ -20,6 +20,7 @@ import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
+import type { EquationActivation, EquationOps } from './surface-equations.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
@@ -165,6 +166,7 @@ export interface PaginatedSurfaceOptions {
    * activation (see the navigation module's single `window.open` gate).
    */
   readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
+  readonly onEquationPopover?: (activation: EquationActivation) => void;
   /**
    * Ctrl/Cmd+K — Word's Insert Hyperlink. The engine reports the request; the host's chrome
    * decides what a link dialog looks like. A host that passes nothing leaves the key alone
@@ -680,6 +682,7 @@ export interface PaginatedSurface {
    * projection, so a caller cannot accidentally hand a refused scheme to a sink.
    */
   readonly hyperlinks: HyperlinkOps;
+  readonly equations: EquationOps;
   /**
    * Content-control chrome, form-fill navigation, and value / remove verbs.
    *

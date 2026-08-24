@@ -67,6 +67,7 @@ import {
   type DrawingPaintStrings,
   type PaintImageUrlPort,
 } from './semantic-paint-drawings.ts';
+import { mountEquationGeometry } from './semantic-paint-equation.ts';
 
 /**
  * When a field's result is drawn on its grey block, following Word's own View option.
@@ -1107,6 +1108,15 @@ function paintSpan(
   extraLeadingPt: number
 ): HTMLElement {
   const element = document.createElement('span');
+  if (span.equation) {
+    element.dataset.paragraphId = span.range.paragraphId;
+    element.dataset.start = String(span.range.start);
+    element.dataset.end = String(span.range.end);
+    applyRunFaceStyle(element, span.style, ctx);
+    mountEquationGeometry(document, element, span.equation, ctx.scale);
+    applyRevisionPresentation(element, span, ctx);
+    return element;
+  }
   element.className = 'layout-run layout-run-text';
   // Each run is its OWN box, aligned on the baseline.
   //

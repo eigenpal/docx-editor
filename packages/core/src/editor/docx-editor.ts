@@ -191,15 +191,18 @@ import {
   resolveOpeningEditingMode,
 } from './opening-editing-mode.ts';
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
+import { createChromeHandlerStack } from './chrome-handler-stack.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
+  EquationChromeHandlers,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
 
 export type {
   DocxEditorConfig,
   DocxEditorInstance,
+  EquationChromeHandlers,
   FontMeasurementState,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
@@ -305,19 +308,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let lastPendingFormat: PaginatedSurfaceState['pendingFormat'] = null;
   /** Furniture scope key — chrome must wake even when caret text offsets did not move. */
   let lastHeaderFooterKey: string | null = null;
-  /**
-   * Registered hyperlink chrome, as a STACK — the top entry is live.
-   *
-   * Save-and-restore only survives strictly nested teardown. Two hosts registering and then
-   * unregistering out of order (React does not promise effect-cleanup order between
-   * siblings) had the outer one's cleanup resurrect a handler whose owner had already
-   * unmounted: the engine went on reporting chrome as wired while every click and Ctrl+K
-   * called into a dead component, and the popover silently stopped opening. Splicing by
-   * identity is order-independent.
-   */
-  const hyperlinkChromeStack: HyperlinkChromeHandlers[] = [];
-  const liveHyperlinkChrome = (): HyperlinkChromeHandlers =>
-    hyperlinkChromeStack[hyperlinkChromeStack.length - 1] ?? {};
+  const hyperlinkChrome = createChromeHandlerStack<HyperlinkChromeHandlers>({});
+  const equationChrome = createChromeHandlerStack<EquationChromeHandlers>({});
   let destroyed = false;
 
   /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
@@ -555,8 +547,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Read through the holder rather than captured: the popover mounts AFTER the editor
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
-      onHyperlinkPopover: (activation) => liveHyperlinkChrome().onPopover?.(activation),
-      onRequestHyperlink: () => liveHyperlinkChrome().onRequest?.(),
+      onHyperlinkPopover: (activation) => hyperlinkChrome.current().onPopover?.(activation),
+      onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
+      onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
         if (reviewPaneOpen) return;
         reviewPaneOpen = true;
@@ -1739,16 +1732,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface;
     },
 
-    setHyperlinkChrome(handlers) {
-      hyperlinkChromeStack.push(handlers);
-      return () => {
-        // Splice by IDENTITY, not by position: unregistering out of order must remove this
-        // entry and leave whatever else is registered alone, never resurrect a handler whose
-        // owner has already torn down.
-        const at = hyperlinkChromeStack.lastIndexOf(handlers);
-        if (at >= 0) hyperlinkChromeStack.splice(at, 1);
-      };
-    },
+    setHyperlinkChrome: hyperlinkChrome.push,
+
+    setEquationChrome: equationChrome.push,
 
     stateVersion: () => stateVersion,
 

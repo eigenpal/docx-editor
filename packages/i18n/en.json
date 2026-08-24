@@ -581,6 +581,15 @@
     "bookmarkTarget": "Goes to a place in this document",
     "refused": "That link could not be applied. Check the address and try again."
   },
+  "equationPopup": {
+    "title": "Edit equation",
+    "inputLabel": "Linear math",
+    "placeholder": "Enter an equation",
+    "syntaxHelp": "Use x^2, x_i, fractions, square roots, or sums.",
+    "apply": "Apply",
+    "delete": "Delete",
+    "refused": "That equation could not be applied. Check the syntax and try again."
+  },
   "contentControl": {
     "group": "Content controls",
     "showAll": "Show content control boundaries",

@@ -151,6 +151,7 @@ import { createSurfaceStructure } from './surface-structure.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
 import { createFieldLinkRegistry } from './surface-field-links.ts';
 import { createHyperlinkOps } from './surface-hyperlinks.ts';
+import { createEquationInteraction, createEquationOps } from './surface-equations.ts';
 import { createSurfaceNavigation } from './surface-navigation.ts';
 import { drawingLinkByIdFromLayout } from './drawing-link-index.ts';
 import {
@@ -814,6 +815,15 @@ export function mountPaginatedSurface(
     textOf: (paragraphId) => textOf(paragraphId),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
   });
+  const equations = createEquationOps({
+    session: gatedSession,
+    storyScope,
+    editingMode: () => editingMode,
+    writeRefusal: (op) => writeRefusal(true, [op]),
+    selection: () => selection,
+    selectionMark: () => selectionMark(),
+    commit: (run, selectionAfter) => commit(run, selectionAfter),
+  });
   /**
    * Put the surface in the story that holds `paragraphId`, for a JUMP.
    *
@@ -879,6 +889,12 @@ export function mountPaginatedSurface(
       selection.anchor.offset === selection.head.offset,
     onScrolled: () => rematerialize(),
     ...(options.onHyperlinkPopover ? { onPopover: options.onHyperlinkPopover } : {}),
+  });
+  const equationInteraction = createEquationInteraction({
+    pagesLayer,
+    equationById: (equationId) => equations.equationById(equationId),
+    setSelection,
+    ...(options.onEquationPopover ? { onPopover: options.onEquationPopover } : {}),
   });
   pagesLayer.addEventListener('contextmenu', onTocContextMenu);
   pagesLayer.addEventListener('click', onTocRowClick);
@@ -4204,6 +4220,7 @@ export function mountPaginatedSurface(
     },
 
     hyperlinks,
+    equations,
     contentControls: contentControlsOps,
     canInsertTable,
     insertTable,
@@ -4669,6 +4686,7 @@ export function mountPaginatedSurface(
       pointer?.destroy();
       tableInteraction.destroy();
       navigation.destroy();
+      equationInteraction.destroy();
       selectionSync.destroy();
       pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
       pagesLayer.removeEventListener('click', onTocRowClick);

@@ -21,6 +21,7 @@ import type { SymbolFieldSpec } from './field-symbol.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
+import type { OmmlEquationProjection } from '@docx-editor.dev/core/store';
 
 /**
  * A `w:ptab` — the ABSOLUTE-position tab (ECMA-376 §17.3.3.16), which is what a table of
@@ -103,6 +104,8 @@ export interface FieldAwarePiece {
   };
   /** Typed inline drawing occupying one UTF-16 model unit. */
   readonly inlineDrawing?: InlineDrawingLayoutInput;
+  /** Bounded paragraph-level OMML projection occupying one UTF-16 model unit. */
+  readonly equation?: OmmlEquationProjection;
   /**
    * The revision wrappers enclosing this text, outermost first, absent when untracked.
    *

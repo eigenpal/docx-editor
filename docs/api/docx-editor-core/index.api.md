@@ -1042,6 +1042,7 @@ export interface DocxEditorInstance extends Editor {
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
+    setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
     stateVersion(): number;
