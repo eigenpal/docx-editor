@@ -195,8 +195,8 @@ await runtime.run(async (context) => {
 ```
 
 `revisionTextView` is a DocxEditor runtime option. It does not belong to the Office.js object model.
-Office.js provides display controls through `document.view.revisionsFilter`. It does not provide a
-text-projection API for the values returned by text reads.
+Office.js provides display controls through `document.activeWindow.view.revisionsFilter`. It does
+not provide a text-projection API for the values returned by text reads.
 
 A range returned by a search uses the runtime's text projection. Its `text` property and nested
 searches use the same projection. The range endpoints remain model offsets, so `insertText()`,
