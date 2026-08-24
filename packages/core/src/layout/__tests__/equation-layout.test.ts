@@ -11,7 +11,7 @@ import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { piecesOfParagraph } from '../field-projection.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf, type PageGeometry, type StyleSpanRecord } from '../semantic-records.ts';
-import type { EquationGeometry } from '../equation-layout.ts';
+import { createEquationLayouter, type EquationGeometry } from '../equation-layout.ts';
 
 function load(body: string): OoxmlPart {
   const result = readOoxmlPart(
@@ -216,5 +216,43 @@ describe('atomic equation paragraph layout', () => {
     const secondEquation = linesOf(second)[0]!.spans.find((span) => span.equation)!.equation;
     expect(secondEquation?.geometry).toEqual(firstEquation?.geometry);
     expect(secondEquation?.sourceNodeId).toBe(firstEquation?.sourceNodeId);
+  });
+
+  test('reuses geometry across paragraph breaks and invalidates changed styles', () => {
+    const part = load(`<w:p>${complexEquation}</w:p>`);
+    const paragraph = part.root.children[0]!.children.find((child) => child.kind === 'paragraph');
+    if (!paragraph) throw new Error('missing paragraph');
+    const piece = piecesOfParagraph(paragraph).find((candidate) => candidate.equation);
+    if (!piece?.equation) throw new Error('missing equation piece');
+    const fixed = createFixedMeasurer(6, 14);
+    let measureCalls = 0;
+    const counting = {
+      measure: (...args: Parameters<typeof fixed.measure>) => {
+        measureCalls += 1;
+        return fixed.measure(...args);
+      },
+      lineMetrics: (...args: Parameters<typeof fixed.lineMetrics>) => fixed.lineMetrics(...args),
+    };
+
+    const first = createEquationLayouter(counting, 'font-epoch:1')(piece.equation, piece.style);
+    const callsAfterFirst = measureCalls;
+    const second = createEquationLayouter(counting, 'font-epoch:1')(piece.equation, piece.style);
+    expect(second).toBe(first);
+    expect(measureCalls).toBe(callsAfterFirst);
+
+    const larger = createEquationLayouter(counting, 'font-epoch:1')(
+      piece.equation,
+      Object.freeze({ ...piece.style, fontSizePt: piece.style.fontSizePt + 2 })
+    );
+    expect(larger).not.toBe(first);
+    expect(measureCalls).toBeGreaterThan(callsAfterFirst);
+
+    const callsAfterStyleChange = measureCalls;
+    const nextProducer = createEquationLayouter(counting, 'font-epoch:2')(
+      piece.equation,
+      piece.style
+    );
+    expect(nextProducer).not.toBe(first);
+    expect(measureCalls).toBeGreaterThan(callsAfterStyleChange);
   });
 });

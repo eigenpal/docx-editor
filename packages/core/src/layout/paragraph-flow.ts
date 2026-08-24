@@ -183,6 +183,8 @@ export interface ParagraphFlowOptions {
    * would need `cacheToken` folded into those producers too.
    */
   readonly themeFonts?: ThemeFonts;
+  /** Stable measurement producer token for cross-break equation geometry reuse. */
+  readonly equationCacheToken?: string;
   /**
    * Paragraph-mark cascade for empty-line metrics and last-line mark height.
    * When omitted, falls back to the content `inheritedRunProperties` argument.
@@ -705,7 +707,7 @@ export function breakParagraph(
       },
     ];
   });
-  const layoutEquation = createEquationLayouter(measurer);
+  const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
   const equationLayoutOf = (piece: FieldAwarePiece) =>
     piece.equation ? layoutEquation(piece.equation, piece.style) : null;
   if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {

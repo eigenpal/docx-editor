@@ -1758,6 +1758,7 @@ function layoutBlocksPass(
         : undefined,
       {
         lineSpacing: entry.lineSpacing,
+        equationCacheToken: producer,
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },

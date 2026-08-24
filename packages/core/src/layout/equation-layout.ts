@@ -94,6 +94,58 @@ interface EquationLayoutCache {
   readonly metrics: Map<number, ReturnType<TextMeasurer['lineMetrics']>>;
 }
 
+interface SharedEquationLayouts {
+  readonly projections: WeakMap<OmmlEquationProjection, Map<string, EquationSpanRecord>>;
+}
+
+const MAX_PRODUCER_CACHES_PER_MEASURER = 4;
+const MAX_STYLES_PER_PROJECTION = 8;
+const sharedLayoutsByMeasurer = new WeakMap<TextMeasurer, Map<string, SharedEquationLayouts>>();
+
+function geometryStyleToken(style: ResolvedRunStyle): string {
+  const resolved = equationRunStyle(style);
+  return [
+    resolved.fontFamily ?? '',
+    resolved.fontSizePt,
+    resolved.bold ? 1 : 0,
+    resolved.italic ? 1 : 0,
+    resolved.verticalAlign,
+    resolved.baselineShiftPt,
+    resolved.caps ? 1 : 0,
+    resolved.smallCaps ? 1 : 0,
+    resolved.characterSpacingPt,
+    resolved.horizontalScalePercent,
+    resolved.kerningMinPt,
+  ].join('|');
+}
+
+function sharedEquationLayouts(
+  measurer: TextMeasurer,
+  producer: string | undefined
+): SharedEquationLayouts {
+  if (producer === undefined) return { projections: new WeakMap() };
+  let producers = sharedLayoutsByMeasurer.get(measurer);
+  if (!producers) {
+    producers = new Map();
+    sharedLayoutsByMeasurer.set(measurer, producers);
+  }
+  const cached = producers.get(producer);
+  if (cached) {
+    producers.delete(producer);
+    producers.set(producer, cached);
+    return cached;
+  }
+  if (producers.size >= MAX_PRODUCER_CACHES_PER_MEASURER) {
+    const oldest = producers.keys().next().value;
+    if (oldest !== undefined) producers.delete(oldest);
+  }
+  const created = {
+    projections: new WeakMap<OmmlEquationProjection, Map<string, EquationSpanRecord>>(),
+  };
+  producers.set(producer, created);
+  return created;
+}
+
 function scaledStyle(
   style: ResolvedRunStyle,
   scale: number,
@@ -354,16 +406,31 @@ export function layoutEquation(
   });
 }
 
-/** Cache equation geometry for one paragraph break by immutable source identity. */
+/** Reuse equation geometry across paragraph breaks for one measurement producer. */
 export function createEquationLayouter(
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  producer?: string
 ): (projection: OmmlEquationProjection, style: ResolvedRunStyle) => EquationSpanRecord {
-  const layouts = new Map<string, EquationSpanRecord>();
+  const layouts = sharedEquationLayouts(measurer, producer);
   return (projection, style) => {
-    const cached = layouts.get(projection.sourceNodeId);
-    if (cached) return cached;
+    const token = geometryStyleToken(style);
+    let styles = layouts.projections.get(projection);
+    const cached = styles?.get(token);
+    if (cached && styles) {
+      styles.delete(token);
+      styles.set(token, cached);
+      return cached;
+    }
     const layout = layoutEquation(projection, measurer, style);
-    layouts.set(projection.sourceNodeId, layout);
+    if (!styles) {
+      styles = new Map();
+      layouts.projections.set(projection, styles);
+    }
+    if (styles.size >= MAX_STYLES_PER_PROJECTION) {
+      const oldest = styles.keys().next().value;
+      if (oldest !== undefined) styles.delete(oldest);
+    }
+    styles.set(token, layout);
     return layout;
   };
 }

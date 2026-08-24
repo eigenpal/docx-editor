@@ -659,6 +659,7 @@ function placeCellParagraph(
       : undefined,
     {
       lineSpacing,
+      equationCacheToken: deps.producer,
       firstLineOffset,
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
