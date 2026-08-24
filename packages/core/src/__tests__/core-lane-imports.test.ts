@@ -97,16 +97,47 @@ function* sourceFiles(directory: string): Generator<string> {
 // One statement at a time, so `import type` classifies the whole statement. A mixed
 // `import { value, type T }` counts as a VALUE import, which is the conservative reading.
 //
-// The clause between the keyword and `from` excludes `;` and quotes rather than being
-// length-capped. Both restrictions are load-bearing: a char budget silently DROPPED any
-// import whose specifier list outgrew it (a 39-line layout import already had), and a
-// clause that could cross a `;` let a from-less `export type X = ...;` statement pair
-// with the NEXT statement's `from`, recording a VALUE import as type-only — which would
-// let it hide under a pinned type grandfather.
-const STATIC_IMPORT =
-  /(?:^|\n)[ \t]*(import|export)\s+(type\s+)?([^;'"`]*?)from\s*['"]([^'"]+)['"]/g;
+// The scan is two-stage: find each `import`/`export` keyword at a line start, then match
+// the clause up to `from '...'` with `;`, quotes and backticks EXCLUDED — after stripping
+// comments from that bounded window. Each piece is load-bearing:
+//  - a char budget here once silently DROPPED any import whose specifier list outgrew it
+//    (a 39-line layout import already had);
+//  - a clause that could cross a `;` let a from-less `export type X = ...;` pair with the
+//    NEXT statement's `from`, recording a VALUE import as type-only — hiding it under a
+//    pinned type grandfather;
+//  - an unstripped comment inside the clause (`// don't ...`) carries a quote or backtick
+//    and killed the match, silently dropping the statement (two real cases existed in
+//    layout/index.ts).
+// The synthetic-source suite at the bottom pins all three failure modes.
+const IMPORT_KEYWORD = /(?:^|\n)[ \t]*(import|export)\s+(type\s+)?/g;
+const CLAUSE_TO_FROM = /^[^;'"`]*?from\s*['"]([^'"]+)['"]/;
 const BARE_IMPORT = /(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g;
+// Also matches type-position `import('x').T`, which is erased at compile time. That
+// over-reports type coupling as a VALUE edge — fail-closed, so it stays.
 const DYNAMIC_IMPORT = /\bimport\(\s*['"]([^'"]+)['"]/g;
+
+/**
+ * Strip comments from one statement window. Safe HERE and only here: between an import
+ * keyword and its `from`, `//` and `/*` always begin comments (no strings or regexes can
+ * appear). Never applied to whole files, where that assumption would corrupt strings.
+ */
+function stripClauseComments(window: string): string {
+  return window.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
+}
+
+/** Every static `... from '...'` statement in `source`: specifier + type-only flag. */
+function staticImportsOf(
+  source: string
+): readonly { readonly specifier: string; readonly typeOnly: boolean }[] {
+  const found: { specifier: string; typeOnly: boolean }[] = [];
+  for (const keyword of source.matchAll(IMPORT_KEYWORD)) {
+    const clauseStart = keyword.index! + keyword[0].length;
+    const window = stripClauseComments(source.slice(clauseStart, clauseStart + 8000));
+    const clause = CLAUSE_TO_FROM.exec(window);
+    if (clause) found.push({ specifier: clause[1]!, typeOnly: keyword[2] !== undefined });
+  }
+  return found;
+}
 
 function edgesOf(file: string): ImportEdge[] {
   const relativePath = relative(SRC, file).split(sep).join('/');
@@ -120,7 +151,7 @@ function edgesOf(file: string): ImportEdge[] {
       edges.push({ file: relativePath, to: target, typeOnly, specifier });
     }
   };
-  for (const match of source.matchAll(STATIC_IMPORT)) record(match[4]!, match[2] !== undefined);
+  for (const found of staticImportsOf(source)) record(found.specifier, found.typeOnly);
   for (const match of source.matchAll(BARE_IMPORT)) record(match[1]!, false);
   for (const match of source.matchAll(DYNAMIC_IMPORT)) record(match[1]!, false);
   return edges;
@@ -160,5 +191,39 @@ describe('every lane import obeys the DAG (core-lane-graph.ts)', () => {
     // Exact equality, both directions: a NEW off-DAG type edge fails until pinned with a
     // justification, and a pin whose edge was cleaned up fails until removed — the ratchet.
     expect(actual).toEqual(pinned);
+  });
+});
+
+describe('the scanner itself, against the statement shapes that broke it', () => {
+  test('a clause comment carrying quotes, backticks and semicolons does not drop the import', () => {
+    const source = [
+      'export {',
+      '  buildStyleCascadeTable,',
+      "  // Referenced by `SemanticTableCell`: don't remove; it is load-bearing.",
+      '  caretAt,',
+      "} from './style-cascade.ts';",
+    ].join('\n');
+    expect(staticImportsOf(source)).toEqual([{ specifier: './style-cascade.ts', typeOnly: false }]);
+  });
+
+  test('a from-less export type cannot bridge to the next statement and launder it', () => {
+    const source = [
+      'export type CommandGate = (command: string) => boolean;',
+      "import { tableContextAt } from '../layout/table-context.ts';",
+    ].join('\n');
+    expect(staticImportsOf(source)).toEqual([
+      { specifier: '../layout/table-context.ts', typeOnly: false },
+    ]);
+  });
+
+  test('a very long specifier list is still scanned — no length budget', () => {
+    const names = Array.from({ length: 120 }, (_, index) => `  someLongExportedName${index},`);
+    const source = `import {\n${names.join('\n')}\n} from '../layout/index.ts';`;
+    expect(staticImportsOf(source)).toEqual([{ specifier: '../layout/index.ts', typeOnly: false }]);
+  });
+
+  test('import type classifies the whole statement as type-only', () => {
+    expect(staticImportsOf("import type { ReviewItem } from '../layout/review-support.ts';")) //
+      .toEqual([{ specifier: '../layout/review-support.ts', typeOnly: true }]);
   });
 });

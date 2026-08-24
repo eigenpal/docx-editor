@@ -136,10 +136,13 @@ jobs:
   # are legitimately consumed, and the release PR (changeset-release/*) deletes them by
   # design. No `bun install` — git and node are the whole setup, same as shipped-advisories.
   api-changeset:
+    # The changeset-release skip requires the SAME repo: head_ref is author-controlled, so
+    # a fork branch named changeset-release/x must not buy its way past the gate.
     if: >-
       github.event_name == 'pull_request' &&
       github.actor != 'dependabot[bot]' &&
-      !startsWith(github.head_ref, 'changeset-release/')
+      !(startsWith(github.head_ref, 'changeset-release/') &&
+        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout

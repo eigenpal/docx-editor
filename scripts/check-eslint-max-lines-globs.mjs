@@ -16,7 +16,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const SLACK = 100;
+// 150, not 100: with caps set ~100 over their file, a tighter slack made ONE deleted line
+// in a capped file a lint failure until the config moved too. 150 keeps the ratchet and
+// gives cleanup PRs a real margin.
+const SLACK = 150;
 
 /** Paths allowed to hold headroom beyond SLACK, each with its reason. */
 const SLACK_EXEMPT = new Map([

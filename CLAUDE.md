@@ -162,11 +162,11 @@ openspec validate typed-ooxml-paragraph-editor --strict
 
 - `bun run lint`'s errors are the `max-lines` caps (1000 lines for most files, per-file caps up
   to 3500 for the handful already past it) and the `no-restricted-syntax` bans (HTML-from-strings sinks
-  everywhere, varargs array spread in `core/src/{store,layout}`). Nothing else catches the caps,
-  so adding to a large file passes typecheck and the whole suite and fails CI. Extract; do not
-  raise the cap — `scripts/check-eslint-max-lines-globs.mjs` also fails a cap that drifts more
-  than 100 lines above its file. Lint covers `examples/*/src` as well as `packages/*/src` — the
-  demos hit the same cap.
+  in `packages/*/src` non-test code, varargs array spread in `core/src/{store,layout}`). Nothing
+  else catches the caps, so adding to a large file passes typecheck and the whole suite and fails
+  CI. Extract; do not raise the cap — `scripts/check-eslint-max-lines-globs.mjs` also fails a cap
+  that drifts more than 150 lines above its file. Lint covers `examples/*/src` as well as
+  `packages/*/src` — the demos hit the same line caps.
 - `bun run test` shards the suite one process per file across a worker pool
   (`scripts/test/run-parallel.mjs`, `--jobs N` to pin the width). That is also
   what CI runs. `bun test` still works and is the one to reach for when you want
