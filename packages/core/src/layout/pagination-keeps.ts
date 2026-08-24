@@ -383,3 +383,45 @@ export function keepNextFlowKeys(keys: string[], keepsNext: (index: number) => b
   }
   return flow;
 }
+
+/** The per-block answers {@link composeFlowKeys} folds over the break-cache keys. */
+export interface FlowKeyFoldInputs {
+  readonly contextualSpacingAt: (index: number) => boolean;
+  /** `null` for a block that can never match a neighbour — a table, or an unstyled paragraph. */
+  readonly styleIdAt: (index: number) => string | null;
+  /** `''` for a block outside every border group. */
+  readonly borderGroupKeyAt: (index: number) => string;
+  /** Empty when the part has no TOC; the fold is then skipped outright. */
+  readonly tocVerdicts: readonly string[];
+  readonly markerTextAt: (index: number) => string | undefined;
+  readonly keepsNextAt: (index: number) => boolean;
+}
+
+/**
+ * The one composition of the flow-key folds — what incremental resume compares.
+ *
+ * `keys` stays what the break cache is stored under; the CROSS-BLOCK properties make the
+ * two differ: `w:contextualSpacing` (§17.3.1.9), paragraph border groups (§17.3.1.24), the
+ * TOC field verdicts, the list marker, and `w:keepNext` (§17.3.1.15) — each of which makes
+ * a block's placement depend on a block it does not contain.
+ *
+ * Each fold returns its input BY IDENTITY when nothing folds, so a document that reads
+ * across no boundary at all reaches the end holding the array it started with.
+ *
+ * `keepNextFlowKeys` runs LAST, and the order is load-bearing. It is the only fold that
+ * splices a NEIGHBOUR'S WHOLE KEY into a block's own, so whatever it reads has to be
+ * finished: run it first and a chain head carries its members' pre-fold keys, which is a
+ * head that never re-places when a member's marker, contextual or border verdict moves.
+ * That is latent rather than live today only because `keepNextGroupHeight` prices AUTHORED
+ * spacing; folding last makes the composition correct whatever that lookahead grows into.
+ * The composition lives HERE, next to the folds, so the order is testable — see
+ * `pagination-keeps.test.ts`.
+ */
+export function composeFlowKeys(keys: string[], at: FlowKeyFoldInputs): string[] {
+  let flow = contextualSpacingFlowKeys(keys, at.contextualSpacingAt, at.styleIdAt);
+  flow = borderGroupFlowKeys(flow, at.borderGroupKeyAt);
+  if (at.tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => at.tocVerdicts[index]!);
+  flow = listMarkerFlowKeys(flow, at.markerTextAt);
+  flow = keepNextFlowKeys(flow, at.keepsNextAt); // LAST — see the doc comment above.
+  return flow;
+}

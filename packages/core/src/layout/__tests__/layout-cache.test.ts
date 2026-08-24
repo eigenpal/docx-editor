@@ -15,6 +15,7 @@ import {
   paragraphLayoutKey,
   type PageGeometry,
 } from '../index.ts';
+import { PARAGRAPH_KEY_INPUT_ROLES } from '../layout-cache.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -343,6 +344,38 @@ describe('key memoization over immutable nodes', () => {
       drawingToken: 'd1',
     });
     expect(withDrawing).not.toEqual(base);
+  });
+
+  test('every declared memo input misses the memo when it alone changes', () => {
+    // Table-driven over PARAGRAPH_KEY_INPUT_ROLES, the same map whose `satisfies` clause
+    // forces a new ParagraphKeyInputs field to be classified. The memo hit test is the
+    // trap this covers: an input folded into the joined key but missing from the memo
+    // comparison is silently inert, because the memo answers before the join runs.
+    const part = load(paragraph('memoized paragraph content'));
+    const node = firstParagraphOf(part);
+    const base: Parameters<typeof paragraphLayoutKey>[0] = {
+      paragraph: node,
+      properties: [],
+      width: 100,
+      producer: 'p',
+      drawingToken: 'd0',
+      exclusionToken: 'x0',
+    };
+    const changed: Record<
+      Exclude<keyof typeof PARAGRAPH_KEY_INPUT_ROLES, 'paragraph'>,
+      Partial<typeof base>
+    > = {
+      properties: { properties: [{ localName: 'jc', attributes: { 'w:val': 'center' } }] },
+      width: { width: 200 },
+      producer: { producer: 'q' },
+      drawingToken: { drawingToken: 'd1' },
+      exclusionToken: { exclusionToken: 'x1' },
+    };
+    for (const [field, override] of Object.entries(changed)) {
+      const warm = paragraphLayoutKey(base);
+      const moved = paragraphLayoutKey({ ...base, ...override });
+      expect(`${field}:${String(moved !== warm)}`).toBe(`${field}:true`);
+    }
   });
 
   test('a REPLACED paragraph node with identical content keys to the same value', () => {

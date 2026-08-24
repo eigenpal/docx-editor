@@ -16,6 +16,38 @@ export interface OperationSnapshot {
 }
 
 /**
+ * How each {@link OperationSnapshot} field gates reuse. Every comparison and eviction list
+ * in this file derives from this one map, and the `satisfies` clause makes a new snapshot
+ * field a compile error until it is classified — a field in the interface but in no list
+ * would typecheck and silently never invalidate anything.
+ *
+ * `'coarse-gate'`: compared wholesale in {@link firstMismatch}, {@link guardOperationSnapshot}
+ * and {@link ResolvedCache.evictEpoch}; any change restarts or evicts.
+ *
+ * `'resource-scoped'` (only `resourceEpoch`): deliberately NOT a coarse reuse gate. Resource
+ * changes are compared per-dependency through `CacheProvenance.resourceDependencies` (see
+ * {@link ResolvedCache.evictResources}), so one font update does not evict entries that
+ * consumed a different, unchanged font.
+ */
+const OPERATION_SNAPSHOT_ROLES = {
+  resourceEpoch: 'resource-scoped',
+  configEpoch: 'coarse-gate',
+  extensionFingerprint: 'coarse-gate',
+  shapingHash: 'coarse-gate',
+  producerVersion: 'coarse-gate',
+} as const satisfies Record<keyof OperationSnapshot, 'coarse-gate' | 'resource-scoped'>;
+
+/** Every snapshot field, in declaration order (`configEpoch` first among the coarse gates,
+ * which keeps the first-mismatch reporting order stable). */
+const ALL_SNAPSHOT_FIELDS = Object.keys(
+  OPERATION_SNAPSHOT_ROLES
+) as readonly (keyof OperationSnapshot)[];
+
+const COARSE_GATE_FIELDS = ALL_SNAPSHOT_FIELDS.filter(
+  (field) => OPERATION_SNAPSHOT_ROLES[field] === 'coarse-gate'
+);
+
+/**
  * One resource a cached entry consumed, and the fingerprint it had at the time.
  *
  * Per-dependency rather than one global epoch, so updating one font does not evict entries that
@@ -87,13 +119,29 @@ const assertFingerprint = (value: string, name: string): void => {
   if (value.trim().length === 0) throw new TypeError(`${name} must not be blank`);
 };
 
+/** Per-field validation, exhaustive by construction like the roles map above: a new
+ * snapshot field fails typecheck here until it declares its validator. */
+const SNAPSHOT_FIELD_VALIDATORS: {
+  readonly [K in keyof OperationSnapshot]: (value: OperationSnapshot[K], name: string) => void;
+} = {
+  resourceEpoch: assertNonNegativeEpoch,
+  configEpoch: assertNonNegativeEpoch,
+  extensionFingerprint: assertFingerprint,
+  shapingHash: assertFingerprint,
+  producerVersion: assertNonNegativeEpoch,
+};
+
+const validateSnapshotField = <K extends keyof OperationSnapshot>(
+  source: OperationSnapshot,
+  field: K
+): void => {
+  SNAPSHOT_FIELD_VALIDATORS[field](source[field], field);
+};
+
 /** Capture, validate, and freeze the environment used throughout one derived operation. */
 export const captureOperationSnapshot = (source: OperationSnapshot): OperationSnapshot => {
-  assertNonNegativeEpoch(source.resourceEpoch, 'resourceEpoch');
-  assertNonNegativeEpoch(source.configEpoch, 'configEpoch');
-  assertNonNegativeEpoch(source.producerVersion, 'producerVersion');
-  assertFingerprint(source.extensionFingerprint, 'extensionFingerprint');
-  assertFingerprint(source.shapingHash, 'shapingHash');
+  for (const field of ALL_SNAPSHOT_FIELDS) validateSnapshotField(source, field);
+  // The literal is a second ratchet: a new interface field is a compile error here too.
   return Object.freeze({
     resourceEpoch: source.resourceEpoch,
     configEpoch: source.configEpoch,
@@ -112,14 +160,9 @@ export const guardOperationSnapshot = (
 ): OperationSnapshotGuard => {
   const expected = captureOperationSnapshot(captured);
   const actual = captureOperationSnapshot(current);
-  const fields: readonly OperationSnapshotField[] = [
-    'resourceEpoch',
-    'configEpoch',
-    'extensionFingerprint',
-    'shapingHash',
-    'producerVersion',
-  ];
-  const changed = fields.filter((field) => expected[field] !== actual[field]);
+  // An in-flight operation restarts on ANY environment move, resources included — the
+  // per-dependency comparison only softens cache eviction, never a live pass.
+  const changed = ALL_SNAPSHOT_FIELDS.filter((field) => expected[field] !== actual[field]);
   return changed.length === 0
     ? Object.freeze({ status: 'current' })
     : Object.freeze({ status: 'restart', changed: Object.freeze(changed) });
@@ -185,14 +228,8 @@ function firstMismatch(a: CacheProvenance, b: Omit<CacheProvenance, 'revision'>)
   if (a.inputFingerprint !== b.inputFingerprint) return { hit: false, reason: 'input-changed' };
   const resources = resourceMismatch(a.resourceDependencies, b.resourceDependencies);
   if (resources) return resources;
-  const epochs: (keyof OperationSnapshot)[] = [
-    'configEpoch',
-    'extensionFingerprint',
-    'shapingHash',
-    'producerVersion',
-  ];
-  for (const e of epochs)
-    if (a[e] !== b[e]) return { hit: false, reason: 'epoch-changed', epoch: e };
+  for (const field of COARSE_GATE_FIELDS)
+    if (a[field] !== b[field]) return { hit: false, reason: 'epoch-changed', epoch: field };
   return null;
 }
 
@@ -229,12 +266,7 @@ export class ResolvedCache<V> {
     let evicted = 0;
     for (const [key, entry] of this.entries) {
       const p = entry.provenance;
-      if (
-        p.configEpoch !== operation.configEpoch ||
-        p.extensionFingerprint !== operation.extensionFingerprint ||
-        p.shapingHash !== operation.shapingHash ||
-        p.producerVersion !== operation.producerVersion
-      ) {
+      if (COARSE_GATE_FIELDS.some((field) => p[field] !== operation[field])) {
         this.entries.delete(key);
         evicted += 1;
       }

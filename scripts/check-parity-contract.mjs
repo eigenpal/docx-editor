@@ -43,11 +43,21 @@ function extractVueDocxEditorForms(source) {
 }
 
 /**
- * Pull field names out of an `export interface FooProps { ... }` block.
- * Lines beginning with whitespace + identifier + optional `?` + colon
- * are field declarations; nested object lines (deeper indent) are ignored.
+ * Normalize one member line for cross-adapter TYPE comparison: drop `readonly`
+ * (an adapter-idiom difference, not an API difference) and collapse whitespace.
+ * The name stays in the string — paired members share it by definition.
  */
-function extractInterfaceFields(snapshotText, interfaceName) {
+function normalizeMemberLine(line) {
+  return line.trim().replace(/^readonly\s+/, '').replace(/\s+/g, ' ');
+}
+
+/**
+ * Pull members out of an `export interface FooProps { ... }` block as a
+ * Map(name → normalized member line). Lines beginning with whitespace +
+ * identifier + optional `?` + colon are field declarations; nested object
+ * lines (deeper indent) are ignored.
+ */
+function scanInterfaceMembers(snapshotText, interfaceName) {
   const lines = snapshotText.split('\n');
   const startMarker = `export interface ${interfaceName} `;
   const startIdx = lines.findIndex(
@@ -60,7 +70,7 @@ function extractInterfaceFields(snapshotText, interfaceName) {
   // interface is closed. Inside the block, only lines at exactly 4-space
   // indent (top-level field declarations) are picked up — nested object
   // literals at deeper indent are skipped by the regex.
-  const fields = new Set();
+  const members = new Map();
   let depth = 0;
   let inBlockComment = false;
   for (let i = startIdx; i < lines.length; i++) {
@@ -83,9 +93,14 @@ function extractInterfaceFields(snapshotText, interfaceName) {
     // as `getEditor(): Editor | null` invisible to the gate, so a ref method
     // could be added or dropped on one adapter without the check noticing.
     const match = /^ {4}(?:readonly\s+)?(\w+)\??[(:]/.exec(line);
-    if (match) fields.add(match[1]);
+    if (match) members.set(match[1], normalizeMemberLine(line));
   }
-  return fields;
+  return members;
+}
+
+function extractInterfaceFields(snapshotText, interfaceName) {
+  const members = scanInterfaceMembers(snapshotText, interfaceName);
+  return members ? new Set(members.keys()) : null;
 }
 
 /**
@@ -108,25 +123,30 @@ function extractRefMembers(snapshotText) {
  * directly — the same shape React uses. That is BETTER parity, not worse, so
  * the checker accepts it instead of failing to find the alias.
  */
-function extractVueRefMembers(snapshotText) {
+function scanVueRefMembers(snapshotText) {
   const lines = snapshotText.split('\n');
   const startIdx = lines.findIndex((l) => l.startsWith('export type DocxEditorRef '));
   if (startIdx === -1) {
     // No alias — fall back to the interface form and report null only if that
     // is missing too, so a genuinely absent DocxEditorRef still fails loudly.
-    const asInterface = extractInterfaceFields(snapshotText, 'DocxEditorRef');
-    return asInterface.size > 0 ? asInterface : null;
+    const asInterface = scanInterfaceMembers(snapshotText, 'DocxEditorRef');
+    return asInterface && asInterface.size > 0 ? asInterface : null;
   }
-  const fields = new Set();
+  const members = new Map();
   let inBlock = false;
   for (let i = startIdx; i < lines.length; i++) {
     const line = lines[i];
     if (line.includes('{')) inBlock = true;
     if (inBlock && line.startsWith('};')) break;
     const match = /^ {4}(\w+)[\?\(:]/.exec(line);
-    if (match) fields.add(match[1]);
+    if (match) members.set(match[1], normalizeMemberLine(line));
   }
-  return fields;
+  return members;
+}
+
+function extractVueRefMembers(snapshotText) {
+  const members = scanVueRefMembers(snapshotText);
+  return members ? new Set(members.keys()) : null;
 }
 
 function diffSets(name, contractList, actualSet) {
@@ -260,9 +280,18 @@ function main() {
   const vueOnly = Object.keys(contract.props.vueExclusive);
   const reactFormProps = [...callbackEmits, ...renderSlots, ...classFallthrough];
 
+  const reactPropTypes = scanInterfaceMembers(reactSnapshot, 'DocxEditorProps');
+  const vuePropTypes = scanInterfaceMembers(vueSnapshot, 'DocxEditorProps');
   for (const k of paired) {
     if (!reactProps.has(k)) issues.push(`PROP paired '${k}' missing from React`);
     if (!vueProps.has(k)) issues.push(`PROP paired '${k}' missing from Vue`);
+    // Paired means the SAME member, not two members with one name: compare the
+    // snapshot member text (normalized), so a type that drifts on one adapter fails.
+    const reactType = reactPropTypes?.get(k);
+    const vueType = vuePropTypes?.get(k);
+    if (reactType !== undefined && vueType !== undefined && reactType !== vueType) {
+      issues.push(`PROP paired '${k}' type drift — React: \`${reactType}\` Vue: \`${vueType}\``);
+    }
   }
   for (const k of deferred) {
     if (!reactProps.has(k)) issues.push(`PROP deferred '${k}' missing from React (contract stale)`);
@@ -339,9 +368,16 @@ function main() {
   const refInherited = Object.keys(contract.ref.pairedViaInheritance || {});
   const refVueOnly = Object.keys(contract.ref.vueExclusive);
 
+  const reactRefTypes = scanInterfaceMembers(reactSnapshot, 'DocxEditorRef');
+  const vueRefTypes = scanVueRefMembers(vueSnapshot);
   for (const k of refPaired) {
     if (!reactRef.has(k)) issues.push(`REF paired '${k}' missing from React`);
     if (!vueRef.has(k)) issues.push(`REF paired '${k}' missing from Vue`);
+    const reactType = reactRefTypes?.get(k);
+    const vueType = vueRefTypes?.get(k);
+    if (reactType !== undefined && vueType !== undefined && reactType !== vueType) {
+      issues.push(`REF paired '${k}' type drift — React: \`${reactType}\` Vue: \`${vueType}\``);
+    }
   }
   for (const k of refInherited) {
     if (!reactRef.has(k))

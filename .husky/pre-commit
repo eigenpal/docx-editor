@@ -8,18 +8,16 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-# Parity gate — DISABLED while @docx-editor.dev/vue is WIP and unpublished. It blocks
-# drift between the React and Vue adapter exports, which shouldn't gate commits on an
-# adapter that doesn't ship. Still runnable by hand: `bun run check:parity`.
-# Re-enable the commented block below when the Vue package drops `private: true`.
+# Parity gate — blocks drift between the React and Vue adapter exports. The Vue package
+# ships, so the drift is a consumer-facing break, and CI runs the same check; failing here
+# saves the round-trip.
 # Spec: openspec/changes/vue-editor-robust-implementation/specs/vue-react-parity/spec.md
-#
-# echo "Running parity gates..."
-# bun run check:parity
-# if [ $? -ne 0 ]; then
-#   echo "Parity gates failed. Fix the drift or document it in notes/intentional-export-divergence.md."
-#   exit 1
-# fi
+echo "Running parity gates..."
+bun run check:parity
+if [ $? -ne 0 ]; then
+  echo "Parity gates failed. Fix the drift or document it in notes/intentional-export-divergence.md."
+  exit 1
+fi
 
 # The license-header checks used to ride along inside `check:parity`. They have
 # nothing to do with React/Vue parity, so they stay wired up on their own.

@@ -116,19 +116,31 @@ export interface ReviewAuthorInfo {
   readonly style?: RevisionAuthorStyle;
 }
 
-const STYLE_KEYS = ['color', 'background', 'spanClassName', 'avatarUrl'] as const;
-
 /**
- * The subset of {@link STYLE_KEYS} that reaches PAINTED DOM, and so the only fields the
- * paint-reuse key may hash.
+ * Where each {@link RevisionAuthorStyle} field lands, and so whether the paint-reuse key
+ * hashes it. The `satisfies` clause makes a new style field a compile error here until it
+ * is classified — a `'painted'` field the key misses keeps stale pages on screen, and a
+ * `'card-only'` field the key hashes drops every retained page for a change that alters
+ * no painted pixel.
  *
- * `avatarUrl` is deliberately absent. It is read by the review card and by nothing the
- * painter emits, so hashing it made an avatar arriving late — a host resolving its team
- * roster over the network, then redeclaring — move the context key and drop every retained
- * page. Measured at 228ms and 0 of 41 pages retained for a change that alters no painted
- * pixel; an identical redeclaration kept all 41 at 0.1ms.
+ * `avatarUrl` is deliberately `'card-only'`. It is read by the review card and by nothing
+ * the painter emits, so hashing it made an avatar arriving late — a host resolving its
+ * team roster over the network, then redeclaring — move the context key and drop every
+ * retained page. Measured at 228ms and 0 of 41 pages retained for a change that alters no
+ * painted pixel; an identical redeclaration kept all 41 at 0.1ms.
  */
-const PAINTED_STYLE_KEYS = ['color', 'background', 'spanClassName'] as const;
+const STYLE_KEY_REACH = {
+  color: 'painted',
+  background: 'painted',
+  spanClassName: 'painted',
+  avatarUrl: 'card-only',
+} as const satisfies Record<keyof Required<RevisionAuthorStyle>, 'painted' | 'card-only'>;
+
+const STYLE_KEYS = Object.keys(STYLE_KEY_REACH) as readonly (keyof RevisionAuthorStyle)[];
+
+/** The `'painted'` subset, in declaration order — the hash fold at the context key relies
+ * on that order staying stable. */
+const PAINTED_STYLE_KEYS = STYLE_KEYS.filter((key) => STYLE_KEY_REACH[key] === 'painted');
 
 /**
  * Schemes an avatar may load over. An allowlist, matching the package's `sanitizeHref`

@@ -13,7 +13,8 @@
 
 import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
 import type { Node as PMNode } from 'prosemirror-model';
-import { paragraphOrderOfPart, type ReviewItem } from '../layout/review-support.ts';
+import { paragraphOrderOfPart } from '@docx-editor.dev/core/store';
+import type { ReviewItem } from '../layout/review-support.ts';
 import {
   canApplyLocalReviewPatch,
   localReviewPatchParagraphId,

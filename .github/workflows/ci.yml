@@ -37,6 +37,12 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Lane boundary compile check
+        # The only compile-level proof that store/layout/automation stay DOM-free:
+        # each lane compiles against a lib with no `dom`. The import-edge half of
+        # the lane DAG is a test (core-lane-imports.test.ts) and runs under `test`.
+        run: bun run check:lane-boundaries
+
       - name: tsconfig lib floor check
         # Several packages map core to `../core/src`, so they type-check core's
         # sources and core's `lib` is their floor. Below it, `build:packages`
@@ -124,6 +130,25 @@ jobs:
         with:
           sarif_file: shipped-advisories.sarif
           category: shipped-advisories
+
+  # A PR that changes the public API surface (docs/api/*.api.md) must carry a changeset,
+  # or a removed export ships as an unversioned change. PRs only: on a push the changesets
+  # are legitimately consumed, and the release PR (changeset-release/*) deletes them by
+  # design. No `bun install` — git and node are the whole setup, same as shipped-advisories.
+  api-changeset:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.actor != 'dependabot[bot]' &&
+      !startsWith(github.head_ref, 'changeset-release/')
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Require a changeset when docs/api changed
+        run: node scripts/check-api-changeset.mjs --base "origin/${{ github.base_ref }}"
 
   build:
     if: github.actor != 'dependabot[bot]'

@@ -48,12 +48,47 @@ const restrictStatic = (banned, message) => ({
   'no-restricted-imports': ['error', { patterns: [{ group: banned, message }] }],
 });
 
+// Security sinks (CLAUDE.md, "No HTML from strings"): every value from a DOCX, pasted HTML
+// or embedded part is attacker-controlled, so file-derived strings must never reach an HTML
+// parser. Use createElement(NS) + setAttribute/textContent instead. These selectors ride in
+// EVERY `no-restricted-syntax` value this config emits, because in flat config a later
+// block's value REPLACES an earlier one's — a block that redefines the rule without
+// spreading SECURITY_SINK_SELECTORS silently drops the sink ban for its files.
+const NO_HTML_SINK_MSG =
+  'No HTML from strings: file-derived values must not reach an HTML parser. ' +
+  'Use createElement(NS) + setAttribute/textContent. See CLAUDE.md "Security".';
+const SECURITY_SINK_SELECTORS = [
+  {
+    selector: "AssignmentExpression[left.property.name='innerHTML']",
+    message: NO_HTML_SINK_MSG,
+  },
+  {
+    selector: "AssignmentExpression[left.property.name='outerHTML']",
+    message: NO_HTML_SINK_MSG,
+  },
+  {
+    selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
+    message: NO_HTML_SINK_MSG,
+  },
+  {
+    selector: "CallExpression[callee.object.name='document'][callee.property.name='write']",
+    message: NO_HTML_SINK_MSG,
+  },
+  // `someWindow.document.write(...)` — the popup variant.
+  {
+    selector:
+      "CallExpression[callee.object.property.name='document'][callee.property.name='write']",
+    message: NO_HTML_SINK_MSG,
+  },
+];
+
 // ESLint's `no-restricted-imports` skips `await import(...)` (it's an
 // `ImportExpression` AST node, not `ImportDeclaration`). Use
 // `no-restricted-syntax` to match dynamic imports by literal source value.
 const restrictDynamic = (specifiers, message) => ({
   'no-restricted-syntax': [
     'error',
+    ...SECURITY_SINK_SELECTORS,
     ...specifiers.map((s) => ({
       selector: `ImportExpression[source.value=${JSON.stringify(s)}]`,
       message,
@@ -146,6 +181,49 @@ export default [
     settings: { react: { version: 'detect' } },
   },
 
+  // Every published package's source bans the HTML-from-strings sinks. Adapter and
+  // editor-api blocks below re-state the same selectors through restrictDynamic when they
+  // take over `no-restricted-syntax` for their files. Tests are exempt — the ban guards
+  // the render path from file-derived strings, and test fixtures/cleanup (`innerHTML = ''`)
+  // never see one; the CLAUDE.md audit grep draws the same line.
+  {
+    files: ['packages/*/src/**/*.{ts,tsx,vue}'],
+    ignores: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx'],
+    rules: { 'no-restricted-syntax': ['error', ...SECURITY_SINK_SELECTORS] },
+  },
+
+  // The DOM-free engine lanes additionally ban spreading an array into a call. A
+  // file-controlled collection spread into varargs (`push(...arr)`) grows the argument
+  // stack with the document and throws on attacker-sized input — a rule repeated in
+  // source comments across both lanes (table-widths.ts, drawing-projection.ts,
+  // tree-op-revisions.ts, ...). `push`/`splice`/`Math.*` call shapes are grandfathered
+  // as human judgment (72 audited sites, all bounded); every OTHER varargs spread is new
+  // and gets stopped here.
+  {
+    files: ['packages/core/src/store/**/*.ts', 'packages/core/src/layout/**/*.ts'],
+    // Tests spread bounded literal fixtures; the rule guards the engine paths that see
+    // attacker-sized collections.
+    ignores: ['**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...SECURITY_SINK_SELECTORS,
+        {
+          selector:
+            "CallExpression:not([callee.object.name='Math'])" +
+            ":not([callee.property.name='push'])" +
+            ":not([callee.property.name='splice'])" +
+            ' > SpreadElement',
+          message:
+            'Spreading an array into a call grows the argument stack with the document ' +
+            'and throws on attacker-sized input. Iterate, or pass the array itself. ' +
+            'push/splice/Math.* sites are grandfathered — audit that the collection is ' +
+            'bounded before adding one.',
+        },
+      ],
+    },
+  },
+
   // Vue adapter: no React imports, and none of React's hook rules.
   //
   // `react-hooks/rules-of-hooks` keys off the `use` PREFIX, so it reads a Vue composable
@@ -179,20 +257,6 @@ export default [
   // React adapter: no Vue imports.
   { files: ['packages/react/src/**/*.{ts,tsx}'], rules: restrictVue },
 
-  // The DocxEditor entry components (React and Vue twins) have a relaxed
-  // 2000-line cap while the extraction effort (tracked in MEMORY.md)
-  // continues. The cap still enforces a ceiling so the files can't grow
-  // unbounded; the rest of the repo stays at 1000.
-  {
-    files: [
-      'packages/react/src/components/DocxEditor.tsx',
-      'packages/vue/src/components/DocxEditor.tsx',
-    ],
-    rules: {
-      'max-lines': ['error', { max: 2000, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
   // word-features.ts is the feature-support matrix — a flat data table with one
   // entry per Word feature and no logic. It grows by a dozen lines every time a
   // feature ships, which is the file working as intended, not a file that wants
@@ -203,25 +267,6 @@ export default [
     files: ['docs/site/data/word-features.ts'],
     rules: {
       'max-lines': ['error', { max: 1400, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  // semantic-layout.ts is the story loop: section flow, paragraph fragmentation
-  // and table-row pagination advance ONE cursor, and a paragraph that spans a
-  // page boundary is decided by all three at once. Splitting them into modules
-  // would mean passing that cursor across a boundary and re-deriving the same
-  // state on the other side. semantic-table-layout.ts is the same argument for
-  // row-split pagination, which has to stay with cell flow and finalize because
-  // a row's real height is only known after its cells have laid out. Both were
-  // carrying a blanket `eslint-disable max-lines`, which removes the ceiling
-  // instead of raising it; these keep the ceiling, with headroom.
-  {
-    files: [
-      'packages/core/src/layout/semantic-layout.ts',
-      'packages/core/src/layout/semantic-table-layout.ts',
-    ],
-    rules: {
-      'max-lines': ['error', { max: 1500, skipBlankLines: false, skipComments: false }],
     },
   },
 
@@ -297,18 +342,26 @@ export default [
   {
     files: [
       'packages/core/src/layout/drawing-layout.ts',
-      'packages/core/src/layout/semantic-hit-test.ts',
       'packages/core/src/store/__tests__/image-resources.test.ts',
-      'packages/core/src/store/package/image-resources.ts',
-      'packages/react/test/toolbar-composition.test.tsx',
     ],
     rules: {
-      'max-lines': ['error', { max: 1500, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1400, skipBlankLines: false, skipComments: false }],
     },
   },
 
   {
-    files: ['packages/core/src/store/__tests__/table-column-ops.test.ts'],
+    files: [
+      'packages/core/src/layout/semantic-hit-test.ts',
+      'packages/core/src/store/__tests__/table-column-ops.test.ts',
+      'packages/core/src/store/package/image-resources.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1450, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: ['packages/react/test/toolbar-composition.test.tsx'],
     rules: {
       'max-lines': ['error', { max: 1500, skipBlankLines: false, skipComments: false }],
     },
@@ -327,11 +380,19 @@ export default [
 
   {
     files: [
+      'packages/core/src/store/store/tree-op-drawings.ts',
+      'packages/core/src/store/store/tree-op-table-cell-properties.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1650, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  {
+    files: [
       'packages/core/src/binding/tree-session.ts',
       'packages/core/src/contracts/editor.ts',
       'packages/core/src/layout/paragraph-flow.ts',
-      'packages/core/src/store/store/tree-op-drawings.ts',
-      'packages/core/src/store/store/tree-op-table-cell-properties.ts',
       'packages/pro/src/__tests__/review-facade.test.ts',
     ],
     rules: {
@@ -348,8 +409,21 @@ export default [
 
   {
     files: [
-      'packages/core/src/layout/semantic-table-layout.ts',
       'packages/core/src/store/store/tree-op-content-controls.ts',
+      'packages/core/src/store/package/drawing-projection.ts',
+    ],
+    rules: {
+      'max-lines': ['error', { max: 1850, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  // semantic-table-layout.ts holds row-split pagination, which has to stay with cell flow
+  // and finalize because a row's real height is only known after its cells have laid out.
+  // It carried a blanket `eslint-disable max-lines` once, which removes the ceiling instead
+  // of raising it; this keeps the ceiling, with headroom.
+  {
+    files: [
+      'packages/core/src/layout/semantic-table-layout.ts',
       'packages/core/src/store/store/tree-op-tables.ts',
     ],
     rules: {
@@ -358,17 +432,14 @@ export default [
   },
 
   {
-    files: ['packages/core/src/store/package/drawing-projection.ts'],
+    files: ['packages/core/src/store/package/ooxml-tree.ts'],
     rules: {
-      'max-lines': ['error', { max: 2000, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 2050, skipBlankLines: false, skipComments: false }],
     },
   },
 
   {
-    files: [
-      'packages/core/src/store/package/ooxml-tree.ts',
-      'packages/pro/src/react/DocxEditorReview.tsx',
-    ],
+    files: ['packages/pro/src/react/DocxEditorReview.tsx'],
     rules: {
       'max-lines': ['error', { max: 2100, skipBlankLines: false, skipComments: false }],
     },
@@ -384,7 +455,7 @@ export default [
   {
     files: ['packages/core/src/store/__tests__/ooxml-tree.test.ts'],
     rules: {
-      'max-lines': ['error', { max: 2400, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 2350, skipBlankLines: false, skipComments: false }],
     },
   },
 
@@ -395,10 +466,15 @@ export default [
     },
   },
 
+  // semantic-layout.ts is the story loop: section flow, paragraph fragmentation and
+  // table-row pagination advance ONE cursor, and a paragraph that spans a page boundary is
+  // decided by all three at once. Splitting them into modules would mean passing that
+  // cursor across a boundary and re-deriving the same state on the other side. The cap is
+  // a ceiling with headroom, not a blanket disable.
   {
     files: ['packages/core/src/layout/semantic-layout.ts'],
     rules: {
-      'max-lines': ['error', { max: 3500, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 3250, skipBlankLines: false, skipComments: false }],
     },
   },
 

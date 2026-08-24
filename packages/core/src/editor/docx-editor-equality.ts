@@ -195,38 +195,51 @@ export function createTocContextCache(): (id: string | null) => { readonly id: s
 }
 
 /**
+ * Every member the snapshot carries has to be compared in {@link snapshotsEqual} or it
+ * cannot move a subscriber: the comments button stayed pressed after the pane closed
+ * because the old hand-written list did not know the pane existed, and `hasReviewContent`
+ * was missing from it entirely. The `satisfies` clause makes a new `EditorSnapshot` field
+ * a compile error here until it is classified, in the manner of
+ * `COMPARED_FORMATTING_KEYS` above and `PAGE_REUSE_GUARDS` in the layout lane.
+ *
+ * Every field is `'compared'` today: after sub-object reuse, each one is a primitive or a
+ * reference-stable object, so `===` is the whole comparison.
+ */
+const SNAPSHOT_FIELDS = {
+  scope: 'compared',
+  isLoading: 'compared',
+  isOpening: 'compared',
+  parseError: 'compared',
+  editable: 'compared',
+  zoom: 'compared',
+  zoomMode: 'compared',
+  selection: 'compared',
+  // Load-bearing: `selection` is a paraId range with no offsets, so collapsing a range
+  // INSIDE one paragraph leaves it identical. Without this compare, a control gated on
+  // the caret/range distinction would never see the moment it changed.
+  selectionCollapsed: 'compared',
+  formatting: 'compared',
+  table: 'compared',
+  tocContext: 'compared',
+  image: 'compared',
+  page: 'compared',
+  canUndo: 'compared',
+  canRedo: 'compared',
+  pageSetup: 'compared',
+  reviewPaneOpen: 'compared',
+  hasReviewContent: 'compared',
+  editingMode: 'compared',
+  lastRejection: 'compared',
+  fontSubstitutions: 'compared',
+} as const satisfies Record<keyof EditorSnapshot, 'compared'>;
+
+const SNAPSHOT_KEYS = Object.keys(SNAPSHOT_FIELDS) as readonly (keyof EditorSnapshot)[];
+
+/**
  * Whether two snapshots are value-equal AFTER sub-object reuse — i.e. every field can be
  * compared by reference or primitive. When true, the previous snapshot object itself is
  * kept, so `snapshot()` returns the same reference across ticks that changed nothing.
  */
 export function snapshotsEqual(a: EditorSnapshot, b: EditorSnapshot): boolean {
-  return (
-    a.scope === b.scope &&
-    a.isLoading === b.isLoading &&
-    a.isOpening === b.isOpening &&
-    a.parseError === b.parseError &&
-    a.editable === b.editable &&
-    a.zoom === b.zoom &&
-    a.selection === b.selection &&
-    // Load-bearing: `selection` is a paraId range with no offsets, so collapsing a range
-    // INSIDE one paragraph leaves it identical. Without this compare, a control gated on
-    // the caret/range distinction would never see the moment it changed.
-    a.selectionCollapsed === b.selectionCollapsed &&
-    a.formatting === b.formatting &&
-    a.table === b.table &&
-    a.tocContext === b.tocContext &&
-    a.image === b.image &&
-    a.fontSubstitutions === b.fontSubstitutions &&
-    a.page === b.page &&
-    a.canUndo === b.canUndo &&
-    a.canRedo === b.canRedo &&
-    a.pageSetup === b.pageSetup &&
-    a.zoomMode === b.zoomMode &&
-    // Every member the snapshot carries has to be compared here or it cannot move a
-    // subscriber: the comments button stayed pressed after the pane closed because this
-    // list did not know the pane existed.
-    a.reviewPaneOpen === b.reviewPaneOpen &&
-    a.editingMode === b.editingMode &&
-    a.lastRejection === b.lastRejection
-  );
+  return SNAPSHOT_KEYS.every((key) => a[key] === b[key]);
 }

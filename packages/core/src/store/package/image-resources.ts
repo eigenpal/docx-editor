@@ -3,7 +3,7 @@
 // Content type is a claim; signature sniffing, structural header validation, and
 // the decode port are authoritative. Validated bytes never enter public state.
 
-import { sha256FontBytes } from '../../layout/font-resource.ts';
+import { sha256FontBytes } from './sha256.ts';
 import {
   createValidatedImageBytesRegistry,
   type ValidatedImageBytesHandle,

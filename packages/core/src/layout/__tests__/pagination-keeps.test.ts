@@ -12,11 +12,14 @@ import { createParagraphLayoutCache } from '../layout-cache.ts';
 import {
   adjustedBreakIndex,
   borderGroupFlowKeys,
+  composeFlowKeys,
   contextualSpacingFlowKeys,
   keepNextFlowKeys,
+  listMarkerFlowKeys,
   tocFieldFlowKeys,
   paragraphKeeps,
   DEFAULT_PARAGRAPH_KEEPS,
+  type FlowKeyFoldInputs,
 } from '../pagination-keeps.ts';
 import type { PageGeometry, PageRecord } from '../semantic-records.ts';
 import { paragraphIndent } from '../paragraph-flow.ts';
@@ -534,5 +537,58 @@ describe('keepNextFlowKeys folds over the other folds', () => {
     const folded = tocFieldFlowKeys(['h', 'p'], (index) => (index === 1 ? '110' : ''));
     const flow = keepNextFlowKeys(folded, (index) => index === 0);
     expect(flow[0]).toBe('h~kn~p~toc~110');
+  });
+});
+
+describe('composeFlowKeys — the one composition, and its load-bearing order', () => {
+  const none: FlowKeyFoldInputs = {
+    contextualSpacingAt: () => false,
+    styleIdAt: () => null,
+    borderGroupKeyAt: () => '',
+    tocVerdicts: [],
+    markerTextAt: () => undefined,
+    keepsNextAt: () => false,
+  };
+
+  test('nothing folding returns the SAME array, not a copy', () => {
+    // Identity is the contract: the prepass memo and the unchanged-document exit both
+    // lean on flow keys not churning when no block reads across a boundary.
+    const keys = ['a', 'b', 'c'];
+    expect(composeFlowKeys(keys, none)).toBe(keys);
+  });
+
+  test('a keep-next chain head carries its successor POST-fold — every other fold first', () => {
+    // Block 0 keeps with block 1; block 1 carries a marker, a contextual verdict and a
+    // border-group verdict. The head must splice block 1's FINISHED key: run keepNext
+    // before any other fold and the head carries 'b' bare — a head that never re-places
+    // when a member's marker, contextual or border verdict moves.
+    const composed = composeFlowKeys(['a', 'b'], {
+      contextualSpacingAt: (index) => index === 1,
+      styleIdAt: () => 'Tight',
+      borderGroupKeyAt: (index) => (index === 1 ? 'box' : ''),
+      tocVerdicts: ['', '110'],
+      markerTextAt: (index) => (index === 1 ? 'M1' : undefined),
+      keepsNextAt: (index) => index === 0,
+    });
+    const successor = composed[1]!;
+    expect(successor).toContain('~cs~');
+    expect(successor).toContain('~bg~');
+    expect(successor).toContain('~toc~110');
+    expect(successor).toContain('~mk~M1');
+    // The whole finished successor key, spliced verbatim — the order test proper.
+    expect(composed[0]).toBe(`a~kn~${successor}`);
+  });
+
+  test('the composition equals the folds applied by hand with keepNext LAST', () => {
+    const keys = ['a', 'b', 'c'];
+    const markerAt = (index: number) => (index === 2 ? 'M2' : undefined);
+    const keepsAt = (index: number) => index === 1;
+    const byHand = keepNextFlowKeys(listMarkerFlowKeys(keys, markerAt), keepsAt);
+    const composed = composeFlowKeys(keys, {
+      ...none,
+      markerTextAt: markerAt,
+      keepsNextAt: keepsAt,
+    });
+    expect(composed).toEqual(byHand);
   });
 });

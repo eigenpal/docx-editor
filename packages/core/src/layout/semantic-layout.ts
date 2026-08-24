@@ -60,11 +60,7 @@ import {
 import { resolveParagraphBorders } from './paragraph-border-resolve.ts';
 import {
   adjustedBreakIndex,
-  borderGroupFlowKeys,
-  keepNextFlowKeys,
-  listMarkerFlowKeys,
-  contextualSpacingFlowKeys,
-  tocFieldFlowKeys,
+  composeFlowKeys,
   keepNextGroupHeight,
   paragraphKeeps,
   MAX_KEEP_NEXT_CHAIN,
@@ -514,7 +510,7 @@ function tocIdsToken(ids: TocIdSets): string {
  * order — kept on the section's {@link LayoutSession} and reused verbatim while every
  * input it derives from is unchanged. Stored through the session's opaque `prepass` slot.
  */
-interface SectionPrepass {
+export interface SectionPrepass {
   readonly bodies: readonly OoxmlElement[];
   readonly producer: string;
   readonly contentWidth: number;
@@ -1164,29 +1160,17 @@ function layoutBlocksPass(
             entry.kind === 'paragraph' ? tocVerdictFor(entry.paragraph.id, tocIds) : ''
           );
 
-    // FLOW keys — what incremental resume compares. `keys` stays what the break cache is
-    // stored under; the CROSS-BLOCK properties make the two differ: `w:keepNext`
-    // (§17.3.1.15), the list marker, `w:contextualSpacing` (§17.3.1.9), paragraph border
-    // groups (§17.3.1.24) and the TOC field verdicts — each of which makes a block's
-    // placement depend on a block it does not contain.
-    //
-    // Each fold returns its input BY IDENTITY when nothing folds, so a document that reads
-    // across no boundary at all reaches the end holding the array it started with.
-    let flow = contextualSpacingFlowKeys(
-      keys,
-      (index) => contextualSpacings[index]!,
-      (index) => styleIds[index] ?? null
-    );
-    flow = borderGroupFlowKeys(flow, (index) => borderGroupKeys[index]!);
-    if (tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => tocVerdicts[index]!);
-    flow = listMarkerFlowKeys(flow, (index) => markerTexts[index]);
-    // LAST, and the order is load-bearing. `keepNextFlowKeys` is the only fold that splices
-    // a NEIGHBOUR'S WHOLE KEY into a block's own, so whatever it reads has to be finished:
-    // run it first and a chain head carries its members' pre-fold keys, which is a head that
-    // never re-places when a member's marker, contextual or border verdict moves. That is
-    // latent rather than live today only because `keepNextGroupHeight` prices AUTHORED
-    // spacing; folding last makes the composition correct whatever that lookahead grows into.
-    flow = keepNextFlowKeys(flow, (index) => keepsNext[index]!);
+    // FLOW keys — what incremental resume compares. The composition, its fold order and
+    // the argument for that order live with the folds in `pagination-keeps.ts`, where the
+    // order is testable.
+    const flow = composeFlowKeys(keys, {
+      contextualSpacingAt: (index) => contextualSpacings[index]!,
+      styleIdAt: (index) => styleIds[index] ?? null,
+      borderGroupKeyAt: (index) => borderGroupKeys[index]!,
+      tocVerdicts,
+      markerTextAt: (index) => markerTexts[index],
+      keepsNextAt: (index) => keepsNext[index]!,
+    });
 
     return {
       bodies,

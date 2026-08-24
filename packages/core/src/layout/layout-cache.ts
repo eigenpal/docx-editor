@@ -163,6 +163,30 @@ export interface ParagraphKeyInputs {
   readonly exclusionToken?: string;
 }
 
+/**
+ * How each {@link ParagraphKeyInputs} field reaches the memo hit test in
+ * {@link paragraphLayoutKey}. The `satisfies` clause makes a new input field a compile
+ * error here until it is classified — the trap this map exists for is the memo: an input
+ * folded into the joined key but missing from the memo comparison is SILENTLY INERT,
+ * because the memo returns the previous key before the join ever runs.
+ *
+ * - `'memo-identity'`: the WeakMap key itself; its content reaches the key via `nodeToken`.
+ * - `'memo-compared'`: compared verbatim (after normalization) in the memo hit test AND
+ *   folded into the key.
+ * - `'memo-derived'`: compared through a derived token (`propertiesToken`).
+ */
+export const PARAGRAPH_KEY_INPUT_ROLES = {
+  paragraph: 'memo-identity',
+  properties: 'memo-derived',
+  width: 'memo-compared',
+  producer: 'memo-compared',
+  drawingToken: 'memo-compared',
+  exclusionToken: 'memo-compared',
+} as const satisfies Record<
+  keyof ParagraphKeyInputs,
+  'memo-identity' | 'memo-compared' | 'memo-derived'
+>;
+
 interface ParagraphKeyMemo {
   readonly producer: string;
   readonly width: number;
