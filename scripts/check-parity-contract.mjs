@@ -4,6 +4,11 @@
 // (`docs/api/<adapter-slug>/index.api.md`), extracts the `DocxEditorProps`
 // and `DocxEditorRef` field names, and applies `scripts/parity/parity.contract.json`.
 //
+// The contract's `pro` section extends the same bucket semantics to the pro
+// package's paired entries (`docs/api/docx-editor-pro/{react,vue}.api.md`):
+// top-level export names, the DocxEditorReview compound part names, and the
+// extends-resolved member names of interfaces exported by both entries.
+//
 // Fails non-zero on any drift the contract does not acknowledge:
 // - A prop/method exists in one adapter but the contract didn't classify it.
 // - A "paired" entry is missing on one side.
@@ -28,6 +33,8 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api.md');
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
+const PRO_REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/react.api.md');
+const PRO_VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/vue.api.md');
 const CONTRACT_PATH = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 const VUE_DOCX_EDITOR_SOURCE = path.join(repoRoot, 'packages/vue/src/components/DocxEditor.tsx');
 
@@ -129,6 +136,271 @@ function extractVueRefMembers(snapshotText) {
   return fields;
 }
 
+// ── Pro entry parity (docs/api/docx-editor-pro/{react,vue}.api.md) ──────────
+// The pro package publishes one React and one Vue entry from the same package.
+// The contract's `pro` section classifies:
+//  - `exports`: every top-level export name of each snapshot
+//  - `reviewParts`: the DocxEditorReview compound part names
+//  - `interfaceMemberExceptions`: acknowledged per-member divergence on
+//    interfaces both entries export (member names compare extends-resolved)
+
+/** Top-level export names of an API Extractor snapshot. */
+function extractTopLevelExportNames(snapshotText) {
+  const names = new Set();
+  for (const line of snapshotText.split('\n')) {
+    const match =
+      /^export (?:declare )?(?:abstract )?(?:function|const|let|var|interface|type|namespace|class|enum) (\w+)/.exec(
+        line
+      );
+    if (match) names.add(match[1]);
+  }
+  return names;
+}
+
+/**
+ * Vue's DocxEditorReview snapshot is one `export const DocxEditorReview: { ... };`
+ * whose trailing intersection enumerates each compound part as
+ * `    PartName: vue.DefineComponent<...>`. Pull those part names out.
+ */
+function extractVueReviewParts(snapshotText) {
+  const lines = snapshotText.split('\n');
+  const startIdx = lines.findIndex((l) => l.startsWith('export const DocxEditorReview'));
+  if (startIdx === -1) return null;
+  const parts = new Set();
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith('};') || line.startsWith('export ')) break;
+    const match = /^ {4}(\w+): vue\.DefineComponent</.exec(line);
+    if (match) parts.add(match[1]);
+  }
+  return parts;
+}
+
+/** Map of interface name → extends clause (or null) for a snapshot. */
+function extractInterfaceDecls(snapshotText) {
+  const decls = new Map();
+  for (const line of snapshotText.split('\n')) {
+    const match = /^export interface (\w+)(?: extends (.+?))? \{/.exec(line);
+    if (match) decls.set(match[1], match[2] ?? null);
+  }
+  return decls;
+}
+
+/** Parse `Base` / `Omit<Base, 'a' | 'b'>` terms from an extends clause. */
+function parseExtendsClause(clause) {
+  const bases = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i <= clause.length; i++) {
+    const c = clause[i];
+    if (c === '<' || c === '(') depth++;
+    else if (c === '>' || c === ')') depth--;
+    if ((c === ',' && depth === 0) || i === clause.length) {
+      const part = clause.slice(start, i).trim();
+      start = i + 1;
+      if (!part) continue;
+      const omit = /^Omit<(\w+),\s*(.+)>$/.exec(part);
+      if (omit) {
+        const omitted = new Set([...omit[2].matchAll(/'([^']+)'/g)].map((m) => m[1]));
+        bases.push({ base: omit[1], omitted });
+      } else if (/^\w+$/.test(part)) {
+        bases.push({ base: part, omitted: new Set() });
+      }
+      // Anything else (generic bases from other packages) cannot be resolved
+      // from the snapshot alone and is skipped.
+    }
+  }
+  return bases;
+}
+
+/** Member names of an interface with same-snapshot `extends` chains folded in. */
+function effectiveInterfaceFields(snapshotText, decls, name, seen = new Set()) {
+  if (seen.has(name)) return new Set();
+  seen.add(name);
+  const fields = new Set(extractInterfaceFields(snapshotText, name) ?? []);
+  const extendsClause = decls.get(name);
+  if (!extendsClause) return fields;
+  for (const { base, omitted } of parseExtendsClause(extendsClause)) {
+    if (!decls.has(base)) continue;
+    for (const field of effectiveInterfaceFields(snapshotText, decls, base, seen)) {
+      if (!omitted.has(field)) fields.add(field);
+    }
+  }
+  return fields;
+}
+
+/** Apply the paired / deferredInVue / vueExclusive buckets to one name set pair. */
+function applyProBuckets(kind, section, reactSet, vueSet, issues) {
+  const paired = section.paired;
+  const deferred = Object.keys(section.deferredInVue);
+  const vueOnly = Object.keys(section.vueExclusive);
+  for (const k of paired) {
+    if (!reactSet.has(k)) issues.push(`${kind} paired '${k}' missing from React`);
+    if (!vueSet.has(k)) issues.push(`${kind} paired '${k}' missing from Vue`);
+  }
+  for (const k of deferred) {
+    if (!reactSet.has(k)) issues.push(`${kind} deferred '${k}' missing from React (contract stale)`);
+    if (vueSet.has(k)) issues.push(`${kind} '${k}' has shipped in Vue — move from deferredInVue to paired`);
+  }
+  for (const k of vueOnly) {
+    if (!vueSet.has(k)) issues.push(`${kind} vueExclusive '${k}' missing from Vue (contract stale)`);
+    if (reactSet.has(k)) issues.push(`${kind} '${k}' has shipped in React — move from vueExclusive to paired`);
+  }
+  for (const k of reactSet) {
+    if (!paired.includes(k) && !deferred.includes(k) && !vueOnly.includes(k)) {
+      issues.push(`${kind} '${k}' in React is not declared in the parity contract`);
+    }
+  }
+  for (const k of vueSet) {
+    if (!paired.includes(k) && !deferred.includes(k) && !vueOnly.includes(k)) {
+      issues.push(`${kind} '${k}' in Vue is not declared in the parity contract`);
+    }
+  }
+}
+
+const PRO_BUCKET_SCHEMA = { paired: 'array', deferredInVue: 'object', vueExclusive: 'object' };
+
+function validateProShape(pro) {
+  const errors = [];
+  if (!pro || typeof pro !== 'object') {
+    errors.push('Missing or invalid top-level key: pro');
+    return errors;
+  }
+  for (const sub of ['exports', 'reviewParts']) {
+    const section = pro[sub];
+    if (!section || typeof section !== 'object') {
+      errors.push(`contract.pro.${sub} is required`);
+      continue;
+    }
+    const seen = new Set();
+    for (const [bucket, type] of Object.entries(PRO_BUCKET_SCHEMA)) {
+      const value = section[bucket];
+      if (value === undefined) {
+        errors.push(`contract.pro.${sub}.${bucket} is required`);
+        continue;
+      }
+      const ok = type === 'array' ? Array.isArray(value) : typeof value === 'object' && !Array.isArray(value);
+      if (!ok) {
+        errors.push(`contract.pro.${sub}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`);
+        continue;
+      }
+      for (const k of Array.isArray(value) ? value : Object.keys(value)) {
+        if (seen.has(k)) errors.push(`contract.pro.${sub}: '${k}' appears in multiple buckets — must be in exactly one`);
+        seen.add(k);
+      }
+    }
+  }
+  const exceptions = pro.interfaceMemberExceptions ?? {};
+  if (typeof exceptions !== 'object' || Array.isArray(exceptions)) {
+    errors.push('contract.pro.interfaceMemberExceptions must be an object');
+    return errors;
+  }
+  for (const [name, entry] of Object.entries(exceptions)) {
+    if (!entry || typeof entry !== 'object' || typeof entry.reason !== 'string') {
+      errors.push(`contract.pro.interfaceMemberExceptions.${name} needs a string 'reason'`);
+      continue;
+    }
+    for (const side of ['reactOnly', 'vueOnly']) {
+      if (entry[side] !== undefined && !Array.isArray(entry[side])) {
+        errors.push(`contract.pro.interfaceMemberExceptions.${name}.${side} must be an array`);
+      }
+    }
+    if (!entry.reactOnly?.length && !entry.vueOnly?.length) {
+      errors.push(`contract.pro.interfaceMemberExceptions.${name} declares no members — remove it`);
+    }
+  }
+  return errors;
+}
+
+function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
+  const reactExports = extractTopLevelExportNames(reactSnapshot);
+  const vueExports = extractTopLevelExportNames(vueSnapshot);
+  const reactParts = extractInterfaceFields(reactSnapshot, 'DocxEditorReviewNamespace');
+  const vueParts = extractVueReviewParts(vueSnapshot);
+
+  // Freshness oracle: a parse regression must fail loudly, never pass vacuously.
+  const MIN_EXPORTS = 20;
+  const MIN_PARTS = 15;
+  if (reactExports.size < MIN_EXPORTS || vueExports.size < MIN_EXPORTS) {
+    console.error(
+      `Pro parity gate misconfigured: expected at least ${MIN_EXPORTS} exports per snapshot, got React ${reactExports.size} / Vue ${vueExports.size}.`
+    );
+    process.exit(1);
+  }
+  if (!reactParts || reactParts.size < MIN_PARTS) {
+    console.error(
+      `Pro parity gate misconfigured: could not parse DocxEditorReviewNamespace parts from ${PRO_REACT_SNAPSHOT} (got ${reactParts?.size ?? 0}).`
+    );
+    process.exit(1);
+  }
+  if (!vueParts || vueParts.size < MIN_PARTS) {
+    console.error(
+      `Pro parity gate misconfigured: could not parse DocxEditorReview parts from ${PRO_VUE_SNAPSHOT} (got ${vueParts?.size ?? 0}).`
+    );
+    process.exit(1);
+  }
+
+  applyProBuckets('PRO EXPORT', contract.pro.exports, reactExports, vueExports, issues);
+  applyProBuckets('PRO REVIEW PART', contract.pro.reviewParts, reactParts, vueParts, issues);
+
+  // Member-name parity for every interface both entries export.
+  const reactDecls = extractInterfaceDecls(reactSnapshot);
+  const vueDecls = extractInterfaceDecls(vueSnapshot);
+  const shared = [...reactDecls.keys()].filter((n) => vueDecls.has(n)).sort();
+  const exceptions = contract.pro.interfaceMemberExceptions ?? {};
+
+  const MIN_SHARED_INTERFACES = 8;
+  if (shared.length < MIN_SHARED_INTERFACES) {
+    console.error(
+      `Pro parity gate misconfigured: expected at least ${MIN_SHARED_INTERFACES} shared interfaces, got ${shared.length}.`
+    );
+    process.exit(1);
+  }
+
+  let memberChecks = 0;
+  for (const name of shared) {
+    const reactFields = effectiveInterfaceFields(reactSnapshot, reactDecls, name);
+    const vueFields = effectiveInterfaceFields(vueSnapshot, vueDecls, name);
+    const exception = exceptions[name];
+    const reactAllowed = new Set(exception?.reactOnly ?? []);
+    const vueAllowed = new Set(exception?.vueOnly ?? []);
+    for (const k of reactAllowed) {
+      if (!reactFields.has(k) || vueFields.has(k)) {
+        issues.push(`PRO INTERFACE '${name}': stale reactOnly exception '${k}' — remove it from the contract`);
+      }
+    }
+    for (const k of vueAllowed) {
+      if (!vueFields.has(k) || reactFields.has(k)) {
+        issues.push(`PRO INTERFACE '${name}': stale vueOnly exception '${k}' — remove it from the contract`);
+      }
+    }
+    for (const k of reactFields) {
+      memberChecks++;
+      if (!vueFields.has(k) && !reactAllowed.has(k)) {
+        issues.push(`PRO INTERFACE '${name}': member '${k}' missing from Vue`);
+      }
+    }
+    for (const k of vueFields) {
+      if (!reactFields.has(k) && !vueAllowed.has(k)) {
+        issues.push(`PRO INTERFACE '${name}': member '${k}' missing from React`);
+      }
+    }
+  }
+  for (const name of Object.keys(exceptions)) {
+    if (!shared.includes(name)) {
+      issues.push(`PRO INTERFACE exception '${name}' does not match a shared interface — remove it`);
+    }
+  }
+
+  return {
+    reactExports: reactExports.size,
+    vueExports: vueExports.size,
+    reviewParts: reactParts.size,
+    sharedInterfaces: shared.length,
+    memberChecks,
+  };
+}
+
 function diffSets(name, contractList, actualSet) {
   const missing = contractList.filter((k) => !actualSet.has(k));
   const extra = [...actualSet].filter((k) => !contractList.includes(k));
@@ -206,7 +478,14 @@ function validateContractShape(contract) {
 }
 
 function main() {
-  for (const f of [REACT_SNAPSHOT, VUE_SNAPSHOT, CONTRACT_PATH, VUE_DOCX_EDITOR_SOURCE]) {
+  for (const f of [
+    REACT_SNAPSHOT,
+    VUE_SNAPSHOT,
+    PRO_REACT_SNAPSHOT,
+    PRO_VUE_SNAPSHOT,
+    CONTRACT_PATH,
+    VUE_DOCX_EDITOR_SOURCE,
+  ]) {
     if (!fs.existsSync(f)) {
       console.error(`Missing required file: ${f}`);
       console.error('Run `bun run api:extract` first.');
@@ -219,7 +498,7 @@ function main() {
   const vueForms = extractVueDocxEditorForms(fs.readFileSync(VUE_DOCX_EDITOR_SOURCE, 'utf8'));
   const contract = readJson(CONTRACT_PATH);
 
-  const shapeErrors = validateContractShape(contract);
+  const shapeErrors = [...validateContractShape(contract), ...validateProShape(contract.pro)];
   if (shapeErrors.length > 0) {
     console.error('Parity contract has structural errors:');
     for (const e of shapeErrors) console.error(`  - ${e}`);
@@ -370,6 +649,11 @@ function main() {
     }
   }
 
+  // ── Pro entries ──────────────────────────────────────────────────────────
+  const proReactSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_REACT_SNAPSHOT, 'utf8'));
+  const proVueSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_VUE_SNAPSHOT, 'utf8'));
+  const proStats = checkProParity(contract, proReactSnapshot, proVueSnapshot, issues);
+
   // ── Report ───────────────────────────────────────────────────────────────
   const reactPropsCount = reactProps.size;
   const vuePropsCount = vueProps.size;
@@ -389,6 +673,11 @@ function main() {
   console.log(`  Paired ref members:    ${refPaired.length}`);
   console.log(`  Inherited via EditorRefLike: ${refInherited.length}`);
   console.log(`  Vue-exclusive refs:    ${refVueOnly.length}`);
+  console.log(`  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`);
+  console.log(`  Pro review parts:      ${proStats.reviewParts}`);
+  console.log(
+    `  Pro shared interfaces: ${proStats.sharedInterfaces} (${proStats.memberChecks} member checks)`
+  );
 
   if (issues.length > 0) {
     console.error(`\nParity drift: ${issues.length} issue${issues.length === 1 ? '' : 's'}`);

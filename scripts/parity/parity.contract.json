@@ -57,5 +57,69 @@
     "paired": ["exec", "focus", "getDocumentHandle", "getEditor", "load", "save", "snapshot"],
     "pairedViaInheritance": {},
     "vueExclusive": {}
+  },
+  "pro": {
+    "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of interfaces exported by both entries.",
+    "exports": {
+      "paired": [
+        "CustomNodeChrome",
+        "CustomNodeChromeProps",
+        "CustomNodeContextMenu",
+        "CustomNodeContextMenuProps",
+        "DocxEditorReview",
+        "DocxEditorReviewNamespace",
+        "ProLicenseOptions",
+        "ResolvedCustomNodeActivation",
+        "ReviewActionProps",
+        "ReviewActivationOptions",
+        "ReviewItemView",
+        "ReviewMarkersProps",
+        "ReviewModuleOptions",
+        "ReviewPartProps",
+        "ReviewProps",
+        "UseReviewReturn",
+        "activatedCustomNodeOf",
+        "resolveCustomNodeActivation",
+        "reviewModule",
+        "useCustomNodeDefinitions",
+        "useReview",
+        "useReviewAuthor",
+        "useReviewItem",
+        "useReviewOf",
+        "useStackedReviewPositions"
+      ],
+      "deferredInVue": {},
+      "vueExclusive": {}
+    },
+    "reviewParts": {
+      "paired": [
+        "Accept",
+        "AddComment",
+        "Author",
+        "Avatar",
+        "Balloon",
+        "Card",
+        "Delete",
+        "Draft",
+        "Empty",
+        "List",
+        "Markers",
+        "Reject",
+        "Reopen",
+        "Replies",
+        "Reply",
+        "Resolve",
+        "Summary",
+        "Time"
+      ],
+      "deferredInVue": {},
+      "vueExclusive": {}
+    },
+    "interfaceMemberExceptions": {
+      "ReviewMarkersProps": {
+        "vueOnly": ["asChild", "children"],
+        "reason": "Vue declares ReviewMarkersProps as extending ReviewPartProps, so asChild and children appear in the type although the markers part does not wire them. React declares only the wired members."
+      }
+    }
   }
 }
