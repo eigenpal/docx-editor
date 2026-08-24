@@ -4857,7 +4857,7 @@ a.docx-hyperlink:focus-visible {
   gap: 6px;
   width: min(340px, calc(100% - 16px));
   margin-top: 4px;
-  padding: 8px;
+  padding: 6px 8px;
   border: 1px solid var(--doc-border);
   border-radius: 8px;
   background: var(--doc-surface);
@@ -4868,7 +4868,7 @@ a.docx-hyperlink:focus-visible {
 
 .docx-equation-popup__input {
   width: 100%;
-  padding: 5px 7px;
+  padding: 4px 6px;
   border: 1px solid var(--doc-border-input);
   border-radius: 4px;
   background: var(--doc-bg-input);
@@ -4879,12 +4879,6 @@ a.docx-hyperlink:focus-visible {
 .docx-equation-popup__input:focus-visible {
   outline: 2px solid var(--doc-focus-ring);
   outline-offset: -1px;
-}
-
-.docx-equation-popup__help {
-  color: var(--doc-text-muted);
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 .docx-equation-popup__error {
@@ -4908,16 +4902,6 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
   font: inherit;
   cursor: pointer;
-}
-
-.docx-equation-popup__apply {
-  border-color: var(--doc-primary);
-  background: var(--doc-primary);
-  color: var(--doc-on-primary);
-}
-
-.docx-equation-popup__delete {
-  color: var(--doc-error);
 }
 
 /* Room for the review pane. The page centres inside the scroller's padding box, so

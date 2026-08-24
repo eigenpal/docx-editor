@@ -31,7 +31,6 @@ export const DocxEditorEquation = defineComponent({
     const state = ref<EquationPopupState | null>(null);
     const placement = ref<CSSProperties | null>(null);
     const inputId = useStableDocxId('equation-input');
-    const helpId = useStableDocxId('equation-help');
     const errorId = useStableDocxId('equation-error');
     const disabledReasonId = useStableDocxId('equation-disabled-reason');
     let panelElement: HTMLElement | null = null;
@@ -212,13 +211,13 @@ export const DocxEditorEquation = defineComponent({
         value: current.draft,
         placeholder: t('equationPopup.placeholder'),
         spellcheck: false,
-        'aria-describedby': [
-          helpId,
-          current.error ? errorId : null,
-          mutationAvailability.value.reason ? disabledReasonId : null,
-        ]
-          .filter(Boolean)
-          .join(' '),
+        'aria-describedby':
+          [
+            current.error ? errorId : null,
+            mutationAvailability.value.reason ? disabledReasonId : null,
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined,
         onInput: (event: InputEvent) => {
           const active = state.value;
           if (!active) return;
@@ -256,9 +255,6 @@ export const DocxEditorEquation = defineComponent({
             {t('equationPopup.inputLabel')}
           </label>,
           field,
-          <div id={helpId} class="docx-equation-popup__help">
-            {t('equationPopup.syntaxHelp')}
-          </div>,
           current.error ? (
             <div
               id={errorId}

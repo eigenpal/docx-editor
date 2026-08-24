@@ -34,7 +34,6 @@ export function DocxEditorEquation() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const releasePinRef = useRef<(() => void) | null>(null);
   const inputId = useId();
-  const helpId = useId();
   const errorId = useId();
   const disabledReasonId = useId();
   const activation = state?.activation ?? null;
@@ -164,7 +163,6 @@ export function DocxEditorEquation() {
 
   if (!state) return null;
   const describedBy = [
-    helpId,
     state.error ? errorId : null,
     mutationAvailability.reason ? disabledReasonId : null,
   ]
@@ -192,7 +190,7 @@ export function DocxEditorEquation() {
         value={state.draft}
         placeholder={t('equationPopup.placeholder')}
         spellCheck={false}
-        aria-describedby={describedBy}
+        aria-describedby={describedBy || undefined}
         onChange={(event) =>
           setState((current) =>
             current ? { ...current, draft: event.target.value, error: false } : current
@@ -204,9 +202,6 @@ export function DocxEditorEquation() {
           apply();
         }}
       />
-      <div id={helpId} className="docx-equation-popup__help">
-        {t('equationPopup.syntaxHelp')}
-      </div>
       {state.error ? (
         <div
           id={errorId}

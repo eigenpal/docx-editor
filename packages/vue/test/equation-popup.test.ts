@@ -99,7 +99,7 @@ describe('default Vue equation popover', () => {
     view.unmount();
   });
 
-  test('describes syntax help and restores focus on Escape', async () => {
+  test('describes apply errors and restores focus on Escape', async () => {
     const view = mount();
     await flush();
     await open(view);
@@ -107,15 +107,14 @@ describe('default Vue equation popover', () => {
     const field = view.container.querySelector(
       '[data-testid="equation-popup-input"]'
     ) as HTMLInputElement;
-    const helpId = field.getAttribute('aria-describedby')!.split(' ')[0]!;
-    expect(view.container.querySelector(`[id="${helpId}"]`)?.textContent).toContain('Use x^2');
+    expect(field.getAttribute('aria-describedby')).toBeNull();
     input(view, 'x^');
     await nextTick();
     click(view, 'equation-popup-apply');
     await nextTick();
-    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(
-      'could not be applied'
-    );
+    const alert = view.container.querySelector<HTMLElement>('[role="alert"]')!;
+    expect(alert.textContent).toContain('could not be applied');
+    expect(field.getAttribute('aria-describedby')).toContain(alert.id);
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await flush();

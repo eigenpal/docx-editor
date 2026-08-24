@@ -120,23 +120,21 @@ describe('default React equation popover', () => {
     expect(document.activeElement).toBe(mounted.view.container.querySelector('.docx-pages'));
   });
 
-  test('describes syntax help and restores focus on Escape', async () => {
+  test('describes apply errors and restores focus on Escape', async () => {
     const mounted = mount();
     await tick();
     open(mounted);
     await tick();
 
     const input = mounted.view.getByTestId('equation-popup-input');
-    const describedBy = input.getAttribute('aria-describedby')!;
-    const helpId = describedBy.split(' ')[0]!;
-    expect(mounted.view.container.querySelector(`#${CSS.escape(helpId)}`)?.textContent).toContain(
-      'Use x^2'
-    );
+    expect(input.getAttribute('aria-describedby')).toBeNull();
     fireEvent.change(mounted.view.getByTestId('equation-popup-input'), {
       target: { value: 'x^' },
     });
     fireEvent.click(mounted.view.getByTestId('equation-popup-apply'));
-    expect(mounted.view.getByRole('alert').textContent).toContain('could not be applied');
+    const alert = mounted.view.getByRole('alert');
+    expect(alert.textContent).toContain('could not be applied');
+    expect(input.getAttribute('aria-describedby')).toContain(alert.id);
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await tick();

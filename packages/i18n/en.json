@@ -585,7 +585,6 @@
     "title": "Edit equation",
     "inputLabel": "Linear math",
     "placeholder": "Enter an equation",
-    "syntaxHelp": "Use x^2, x_i, fractions, square roots, or sums.",
     "apply": "Apply",
     "delete": "Delete",
     "refused": "That equation could not be applied. Check the syntax and try again."
