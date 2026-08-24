@@ -37,22 +37,127 @@ export function selectionRects(
    */
   order: readonly string[]
 ): SelectionRect[] {
+  return rangeRects(layout, selection, order, true);
+}
+
+/**
+ * Rectangles for selected paragraph marks only.
+ *
+ * Native DOM selection paints characters, but it cannot paint the paragraph mark after a
+ * filled line or the only position on an empty line. The active surface draws these small
+ * semantic rectangles beside the native highlight.
+ */
+export function selectionMarkRects(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  order: readonly string[]
+): SelectionRect[] {
+  return rangeRects(layout, selection, order, false);
+}
+
+interface ParagraphTerminal {
+  end: number;
+  start: number;
+}
+
+const paragraphTerminalsCache = new WeakMap<
+  SemanticLayout,
+  ReadonlyMap<string, ParagraphTerminal>
+>();
+const orderIndexCache = new WeakMap<readonly string[], ReadonlyMap<string, number>>();
+
+/** Last visual segment range for each paragraph, including repeated visual occurrences. */
+function paragraphTerminals(layout: SemanticLayout): ReadonlyMap<string, ParagraphTerminal> {
+  const cached = paragraphTerminalsCache.get(layout);
+  if (cached) return cached;
+  const terminals = new Map<string, ParagraphTerminal>();
+  for (const page of layout.pages)
+    for (const fragment of paragraphFragmentsOf(page))
+      for (const line of fragment.lines)
+        for (const segment of lineSegments(line)) {
+          const previous = terminals.get(segment.paragraphId);
+          if (
+            !previous ||
+            segment.end > previous.end ||
+            (segment.end === previous.end && segment.start > previous.start)
+          ) {
+            terminals.set(segment.paragraphId, { end: segment.end, start: segment.start });
+          }
+        }
+  paragraphTerminalsCache.set(layout, terminals);
+  return terminals;
+}
+
+function indexesOf(order: readonly string[]): ReadonlyMap<string, number> {
+  const cached = orderIndexCache.get(order);
+  if (cached) return cached;
+  const index = new Map(order.map((paragraphId, at) => [paragraphId, at]));
+  orderIndexCache.set(order, index);
+  return index;
+}
+
+/** A compact Word-like block for a selected paragraph mark, in layout points. */
+function paragraphMarkWidth(lineHeight: number): number {
+  return Math.max(3, Math.min(8, lineHeight * 0.25));
+}
+
+function rangeRects(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  order: readonly string[],
+  includeText: boolean
+): SelectionRect[] {
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];
+  const orderIndex = indexesOf(order);
+  const fromIndex = orderIndex.get(ordered.from.paragraphId);
+  const toIndex = orderIndex.get(ordered.to.paragraphId);
+  const terminals = paragraphTerminals(layout);
   const rects: SelectionRect[] = [];
   for (const page of layout.pages) {
     for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
-        for (const segment of lineSegments(line)) {
+        const segments = lineSegments(line);
+        for (const [segmentIndex, segment] of segments.entries()) {
           const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
-          if (!overlap) continue;
-          const startX = xWithinLine(line, overlap.start, undefined, segment);
-          const endX = xWithinLine(line, overlap.end, undefined, segment);
+          const paragraphIndex = orderIndex.get(segment.paragraphId);
+          const terminal = terminals.get(segment.paragraphId);
+          // A paragraph mark is the boundary AFTER this paragraph. The range selects it only
+          // when its head reaches a later paragraph; the head paragraph's own mark stays out.
+          const markSelected =
+            fromIndex !== undefined &&
+            toIndex !== undefined &&
+            paragraphIndex !== undefined &&
+            paragraphIndex >= fromIndex &&
+            paragraphIndex < toIndex &&
+            terminal?.end === segment.end &&
+            terminal.start === segment.start &&
+            segmentIndex === segments.length - 1;
+          if ((!includeText || !overlap) && !markSelected) continue;
+          const textStartX =
+            includeText && overlap ? xWithinLine(line, overlap.start, undefined, segment) : null;
+          const textEndX =
+            includeText && overlap ? xWithinLine(line, overlap.end, undefined, segment) : null;
+          const markStartX = markSelected
+            ? xWithinLine(line, segment.end, undefined, segment)
+            : null;
+          const markEndX =
+            markStartX !== null
+              ? markStartX +
+                paragraphMarkWidth(
+                  Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0))
+                )
+              : null;
+          const edges = [textStartX, textEndX, markStartX, markEndX].filter(
+            (edge): edge is number => edge !== null
+          );
+          const startX = Math.min(...edges);
+          const endX = Math.max(...edges);
           rects.push({
             pageIndex: page.index,
-            x: Math.min(startX, endX),
+            x: startX,
             y: line.box.y,
-            width: Math.abs(endX - startX),
+            width: endX - startX,
             height: line.box.height,
           });
         }

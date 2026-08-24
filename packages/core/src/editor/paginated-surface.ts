@@ -70,6 +70,7 @@ import {
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
+import { selectionMarkRects } from '../layout/selection-rects.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
 // internal for the IME lane, not something the output barrel should offer consumers.
@@ -3515,23 +3516,30 @@ export function mountPaginatedSurface(
     commentHighlightAuthors = roster.resolved;
   }
 
-  /** Draw the selected cells, or clear the layer when nothing is selected that way. */
+  /** Draw selected cells, retained text, or paragraph marks native selection cannot show. */
   function renderOverlay(): void {
+    const rects = cellSelection
+      ? cellSelectionRects(currentLayout, cellSelection.cellIds)
+      : retainedSelection
+        ? selectionRects(currentLayout, retainedSelection, paragraphOrder())
+        : selectionMarkRects(currentLayout, selection, paragraphOrder());
     paintSelectionOverlay(
       overlayLayer,
       currentLayout,
-      cellSelection
-        ? cellSelectionRects(currentLayout, cellSelection.cellIds)
-        : retainedSelection
-          ? selectionRects(currentLayout, retainedSelection, paragraphOrder())
-          : [],
+      rects,
       // Pages of differing width are centred individually, so the overlay has to carry the
       // same per-page offset the painter applied or a highlight in a landscape section would
       // sit beside the cells it describes.
       {
         scale,
         pageOffsetX: materializedExtent?.pageOffsetX,
-        ...(cellSelection ? {} : { className: 'docx-retained-selection-rect' }),
+        ...(cellSelection
+          ? {}
+          : {
+              className: retainedSelection
+                ? 'docx-retained-selection-rect'
+                : 'docx-selection-mark-rect',
+            }),
       }
     );
   }

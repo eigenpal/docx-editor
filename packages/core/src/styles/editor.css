@@ -3402,6 +3402,11 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-selection);
 }
 
+/* A native range has no glyph box for a paragraph mark or an empty line. */
+.docx-paginated-surface .docx-selection-mark-rect {
+  background-color: var(--doc-selection);
+}
+
 /* ========================================================================
  * COMPOUND TOOLBAR (`docx-toolbar` family) — the composition API's default
  * chrome bar, the chrome spec's visual recipe:

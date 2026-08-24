@@ -41,6 +41,7 @@ const lay = (part: OoxmlPart, geometry?: PageGeometry) =>
 
 const P0 = '/word/document.xml#0.0.0';
 const P1 = '/word/document.xml#0.0.1';
+const P2 = '/word/document.xml#0.0.2';
 const at = (paragraphId: string, offset: number): SemanticPosition => ({ paragraphId, offset });
 
 const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
@@ -202,6 +203,42 @@ describe('selection geometry', () => {
       documentOrder(layout)
     );
     expect(rects).toHaveLength(2);
+  });
+
+  test('a selected paragraph mark paints a small block after the line', () => {
+    const layout = lay(load(paragraph('abcd') + paragraph('efgh')));
+    const rects = selectionRects(
+      layout,
+      { anchor: at(P0, 4), head: at(P1, 0) },
+      documentOrder(layout)
+    );
+    expect(rects).toHaveLength(1);
+    expect(rects[0]!.x).toBe(24);
+    expect(rects[0]!.width).toBeGreaterThan(0);
+    expect(rects[0]!.width).toBeLessThan(6);
+  });
+
+  test('a selection crossing an empty paragraph shows its selected line', () => {
+    const layout = lay(load(paragraph('a') + '<w:p/>' + paragraph('b')));
+    const rects = selectionRects(
+      layout,
+      { anchor: at(P0, 1), head: at(P2, 0) },
+      documentOrder(layout)
+    );
+    expect(rects).toHaveLength(2);
+    expect(rects.every((rect) => rect.width > 0)).toBe(true);
+    expect(rects[1]!.x).toBe(0);
+  });
+
+  test('selected authored whitespace keeps its measured width', () => {
+    const layout = lay(load('<w:p><w:r><w:t xml:space="preserve">a  b</w:t></w:r></w:p>'));
+    const rects = selectionRects(
+      layout,
+      { anchor: at(P0, 1), head: at(P0, 3) },
+      documentOrder(layout)
+    );
+    expect(rects).toHaveLength(1);
+    expect(rects[0]!.width).toBe(12);
   });
 
   test('an empty selection covers nothing', () => {

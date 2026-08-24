@@ -93,6 +93,18 @@ describe('a retained selection stays lit while focus is elsewhere', () => {
     expect(retainedRects(mounted)).toBe(0);
   });
 
+  test('an active paragraph-mark selection paints the part the browser cannot show', () => {
+    const mounted = mount();
+    mounted.surface.setSelection({
+      anchor: { paragraphId: P(0), offset: 'Visit example today'.length },
+      head: { paragraphId: P(1), offset: 0 },
+    });
+    const marks = mounted.container.querySelectorAll<HTMLElement>('.docx-selection-mark-rect');
+    expect(marks).toHaveLength(1);
+    expect(parseFloat(marks[0]!.style.width)).toBeGreaterThan(0);
+    expect(retainedRects(mounted)).toBe(0);
+  });
+
   test('retaining pins the range and paints it', () => {
     const mounted = mount();
     select(mounted, 0, 6, 13);
