@@ -135,15 +135,9 @@ function firstParagraphIn(block: OoxmlNode | undefined): string | null {
   return walk(block, 0);
 }
 
-/**
- * Every body paragraph's section, built once per block list.
- *
- * Keyed on the `storyBlocks` array, which is memoized per `(part, displayMode)` and therefore
- * identity-stable across reads of one revision. Scanning per call instead made this O(document)
- * for a BODY caret — the per-keystroke common case, because `sectionPropertiesAt` sits on the
- * `snapshot()` path — and it is the same walk either way, so doing it once is free.
- */
-const sectionIndexByParagraph = new WeakMap<object, ReadonlyMap<string, number>>();
+/** Lazy paragraph answers per revision, instead of one O(document) map for one caret lookup. */
+const sectionIndexByParagraph = new WeakMap<object, Map<string, number | null>>();
+const paragraphIdsByBlock = new WeakMap<OoxmlNode, ReadonlySet<string>>();
 
 /** The section index of a BODY paragraph, or `null` when the body does not hold it. */
 export function bodySectionIndexOf(
@@ -156,37 +150,42 @@ export function bodySectionIndexOf(
   // before returning `null` — and a furniture caret paid that per keystroke.
   if (!paragraphId.startsWith(`${part.name}#`)) return null;
   const blocks = storyBlocks(part);
-  const cached = sectionIndexByParagraph.get(blocks);
-  if (cached) return cached.get(paragraphId) ?? null;
+  let cached = sectionIndexByParagraph.get(blocks);
+  if (cached?.has(paragraphId)) return cached.get(paragraphId) ?? null;
+  cached ??= new Map<string, number | null>();
 
   const sections = enumerateDocumentSections(part);
-  const map = new Map<string, number>();
   for (let index = 0; index < sections.length; index += 1) {
     const section = sections[index]!;
     for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
       const block = blocks[i];
-      if (block) collectParagraphs(block, index, map, 0);
+      if (!block || !paragraphIdsOfBlock(block).has(paragraphId)) continue;
+      cached.set(paragraphId, index);
+      sectionIndexByParagraph.set(blocks, cached);
+      return index;
     }
   }
-  sectionIndexByParagraph.set(blocks, map);
-  return map.get(paragraphId) ?? null;
+  cached.set(paragraphId, null);
+  sectionIndexByParagraph.set(blocks, cached);
+  return null;
 }
 
-/** Record every paragraph under a block against its section, within the shared depth cap. */
-function collectParagraphs(
-  node: OoxmlNode,
-  sectionIndex: number,
-  into: Map<string, number>,
-  depth: number
-): void {
-  if (node.kind === 'textValue' || depth > MAX_NOTE_WALK_DEPTH) return;
-  // FIRST WINS, matching the scan this replaces: it returned the earliest section whose blocks
-  // held the paragraph, and a paragraph cannot legitimately be in two.
-  if (node.kind === 'paragraph') {
-    if (!into.has(node.id)) into.set(node.id, sectionIndex);
-    return;
-  }
-  for (const child of node.children) collectParagraphs(child, sectionIndex, into, depth + 1);
+/** Paragraph ids under one immutable block, reused across body revisions. */
+function paragraphIdsOfBlock(block: OoxmlNode): ReadonlySet<string> {
+  const cached = paragraphIdsByBlock.get(block);
+  if (cached) return cached;
+  const ids = new Set<string>();
+  const collect = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > MAX_NOTE_WALK_DEPTH) return;
+    if (node.kind === 'paragraph') {
+      ids.add(node.id);
+      return;
+    }
+    for (const child of node.children) collect(child, depth + 1);
+  };
+  collect(block, 0);
+  paragraphIdsByBlock.set(block, ids);
+  return ids;
 }
 
 /**

@@ -5,8 +5,18 @@ import { findNode } from '../store/package/ooxml-edit.ts';
 import { detectBodyTocs, type DetectedToc } from '../store/package/toc-detect.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 
+const visibleTextByParagraph = new WeakMap<OoxmlElement, boolean>();
+
 /** True when a paragraph carries visible `w:t` text outside field chrome. */
 function paragraphHasVisibleText(paragraph: OoxmlElement): boolean {
+  const cached = visibleTextByParagraph.get(paragraph);
+  if (cached !== undefined) return cached;
+  const result = computeParagraphHasVisibleText(paragraph);
+  visibleTextByParagraph.set(paragraph, result);
+  return result;
+}
+
+function computeParagraphHasVisibleText(paragraph: OoxmlElement): boolean {
   const walk = (node: OoxmlNode): boolean => {
     if (node.kind === 'textValue') return false;
     if (isInstrTextNode(node) || fldCharType(node) !== null) return false;

@@ -47,7 +47,6 @@ import {
   readEmbeddedFonts,
   readOoxmlPackage,
   resolveHeaderFooterParts,
-  resolveHeaderFooterPartsBySection,
   resolveHeaderFooterResolutionBySection,
   resolveRelationship,
   writeOoxmlPackage,
@@ -77,6 +76,7 @@ import {
   type TreeDocumentStore,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
+import { headerFooterPartsFromResolution } from '../store/package/hf-references.ts';
 import {
   collectDocumentFonts,
   collectDocumentStyles,
@@ -106,7 +106,11 @@ import {
 } from './document-run-defaults.ts';
 import { allParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from './tree-binding.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
-import { buildParagraphAnchorIndex, type ParagraphAnchorIndex } from './paragraph-anchors.ts';
+import {
+  buildParagraphAnchorIndex,
+  refreshParagraphAnchorParts,
+  type ParagraphAnchorIndex,
+} from './paragraph-anchors.ts';
 import {
   readTrackingSettings,
   type DocumentTrackingSettings,
@@ -675,6 +679,22 @@ export function openTreeSession(
     readonly resolution: readonly HeaderFooterSectionResolution[];
   } => {
     if (
+      headerFooterBySection &&
+      lastChange &&
+      headerFooterBySection.packageRevision === lastChange.fromRevision &&
+      packageStore.packageRevision === lastChange.toRevision &&
+      lastChange.story?.kind === 'body' &&
+      lastChange.impact === 'text-local' &&
+      lastChange.created.length === 0 &&
+      lastChange.deleted.length === 0 &&
+      lastChange.splitJoin.length === 0
+    ) {
+      headerFooterBySection = {
+        ...headerFooterBySection,
+        packageRevision: packageStore.packageRevision,
+      };
+    }
+    if (
       !headerFooterBySection ||
       headerFooterBySection.packageRevision !== packageStore.packageRevision
     ) {
@@ -682,7 +702,7 @@ export function openTreeSession(
       headerFooterBySection = {
         packageRevision: packageStore.packageRevision,
         resolution,
-        parts: resolveHeaderFooterPartsBySection(currentPackage()),
+        parts: headerFooterPartsFromResolution(resolution),
       };
     }
     return headerFooterBySection;
@@ -895,6 +915,7 @@ export function openTreeSession(
   let anchorsCache: {
     readonly revision: number;
     readonly openStories: string;
+    readonly parts: readonly OoxmlPart[];
     readonly index: ParagraphAnchorIndex;
   } | null = null;
   const readNormalizedParts = new WeakMap<OoxmlPart, OoxmlPart>();
@@ -930,10 +951,6 @@ export function openTreeSession(
     // over every paragraph rather than on the walk (memoizing `allParagraphs` per part takes
     // only ~7% off).
     //
-    // If it ever needs to come down, the fix is a composed index that resolves a lookup across
-    // per-part sub-maps instead of merging them, so a `.get` costs O(parts) rather than
-    // O(paragraphs), and every production caller reads by key. Not done here: it changes the
-    // shape every consumer of `ParagraphAnchorIndex` sees, for a cost this branch did not add.
     const revision = packageStore.packageRevision;
     // AND which stories are open. Opening one mints its paraIds without publishing an edit, so
     // the package revision does not move and an index built a moment earlier would be served
@@ -959,10 +976,28 @@ export function openTreeSession(
       const rest = furnitureAndNoteParts()
         .filter((part) => !seen.has(part.name))
         .map(normalizedForRead);
+      const parts = [bodyStore().part, ...open, ...rest];
+      const previousAnchors = anchorsCache;
+      const canReuseMaps =
+        previousAnchors !== null &&
+        lastChange !== null &&
+        previousAnchors.openStories === openStories &&
+        previousAnchors.revision === lastChange.fromRevision &&
+        revision === lastChange.toRevision &&
+        lastChange.impact === 'text-local' &&
+        lastChange.created.length === 0 &&
+        lastChange.deleted.length === 0 &&
+        lastChange.splitJoin.length === 0 &&
+        previousAnchors.parts.length === parts.length &&
+        previousAnchors.parts.every((part, index) => part.name === parts[index]?.name);
       anchorsCache = {
         revision,
         openStories,
-        index: buildParagraphAnchorIndex([bodyStore().part, ...open, ...rest]),
+        parts,
+        index:
+          canReuseMaps && previousAnchors
+            ? refreshParagraphAnchorParts(previousAnchors.index, parts)
+            : buildParagraphAnchorIndex(parts),
       };
     }
     return anchorsCache.index;

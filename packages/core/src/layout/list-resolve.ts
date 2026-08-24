@@ -553,6 +553,7 @@ interface NumberedBlockMemo {
   readonly numbered: readonly OoxmlElement[];
 }
 const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
+const NO_NUMBERED_PARAGRAPHS: readonly OoxmlElement[] = Object.freeze([]);
 
 function numberedParagraphsOfBlock(
   block: OoxmlElement,
@@ -560,9 +561,10 @@ function numberedParagraphsOfBlock(
 ): readonly OoxmlElement[] {
   const cached = numberedBlockMemos.get(block);
   if (cached && cached.styleCascade === styleCascade) return cached.numbered;
-  const numbered = walkStoryParagraphs([block]).filter(
+  const collected = walkStoryParagraphs([block]).filter(
     (paragraph) => paragraphListPrelude(paragraph, styleCascade).numPr !== null
   );
+  const numbered = collected.length > 0 ? collected : NO_NUMBERED_PARAGRAPHS;
   numberedBlockMemos.set(block, { styleCascade, numbered });
   return numbered;
 }
@@ -588,10 +590,26 @@ interface LastStoryResolve {
   readonly rawIndex: NumberingIndex | undefined;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly isFontAvailable: ((family: string) => boolean) | undefined;
-  readonly numbered: readonly OoxmlElement[];
+  readonly blocks: readonly OoxmlElement[];
+  readonly numberedByBlock: readonly (readonly OoxmlElement[])[];
   readonly listItems: ReadonlyMap<string, ResolvedListItem>;
 }
 const lastStoryResolves = new WeakMap<OoxmlElement, LastStoryResolve>();
+
+function sameNumberingSequence(a: readonly OoxmlElement[], b: readonly OoxmlElement[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((paragraph, index) => {
+      const previous = b[index];
+      if (!previous || paragraph.id !== previous.id) return false;
+      const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+      const previousProperties = previous.children.find(
+        (child) => child.kind === 'paragraphProperties'
+      );
+      return properties === previousProperties;
+    })
+  );
+}
 
 function resolveStoryListItemsStable(
   blocks: readonly OoxmlElement[],
@@ -600,27 +618,42 @@ function resolveStoryListItemsStable(
   styleCascade: StyleCascadeTable | undefined,
   isFontAvailable?: (family: string) => boolean
 ): ReadonlyMap<string, ResolvedListItem> {
-  const anchor = blocks[0];
-  const numbered: OoxmlElement[] = [];
-  for (const block of blocks) {
-    const blockNumbered = numberedParagraphsOfBlock(block, styleCascade);
-    for (const paragraph of blockNumbered) numbered.push(paragraph);
-  }
-  const last = anchor ? lastStoryResolves.get(anchor) : undefined;
-  if (
-    last &&
+  const first = blocks[0];
+  const lastBlock = blocks[blocks.length - 1];
+  const last =
+    (first ? lastStoryResolves.get(first) : undefined) ??
+    (lastBlock ? lastStoryResolves.get(lastBlock) : undefined);
+  const numberedByBlock = new Array<readonly OoxmlElement[]>(blocks.length);
+  let numberedSequenceUnchanged =
+    last !== undefined &&
     last.rawIndex === rawIndex &&
     last.styleCascade === styleCascade &&
     last.isFontAvailable === isFontAvailable &&
-    last.numbered.length === numbered.length &&
-    last.numbered.every((node, index) => node === numbered[index])
-  ) {
+    last.blocks.length === blocks.length;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    const numbered =
+      last && last.blocks[index] === block
+        ? last.numberedByBlock[index]!
+        : numberedParagraphsOfBlock(block, styleCascade);
+    numberedByBlock[index] = numbered;
+    if (
+      numberedSequenceUnchanged &&
+      !sameNumberingSequence(numbered, last!.numberedByBlock[index]!)
+    ) {
+      numberedSequenceUnchanged = false;
+    }
+  }
+  if (last && numberedSequenceUnchanged) {
+    const next = { ...last, blocks, numberedByBlock };
+    if (first) lastStoryResolves.set(first, next);
+    if (lastBlock && lastBlock !== first) lastStoryResolves.set(lastBlock, next);
     return last.listItems;
   }
   const listItems = resolveStoryListItems(blocks, linkedIndex, styleCascade, isFontAvailable);
-  if (anchor) {
-    lastStoryResolves.set(anchor, { rawIndex, styleCascade, isFontAvailable, numbered, listItems });
-  }
+  const next = { rawIndex, styleCascade, isFontAvailable, blocks, numberedByBlock, listItems };
+  if (first) lastStoryResolves.set(first, next);
+  if (lastBlock && lastBlock !== first) lastStoryResolves.set(lastBlock, next);
   return listItems;
 }
 

@@ -649,6 +649,10 @@ export function layoutSemanticDocument(
   };
 
   if (!options.notes) {
+    if (options.session) {
+      options.session.notes = null;
+      options.session.notePageBottomReserves = null;
+    }
     return finish(runBody(optionsWithLists));
   }
 

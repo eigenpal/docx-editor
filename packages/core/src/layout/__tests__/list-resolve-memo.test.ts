@@ -4,6 +4,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { withResolvedListItems } from '../list-resolve.ts';
 import { storyBlocks } from '../story-roots.ts';
@@ -36,6 +37,18 @@ function loadBodyPart() {
       '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
       '<w:r><w:t>two</w:t></w:r></w:p>' +
       '</w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
+function loadThreeItemBodyPart() {
+  const item = (text: string) =>
+    '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+    `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const result = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>${item('one')}${item('two')}${item('three')}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!result.ok) throw new Error(result.reason);
@@ -75,6 +88,27 @@ describe('withResolvedListItems memo', () => {
     const supplied = new Map();
     const result = withResolvedListItems({ numberingIndex, listItems: supplied }, blocks);
     expect(result.listItems).toBe(supplied);
+  });
+
+  test('typing in a list item reuses the sequential list result', () => {
+    const numberingIndex = loadNumbering(DECIMAL);
+    const part = loadThreeItemBodyPart();
+    const blocks = storyBlocks(part);
+    const first = withResolvedListItems({ numberingIndex }, blocks);
+    const edited = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: blocks[1]!.id,
+      offset: 3,
+      text: '!',
+    });
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+
+    const editedBlocks = storyBlocks(edited.part);
+    expect(editedBlocks[0]).toBe(blocks[0]);
+    expect(editedBlocks[2]).toBe(blocks[2]);
+    const second = withResolvedListItems({ numberingIndex }, editedBlocks);
+    expect(second.listItems).toBe(first.listItems!);
   });
 
   test('with a style cascade: repeated resolves stay identity-stable, edits stay correct', () => {

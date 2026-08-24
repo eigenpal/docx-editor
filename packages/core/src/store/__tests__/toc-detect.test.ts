@@ -52,6 +52,32 @@ describe('detectBodyTocs memoization', () => {
     expect(noTocFirst).toEqual([]);
   });
 
+  test('reuses an unchanged content-control TOC across an outside edit', () => {
+    const part = load(
+      '<w:p><w:r><w:t>Before</w:t></w:r></w:p>' +
+        `<w:sdt><w:sdtPr/><w:sdtContent>${TOC}</w:sdtContent></w:sdt>`
+    );
+    const before = detectBodyTocs(part);
+    const body = part.root.children.find((child) => child.kind === 'body');
+    if (!body || body.kind === 'textValue') throw new Error('missing body');
+    const paragraph = body.children.find((child) => child.kind === 'paragraph');
+    if (!paragraph) throw new Error('missing paragraph');
+
+    const edited = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: paragraph.id,
+      offset: 6,
+      text: '!',
+    });
+    expect(edited.ok).toBe(true);
+    if (!edited.ok) return;
+
+    const after = detectBodyTocs(edited.part);
+    expect(after).not.toBe(before);
+    expect(after).toEqual(before);
+    expect(after[0]).toBe(before[0]);
+  });
+
   test('recomputes after an edit replaces the part identity', () => {
     const part = load(TOC);
     const before = detectBodyTocs(part);
@@ -76,6 +102,7 @@ describe('detectBodyTocs memoization', () => {
     const after = detectBodyTocs(edited.part);
     expect(after).not.toBe(before);
     expect(after).toHaveLength(1);
+    expect(after[0]).not.toBe(before[0]);
     expect(detectBodyTocs(edited.part)).toBe(after);
   });
 });

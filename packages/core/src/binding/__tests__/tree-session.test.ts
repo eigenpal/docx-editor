@@ -271,6 +271,29 @@ describe('w14 paragraph identity through the session', () => {
     expect(session.nodeIdOf('no such id')).toBeNull();
     expect(session.paraIdOf('/word/document.xml#nope')).toBeNull();
   });
+
+  test('a text edit reuses address maps and refreshes the live part', () => {
+    const session = open(
+      docx('<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>')
+    );
+    const [firstId] = session.paragraphIds();
+    const beforePart = session.part();
+    const before = session.paragraphAnchors();
+
+    const edited = session.applyTreeOps([
+      { op: 'insertText', paragraphId: firstId!, offset: 3, text: '!' },
+    ]);
+    expect(edited.committed).toBe(true);
+    const after = session.paragraphAnchors();
+
+    expect(after).not.toBe(before);
+    expect(after.paraIdByNode).toBe(before.paraIdByNode);
+    expect(after.nodeByParaId).toBe(before.nodeByParaId);
+    expect(after.ordinalByNode).toBe(before.ordinalByNode);
+    expect(after.partByNode.get(firstId!)).toBe(session.part());
+    expect(after.partByNode.get(firstId!)).not.toBe(beforePart);
+    expect([...after.partByNode.keys()]).toEqual([...before.partByNode.keys()]);
+  });
 });
 
 describe('hostile prefix shadowing end to end', () => {

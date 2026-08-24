@@ -12,6 +12,7 @@ import { readOoxmlPackage, withPart, writeOoxmlPackage } from '../package/ooxml-
 import {
   resolveHeaderFooterParts,
   resolveHeaderFooterPartsBySection,
+  resolveHeaderFooterResolutionBySection,
 } from '../package/hf-references.ts';
 import { applyTreeOp } from '../store/tree-ops.ts';
 
@@ -280,5 +281,28 @@ describe('fidelity with header parts', () => {
     if (!edited.ok) throw new Error(edited.reason);
     const reopened = load(writeOoxmlPackage(withPart(pkg, edited.part)));
     expect(canonicalOoxmlFingerprint(reopened.parts.get('/word/header1.xml')!)).toBe(headerBefore);
+  });
+
+  test('editing body text reuses header and footer resolution', () => {
+    const pkg = load(packed());
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const paragraphId = JSON.stringify(main).match(
+      /"(\/word\/document\.xml#[0-9.]+)","kind":"paragraph"/
+    )?.[1];
+    if (!paragraphId) throw new Error('no paragraph id found');
+    const beforeResolution = resolveHeaderFooterResolutionBySection(pkg);
+    const beforeParts = resolveHeaderFooterPartsBySection(pkg);
+
+    const edited = applyTreeOp(main, {
+      op: 'insertText',
+      paragraphId,
+      offset: 0,
+      text: 'Z',
+    });
+    if (!edited.ok) throw new Error(edited.reason);
+    const editedPackage = withPart(pkg, edited.part);
+
+    expect(resolveHeaderFooterResolutionBySection(editedPackage)).toBe(beforeResolution);
+    expect(resolveHeaderFooterPartsBySection(editedPackage)).toBe(beforeParts);
   });
 });
