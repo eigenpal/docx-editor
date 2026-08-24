@@ -26,7 +26,8 @@ import { allParagraphs } from './tree-binding.ts';
  */
 const validParaIds = new WeakMap<OoxmlNode, string | null>();
 
-function validParaIdOf(paragraph: OoxmlNode): string | null {
+/** Validated `w14:paraId` of one paragraph node; null when absent or invalid. */
+export function validatedParaIdOfNode(paragraph: OoxmlNode): string | null {
   const cached = validParaIds.get(paragraph);
   if (cached !== undefined) return cached;
   const paraId = paraIdOf(paragraph);
@@ -155,7 +156,7 @@ export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): Paragrap
       ordinalByNode.set(paragraph.id, ordinal);
       partByNode.set(paragraph.id, part);
       ordinal += 1;
-      const paraId = validParaIdOf(paragraph);
+      const paraId = validatedParaIdOfNode(paragraph);
       if (paraId === null) continue;
       paraIdByNode.set(paragraph.id, paraId);
       const canonical = paraId.toUpperCase();

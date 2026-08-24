@@ -57,6 +57,7 @@ import {
   relationshipTargetIn,
   isHeaderFooterLifecycleOp,
   isNoteLifecycleOp,
+  findNode,
   normalizeParagraphIdentity,
   paragraphTextOf,
   collectRevisionSites,
@@ -109,6 +110,7 @@ import type { TreeBindingRejection } from './tree-binding.ts';
 import {
   buildParagraphAnchorIndex,
   refreshParagraphAnchorParts,
+  validatedParaIdOfNode,
   type ParagraphAnchorIndex,
 } from './paragraph-anchors.ts';
 import {
@@ -936,6 +938,24 @@ export function openTreeSession(
     return normalized;
   };
 
+  /**
+   * The live part a canonical node id names, without building the full paraId index.
+   *
+   * Open story stores win over the package copy, and unopened furniture or note parts are
+   * normalized on read so deterministic paraIds exist before anyone enters that story.
+   */
+  const resolveLivePartForNodeId = (partName: string): OoxmlPart | null => {
+    const body = bodyStore().part;
+    if (partName === body.name) return body;
+    for (const part of packageStore.openStoryParts()) {
+      if (part.name === partName) return part;
+    }
+    for (const part of furnitureAndNoteParts()) {
+      if (part.name === partName) return normalizedForRead(part);
+    }
+    return null;
+  };
+
   const paragraphAnchors = (): ParagraphAnchorIndex => {
     // Keyed on the PACKAGE revision, because the index now spans every story: a split in a
     // header mints a paragraph the body revision knows nothing about, and against that key the
@@ -1318,7 +1338,17 @@ export function openTreeSession(
 
       paragraphAnchors,
 
-      paraIdOf: (nodeId) => paragraphAnchors().paraIdByNode.get(nodeId) ?? null,
+      paraIdOf: (nodeId) => {
+        const hash = nodeId.indexOf('#');
+        if (hash === -1) return null;
+        const partName = nodeId.slice(0, hash);
+        if (partName.length === 0) return null;
+        const part = resolveLivePartForNodeId(partName);
+        if (!part) return null;
+        const paragraph = findNode(part, nodeId);
+        if (!paragraph || paragraph.kind !== 'paragraph') return null;
+        return validatedParaIdOfNode(paragraph);
+      },
 
       nodeIdOf: (paraId) => paragraphAnchors().nodeByParaId.get(paraId.toUpperCase()) ?? null,
 

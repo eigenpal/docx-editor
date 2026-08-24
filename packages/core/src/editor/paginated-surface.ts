@@ -66,6 +66,7 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
@@ -902,7 +903,8 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('pointerleave', onTocPointerLeave);
   let desiredX: number | null = null;
 
-  function layoutDocument(revision: number): SemanticLayout {
+  function layoutDocument(revision: number, scope?: LayoutScope): SemanticLayout {
+    if (scope) attachListResolveChangeEvidence(layoutSession, scope);
     drawingBundle.sync(session);
     const notes = createNotesLayoutInput({
       session,
@@ -1046,7 +1048,7 @@ export function mountPaginatedSurface(
     // layout after the first comes through here rather than through `layoutOnce`.
     run: (scope: LayoutScope) => {
       const began = now();
-      const layout = layoutDocument(scope.revision);
+      const layout = layoutDocument(scope.revision, scope);
       lastLayoutMs = now() - began;
       return layout;
     },

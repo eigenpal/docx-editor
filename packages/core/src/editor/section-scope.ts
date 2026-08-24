@@ -9,6 +9,7 @@
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { StoryScope } from '@docx-editor.dev/core/store';
+import { bodyParagraphSectionIndexForSession } from './body-paragraph-section-index.ts';
 import { enumerateDocumentSections } from '../layout/section-properties.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
@@ -135,57 +136,19 @@ function firstParagraphIn(block: OoxmlNode | undefined): string | null {
   return walk(block, 0);
 }
 
-/** Lazy paragraph answers per revision, instead of one O(document) map for one caret lookup. */
-const sectionIndexByParagraph = new WeakMap<object, Map<string, number | null>>();
-const paragraphIdsByBlock = new WeakMap<OoxmlNode, ReadonlySet<string>>();
-
+/**
+ * Every body paragraph's section, cached on the session until section structure changes.
+ *
+ * Warm text edits reuse the map because top-level block ids and section breaks stay
+ * unchanged. Structural edits, section-property changes, undo, and redo publish new block
+ * ids or section breaks and therefore rebuild safely.
+ */
 /** The section index of a BODY paragraph, or `null` when the body does not hold it. */
 export function bodySectionIndexOf(
   session: TreeDocxSessionView,
   paragraphId: string
 ): number | null {
-  const part = session.part();
-  // Node ids are part-qualified, so a paragraph from another story is answerable in constant
-  // time, without building the map at all. Without this the walk below ran the whole body
-  // before returning `null` — and a furniture caret paid that per keystroke.
-  if (!paragraphId.startsWith(`${part.name}#`)) return null;
-  const blocks = storyBlocks(part);
-  let cached = sectionIndexByParagraph.get(blocks);
-  if (cached?.has(paragraphId)) return cached.get(paragraphId) ?? null;
-  cached ??= new Map<string, number | null>();
-
-  const sections = enumerateDocumentSections(part);
-  for (let index = 0; index < sections.length; index += 1) {
-    const section = sections[index]!;
-    for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
-      const block = blocks[i];
-      if (!block || !paragraphIdsOfBlock(block).has(paragraphId)) continue;
-      cached.set(paragraphId, index);
-      sectionIndexByParagraph.set(blocks, cached);
-      return index;
-    }
-  }
-  cached.set(paragraphId, null);
-  sectionIndexByParagraph.set(blocks, cached);
-  return null;
-}
-
-/** Paragraph ids under one immutable block, reused across body revisions. */
-function paragraphIdsOfBlock(block: OoxmlNode): ReadonlySet<string> {
-  const cached = paragraphIdsByBlock.get(block);
-  if (cached) return cached;
-  const ids = new Set<string>();
-  const collect = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > MAX_NOTE_WALK_DEPTH) return;
-    if (node.kind === 'paragraph') {
-      ids.add(node.id);
-      return;
-    }
-    for (const child of node.children) collect(child, depth + 1);
-  };
-  collect(block, 0);
-  paragraphIdsByBlock.set(block, ids);
-  return ids;
+  return bodyParagraphSectionIndexForSession(session, session.part(), paragraphId);
 }
 
 /**
