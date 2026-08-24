@@ -7,7 +7,7 @@
 // The contract's `pro` section extends the same bucket semantics to the pro
 // package's paired entries (`docs/api/docx-editor-pro/{react,vue}.api.md`):
 // top-level export names, the DocxEditorReview compound part names, and the
-// extends-resolved member names of interfaces exported by both entries.
+// extends-resolved member names of the pinned `memberCheckedInterfaces` list.
 //
 // Fails non-zero on any drift the contract does not acknowledge:
 // - A prop/method exists in one adapter but the contract didn't classify it.
@@ -161,8 +161,13 @@ function extractVueRefMembers(snapshotText) {
 // The contract's `pro` section classifies:
 //  - `exports`: every top-level export name of each snapshot
 //  - `reviewParts`: the DocxEditorReview compound part names
+//  - `memberCheckedInterfaces`: the pinned list of interfaces whose member
+//    names compare extends-resolved across both entries. Exact-match
+//    staleness: a listed interface that stops being comparable fails as
+//    stale, and an interface comparable on both sides that is not listed
+//    fails as unclassified — the set can never shrink silently.
 //  - `interfaceMemberExceptions`: acknowledged per-member divergence on
-//    interfaces both entries export (member names compare extends-resolved)
+//    member-checked interfaces
 
 /** Top-level export names of an API Extractor snapshot. */
 function extractTopLevelExportNames(snapshotText) {
@@ -179,31 +184,89 @@ function extractTopLevelExportNames(snapshotText) {
 
 /**
  * Vue's DocxEditorReview snapshot is one `export const DocxEditorReview: { ... };`
- * whose trailing intersection enumerates each compound part as
- * `    PartName: vue.DefineComponent<...>`. Pull those part names out.
+ * whose trailing intersection enumerates each compound part as a
+ * `PartName: <component type>` member. The member match is type-agnostic
+ * (DefineComponent, FunctionalComponent, anything): a part emitted under a new
+ * component type must still surface, so the buckets classify it instead of the
+ * scraper silently dropping it.
+ *
+ * Membership is start-of-line brace depth 1 plus a PascalCase name: parts are
+ * components and Object.assign keys keep their exported casing. That excludes
+ * the camelCase prop-literal keys inside the intersection's generic segments
+ * (which also reach depth 1, because API Extractor restarts indentation per
+ * intersection term) and Vue's underscore-prefixed `__isFragment`-style
+ * internal markers. A false match fails loudly as unclassified; it cannot
+ * pass vacuously.
  */
 function extractVueReviewParts(snapshotText) {
   const lines = snapshotText.split('\n');
   const startIdx = lines.findIndex((l) => l.startsWith('export const DocxEditorReview'));
   if (startIdx === -1) return null;
   const parts = new Set();
-  for (let i = startIdx + 1; i < lines.length; i++) {
+  let depth = 0;
+  for (let i = startIdx; i < lines.length; i++) {
     const line = lines[i];
-    if (line.startsWith('};') || line.startsWith('export ')) break;
-    const match = /^ {4}(\w+): vue\.DefineComponent</.exec(line);
-    if (match) parts.add(match[1]);
+    if (i > startIdx && (line.startsWith('};') || line.startsWith('export '))) break;
+    if (i > startIdx && depth === 1) {
+      const match = /^ {4}([A-Z]\w*)\??: \S/.exec(line);
+      if (match) parts.add(match[1]);
+    }
+    for (const ch of line) {
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+    }
   }
   return parts;
 }
 
-/** Map of interface name → extends clause (or null) for a snapshot. */
+/**
+ * Map of member-comparable declarations for a snapshot:
+ * name → { form: 'interface' | 'aliasObject', extendsClause: string | null }.
+ * An interface API Extractor re-emits as an object-literal type alias
+ * (`export type X = { ... };`) stays comparable instead of exiting the set.
+ */
 function extractInterfaceDecls(snapshotText) {
   const decls = new Map();
   for (const line of snapshotText.split('\n')) {
-    const match = /^export interface (\w+)(?: extends (.+?))? \{/.exec(line);
-    if (match) decls.set(match[1], match[2] ?? null);
+    const iface = /^export interface (\w+)(?: extends (.+?))? \{/.exec(line);
+    if (iface) {
+      decls.set(iface[1], { form: 'interface', extendsClause: iface[2] ?? null });
+      continue;
+    }
+    const alias = /^export type (\w+) = \{/.exec(line);
+    if (alias && !decls.has(alias[1])) {
+      decls.set(alias[1], { form: 'aliasObject', extendsClause: null });
+    }
   }
   return decls;
+}
+
+/** Field names of an `export type X = { ... };` object-literal alias block. */
+function extractAliasObjectFields(snapshotText, name) {
+  const lines = snapshotText.split('\n');
+  const startIdx = lines.findIndex((l) => l.startsWith(`export type ${name} = {`));
+  if (startIdx === -1) return null;
+  const fields = new Set();
+  let depth = 0;
+  for (let i = startIdx; i < lines.length; i++) {
+    const line = lines[i];
+    for (const ch of line) {
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+    }
+    if (depth <= 0 && i > startIdx) break;
+    const match = /^ {4}(?:readonly\s+)?(\w+)\??[(:]/.exec(line);
+    if (match) fields.add(match[1]);
+  }
+  return fields;
+}
+
+/** Declared field names of a comparable declaration, whatever its form. */
+function declaredProFields(snapshotText, decls, name) {
+  if (decls.get(name)?.form === 'aliasObject') {
+    return extractAliasObjectFields(snapshotText, name) ?? new Set();
+  }
+  return new Set(extractInterfaceFields(snapshotText, name) ?? []);
 }
 
 /** Parse `Base` / `Omit<Base, 'a' | 'b'>` terms from an extends clause. */
@@ -237,8 +300,8 @@ function parseExtendsClause(clause) {
 function effectiveInterfaceFields(snapshotText, decls, name, seen = new Set()) {
   if (seen.has(name)) return new Set();
   seen.add(name);
-  const fields = new Set(extractInterfaceFields(snapshotText, name) ?? []);
-  const extendsClause = decls.get(name);
+  const fields = declaredProFields(snapshotText, decls, name);
+  const extendsClause = decls.get(name)?.extendsClause;
   if (!extendsClause) return fields;
   for (const { base, omitted } of parseExtendsClause(extendsClause)) {
     if (!decls.has(base)) continue;
@@ -310,6 +373,15 @@ function validateProShape(pro) {
       }
     }
   }
+  if (!Array.isArray(pro.memberCheckedInterfaces)) {
+    errors.push('contract.pro.memberCheckedInterfaces must be an array');
+  } else {
+    const seen = new Set();
+    for (const name of pro.memberCheckedInterfaces) {
+      if (seen.has(name)) errors.push(`contract.pro.memberCheckedInterfaces lists '${name}' twice`);
+      seen.add(name);
+    }
+  }
   const exceptions = pro.interfaceMemberExceptions ?? {};
   if (typeof exceptions !== 'object' || Array.isArray(exceptions)) {
     errors.push('contract.pro.interfaceMemberExceptions must be an object');
@@ -363,22 +435,39 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
   applyProBuckets('PRO EXPORT', contract.pro.exports, reactExports, vueExports, issues);
   applyProBuckets('PRO REVIEW PART', contract.pro.reviewParts, reactParts, vueParts, issues);
 
-  // Member-name parity for every interface both entries export.
+  // Member-name parity for the pinned interface list. The list is exact-match
+  // stale-checked in both directions, so the compared set can never shrink
+  // silently: a listed name that stops being comparable (renamed, dropped, or
+  // re-emitted in a form the parser cannot read) fails as stale, and a new
+  // interface comparable on both sides fails as unclassified.
   const reactDecls = extractInterfaceDecls(reactSnapshot);
   const vueDecls = extractInterfaceDecls(vueSnapshot);
-  const shared = [...reactDecls.keys()].filter((n) => vueDecls.has(n)).sort();
+  const memberChecked = contract.pro.memberCheckedInterfaces;
   const exceptions = contract.pro.interfaceMemberExceptions ?? {};
 
-  const MIN_SHARED_INTERFACES = 8;
-  if (shared.length < MIN_SHARED_INTERFACES) {
-    console.error(
-      `Pro parity gate misconfigured: expected at least ${MIN_SHARED_INTERFACES} shared interfaces, got ${shared.length}.`
-    );
-    process.exit(1);
+  for (const name of memberChecked) {
+    if (!reactDecls.has(name)) {
+      issues.push(
+        `PRO INTERFACE memberChecked '${name}' is no longer comparable in the React snapshot (contract stale, or the declaration form changed)`
+      );
+    }
+    if (!vueDecls.has(name)) {
+      issues.push(
+        `PRO INTERFACE memberChecked '${name}' is no longer comparable in the Vue snapshot (contract stale, or the declaration form changed)`
+      );
+    }
+  }
+  for (const name of [...reactDecls.keys()].sort()) {
+    if (vueDecls.has(name) && !memberChecked.includes(name)) {
+      issues.push(
+        `PRO INTERFACE '${name}' is exported by both entries but not listed in memberCheckedInterfaces`
+      );
+    }
   }
 
   let memberChecks = 0;
-  for (const name of shared) {
+  for (const name of memberChecked) {
+    if (!reactDecls.has(name) || !vueDecls.has(name)) continue; // reported stale above
     const reactFields = effectiveInterfaceFields(reactSnapshot, reactDecls, name);
     const vueFields = effectiveInterfaceFields(vueSnapshot, vueDecls, name);
     const exception = exceptions[name];
@@ -407,8 +496,10 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     }
   }
   for (const name of Object.keys(exceptions)) {
-    if (!shared.includes(name)) {
-      issues.push(`PRO INTERFACE exception '${name}' does not match a shared interface — remove it`);
+    if (!memberChecked.includes(name)) {
+      issues.push(
+        `PRO INTERFACE exception '${name}' does not match a member-checked interface — remove it`
+      );
     }
   }
 
@@ -416,7 +507,7 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     reactExports: reactExports.size,
     vueExports: vueExports.size,
     reviewParts: reactParts.size,
-    sharedInterfaces: shared.length,
+    memberCheckedInterfaces: memberChecked.length,
     memberChecks,
   };
 }
@@ -712,7 +803,7 @@ function main() {
   console.log(`  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`);
   console.log(`  Pro review parts:      ${proStats.reviewParts}`);
   console.log(
-    `  Pro shared interfaces: ${proStats.sharedInterfaces} (${proStats.memberChecks} member checks)`
+    `  Pro member-checked interfaces: ${proStats.memberCheckedInterfaces} (${proStats.memberChecks} member checks)`
   );
 
   if (issues.length > 0) {

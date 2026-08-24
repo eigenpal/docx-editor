@@ -59,7 +59,7 @@
     "vueExclusive": {}
   },
   "pro": {
-    "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of interfaces exported by both entries.",
+    "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of the pinned memberCheckedInterfaces list.",
     "exports": {
       "paired": [
         "CustomNodeChrome",
@@ -115,6 +115,19 @@
       "deferredInVue": {},
       "vueExclusive": {}
     },
+    "memberCheckedInterfaces": [
+      "CustomNodeChromeProps",
+      "CustomNodeContextMenuProps",
+      "ProLicenseOptions",
+      "ResolvedCustomNodeActivation",
+      "ReviewActionProps",
+      "ReviewActivationOptions",
+      "ReviewMarkersProps",
+      "ReviewModuleOptions",
+      "ReviewPartProps",
+      "ReviewProps",
+      "UseReviewReturn"
+    ],
     "interfaceMemberExceptions": {
       "ReviewMarkersProps": {
         "vueOnly": ["asChild", "children"],
