@@ -167,7 +167,10 @@ jobs:
       - name: Parity gates
         run: bun run check:parity
 
-      - name: Feature parity report
+      # Fails when React/Vue adapter drift diverges from the pinned
+      # baseline in scripts/feature-parity-baseline.json, in either
+      # direction. Update the baseline with --update-baseline.
+      - name: Feature parity gate
         run: bun run check:feature-parity
 
       # Same generator the release runs, here as a gate rather than for its
