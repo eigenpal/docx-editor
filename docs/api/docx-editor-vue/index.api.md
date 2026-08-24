@@ -2742,10 +2742,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     author: string;
     mode: "suggesting" | "edit" | "view";
     imageDecodePort: ImageDecodePort;
+    zoomMode: "auto" | ZoomMode;
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
-    zoomMode: "auto" | ZoomMode;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
