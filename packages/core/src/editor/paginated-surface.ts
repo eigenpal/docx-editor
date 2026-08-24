@@ -352,7 +352,9 @@ export function mountPaginatedSurface(
           ? { preferredPageIndex: active.pageIndex }
           : notePageIndex !== null
             ? { preferredPageIndex: notePageIndex }
-            : {}),
+            : selectionSync.selectionPageIndex() !== undefined
+              ? { preferredPageIndex: selectionSync.selectionPageIndex() }
+              : {}),
         scopedHost,
         ...(active
           ? { scopedHostKind: 'headerFooter' as const }
@@ -1100,9 +1102,9 @@ export function mountPaginatedSurface(
 
   function visiblePages(): ReadonlySet<number> | undefined {
     const set = visiblePageSet(container, currentLayout, selection, scale);
-    const occurrence = hfScope?.getActive()?.pageIndex;
-    if (occurrence === undefined || set === undefined || set.has(occurrence)) return set;
-    return new Set([...set, occurrence]);
+    const extra = hfScope?.getActive()?.pageIndex ?? selectionSync.selectionPageIndex();
+    if (extra === undefined || set === undefined || set.has(extra)) return set;
+    return new Set([...set, extra]);
   }
 
   /** Publish any pending layout. Returns whether it did, so callers can avoid a double paint. */
@@ -2277,7 +2279,12 @@ export function mountPaginatedSurface(
     const active = document.activeElement;
     if (active !== pagesLayer && (!active || !pagesLayer.contains(active))) return;
 
-    const geometry = caretAt(currentLayout, selection.head, { measurer });
+    const geometry = caretAt(currentLayout, selection.head, {
+      measurer,
+      ...(selectionSync.selectionPageIndex() !== undefined
+        ? { preferredPageIndex: selectionSync.selectionPageIndex() }
+        : {}),
+    });
     if (!geometry) return;
     const changedPage = lastCaretPageIndex !== null && lastCaretPageIndex !== geometry.pageIndex;
     lastCaretPageIndex = geometry.pageIndex;

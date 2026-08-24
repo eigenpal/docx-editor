@@ -171,6 +171,13 @@ export interface SurfaceSelectionSync {
   readonly onCompositionEnd: (event?: CompositionEvent) => void;
   /** Drop capture listeners. Safe to call once from surface destroy/detach. */
   destroy(): void;
+  /**
+   * The sheet the last mapped gesture sat on.
+   *
+   * A repeating `w:tblHeader` row shares one paragraph id on every page. Caret paint and
+   * scroll-follow need this page or they jump to the authored copy on page 0.
+   */
+  selectionPageIndex(): number | undefined;
 }
 
 export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): SurfaceSelectionSync {
@@ -621,6 +628,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       deps.render();
     },
 
+    selectionPageIndex: () => lastSelectionPageIndex,
     destroy() {
       pagesLayer.removeEventListener('pointerdown', noteUserSelectionGesture, true);
       pagesLayer.removeEventListener('selectstart', noteUserSelectionGesture, true);

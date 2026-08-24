@@ -10,7 +10,9 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { afterEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { caretAt } from '../../layout/semantic-interaction.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
+import type { SemanticLayout } from '../../layout/semantic-records.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { applySelectionToDom, pageIndexOfNode, positionFromDomPoint } from '../dom-selection.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
@@ -59,7 +61,10 @@ function repeatingHeaderDocx(): Uint8Array {
   });
 }
 
-function paintRepeatingHeader(materialize?: ReadonlySet<number>): HTMLElement {
+function paintRepeatingHeader(materialize?: ReadonlySet<number>): {
+  readonly root: HTMLElement;
+  readonly layout: SemanticLayout;
+} {
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body>${repeatingHeaderXml()}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'application/xml' }
@@ -74,7 +79,7 @@ function paintRepeatingHeader(materialize?: ReadonlySet<number>): HTMLElement {
     ariaHidden: false,
     ...(materialize ? { materialize } : {}),
   });
-  return root;
+  return { root, layout };
 }
 
 function copiesOf(root: Element, paragraphId: string): HTMLElement[] {
@@ -103,7 +108,7 @@ function textNodeIn(element: Element): Node {
 
 describe('a repeating w:tblHeader row is written to the copy on the named page', () => {
   test('a read from a later copy is accepted', () => {
-    const root = paintRepeatingHeader();
+    const { root } = paintRepeatingHeader();
     const id = headerParagraphId(root);
     const copies = copiesOf(root, id);
     expect(root.querySelectorAll('[data-page-index]').length).toBeGreaterThan(1);
@@ -115,7 +120,7 @@ describe('a repeating w:tblHeader row is written to the copy on the named page',
   });
 
   test('a write without a page hint lands on the first built copy', () => {
-    const root = paintRepeatingHeader();
+    const { root } = paintRepeatingHeader();
     document.body.append(root);
     const id = headerParagraphId(root);
     const position = { paragraphId: id, offset: 3 };
@@ -127,7 +132,7 @@ describe('a repeating w:tblHeader row is written to the copy on the named page',
   });
 
   test('a write moves a same-model caret off the first copy onto the named page', () => {
-    const root = paintRepeatingHeader();
+    const { root } = paintRepeatingHeader();
     document.body.append(root);
     const id = headerParagraphId(root);
     const later = copiesOf(root, id).find((copy) => pageOf(copy, root) !== '0')!;
@@ -146,7 +151,7 @@ describe('a repeating w:tblHeader row is written to the copy on the named page',
   });
 
   test('a write prefers the copy on the named page', () => {
-    const root = paintRepeatingHeader();
+    const { root } = paintRepeatingHeader();
     document.body.append(root);
     const id = headerParagraphId(root);
     const later = copiesOf(root, id).find((copy) => pageOf(copy, root) !== '0')!;
@@ -164,8 +169,18 @@ describe('a repeating w:tblHeader row is written to the copy on the named page',
     root.remove();
   });
 
+  test('caretAt without a page hint names the authored sheet', () => {
+    const { root, layout } = paintRepeatingHeader();
+    const id = headerParagraphId(root);
+    const later = copiesOf(root, id).find((copy) => pageOf(copy, root) !== '0')!;
+    const preferredPageIndex = pageIndexOfNode(later, root)!;
+    const position = { paragraphId: id, offset: 3 };
+    expect(caretAt(layout, position)?.pageIndex).toBe(0);
+    expect(caretAt(layout, position, { preferredPageIndex })?.pageIndex).toBe(preferredPageIndex);
+  });
+
   test('with page 0 dematerialized, a named later page still wins', () => {
-    const root = paintRepeatingHeader(new Set([2]));
+    const { root } = paintRepeatingHeader(new Set([2]));
     document.body.append(root);
     const pages = [...root.querySelectorAll('[data-page-index]')] as HTMLElement[];
     expect(
@@ -228,6 +243,29 @@ describe('the surface remirrors a repeating header onto the copy the user clicke
     document.getSelection()?.removeAllRanges();
     surface.setSelection(surface.state().selection);
     expect(pageOf(document.getSelection()?.anchorNode, pages)).toBe(String(preferredPageIndex));
+    surface.destroy();
+    container.remove();
+  });
+
+  test('the painted caret sits on the sheet the gesture mapped', async () => {
+    const { surface, container } = mount(repeatingHeaderDocx());
+    const pages = container.querySelector('.docx-pages')!;
+    surface.focus();
+    const id = headerParagraphId(pages);
+    const later = copiesOf(pages, id).find((copy) => pageOf(copy, pages) !== '0');
+    expect(later).toBeDefined();
+    const preferredPageIndex = pageIndexOfNode(later!, pages)!;
+    const text = textNodeIn(later!);
+    armGesture(later!);
+    await gesture([text, 3], [text, 3]);
+    surface.setSelection(surface.state().selection);
+    const caret = container.querySelector('[data-docx-caret]');
+    expect(caret).not.toBeNull();
+    expect(pageOf(caret, pages)).toBe(String(preferredPageIndex));
+    expect(caretAt(surface.layout(), { paragraphId: id, offset: 3 })?.pageIndex).toBe(0);
+    expect(
+      caretAt(surface.layout(), { paragraphId: id, offset: 3 }, { preferredPageIndex })?.pageIndex
+    ).toBe(preferredPageIndex);
     surface.destroy();
     container.remove();
   });

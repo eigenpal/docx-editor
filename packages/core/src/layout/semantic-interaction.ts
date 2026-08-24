@@ -354,6 +354,28 @@ function resolveCaretAtOptions(measurerOrOptions?: TextMeasurer | CaretAtOptions
   return measurerOrOptions as CaretAtOptions;
 }
 
+/**
+ * Header-repeat lines of one paragraph on one sheet.
+ *
+ * The main line index skips `w:tblHeader` repeats so keyboard stops visit each offset once.
+ * A click on a later copy still needs geometry on THAT sheet, or the painted caret and
+ * scroll-follow jump back to the authored row on page 0.
+ */
+function headerRepeatLinesOnPage(
+  layout: SemanticLayout,
+  pageIndex: number,
+  paragraphId: string
+): { line: LineRecord; pageIndex: number }[] {
+  const page = layout.pages[pageIndex];
+  if (!page) return [];
+  const found: { line: LineRecord; pageIndex: number }[] = [];
+  for (const fragment of paragraphFragmentsOf(page, true)) {
+    if (fragment.paragraphId !== paragraphId) continue;
+    for (const line of fragment.lines) found.push({ line, pageIndex });
+  }
+  return found;
+}
+
 /** Geometry for one model position, or null when it is not laid out. */
 export function caretAt(
   layout: SemanticLayout,
@@ -363,10 +385,15 @@ export function caretAt(
   const options = resolveCaretAtOptions(measurerOrOptions);
   const placed = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
   const preferred = options.preferredPageIndex;
+  const repeats =
+    preferred === undefined ? [] : headerRepeatLinesOnPage(layout, preferred, position.paragraphId);
+  const seen = new Set(placed.map((entry) => entry.line.id));
+  const extra = repeats.filter((entry) => !seen.has(entry.line.id));
+  const catalog = extra.length > 0 ? [...placed, ...extra] : placed;
   const ordered =
     preferred === undefined
-      ? placed
-      : [...placed].sort((a, b) => {
+      ? catalog
+      : [...catalog].sort((a, b) => {
           const aHit = a.pageIndex === preferred ? 0 : 1;
           const bHit = b.pageIndex === preferred ? 0 : 1;
           return aHit - bHit;
