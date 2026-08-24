@@ -190,13 +190,16 @@ function extractTopLevelExportNames(snapshotText) {
  * component type must still surface, so the buckets classify it instead of the
  * scraper silently dropping it.
  *
- * Membership is start-of-line brace depth 1 plus a PascalCase name: parts are
- * components and Object.assign keys keep their exported casing. That excludes
- * the camelCase prop-literal keys inside the intersection's generic segments
- * (which also reach depth 1, because API Extractor restarts indentation per
- * intersection term) and Vue's underscore-prefixed `__isFragment`-style
- * internal markers. A false match fails loudly as unclassified; it cannot
- * pass vacuously.
+ * Membership is start-of-line brace depth 1 plus either a PascalCase name
+ * (parts are components and Object.assign keys keep their exported casing) or
+ * a declared type that references a component form (`DefineComponent<`,
+ * `FunctionalComponent<`, `Component<`) — so a camelCase key of component
+ * type still surfaces as a part instead of being silently ignored. That
+ * excludes the camelCase prop-literal keys inside the intersection's generic
+ * segments (which also reach depth 1, because API Extractor restarts
+ * indentation per intersection term — their value types are plain) and Vue's
+ * underscore-prefixed `__isFragment`-style internal markers. A false match
+ * fails loudly as unclassified; it cannot pass vacuously.
  */
 function extractVueReviewParts(snapshotText) {
   const lines = snapshotText.split('\n');
@@ -208,8 +211,12 @@ function extractVueReviewParts(snapshotText) {
     const line = lines[i];
     if (i > startIdx && (line.startsWith('};') || line.startsWith('export '))) break;
     if (i > startIdx && depth === 1) {
-      const match = /^ {4}([A-Z]\w*)\??: \S/.exec(line);
-      if (match) parts.add(match[1]);
+      const match = /^ {4}(\w+)\??: (\S.*)$/.exec(line);
+      if (match && !match[1].startsWith('__')) {
+        const [, name, type] = match;
+        const componentTyped = /\b(?:DefineComponent|FunctionalComponent|Component)</.test(type);
+        if (/^[A-Z]/.test(name) || componentTyped) parts.add(name);
+      }
     }
     for (const ch of line) {
       if (ch === '{') depth++;
@@ -470,6 +477,20 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     if (!reactDecls.has(name) || !vueDecls.has(name)) continue; // reported stale above
     const reactFields = effectiveInterfaceFields(reactSnapshot, reactDecls, name);
     const vueFields = effectiveInterfaceFields(vueSnapshot, vueDecls, name);
+    // A listed interface must resolve to at least one member on each side.
+    // Every current entry does; an empty set means the emission changed to a
+    // form the parser reads as a declaration but cannot extract fields from
+    // (for example a single-line alias body), so the member comparison would
+    // pass vacuously. Fail it as unparseable instead.
+    if (reactFields.size === 0 || vueFields.size === 0) {
+      const sides = [reactFields.size === 0 && 'React', vueFields.size === 0 && 'Vue']
+        .filter(Boolean)
+        .join(' and ');
+      issues.push(
+        `PRO INTERFACE memberChecked '${name}' resolved to zero members in the ${sides} snapshot — declaration form is unparseable (contract stale or emission changed)`
+      );
+      continue;
+    }
     const exception = exceptions[name];
     const reactAllowed = new Set(exception?.reactOnly ?? []);
     const vueAllowed = new Set(exception?.vueOnly ?? []);
