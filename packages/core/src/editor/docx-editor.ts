@@ -662,6 +662,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function loadBytes(bytes: Uint8Array): void {
     // A load supersedes any open still waiting on its frame: drop the superseded bytes.
     openScheduler.cancel();
+    // The previous document can leave its comments pane open. Close it before a deferred
+    // open publishes `isOpening`, so the loading page uses the full centred workspace.
+    reviewPaneOpen = false;
     loadSeq += 1;
     shapedMeasurer = undefined;
     shapedProducer = undefined;

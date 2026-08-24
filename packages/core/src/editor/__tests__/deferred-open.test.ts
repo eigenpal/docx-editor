@@ -14,6 +14,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
+import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -158,6 +159,25 @@ describe('deferred open of a large document', () => {
 
     await until(() => container.textContent?.includes('large document body') === true);
     expect(editor.snapshot().isOpening).toBe(false);
+    editor.destroy();
+  });
+
+  test('load() closes the previous comments pane before it shows the overlay', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: SMALL,
+      modules: [stubReviewModule()],
+    });
+    editor.exec({ type: 'toggleReviewPane' });
+    expect(editor.isReviewPaneOpen()).toBe(true);
+
+    editor.load(LARGE);
+
+    expect(editor.snapshot().isOpening).toBe(true);
+    expect(editor.isReviewPaneOpen()).toBe(false);
+    await until(() => editor.surface?.session.bodyText().includes('large document body') === true);
+    expect(editor.isReviewPaneOpen()).toBe(false);
     editor.destroy();
   });
 
