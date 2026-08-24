@@ -414,3 +414,26 @@ describe('DocxEditor.Loading', () => {
     expect(DocxEditor.Loading).toBe(DocxEditorLoading);
   });
 });
+
+describe('packaged DocxEditor loading screen', () => {
+  test('mounts the default page scaffold while no document is available', () => {
+    const view = render(<DocxEditor />);
+    const loading = view.container.querySelector('.docx-editor__loading--overlay');
+
+    expect(loading).not.toBeNull();
+    expect(loading!.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
+  });
+
+  test('keeps the default page scaffold up while a large document opens', async () => {
+    const view = render(<DocxEditor document={LARGE_SOURCE} />);
+
+    await act(async () => {});
+    expect(view.container.querySelector('.docx-editor__loading-page')).not.toBeNull();
+    expect(view.container.textContent).not.toContain('large body');
+
+    await waitFor(() => {
+      expect(view.container.textContent).toContain('large body');
+    });
+    expect(view.container.querySelector('.docx-editor__loading')).toBeNull();
+  });
+});

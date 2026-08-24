@@ -11,7 +11,7 @@ import { DocxEditorNavigation } from '../src/editor/navigation';
 import { DocxEditorLoading } from '../src/editor/DocxEditorLoading';
 import { LocaleProvider } from '../src/i18n';
 import { flush, mountComponent, mountEditorTree, mountSugarAsync, SOURCE } from './helpers/mount';
-import { docx } from './helpers/fixtures';
+import { docx, LARGE_SOURCE } from './helpers/fixtures';
 
 const label = createT(en);
 
@@ -20,6 +20,26 @@ afterEach(() => {
 });
 
 describe('DocxEditor sugar host', () => {
+  test('mounts the default page scaffold while no document is available', async () => {
+    const view = await mountSugarAsync({ document: undefined });
+    await nextTick();
+    const loading = view.container.querySelector('.docx-editor__loading--overlay');
+    expect(loading).not.toBeNull();
+    expect(loading?.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
+    view.unmount();
+  });
+
+  test('keeps the default page scaffold up while a large document opens', async () => {
+    const view = await mountSugarAsync({ document: LARGE_SOURCE });
+    await nextTick();
+    expect(view.container.querySelector('.docx-editor__loading-page')).not.toBeNull();
+
+    await view.flush();
+    expect(view.container.querySelector('.docx-editor__loading')).toBeNull();
+    expect(view.container.textContent).toContain('large body');
+    view.unmount();
+  });
+
   test('clamps rulers with the page on narrow viewports', async () => {
     const widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
