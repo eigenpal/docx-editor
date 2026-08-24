@@ -1,83 +1,52 @@
 {
   "reactOnlyComponents": [
-    "AlignmentButtons",
-    "Button",
-    "ColorPicker",
-    "ColorSplit",
-    "ContentControlParts",
-    "DocxEditor",
-    "DocxEditorContentControl",
-    "DocxEditorContextMenu",
-    "DocxEditorEquation",
-    "DocxEditorHeaderFooter",
-    "DocxEditorHyperLink",
-    "DocxEditorMenu",
-    "DocxEditorNavigation",
-    "DocxEditorNotes",
-    "DocxEditorPageSetup",
-    "DocxEditorParagraphDialog",
-    "DocxEditorRulers",
-    "DocxEditorShell",
-    "DocxEditorToolbar",
-    "EditingMode",
-    "EditorToolbar",
-    "EditorToolbarContext",
-    "ErrorBoundary",
-    "ErrorManager",
-    "FontFamily",
-    "FontPicker",
-    "FontSizePicker",
-    "HorizontalRuler",
-    "IconGridDropdown",
-    "Icons",
-    "ImageAltText",
-    "ImageInsert",
-    "ImageProperties",
-    "ImageSelectionOverlay",
-    "ImageTransformDropdown",
-    "ImageWrap",
-    "ImageWrapDropdown",
-    "LineSpacing",
-    "LineSpacingPicker",
-    "ListButtons",
-    "MaterialSymbol",
-    "MenuDropdown",
-    "OutlineToggleButton",
-    "PageIndicator",
-    "PaginatedDocxEditor",
-    "PaginatedDocxEditorShell",
-    "ParagraphStyle",
-    "Select",
-    "StylePicker",
-    "Subscribable",
-    "TableBorderColorPicker",
-    "TableBorderPicker",
-    "TableBorderWidthPicker",
-    "TableCellFillPicker",
-    "TableControls",
-    "TableGridInline",
-    "TableMoreDropdown",
-    "TableToolbar",
-    "TitleBar",
-    "Tooltip",
-    "VerticalRuler",
-    "ZoomControl",
-    "constants",
-    "fontPickerValue",
-    "menu-flyouts",
-    "normalizeFontFamilies",
-    "operations",
-    "paragraph-dialog-host",
-    "steppers",
-    "table-chrome-shared",
-    "toolbarUtils",
-    "useFixedDropdown",
-    "useTableChrome",
-    "watermark"
+    "components/DocxEditor/OutlineToggleButton",
+    "components/DocxEditor/hooks/useDocxEditorRefApi",
+    "components/EditorToolbar",
+    "components/EditorToolbarContext",
+    "components/ErrorBoundary",
+    "components/reportIssue",
+    "components/sidebar/constants",
+    "components/toolbarUtils",
+    "components/ui/AlignmentButtons",
+    "components/ui/Button",
+    "components/ui/ColorPicker",
+    "components/ui/FontPicker",
+    "components/ui/FontSizePicker",
+    "components/ui/IconGridDropdown",
+    "components/ui/ImageTransformDropdown",
+    "components/ui/ImageWrapDropdown",
+    "components/ui/LineSpacingPicker",
+    "components/ui/ListButtons",
+    "components/ui/MaterialSymbol",
+    "components/ui/MenuDropdown",
+    "components/ui/Select",
+    "components/ui/StylePicker",
+    "components/ui/TableBorderColorPicker",
+    "components/ui/TableBorderPicker",
+    "components/ui/TableBorderWidthPicker",
+    "components/ui/TableCellFillPicker",
+    "components/ui/TableGridInline",
+    "components/ui/TableMoreDropdown",
+    "components/ui/TableToolbar",
+    "components/ui/TableToolbar/operations",
+    "components/ui/Tooltip",
+    "components/ui/ZoomControl",
+    "components/ui/fontPickerValue",
+    "components/ui/normalizeFontFamilies",
+    "hooks/useFixedDropdown",
+    "index",
+    "lib/watermark",
+    "managers/ErrorManager",
+    "managers/Subscribable",
+    "managers/types"
   ],
-  "vueOnlyComponents": [],
+  "vueOnlyComponents": [
+    "editor/images/index",
+    "types"
+  ],
   "signatureDivergence": {
-    "DocumentOutline": {
+    "components/DocumentOutline": {
       "propsAddedInReact": [
         "bottom",
         "display",
@@ -106,7 +75,156 @@
       ],
       "emitsAddedInVue": []
     },
-    "DocxEditorAuthorStyle": {
+    "components/DocxEditor/DocxEditorShell": {
+      "propsAddedInReact": [
+        "className",
+        "containerRef",
+        "containerStyle",
+        "dialogs",
+        "editable",
+        "editable",
+        "editorContainerStyle",
+        "editorContentRef",
+        "editorScrollLeft",
+        "expandedSidebarItem",
+        "fileInputs",
+        "headings",
+        "horizontalRulerProps",
+        "i18n",
+        "isDark",
+        "mainContentStyle",
+        "minLayoutWidth",
+        "onBottomMarginChange",
+        "onClose",
+        "onEditorBgMouseDown",
+        "onEditorContextMenu",
+        "onEditorError",
+        "onHeadingClick",
+        "onLeftMarginChange",
+        "onRightMarginChange",
+        "onScrollContainerMouseDown",
+        "onTabMarkRemove",
+        "onToggleOutline",
+        "onTopMarginChange",
+        "outlineProps",
+        "overlays",
+        "pageSetup",
+        "pageSetup",
+        "pagedArea",
+        "readOnlyProp",
+        "scrollContainerRef",
+        "scrollLeft",
+        "scrollPageInfo",
+        "showOutline",
+        "showOutlineButton",
+        "showRuler",
+        "sidebarOpen",
+        "tabMarks",
+        "toolbar",
+        "toolbarHeight",
+        "topOffset",
+        "trackedChanges",
+        "unit",
+        "unit",
+        "verticalRulerProps",
+        "zoom",
+        "zoom"
+      ],
+      "propsAddedInVue": [],
+      "emitsAddedInReact": [
+        "bottom-margin-change",
+        "close",
+        "editor-bg-mouse-down",
+        "editor-context-menu",
+        "editor-error",
+        "heading-click",
+        "left-margin-change",
+        "right-margin-change",
+        "scroll-container-mouse-down",
+        "tab-mark-remove",
+        "toggle-outline",
+        "top-margin-change"
+      ],
+      "emitsAddedInVue": []
+    },
+    "components/DocxEditor/PageIndicator": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "name",
+        "props",
+        "role",
+        "style"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "components/PaginatedDocxEditorShell": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "className",
+        "colorMode",
+        "default",
+        "default",
+        "documentFontFamily",
+        "documentName",
+        "measurer",
+        "name",
+        "onError",
+        "onSave",
+        "onStateChange",
+        "onZoomChange",
+        "props",
+        "scale",
+        "source",
+        "type",
+        "type"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": [
+        "error",
+        "save",
+        "state-change",
+        "zoom-change"
+      ]
+    },
+    "components/TitleBar": {
+      "propsAddedInReact": [
+        "children",
+        "children",
+        "editable",
+        "onChange",
+        "placeholder",
+        "value"
+      ],
+      "propsAddedInVue": [],
+      "emitsAddedInReact": [
+        "change"
+      ],
+      "emitsAddedInVue": []
+    },
+    "components/ui/VerticalRuler": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "default",
+        "default",
+        "name",
+        "props",
+        "type",
+        "type"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "components/ui/icon-base": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorAuthorStyle": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "name"
@@ -114,7 +232,7 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "DocxEditorContent": {
+    "editor/DocxEditorContent": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "class",
@@ -126,7 +244,7 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "DocxEditorFontNotice": {
+    "editor/DocxEditorFontNotice": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "class",
@@ -137,7 +255,7 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "DocxEditorLoading": {
+    "editor/DocxEditorLoading": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "ariaHidden",
@@ -148,7 +266,7 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "DocxEditorOutline": {
+    "editor/DocxEditorOutline": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "name"
@@ -156,7 +274,7 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "DocxEditorPageNumber": {
+    "editor/DocxEditorPageNumber": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "name",
@@ -165,7 +283,37 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "DocxEditorRoot": {
+    "editor/DocxEditorPageSetup": {
+      "propsAddedInReact": [
+        "alignItems",
+        "backgroundColor",
+        "display",
+        "inset",
+        "justifyContent",
+        "position",
+        "zIndex"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorParagraphDialog": {
+      "propsAddedInReact": [
+        "color",
+        "fontSize",
+        "marginRight"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorRoot": {
       "propsAddedInReact": [
         "author",
         "children",
@@ -200,7 +348,7 @@
       ],
       "emitsAddedInVue": []
     },
-    "DocxEditorViewport": {
+    "editor/DocxEditorViewport": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "class",
@@ -211,7 +359,70 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "icon-base": {
+    "editor/images/ImageAltText": {
+      "propsAddedInReact": [
+        "children"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/images/ImageInsert": {
+      "propsAddedInReact": [
+        "children",
+        "data",
+        "heightPoints",
+        "mime",
+        "type",
+        "widthPoints"
+      ],
+      "propsAddedInVue": [
+        "name"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/images/ImageSelectionOverlay": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "containerRef",
+        "portalRef",
+        "scrollPort"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/images/ImageWrap": {
+      "propsAddedInReact": [
+        "children"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/menu/menu-flyouts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "children",
+        "className",
+        "className",
+        "labelKey",
+        "labelKey",
+        "name",
+        "paths",
+        "paths",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/menu/parts": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "name",
@@ -220,7 +431,46 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "LocaleContext": {
+    "editor/navigation/DocxEditorNavigation": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "default",
+        "defaultOpen",
+        "defaultTab",
+        "name",
+        "onOpenChange",
+        "onTabChange",
+        "open",
+        "paneWidth",
+        "props",
+        "tab",
+        "type"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": [
+        "open-change",
+        "tab-change"
+      ]
+    },
+    "editor/navigation/parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "name",
+        "props",
+        "value"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/toolbar/ColorSplit": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "className"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/toolbar/DocxEditorToolbar": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "name",
@@ -229,21 +479,48 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "parts": {
+    "editor/toolbar/EditingMode": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
-        "asChild",
-        "class",
-        "class",
-        "docxSlot",
-        "icon",
         "name",
         "props"
       ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "Slot": {
+    "editor/toolbar/FontFamily": {
+      "propsAddedInReact": [
+        "disabled",
+        "onClick",
+        "onMouseDown"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [
+        "click",
+        "mouse-down"
+      ],
+      "emitsAddedInVue": []
+    },
+    "editor/toolbar/ParagraphStyle": {
+      "propsAddedInReact": [
+        "disabled",
+        "onClick",
+        "onMouseDown"
+      ],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [
+        "click",
+        "mouse-down"
+      ],
+      "emitsAddedInVue": []
+    },
+    "editor/toolbar/Slot": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "class",
@@ -253,7 +530,16 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "ToolbarAction": {
+    "editor/toolbar/TableControls": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/toolbar/ToolbarAction": {
       "propsAddedInReact": [
         "type"
       ],
@@ -267,7 +553,7 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "ToolbarButton": {
+    "editor/toolbar/ToolbarButton": {
       "propsAddedInReact": [
         "disabled",
         "onClick",
@@ -285,7 +571,7 @@
       ],
       "emitsAddedInVue": []
     },
-    "ToolbarOverflow": {
+    "editor/toolbar/ToolbarOverflow": {
       "propsAddedInReact": [
         "close"
       ],
@@ -293,33 +579,32 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "types": {
+    "editor/toolbar/parts": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
-        "author",
-        "chrome",
+        "asChild",
         "class",
-        "colorMode",
-        "contextMenu",
-        "document",
-        "fonts",
-        "hyperlinkPopup",
-        "i18n",
-        "locale",
-        "menu",
-        "mode",
-        "modules",
-        "navigation",
-        "rulers",
-        "t",
-        "title",
-        "zoom",
-        "zoomMode"
+        "class",
+        "docxSlot",
+        "icon",
+        "name",
+        "props"
       ],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "useDocxEditorRoot": {
+    "editor/toolbar/useTableChrome": {
+      "propsAddedInReact": [
+        "editable",
+        "editingMode",
+        "editor",
+        "snapshot"
+      ],
+      "propsAddedInVue": [],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/useDocxEditorRoot": {
       "propsAddedInReact": [],
       "propsAddedInVue": [
         "author",
@@ -351,6 +636,15 @@
         "font-error",
         "ready"
       ]
+    },
+    "i18n/LocaleContext": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": [
+        "name",
+        "props"
+      ],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
     }
   },
   "categoryDrift": {
@@ -371,11 +665,7 @@
     "sidebarKinds": {
       "reactOnly": [
         "auto",
-        "body",
-        "hex",
         "picture",
-        "row",
-        "separator",
         "text",
         "theme"
       ],

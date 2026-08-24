@@ -42,17 +42,15 @@ const RENDER_PATH_DIVERGENCE = path.join(
 // Files whose React-only-ness is documented as intentional in the
 // render-path divergence note. They share their behaviour with Vue
 // via the core package surface, so the parity counter should not
-// penalize them.
+// penalize them. Keys are adapter-relative paths without extension,
+// the same keys buildReport pairs components by.
 function loadIntentionalRenderPathSet() {
   if (!fs.existsSync(RENDER_PATH_DIVERGENCE)) return new Set();
   const md = fs.readFileSync(RENDER_PATH_DIVERGENCE, 'utf8');
   const out = new Set();
   for (const line of md.split('\n')) {
-    const m = line.match(/`(packages\/react\/src\/[^`]+)`/);
-    if (m) {
-      const base = path.basename(m[1]).replace(/\.(tsx?|ts)$/, '');
-      out.add(base);
-    }
+    const m = line.match(/`packages\/react\/src\/([^`]+)`/);
+    if (m) out.add(m[1].replace(/\.(tsx?|jsx?)$/, ''));
   }
   return out;
 }
@@ -71,7 +69,12 @@ const PATTERNS = {
 function walkFiles(rootDir, accept) {
   const out = [];
   if (!fs.existsSync(rootDir)) return out;
-  for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+  // readdir order is filesystem-dependent; sort by code point so the
+  // walk (and everything derived from it) is identical on every host.
+  const entries = fs
+    .readdirSync(rootDir, { withFileTypes: true })
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
     const full = path.join(rootDir, entry.name);
     if (entry.isDirectory()) {
@@ -100,11 +103,16 @@ function readSfcScript(src) {
   return src.slice(openEnd + 1, close);
 }
 
-function extractFromFile(absPath) {
+function extractFromFile(absPath, adapterRoot) {
   const src = fs.readFileSync(absPath, 'utf8');
   const body = absPath.endsWith('.vue') ? readSfcScript(src) : src;
+  // Key by adapter-relative path, not basename: both adapters hold
+  // several files with the same basename (`parts`, `index`, `types`),
+  // and a basename key would let all but one of them escape the gate.
   const componentName = path
-    .basename(absPath)
+    .relative(adapterRoot, absPath)
+    .split(path.sep)
+    .join('/')
     .replace(/\.(tsx?|vue|jsx?)$/, '');
 
   // Tag files that are pure core re-exports — they don't add surface
@@ -190,15 +198,22 @@ function diffSets(reactSet, vueSet) {
 
 function buildReport() {
   const reactFiles = walkFiles(REACT_ROOT, (n) => n.endsWith('.tsx') || n.endsWith('.ts'));
-  const vueFiles = walkFiles(VUE_ROOT, (n) => n.endsWith('.vue') || n.endsWith('.ts'));
+  // The Vue adapter ships .tsx files too (render-function components);
+  // leaving them out would hide their pairs from the gate entirely.
+  const vueFiles = walkFiles(
+    VUE_ROOT,
+    (n) => n.endsWith('.vue') || n.endsWith('.tsx') || n.endsWith('.ts')
+  );
   // Drop pure core re-exports, the surface lives in core, not in
   // the adapter, so they should not count as adapter-specific drift.
   // Also drop files documented as intentional render-path divergence
   // where Vue ships the same behaviour through the core package.
   const reactComponents = reactFiles
-    .map(extractFromFile)
+    .map((f) => extractFromFile(f, REACT_ROOT))
     .filter((f) => !f.isCoreReexport && !INTENTIONAL_RENDER_PATH.has(f.componentName));
-  const vueComponents = vueFiles.map(extractFromFile).filter((f) => !f.isCoreReexport);
+  const vueComponents = vueFiles
+    .map((f) => extractFromFile(f, VUE_ROOT))
+    .filter((f) => !f.isCoreReexport);
 
   const byName = new Map();
   for (const r of reactComponents) {
@@ -242,7 +257,9 @@ function buildReport() {
     }
     components.push(row);
   }
-  components.sort((a, b) => a.name.localeCompare(b.name));
+  // Code-point sort, not localeCompare: baseline output must not vary
+  // with the host's ICU locale.
+  components.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   // Aggregate global category sets across the whole adapter.
   const aggregate = (xs, key) => {
@@ -368,7 +385,7 @@ function parityState(report) {
     reactOnlyComponents: names('react-only'),
     vueOnlyComponents: names('vue-only'),
     signatureDivergence: Object.fromEntries(
-      Object.entries(signatureDivergence).sort(([a], [b]) => a.localeCompare(b))
+      Object.entries(signatureDivergence).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     ),
     categoryDrift,
   };
