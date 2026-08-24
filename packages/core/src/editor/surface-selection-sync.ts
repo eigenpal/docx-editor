@@ -18,6 +18,7 @@ import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import {
   applySelectionToDom,
   domSelectionTouchesPages,
+  pageIndexOfNode,
   selectionsEqual,
   semanticSelectionFromDom,
 } from './dom-selection.ts';
@@ -178,6 +179,29 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   let applyingSelection = false;
   let lastMirroredSelection: SemanticSelection | null = null;
   /**
+   * The sheet the last mapped gesture sat on.
+   *
+   * A `w:tblHeader` row paints the same paragraph id on every page it repeats. The model
+   * position cannot name a copy, so a later remirror must prefer this sheet or it writes
+   * the first built one — usually page 0.
+   */
+  let lastSelectionPageIndex: number | undefined;
+
+  function rememberSelectionPage(domSelection: Selection | null): void {
+    const page =
+      pageIndexOfNode(domSelection?.anchorNode, pagesLayer) ??
+      pageIndexOfNode(domSelection?.focusNode, pagesLayer);
+    if (page !== undefined) lastSelectionPageIndex = page;
+  }
+
+  function preferredSelectionPage(domSelection: Selection | null): number | undefined {
+    return (
+      lastSelectionPageIndex ??
+      pageIndexOfNode(domSelection?.anchorNode, pagesLayer) ??
+      pageIndexOfNode(domSelection?.focusNode, pagesLayer)
+    );
+  }
+  /**
    * Whether a user selection gesture has an unused adoption opportunity.
    *
    * A deferred paint leaves the DOM caret at `lastMirroredSelection`. Equality with that
@@ -225,8 +249,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * mirror the selection into the DOM and report the new state anyway.
    */
   function adoptPendingDomSelection(): boolean {
-    const next = semanticSelectionFromDom(pagesLayer, document.getSelection());
-    if (!next || selectionsEqual(next, deps.selection())) return false;
+    const domSelection = document.getSelection();
+    const next = semanticSelectionFromDom(pagesLayer, domSelection);
+    if (!next) return false;
+    rememberSelectionPage(domSelection);
+    if (selectionsEqual(next, deps.selection())) return false;
     deps.adoptSelection(next);
     return true;
   }
@@ -277,6 +304,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // empty selectionchange (removeAllRanges mid-gesture) cannot spend it, and so a click
     // on the already-current caret cannot authorize a later stale echo.
     userSelectionGesture = false;
+    rememberSelectionPage(domSelection);
     if (selectionsEqual(next, deps.selection())) return;
     deps.setSelection(next);
   };
@@ -475,7 +503,15 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // This write is the new baseline. Matching DOM carets after it are echoes until the
       // user starts another selection gesture.
       userSelectionGesture = false;
-      const wrote = applySelectionToDom(pagesLayer, next, document.getSelection());
+      const native = document.getSelection();
+      const preferredPageIndex = preferredSelectionPage(native);
+      const wrote = applySelectionToDom(
+        pagesLayer,
+        next,
+        native,
+        preferredPageIndex !== undefined ? { preferredPageIndex } : undefined
+      );
+      if (wrote) rememberSelectionPage(native);
       // A REFUSED write is not a baseline. `applySelectionToDom` answers false when either
       // endpoint has no painted place to land — a caret in a paragraph that painted no spans,
       // an offset no span covers, a page that is not built — and the browser then keeps
