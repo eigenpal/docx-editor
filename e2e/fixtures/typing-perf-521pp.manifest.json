@@ -1,0 +1,9 @@
+{
+  "fixtures": {
+    "typing-perf-521pp.docx": {
+      "sha256": "afe6043ba2c66d162ae9de9bbd03c360e7bb7ef139db5365a1d56d2408b4e0e6",
+      "byteSize": 425906,
+      "expectedPageCount": 521
+    }
+  }
+}
