@@ -1,5 +1,41 @@
 # @docx-editor.dev/core
 
+## 2.9.0
+
+### Minor Changes
+
+- 686a9d6: Add agent-safe document writing and revision APIs.
+  - Add an explicit `original` text projection. Pending deletions remain visible, while pending
+    insertions stay hidden. This matches Word's Original review view.
+  - Add the atomic `replaceStoryBlocks` automation operation with stable paragraph identities.
+  - Add the DocxEditor `revisionTextView` runtime option outside the Office.js object model.
+  - Implement `proposeInsertion`, `proposeDeletion`, and `proposeReplacement` editor commands.
+
+  Projected search ranges map back to editable model offsets and retain their projection for later
+  range reads and searches.
+
+- dfe6d27: Display and edit Word mathematical equations through a bounded linear-math editor.
+- 0fb376a: The store entry point now exports the full review-item vocabulary: `ReviewCustomItem` joins the `ReviewItem` union, and `ReviewModelInput` carries the custom-node inputs.
+
+### Patch Changes
+
+- 1b7ce7c: API report snapshots now use a canonical member order, so `api:check` no longer fails across machines; no runtime changes.
+- 71052d6: Internal unit-type hardening: twips and points values now carry branded types and share one conversion module, with no behavior change.
+- 91d3797: Typing now skips unused note pagination and reuses unchanged document layout data in large documents. Fixes #391.
+- 1367058: Typing in a long document no longer rebuilds the review paragraph-order index on every keystroke, and repeated state reads reuse the resolved caret content control instead of re-running the hit test. Replacing a block content-control placeholder now reports the paragraph swap, so review items anchored in the replacement stay activatable.
+- 5d08027: Lists now suppress paragraph spacing between consecutive items when converted documents omit the built-in contextual spacing rule.
+- 0f09123: List markers now reflow when the numbering level's face or size changes.
+- 5fbddee: Keep font, spacing, and alignment menus visible in the responsive toolbar overflow panel.
+- fae8055: The note-properties state now refreshes when a shared header or footer is re-entered from a different section, instead of reporting the previously opened section's numbering.
+- 865637a: New ordered lists now start at one instead of continuing an earlier disconnected list.
+- 808ffac: Typing in a multi-page section keeps the section's untouched sheets identical across passes, so paint skips them, and repaints no longer walk the whole document to collect drawing keys.
+- abd2d27: Selection writes in a repeating table header now land on the page the user is looking at, so copy and typing no longer target the first painted copy.
+- 94ec84e: Plain horizontal arrow keys now collapse a text selection to its start or end without moving one extra character.
+- 44f11db: The editor snapshot now notifies subscribers when `hasReviewContent` changes.
+- 03262fc: Review author colours now remain stable while you edit, remove, and undo comments or tracked changes in an attached document.
+- 2704c4d: Speed up large-document typing by caching paragraph, section, list, and content-control lookups so keystrokes avoid repeated full-document walks.
+  - @docx-editor.dev/i18n@2.9.0
+
 ## 2.8.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/pro",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering) and custom inline nodes over content controls.",
   "sideEffects": false,
   "type": "module",

@@ -1,5 +1,7 @@
 # @docx-editor.dev/pro
 
+## 2.9.0
+
 ## 2.8.0
 
 ### Patch Changes

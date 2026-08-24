@@ -1,5 +1,12 @@
 # @eigenpal/docx-js-editor
 
+## 2.9.0
+
+### Patch Changes
+
+- 040be03: Show a responsive document page with loading status while a document opens.
+  - @docx-editor.dev/i18n@2.9.0
+
 ## 2.8.0
 
 ### Patch Changes
