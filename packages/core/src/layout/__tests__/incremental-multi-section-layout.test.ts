@@ -142,6 +142,36 @@ describe('multi-section page identity and invalidation', () => {
     expect(session.stats.reusedPages).toBeGreaterThan(0);
   });
 
+  test('an edit keeps the untouched pages of ITS OWN section by identity', () => {
+    // The rebuilt section republishes every sheet it laid, including the ones its own
+    // incremental pass carried over by reference — and the remap used to mint fresh box and
+    // furniture wrappers on all of them. Paint skips a page only by record identity, so a
+    // one-character edit repainted the whole section. The publish memo returns the previous
+    // sheet when nothing about it changed; only the edited page may change identity.
+    const session = createLayoutSession();
+    const before = lay(load(twoSectionDocument()), 1, session);
+    expect(before.pages.length).toBeGreaterThan(3);
+    // Edit a paragraph that lays out on a LATER page of section 0, so earlier section-0
+    // pages are provably untouched.
+    const after = lay(
+      load(twoSectionDocument((body) => body.replace('s0p10 ', 's0p10-changed '))),
+      2,
+      session
+    );
+    expect(after.pages.length).toBe(before.pages.length);
+    const changed = after.pages
+      .filter((page, index) => before.pages[index] !== page)
+      .map((page) => page.index);
+    // The page carrying the edit, and nothing else — not its section siblings.
+    expect(changed.length).toBe(1);
+    const changedText = after.pages[changed[0]!]!.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph'
+        ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
+        : []
+    ).join('');
+    expect(changedText).toContain('s0p10-changed');
+  });
+
   test('a line-count change before a next-page section keeps later-section pages', () => {
     const session = createLayoutSession();
     const before = lay(load(twoSectionDocument()), 1, session);

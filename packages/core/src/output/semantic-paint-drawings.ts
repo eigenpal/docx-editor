@@ -13,6 +13,7 @@ import type { DrawingPoint } from '../layout/drawing-geometry.ts';
 import { cssTransformForDrawingImage } from '../layout/drawing-geometry.ts';
 import type {
   LayoutBox,
+  PageRecord,
   ParagraphFragmentRecord,
   TableFragmentRecord,
 } from '../layout/semantic-records.ts';
@@ -707,38 +708,32 @@ export function paintAnchoredDrawingsLayer(
 const MAX_TEXTBOX_STORY_DEPTH = 16;
 
 /**
- * Every drawing a page paints, whatever story it is in.
+ * Every drawing one page paints, whatever story it is in.
  *
  * `paintPageNoteAreas` paints note fragments through the same `paintFragment` the body uses, so
  * a picture in a footnote gets a cached element and a blob URL like any other. Walking only the
  * body and the furniture stories meant the reconcile pass never saw those keys and treated them
  * as unused — so every repaint revoked the note image's resource and stripped its `src`. Typing
  * one character in the body blanked a picture in a footnote.
- *
- * `visitDrawing` receives the page so a caller can key on it; the resource walk ignores it.
  */
-function forEachPaintedDrawing(
-  layout: SemanticLayout,
-  visitDrawing: (pageIndex: number, drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
+function forEachPageDrawing(
+  page: PageRecord,
+  visitDrawing: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
 ): void {
-  const visitBlock = (
-    pageIndex: number,
-    block: ParagraphFragmentRecord | TableFragmentRecord
-  ): void => {
+  const visitBlock = (block: ParagraphFragmentRecord | TableFragmentRecord): void => {
     if (block.kind === 'table') {
       for (const row of block.rows) {
         for (const cell of row.cells) {
-          for (const inner of cell.blocks) visitBlock(pageIndex, inner);
+          for (const inner of cell.blocks) visitBlock(inner);
         }
       }
       return;
     }
     for (const line of block.lines) {
-      for (const drawing of line.drawings ?? []) visitDrawing(pageIndex, drawing);
+      for (const drawing of line.drawings ?? []) visitDrawing(drawing);
     }
   };
   const visitStory = (
-    pageIndex: number,
     story: {
       readonly fragments: readonly (ParagraphFragmentRecord | TableFragmentRecord)[];
       readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
@@ -750,43 +745,74 @@ function forEachPaintedDrawing(
     // to trust it, since the cost of the bound is nothing.
     if (depth > MAX_TEXTBOX_STORY_DEPTH) return;
     for (const drawing of story.anchoredDrawings ?? []) {
-      visitDrawing(pageIndex, drawing);
+      visitDrawing(drawing);
       // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) visitStory(pageIndex, drawing.textboxStory, depth + 1);
+      if (drawing.textboxStory) visitStory(drawing.textboxStory, depth + 1);
     }
-    for (const fragment of story.fragments) visitBlock(pageIndex, fragment);
+    for (const fragment of story.fragments) visitBlock(fragment);
   };
 
-  for (const page of layout.pages) {
-    visitStory(page.index, {
-      fragments: page.fragments,
-      ...(page.anchoredDrawings ? { anchoredDrawings: page.anchoredDrawings } : {}),
-    });
-    for (const story of [page.header, page.footer]) {
-      if (story) visitStory(page.index, story);
-    }
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      // The separator is an authored story too, and `paintPageNoteAreas` paints it.
-      if (area.separator) visitStory(page.index, area.separator);
-      for (const note of area.notes) visitStory(page.index, note);
-    }
+  visitStory({
+    fragments: page.fragments,
+    ...(page.anchoredDrawings ? { anchoredDrawings: page.anchoredDrawings } : {}),
+  });
+  for (const story of [page.header, page.footer]) {
+    if (story) visitStory(story);
   }
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    // The separator is an authored story too, and `paintPageNoteAreas` paints it.
+    if (area.separator) visitStory(area.separator);
+    for (const note of area.notes) visitStory(note);
+  }
+}
+
+interface PageDrawingKeys {
+  readonly resourceKeys: readonly string[];
+  readonly elementKeys: readonly string[];
+}
+
+/**
+ * Drawing keys per immutable page record.
+ *
+ * Both collectors run on every paint, and each walked every fragment of every page — two
+ * whole-document walks per keystroke for answers that cannot change on an untouched page.
+ * Page records are reused by identity across incremental passes, and everything a key reads
+ * (fragments, resource state, the page index the element key embeds) lives inside the record,
+ * so the record's identity is the complete cache key.
+ */
+const drawingKeysByPage = new WeakMap<PageRecord, PageDrawingKeys>();
+
+function pageDrawingKeys(page: PageRecord): PageDrawingKeys {
+  const cached = drawingKeysByPage.get(page);
+  if (cached) return cached;
+  const resourceKeys: string[] = [];
+  const elementKeys: string[] = [];
+  forEachPageDrawing(page, (drawing) => {
+    if (drawing.resource.kind === 'ready') resourceKeys.push(drawing.resource.resourceKey);
+    elementKeys.push(`p${page.index}|${drawing.drawingNodeId}`);
+  });
+  const keys: PageDrawingKeys = Object.freeze({
+    resourceKeys: Object.freeze(resourceKeys),
+    elementKeys: Object.freeze(elementKeys),
+  });
+  drawingKeysByPage.set(page, keys);
+  return keys;
 }
 
 export function collectUsedDrawingResourceKeys(layout: SemanticLayout): ReadonlySet<string> {
   const keys = new Set<string>();
-  forEachPaintedDrawing(layout, (_pageIndex, drawing) => {
-    if (drawing.resource.kind === 'ready') keys.add(drawing.resource.resourceKey);
-  });
+  for (const page of layout.pages) {
+    for (const key of pageDrawingKeys(page).resourceKeys) keys.add(key);
+  }
   return keys;
 }
 
 export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlySet<string> {
   const keys = new Set<string>();
-  forEachPaintedDrawing(layout, (pageIndex, drawing) => {
-    keys.add(`p${pageIndex}|${drawing.drawingNodeId}`);
-  });
+  for (const page of layout.pages) {
+    for (const key of pageDrawingKeys(page).elementKeys) keys.add(key);
+  }
   return keys;
 }
 

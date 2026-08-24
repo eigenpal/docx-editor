@@ -258,6 +258,58 @@ function adoptMultiSectionResult(
 }
 
 /**
+ * The published (remapped + PAGE-field-stamped) sheet a section-local page last produced.
+ *
+ * A rebuilt section remaps EVERY page it laid, including the ones its own incremental pass
+ * carried over by reference — and `remapPage` mints fresh box and furniture wrappers even
+ * when nothing moved. Paint skips a page only by record identity, so a one-character edit
+ * repainted every sheet of its section. Keyed on the section-local record: an edit replaces
+ * it, and any changed publish parameter misses, so the memo can only return a twin the same
+ * inputs would rebuild.
+ */
+interface PublishedPageMemo {
+  readonly globalIndex: number;
+  readonly sheetY: number;
+  readonly pageNumber: number;
+  readonly sectionPageCount: number;
+  readonly format: string | undefined;
+  readonly published: PageRecord;
+}
+const publishedPageMemos = new WeakMap<PageRecord, PublishedPageMemo>();
+
+function publishSectionPage(
+  page: PageRecord,
+  globalIndex: number,
+  sheetY: number,
+  pageNumber: number,
+  sectionPageCount: number,
+  format: string | undefined
+): PageRecord {
+  const memo = publishedPageMemos.get(page);
+  if (
+    memo &&
+    memo.globalIndex === globalIndex &&
+    memo.sheetY === sheetY &&
+    memo.pageNumber === pageNumber &&
+    memo.sectionPageCount === sectionPageCount &&
+    memo.format === format
+  ) {
+    return memo.published;
+  }
+  const remapped = remapPage(page, globalIndex, sheetY);
+  const published = withPageFieldSources([remapped], pageNumber, sectionPageCount, format)[0]!;
+  publishedPageMemos.set(page, {
+    globalIndex,
+    sheetY,
+    pageNumber,
+    sectionPageCount,
+    format,
+    published,
+  });
+  return published;
+}
+
+/**
  * Lay a multi-section part out section by section, with per-section incremental sessions.
  *
  * `w:type` on a section (default `nextPage`) controls whether that section starts on a new
@@ -268,6 +320,7 @@ function adoptMultiSectionResult(
  * An empty final section is still laid out when its break type requires a new sheet: that
  * materializes the blank page Word keeps for the section's geometry and furniture.
  */
+
 export function layoutMultiSectionDocument(
   blocks: readonly OoxmlElement[],
   sections: readonly DocumentSection[],
@@ -448,11 +501,18 @@ export function layoutMultiSectionDocument(
     } else {
       const built: PageRecord[] = [];
       for (const page of laid.pages) {
-        const next = remapPage(page, pages.length + built.length, sheetY);
+        const next = publishSectionPage(
+          page,
+          pages.length + built.length,
+          sheetY,
+          displayedStart + built.length,
+          laid.pages.length,
+          format
+        );
         built.push(next);
         sheetY = next.box.y + next.box.height + 24;
       }
-      remapped = withPageFieldSources(built, displayedStart, built.length, format);
+      remapped = built;
       for (const page of remapped) {
         pages.push(page);
         remappedAll.push(page);
