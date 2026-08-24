@@ -18,6 +18,7 @@ import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
+import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship, type RelationshipRecord } from '../package/relationships.ts';
 import {
@@ -392,6 +393,8 @@ export class TreePackageStore {
     // a before/after diff, so it needs the same "was it even possible" gate.
     let mayEmptyComments = false;
     const commentTargets = new Set<string>();
+    let turnsListOn = false;
+    let listStyleId: string | undefined;
     const result = store.transact(
       (ctx) => {
         build({
@@ -400,6 +403,11 @@ export class TreePackageStore {
           // same unit as the story, and rebuilding the object dropped them.
           ...ctx,
           apply: (op) => {
+            if (op.op === 'setListNumbering' && op.numId !== null) turnsListOn = true;
+            if (op.op === 'setParagraphProperties') {
+              listStyleId ??= op.properties.find((property) => property.localName === 'pStyle')
+                ?.attributes?.val;
+            }
             if (!mayDeleteNoteAtoms) {
               if (
                 op.op === 'deleteText' &&
@@ -463,6 +471,10 @@ export class TreePackageStore {
     }
 
     this.syncPackageFromStore(store);
+    if (turnsListOn && listStyleId) {
+      const repaired = ensureListParagraphContextualSpacing(this.pkg, listStyleId);
+      if (repaired) this.replacePackageShell(repaired);
+    }
 
     // Cascade note-body deletion when a reference atom was removed by text or block delete.
     // Body mutation + cascade share one package history unit; local story history is

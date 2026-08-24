@@ -579,8 +579,7 @@ export function mountPaginatedSurface(
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
 
-  // Styles/numbering are immutable in-session; cascade + index are built once and shared
-  // by body layout and header/footer stories.
+  // Style and numbering indexes are identity-memoized and shared by every story.
   const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
   let onDrawingResourcesChanged: (() => void) | null = null;
   const decodePort =
@@ -737,7 +736,7 @@ export function mountPaginatedSurface(
     selectionMark: () => selectionMark(),
     textOf: (paragraphId) => textOf(paragraphId),
     selectedCells: () => cellSelection?.cellIds,
-    defaultParagraphStyleId: () => styleCascade?.defaultParagraphStyleId ?? null,
+    defaultParagraphStyleId: () => styleCascade()?.defaultParagraphStyleId ?? null,
     defaultFontFamily: () => options.defaultFontFamily ?? null,
     pendingFormats: () => pendingAtCaret(),
     setPendingFormats: (next) => {
@@ -795,7 +794,7 @@ export function mountPaginatedSurface(
     // `setListLevel` was refused where layout would have rendered the marker fine.
     numberingLevelExists: (numId, level) =>
       resolveNumberingLevel(
-        withNumberingStyleLinks(numberingIndex(), styleCascade),
+        withNumberingStyleLinks(numberingIndex(), styleCascade()),
         numId,
         level
       ) !== null,
@@ -925,7 +924,7 @@ export function mountPaginatedSurface(
       cache: layoutCache,
       session: layoutSession,
       producer,
-      styleCascade,
+      styleCascade: styleCascade(),
       defaultTabStopPt,
       numberingIndex: numberingIndex(),
       sectionFurniture: furnitureSource.sectionFurniture(),

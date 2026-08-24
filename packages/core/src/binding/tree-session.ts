@@ -253,17 +253,9 @@ export interface TreeDocxSessionView {
    * empty paragraph — a declaration with no glyph behind it.
    */
   rendersText(): boolean;
-  /**
-   * The `w:style` definitions of the styles part, validated and projected for a style
-   * picker. Memoized once: the styles part is immutable for the session's lifetime.
-   * A document without a styles part answers `[]`.
-   */
+  /** Validated style-picker projection. A document without styles answers `[]`. */
   documentStyles(): readonly DocumentStyleEntry[];
-  /**
-   * Root of the styles part tree, for layout's style cascade. Memoized once; `null` when
-   * the package has no styles part. Styles editing is a later slice, so this is immutable
-   * for the session.
-   */
+  /** Current styles root for layout, or `null` when the package has no styles part. */
   stylesRoot(): OoxmlElement | null;
   /**
    * The theme part's Latin typefaces, for resolving `w:rFonts` theme references in layout.
@@ -709,18 +701,14 @@ export function openTreeSession(
     return headerFooterBySection;
   };
 
-  // The styles / numbering parts, resolved once through the main part's relationships
-  // (the same resolution discipline `resolveHeaderFooterParts` uses), with conventional
-  // part names as fallbacks. Both are immutable in-session (editing is a later slice).
+  // Resolve styles and numbering through relationships, with conventional-name fallbacks.
+  // Their memoized roots are cleared after the narrow package edits this session supports.
   const STYLES_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
   const NUMBERING_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
-  let stylesRootResolved = false;
   let stylesRoot: OoxmlElement | null = null;
   const resolveStylesRoot = (): OoxmlElement | null => {
-    if (stylesRootResolved) return stylesRoot;
-    stylesRootResolved = true;
     const live = currentPackage();
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === STYLES_REL_TYPE
@@ -733,7 +721,12 @@ export function openTreeSession(
       }
     }
     part ??= live.parts.get('/word/styles.xml');
-    stylesRoot = part?.root ?? null;
+    const next = part?.root ?? null;
+    if (next !== stylesRoot) {
+      stylesRoot = next;
+      stylesCache = null;
+      runDefaultsResolver = null;
+    }
     return stylesRoot;
   };
 
@@ -870,16 +863,8 @@ export function openTreeSession(
   let themeColorsCache: readonly DocumentThemeColorEntry[] | null = null;
   let themeFontsCache: DocumentThemeFonts | null = null;
   /**
-   * The trees the document-wide catalogs read: the live body, the styles part, and every
-   * other story — each distinct header and footer across sections, and both note parts.
-   *
-   * NOTES ARE STORIES TOO. The list enumerated them explicitly and stopped one short, so a
-   * family declared only in a footnote was invisible: the host was never told to load it, so
-   * the note measured and painted with a fallback face, and the font picker did not offer it.
-   *
-   * Shared so `documentFonts` and `rendersText` can never disagree about what "the document"
-   * covers. Not memoized — both callers cache their own answer per package revision, and this
-   * only gathers already-resolved roots.
+   * Live body, styles, headers, footers, and notes used by both document-wide catalogs.
+   * Including notes ensures their fonts load. Callers memoize each answer by package revision.
    */
   const catalogRoots = (): OoxmlElement[] => {
     const roots: OoxmlElement[] = [bodyStore().part.root];
@@ -897,8 +882,7 @@ export function openTreeSession(
   let runDefaultsResolver:
     | ((styleId: string | null, runProperties?: readonly RunPropertyLike[]) => StyleRunDefaults)
     | null = null;
-  // Paragraph -> pStyle, per revision: an edit can change a paragraph's style, but the
-  // styles and theme parts cannot change in-session.
+  // Paragraph -> pStyle, per revision. Style-part repair clears this cache explicitly.
   let pStyleCache: { readonly revision: number; readonly byId: Map<string, string | null> } | null =
     null;
   let outlineCache: {

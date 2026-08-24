@@ -58,7 +58,7 @@ export function createFurnitureSource(env: {
   readonly measurer: TextMeasurer;
   readonly producer: string;
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
-  readonly styleCascade?: Parameters<typeof layoutHeaderFooterStory>[5];
+  readonly styleCascade?: () => Parameters<typeof layoutHeaderFooterStory>[5];
   /**
    * `numbering.xml`, so a `w:numPr` paragraph in a header or footer resolves a marker.
    *
@@ -132,6 +132,7 @@ export function createFurnitureSource(env: {
       producer: string;
       drawingLayoutToken: string;
       numberingIndex: import('../layout/numbering-index.ts').NumberingIndex | undefined;
+      styleCascade: Parameters<typeof layoutHeaderFooterStory>[5];
       story: ReturnType<typeof layoutHeaderFooterStory>;
     }
   >();
@@ -160,6 +161,7 @@ export function createFurnitureSource(env: {
     const marginLeft = sectionGeometry?.margin.left ?? 0;
     const marginRight = sectionGeometry?.margin.right ?? 0;
     const numbering = numberingIndex?.();
+    const styles = styleCascade?.();
     const memo = hfStoryMemo.get(part);
     if (
       memo &&
@@ -171,7 +173,8 @@ export function createFurnitureSource(env: {
       memo.marginRight === marginRight &&
       memo.producer === producer &&
       memo.drawingLayoutToken === partDrawingToken &&
-      memo.numberingIndex === numbering
+      memo.numberingIndex === numbering &&
+      memo.styleCascade === styles
     ) {
       return memo.story;
     }
@@ -182,7 +185,7 @@ export function createFurnitureSource(env: {
       measurer,
       producer,
       cache,
-      styleCascade,
+      styles,
       undefined,
       undefined,
       defaultTabStopPt,
@@ -218,6 +221,7 @@ export function createFurnitureSource(env: {
       producer,
       drawingLayoutToken: partDrawingToken,
       numberingIndex: numbering,
+      styleCascade: styles,
       story,
     });
     return story;
@@ -300,36 +304,42 @@ function stampStoryRId(
   };
 }
 
-/** Immutable-in-session style + numbering projections shared by body and furniture layout. */
+/** Style and numbering projections shared by body and furniture layout. */
 export function createSurfaceStyleDeps(session: TreeDocxSessionView): {
-  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly styleCascade: () => StyleCascadeTable | undefined;
   /**
    * `w:settings/w:defaultTabStop` in points. Read once: the settings part is immutable
-   * in-session, like the styles part.
+   * in-session.
    */
   readonly defaultTabStopPt: number;
   /**
    * Read per layout pass, not captured once.
    *
-   * The styles part is immutable in-session, but the numbering part is NOT: turning on
-   * bullets creates a definition, and a captured index would keep reporting the document
-   * as unnumbered. `session.numberingRoot()` is memoized until that happens, so re-reading
-   * costs a map lookup on every other pass.
+   * The numbering part is mutable: turning on bullets can create a definition.
    */
   numberingIndex(): NumberingIndex;
 } {
-  let root: OoxmlElement | null | undefined;
-  let index: NumberingIndex | undefined;
+  let numberingRoot: OoxmlElement | null | undefined;
+  let numbering: NumberingIndex | undefined;
+  let stylesRoot: OoxmlElement | null | undefined;
+  let styles: StyleCascadeTable | undefined;
   return {
-    styleCascade: buildStyleCascadeTable(session.stylesRoot(), session.documentThemeFonts()),
+    styleCascade() {
+      const current = session.stylesRoot();
+      if (styles === undefined || current !== stylesRoot) {
+        stylesRoot = current;
+        styles = buildStyleCascadeTable(current, session.documentThemeFonts());
+      }
+      return styles;
+    },
     defaultTabStopPt: defaultTabIntervalFromSettings(session.settingsRoot()),
     numberingIndex() {
       const current = session.numberingRoot();
-      if (index === undefined || current !== root) {
-        root = current;
-        index = buildNumberingIndex(current);
+      if (numbering === undefined || current !== numberingRoot) {
+        numberingRoot = current;
+        numbering = buildNumberingIndex(current);
       }
-      return index;
+      return numbering;
     },
   };
 }
@@ -494,7 +504,7 @@ export function createNotesLayoutInput(env: {
   readonly measurer: TextMeasurer;
   readonly producer: string;
   readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
-  readonly styleCascade?: StyleCascadeTable;
+  readonly styleCascade?: () => StyleCascadeTable | undefined;
   /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
   readonly numberingIndex?: () => import('../layout/numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
@@ -572,7 +582,7 @@ export function createNotesLayoutInput(env: {
     measurer: env.measurer,
     producer: env.producer,
     cache: env.cache,
-    styleCascade: env.styleCascade,
+    styleCascade: env.styleCascade?.(),
     numberingIndex: env.numberingIndex?.(),
     defaultTabStopPt: env.defaultTabStopPt,
     ...(drawingsForPart ? { drawingsForPart } : {}),

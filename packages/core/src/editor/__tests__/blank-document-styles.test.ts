@@ -90,6 +90,11 @@ async function savedDocument(editor: DocxEditorInstance): Promise<string> {
   return strFromU8(files['word/document.xml']!);
 }
 
+async function savedStyles(editor: DocxEditorInstance): Promise<string> {
+  const files = unzipSync(new Uint8Array(await editor.save()));
+  return strFromU8(files['word/styles.xml']!);
+}
+
 describe("the blank template's style gallery", () => {
   test("it defines Word's built-in styles, in Word's gallery order", () => {
     const { editor } = mount(blankDocumentBytes());
@@ -195,6 +200,35 @@ describe('toggleList applies List Paragraph, as Word does', () => {
     expect(saved).not.toContain('<w:pStyle w:val="Normal"/>');
     const [first, second] = blockHeights(surface);
     expect(second! - first!).toBe(8);
+  });
+
+  test('a converted List Paragraph style gains contextual spacing before use', async () => {
+    const { editor, surface } = mount(
+      docx(
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="ListParagraph">' +
+          '<w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/></w:style>',
+        '<w:p><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr><w:r><w:t>one</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:spacing w:before="120" w:after="120"/></w:pPr><w:r><w:t>two</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>after</w:t></w:r></w:p>'
+      )
+    );
+    selectParagraphs(surface, 0, 1);
+    expect(surface.toggleList('bullet')).toBe(true);
+
+    const styles = await savedStyles(editor);
+    expect(styles).toMatch(
+      /<w:style [^>]*w:styleId="ListParagraph"[^>]*>.*<w:pPr><w:contextualSpacing\/><\/w:pPr><\/w:style>/
+    );
+    const [first, second] = surface
+      .layout()
+      .pages[0]!.fragments.filter((fragment) => fragment.kind === 'paragraph');
+    if (first?.kind !== 'paragraph' || second?.kind !== 'paragraph') {
+      throw new Error('expected list paragraphs');
+    }
+    expect(first.spacing.after).toBe(0);
+    expect(second.spacing.before).toBe(0);
+    expect(second.spacing.after).toBe(6);
   });
 
   test('pressing Bullets FIRST and then typing closes the items up too', () => {
