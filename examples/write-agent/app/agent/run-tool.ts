@@ -46,7 +46,10 @@ function handlesAt(response: AutomationBatchResponse, index: number): readonly A
 }
 
 export function createWriterRuntime(editor: DocxEditorInstance): DocxEditorRuntime {
-  return EditorApi.createBrowser(editor, { author: WRITER_AUTHOR });
+  return EditorApi.createBrowser(editor, {
+    author: WRITER_AUTHOR,
+    revisionTextView: 'vanilla',
+  });
 }
 
 async function readDocument(runtime: DocxEditorRuntime): Promise<ToolResult> {
@@ -54,15 +57,12 @@ async function readDocument(runtime: DocxEditorRuntime): Promise<ToolResult> {
     const collection = context.document.body.paragraphs;
     collection.load();
     await context.sync();
-    const reads = collection.items.map((paragraph) => {
-      paragraph.load('uniqueLocalId');
-      return paragraph.getText({ projection: 'vanilla' });
-    });
+    collection.items.forEach((paragraph) => paragraph.load(['uniqueLocalId', 'text']));
     await context.sync();
     return collection.items
-      .map((paragraph, index) => ({
+      .map((paragraph) => ({
         id: paragraph.uniqueLocalId,
-        text: reads[index]!.value,
+        text: paragraph.text,
       }))
       .filter((paragraph) => paragraph.text.length > 0);
   });
@@ -81,10 +81,28 @@ async function createDocument(
     );
   }
   const { blocks, title } = parsed.data;
-  const paragraphIds = await runtime.run(async (context) => {
-    context.document.body.replaceParagraphs(blocks.map((block) => block.text));
-    await context.sync();
+  const host = createBrowserAutomationHost(editor);
+  const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
+  const body = handleAt(host.execute({ operations: [{ op: 'getBody', document }] }), 0);
+  const replacement = host.execute({
+    operations: [
+      {
+        op: 'replaceStoryBlocks',
+        body,
+        paragraphs: blocks.map((block) => block.text),
+      },
+    ],
+  });
+  const replacementResult = replacement.results[0];
+  if (replacementResult?.status !== 'ok' || replacementResult.value.kind !== 'applied') {
+    const detail =
+      replacementResult?.status === 'error'
+        ? `${replacementResult.error.code}: ${replacementResult.error.detail}`
+        : 'operation returned no applied result';
+    throw new Error(`replaceStoryBlocks: ${detail}`);
+  }
 
+  const paragraphIds = await runtime.run(async (context) => {
     const collection = context.document.body.paragraphs;
     collection.load();
     await context.sync();
@@ -122,9 +140,6 @@ async function createDocument(
     .map((block, index) => (block.contentControl ? index : -1))
     .filter((index) => index >= 0);
   if (controls.length > 0) {
-    const host = createBrowserAutomationHost(editor);
-    const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
-    const body = handleAt(host.execute({ operations: [{ op: 'getBody', document }] }), 0);
     const paragraphs = handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body }] }), 0);
     const response = host.execute({
       operations: controls.map((index) => ({
@@ -174,7 +189,6 @@ async function selectExactRangeEnd(
   await runtime.run(async (context) => {
     const hits = context.document.body.search(phrase, {
       matchCase: true,
-      projection: 'vanilla',
     });
     hits.load();
     await context.sync();

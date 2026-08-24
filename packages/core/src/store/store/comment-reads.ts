@@ -24,8 +24,10 @@
 // this document hold", and the answer is a property of the canonical tree rather than of any one
 // of their views — layout re-exports what is here rather than owning it. The walk is the store's
 // own story walk (`storyRootsOf`), which is also why a comment anchored inside a footnote is
-// found: a notes part holds a story per note, and the reader that stopped at one root per part
-// answered nothing for it.
+// found: a notes part holds a story per NORMAL note, and the reader that stopped at one root
+// per part answered nothing for it. A comment anchored inside a `w:separator` or a
+// `w:continuationSeparator` is not found — those are not stories, Word writes no comment there,
+// and a malformed file that does keeps its markup on save rather than losing it.
 
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import {

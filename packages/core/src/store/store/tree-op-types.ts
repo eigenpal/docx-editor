@@ -4,6 +4,7 @@
 // accepted property boundaries, and the effect/rejection contracts. Validation lives in
 // tree-op-validate.ts; application lives in tree-op-apply.ts; both re-export via tree-ops.ts.
 
+import type { ParagraphTabStop } from '../../contracts/types.ts';
 import type { ContentControlLock } from '../package/content-control-nodes.ts';
 import type { OoxmlDrawingNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import type {
@@ -14,7 +15,7 @@ import type {
 } from '../package/drawing-projection.ts';
 import type {
   ContentControlValueInput,
-  InsertableContentControlType,
+  InsertableContentControlKind,
 } from './tree-op-content-controls.ts';
 import type { TableBorderStyle } from '../table-border-style.ts';
 
@@ -105,6 +106,9 @@ export const ACCEPTED_PARAGRAPH_PROPERTIES = [
   'keepLines',
   'widowControl',
   'pageBreakBefore',
+  // Word's "Don't add space between paragraphs of the same style". Layout has always read
+  // it (`paragraphContextualSpacing`); until now nothing could write it.
+  'contextualSpacing',
   'shd', // shading
 ] as const;
 
@@ -112,14 +116,20 @@ export type AcceptedRunProperty = (typeof ACCEPTED_RUN_PROPERTIES)[number];
 export type AcceptedParagraphProperty = (typeof ACCEPTED_PARAGRAPH_PROPERTIES)[number];
 
 /**
+ * One tab stop an op can author: where it sits, how it aligns, and what fills the gap.
+ *
+ * An alias, not a second declaration. The contract lane already names this shape, and two
+ * public names for one shape is a trap — a caller building a stop for a read and for an op
+ * would otherwise have to name it two things.
+ */
+export type TabStopWrite = ParagraphTabStop;
+
+/**
  * One authored property: an element name plus its `w:`-namespace attributes.
  *
  * Modeled as name+attributes rather than a typed record per property because that is what
  * the tree holds, so an op maps to nodes without a lossy intermediate vocabulary. Attribute
  * VALUES are validated as XML text; their meaning is the resolver's business.
- */
-/**
- * One property an op writes, as a name plus attributes.
  *
  * Deliberately structural rather than a typed union: the accepted property lists bound WHICH
  * properties may be written, so the shape itself does not need to enumerate them.
@@ -356,6 +366,30 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly numId: string | null;
       readonly level?: number;
+    }
+  | {
+      /**
+       * Replace a paragraph's custom tab stops, or clear them with an empty list.
+       *
+       * Its OWN op rather than a `w:tabs` entry in `setParagraphProperties`, because
+       * `OoxmlProperty` is flat and `w:tabs` carries its meaning in `w:tab` children — the
+       * same reason `setListNumbering` exists for `w:numPr`.
+       */
+      readonly op: 'setParagraphTabStops';
+      readonly paragraphId: string;
+      readonly stops: readonly TabStopWrite[];
+      /**
+       * Every stop position IN FORCE when the editor read the paragraph, including the
+       * ones a style supplied.
+       *
+       * Tab stops are read through the cascade and written at the paragraph level, so a
+       * replace alone cannot remove an inherited stop — the user clears a row, the style
+       * puts it straight back, and the command reports success. A position that was in
+       * force and is not in `stops` is suppressed with `w:val="clear"`, which is what the
+       * value exists for (§17.3.1.37). Omit when the caller has no cascade to speak of;
+       * the write is then a plain paragraph-level replace.
+       */
+      readonly inForcePositionsTwips?: readonly number[];
     }
   | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
   | {
@@ -804,7 +838,7 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly start: number;
       readonly end: number;
-      readonly type: InsertableContentControlType;
+      readonly type: InsertableContentControlKind;
       readonly tag?: string;
       readonly alias?: string;
       readonly lock?: ContentControlLock;
@@ -952,6 +986,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertPageField',
   'setListLevel',
   'setListNumbering',
+  'setParagraphTabStops',
   'setParagraphMarkProperties',
   'splitParagraph',
   'splitParagraphMany',
@@ -1071,6 +1106,15 @@ export type TreeOpRejection =
   | 'unsupported-property'
   | 'invalid-property-value'
   | 'not-adjacent-siblings'
+  /**
+   * The addressed position is strictly inside content nothing can divide: a hyperlink, an
+   * inline content control, a revision wrapper, or an atomic field.
+   *
+   * Distinct from `invalid-range`, which is an offset the paragraph does not have. This one is
+   * a real offset that is not a PLACE — refused rather than resolved to the nearest one, so a
+   * caller learns the node would not have landed where they asked.
+   */
+  | 'indivisible-content'
   | 'unknown-block'
   | 'not-a-block'
   | 'block-required'

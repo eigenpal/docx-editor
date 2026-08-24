@@ -9,7 +9,6 @@ import { AutomationHandle } from '@docx-editor.dev/core/automation';
 import { AutomationHost } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
 import { AutomationSpan } from '@docx-editor.dev/core/automation';
-import { AutomationTextProjection } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 
@@ -23,7 +22,6 @@ class Body_2 extends ModelObject {
     get contentControls(): ContentControlCollection;
     get font(): Font;
     getComments(): CommentCollection;
-    getText(options?: TextReadOptions): ClientResult<string>;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     insertParagraph(paragraphText: string, insertLocation: 'Start' | 'End'): Paragraph;
@@ -38,7 +36,6 @@ class Body_2 extends ModelObject {
     paragraphsUnder(label: string): ParagraphCollection;
     // @internal
     static promisedStory(context: RequestContext, label: string): Body_2;
-    replaceParagraphs(paragraphs: readonly string[]): void;
     get revisions(): RevisionCollection;
     search(searchText: string, options?: SearchOptions): RangeCollection;
     get style(): string;
@@ -251,12 +248,14 @@ export type ContentControlValue = {
 // @public
 export interface CreateBrowserOptions {
     readonly author?: string;
+    readonly revisionTextView?: RevisionTextView;
 }
 
 // @public
 export interface CreateServerOptions {
     readonly author?: string;
     readonly limits?: DocumentLimits;
+    readonly revisionTextView?: RevisionTextView;
 }
 
 // @public
@@ -548,7 +547,6 @@ export class Paragraph extends ModelObject implements PromisedItem {
     get firstLineIndent(): number;
     set firstLineIndent(value: number);
     get font(): Font;
-    getText(options?: TextReadOptions): ClientResult<string>;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
@@ -609,10 +607,9 @@ export type ParagraphInsertTextLocation = Extract<InsertLocation, 'Replace' | 'S
 // @public
 class Range_2 extends ModelObject implements PromisedItem {
     // @internal
-    static at(context: RequestContext, label: string, address: ObjectAddress, projection?: AutomationTextProjection): Range_2;
+    static at(context: RequestContext, label: string, address: ObjectAddress): Range_2;
     get bookmarks(): BookmarkCollection;
     get font(): Font;
-    getText(options?: TextReadOptions): ClientResult<string>;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
@@ -626,7 +623,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     protected onLoad(request: ResolvedLoadOptions): void;
     get paragraphs(): ParagraphCollection;
     // @internal
-    static promised(context: RequestContext, label: string, nullable: boolean, projection?: AutomationTextProjection): Range_2;
+    static promised(context: RequestContext, label: string, nullable: boolean): Range_2;
     search(searchText: string, options?: SearchOptions): RangeCollection;
     select(selectionMode_?: SelectionMode_2): void;
     get style(): string;
@@ -649,7 +646,7 @@ export class RangeCollection extends ItemCollection<Range_2> {
     // @internal
     protected listing(): AutomationOperation | null;
     // @internal
-    static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation, projection?: AutomationTextProjection): RangeCollection;
+    static of(context: RequestContext, label: string, owner: ObjectPath, plan: () => AutomationOperation): RangeCollection;
     // @internal
     protected promised(label: string, nullable: boolean): Range_2 & PromisedItem;
     // @internal
@@ -710,6 +707,9 @@ export class RevisionCollection extends HandleCollection<Revision> {
 }
 
 // @public
+export type RevisionTextView = 'all' | 'vanilla';
+
+// @public
 export type RevisionType = 'None' | 'Insert' | 'Delete' | 'Property' | 'ParagraphNumber' | 'DisplayField' | 'Reconcile' | 'Conflict' | 'Style' | 'Replace' | 'ParagraphProperty' | 'TableProperty' | 'SectionProperty' | 'StyleDefinition' | 'MovedFrom' | 'MovedTo' | 'CellInsertion' | 'CellDeletion' | 'CellMerge' | 'CellSplit' | 'ConflictInsert' | 'ConflictDelete';
 
 // @public
@@ -722,7 +722,6 @@ export interface SearchOptions {
     readonly matchCase?: boolean;
     readonly matchWholeWord?: boolean;
     readonly matchWildcards?: boolean;
-    readonly projection?: TextProjection;
 }
 
 // @public
@@ -760,14 +759,6 @@ export class SectionCollection extends HandleCollection<Section> {
 // @public
 type SelectionMode_2 = 'Select' | 'Start' | 'End';
 export { SelectionMode_2 as SelectionMode }
-
-// @public
-export type TextProjection = 'all' | 'vanilla';
-
-// @public
-export interface TextReadOptions {
-    readonly projection?: TextProjection;
-}
 
 // @public
 export class TrackedObjects {

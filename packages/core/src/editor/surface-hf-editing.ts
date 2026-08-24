@@ -63,6 +63,15 @@ export interface HeaderFooterScopeController {
 export function createHeaderFooterScopeController(deps: {
   session: TreeDocxSessionView;
   layout(): SemanticLayout;
+  /**
+   * The section a painted page belongs to.
+   *
+   * One header part can be the default of SEVERAL sections, so "the first section that names
+   * this rId" is a different page's geometry from the one the reader is on. Binding the
+   * PAINTED page's section is what keeps a programmatic entry agreeing with a pointer entry,
+   * which already forwards it.
+   */
+  sectionAtPage(pageIndex: number): { sectionIndex: number; sectionStart: number };
   selection(): SemanticSelection;
   setScopeSelection(next: SemanticSelection): void;
   noteModelMoved(): void;
@@ -99,7 +108,17 @@ export function createHeaderFooterScopeController(deps: {
     if (!activeHf) return;
     const next = resolvePreferredFurniturePage(deps.layout(), activeHf, deps.materializedPages?.());
     if (next === activeHf.pageIndex) return;
-    activeHf = { ...activeHf, pageIndex: next };
+    // The SECTION moves with the page. `resolvePreferredFurniturePage` scans every page
+    // hosting this story and takes the first materialized one, and for a header shared across
+    // sections that page can be in a different section from the one bound at entry. Carrying
+    // the old index over meant a repagination or a scroll left the bound section pointing at a
+    // page the reader is no longer on — the same wrong-section write the entry path was just
+    // fixed for, arriving by a different route.
+    activeHf = {
+      ...activeHf,
+      pageIndex: next,
+      sectionIndex: deps.sectionAtPage(next).sectionIndex,
+    };
   };
 
   const enterHeaderFooter = (args: {
@@ -164,11 +183,24 @@ export function createHeaderFooterScopeController(deps: {
           head: { ...selection.head },
         };
 
+    // The PAGE the reader is on decides the section, and only a re-scope that names no new
+    // page keeps the prior one.
+    //
+    // Leaving this undefined for a painted story sent every downstream reader to "the first
+    // section naming this rId" — which, for a header shared by several sections, is not the
+    // page the reader is looking at. Page Setup then wrote that other section's `w:sectPr` and
+    // the ruler clamped to its geometry. Keeping the prior section when the caller DID name a
+    // new page is the same defect a step later: the page moves and the section it belongs to
+    // does not.
+    const staysOnPriorPage =
+      alreadyOpen && prior?.sectionIndex !== undefined && pageIndex === prior.pageIndex;
     const sectionIndex =
       args.sectionIndex ??
-      (alreadyOpen && prior?.sectionIndex !== undefined
+      (staysOnPriorPage
         ? prior.sectionIndex
-        : fromPackage?.sectionIndex);
+        : found
+          ? deps.sectionAtPage(pageIndex).sectionIndex
+          : fromPackage?.sectionIndex);
 
     activeHf = {
       scope: { kind: 'headerFooter', rId: args.rId },

@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test';
 import { applyTreeOp, readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { documentOrder } from '../document-order.ts';
 import {
   caretAt,
   caretStops,
@@ -250,27 +251,39 @@ describe('what reads a merged line reads its own paragraph', () => {
   test('a selection inside the second half is highlighted', () => {
     const layout = lay(load(DELETED_MARK), 'proposed');
     const second = linesOf(layout)[0]!.spans[1]!.range.paragraphId;
-    const rects = selectionRects(layout, {
-      anchor: { paragraphId: second, offset: 0 },
-      head: { paragraphId: second, offset: 5 },
-    });
+    const rects = selectionRects(
+      layout,
+      {
+        anchor: { paragraphId: second, offset: 0 },
+        head: { paragraphId: second, offset: 5 },
+      },
+      documentOrder(layout)
+    );
     expect(rects).toHaveLength(1);
     expect(rects[0]!.width).toBeGreaterThan(0);
     expect(
-      spansInSelection(layout, {
-        anchor: { paragraphId: second, offset: 0 },
-        head: { paragraphId: second, offset: 5 },
-      }).map((span) => span.text)
+      spansInSelection(
+        layout,
+        {
+          anchor: { paragraphId: second, offset: 0 },
+          head: { paragraphId: second, offset: 5 },
+        },
+        documentOrder(layout)
+      ).map((span) => span.text)
     ).toEqual(['world']);
   });
 
   test('a selection across the join covers both halves', () => {
     const layout = lay(load(DELETED_MARK), 'proposed');
     const ids = linesOf(layout)[0]!.spans.map((span) => span.range.paragraphId);
-    const rects = selectionRects(layout, {
-      anchor: { paragraphId: ids[0]!, offset: 0 },
-      head: { paragraphId: ids[1]!, offset: 5 },
-    });
+    const rects = selectionRects(
+      layout,
+      {
+        anchor: { paragraphId: ids[0]!, offset: 0 },
+        head: { paragraphId: ids[1]!, offset: 5 },
+      },
+      documentOrder(layout)
+    );
     const covered = rects.reduce((total, rect) => total + rect.width, 0);
     const line = linesOf(layout)[0]!;
     const lineWidth = line.spans.reduce((total, span) => total + span.box.width, 0);

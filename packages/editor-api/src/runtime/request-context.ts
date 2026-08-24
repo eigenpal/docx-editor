@@ -32,7 +32,7 @@ import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
 import type { ClientObject } from './client-object.ts';
 import { DocxEditorError, fail } from './errors.ts';
-import type { DocumentCapabilities } from './runtime.ts';
+import type { DocumentCapabilities, RevisionTextView } from './runtime.ts';
 import {
   INTERNALS,
   REBIND,
@@ -49,6 +49,8 @@ export interface RuntimeSession {
   readonly capabilities: AutomationCapabilities;
   /** Who a comment this runtime writes is recorded as, or absent when it may not write one. */
   readonly author?: string;
+  /** Revision view used by standard Office-compatible text reads and searches. */
+  readonly revisionTextView: RevisionTextView;
   /** Identity for adoption checks. The session object itself. */
   readonly id: object;
   roots(): RootHandles;
@@ -98,6 +100,7 @@ export class RequestContext {
       host: session.host,
       capabilities: session.capabilities,
       ...(session.author === undefined ? {} : { author: session.author }),
+      revisionTextView: session.revisionTextView,
       queue: this.#queue,
       session: session.id,
       roots: () => session.roots(),

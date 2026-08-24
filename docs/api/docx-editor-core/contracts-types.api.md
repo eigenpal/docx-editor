@@ -200,6 +200,9 @@ export interface IndentFormatting {
 }
 
 // @public
+export type InsertableContentControlType = Extract<ContentControlType, 'richText' | 'plainText' | 'dropdown' | 'comboBox' | 'date'> | 'dropDownList';
+
+// @public
 export interface NumberingRef {
     readonly level: number;
     // (undocumented)
@@ -229,6 +232,75 @@ export interface Paragraph {
     readonly runs: readonly Run[];
     // (undocumented)
     readonly styleId?: string;
+}
+
+// @public
+export interface ParagraphDisagreements {
+    // (undocumented)
+    readonly alignment: boolean;
+    // (undocumented)
+    readonly lineSpacing: boolean;
+    // (undocumented)
+    readonly spaceAfterPt: boolean;
+    // (undocumented)
+    readonly spaceBeforePt: boolean;
+    // (undocumented)
+    readonly tabStops: boolean;
+}
+
+// @public
+export interface ParagraphFlags {
+    // (undocumented)
+    readonly contextualSpacing: boolean | null;
+    // (undocumented)
+    readonly keepLines: boolean | null;
+    // (undocumented)
+    readonly keepNext: boolean | null;
+    // (undocumented)
+    readonly pageBreakBefore: boolean | null;
+    // (undocumented)
+    readonly widowControl: boolean | null;
+}
+
+// @public
+export interface ParagraphFormatCommand {
+    // (undocumented)
+    alignment?: 'left' | 'center' | 'right' | 'justify';
+    // (undocumented)
+    contextualSpacing?: boolean;
+    indentFirstLineTwips?: number | null;
+    // (undocumented)
+    indentLeftTwips?: number | null;
+    // (undocumented)
+    indentRightTwips?: number | null;
+    // (undocumented)
+    keepLines?: boolean;
+    // (undocumented)
+    keepNext?: boolean;
+    // (undocumented)
+    lineSpacing?: {
+        rule: 'multiple' | 'exact' | 'atLeast';
+        value: number;
+    } | null;
+    // (undocumented)
+    pageBreakBefore?: boolean;
+    // (undocumented)
+    spaceAfterPt?: number | null;
+    // (undocumented)
+    spaceBeforePt?: number | null;
+    tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    widowControl?: boolean;
+}
+
+// @public
+export interface ParagraphTabStop {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
 }
 
 // @public
@@ -289,6 +361,7 @@ export interface RunFormatting {
     readonly bold?: boolean;
     // (undocumented)
     readonly color?: ColorValue;
+    readonly disagrees?: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily?: string;
     // (undocumented)
@@ -302,6 +375,7 @@ export interface RunFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     };
+    readonly paragraphFlags?: ParagraphFlags;
     // (undocumented)
     readonly spaceAfterPt?: number;
     readonly spaceBeforePt?: number;
@@ -312,6 +386,7 @@ export interface RunFormatting {
     readonly subscript?: boolean;
     // (undocumented)
     readonly superscript?: boolean;
+    readonly tabStops?: readonly ParagraphTabStop[];
     // (undocumented)
     readonly underline?: boolean;
 }

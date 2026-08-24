@@ -24,6 +24,7 @@ import {
 } from '../package/custom-node-payloads.ts';
 import {
   customXmlNodes,
+  type CustomXmlNode,
   readCustomXmlNode,
   withCustomXmlNode,
   withoutCustomXmlNode,
@@ -443,6 +444,38 @@ export interface CustomNodePayloadRead {
 }
 
 /**
+ * The customXml stores one part relates, with each store's nodes indexed by id.
+ *
+ * Memoized per package, because the owner is a constant and the readers under it are not
+ * memoized themselves. {@link customNodePayloadsByControl} is called once per STORY when the
+ * review queue rebuilds, and the queue rebuilds per package revision — so on a document with a
+ * dozen furniture parts this parsed the same store a dozen times per keystroke.
+ */
+const customXmlStoreNodesByPackage = new WeakMap<
+  OoxmlPackage,
+  Map<string, readonly { readonly itemId: string; readonly nodes: Map<string, CustomXmlNode> }[]>
+>();
+
+function customXmlStoreNodes(
+  pkg: OoxmlPackage,
+  dataOwnerPartName: string
+): readonly { readonly itemId: string; readonly nodes: Map<string, CustomXmlNode> }[] {
+  let byOwner = customXmlStoreNodesByPackage.get(pkg);
+  if (!byOwner) {
+    byOwner = new Map();
+    customXmlStoreNodesByPackage.set(pkg, byOwner);
+  }
+  const cached = byOwner.get(dataOwnerPartName);
+  if (cached) return cached;
+  const built = customXmlDataParts(pkg, dataOwnerPartName).map((store) => ({
+    itemId: store.itemId,
+    nodes: new Map(customXmlNodes(pkg, store.partName).map((node) => [node.id, node])),
+  }));
+  byOwner.set(dataOwnerPartName, built);
+  return built;
+}
+
+/**
  * The payload every control in a story binds to, keyed by the CONTROL's canonical node id.
  *
  * Keyed by the control rather than by the store node because that is the question a reader
@@ -455,17 +488,24 @@ export interface CustomNodePayloadRead {
  */
 export function customNodePayloadsByControl(
   pkg: OoxmlPackage,
-  storyPartName: string
+  storyPartName: string,
+  /**
+   * The part that RELATES the customXml store, when it is not the story's own.
+   *
+   * Two different questions wear one name here: which part holds the CONTROLS, and which part
+   * relates the STORE they bind into. Word only reads a store hung off the main document part,
+   * so {@link writeCustomNode} already takes them separately — this read did not, and answered
+   * with the body's controls whatever story it was asked about. A chip in a header therefore
+   * read as having no payload at all, and an update that meant to keep the existing data
+   * dropped it.
+   */
+  dataOwnerPartName: string = storyPartName
 ): ReadonlyMap<string, CustomNodePayloadRead> {
   const found = new Map<string, CustomNodePayloadRead>();
   const story = pkg.parts.get(storyPartName);
   if (!story) return found;
-  const stores = customXmlDataParts(pkg, storyPartName);
-  if (stores.length === 0) return found;
-  const nodesByStore = stores.map((store) => ({
-    itemId: store.itemId,
-    nodes: new Map(customXmlNodes(pkg, store.partName).map((node) => [node.id, node])),
-  }));
+  const nodesByStore = customXmlStoreNodes(pkg, dataOwnerPartName);
+  if (nodesByStore.length === 0) return found;
   for (const entry of contentControlsIn(story.root)) {
     for (const store of nodesByStore) {
       const nodeId = boundCustomXmlNodeIdOf(entry.node, store.itemId);

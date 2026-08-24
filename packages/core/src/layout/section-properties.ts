@@ -375,7 +375,14 @@ export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): Se
 }
 
 /** The body-level `w:sectPr`, which is the last child of `w:body`. */
-function bodySectionNode(part: OoxmlPart): OoxmlNode | undefined {
+/**
+ * The body-level `w:sectPr`, which governs the FINAL section.
+ *
+ * Exported because the last section's properties live nowhere else: every earlier section is
+ * closed by a paragraph-level mark, and a caller that collects only those has no node at all
+ * for the last one — including the whole of a single-section document.
+ */
+export function bodySectionNode(part: OoxmlPart): OoxmlNode | undefined {
   const find = (node: OoxmlNode): OoxmlNode | undefined => {
     if (node.kind === 'textValue') return undefined;
     if (node.kind === 'body') return childNamed(node, 'sectPr');

@@ -703,48 +703,24 @@ export function paintAnchoredDrawingsLayer(
   return Object.freeze(painted);
 }
 
-export function collectUsedDrawingResourceKeys(layout: SemanticLayout): ReadonlySet<string> {
-  const keys = new Set<string>();
-  const visitDrawing = (drawing: InlineDrawingRecord | AnchoredDrawingRecord): void => {
-    if (drawing.resource.kind === 'ready') keys.add(drawing.resource.resourceKey);
-  };
-  const visitLine = (line: { readonly drawings?: readonly InlineDrawingRecord[] }): void => {
-    for (const drawing of line.drawings ?? []) visitDrawing(drawing);
-  };
-  const visitParagraphFragment = (fragment: ParagraphFragmentRecord): void => {
-    for (const line of fragment.lines) visitLine(line);
-  };
-  const visitBlock = (block: ParagraphFragmentRecord | TableFragmentRecord): void => {
-    if (block.kind === 'table') {
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          for (const inner of cell.blocks) visitBlock(inner);
-        }
-      }
-      return;
-    }
-    visitParagraphFragment(block);
-  };
-  for (const page of layout.pages) {
-    for (const drawing of page.anchoredDrawings ?? []) visitDrawing(drawing);
-    for (const fragment of page.fragments) visitBlock(fragment);
-    for (const story of [page.header, page.footer]) {
-      if (!story) continue;
-      for (const drawing of story.anchoredDrawings ?? []) visitDrawing(drawing);
-      for (const fragment of story.fragments) visitBlock(fragment);
-    }
-  }
-  return keys;
-}
+/** Nesting bound for text-box stories inside text-box stories. */
+const MAX_TEXTBOX_STORY_DEPTH = 16;
 
-export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlySet<string> {
-  const keys = new Set<string>();
-  const visitDrawing = (
-    pageIndex: number,
-    drawing: InlineDrawingRecord | AnchoredDrawingRecord
-  ): void => {
-    keys.add(`p${pageIndex}|${drawing.drawingNodeId}`);
-  };
+/**
+ * Every drawing a page paints, whatever story it is in.
+ *
+ * `paintPageNoteAreas` paints note fragments through the same `paintFragment` the body uses, so
+ * a picture in a footnote gets a cached element and a blob URL like any other. Walking only the
+ * body and the furniture stories meant the reconcile pass never saw those keys and treated them
+ * as unused — so every repaint revoked the note image's resource and stripped its `src`. Typing
+ * one character in the body blanked a picture in a footnote.
+ *
+ * `visitDrawing` receives the page so a caller can key on it; the resource walk ignores it.
+ */
+function forEachPaintedDrawing(
+  layout: SemanticLayout,
+  visitDrawing: (pageIndex: number, drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
+): void {
   const visitBlock = (
     pageIndex: number,
     block: ParagraphFragmentRecord | TableFragmentRecord
@@ -761,15 +737,56 @@ export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlyS
       for (const drawing of line.drawings ?? []) visitDrawing(pageIndex, drawing);
     }
   };
+  const visitStory = (
+    pageIndex: number,
+    story: {
+      readonly fragments: readonly (ParagraphFragmentRecord | TableFragmentRecord)[];
+      readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
+    },
+    depth = 0
+  ): void => {
+    // Capped like every other walk over file-derived structure here. Layout builds these
+    // records, so a cycle should be impossible — which is the reason to bound it rather than
+    // to trust it, since the cost of the bound is nothing.
+    if (depth > MAX_TEXTBOX_STORY_DEPTH) return;
+    for (const drawing of story.anchoredDrawings ?? []) {
+      visitDrawing(pageIndex, drawing);
+      // A text box is a story of its own, nested in the drawing that anchors it.
+      if (drawing.textboxStory) visitStory(pageIndex, drawing.textboxStory, depth + 1);
+    }
+    for (const fragment of story.fragments) visitBlock(pageIndex, fragment);
+  };
+
   for (const page of layout.pages) {
-    for (const drawing of page.anchoredDrawings ?? []) visitDrawing(page.index, drawing);
-    for (const fragment of page.fragments) visitBlock(page.index, fragment);
+    visitStory(page.index, {
+      fragments: page.fragments,
+      ...(page.anchoredDrawings ? { anchoredDrawings: page.anchoredDrawings } : {}),
+    });
     for (const story of [page.header, page.footer]) {
-      if (!story) continue;
-      for (const drawing of story.anchoredDrawings ?? []) visitDrawing(page.index, drawing);
-      for (const fragment of story.fragments) visitBlock(page.index, fragment);
+      if (story) visitStory(page.index, story);
+    }
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      // The separator is an authored story too, and `paintPageNoteAreas` paints it.
+      if (area.separator) visitStory(page.index, area.separator);
+      for (const note of area.notes) visitStory(page.index, note);
     }
   }
+}
+
+export function collectUsedDrawingResourceKeys(layout: SemanticLayout): ReadonlySet<string> {
+  const keys = new Set<string>();
+  forEachPaintedDrawing(layout, (_pageIndex, drawing) => {
+    if (drawing.resource.kind === 'ready') keys.add(drawing.resource.resourceKey);
+  });
+  return keys;
+}
+
+export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlySet<string> {
+  const keys = new Set<string>();
+  forEachPaintedDrawing(layout, (pageIndex, drawing) => {
+    keys.add(`p${pageIndex}|${drawing.drawingNodeId}`);
+  });
   return keys;
 }
 

@@ -164,6 +164,16 @@ const IMPACT_RANK: Record<ImpactClass, number> = {
 export interface TreeDocumentStoreOptions {
   /** Bound on retained history entries. Oldest entries drop first. */
   readonly historyLimit?: number;
+  /**
+   * The document's `settings.xml`, for a store built from a PART rather than a package.
+   *
+   * Forms protection lives one part up from the op, and a store built from a part gets a
+   * synthetic one-part package that cannot see it — so `w:documentProtection w:edit="forms"`
+   * was enforced in the body and nowhere else, and a header, a footer or a note accepted every
+   * write a protected document is supposed to refuse. Read through a getter, not captured: a
+   * document can gain or lose protection while its stories stay open.
+   */
+  readonly settingsPart?: () => OoxmlPart | null | undefined;
 }
 
 /** A package holding exactly one part, for callers that never open a real one. */
@@ -220,6 +230,8 @@ export class TreeDocumentStore {
   private readonly redoStack: HistoryEntry[] = [];
   private readonly subscribers = new Set<(change: TreeModelChange) => void>();
   private readonly historyLimit: number;
+  /** See {@link TreeDocumentStoreOptions.settingsPart}. */
+  private readonly settingsPartOverride: (() => OoxmlPart | null | undefined) | undefined;
   /** Package-aware story tag applied to publishes (including undo/redo). */
   private storyRef: TreeStoryRef | null = null;
 
@@ -254,6 +266,7 @@ export class TreeDocumentStore {
     this.current = isPart ? singlePartPackage(source) : source;
     this.storyPartName = storyPartName ?? (isPart ? source.name : source.mainDocumentPart);
     this.historyLimit = options.historyLimit ?? 200;
+    this.settingsPartOverride = options.settingsPart;
   }
 
   /**
@@ -408,7 +421,11 @@ export class TreeDocumentStore {
       // Forms protection lives in `settings.xml`, one part up from the op, so it is resolved
       // HERE rather than in the per-part applier: a part alone cannot see whether the document
       // it belongs to is protected.
-      const protection = formsProtectionRefusal(target, settingsPartOf(working), op);
+      const protection = formsProtectionRefusal(
+        target,
+        this.settingsPartOverride?.() ?? settingsPartOf(working),
+        op
+      );
       if (protection) {
         failure = { reason: protection };
         return false;

@@ -18,6 +18,7 @@ import {
 } from '../package/package-edit.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { insertChildren, findNode, replaceNode } from '../package/ooxml-edit.ts';
+import { relativeTarget } from '../package/custom-xml-part.ts';
 import { resolveInternalTarget } from '../package/opc-names.ts';
 import {
   WML_NAMESPACE_URI,
@@ -174,20 +175,58 @@ function relatedPartName(
   contentType: string | readonly string[],
   conventional: string
 ): string {
-  for (const record of relationshipsOf(pkg, storyPartName)) {
-    if (record.type !== relationshipType) continue;
-    const resolved = resolveInternalTarget(storyPartName, record.rawTarget);
-    if (!resolved.ok) continue;
-    if (!pkg.parts.has(resolved.partName)) return resolved.partName;
-    const actual = resolveContentTypeOf(pkg, resolved.partName);
-    if (
-      actual !== null &&
-      (typeof contentType === 'string' ? actual === contentType : contentType.includes(actual))
-    ) {
-      return resolved.partName;
+  // The story first, then the MAIN document, because that is where Word keeps the comments
+  // relationship and where this lane now mints it. A story that names its own part still wins.
+  const owners =
+    storyPartName === pkg.mainDocumentPart
+      ? [storyPartName]
+      : [storyPartName, pkg.mainDocumentPart];
+  for (const owner of owners) {
+    for (const record of relationshipsOf(pkg, owner)) {
+      if (record.type !== relationshipType) continue;
+      const resolved = resolveInternalTarget(owner, record.rawTarget);
+      if (!resolved.ok) continue;
+      if (!pkg.parts.has(resolved.partName)) return resolved.partName;
+      const actual = resolveContentTypeOf(pkg, resolved.partName);
+      if (
+        actual !== null &&
+        (typeof contentType === 'string' ? actual === contentType : contentType.includes(actual))
+      ) {
+        return resolved.partName;
+      }
     }
   }
   return conventional;
+}
+
+/**
+ * The package with the MAIN DOCUMENT relating `targetPartName`, added only if it is missing.
+ *
+ * Word resolves the comments part through the main document's relationship and through no
+ * other, so that is where this lane mints one. Two things make it a helper rather than a call:
+ * `withRelationship` appends unconditionally, so a second call would write a duplicate record;
+ * and the part may already exist because a STORY relates it, in which case the creation branch
+ * is skipped and the main document would otherwise never gain its own.
+ *
+ * `withRelationship` fails closed when the owner has no `.rels` part. The main document always
+ * has one, which is the other reason the relationship belongs there rather than on a header.
+ */
+function withMainDocumentRelationship(
+  pkg: OoxmlPackage,
+  relationshipType: string,
+  targetPartName: string
+): OoxmlPackage {
+  const owner = pkg.mainDocumentPart;
+  for (const record of relationshipsOf(pkg, owner)) {
+    if (record.type !== relationshipType) continue;
+    const resolved = resolveInternalTarget(owner, record.rawTarget);
+    if (resolved.ok && resolved.partName === targetPartName) return pkg;
+  }
+  // DERIVED from the part, not a literal. The part name honours a story's redirect to a
+  // non-conventional name, so a hardcoded `comments.xml` beside it minted a relationship
+  // naming a part that does not exist — which the guard above could then never match, so the
+  // branch was re-entered on every comment and the write was refused outright.
+  return withRelationship(pkg, owner, relationshipType, relativeTarget(owner, targetPartName)).pkg;
 }
 
 /** The comment part this story points at, or the conventional name when it has none yet. */
@@ -538,11 +577,14 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
   const result = store.transact((ctx) => {
     // The comment part first, so the relationship the story needs already has a target.
     ctx.applyPackage((current) => {
-      if (current.parts.has(commentsName)) return current;
-      const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
-      if (!root) return current;
-      const withCommentsPart = withNewPart(current, commentsName, root, COMMENTS_TYPE);
-      return withRelationship(withCommentsPart, storyPartName, COMMENTS_REL, 'comments.xml').pkg;
+      const withCommentsPart = current.parts.has(commentsName)
+        ? current
+        : (() => {
+            const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
+            return root ? withNewPart(current, commentsName, root, COMMENTS_TYPE) : null;
+          })();
+      if (withCommentsPart === null) return current;
+      return withMainDocumentRelationship(withCommentsPart, COMMENTS_REL, commentsName);
     });
 
     if (parentTarget && mintedParentParaId) {
@@ -569,16 +611,17 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
     // which is what keeps an untouched round trip untouched.
     if (parentParaId !== null) {
       ctx.applyPackage((current) => {
-        if (current.parts.has(extendedName)) return current;
-        const root = emptyPart(extendedName, `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`);
-        if (!root) return current;
-        const withExtended = withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE);
-        return withRelationship(
-          withExtended,
-          storyPartName,
-          COMMENTS_EXTENDED_REL,
-          'commentsExtended.xml'
-        ).pkg;
+        const withExtended = current.parts.has(extendedName)
+          ? current
+          : (() => {
+              const root = emptyPart(
+                extendedName,
+                `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`
+              );
+              return root ? withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE) : null;
+            })();
+        if (withExtended === null) return current;
+        return withMainDocumentRelationship(withExtended, COMMENTS_EXTENDED_REL, extendedName);
       });
 
       ctx.applyPackage((current) => {

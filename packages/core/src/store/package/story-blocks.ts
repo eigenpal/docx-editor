@@ -22,6 +22,7 @@ import {
   isContentControlWrapper,
 } from './content-control-nodes.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
+import { isNormalNote } from './note-nodes.ts';
 
 /** How deep block-level content controls may nest before the walk stops descending. */
 export const MAX_STORY_SDT_NESTING = 32;
@@ -39,7 +40,15 @@ export interface OoxmlStoryRoot {
 function storyKindOf(node: OoxmlNode): OoxmlStoryKind | null {
   if (node.kind === 'textValue') return null;
   if (node.kind === 'body') return 'body';
-  if (node.kind === 'note') return 'note';
+  // A NORMAL note only. `w:separator` and `w:continuationSeparator` are the rules drawn above
+  // a note area, not content: Word puts no caret in one, and layout paints them as a line
+  // rather than as paragraphs. Counting them as stories made the tree claim two paragraphs the
+  // layout never publishes, so anything ordering by layout ranked a caret in one at -1 — and a
+  // selection ordered against -1 silently collapses to a single paragraph.
+  //
+  // Returning null lets the walk descend, and a separator holds no story root, so its
+  // paragraph belongs to no story at all. That is the honest answer: it is not editable text.
+  if (node.kind === 'note') return isNormalNote(node) ? 'note' : null;
   if (node.localName === 'hdr') return 'header';
   if (node.localName === 'ftr') return 'footer';
   return null;
@@ -64,6 +73,28 @@ export function storyRootsOf(part: OoxmlPart): readonly OoxmlStoryRoot[] {
   };
   walk(part.root);
   return roots;
+}
+
+/**
+ * Whether a part is SHAPED to hold stories — a body, a header, a footer, or a notes part.
+ *
+ * A shape test, deliberately not `storyRootsOf(part).length > 0`. That counts EDITABLE stories,
+ * and a notes part holding nothing but `w:separator` and `w:continuationSeparator` has none —
+ * which is the footnotes part Word writes into every document that ever held a footnote. A
+ * caller asking "should I walk this part at all" that used the editable count skipped it
+ * entirely, and the two callers that ask are a payload sweep and an export strip: both DELETE
+ * what they conclude nothing names.
+ */
+export function isStoryPart(part: OoxmlPart): boolean {
+  const walk = (node: OoxmlNode): boolean => {
+    if (node.kind === 'textValue') return false;
+    // Any note, normal or furniture: the part is a notes part either way.
+    if (node.kind === 'body' || node.kind === 'note') return true;
+    if (node.localName === 'hdr' || node.localName === 'ftr') return true;
+    for (const child of node.children) if (walk(child)) return true;
+    return false;
+  };
+  return walk(part.root);
 }
 
 /** The main body story of a part, or null when the part holds none. */

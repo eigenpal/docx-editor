@@ -52,4 +52,3 @@ export type {
 export { Paragraph, type ParagraphAlignment } from './paragraph.ts';
 export { Range } from './range.ts';
 export type { SearchOptions } from './search-options.ts';
-export type { TextProjection, TextReadOptions } from './text-options.ts';

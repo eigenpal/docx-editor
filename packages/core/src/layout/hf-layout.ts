@@ -41,6 +41,8 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
+import type { NumberingIndex } from './numbering-index.ts';
 import { layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
@@ -74,6 +76,14 @@ export interface HeaderFooterPageContext {
 
 export interface HeaderFooterStoryLayout {
   readonly partName: string;
+  /**
+   * The part this story was laid out from.
+   *
+   * Carried because a derivation that runs over the finished layout cannot reach it otherwise:
+   * the layout receives furniture as fragments plus a NAME, and a name is not a tree. The
+   * content-control boundary pass needs the tree to know which controls exist at all.
+   */
+  readonly part?: OoxmlPart;
   /** Main-document relationship id when the furniture source knows it. */
   readonly rId?: string;
   /**
@@ -149,6 +159,24 @@ function createBoundedContextCache(maxEntries: number): {
 }
 
 /**
+ * Story-level inputs the body path has always had and furniture never did.
+ *
+ * A BAG, not more positional parameters. The signature below already carries fifteen, and its
+ * own doc comment used to tell new callers to "keep passing `undefined` for what they do not
+ * set" — which is why `numberingIndex` was never added and a numbered paragraph in a header
+ * painted no marker for as long as headers have been editable. Everything new goes here.
+ */
+export interface HeaderFooterStoryInputs {
+  /**
+   * `numbering.xml`, so a `w:numPr` paragraph in this story resolves a marker.
+   *
+   * Absent, the story lays out exactly as before: no marker record, and no numbering indent
+   * merged into the paragraph's own.
+   */
+  readonly numberingIndex?: NumberingIndex;
+}
+
+/**
  * Lay one header/footer part out at `contentWidth`.
  *
  * Line ids are namespaced by part so the body's `line-N` counter — which incremental
@@ -163,6 +191,9 @@ function createBoundedContextCache(maxEntries: number): {
  * body — a page-number tab in a metric-locale footer belongs on the document's interval, not
  * on a constant. It sits at the tail because the parameters ahead of it are already
  * positional; new callers should keep passing `undefined` for what they do not set.
+ *
+ * NEW inputs belong in {@link HeaderFooterStoryInputs}, the trailing bag, rather than as a
+ * sixteenth position. Fifteen is what stopped `numberingIndex` being threaded here at all.
  */
 export function layoutHeaderFooterStory(
   part: OoxmlPart,
@@ -179,7 +210,8 @@ export function layoutHeaderFooterStory(
   drawingTokenForParagraph?: (paragraph: import('@docx-editor.dev/core/store').OoxmlNode) => string,
   drawingLayoutToken?: string,
   hfPageContext?: HeaderFooterPageContext,
-  documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties
+  documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties,
+  inputs?: HeaderFooterStoryInputs
 ): HeaderFooterStoryLayout {
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
@@ -188,6 +220,16 @@ export function layoutHeaderFooterStory(
   // did not, so the paragraph a tracked mark merges away kept its own line, and a paragraph a
   // revision removed entirely kept a blank one. The cache is namespaced by mode below.
   const blocks = storyBlocks(part, displayMode);
+  // The story's own list-item map, resolved once per layout of this part.
+  //
+  // Per STORY, not continuing the body's counters: `createListCounterState` is created fresh
+  // per story walk, and a header repeats on every page, so a numbered header list restarts at
+  // `w:start` and shows the same number on page 3 as on page 1. That matches Word, which keeps
+  // furniture numbering independent of the body's.
+  const listItems: ReadonlyMap<string, ResolvedListItem> | undefined = withResolvedListItems(
+    { numberingIndex: inputs?.numberingIndex, styleCascade },
+    blocks
+  ).listItems;
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
   let baseline: HeaderFooterStoryLayout | undefined;
@@ -261,6 +303,7 @@ export function layoutHeaderFooterStory(
             (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
+          ...(listItems ? { listItems } : {}),
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
@@ -337,6 +380,7 @@ export function layoutHeaderFooterStory(
           (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
         nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
         styleCascade,
+        ...(listItems ? { listItems } : {}),
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
         displayMode,
@@ -346,6 +390,7 @@ export function layoutHeaderFooterStory(
 
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
+      part,
       contentKey,
       fragments: flow.blocks,
       flowHeight: flow.bottom,
@@ -437,6 +482,36 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
 }
 
 /**
+ * Marker identity of every list item a header/footer story paints.
+ *
+ * The exact sibling of {@link storyDrawingResourceToken}, and for the same reason. What
+ * otherwise identifies a story — `contentKey` and `flowHeight` — describes the AUTHORED part,
+ * and neither moves when `numbering.xml` changes: the definition lives in a different part, and
+ * a marker sits in the hanging-indent slot, so the story is exactly as tall with `1.` as with
+ * `vii.`. Without this the unchanged-pass early exit finds every key equal and returns the
+ * previous pages BY IDENTITY, furniture included.
+ *
+ * Measured before this existed: a body edit that also changed the numbering left six reused
+ * pages showing the old header marker and the one rebuilt page showing the new one — two
+ * different numbers for the same header in one section.
+ */
+export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
+  const tokens: string[] = [];
+  const visitBlock = (block: BlockFragmentRecord): void => {
+    if (block.kind === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) for (const inner of cell.blocks) visitBlock(inner);
+      }
+      return;
+    }
+    const marker = block.marker;
+    if (marker) tokens.push(`${block.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
+  };
+  for (const block of story.fragments) visitBlock(block);
+  return tokens.length === 0 ? '' : `|list:${tokens.join(',')}`;
+}
+
+/**
  * Resource identity of every image a header/footer story paints.
  *
  * Part of the session context, because the rest of what identifies a story — `contentKey`
@@ -493,7 +568,8 @@ export function furnitureLayoutContext(
     [...source]
       .map(
         ([variant, story]) =>
-          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}${storyDrawingResourceToken(story)}`
+          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}` +
+          `${storyDrawingResourceToken(story)}${storyListMarkerToken(story)}`
       )
       .sort()
       .join(',');

@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { describe, expect, test } from 'bun:test';
 import { isDocxEditorError } from '../../runtime/errors.ts';
+import { createServer } from '../../runtime/server.ts';
 import {
   EMPTY_BODY,
   NESTED_TABLE_DOCUMENT,
@@ -67,46 +68,49 @@ describe('revision text projections', () => {
       '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>'
   );
 
-  test('keeps compatibility reads and offers a consistent vanilla read-search-range view', async () => {
-    const runtime = await serverRuntime(document);
+  test('keeps the Office shape while a runtime selects a consistent vanilla view', async () => {
+    const compatibilityRuntime = await serverRuntime(document);
+    const compatibility = await compatibilityRuntime.run(async (context) => {
+      const body = context.document.body;
+      body.load('text');
+      await context.sync();
+      return body.text;
+    });
+
+    const runtime = await createServer(document, { revisionTextView: 'vanilla' });
     const result = await runtime.run(async (context) => {
       const body = context.document.body;
       body.load('text');
-      const vanilla = body.getText({ projection: 'vanilla' });
-      const found = body.search('gone', { projection: 'vanilla' });
-      const inserted = body.search('added', { projection: 'vanilla' });
+      const found = body.search('gone');
+      const inserted = body.search('added');
       found.load('items');
       inserted.load('items');
       await context.sync();
 
       const range = found.items[0]!;
       range.load('text');
-      const explicitRange = range.getText();
       await context.sync();
       const before = {
-        compatibility: body.text,
-        vanilla: vanilla.value,
+        body: body.text,
         range: range.text,
-        explicitRange: explicitRange.value,
         hiddenMatches: inserted.items.length,
       };
 
       range.insertText('kept', 'Replace');
       await context.sync();
-      const after = body.getText({ projection: 'all' });
+      body.load('text');
       await context.sync();
-      return { before, after: after.value };
+      return { before, after: body.text };
     });
 
-    expect(result).toEqual({
+    expect({ compatibility, ...result }).toEqual({
+      compatibility: 'keep goneadded',
       before: {
-        compatibility: 'keep goneadded',
-        vanilla: 'keep gone',
+        body: 'keep gone',
         range: 'gone',
-        explicitRange: 'gone',
         hiddenMatches: 0,
       },
-      after: 'keep keptadded',
+      after: 'keep kept',
     });
   });
 });

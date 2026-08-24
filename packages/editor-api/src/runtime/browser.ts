@@ -18,7 +18,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // the DOM lib, which is what `__tests__/runtime-boundaries.test.ts` holds in place.
 
 import { createBrowserAutomationHost, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { createRuntime, type DocxEditorRuntime } from './runtime.ts';
+import { createRuntime, type DocxEditorRuntime, type RevisionTextView } from './runtime.ts';
 
 /**
  * How `DocxEditor.createBrowser` borrows a live editor.
@@ -34,6 +34,12 @@ export interface CreateBrowserOptions {
    * `NotSupported`; ordinary document reads and writes are unaffected.
    */
   readonly author?: string;
+  /**
+   * Revision view for ordinary Office-compatible `text` loads and `search()` calls.
+   *
+   * Omitted means `all`.
+   */
+  readonly revisionTextView?: RevisionTextView;
 }
 
 // The editor instance, not the narrower `Editor` a document command programs against: the host
@@ -50,5 +56,8 @@ export function createBrowser(
     host: createBrowserAutomationHost(editor),
     save: false,
     ...(options.author === undefined ? {} : { author: options.author }),
+    ...(options.revisionTextView === undefined
+      ? {}
+      : { revisionTextView: options.revisionTextView }),
   });
 }

@@ -24,6 +24,7 @@ import type {
 } from '@docx-editor.dev/core/automation';
 import type { ActionQueue } from './queue.ts';
 import type { RequestContext } from './request-context.ts';
+import type { RevisionTextView } from './runtime.ts';
 
 export const INTERNALS: unique symbol = Symbol('docx-editor.runtime.internals');
 export const RELEASE: unique symbol = Symbol('docx-editor.runtime.release');
@@ -46,6 +47,8 @@ export interface ContextInternals {
    * write refuses (`NotSupported`) rather than putting a made-up name in the file.
    */
   readonly author?: string;
+  /** Revision view used by standard Office-compatible text reads and searches. */
+  readonly revisionTextView: RevisionTextView;
   readonly queue: ActionQueue;
   /**
    * Identity of the runtime session behind this context.

@@ -183,6 +183,7 @@ export interface TreeDocxSessionView {
     save(): Uint8Array;
     setCommentResolved(commentId: string, resolved: boolean): boolean;
     settingsRoot(): OoxmlElement | null;
+    storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;
     stylesRoot(): OoxmlElement | null;
     // (undocumented)

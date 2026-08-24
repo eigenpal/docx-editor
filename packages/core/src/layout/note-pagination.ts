@@ -141,6 +141,8 @@ export interface NotesLayoutInput {
   readonly producer: string;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
+  /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
+  readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
   /**
    * Link projector seams, same as the body walk's. Normally injected by `semantic-layout`
@@ -248,6 +250,7 @@ const notesInputIdentities = new WeakMap<
     readonly measurer: TextMeasurer;
     readonly cache: unknown;
     readonly styleCascade: unknown;
+    readonly numberingIndex: unknown;
   }
 >();
 
@@ -273,7 +276,10 @@ function notesMemoFor(
       identity.endnotesPart === input.endnotesPart &&
       identity.measurer === input.measurer &&
       identity.cache === input.cache &&
-      identity.styleCascade === input.styleCascade
+      identity.styleCascade === input.styleCascade &&
+      // By identity, like the cascade beside it. `numbering.xml` is a different part from the
+      // notes part, so an edit to it moves nothing else this fingerprint compares.
+      identity.numberingIndex === input.numberingIndex
     ) {
       return { memo: existing, allHits: existing.allHits, reused: true };
     }
@@ -293,6 +299,7 @@ function notesMemoFor(
     measurer: input.measurer,
     cache: input.cache,
     styleCascade: input.styleCascade,
+    numberingIndex: input.numberingIndex,
   });
   session.notes = fresh;
   return { memo: fresh, allHits, reused: false };
@@ -505,6 +512,7 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     producer: input.producer,
     cache: input.cache,
     styleCascade: input.styleCascade,
+    numberingIndex: input.numberingIndex,
     defaultTabStopPt: input.defaultTabStopPt,
     projectLink: input.projectLink,
     projectFieldLink: input.projectFieldLink,

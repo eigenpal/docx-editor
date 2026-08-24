@@ -20,7 +20,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
 import { fail } from './errors.ts';
-import { createRuntime, type DocxEditorServerRuntime } from './runtime.ts';
+import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } from './runtime.ts';
 
 /** Resource limits for the DOCX archive. */
 export interface DocumentZipLimits {
@@ -82,6 +82,12 @@ export interface CreateServerOptions {
    * placeholder name into someone's document.
    */
   readonly author?: string;
+  /**
+   * Revision view for ordinary Office-compatible `text` loads and `search()` calls.
+   *
+   * Omitted means `all`.
+   */
+  readonly revisionTextView?: RevisionTextView;
 }
 
 export async function createServer(
@@ -96,5 +102,8 @@ export async function createServer(
     host: opened.host,
     save: true,
     ...(options.author === undefined ? {} : { author: options.author }),
+    ...(options.revisionTextView === undefined
+      ? {}
+      : { revisionTextView: options.revisionTextView }),
   });
 }

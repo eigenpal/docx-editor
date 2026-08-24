@@ -457,6 +457,51 @@ describe('the failures a payload store can hide', () => {
     expect(store && strFromU8(store)).toContain('src_9f3');
   });
 
+  test('an update in a HEADER keeps the payload the chip already binds', () => {
+    // The store hangs off the MAIN part and the control lives in the header: two different
+    // parts. Reading both from the body answered `undefined`, which the update contract reads
+    // as "no payload" — so a rewrite naming only `text` dropped the data it was meant to carry
+    // and orphaned the node for the next open-time sweep to delete.
+    // No header authored: entering one creates the part, which is the ordinary way a user
+    // gets here and keeps the fixture to the one thing under test.
+    const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
+    expect(editor.exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+    // The scope the editor actually opened, rather than one the test assumes: entering a
+    // header creates the part when the section declares none.
+    const scope = editor.getActiveScope();
+    expect(scope.kind).toBe('headerFooter');
+    const headerParagraph = editor.surface!.session.paragraphIdsIn(
+      scope as { kind: 'headerFooter'; rId: string }
+    )[0]!;
+
+    const inserted = insertCustomNode(editor, citation, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024)',
+      at: { paragraphId: headerParagraph, offset: 0 },
+      data: CITATION,
+    });
+    expect(inserted).toMatchObject({ ok: true });
+    if (!inserted.ok || inserted.nodeId === undefined) return;
+
+    const updated = updateCustomNode(editor, citation, inserted.nodeId, {
+      attrs: { sourceId: 'src_9f3' },
+      text: '(Smith 2024, p. 42)',
+    });
+    expect(updated).toMatchObject({ ok: true, changed: true });
+
+    const saved = unzipSync(editor.surface!.session.save());
+    const headerPart = Object.keys(saved).find((name) => /^word\/header\d+\.xml$/.test(name))!;
+    expect(strFromU8(saved[headerPart]!)).toContain('(Smith 2024, p. 42)');
+
+    // REOPENED, because that is where the loss showed. An update that was handed no payload
+    // still leaves the old node in the store, so an in-session save looks intact; the node is
+    // simply no longer bound, and the open-time sweep collects it the next time the file is
+    // opened. Asserting on this save alone passed with the defect in place.
+    const reopened = mount(zipSync(saved));
+    const store = unzipSync(reopened.surface!.session.save())['customXml/item1.xml'];
+    expect(store && strFromU8(store)).toContain('src_9f3');
+  });
+
   test('an update that only changes the label keeps the payload', () => {
     const editor = mount(docx('<w:p><w:r><w:t>x</w:t></w:r></w:p>'));
     insertCustomNode(editor, citation, {

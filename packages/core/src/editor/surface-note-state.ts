@@ -1,7 +1,13 @@
 // Read-only note-property state for adapter chrome — no tree mutation.
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import { enumerateDocumentSections, paragraphSectionNode } from '../layout/section-properties.ts';
+import {
+  bodySectionNode,
+  enumerateDocumentSections,
+  paragraphSectionNode,
+} from '../layout/section-properties.ts';
+import { sectionIndexForCaret } from './section-scope.ts';
+import { storyScopeOfNodeId } from './surface-scope.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import {
   authoredDocumentEndnoteProperties,
@@ -25,7 +31,7 @@ import {
 } from '../store/package/note-nodes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 export type NotePropertiesSlice = {
@@ -43,39 +49,6 @@ export type NotePropertiesStateSnapshot = {
 /** Hard cap for attacker-controlled note text exposed to hover chrome. */
 export const MAX_NOTE_PREVIEW_CHARS = 500;
 
-function paragraphSectionIndexOf(session: TreeDocxSessionView, paragraphId: string): number {
-  const part = session.part();
-  const sections = enumerateDocumentSections(part);
-  const blocks = storyBlocks(part);
-  const map = new Map<string, number>();
-  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
-    const section = sections[sectionIndex]!;
-    for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
-      const block = blocks[i];
-      if (!block) continue;
-      if (block.kind === 'paragraph') {
-        map.set(block.id, sectionIndex);
-        continue;
-      }
-      const walk = (
-        node: { kind: string; id?: string; children?: readonly unknown[] },
-        depth: number
-      ): void => {
-        if (depth > 32) return;
-        if (node.kind === 'paragraph' && typeof node.id === 'string') {
-          map.set(node.id, sectionIndex);
-          return;
-        }
-        for (const child of node.children ?? []) {
-          walk(child as { kind: string; id?: string; children?: readonly unknown[] }, depth + 1);
-        }
-      };
-      walk(block, 0);
-    }
-  }
-  return map.get(paragraphId) ?? 0;
-}
-
 function sectionSectPrNodes(
   session: TreeDocxSessionView,
   sections: ReturnType<typeof enumerateDocumentSections>
@@ -90,6 +63,14 @@ function sectionSectPrNodes(
     if (!sectPr) continue;
     nodes.push(sectPr);
   }
+  // The FINAL section is closed by the body-level `w:sectPr`, not by a paragraph mark, so it
+  // has no entry in the walk above. Padding it with `undefined` made the dialog report document
+  // defaults for the last section of every document — and in a single-section file that is the
+  // only section there is, so its `w:footnotePr` was never read at all.
+  if (nodes.length < sections.length) {
+    const body = bodySectionNode(session.part());
+    nodes.push(body && body.kind !== 'textValue' ? (body as OoxmlElement) : undefined);
+  }
   while (nodes.length < sections.length) nodes.push(undefined);
   return nodes;
 }
@@ -100,7 +81,14 @@ export function notePropertiesStateOf(
   if (!surface) return null;
   const session = surface.session;
   const paragraphId = surface.state().selection.head.paragraphId;
-  const sectionIndex = paragraphSectionIndexOf(session, paragraphId);
+  const sectionIndex = sectionIndexForCaret(
+    session,
+    paragraphId,
+    surface.activeScope().kind === 'headerFooter'
+      ? { kind: 'headerFooter', rId: surface.headerFooterState()?.rId ?? '' }
+      : storyScopeOfNodeId(session, paragraphId, { kind: 'body' }),
+    surface.headerFooterState()?.sectionIndex
+  );
   const pkg = session.currentPackage();
   const settings = settingsPartOf(pkg);
   const docFnAuthored = authoredDocumentFootnoteProperties(settings);

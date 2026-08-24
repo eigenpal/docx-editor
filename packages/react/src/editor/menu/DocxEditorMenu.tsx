@@ -36,6 +36,7 @@ import { editorScopeFor } from '../editor-scope';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
+import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuContext, type MenuContextValue, type MenuId } from './menu-context';
@@ -178,6 +179,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   // moves it, and opening a menu takes it so Escape returns focus somewhere sensible.
   const [activeMenu, setActiveMenu] = useState<MenuId | null>(null);
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
+  const [paragraphDialogOpen, setParagraphDialogOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -273,6 +275,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       onOpen: resolvedOpen,
       onSave: resolvedSave,
       onPageSetup: resolvedPageSetup,
+      onParagraphDialog: () => setParagraphDialogOpen(true),
       onReportIssue,
       reportIssue,
     }),
@@ -391,6 +394,12 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       />
       {/* The packaged Page Setup dialog. A host that passed `onPageSetup` never opens it. */}
       <DocxEditorPageSetupDialog open={pageSetupOpen} onClose={() => setPageSetupOpen(false)} />
+      {/* The menu bar owns its own, the way it owns Page Setup's: it does not collapse, so
+          this route survives the narrow window that hides the line-spacing menu. */}
+      <DocxEditorParagraphDialog
+        open={paragraphDialogOpen}
+        onClose={() => setParagraphDialogOpen(false)}
+      />
     </MenuContext.Provider>
   );
 }

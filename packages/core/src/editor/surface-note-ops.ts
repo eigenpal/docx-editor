@@ -63,6 +63,8 @@ export interface NoteOps {
 
 export function createNoteOps(deps: {
   session: TreeDocxSessionView;
+  /** Close an open header or footer, because a note replaces it rather than nesting in it. */
+  exitHeaderFooter?: () => void;
   applyOps: (
     ops: readonly TreeDocOp[],
     before?: { paragraphId: string; start: number; end: number } | null,
@@ -134,6 +136,11 @@ export function createNoteOps(deps: {
       deps.setLastRejection('note not found');
       return false;
     }
+    // A note and a header are not both open. `activeScope` answers with the NOTE when both are
+    // set and `storyScope` answers with the HEADER, so every write routed to a store that has
+    // never heard of the note's paragraphs — the edit vanished, with nothing refused. Clicking
+    // a footnote reference while a header was open reached exactly this.
+    deps.exitHeaderFooter?.();
     if (deps.activeScope().kind === 'body') {
       const current = deps.selection();
       savedBodySelection = {

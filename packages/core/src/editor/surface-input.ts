@@ -11,6 +11,8 @@ import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
+import { spanSearchRoots } from './dom-selection.ts';
+import { paintedTextIn } from './surface-composition-readback.ts';
 
 type SelectionMark = { paragraphId: string; start: number; end: number };
 const NAVIGATION: Record<string, NavigationCommand> = {
@@ -410,60 +412,29 @@ export function createBeforeInputHandler(
 /**
  * The text the browser currently shows for a paragraph, IN THE MODEL'S OWN OFFSET SPACE.
  *
- * Not simply the concatenated `textContent`. A span's painted text is not always as long as
- * the range it stands for: a field occupies ONE model offset and paints its whole cached
- * result, so "Scope of the discussions" is 24 glyphs over a range of 1. Joining the painted
- * text made this readback see 23 characters that the model does not have, and the diff below
- * then explained the difference the only way it could — by deleting the field and inserting
- * its own rendering as literal text. One IME composition anywhere in the paragraph destroyed
- * the field permanently and silently.
+ * The reading itself lives in surface-composition-readback.ts, which is the mirror of layout's
+ * `paragraphTextFromLayout`: same rules for repeated ranges, projected atoms and unpainted
+ * offsets, differing only in reading the PAINTED text so an IME's edit is visible.
  *
- * So a PROJECTED span — one layout owns the glyphs of, marked `data-docx-field` and painted
- * `contenteditable="false"` — contributes the MODEL's characters for its range instead. The
- * browser cannot write inside one, so whatever the model has there is still correct, and the
- * diff is left to describe only what actually changed.
- *
- * Keyed on that marker rather than on the lengths disagreeing, which is the tempting shortcut
- * and the wrong one: a browser edit is ALSO a length disagreement, so inferring it that way
- * would swallow the very keystrokes this exists to recover.
+ * This wrapper owns one thing — WHICH ROOT to read. A header or footer open for editing is
+ * searched first, because a shared part paints the same paragraph ids on every page and the
+ * active band is the copy the caret entered; that is the preference the selection reader
+ * already applies. `anchor` settles the same question where no scope attribute can: a
+ * repeating table header row is ordinary body content on every page it repeats on.
  *
  * `modelText` is the paragraph's current model text, which the caller already holds.
  */
 export function paintedTextOf(
   pagesLayer: HTMLElement,
   paragraphId: string,
-  modelText: string
+  modelText: string,
+  anchor: Node | null = null
 ): string | null {
-  const spans = pagesLayer.querySelectorAll('[data-paragraph-id][data-start]');
-  const pieces: { start: number; text: string }[] = [];
-  /** Model ranges already contributed by a projected span, keyed by start. */
-  const projectedRanges = new Set<number>();
-  for (const span of spans) {
-    const element = span as HTMLElement;
-    if (element.dataset.paragraphId !== paragraphId) continue;
-    const start = Number(element.dataset.start);
-    if (!Number.isInteger(start)) continue;
-    if (element.dataset.docxField !== undefined) {
-      // ONCE per range, not once per span. Line breaking splits a field's result at its
-      // spaces and every resulting span republishes the SAME model range, so emitting the
-      // slice per span repeated the field's model characters — a four-word result read back
-      // as four `￼` where the model has one, and the diff then inserted the extras as
-      // literal object-replacement characters.
-      if (projectedRanges.has(start)) continue;
-      projectedRanges.add(start);
-      const rawEnd = element.dataset.end;
-      const end =
-        rawEnd !== undefined && /^\d{1,9}$/.test(rawEnd) && Number(rawEnd) >= start
-          ? Number(rawEnd)
-          : start;
-      pieces.push({ start, text: modelText.slice(start, end) });
-      continue;
-    }
-    pieces.push({ start, text: element.textContent ?? '' });
+  for (const root of spanSearchRoots(pagesLayer)) {
+    const painted = paintedTextIn(root, paragraphId, modelText, anchor);
+    if (painted !== null) return painted;
   }
-  if (pieces.length === 0) return null;
-  pieces.sort((a, b) => a.start - b.start);
-  return pieces.map((piece) => piece.text).join('');
+  return null;
 }
 
 /**

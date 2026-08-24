@@ -287,6 +287,15 @@ const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Object.fr
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',
+  // Scope refusals. Each names a story limit the engine really enforces, so each is chrome the
+  // user reads — and each rendered as raw English in every locale until it was listed here.
+  'a section break can only be inserted in the editable document body':
+    'disabledReason.bodyOnlySectionBreak',
+  'a table of contents can only be inserted in the editable document body':
+    'disabledReason.bodyOnlyToc',
+  'insertNote requires body scope': 'disabledReason.bodyOnlyNote',
+  'insertPageField requires an open header or footer scope':
+    'disabledReason.furnitureOnlyPageField',
 });
 
 /**

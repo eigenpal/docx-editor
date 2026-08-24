@@ -100,6 +100,16 @@ export interface DocxEditorServerRuntime extends DocxEditorRuntime {
   save(): Promise<Uint8Array>;
 }
 
+/**
+ * The tracked-revision view used by this runtime's ordinary Office-compatible text reads.
+ *
+ * `all` preserves the historical behavior. `vanilla` keeps pending deletions visible and hides
+ * pending insertions, so text returned to an agent remains a valid edit anchor.
+ *
+ * @public
+ */
+export type RevisionTextView = 'all' | 'vanilla';
+
 export interface CreateRuntimeOptions {
   readonly host: AutomationHost;
   /**
@@ -119,6 +129,8 @@ export interface CreateRuntimeOptions {
    * (`NotSupported`) instead of inventing a name that would end up in the file.
    */
   readonly author?: string;
+  /** Revision view for standard `text` loads and `search()` calls. Omitted means `all`. */
+  readonly revisionTextView?: RevisionTextView;
 }
 
 export function createRuntime(
@@ -135,6 +147,10 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     typeof options.author === 'string' && options.author.trim().length > 0
       ? options.author
       : undefined;
+  const revisionTextView = options.revisionTextView ?? 'all';
+  if (revisionTextView !== 'all' && revisionTextView !== 'vanilla') {
+    fail({ code: 'InvalidArgument', target: 'revisionTextView' });
+  }
   let disposed = false;
   let roots: RootHandles | null = null;
 
@@ -165,6 +181,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     host,
     capabilities,
     ...(author === undefined ? {} : { author }),
+    revisionTextView,
     id: {},
     roots: resolveRoots,
     assertLive,

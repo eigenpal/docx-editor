@@ -23,14 +23,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   ObjectPath,
-  clientResult,
   fail,
   hydratedSpan,
   hydratedStyle,
   hydratedText,
   type AutomationSpan,
-  type AutomationTextProjection,
-  type ClientResult,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -49,7 +46,6 @@ import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
 import { Comment } from './review.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
-import { textProjection, type TextReadOptions } from './text-options.ts';
 
 /**
  * A stretch of a story: two endpoints, each a paragraph and a UTF-16 offset.
@@ -72,37 +68,20 @@ export class Range extends ModelObject implements PromisedItem {
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
   #bookmarks: BookmarkCollection | undefined;
-  readonly #projection: AutomationTextProjection;
 
   /** @internal A range a read already found. */
-  static at(
-    context: RequestContext,
-    label: string,
-    address: ObjectAddress,
-    projection: AutomationTextProjection = 'all'
-  ): Range {
+  static at(context: RequestContext, label: string, address: ObjectAddress): Range {
     if (address.kind !== 'span') fail({ code: 'InvalidObjectPath', target: label });
-    return new Range(context, ObjectPath.ofSpan(label, address.span), false, projection);
+    return new Range(context, ObjectPath.ofSpan(label, address.span), false);
   }
 
   /** @internal A range a queued operation will name, or report as nothing. */
-  static promised(
-    context: RequestContext,
-    label: string,
-    nullable: boolean,
-    projection: AutomationTextProjection = 'all'
-  ): Range {
-    return new Range(context, ObjectPath.pending(label), nullable, projection);
+  static promised(context: RequestContext, label: string, nullable: boolean): Range {
+    return new Range(context, ObjectPath.pending(label), nullable);
   }
 
-  private constructor(
-    context: RequestContext,
-    path: ObjectPath,
-    nullable: boolean,
-    projection: AutomationTextProjection
-  ) {
+  private constructor(context: RequestContext, path: ObjectPath, nullable: boolean) {
     super(context, path, { nullable });
-    this.#projection = projection;
   }
 
   /** @internal Bind this object to the address the owning read answered. */
@@ -124,20 +103,6 @@ export class Range extends ModelObject implements PromisedItem {
    */
   get text(): string {
     return this.loadedProperty<string>('text');
-  }
-
-  /** Read this range under an explicit revision projection after the next `sync()`. */
-  getText(options?: TextReadOptions): ClientResult<string> {
-    const target = `${this.path.label}.getText`;
-    const projection = textProjection(options, target) ?? this.#projection;
-    const span = this.#span();
-    const { result, fill } = clientResult<string>(target);
-    this.read(
-      target,
-      () => ({ op: 'getSpanText', span, projection }),
-      (value) => fill(hydratedText(value, target))
-    );
-    return result;
   }
 
   /** The character formatting of the characters this range covers. */
@@ -213,20 +178,16 @@ export class Range extends ModelObject implements PromisedItem {
     const target = `${this.path.label}.search`;
     if (typeof searchText !== 'string') fail({ code: 'InvalidArgument', target });
     const selected = searchOptions(options, target);
-    const projection = selected?.projection ?? this.#projection;
     const span = this.#span();
-    return RangeCollection.of(
-      this.context,
-      target,
-      this.path,
-      () => ({
-        op: 'search',
-        scope: span,
-        text: searchText,
-        options: { ...selected, projection },
-      }),
-      projection
-    );
+    return RangeCollection.of(this.context, target, this.path, () => ({
+      op: 'search',
+      scope: span,
+      text: searchText,
+      options: {
+        ...(selected ?? {}),
+        projection: this.revisionTextView(),
+      },
+    }));
   }
 
   /**
@@ -354,7 +315,7 @@ export class Range extends ModelObject implements PromisedItem {
       const label = `${this.path.label}.text`;
       this.read(
         label,
-        () => ({ op: 'getSpanText', span, projection: this.#projection }),
+        () => ({ op: 'getSpanText', span, projection: this.revisionTextView() }),
         (value) => {
           this.setLoadedProperty('text', hydratedText(value, label));
         }

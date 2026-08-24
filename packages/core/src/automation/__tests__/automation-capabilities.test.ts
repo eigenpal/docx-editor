@@ -197,6 +197,7 @@ describe('the operation vocabulary declares which operations write', () => {
     expect([...AUTOMATION_COMMAND_OPERATIONS]).toEqual([
       'insertText',
       'replaceSpan',
+      'replaceStoryBlocks',
       'insertParagraph',
       'splitParagraph',
       'deleteParagraph',

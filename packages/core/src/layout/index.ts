@@ -361,6 +361,10 @@ export {
   type ContentControlFragmentRecord,
 } from './content-control-boundaries.ts';
 export {
+  contentControlHoldingParagraph,
+  contentControlRecordsInPart,
+} from './content-control-boundary-layout.ts';
+export {
   W15_NAMESPACE_URI,
   type CommentAnchor,
   type CommentPosition,
@@ -512,6 +516,7 @@ export {
   contentControlAtSemantic,
   contentControlsInLayout,
   documentOrder,
+  everyStoryOrder,
   // `hitTest` is already taken by the legacy painted-geometry lane; this one answers in
   // MODEL coordinates, so it is named for what it returns rather than shadowing that.
   hitTestSemantic,

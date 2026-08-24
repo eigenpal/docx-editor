@@ -173,8 +173,17 @@ describe('painted furniture never contributes a model offset', () => {
  */
 function paintedFieldParagraph(): HTMLElement {
   const root = document.createElement('div');
+  // The fragment is the paragraph's painted container, and `paintFragment` always stamps it
+  // with the paragraph id — the readback walks it in DOM order so that text the browser
+  // wrote OUTSIDE any span is still seen.
+  const fragment = document.createElement('div');
+  fragment.className = 'docx-paragraph-fragment';
+  fragment.dataset.paragraphId = 'p1';
+  fragment.dataset.fragmentIndex = '0';
   const line = document.createElement('div');
   line.className = 'docx-line';
+  line.dataset.lineId = 'line-1';
+  line.dataset.paragraphId = 'p1';
   const add = (text: string, start: number, end: number, projected = false): void => {
     const span = document.createElement('span');
     span.dataset.paragraphId = 'p1';
@@ -190,7 +199,8 @@ function paintedFieldParagraph(): HTMLElement {
   add('a potential ', 0, 12);
   add('Scope of the discussions', 12, 13, true);
   add(' (the ', 13, 19);
-  root.append(line);
+  fragment.append(line);
+  root.append(fragment);
   return root;
 }
 
@@ -213,8 +223,14 @@ describe('the readback over a paragraph containing a field', () => {
     // so a four-word result read back as four `￼` where the model has one — and the diff then
     // inserted the extras into the document as literal object-replacement characters.
     const root = document.createElement('div');
+    const fragment = document.createElement('div');
+    fragment.className = 'docx-paragraph-fragment';
+    fragment.dataset.paragraphId = 'p1';
+    fragment.dataset.fragmentIndex = '0';
     const line = document.createElement('div');
     line.className = 'docx-line';
+    line.dataset.lineId = 'line-1';
+    line.dataset.paragraphId = 'p1';
     const add = (text: string, start: number, end: number, projected = false): void => {
       const span = document.createElement('span');
       span.dataset.paragraphId = 'p1';
@@ -229,7 +245,8 @@ describe('the readback over a paragraph containing a field', () => {
     add('of the ', 12, 13, true);
     add('discussions', 12, 13, true);
     add(' (the ', 13, 19);
-    root.append(line);
+    fragment.append(line);
+    root.append(fragment);
 
     expect(paintedTextOf(root, 'p1', FIELD_MODEL_TEXT)).toBe(FIELD_MODEL_TEXT);
     expect(paragraphReplacePlan('p1', FIELD_MODEL_TEXT, FIELD_MODEL_TEXT)).toBeNull();

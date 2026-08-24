@@ -513,6 +513,43 @@ export function inlineControlStartingAt(
   return span && span.start === offset ? span : null;
 }
 
+/**
+ * Whether `offset` falls strictly inside content that NO split can divide.
+ *
+ * A run divides at any offset, so a boundary inside one is a place. Three things are not:
+ *
+ *   - an inline CONTAINER — `w:hyperlink`, an inline `w:sdt`, a revision wrapper — which is a
+ *     paragraph child holding runs. Splitting the run inside it leaves the container whole, so
+ *     a caller placing a sibling at that offset would put it beside the container instead of
+ *     where the offset actually is;
+ *   - an ATOMIC FIELD, whose begin/instruction/separate/result/end runs spell ONE unit, and
+ *     which the offset model already reports as one segment;
+ *   - a note reference, for the same reason.
+ *
+ * An op that places a node at an offset asks this first and refuses, rather than emitting the
+ * node somewhere the caller did not name. The alternative — descending into the container and
+ * re-wrapping each half — is what `distributeInline` does for the ops that own that shape.
+ *
+ * Boundaries are places: `offset === span.start` and `offset === span.end` both answer false,
+ * which is what puts a control immediately before or after a link rather than refusing.
+ */
+export function indivisibleAt(paragraph: OoxmlParagraphNode, offset: number): boolean {
+  const index = paragraphOffsetIndex(paragraph);
+  for (const segment of index.segments) {
+    // `removeNodeIds` is the offset model's own record of "these nodes are one unit".
+    if (!segment.removeNodeIds) continue;
+    if (segment.start < offset && offset < segment.end) return true;
+  }
+  for (const child of paragraph.children) {
+    // A run divides at any offset inside it, which is what `splitRunsAt` does; every other
+    // child is taken whole or not at all.
+    if (child.kind === 'run') continue;
+    const span = index.spanOf(child);
+    if (span && span.start < offset && offset < span.end) return true;
+  }
+  return false;
+}
+
 /** Whether an offset falls between the halves of a surrogate pair. */
 export function splitsSurrogate(paragraph: OoxmlParagraphNode, offset: number): boolean {
   for (const segment of segmentsOf(paragraph)) {

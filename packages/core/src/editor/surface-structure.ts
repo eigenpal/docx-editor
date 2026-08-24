@@ -12,19 +12,43 @@ import {
   enumerateDocumentSections,
   paragraphsInCells,
   readSectionProperties,
-  storyBlocks,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
+import { paragraphTabStopsOf } from './surface-formatting.ts';
+import {
+  lineSpacingAttributes,
+  paragraphFlagAttributes,
+  spacingSideAttributes,
+} from './paragraph-format-write.ts';
 import {
   directParagraphProperties,
   mergedProperties,
   paragraphPropertiesOf,
 } from './surface-formatting.ts';
-import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { createListStyleWrites } from './surface-list-style.ts';
+import type {
+  PaginatedSurface,
+  SurfaceParagraphFormat,
+  ParagraphPropertyEdit,
+} from './paginated-surface-contract.ts';
+
+/**
+ * The dialog's checkbox fields, and the `w:pPr` element each writes.
+ *
+ * One table so the update shape and the write cannot drift apart.
+ */
+const PARAGRAPH_FLAG_PROPERTIES = [
+  ['contextualSpacing', 'contextualSpacing'],
+  ['keepNext', 'keepNext'],
+  ['keepLines', 'keepLines'],
+  ['widowControl', 'widowControl'],
+  ['pageBreakBefore', 'pageBreakBefore'],
+] as const satisfies readonly (readonly [keyof SurfaceParagraphFormat, string])[];
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
@@ -32,6 +56,8 @@ export interface SurfaceStructureDeps {
   readonly session: TreeDocxSessionView;
   /** Active story for content mutations — body or open furniture. */
   storyScope(): StoryScope;
+  /** Section index of the header or footer the reader has open, when one is. */
+  headerFooterSectionIndex?(): number | undefined;
   /** The CURRENT layout — read per call, never captured. */
   layout(): SemanticLayout;
   commit(
@@ -79,10 +105,12 @@ type StructureMethods = Pick<
   | 'toggleList'
   | 'adjustIndent'
   | 'setIndent'
+  | 'setParagraphFormat'
   | 'canAdjustIndent'
   | 'exitListOnEmptyItem'
   | 'sectionProperties'
   | 'sectionPropertiesAt'
+  | 'sectionAnchorParagraphAt'
   | 'setSectionProperties'
   | 'insertSectionBreak'
 >;
@@ -188,6 +216,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
     after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
   ): TreeApplyResult => session.applyTreeOps(ops, before, after, deps.storyScope());
+  // Word's list gesture is two writes: the numbering, and the List Paragraph style that
+  // carries `w:contextualSpacing`. The style half lives in its own lane.
+  const listStyle = createListStyleWrites({ session, storyPart });
   const orderOf = () => deps.paragraphOrder();
   const currentLayout = {
     get value(): SemanticLayout {
@@ -437,12 +468,22 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       if (text.length > 0) return false;
 
       const outdented = marker.level > 0 && listLevelExists(marker, marker.level - 1);
-      const op: TreeDocOp = outdented
-        ? { op: 'setListLevel', paragraphId: from.paragraphId, level: marker.level - 1 }
-        : { op: 'setListNumbering', paragraphId: from.paragraphId, numId: null };
+      // Outdenting stays in the list, so it keeps the style. Leaving the list sheds it, or
+      // the paragraph keeps List Paragraph's half-inch indent with no marker beside it —
+      // see `clearListParagraphStyleOp`. The style write goes first for the same reason it
+      // does in `toggleList`: it carries the authored `w:numPr` forward, so running it
+      // after the numbering op would put back what that op had just removed.
+      const ops: TreeDocOp[] = [];
+      if (outdented) {
+        ops.push({ op: 'setListLevel', paragraphId: from.paragraphId, level: marker.level - 1 });
+      } else {
+        const cleared = listStyle.clearOp(from.paragraphId);
+        if (cleared) ops.push(cleared);
+        ops.push({ op: 'setListNumbering', paragraphId: from.paragraphId, numId: null });
+      }
       let committed = false;
       commit(() => {
-        const result = applyOps([op], selectionMark());
+        const result = applyOps(ops, selectionMark());
         committed = result.committed;
         return result;
       });
@@ -473,19 +514,22 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         ? null
         : (adjacentListNumId(touched, kind) ?? session.ensureListDefinition(kind));
       if (!turningOff && numId === null) return false;
-      const ops: TreeDocOp[] = touched.map((paragraphId) => {
+      // Turning a list OFF leaves the style alone, as Word does: an outdented item stays
+      // in List Paragraph until the user picks another style.
+      const ops: TreeDocOp[] = turningOff ? [] : listStyle.applyOps(touched);
+      for (const paragraphId of touched) {
         // `w:numPr` carries the level AND the definition, and the op mints a fresh one, so
         // a call that names no level silently resets `w:ilvl` to 0. Word converts a bullet
         // to a number IN PLACE: pressing Numbered on a level-2 item left it at level 2,
         // where this flattened it to the left margin two levels out.
         const level = listLevelOf(paragraphId);
-        return {
-          op: 'setListNumbering' as const,
+        ops.push({
+          op: 'setListNumbering',
           paragraphId,
           numId,
           ...(level !== null ? { level } : {}),
-        };
-      });
+        });
+      }
       return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 
@@ -600,42 +644,161 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       return commitOverTarget(() => applyOps(ops, selectionMark()));
     },
 
+    setParagraphFormat(update) {
+      const touched = targetParagraphs();
+      if (touched === null || touched.length === 0) return false;
+      // ONE op per paragraph carrying EVERY field the dialog changed, so OK is one undo
+      // step and the page repaints once. Firing a command per field would leave the user
+      // pressing Ctrl+Z five times and would paint four intermediate layouts on the way.
+      const entries: ParagraphPropertyEdit[] = [];
+      if (update.alignment !== undefined) {
+        entries.push({ localName: 'jc', attributes: { val: update.alignment } });
+      }
+      const spacing: Record<string, string | null> = {
+        ...spacingSideAttributes('before', update.spaceBeforePt),
+        ...spacingSideAttributes('after', update.spaceAfterPt),
+        ...lineSpacingAttributes(update.lineSpacing),
+      };
+      if (Object.keys(spacing).length > 0) {
+        entries.push({ localName: 'spacing', attributes: spacing, mergeAttributes: true });
+      }
+      for (const [field, localName] of PARAGRAPH_FLAG_PROPERTIES) {
+        const on = update[field];
+        if (on !== undefined) {
+          entries.push({ localName, attributes: paragraphFlagAttributes(on) });
+        }
+      }
+      // Tab stops ride the SAME transaction as the properties above, so the dialog is still
+      // one undo step. They are a separate op because `w:tabs` carries `w:tab` children and
+      // a property is flat — see `applySetParagraphTabStops`.
+      const wantsTabStops = update.tabStops !== undefined;
+      const wantsIndent =
+        update.indentLeftTwips !== undefined ||
+        update.indentRightTwips !== undefined ||
+        update.indentFirstLineTwips !== undefined;
+      if (entries.length === 0 && !wantsIndent && !wantsTabStops) return false;
+
+      const ops: TreeDocOp[] = [];
+      for (const paragraphId of touched) {
+        const direct = directParagraphProperties(storyPart(), paragraphId);
+        // `w:ind` is built here rather than as another entry: its four settings are two
+        // pairs of mutually exclusive SPELLINGS, so the attributes depend on what the
+        // paragraph already authored — the same reason `setIndent` does it this way.
+        let properties = direct;
+        if (wantsIndent) {
+          const authored =
+            direct.find((property) => property.localName === 'ind')?.attributes ?? {};
+          let attributes: Record<string, string> = { ...authored };
+          if (update.indentLeftTwips !== undefined) {
+            attributes = writeIndentSide(attributes, 'left', 'start', update.indentLeftTwips);
+          }
+          if (update.indentRightTwips !== undefined) {
+            attributes = writeIndentSide(attributes, 'right', 'end', update.indentRightTwips);
+          }
+          if (update.indentFirstLineTwips !== undefined) {
+            attributes = writeFirstLine(attributes, update.indentFirstLineTwips);
+          }
+          properties = mergedProperties(properties, {
+            localName: 'ind',
+            ...(Object.keys(attributes).length > 0 ? { attributes } : {}),
+          });
+        }
+        for (const entry of entries) {
+          const merged = entry.mergeAttributes
+            ? {
+                ...(properties.find((property) => property.localName === entry.localName)
+                  ?.attributes ?? {}),
+                ...entry.attributes,
+              }
+            : (entry.attributes ?? {});
+          const kept = Object.fromEntries(
+            Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
+          ) as Record<string, string>;
+          properties = mergedProperties(properties, {
+            localName: entry.localName,
+            ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
+          });
+        }
+        // Only when there is something to write. `setParagraphProperties` REPLACES the
+        // paragraph's authorable `w:pPr` children with what it is handed, so pushing it for
+        // a tab-stops-only edit put the whole of `w:pPr` at the mercy of the `direct` read
+        // — a wrong base there deletes `w:pStyle`, `w:jc` and everything else rather than
+        // doing nothing. Defence in depth: the header test pins the part identity, and this
+        // makes a repeat of that mistake harmless for edits that name no property.
+        if (entries.length > 0 || wantsIndent) {
+          ops.push({ op: 'setParagraphProperties', paragraphId, properties });
+        }
+        if (wantsTabStops) {
+          // What the editor SAW, so the op can tell an inherited stop from an authored
+          // one. The read resolves the cascade and the write lands on the paragraph, so
+          // without this a style's stop survives a "Clear All" and the command still
+          // reports success — see `applySetParagraphTabStops`.
+          //
+          // Through `paragraphTabStopsOf`, which is the SAME walk the read uses. A
+          // page-fragment walk sees the body only: header, footer and note fragments hang
+          // off `page.header`/`page.footer`/`page.footnotes` and were never visited, so
+          // every paragraph in those stories cleared nothing and the style put its stop
+          // straight back — with the command still reporting success.
+          const inForce = paragraphTabStopsOf(deps.layout(), paragraphId);
+          ops.push({
+            op: 'setParagraphTabStops',
+            paragraphId,
+            stops: update.tabStops!.map((stop) => ({
+              positionTwips: Math.round(stop.positionTwips),
+              alignment: stop.alignment,
+              ...(stop.leader && stop.leader !== 'none' ? { leader: stop.leader } : {}),
+            })),
+            ...(inForce
+              ? {
+                  inForcePositionsTwips: inForce.stops.map((stop) =>
+                    Math.round(stop.positionPt * 20)
+                  ),
+                }
+              : {}),
+          });
+        }
+      }
+      if (ops.length === 0) return false;
+      return commitOverTarget(() => applyOps(ops, selectionMark()));
+    },
+
     sectionProperties: () => readSectionProperties(session.part()),
 
     sectionPropertiesAt(paragraphId) {
       const sections = enumerateDocumentSections(session.part());
-      if (sections.length === 1) return sections[0]!.properties;
-      const blocks = storyBlocks(session.part());
-      const contains = (node: (typeof blocks)[number], id: string): boolean => {
-        if (node.id === id) return true;
-        for (const child of node.children) {
-          if (child.kind !== 'textValue' && contains(child as (typeof blocks)[number], id)) {
-            return true;
-          }
-        }
-        return false;
-      };
-      const blockIndex = blocks.findIndex(
-        (block) => block.id === paragraphId || contains(block, paragraphId)
+      const index = sectionIndexForCaret(
+        session,
+        paragraphId,
+        deps.storyScope(),
+        deps.headerFooterSectionIndex?.()
       );
-      // An unknown id falls back to the tail section — the document-wide answer.
-      let owner = sections[sections.length - 1]!;
-      if (blockIndex !== -1) {
-        for (const section of sections) {
-          if (section.blockStart <= blockIndex) owner = section;
-          else break;
-        }
-      }
-      return owner.properties;
+      return (sections[index] ?? sections[sections.length - 1]!).properties;
+    },
+
+    sectionAnchorParagraphAt(paragraphId) {
+      return sectionAnchorParagraphFor(
+        session,
+        paragraphId,
+        deps.storyScope(),
+        deps.headerFooterSectionIndex?.()
+      );
     },
 
     setSectionProperties(update) {
       let committed = false;
       commit(() => {
         // Section geometry lives on the body story, never on an open furniture scope.
+        //
+        // The SELECTION MARK has to stay behind with it. A body-scoped write is validated
+        // against the body store, and a mark naming the header paragraph the caret is really
+        // in is a paragraph that store has never heard of — so the whole write came back
+        // `unknown-paragraph` and Page Setup silently did nothing from any furniture caret.
+        // Recording no mark costs an undo that does not restore the caret, which is the
+        // smaller loss and the honest one: the caret never moved to begin with.
+        const inBody = deps.storyScope().kind === 'body';
         const result = session.applyTreeOps(
           [{ op: 'setSectionProperties', ...update }],
-          selectionMark(),
+          inBody ? selectionMark() : undefined,
           undefined,
           { kind: 'body' }
         );

@@ -11,6 +11,10 @@ import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import {
   adjustedBreakIndex,
+  borderGroupFlowKeys,
+  contextualSpacingFlowKeys,
+  keepNextFlowKeys,
+  tocFieldFlowKeys,
   paragraphKeeps,
   DEFAULT_PARAGRAPH_KEEPS,
 } from '../pagination-keeps.ts';
@@ -358,5 +362,177 @@ describe('ISO 29500 Strict tab alignments (B12)', () => {
     expect(tabs('<w:tab w:val="sideways" w:pos="720"/>').stops).toHaveLength(0);
     // `bar` and `num` are not stops.
     expect(tabs('<w:tab w:val="bar" w:pos="720"/>').stops).toHaveLength(0);
+  });
+});
+
+// `w:contextualSpacing` (§17.3.1.9) is a CROSS-BLOCK property: it drops a paragraph's space
+// on the side where the neighbour is a paragraph of the same style, so a block's height is a
+// function of two blocks it does not contain. Incremental resume compares flow keys and
+// re-places from the first that moved, which makes the fold the whole mechanism — a verdict
+// that changes without moving a key is a paragraph that keeps its old spacing until the
+// document is reopened.
+//
+// These pin the fold's boundary answers, and the correspondence between `styleAt` here and
+// `sameStyleAs` in `semantic-layout.ts`. Everything else about the property rests on it.
+describe('contextualSpacingFlowKeys — the cross-block fold', () => {
+  const KEYS = ['a', 'b', 'c'];
+  const all = () => true;
+
+  test('nothing contextual returns the SAME array, not a copy', () => {
+    // Identity is the contract: the prepass memo and the unchanged-document exit both lean
+    // on flow keys not churning when no block reads across a boundary.
+    expect(
+      contextualSpacingFlowKeys(
+        KEYS,
+        () => false,
+        () => 'Tight'
+      )
+    ).toBe(KEYS);
+  });
+
+  test('a run of one style records which SIDES match', () => {
+    const flow = contextualSpacingFlowKeys(KEYS, all, () => 'Tight');
+    // First has no block before it, last has none after it; the middle matches on both.
+    expect(flow).toEqual(['a~cs~01', 'b~cs~11', 'c~cs~10']);
+  });
+
+  test('a neighbour of a DIFFERENT style does not match', () => {
+    const styles = ['Tight', 'Other', 'Tight'];
+    const flow = contextualSpacingFlowKeys(KEYS, all, (index) => styles[index]!);
+    expect(flow).toEqual(['a~cs~00', 'b~cs~00', 'c~cs~00']);
+  });
+
+  test('a null style is never a match on either side, and takes no token', () => {
+    // `styleAt` answers null for a table, and for a paragraph with no resolved style. That
+    // mirrors `sameStyleAs`, whose `styleId !== null` guard makes both sides false.
+    const styles: (string | null)[] = ['Tight', null, 'Tight'];
+    const flow = contextualSpacingFlowKeys(KEYS, all, (index) => styles[index]!);
+    expect(flow).toEqual(['a~cs~00', 'b', 'c~cs~00']);
+  });
+
+  test('only the contextual blocks are keyed', () => {
+    const flow = contextualSpacingFlowKeys(
+      KEYS,
+      (index) => index === 1,
+      () => 'Tight'
+    );
+    expect(flow).toEqual(['a', 'b~cs~11', 'c']);
+  });
+
+  test('the verdict MOVES when a same-style neighbour arrives — the bug this exists for', () => {
+    const before = contextualSpacingFlowKeys(['a', 'b'], all, () => 'Tight');
+    const after = contextualSpacingFlowKeys(['a', 'b', 'c'], all, () => 'Tight');
+    // `b` was last and carried its space-after; now a same-style block follows it.
+    expect(before[1]).toBe('b~cs~10');
+    expect(after[1]).toBe('b~cs~11');
+    expect(after[1]).not.toBe(before[1]);
+  });
+});
+
+describe('borderGroupFlowKeys — the border-group fold', () => {
+  const KEYS = ['a', 'b', 'c'];
+
+  test('no borders anywhere returns the SAME array, not a copy', () => {
+    expect(borderGroupFlowKeys(KEYS, () => '')).toBe(KEYS);
+  });
+
+  test('a run of one border group records which SIDES continue', () => {
+    const flow = borderGroupFlowKeys(KEYS, () => 'box');
+    // The first has nothing above it, the last nothing below; the middle continues both ways.
+    expect(flow).toEqual(['a~bg~01', 'b~bg~11', 'c~bg~10']);
+  });
+
+  test('a DIFFERENT group on either side does not continue', () => {
+    const groups = ['box', 'other', 'box'];
+    const flow = borderGroupFlowKeys(KEYS, (index) => groups[index]!);
+    expect(flow).toEqual(['a~bg~00', 'b~bg~00', 'c~bg~00']);
+  });
+
+  test('a block with no borders takes no token and breaks the group', () => {
+    // `''` is a table, or a paragraph with no `w:pBdr` at all. Two of them are not a group
+    // with each other, which is what keeps an ordinary document out of the fold entirely.
+    const groups = ['box', '', 'box'];
+    const flow = borderGroupFlowKeys(KEYS, (index) => groups[index]!);
+    expect(flow).toEqual(['a~bg~00', 'b', 'c~bg~00']);
+  });
+
+  test('the verdict MOVES when a member arrives below — the bug this exists for', () => {
+    const before = borderGroupFlowKeys(['a', 'b'], () => 'box');
+    const after = borderGroupFlowKeys(['a', 'b', 'c'], () => 'box');
+    // `b` closed the box; now a third member does, and `b` has to draw `between` instead.
+    expect(before[1]).toBe('b~bg~10');
+    expect(after[1]).toBe('b~bg~11');
+  });
+
+  test('the verdict MOVES when the member ABOVE joins the group', () => {
+    // The backward bit. Resume never needs it — the block above moving re-places everything
+    // after — but the convergence tail is a suffix cut, where backward is the exposed side.
+    const apart = borderGroupFlowKeys(KEYS, (index) => (index === 0 ? 'other' : 'box'));
+    const together = borderGroupFlowKeys(KEYS, () => 'box');
+    expect(apart[1]).toBe('b~bg~01');
+    expect(together[1]).toBe('b~bg~11');
+  });
+
+  test('an indent that moves the box splits the group', () => {
+    // `borderGroupKey` carries the box geometry as well as the rules, so Increase Indent on
+    // one member is a different key and the paragraph above it has to close.
+    const groups = ['box@0,468', 'box@0,468', 'box@36,468'];
+    const flow = borderGroupFlowKeys(KEYS, (index) => groups[index]!);
+    expect(flow).toEqual(['a~bg~01', 'b~bg~10', 'c~bg~00']);
+  });
+});
+
+describe('tocFieldFlowKeys — the TOC field fold', () => {
+  const KEYS = ['begin', 'result', 'end'];
+
+  test('a document with no TOC returns the SAME array, not a copy', () => {
+    expect(tocFieldFlowKeys(KEYS, () => '')).toBe(KEYS);
+  });
+
+  test('only the blocks a TOC touches are keyed', () => {
+    const verdicts = ['100', '', '100'];
+    expect(tocFieldFlowKeys(KEYS, (index) => verdicts[index]!)).toEqual([
+      'begin~toc~100',
+      'result',
+      'end~toc~100',
+    ]);
+  });
+
+  test('the begin paragraph re-places when the TOC empties under it', () => {
+    // Chrome-only while the results carry text; chrome plus placeholder once they do not.
+    // The begin paragraph itself does not change one byte between the two.
+    const filled = tocFieldFlowKeys(KEYS, (index) => (index === 0 ? '100' : ''));
+    const emptied = tocFieldFlowKeys(KEYS, (index) => (index === 0 ? '110' : ''));
+    expect(filled[0]).toBe('begin~toc~100');
+    expect(emptied[0]).toBe('begin~toc~110');
+  });
+});
+
+// `keepNextFlowKeys` splices a neighbour's WHOLE key in, so it has to fold last or a chain
+// head carries its members' pre-fold keys.
+describe('keepNextFlowKeys folds over the other folds', () => {
+  test('a chain head carries the successor key INCLUDING its contextual verdict', () => {
+    const folded = contextualSpacingFlowKeys(
+      ['h', 'p'],
+      (index) => index === 1,
+      () => 'Tight'
+    );
+    const flow = keepNextFlowKeys(folded, (index) => index === 0);
+    // The head splices in the AUGMENTED successor key, so a verdict flip under it moves
+    // the head's own key too. Folded the other way round the head would carry a bare `p`.
+    expect(flow[0]).toBe('h~kn~p~cs~10');
+  });
+
+  test('a chain head carries the successor key INCLUDING its border-group verdict', () => {
+    const folded = borderGroupFlowKeys(['h', 'p'], () => 'box');
+    const flow = keepNextFlowKeys(folded, (index) => index === 0);
+    // The head carries its OWN group verdict too, then the successor's whole folded key.
+    expect(flow[0]).toBe('h~bg~01~kn~p~bg~10');
+  });
+
+  test('a chain head carries the successor key INCLUDING its TOC verdict', () => {
+    const folded = tocFieldFlowKeys(['h', 'p'], (index) => (index === 1 ? '110' : ''));
+    const flow = keepNextFlowKeys(folded, (index) => index === 0);
+    expect(flow[0]).toBe('h~kn~p~toc~110');
   });
 });

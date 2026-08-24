@@ -10,6 +10,7 @@
 // A shape it cannot explain is rejected outright (task 6.3): a silently-dropped edit is
 // worse than a refused one, because only the refusal can be reconciled.
 
+import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { Node as PMNode } from 'prosemirror-model';
 import {
   collectStoryParagraphs,
@@ -183,7 +184,24 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * paragraphs directly by node id — selection clamping, Enter's minted-tail diff and
  * select-all all need the full set.
  */
+/**
+ * Memoized on the PART's identity. Parts are immutable, so one walk per part is always
+ * enough — and the paraId index reads every story on every package revision, so without this
+ * a keystroke in the body re-walked each header, footer and notes part to rediscover
+ * paragraphs that had not moved. Entries die with their part.
+ *
+ * Callers treat the result as read-only; nothing in the tree mutates it.
+ *
+ * BOUNDED, not a bare `WeakMap`, for the reason `story-roots.ts` gives about its own cache:
+ * undo history retains up to 200 package snapshots by reference, and every part it keeps
+ * alive would keep an O(document) array alive with it. `paragraphAnchors` populates one per
+ * revision, so a bare map would grow with the history rather than with the document.
+ */
+const paragraphsByPart = createRecentRootCache<OoxmlNode[]>(16);
+
 export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
+  const cached = paragraphsByPart.get(part);
+  if (cached) return cached;
   // The walk itself lives in the store lane (`story-blocks.ts`) because the automation lane
   // asks the same question and the two must not answer it differently — a paragraph inside a
   // nested table or a content control has to be in the story for both, or an offset computed
@@ -193,6 +211,7 @@ export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
     if (story.root.kind === 'textValue') continue;
     collectStoryParagraphs(story.root.children, paragraphs, 0);
   }
+  paragraphsByPart.set(part, paragraphs);
   return paragraphs;
 }
 

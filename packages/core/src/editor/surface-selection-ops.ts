@@ -70,11 +70,16 @@ export function clampedToDocument(
 ): SemanticSelection {
   const fallback = ids[0];
   const clampPosition = (position: SemanticPosition): SemanticPosition => {
-    const paragraphId = ids.includes(position.paragraphId)
-      ? position.paragraphId
-      : (fallback ?? position.paragraphId);
+    const known = ids.includes(position.paragraphId);
+    const paragraphId = known ? position.paragraphId : (fallback ?? position.paragraphId);
+    // A SUBSTITUTED paragraph does not keep the old one's OFFSET. The offset was counted in a
+    // paragraph this one has nothing to do with — a header's, on an undo taken from the body —
+    // so carrying it over put the caret some arbitrary way into the first paragraph of the
+    // document, for no reason the reader can see. Its start is the honest answer, and it is
+    // where a fallback means to put them.
+    const offset = known ? position.offset : 0;
     const length = paragraphTextFromLayout(layout, paragraphId).length;
-    return { paragraphId, offset: Math.max(0, Math.min(position.offset, length)) };
+    return { paragraphId, offset: Math.max(0, Math.min(offset, length)) };
   };
   return { anchor: clampPosition(next.anchor), head: clampPosition(next.head) };
 }

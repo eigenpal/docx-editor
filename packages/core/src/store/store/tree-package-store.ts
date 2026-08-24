@@ -16,6 +16,8 @@
 
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
+import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
+import { settingsPartOf } from '../package/note-properties.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship, type RelationshipRecord } from '../package/relationships.ts';
 import {
@@ -236,7 +238,16 @@ export class TreePackageStore {
     // unit — a comment's markers in the story plus its body in `comments.xml` plus the
     // relationship and content-type override — needs the package as its working set, and a
     // store handed one part rebuilds a stub package the invariant check then refuses.
-    this.body = new TreeDocumentStore(this.pkg, main.name, { historyLimit: this.historyLimit });
+    this.body = new TreeDocumentStore(this.pkg, main.name, {
+      historyLimit: this.historyLimit,
+      // The SAME live getter the story stores get. A store keeps its own working copy of the
+      // package, so a `settings.xml` replaced through the coordinator rather than through this
+      // store's own transaction left the body reading stale protection — and once the story
+      // stores read it live, the body was the one story a protected document still let you
+      // edit. Protection that holds in a header and not in the body is worse than protection
+      // that holds nowhere: it looks enforced.
+      settingsPart: () => settingsPartOf(this.pkg),
+    });
     this.body.setStoryRef({ kind: 'body', partName: main.name });
     // Body is always open; HF stores are opened lazily and count against the cap.
   }
@@ -758,9 +769,19 @@ export class TreePackageStore {
     return store?.selectionForRedo() ?? null;
   }
 
+  /** See {@link openStoryPartsOf}. */
+  openStoryParts(): readonly OoxmlPart[] {
+    return openStoryPartsOf(this.stories, this.pkg);
+  }
+
   /** How many story stores are open (body counts as one). */
   openedStoryCount(): number {
     return 1 + this.stories.size;
+  }
+
+  /** See {@link openStoryTokenOf}. */
+  openStoryToken(): string {
+    return openStoryTokenOf(this.stories, this.pkg);
   }
 
   /**
@@ -991,7 +1012,12 @@ export class TreePackageStore {
       };
     }
     const normalized = normalizeParagraphIdentity(part);
-    const store = new TreeDocumentStore(normalized, { historyLimit: this.historyLimit });
+    const store = new TreeDocumentStore(normalized, {
+      historyLimit: this.historyLimit,
+      // A story store is built from a PART, whose synthetic package holds no `settings.xml`
+      // — so without this a protected document refused a body edit and accepted a header one.
+      settingsPart: () => settingsPartOf(this.pkg),
+    });
     const story: TreeStoryRef = {
       kind: 'notesPart',
       partName: normalized.name,
@@ -1044,7 +1070,12 @@ export class TreePackageStore {
     }
 
     const normalized = normalizeParagraphIdentity(located.part);
-    const store = new TreeDocumentStore(normalized, { historyLimit: this.historyLimit });
+    const store = new TreeDocumentStore(normalized, {
+      historyLimit: this.historyLimit,
+      // A story store is built from a PART, whose synthetic package holds no `settings.xml`
+      // — so without this a protected document refused a body edit and accepted a header one.
+      settingsPart: () => settingsPartOf(this.pkg),
+    });
     const story: TreeStoryRef = {
       kind: 'headerFooter',
       partName: normalized.name,

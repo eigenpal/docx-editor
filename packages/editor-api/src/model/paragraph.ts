@@ -23,15 +23,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   ObjectPath,
-  clientResult,
   fail,
   hydratedApplied,
   hydratedHandle,
   hydratedParagraphFormat,
   hydratedSpan,
-  hydratedText,
   type AutomationHandle,
-  type ClientResult,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -43,7 +40,6 @@ import { Font } from './font.ts';
 import { besideLocation, insertableText, paragraphTextLocation } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
-import { textProjection, type TextReadOptions } from './text-options.ts';
 
 /** Most delimiters one `split` may name. The host applies its own cap as well. */
 const MAX_DELIMITERS = 16;
@@ -104,20 +100,6 @@ export class Paragraph extends ModelObject implements PromisedItem {
   /** This paragraph's text. Readable after `load('text')` and a `sync()`. */
   get text(): string {
     return this.loadedProperty<string>('text');
-  }
-
-  /** Read this paragraph under an explicit revision projection after the next `sync()`. */
-  getText(options?: TextReadOptions): ClientResult<string> {
-    const target = `${this.path.label}.getText`;
-    const projection = textProjection(options, target);
-    const handle = this.#handle();
-    const { result, fill } = clientResult<string>(target);
-    this.read(
-      target,
-      () => ({ op: 'getText', target: handle, ...(projection ? { projection } : {}) }),
-      (value) => fill(hydratedText(value, target))
-    );
-    return result;
   }
 
   /**
@@ -339,7 +321,11 @@ export class Paragraph extends ModelObject implements PromisedItem {
     const selected = this.selection(request, ['text', 'uniqueLocalId', ...FORMAT_FIELDS]);
     const handle = this.#handle();
     if (selected.includes('text')) {
-      this.loadTextInto('text', () => ({ op: 'getText', target: handle }));
+      this.loadTextInto('text', () => ({
+        op: 'getText',
+        target: handle,
+        projection: this.revisionTextView(),
+      }));
     }
     if (selected.includes('uniqueLocalId')) {
       this.loadTextInto('uniqueLocalId', () => ({ op: 'getParagraphId', paragraph: handle }));

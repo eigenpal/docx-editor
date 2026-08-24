@@ -545,6 +545,35 @@ export const CHROME_GROUPS = [
     ],
   },
   {
+    // The Paragraph dialog, and anything else that edits a paragraph by VALUE rather than
+    // by step. Contextual for the same reason the File group is: the dialog belongs behind
+    // a menu row, not in the formatting bar, and `formattingBarChromeGroups()` filters
+    // contextual groups out so no button is rendered for it.
+    //
+    // A slot rather than a hand-rolled menu item so the row is addressable: hosts can hide,
+    // reorder or override it like any other control, and its enabled state comes from
+    // `toolbarCommandState` — the single source CLAUDE.md names — instead of a second
+    // implementation beside it.
+    id: 'paragraph',
+    labelKey: 'dialogs.paragraph.title',
+    contextual: true,
+    controls: [
+      {
+        // Command-shaped without a fixed command, like `file.pageSetup`: whether this
+        // selection's paragraphs can be reformatted is the engine's question, WHICH values
+        // is the dialog's. Deliberately absent from `SLOT_COMMANDS` for the reason recorded
+        // there — a row there would enable it in an adapter that has grown no dialog.
+        id: 'dialog',
+        labelKey: 'lineSpacing.options',
+        // Carries an icon like `file.pageSetup` does, even though the packaged chrome
+        // renders it as a labelled menu row: the registry models a control as icon-bearing
+        // or as a picker, and a host arranging this slot itself needs a picture for it.
+        paths: GENERATED_ICON_PATHS['format_line_spacing'],
+        state: { kind: 'command' },
+      },
+    ],
+  },
+  {
     // The File menu's controls. Contextual because none of them belong in the formatting
     // bar: the chrome spec puts open, save and page setup in a menu above it.
     //
@@ -693,6 +722,7 @@ export type ChromeGroupId =
   | 'contentControl'
   | 'image'
   | 'table'
+  | 'paragraph'
   | 'file'
   | 'insert';
 
@@ -747,6 +777,7 @@ export type ChromeSlotId =
   | 'table.cellFill'
   | 'file.open'
   | 'file.save'
+  | 'paragraph.dialog'
   | 'file.pageSetup'
   | 'insert.footnote'
   | 'insert.endnote'
@@ -946,6 +977,13 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'alignment.center' },
       { kind: 'item', slot: 'alignment.right' },
       { kind: 'item', slot: 'alignment.justify' },
+      { kind: 'separator' },
+      // A SECOND route to the Paragraph dialog, the way `file.pageSetup` sits in the File
+      // menu. The line-spacing menu is its natural home, but that control collapses into
+      // the toolbar's overflow panel on a narrow window and its submenu opens clipped — so
+      // a feature with only that route disappears entirely at around 1100px. The menu bar
+      // does not collapse.
+      { kind: 'item', slot: 'paragraph.dialog' },
       { kind: 'separator' },
       { kind: 'item', slot: 'format.clear' },
     ],

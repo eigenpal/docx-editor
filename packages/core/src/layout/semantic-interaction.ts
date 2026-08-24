@@ -10,7 +10,7 @@
 
 import { caretBoxOnLine, contentControlAtPoint, hitTestPage } from './semantic-hit-test.ts';
 import { documentOrder, documentOrderIndex } from './document-order.ts';
-export { documentOrder } from './document-order.ts';
+export { documentOrder, everyStoryOrder } from './document-order.ts';
 export { selectionRects, keyedRangeRects, type KeyedRange } from './selection-rects.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { lineSegmentFor, lineSegments, segmentOverlap, type LineSegment } from './line-segments.ts';
@@ -354,6 +354,28 @@ function resolveCaretAtOptions(measurerOrOptions?: TextMeasurer | CaretAtOptions
   return measurerOrOptions as CaretAtOptions;
 }
 
+/**
+ * Header-repeat lines of one paragraph on one sheet.
+ *
+ * The main line index skips `w:tblHeader` repeats so keyboard stops visit each offset once.
+ * A click on a later copy still needs geometry on THAT sheet, or the painted caret and
+ * scroll-follow jump back to the authored row on page 0.
+ */
+function headerRepeatLinesOnPage(
+  layout: SemanticLayout,
+  pageIndex: number,
+  paragraphId: string
+): { line: LineRecord; pageIndex: number }[] {
+  const page = layout.pages[pageIndex];
+  if (!page) return [];
+  const found: { line: LineRecord; pageIndex: number }[] = [];
+  for (const fragment of paragraphFragmentsOf(page, true)) {
+    if (fragment.paragraphId !== paragraphId) continue;
+    for (const line of fragment.lines) found.push({ line, pageIndex });
+  }
+  return found;
+}
+
 /** Geometry for one model position, or null when it is not laid out. */
 export function caretAt(
   layout: SemanticLayout,
@@ -363,10 +385,15 @@ export function caretAt(
   const options = resolveCaretAtOptions(measurerOrOptions);
   const placed = paragraphLinesIndex(layout).get(position.paragraphId) ?? [];
   const preferred = options.preferredPageIndex;
+  const repeats =
+    preferred === undefined ? [] : headerRepeatLinesOnPage(layout, preferred, position.paragraphId);
+  const seen = new Set(placed.map((entry) => entry.line.id));
+  const extra = repeats.filter((entry) => !seen.has(entry.line.id));
+  const catalog = extra.length > 0 ? [...placed, ...extra] : placed;
   const ordered =
     preferred === undefined
-      ? placed
-      : [...placed].sort((a, b) => {
+      ? catalog
+      : [...catalog].sort((a, b) => {
           const aHit = a.pageIndex === preferred ? 0 : 1;
           const bHit = b.pageIndex === preferred ? 0 : 1;
           return aHit - bHit;
@@ -469,20 +496,57 @@ export function contentControlsInLayout(
   return contentControlsOfLayout(layout);
 }
 
+/**
+ * Position lookup for one reading order, memoized on the array.
+ *
+ * The BODY's order is an identity-stable memoized array, so the map survives as long as it
+ * does. That is where the cost was: scanning it with `indexOf` meant two O(n) walks per
+ * formatting read, on a path that fires on every selection change — measured at 0.12 ms for a
+ * selection near the end of a 240-page document, and growing with it.
+ *
+ * A furniture or note order is rebuilt per call, so the map never hits there and this is a
+ * little more work than the scan it replaced. A header's order is a handful of entries, which
+ * is why that trade is worth making for the body's twelve thousand.
+ */
+const orderIndexes = new WeakMap<readonly string[], Map<string, number>>();
+
+function positionIn(order: readonly string[], paragraphId: string): number {
+  let index = orderIndexes.get(order);
+  if (!index) {
+    index = new Map();
+    order.forEach((id, at) => {
+      if (!index!.has(id)) index!.set(id, at);
+    });
+    orderIndexes.set(order, index);
+  }
+  return index.get(paragraphId) ?? -1;
+}
+
+/**
+ * Order a selection's endpoints, against the order of the story they live in.
+ *
+ * `order` is REQUIRED, here and on every public entry point that calls this. It used to
+ * default to the body's `documentOrder`, which meant every new call site was body-blind unless
+ * its author remembered — and a two-paragraph selection in a header ranked both endpoints at
+ * -1, gave up, and returned null. The reads built on this then answered for the head paragraph
+ * alone. Making the caller state the order turns that from a silent wrong answer into a
+ * compile error.
+ *
+ * A caller holding only a layout and a selection passes {@link everyStoryOrder}, published for
+ * exactly that: it covers every story, and a selection cannot span two of them.
+ */
 export function orderPositions(
-  layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  order: readonly string[]
 ): { from: SemanticPosition; to: SemanticPosition } | null {
-  // Same paragraph needs no document-wide order — furniture stories are absent from
-  // body `documentOrder` but still format within one paragraph.
+  // Same paragraph needs no document-wide order at all.
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return selection.anchor.offset <= selection.head.offset
       ? { from: selection.anchor, to: selection.head }
       : { from: selection.head, to: selection.anchor };
   }
-  const order = documentOrder(layout);
-  const anchorIndex = order.indexOf(selection.anchor.paragraphId);
-  const headIndex = order.indexOf(selection.head.paragraphId);
+  const anchorIndex = positionIn(order, selection.anchor.paragraphId);
+  const headIndex = positionIn(order, selection.head.paragraphId);
   if (anchorIndex === -1 || headIndex === -1) return null;
   if (
     anchorIndex < headIndex ||
@@ -781,9 +845,21 @@ export function compositionAnchor(
 /** The style spans a selection touches, for reporting active formatting. */
 export function spansInSelection(
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  /**
+   * Reading order of the ACTIVE story. See {@link orderPositions}.
+   *
+   * REQUIRED. A default here can only be one story's order, and whichever one it is will be
+   * wrong for every caret in another — which is exactly how this read came to answer about the
+   * body while the caret sat in a header. Requiring it is what makes the compiler find a call
+   * site that forgot, and it already found one.
+   *
+   * A caller with no story in hand passes {@link everyStoryOrder}, which covers all of them: a
+   * selection cannot span two stories, so only the order WITHIN one is ever compared.
+   */
+  order: readonly string[]
 ): StyleSpanRecord[] {
-  const ordered = orderPositions(layout, selection);
+  const ordered = orderPositions(selection, order);
   if (!ordered) return [];
   if (
     ordered.from.paragraphId === ordered.to.paragraphId &&
@@ -806,11 +882,11 @@ export function spansInSelection(
     }
     return spans;
   }
-  const order = documentOrder(layout);
-  const index = documentOrderIndex(layout);
   const lines = paragraphLinesIndex(layout);
-  const first = index.get(ordered.from.paragraphId) ?? -1;
-  const last = index.get(ordered.to.paragraphId) ?? -1;
+  // Positions WITHIN the given order, not the body index: the two agree for the body and
+  // nowhere else, and `paragraphLinesIndex` already covers every story.
+  const first = positionIn(order, ordered.from.paragraphId);
+  const last = positionIn(order, ordered.to.paragraphId);
   if (first === -1 || last === -1) return [];
   for (let at = first; at <= last; at += 1) {
     for (const { line } of lines.get(order[at]!) ?? []) {

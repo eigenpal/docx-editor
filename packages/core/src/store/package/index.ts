@@ -483,6 +483,7 @@ export {
   bodyStoryRoot,
   collectStoryParagraphs,
   storyParagraphs,
+  isStoryPart,
   storyRootsOf,
   type OoxmlStoryKind,
   type OoxmlStoryRoot,

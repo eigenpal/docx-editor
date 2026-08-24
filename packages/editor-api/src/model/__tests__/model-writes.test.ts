@@ -172,48 +172,6 @@ describe('clearing a story', () => {
   });
 });
 
-describe('replacing a story structure', () => {
-  test('creates many paragraphs atomically and removes stale wrappers and section marks', async () => {
-    const complex =
-      '<w:sdt><w:sdtPr><w:tag w:val="old"/></w:sdtPr><w:sdtContent>' +
-      p('inside control') +
-      '</w:sdtContent></w:sdt>' +
-      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
-      '<w:r><w:t>old section</w:t></w:r></w:p>' +
-      p('tail') +
-      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>';
-    const runtime = await serverRuntime(docx(complex));
-
-    await runtime.run(async (context) => {
-      context.document.body.replaceParagraphs(['Fresh title', 'First paragraph', '']);
-      await context.sync();
-    });
-
-    expect(await paragraphTexts(runtime)).toEqual(['Fresh title', 'First paragraph', '']);
-    expect(await textsAfterReopen(runtime)).toEqual(['Fresh title', 'First paragraph', '']);
-    const xml = await mainXmlOf(runtime);
-    expect(xml).not.toContain('<w:sdt');
-    expect(xml.match(/<w:sectPr/g)).toHaveLength(1);
-    expect(xml).toContain('w:w="11906"');
-  });
-
-  test('refuses an empty draft and paragraph marks with exact codes', async () => {
-    const runtime = await serverRuntime();
-    const empty = await codeOf(() =>
-      runtime.run(async (context) => {
-        context.document.body.replaceParagraphs([]);
-      })
-    );
-    const multiline = await codeOf(() =>
-      runtime.run(async (context) => {
-        context.document.body.replaceParagraphs(['one\r\ntwo']);
-      })
-    );
-    expect(empty).toBe('InvalidArgument');
-    expect(multiline).toBe('ParagraphMarkInText');
-  });
-});
-
 describe('adding a paragraph to a story', () => {
   test('at the start and at the end, and each answer is the paragraph that was added', async () => {
     const runtime = await serverRuntime();

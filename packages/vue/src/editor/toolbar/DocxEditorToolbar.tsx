@@ -90,6 +90,7 @@ import {
   type TableBorderWidthNamespace,
   type TableCellFillNamespace,
 } from './TableControls';
+import { ParagraphDialogHost } from '../paragraph-dialog-host';
 import { TableChromeProvider } from './useTableChrome';
 import { ToolbarEditingMode } from './EditingMode';
 
@@ -384,6 +385,9 @@ const DocxEditorToolbarRoot = defineComponent({
           })
         : content;
 
+      // The host sits INSIDE the toolbar element and teleports the dialog to the body. A
+      // host wrapping the element would make this component's root a fragment, and Vue
+      // then drops every fallthrough attribute the host passes — `class`, `style`, `id`.
       return h(
         'div',
         {
@@ -394,7 +398,7 @@ const DocxEditorToolbarRoot = defineComponent({
           ...(measuring.value ? { 'data-overflow': '' } : {}),
           onMousedown: guardToolbarMousedown,
         },
-        [inner]
+        [h(ParagraphDialogHost, null, { default: () => [inner] })]
       );
     };
   },

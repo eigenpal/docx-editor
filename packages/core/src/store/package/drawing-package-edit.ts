@@ -21,7 +21,12 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
-import { relsPartNameFor, withContentTypeOverride, withRelationship } from './package-edit.ts';
+import {
+  relsPartNameFor,
+  withContentTypeOverride,
+  withRelationship,
+  withRelationshipsPartFor,
+} from './package-edit.ts';
 import { IMAGE_RELATIONSHIP_TYPE, resolveImageRelationship } from './relationships.ts';
 import { withoutContentTypeOverride } from './hf-lifecycle-shell.ts';
 
@@ -378,7 +383,21 @@ export function withEmbeddedImage(
   const target = relationshipTargetForMediaPart(mediaPartName);
   if (target === null) return { ok: false, reason: 'invalidArgs' };
 
-  const related = withRelationship(next, owner, IMAGE_RELATIONSHIP_TYPE, target);
+  // MINT THE OWNER'S `.rels` PART FIRST. `withRelationship` fails closed when the owner has
+  // none, and a header, a footer or a notes part that carries no relationship yet has no
+  // `.rels` entry at all — the ordinary shape for a plain-text header, and near-universal for
+  // a notes part. So Insert Picture was refused in every story but the body, which always has
+  // one. The custom-XML lane already does this and the hyperlink lane authors its own; this
+  // lane did neither.
+  //
+  // `withRelationshipsPartFor` still fails closed when the `.rels` exists only as bytes, so
+  // the refusal below keeps its meaning for a package this cannot safely edit.
+  const related = withRelationship(
+    withRelationshipsPartFor(next, owner),
+    owner,
+    IMAGE_RELATIONSHIP_TYPE,
+    target
+  );
   if (!related.ok) return { ok: false, reason: 'invalidArgs' };
   next = related.pkg;
 

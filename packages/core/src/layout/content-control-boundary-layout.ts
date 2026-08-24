@@ -7,6 +7,7 @@
 // spans of the two pages it rebuilt, not the whole document.
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import { storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
   contentControlContentChildren,
@@ -110,7 +111,7 @@ function addressableInlineLength(node: OoxmlNode): number {
   return total;
 }
 
-interface CollectedControl {
+export interface CollectedControl {
   readonly control: OoxmlElement;
   readonly nestingDepth: number;
   readonly lockStack: readonly ContentControlLock[];
@@ -121,7 +122,7 @@ interface CollectedControl {
 }
 
 /** Collected controls plus the id sets their geometry needs, memoized per immutable part. */
-interface CollectedControlIndex {
+export interface CollectedControlIndex {
   readonly controls: readonly CollectedControl[];
   readonly neededBlockIds: ReadonlySet<string>;
   readonly neededParagraphIds: ReadonlySet<string>;
@@ -131,7 +132,7 @@ interface CollectedControlIndex {
 
 const collectedControlIndexes = new WeakMap<OoxmlPart, CollectedControlIndex>();
 
-function collectedControlIndexOf(part: OoxmlPart): CollectedControlIndex {
+export function collectedControlIndexOf(part: OoxmlPart): CollectedControlIndex {
   const cached = collectedControlIndexes.get(part);
   if (cached !== undefined) return cached;
   const controls = collectControls(part);
@@ -271,9 +272,13 @@ function collectControls(part: OoxmlPart): CollectedControl[] {
   // the lock stack is empty, so a block's entries are a pure function of its subtree. A
   // keystroke publishes a new part whose body children are all shared but one — without
   // this the whole document re-walked per pass.
-  const body = part.root.children.find((child) => child.kind === 'body');
-  if (body && body.kind !== 'textValue') {
-    for (const child of body.children) {
+  // EVERY story the part holds, not a `w:body` child. A header's root is `w:hdr` and a note
+  // part's stories hang off `w:footnote` elements, so looking for `body` collected nothing
+  // from either — which is why a content control in a header had no record at all, and the
+  // caret's geometry then matched whichever BODY control sat at the same page coordinates.
+  for (const story of storyRootsOf(part)) {
+    if (story.root.kind === 'textValue') continue;
+    for (const child of story.root.children) {
       if (child.kind === 'textValue') continue;
       const cached = topLevelBlockControls.get(child);
       if (cached !== undefined) {
@@ -336,6 +341,21 @@ export interface ContentControlBoundaryWork {
 interface PlacedGeometryIndex {
   readonly blocksById: ReadonlyMap<string, readonly PlacedBlockBox[]>;
   readonly spansByParagraph: ReadonlyMap<string, readonly PlacedSpanBox[]>;
+  /**
+   * Paragraphs whose spans are NOT one ascending run, so the binary search below cannot be used.
+   *
+   * A body paragraph is emitted once, in source order, even when it wraps across a page: its
+   * later text is on the later page, so the array stays ascending. ONE HEADER STORY IS ATTACHED
+   * TO EVERY PAGE IT APPLIES TO, so a header paragraph's array is that ascending run repeated
+   * once per page. Binary-searching it lands arbitrarily and the `start >= end` break stops
+   * early — measured as an inline control in a repeated header getting geometry on page 1 and
+   * nowhere else, so its outline drew once and `contentControlAtPoint` missed it everywhere
+   * after.
+   *
+   * Recorded at build time rather than detected per lookup: the builder already walks every
+   * span in order, and a control-heavy template does many lookups per build.
+   */
+  readonly repeatedParagraphs: ReadonlySet<string>;
 }
 
 /** More lines than one page can carry; keeps composite line keys ordered across pages. */
@@ -380,11 +400,21 @@ function pageContribution(
   const blocks: PlacedBlockBox[] = [];
   const spans: PlacedSpanBox[] = [];
   let lineOrdinal = page.index * PAGE_LINE_ORDINAL_SPAN;
+  // Boxes are stored in the BODY's content-box space, because that is the space the painter
+  // and the hit test read them in. A story's fragments are laid out relative to the story's
+  // own box, so a story is walked with the offset that carries it into that shared space.
+  // Recording a header control's raw box would draw its boundary chrome at the body's origin.
+  let offsetX = 0;
+  let offsetY = 0;
+  const shift = (box: LayoutBox): LayoutBox =>
+    offsetX === 0 && offsetY === 0
+      ? box
+      : { x: box.x + offsetX, y: box.y + offsetY, width: box.width, height: box.height };
   const visit = (pageIndex: number, fragment: BlockFragmentRecord): void => {
     if (fragment.kind === 'paragraph') {
       if (index.neededBlockIds.has(fragment.paragraphId)) {
         work && (work.geometryEntries += 1);
-        blocks.push({ pageIndex, blockId: fragment.paragraphId, box: fragment.box });
+        blocks.push({ pageIndex, blockId: fragment.paragraphId, box: shift(fragment.box) });
       }
       const needSpans = index.neededParagraphIds.has(fragment.paragraphId);
       for (const line of fragment.lines) {
@@ -414,8 +444,8 @@ function pageContribution(
             end: span.range.end,
             line: lineKey,
             box: {
-              x: span.box.x,
-              y: span.box.y + line.leading,
+              x: span.box.x + offsetX,
+              y: span.box.y + line.leading + offsetY,
               width: span.box.width,
               height: textHeight,
             },
@@ -426,7 +456,7 @@ function pageContribution(
     }
     if (index.neededBlockIds.has(fragment.tableId)) {
       work && (work.geometryEntries += 1);
-      blocks.push({ pageIndex, blockId: fragment.tableId, box: fragment.box });
+      blocks.push({ pageIndex, blockId: fragment.tableId, box: shift(fragment.box) });
     }
     for (const row of fragment.rows) {
       if (row.isHeaderRepeat) continue;
@@ -436,6 +466,14 @@ function pageContribution(
     }
   };
   for (const fragment of page.fragments) visit(page.index, fragment);
+  for (const story of [page.header, page.footer]) {
+    if (!story) continue;
+    offsetX = story.box.x - page.contentBox.x;
+    offsetY = story.box.y - page.contentBox.y;
+    for (const fragment of story.fragments) visit(page.index, fragment);
+  }
+  offsetX = 0;
+  offsetY = 0;
   const contribution: PageGeometryContribution = { neededStamp: stamp, blocks, spans };
   pageGeometryContributions.set(page, contribution);
   return contribution;
@@ -449,6 +487,7 @@ function placedGeometryOf(
   const stamp = neededStampOf(index.neededToken);
   const blocksById = new Map<string, PlacedBlockBox[]>();
   const spansByParagraph = new Map<string, PlacedSpanBox[]>();
+  const repeatedParagraphs = new Set<string>();
   for (const page of layout.pages) {
     const contribution = pageContribution(page, index, stamp, work);
     for (const entry of contribution.blocks) {
@@ -458,11 +497,17 @@ function placedGeometryOf(
     }
     for (const entry of contribution.spans) {
       const entries = spansByParagraph.get(entry.paragraphId);
-      if (entries) entries.push(entry);
-      else spansByParagraph.set(entry.paragraphId, [entry]);
+      if (entries) {
+        // Strictly less: equal starts are ordinary within one run (a zero-width span beside a
+        // real one), and treating them as a repeat would only cost a linear scan.
+        if (entry.start < entries[entries.length - 1]!.start) {
+          repeatedParagraphs.add(entry.paragraphId);
+        }
+        entries.push(entry);
+      } else spansByParagraph.set(entry.paragraphId, [entry]);
     }
   }
-  return { blocksById, spansByParagraph };
+  return { blocksById, spansByParagraph, repeatedParagraphs };
 }
 
 function fragmentsForBlockControl(
@@ -504,9 +549,14 @@ function fragmentsForInlineControl(
   const byLine = new Map<number, { pageIndex: number; boxes: LayoutBox[] }>();
   // Paragraph spans are emitted in source-range order. Binary search skips all spans ending
   // before this control, so sibling controls do not repeatedly scan the paragraph prefix.
+  //
+  // Not for a paragraph the layout draws more than once — see `repeatedParagraphs`. There the
+  // array is several ascending runs, both the search and the `break` are wrong, and the only
+  // correct thing is to look at every span.
+  const repeated = geometry.repeatedParagraphs.has(paragraphId);
   let low = 0;
   let high = placed.length;
-  while (low < high) {
+  while (!repeated && low < high) {
     work && (work.spanCandidates += 1);
     const middle = low + ((high - low) >> 1);
     const beforeStart =
@@ -516,32 +566,50 @@ function fragmentsForInlineControl(
     if (beforeStart) low = middle + 1;
     else high = middle;
   }
+  if (repeated) low = 0;
   for (let index = low; index < placed.length; index += 1) {
     const span = placed[index]!;
     work && (work.spanCandidates += 1);
     if (span.end <= range.start) continue;
-    if (span.start >= range.end) break;
+    if (span.start >= range.end) {
+      if (repeated) continue;
+      break;
+    }
     const group = byLine.get(span.line);
     if (group) group.boxes.push(span.box);
     else byLine.set(span.line, { pageIndex: span.pageIndex, boxes: [span.box] });
   }
   // Empty range (empty control): fall back to a zero-width box at the caret when a span
   // touches the insertion point, otherwise leave fragments empty.
+  //
+  // One per PAGE the paragraph is drawn on. For a body paragraph that is one box and the loop
+  // stops at the first. For a repeated header it is one per page, which is what the outline
+  // needs to draw on each of them.
   if (byLine.size === 0 && range.start === range.end) {
+    const carets: ContentControlGeometryFragment[] = [];
+    const seenPages = new Set<number>();
     for (let index = low; index < placed.length; index += 1) {
       const span = placed[index]!;
       work && (work.spanCandidates += 1);
-      if (span.start > range.start) break;
+      if (span.start > range.start) {
+        if (repeated) continue;
+        break;
+      }
       if (range.start > span.end) continue;
+      if (seenPages.has(span.pageIndex)) continue;
+      seenPages.add(span.pageIndex);
       const x =
         span.start === span.end
           ? span.box.x
           : span.box.x +
             (span.box.width * (range.start - span.start)) / Math.max(1, span.end - span.start);
-      return [
-        { pageIndex: span.pageIndex, box: { x, y: span.box.y, width: 0, height: span.box.height } },
-      ];
+      carets.push({
+        pageIndex: span.pageIndex,
+        box: { x, y: span.box.y, width: 0, height: span.box.height },
+      });
+      if (!repeated) break;
     }
+    if (carets.length > 0) return carets;
   }
   // Line keys are page-major document order, so sorting by line also sorts by page.
   return [...byLine.entries()]
@@ -666,12 +734,26 @@ const wrappedPages = new WeakMap<
  * an identity-reused page. When no page wrapper needs rewriting, the prior `pages` array is
  * kept by reference so a no-change resume still satisfies `layout.pages` identity.
  */
+import { boundaryParts, collectedControlIndexOverParts } from './content-control-boundary-parts.ts';
+
 export function attachContentControlBoundaries(
   layout: SemanticLayout,
   part: OoxmlPart,
   token = contentControlContextToken(part),
   work?: ContentControlBoundaryWork
 ): SemanticLayout {
+  // The token the CALLER passes is the body part's. A control in a header lives in a different
+  // part, whose token the body's does not move with — so the authority is derived here, over
+  // every story part the layout draws. Each part's own token is memoized, so the extra parts
+  // cost a join rather than a walk.
+  const parts = boundaryParts(layout, part);
+  if (parts.length > 1) {
+    const perPart = parts.map((storyPart) => contentControlContextToken(storyPart));
+    // EMPTY when no part holds a control, not `'|'`. A join of empty strings is truthy, which
+    // defeated the short-circuit below for every document that merely HAS a header — so the
+    // common case paid the full collect-and-index walk on every pass.
+    token = perPart.some((each) => each !== '') ? perPart.join('|') : '';
+  }
   // The token includes every control id, so an empty token proves there are no controls.
   // Avoid both otherwise-unconditional full walks: collecting controls from the tree and
   // indexing every placed fragment/span across every page.
@@ -701,7 +783,7 @@ export function attachContentControlBoundaries(
     };
   }
 
-  const index = collectedControlIndexOf(part);
+  const index = collectedControlIndexOverParts(parts);
   const geometry = placedGeometryOf(layout, index, work);
   const contentControls = index.controls.map((entry) => boundaryRecordOf(entry, geometry, work));
   const byPage = new Map<number, ContentControlBoundaryRecord[]>();
@@ -758,5 +840,102 @@ export function attachContentControlBoundaries(
     pages,
     contentControls,
     controlContextToken: token,
+  };
+}
+
+/**
+ * Every content control a part declares, in document order, WITHOUT geometry.
+ *
+ * For callers that want the ROSTER rather than the rectangles — the Tab walk through form
+ * fields is the one, and it needs story order, not boxes. `fragments` comes back empty here
+ * by design; a caller that needs geometry reads `layout.contentControls`, which covers every
+ * story the layout draws.
+ */
+export function contentControlRecordsInPart(
+  part: OoxmlPart,
+  /**
+   * Keep only controls holding one of these paragraphs.
+   *
+   * For a notes PART, which holds every note in the document rather than one story. Rostered
+   * whole, Tab walked out of the open footnote and into the next one, and the keystrokes after
+   * it landed in a note the reader was not in.
+   */
+  withinParagraphs?: ReadonlySet<string>
+): readonly ContentControlBoundaryRecord[] {
+  const controls = collectedControlIndexOf(part).controls.filter((collected) => {
+    if (!withinParagraphs) return true;
+    if (collected.paragraphId !== undefined) return withinParagraphs.has(collected.paragraphId);
+    // Any paragraph the control DRAWS, not just a top-level one. `blockIds` carries table ids
+    // as well as paragraph ids, and the membership set is paragraphs alone — so a block control
+    // wrapping a table matched nothing and dropped out of the roster entirely.
+    return paragraphsUnder(collected.control).some((id) => withinParagraphs.has(id));
+  });
+  return controls.map(recordWithoutGeometry);
+}
+
+/** Every paragraph id anywhere under a control, tables and nested controls included. */
+function paragraphsUnder(control: OoxmlElement): string[] {
+  const found: string[] = [];
+  const walk = (nodes: readonly OoxmlNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === 'textValue') continue;
+      if (node.kind === 'paragraph') {
+        found.push(node.id);
+        continue;
+      }
+      if (isContentControl(node)) {
+        walk(contentControlContentChildren(node));
+        continue;
+      }
+      walk(node.children);
+    }
+  };
+  walk(contentControlContentChildren(control));
+  return found;
+}
+
+/**
+ * The innermost content control holding `paragraphId`, in `part`.
+ *
+ * Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside a
+ * control is the one the caret is actually in.
+ */
+export function contentControlHoldingParagraph(
+  part: OoxmlPart,
+  paragraphId: string
+): ContentControlBoundaryRecord | null {
+  let found: CollectedControl | null = null;
+  for (const collected of collectedControlIndexOf(part).controls) {
+    // `blockIds` carries a table's OWN id and stops there, so a paragraph inside a table
+    // inside a block control is in no `blockIds` list. `contentControlRecordsInPart` was
+    // given `paragraphsUnder` for exactly that; this reader was not, so the caret in such a
+    // cell reported no control at all — no outline, `remove()` answering `notFound`, and
+    // `navigate` stepping over it. Every scope but the body routes through here.
+    const holds =
+      collected.paragraphId === paragraphId ||
+      collected.blockIds.includes(paragraphId) ||
+      paragraphsUnder(collected.control).includes(paragraphId);
+    if (!holds) continue;
+    if (!found || collected.nestingDepth >= found.nestingDepth) found = collected;
+  }
+  return found ? recordWithoutGeometry(found) : null;
+}
+
+function recordWithoutGeometry(collected: CollectedControl): ContentControlBoundaryRecord {
+  const properties = contentControlPropertiesOf(collected.control);
+  const alias = propertyVal(properties, 'alias');
+  const tag = propertyVal(properties, 'tag');
+  return {
+    id: collected.control.id,
+    ...(alias !== undefined ? { alias } : {}),
+    ...(tag !== undefined ? { tag } : {}),
+    controlType: mapContentControlType(properties),
+    lock: collected.lockStack[collected.lockStack.length - 1] ?? 'unlocked',
+    effectiveLock: effectiveContentControlLock(collected.lockStack),
+    placeholder: propertyChild(properties, 'showingPlcHdr') !== undefined,
+    bound: propertyChild(properties, 'dataBinding') !== undefined,
+    nestingDepth: collected.nestingDepth,
+    level: collected.level,
+    fragments: [],
   };
 }

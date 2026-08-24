@@ -37,6 +37,7 @@ import {
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   reviewItemKey,
   reviewItemsAt,
   reviewThreadRootOf,
@@ -44,6 +45,8 @@ import {
   caretAt,
   cellSelectionText,
   contentControlAtSemantic,
+  contentControlHoldingParagraph,
+  contentControlRecordsInPart,
   contentControlsInLayout,
   layoutSemanticDocument,
   paragraphsInCells,
@@ -70,6 +73,9 @@ import {
   paintSemanticLayout,
   type OverlayRect,
 } from '@docx-editor.dev/core/output';
+// By module path, like the roster walk below: dropping a retained paint is an engine
+// internal for the IME lane, not something the output barrel should offer consumers.
+import { discardRetainedPaint } from '../output/semantic-paint.ts';
 // By module path: the roster walk is an engine internal, not part of the output barrel's
 // public surface. See the note there.
 import {
@@ -156,6 +162,8 @@ import {
   setEditingModeChrome,
   setHeaderFooterEditingChrome,
   storyScopeOf,
+  partOfNodeId,
+  storyScopeOfNodeId,
 } from './surface-scope.ts';
 import { createHeaderFooterOps } from './surface-hf-ops.ts';
 import { createImageOps } from './surface-image-ops.ts';
@@ -171,6 +179,10 @@ export type {
   PaginatedSurfaceOptions,
   PaginatedSurfacePerf,
   PaginatedSurfaceState,
+  ParagraphFlags,
+  SurfaceParagraphFormat,
+  ParagraphPropertyEdit,
+  ParagraphTabStop,
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
 
@@ -340,7 +352,9 @@ export function mountPaginatedSurface(
           ? { preferredPageIndex: active.pageIndex }
           : notePageIndex !== null
             ? { preferredPageIndex: notePageIndex }
-            : {}),
+            : selectionSync.selectionPageIndex() !== undefined
+              ? { preferredPageIndex: selectionSync.selectionPageIndex() }
+              : {}),
         scopedHost,
         ...(active
           ? { scopedHostKind: 'headerFooter' as const }
@@ -525,6 +539,32 @@ export function mountPaginatedSurface(
   const storyScope = () =>
     storyScopeOf(hfScope?.getActive() ?? null, noteOps?.activeNoteScope() ?? null);
   const noteScopeId = () => noteOps?.activeNoteScope()?.id ?? null;
+  /**
+   * The section a page belongs to, and where that section starts.
+   *
+   * A page is the only thing a pointer entry knows, and a header belongs to a SECTION: one
+   * header may be referenced by several, and their page geometry can differ. Without this the
+   * entry defaulted to section 0, so double-clicking the header on a landscape page answered
+   * with the first section's portrait width — which is the ruler's clamp and the grid width
+   * `insertTableOp` divides.
+   *
+   * A single-section document has no spans and every page belongs to section 0.
+   */
+  const sectionAtPage = (pageIndex: number): { sectionIndex: number; sectionStart: number } => {
+    const spans = layoutSession.multi?.spans;
+    let sectionIndex = 0;
+    let sectionStart = 0;
+    if (spans && spans.length > 0) {
+      for (let index = 0; index < spans.length; index += 1) {
+        const span = spans[index]!;
+        sectionIndex = index;
+        sectionStart = span.startIndex;
+        if (pageIndex < span.startIndex + span.pageCount) break;
+      }
+    }
+    return { sectionIndex, sectionStart };
+  };
+
   const paragraphOrder = () =>
     scopedDocumentOrder(currentLayout, hfScope?.getActive() ?? null, noteScopeId());
   // Phase timers, one slot per phase rather than a log: the state reports the LAST pass,
@@ -596,6 +636,7 @@ export function mountPaginatedSurface(
     producer,
     cache: layoutCache,
     styleCascade,
+    numberingIndex,
     defaultTabStopPt,
     // Furniture answers the document's display mode, like the body does — and it is named
     // even when it is the default, because a lane that says nothing is treated as saying
@@ -646,7 +687,13 @@ export function mountPaginatedSurface(
    */
   const gatedSession: TreeDocxSession = {
     ...session,
-    applyTreeOps: (ops, before, after) => applyOps(ops, before, after),
+    // The SCOPE has to travel. `applyOps` defaults it to the open story, so dropping the
+    // argument here silently rewrote every caller that named one — and the one caller that
+    // needs to is section geometry, which pins `{ kind: 'body' }` because `w:sectPr` lives on
+    // the body story and nowhere else. A header store has no `w:body`, so with the caret in a
+    // header every page-setup write was refused as `tree-invariant`: the ruler snapped back and
+    // Page Setup's Apply did nothing, with the dialog still reading the right section.
+    applyTreeOps: (ops, before, after, scope) => applyOps(ops, before, after, scope),
     applyPmDoc: (doc) => {
       if (editingMode === 'view') {
         return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
@@ -717,6 +764,7 @@ export function mountPaginatedSurface(
   const structure = createSurfaceStructure({
     session: gatedSession,
     storyScope,
+    headerFooterSectionIndex: () => hfScope?.getActive()?.sectionIndex,
     paragraphOrder,
     // A rectangle is not the range it stands in for — the same question `createSurfaceFormat`
     // asks. Without it, bulleting or indenting one selected column also hit the cells between
@@ -766,6 +814,54 @@ export function mountPaginatedSurface(
     textOf: (paragraphId) => textOf(paragraphId),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
   });
+  /**
+   * Put the surface in the story that holds `paragraphId`, for a JUMP.
+   *
+   * A bookmark or an internal link can name a paragraph in any story, and moving the caret
+   * there while the scope stayed on the body left the two disagreeing: `activeScope` said
+   * body, the caret sat on a paragraph the body store has never heard of, and every keystroke
+   * after it was refused with nothing said. False means the story could not be opened, and the
+   * caller must not jump anyway.
+   */
+  const enterStoryHolding = (paragraphId: string): boolean => {
+    const scope = storyScopeOfNodeId(session, paragraphId, { kind: 'body' });
+    if (scope.kind === 'body') {
+      // Leaving is unconditional here, unlike entering: a body target is not somewhere
+      // staying in the open story could help.
+      noteOps?.exitNote();
+      hfScope?.exitHeaderFooter();
+      return true;
+    }
+    if (scope.kind === 'headerFooter') {
+      const active = hfScope?.activeScope();
+      if (active?.kind === 'headerFooter' && active.rId === scope.rId) return true;
+      noteOps?.exitNote();
+      return hfScope?.enterHeaderFooter({ rId: scope.rId }) ?? false;
+    }
+    // A notes PART holds every note, so the scope has to name the NOTE the paragraph is in,
+    // and only the painted layout knows which one that is.
+    const scopeId = noteScopeIdHolding(paragraphId);
+    if (!scopeId) return false;
+    if (noteOps?.activeNoteScope()?.id === scopeId) return true;
+    hfScope?.exitHeaderFooter();
+    return noteOps?.enterNote(scopeId) ?? false;
+  };
+
+  /** The note whose painted fragments hold this paragraph, or null. */
+  const noteScopeIdHolding = (paragraphId: string): string | null => {
+    for (const page of currentLayout.pages) {
+      for (const area of [page.footnotes, page.endnotes]) {
+        if (!area) continue;
+        for (const note of area.notes) {
+          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+            if (fragment.paragraphId === paragraphId) return note.scopeId;
+          }
+        }
+      }
+    }
+    return null;
+  };
+
   const navigation = createSurfaceNavigation({
     pagesLayer,
     container,
@@ -777,6 +873,7 @@ export function mountPaginatedSurface(
     linkById: (linkId) => fieldLinks.linkById(linkId) ?? hyperlinks.linkById(linkId),
     drawingLinkById: (drawingNodeId) => drawingLinkByIdFromLayout(currentLayout, drawingNodeId),
     setSelection: (position) => setSelection(collapsedAt(position)),
+    enterStoryFor: (paragraphId) => enterStoryHolding(paragraphId),
     isCollapsedSelection: () =>
       selection.anchor.paragraphId === selection.head.paragraphId &&
       selection.anchor.offset === selection.head.offset,
@@ -797,6 +894,7 @@ export function mountPaginatedSurface(
       producer,
       cache: layoutCache,
       styleCascade,
+      numberingIndex,
       defaultTabStopPt,
       inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
       drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -1064,9 +1162,9 @@ export function mountPaginatedSurface(
 
   function visiblePages(): ReadonlySet<number> | undefined {
     const set = visiblePageSet(container, currentLayout, selection, scale);
-    const occurrence = hfScope?.getActive()?.pageIndex;
-    if (occurrence === undefined || set === undefined || set.has(occurrence)) return set;
-    return new Set([...set, occurrence]);
+    const extra = hfScope?.getActive()?.pageIndex ?? selectionSync.selectionPageIndex();
+    if (extra === undefined || set === undefined || set.has(extra)) return set;
+    return new Set([...set, extra]);
   }
 
   /** Publish any pending layout. Returns whether it did, so callers can avoid a double paint. */
@@ -1271,14 +1369,53 @@ export function mountPaginatedSurface(
   }
 
   /** Innermost layout boundary under the caret, or null outside every control. */
+  /**
+   * The content control the caret is inside, or null.
+   *
+   * Two resolutions, because the boundary records the fast one needs exist for the body
+   * alone. In the body, geometry: a paragraph can hold several inline controls and only the
+   * caret's x/y says which. Anywhere else, the caret's own PARAGRAPH, walked in that story's
+   * part — which is the honest answer where no records exist, and is what a block control
+   * needs in any case.
+   *
+   * The story check is not an optimisation. Page-content coordinates mean nothing without
+   * knowing whose box they are in: a header caret's y lands in the top band of the BODY
+   * content box, so the geometry path answered with whichever body control sat there, and
+   * `setValue` and `remove` then rewrote and deleted body content while the reader was
+   * editing a header.
+   */
   function contentControlAtCaret(): ContentControlBoundaryRecord | null {
+    const scope = storyScope();
+    if (scope.kind !== 'body') return contentControlInStoryAtCaret(scope);
     const caret = caretAt(currentLayout, selection.head, measurer);
     if (!caret) return null;
-    return contentControlAtSemantic(currentLayout, {
+    const found = contentControlAtSemantic(currentLayout, {
       x: caret.x,
       y: caret.y + caret.height / 2,
       pageIndex: caret.pageIndex,
     });
+    // Belt and braces: the records are the body's, so a match from another part is a bug in
+    // the index rather than an answer, and must not become a write.
+    if (!found) return null;
+    return partNameOfNodeId(found.id) === session.part().name ? found : null;
+  }
+
+  /** The part name a node id names, or '' when it names none. */
+  function partNameOfNodeId(id: string): string {
+    const hash = id.indexOf('#');
+    return hash === -1 ? '' : id.slice(0, hash);
+  }
+
+  /**
+   * The innermost control holding the caret's paragraph, in the open story's own part.
+   *
+   * Deepest wins, matching the geometry path's innermost-by-nesting rule: a control inside a
+   * control is the one the caret is actually in.
+   */
+  function contentControlInStoryAtCaret(scope: StoryScope): ContentControlBoundaryRecord | null {
+    const part = session.partFor(scope);
+    if (!part) return null;
+    return contentControlHoldingParagraph(part, selection.head.paragraphId);
   }
 
   function contentLockedOrBound(control: ContentControlBoundaryRecord): string | null {
@@ -1302,8 +1439,20 @@ export function mountPaginatedSurface(
     return isContentControl(node);
   }
 
+  /**
+   * The control a given id names, in whichever story owns it.
+   *
+   * Looked up in the part the ID names, not in the body. Every read built on this — the lock
+   * and binding gates, the tab index, a checkbox's state, a dropdown's items — answered as if
+   * a control outside the body did not exist, so `disabledReason` refused every verb on one
+   * with `notFound` while the control was plainly on screen.
+   */
   function findControl(controlId: string): OoxmlElement | null {
-    const node = findNode(session.part(), controlId);
+    // From the PACKAGE, never `partFor`: this backs the lock and binding gates, the tab index,
+    // a checkbox's state and a dropdown's items, all of them reads, and `partFor` would spend
+    // one of the 64 story-store slots per part touched and never give it back.
+    const part = partOfNodeId(session, controlId);
+    const node = findNode(part ?? session.part(), controlId);
     if (!node || !isContentControlElement(node)) return null;
     return node;
   }
@@ -1329,8 +1478,27 @@ export function mountPaginatedSurface(
     return null;
   }
 
+  /**
+   * The controls Tab cycles, in the OPEN story.
+   *
+   * Built from the layout for the body, where the records carry document order, and from the
+   * story's own part otherwise. Against the body's list a furniture caret's own control was
+   * never in the roster, so its index was always -1 and 'next' landed unconditionally on the
+   * first control in the document body — moving the caret out of the story while the scope
+   * still said it was open, which refuses every keystroke after it.
+   */
   function editableControlsInOrder(): ContentControlBoundaryRecord[] {
-    const controls = [...contentControlsInLayout(currentLayout)];
+    const scope = storyScope();
+    const storyPart = scope.kind === 'body' ? null : session.partFor(scope);
+    // A notes PART holds every note in the document, so its controls are not one story's.
+    // Rostered whole, Tab walked out of the open footnote and into the next one — the same
+    // escape this roster was scoped to stop, one level down — and the keystrokes after it
+    // landed in a note the reader was not in. `paragraphOrder()` is already bounded to the
+    // open note, so it is what bounds this.
+    const withinNote = scope.kind === 'notesPart' ? new Set(paragraphOrder()) : undefined;
+    const controls = storyPart
+      ? [...contentControlRecordsInPart(storyPart, withinNote)]
+      : [...contentControlsInLayout(currentLayout)];
     return controls
       .filter((control) => contentLockedOrBound(control) === null)
       .sort((a, b) => {
@@ -1454,7 +1622,12 @@ export function mountPaginatedSurface(
       }
       return false;
     };
-    scanInline(session.part().root.children, 0, '');
+    scanInline(
+      (session.partFor(storyScopeOfNodeId(session, controlId, storyScope())) ?? session.part()).root
+        .children,
+      0,
+      ''
+    );
     if (!hostParagraphId) return false;
     setSelection({
       anchor: { paragraphId: hostParagraphId, offset: start },
@@ -1888,15 +2061,18 @@ export function mountPaginatedSurface(
       commit(() => {
         // `applyOps`, not `session.applyTreeOps`: this lane wrote straight past the mode
         // rules, so a checkbox in a document open for viewing still toggled and committed.
-        // Explicitly the BODY story and no selection check, because a control op names the
-        // control it edits: the story the reader happens to have open, and where their caret
-        // sits, are answers to a different question — and `contentControlRefusal` above
+        // No selection check, because a control op names the control it edits: where the
+        // reader's caret sits is a different question, and `contentControlRefusal` above
         // judges the write on exactly these terms.
+        //
+        // The STORY comes from the control's own id, not from the open scope and not from a
+        // constant. Pinned to the body, this wrote body content while the reader was editing
+        // a header, and a control in that header could never be written at all.
         const result = applyOps(
           [{ op: 'setContentControlValue', controlId, value }],
           selectionMark(),
           undefined,
-          BODY_STORY,
+          storyScopeOfNodeId(session, controlId, storyScope()),
           false
         );
         committed = result.committed;
@@ -1923,7 +2099,7 @@ export function mountPaginatedSurface(
           [{ op: 'removeContentControl', controlId: id }],
           selectionMark(),
           undefined,
-          BODY_STORY,
+          storyScopeOfNodeId(session, id, storyScope()),
           false
         );
         committed = result.committed;
@@ -2163,7 +2339,12 @@ export function mountPaginatedSurface(
     const active = document.activeElement;
     if (active !== pagesLayer && (!active || !pagesLayer.contains(active))) return;
 
-    const geometry = caretAt(currentLayout, selection.head, { measurer });
+    const geometry = caretAt(currentLayout, selection.head, {
+      measurer,
+      ...(selectionSync.selectionPageIndex() !== undefined
+        ? { preferredPageIndex: selectionSync.selectionPageIndex() }
+        : {}),
+    });
     if (!geometry) return;
     const changedPage = lastCaretPageIndex !== null && lastCaretPageIndex !== geometry.pageIndex;
     lastCaretPageIndex = geometry.pageIndex;
@@ -2675,11 +2856,15 @@ export function mountPaginatedSurface(
     isGesturing: () => pointer?.dragging() ?? false,
     domSelection: () => (cellSelection ? collapsedAt(cellSelection.text.anchor) : selection),
     holdsCellSelection: () => cellSelection !== null,
+    // `surface` is assigned below; a composition can only end once a caller holds it.
+    replaceSelectionWith: (text) => surface.type(text),
+    discardPaint: () => discardRetainedPaint(pagesLayer),
   });
 
   hfScope = createHeaderFooterScopeController({
     session,
     layout: () => currentLayout,
+    sectionAtPage,
     selection: () => selection,
     setScopeSelection: (next) => {
       // Entering or leaving a header/footer moves the caret ACROSS STORIES;
@@ -2707,6 +2892,7 @@ export function mountPaginatedSurface(
 
   noteOps = createNoteOps({
     session,
+    exitHeaderFooter: () => hfScope?.exitHeaderFooter(),
     applyOps,
     commit,
     selection: () => selection,
@@ -3216,7 +3402,7 @@ export function mountPaginatedSurface(
       cellSelection
         ? cellSelectionRects(currentLayout, cellSelection.cellIds)
         : retainedSelection
-          ? selectionRects(currentLayout, retainedSelection)
+          ? selectionRects(currentLayout, retainedSelection, paragraphOrder())
           : [],
       // Pages of differing width are centred individually, so the overlay has to carry the
       // same per-page offset the painter applied or a highlight in a landscape section would
@@ -3368,7 +3554,12 @@ export function mountPaginatedSurface(
   function canInsertTable(rows: number, cols: number): boolean {
     if (editingMode === 'view' || !session.editable) return false;
     const op = insertTableOp(rows, cols);
-    return op !== null && validateTreeOp(session.part(), op) === null;
+    // Validated against the part the CARET is in, the same part `applyOps` will write to.
+    // Against the body part, a caret in a header named a paragraph that part has never heard
+    // of, so the op was refused as `unknown-paragraph` before it was ever applied — and the
+    // refusal reached the toolbar as a message about where tables may go.
+    const part = session.partFor(storyScope()) ?? session.part();
+    return op !== null && validateTreeOp(part, op) === null;
   }
 
   function insertTable(rows: number, cols: number): boolean {
@@ -3582,14 +3773,22 @@ export function mountPaginatedSurface(
         // mount and gone by the next zoom resolves to the fixed grid, and the identity has to
         // say so.
         producer = producerIdentity();
+        // EVERY input the mount-time source is given, not a subset. Rebuilt without the three
+        // drawing hooks, a header's inline pictures lost their layout context for the rest of
+        // the session the first time the user zoomed.
         furnitureSource = createFurnitureSource({
           session,
           measurer,
           producer,
           cache: layoutCache,
           styleCascade,
+          numberingIndex,
           defaultTabStopPt,
           displayMode: options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+          inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
+          drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
+          drawingTokenForParagraphForPart: (partName, paragraph) =>
+            drawingBundle.drawingTokenForParagraph(paragraph, partName),
         });
         // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
         // flush that publishes nothing (a revision already superseded) would otherwise leave
@@ -4380,6 +4579,7 @@ export function mountPaginatedSurface(
       flushTypeBuffer();
       restoreSelection(session.redo());
     },
+    sectionAtPage,
     activeScope: () => {
       const note = noteOps?.activeNoteScope();
       if (note) return note;
@@ -5018,6 +5218,9 @@ export function mountPaginatedSurface(
         hfScope?.enterHeaderFooter({
           rId: info.rId,
           pageIndex: info.pageIndex,
+          // The section this PAGE is in. Omitted, the scope bound section 0, and every read
+          // that resolves geometry from the open story answered for the wrong page.
+          sectionIndex: sectionAtPage(info.pageIndex).sectionIndex,
           kind: info.kind,
           ...(info.position ? { position: info.position } : {}),
         });
@@ -5040,17 +5243,7 @@ export function mountPaginatedSurface(
         flushTypeBuffer();
         // Which section owns the page, from the multi-section spans; a single-section
         // document has no spans and every page belongs to section 0.
-        const spans = layoutSession.multi?.spans;
-        let sectionIndex = 0;
-        let sectionStart = 0;
-        if (spans && spans.length > 0) {
-          for (let index = 0; index < spans.length; index += 1) {
-            const span = spans[index]!;
-            sectionIndex = index;
-            sectionStart = span.startIndex;
-            if (pageIndex < span.startIndex + span.pageCount) break;
-          }
-        }
+        const { sectionIndex, sectionStart } = sectionAtPage(pageIndex);
         const bySection = session.headerFooterResolutionBySection();
         const section = bySection[Math.min(sectionIndex, Math.max(0, bySection.length - 1))];
         // The variant this page would DISPLAY, which is the one Word creates on a blank

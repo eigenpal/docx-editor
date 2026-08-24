@@ -20,6 +20,7 @@ import type {
   ContentControlType,
   DocComment,
   DocRange,
+  InsertableContentControlType,
   Revision,
   StyleDefinitions,
   DocTarget,
@@ -53,7 +54,10 @@ export type {
   Extent,
   HeaderFooterSet,
   IndentFormatting,
+  InsertableContentControlType,
   Paragraph,
+  ParagraphFlags,
+  ParagraphTabStop,
   Revision,
   RevisionType,
   RunFormatting,
@@ -122,6 +126,28 @@ export interface DocEdits {
   acceptAllRevisions: Record<never, never>;
   rejectAllRevisions: Record<never, never>;
 
+  /**
+   * Author a NEW control over the addressed span.
+   *
+   * A RANGE becomes a wrapper around the characters that are already there. A COLLAPSED
+   * position inserts an empty control showing its type's prompt, which is Word's own gesture
+   * and the one a template host reaches for: the first character typed replaces the prompt
+   * whole, so nothing has to detect and undo text the caller never asked for.
+   *
+   * `title` is Word's `w:alias` — the label a user sees — and `tag` is `w:tag`, the
+   * machine-readable identity a host looks the control back up by. Named as the automation
+   * protocol names them, so a caller who reaches for both surfaces writes one vocabulary.
+   *
+   * One paragraph only. A control that starts in one paragraph and ends in another is a BLOCK
+   * wrapper over both, a different element than the inline one this authors — refused rather
+   * than guessed, so a caller learns which they asked for.
+   */
+  insertContentControl: {
+    target: DocTarget;
+    subtype: InsertableContentControlType;
+    tag?: string;
+    title?: string;
+  };
   setContentControlValue: { target: DocTarget; value: string };
   removeContentControl: { target: DocTarget };
   addRepeatingSectionItem: { target: DocTarget; index?: number };

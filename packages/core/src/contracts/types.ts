@@ -5,6 +5,67 @@
  * `types-barrel.ts`. There is no `@docx-editor.dev/core/types` subpath.
  */
 
+/** Which paragraph-level reads the selection disagrees about. @public */
+export interface ParagraphDisagreements {
+  readonly alignment: boolean;
+  readonly spaceBeforePt: boolean;
+  readonly spaceAfterPt: boolean;
+  readonly lineSpacing: boolean;
+  readonly tabStops: boolean;
+}
+
+/**
+ * The five paragraph flags a Paragraph dialog shows as checkboxes.
+ *
+ * `contextualSpacing` is Word's "Don't add space between paragraphs of the same style";
+ * the rest are its Pagination block. `null` means the selection disagrees.
+ *
+ * @public
+ */
+export interface ParagraphFlags {
+  readonly contextualSpacing: boolean | null;
+  readonly keepNext: boolean | null;
+  readonly keepLines: boolean | null;
+  readonly widowControl: boolean | null;
+  readonly pageBreakBefore: boolean | null;
+}
+
+/**
+ * Every field of the Paragraph dialog, as `setParagraphFormat` takes it.
+ *
+ * An omitted field is left as authored. `null` REMOVES a setting so the style supplies it
+ * again — not the same as a zero, which blocks the cascade.
+ *
+ * @public
+ */
+export interface ParagraphFormatCommand {
+  alignment?: 'left' | 'center' | 'right' | 'justify';
+  spaceBeforePt?: number | null;
+  spaceAfterPt?: number | null;
+  lineSpacing?: { rule: 'multiple' | 'exact' | 'atLeast'; value: number } | null;
+  indentLeftTwips?: number | null;
+  indentRightTwips?: number | null;
+  /** ONE signed first-line offset: negative is a hanging indent. */
+  indentFirstLineTwips?: number | null;
+  contextualSpacing?: boolean;
+  keepNext?: boolean;
+  keepLines?: boolean;
+  widowControl?: boolean;
+  pageBreakBefore?: boolean;
+  /**
+   * Replace the paragraph's custom tab stops. An empty list CLEARS them, which is what
+   * "Clear All" does; omit the field to leave them as authored.
+   */
+  tabStops?: readonly ParagraphTabStop[];
+}
+
+/** One custom tab stop, as a command states it. @public */
+export interface ParagraphTabStop {
+  readonly positionTwips: number;
+  readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+  readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+}
+
 /** Ownership token for one retained selection highlight. @public */
 export type SelectionPin = symbol;
 
@@ -212,6 +273,30 @@ export interface RunFormatting {
   readonly spaceBeforePt?: number;
   readonly spaceAfterPt?: number;
   /**
+   * The paragraph flags the Paragraph dialog shows as checkboxes.
+   *
+   * Each is `true`, `false`, or `null` when the selection's paragraphs disagree — a
+   * checkbox needs all three. Read through the cascade, so a flag a STYLE sets reads as on,
+   * which is what the box has to show over a paragraph the page is visibly keeping with the
+   * next. Absent on a `Run`, like every other selection-level field here.
+   */
+  readonly paragraphFlags?: ParagraphFlags;
+  /**
+   * Which paragraph-level fields above are absent because the selection DISAGREES, as
+   * opposed to because nothing states them.
+   *
+   * A `null`/absent value alone cannot tell those apart, and both readings have shipped as
+   * bugs: a disagreement rendered as a concrete value is uncorrectable, because the value
+   * that would fix it is the one already on screen; an absent value rendered as "mixed"
+   * tells a single paragraph it disagrees with itself.
+   */
+  readonly disagrees?: ParagraphDisagreements;
+  /**
+   * The paragraph's custom tab stops at the selection, cascade included. Absent when the
+   * selection disagrees or the paragraphs have none.
+   */
+  readonly tabStops?: readonly ParagraphTabStop[];
+  /**
    * The EFFECTIVE paragraph indent at the selection — cascade and numbering merge
    * included, so a numbered item that authors no `w:ind` reports the indent its list
    * definition gives it. Absent when nothing is loaded, or when the selection is inside a
@@ -298,6 +383,25 @@ export type ContentControlType =
   | 'date'
   | 'picture'
   | 'repeatingSection';
+
+/**
+ * The control kinds an insertion can author.
+ *
+ * A NARROWING of {@link ContentControlType}, not a separate vocabulary: a kind read off an
+ * existing control can be handed straight back to `insertContentControl`. Three kinds are
+ * absent because an insertion would have to invent what they carry — a checkbox needs its two
+ * declared glyph states, a picture needs an image part, and a repeating section is a container
+ * whose items have their own verbs. Reading still answers the wider type; a document may hold
+ * kinds this cannot create.
+ *
+ * `dropDownList` is the same kind as `dropdown`, spelt as OOXML spells it. Both are accepted,
+ * so a type read off a control can be handed back without translating it — and the OOXML
+ * spelling is the one the automation protocol takes, so a caller who uses both surfaces can
+ * write that one everywhere.
+ */
+export type InsertableContentControlType =
+  | Extract<ContentControlType, 'richText' | 'plainText' | 'dropdown' | 'comboBox' | 'date'>
+  | 'dropDownList';
 
 /**
  * Narrows a content-control query. Fields combine with AND; an empty filter matches every

@@ -17,7 +17,10 @@ import { fragmentParagraphs } from './line-segments.ts';
 import type { TableCellAddress } from './semantic-hit-test.ts';
 import {
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
   type BlockFragmentRecord,
+  type PageRecord,
+  type ParagraphFragmentRecord,
   type SemanticLayout,
   type StyleSpanRecord,
   type TableCellFragmentRecord,
@@ -53,6 +56,18 @@ export interface PlacedCell {
   /** Ordinal within the whole table, shared by a header row and every repeat of it. */
   readonly rowIndex: number;
   readonly isHeaderRepeat: boolean;
+  /**
+   * What to add to the cell's box to reach the page's content-box space.
+   *
+   * Zero for the body, whose fragments are already laid out from that box. A header's are laid
+   * out from the header's own box, which sits ABOVE it, and a footer's from a box past the
+   * bottom of it. `cellSelectionRects` promises page-content coordinates and the overlay
+   * painter places what it returns against `page.contentBox`, so a story's raw box painted a
+   * header's selection band down in the body text.
+   */
+  readonly offsetX: number;
+  /** The vertical half of the same offset. See {@link PlacedCell.offsetX}. */
+  readonly offsetY: number;
 }
 
 interface TableIndex {
@@ -80,7 +95,12 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
   const rows = new Map<string, Map<number, readonly TableCellFragmentRecord[]>>();
   const ordinals = new Map<string, Map<string, number>>();
 
-  const visit = (blocks: readonly BlockFragmentRecord[], pageIndex: number): void => {
+  const visit = (
+    blocks: readonly BlockFragmentRecord[],
+    pageIndex: number,
+    offsetX: number,
+    offsetY: number
+  ): void => {
     for (const block of blocks) {
       if (block.kind === 'paragraph') continue;
       const id = block.tableId;
@@ -107,14 +127,42 @@ function tableIndex(layout: SemanticLayout): Map<string, TableIndex> {
             cell,
             rowIndex,
             isHeaderRepeat: row.isHeaderRepeat,
+            offsetX,
+            offsetY,
           });
-          visit(cell.blocks, pageIndex);
+          visit(cell.blocks, pageIndex, offsetX, offsetY);
         }
       }
     }
   };
 
-  for (const page of layout.pages) visit(page.fragments, page.index);
+  // EVERY story a page draws, not `page.fragments` alone. A table inside a header, a footer or
+  // a note is a table, and against the body's fragments the whole table lane answered "the
+  // selection is not inside a table" for one the user was looking at — a message that states a
+  // fact about the caret rather than the limit it actually hit.
+  for (const page of layout.pages) {
+    visit(page.fragments, page.index, 0, 0);
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      visit(
+        story.fragments,
+        page.index,
+        story.box.x - page.contentBox.x,
+        story.box.y - page.contentBox.y
+      );
+    }
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        visit(
+          note.fragments,
+          page.index,
+          note.box.x - page.contentBox.x,
+          note.box.y - page.contentBox.y
+        );
+      }
+    }
+  }
 
   const index = new Map<string, TableIndex>();
   for (const [id, cells] of placed) {
@@ -325,6 +373,26 @@ function nearestPositionInTable(layout: SemanticLayout, tableId: string): Semant
   return { anchor: nowhere, head: nowhere };
 }
 
+/**
+ * Paragraph fragments of every story a page draws, in reading order.
+ *
+ * `paragraphFragmentsOf` covers the body. A header, a footer and a note story keep their
+ * fragments on their own record, so a read that wants "the paragraphs painted on this page"
+ * has to visit each. No memo of its own: each list it flattens is memoized already, and this
+ * only concatenates them.
+ */
+function paragraphFragmentsEverywhereOn(page: PageRecord): ParagraphFragmentRecord[] {
+  const found = [...paragraphFragmentsOf(page)];
+  for (const story of [page.header, page.footer]) {
+    if (story) found.push(...paragraphFragmentsOfBlocks(story.fragments));
+  }
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    for (const note of area.notes) found.push(...paragraphFragmentsOfBlocks(note.fragments));
+  }
+  return found;
+}
+
 /** The style spans a cell selection covers, for reporting active formatting. */
 export function spansInCells(
   layout: SemanticLayout,
@@ -333,8 +401,12 @@ export function spansInCells(
   const wanted = new Set(paragraphsInCells(layout, cellIds));
   const found: StyleSpanRecord[] = [];
   const seen = new Set<string>();
+  // EVERY story, matching `tableIndex`. Reading `page.fragments` alone reported no spans at
+  // all for a cell selection in a header, so the toolbar showed a fully bold selection as not
+  // bold. This walk carries no geometry — it collects style spans by paragraph id — so a story
+  // needs no origin here, only visiting.
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
+    for (const fragment of paragraphFragmentsEverywhereOn(page)) {
       if (!wanted.has(fragment.paragraphId)) continue;
       for (const line of fragment.lines) {
         for (const span of line.spans) {
@@ -365,8 +437,8 @@ export function cellSelectionRects(
       if (!wanted.has(entry.cell.id)) continue;
       rects.push({
         pageIndex: entry.pageIndex,
-        x: entry.cell.box.x,
-        y: entry.cell.box.y,
+        x: entry.cell.box.x + entry.offsetX,
+        y: entry.cell.box.y + entry.offsetY,
         width: entry.cell.box.width,
         height: entry.cell.box.height,
       });

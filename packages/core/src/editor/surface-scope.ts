@@ -25,7 +25,7 @@ import type {
 } from '@docx-editor.dev/core/layout';
 import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
-import type { StoryScope } from '@docx-editor.dev/core/store';
+import type { OoxmlPart, StoryScope } from '@docx-editor.dev/core/store';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
@@ -57,12 +57,55 @@ export function isHeaderFooterScope(
   return scope?.kind === 'headerFooter' && typeof scope.rId === 'string' && scope.rId.length > 0;
 }
 
-type StoryScopeLookup = Pick<
+/**
+ * The session reads {@link storyScopeOfNodeId} needs. A structural subset, so a caller can
+ * hand it either the surface's session or the facade's.
+ */
+export type StoryScopeLookup = Pick<
   TreeDocxSessionView,
   'part' | 'headerFooterResolutionBySection' | 'partFor'
 >;
 
-/** Resolve a node's story from the canonical part name embedded in its id. */
+/**
+ * The story a NODE lives in, which is what a write about that node must target.
+ *
+ * The open scope is a near-enough proxy most of the time and wrong exactly when it matters:
+ * nothing binds a node id to it, so a verb invoked on a control, a chip or a paragraph the
+ * reader is not currently standing in wrote against the wrong store — or, where the id came
+ * from a body-only index, against body content the reader could not see.
+ *
+ * Answered from the id's own PART NAME. Node ids are minted `${partName}#${path}`, so the
+ * question is constant-time and needs no store to be opened. That last part is load-bearing:
+ * asking each scope for its paragraph list instead OPENS a story store, the store cap is 64,
+ * and a store whose part is still in the package is never evicted — on a many-section
+ * document that left later headers unopenable for the rest of the session.
+ *
+ * Falls back to `fallback` for an id no story claims, so the store refuses it rather than this.
+ */
+/**
+ * The part a NODE lives in, WITHOUT opening a story store.
+ *
+ * `session.partFor(scope)` resolves a scope by opening that story's store, and an open store is
+ * retained for as long as its part is in the package. The cap is 64. So routing a pure READ —
+ * "is this control locked", "what is its tab index" — through `partFor` spent a permanent slot
+ * per part touched, and an id naming no node at all still spent one, because the part name is
+ * matched from the id's prefix before anything is looked up. Sixty-four such reads and no
+ * further header could be opened for the rest of the session, silently.
+ *
+ * Read straight from the live package instead. Ids carry the canonical part name, so this is a
+ * map lookup.
+ */
+export function partOfNodeId(
+  session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>,
+  nodeId: string | undefined
+): OoxmlPart | null {
+  const hash = nodeId?.indexOf('#') ?? -1;
+  if (hash === -1) return null;
+  const partName = nodeId!.slice(0, hash);
+  if (partName.length === 0) return null;
+  return session.currentPackage().parts.get(partName) ?? null;
+}
+
 export function storyScopeOfNodeId(
   session: StoryScopeLookup,
   nodeId: string | undefined,

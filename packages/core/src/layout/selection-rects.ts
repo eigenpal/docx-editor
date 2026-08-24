@@ -11,12 +11,33 @@ import type { SemanticLayout } from './semantic-records.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
 
-/** The rectangles covering a selection, one per line it spans. */
+/**
+ * The rectangles covering a selection, one per line it spans.
+ *
+ * BODY fragments only, and a selection outside the body paints nothing. That is a real gap —
+ * a retained pin in a header shows no highlight, and a comment anchored in one draws no band
+ * even though the review queue lists it — but it is the honest shape of what this can answer
+ * today. Widening the walk to the other stories is not enough on its own: header and footer
+ * fragments carry positions relative to their own story box, note fragments relative to their
+ * note area, and one header story object is attached to EVERY page it applies to. Fed straight
+ * into a page-content-relative rect, those produce a band per page, at coordinates belonging
+ * to a different box. Measured, that put a header comment's band on all six pages of a
+ * document at the top-left of the body text. Painting nothing is wrong; painting over the
+ * wrong words is worse, so the walk stays here until the geometry is carried with it.
+ */
 export function selectionRects(
   layout: SemanticLayout,
-  selection: SemanticSelection
+  selection: SemanticSelection,
+  /**
+   * Reading order of the ACTIVE story.
+   *
+   * REQUIRED, for the reason `spansInSelection` gives: any default is one story's order, and
+   * it is wrong for every caret outside that story. A caller with no story in hand passes
+   * {@link everyStoryOrder}.
+   */
+  order: readonly string[]
 ): SelectionRect[] {
-  const ordered = orderPositions(layout, selection);
+  const ordered = orderPositions(selection, order);
   if (!ordered) return [];
   const rects: SelectionRect[] = [];
   for (const page of layout.pages) {

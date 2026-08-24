@@ -11,6 +11,7 @@
 // is a paragraph; unknown content survives because it is in the tree; so those fields
 // collapse to a single honest statement of what the part contains.
 
+import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
 import type { Node as PMNode } from 'prosemirror-model';
 import { paragraphOrderOfPart, type ReviewItem } from '../layout/review-support.ts';
 import {
@@ -27,6 +28,7 @@ import {
 } from '../store/store/comment-writes.ts';
 import {
   customNodePayloadsByControl,
+  type CustomNodePayloadRead,
   insertCustomNodeWrite,
   removeCustomNodeWrite,
   sweepCustomNodePayloads,
@@ -65,7 +67,6 @@ import {
   type HeaderFooterParts,
   type HeaderFooterSectionResolution,
   type OoxmlElement,
-  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
@@ -103,13 +104,7 @@ import {
   type RunPropertyLike,
   type StyleRunDefaults,
 } from './document-run-defaults.ts';
-import {
-  allParagraphs,
-  bodyParagraphs,
-  docToTreeOps,
-  reconcileDoc,
-  treeToDoc,
-} from './tree-binding.ts';
+import { allParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from './tree-binding.ts';
 import type { TreeBindingRejection } from './tree-binding.ts';
 import { buildParagraphAnchorIndex, type ParagraphAnchorIndex } from './paragraph-anchors.ts';
 import {
@@ -182,6 +177,15 @@ export interface TreeDocxSessionView {
     selectionAfter?: SelectionMark | null,
     scope?: StoryScope
   ): TreeApplyResult;
+  /**
+   * Every part that holds a story, body first, then headers, footers and note parts.
+   *
+   * A READ: parts come from the package, so this opens no story store and spends none of the
+   * 64 editable-store slots. Use it for any query that must answer about the whole document
+   * rather than about the caret — an enumeration that reads only the body reports a document
+   * the reader is not looking at.
+   */
+  storyParts(): readonly OoxmlPart[];
   /** Body text, paragraphs joined by newlines, read from the CANONICAL tree. */
   bodyText(): string;
   /** Text of a story scope, paragraphs joined by newlines. */
@@ -846,22 +850,25 @@ export function openTreeSession(
   let themeFontsCache: DocumentThemeFonts | null = null;
   /**
    * The trees the document-wide catalogs read: the live body, the styles part, and every
-   * distinct header/footer part across sections. Shared so `documentFonts` and
-   * `rendersText` can never disagree about what "the document" covers. Not memoized —
-   * both callers cache their own answer per package revision, and this only gathers
-   * already-resolved roots.
+   * other story — each distinct header and footer across sections, and both note parts.
+   *
+   * NOTES ARE STORIES TOO. The list enumerated them explicitly and stopped one short, so a
+   * family declared only in a footnote was invisible: the host was never told to load it, so
+   * the note measured and painted with a fallback face, and the font picker did not offer it.
+   *
+   * Shared so `documentFonts` and `rendersText` can never disagree about what "the document"
+   * covers. Not memoized — both callers cache their own answer per package revision, and this
+   * only gathers already-resolved roots.
    */
   const catalogRoots = (): OoxmlElement[] => {
     const roots: OoxmlElement[] = [bodyStore().part.root];
     const styles = resolveStylesRoot();
     if (styles) roots.push(styles);
     const seen = new Set<OoxmlPart>();
-    for (const section of resolvedHeaderFooterBySection().parts) {
-      for (const part of [...section.headers.values(), ...section.footers.values()]) {
-        if (seen.has(part)) continue;
-        seen.add(part);
-        roots.push(part.root);
-      }
+    for (const part of furnitureAndNoteParts()) {
+      if (seen.has(part)) continue;
+      seen.add(part);
+      roots.push(part.root);
     }
     return roots;
   };
@@ -887,17 +894,140 @@ export function openTreeSession(
   } | null = null;
   let anchorsCache: {
     readonly revision: number;
+    readonly openStories: string;
     readonly index: ParagraphAnchorIndex;
   } | null = null;
+  const readNormalizedParts = new WeakMap<OoxmlPart, OoxmlPart>();
   let bookmarksCache: { readonly revision: number; readonly index: BookmarkIndex } | null = null;
+  /**
+   * A story part with its paraIds minted, for READING only.
+   *
+   * Memoized on the part's identity: parts are immutable, so one normalization per part is
+   * always enough, and without the memo every revision would rebuild every furniture part in a
+   * document that has several. The result never reaches the package — the store mints its own
+   * on open, deterministically and identically.
+   */
+  const normalizedForRead = (part: OoxmlPart): OoxmlPart => {
+    const cached = readNormalizedParts.get(part);
+    if (cached) return cached;
+    const normalized = normalizeParagraphIdentity(part);
+    readNormalizedParts.set(part, normalized);
+    return normalized;
+  };
+
   const paragraphAnchors = (): ParagraphAnchorIndex => {
-    // Keyed on the body-store revision, like the outline: a split mints a new paragraph and
-    // a join removes one, but between commits the map cannot move.
-    const store = bodyStore();
-    if (!anchorsCache || anchorsCache.revision !== store.revision) {
-      anchorsCache = { revision: store.revision, index: buildParagraphAnchorIndex(store.part) };
+    // Keyed on the PACKAGE revision, because the index now spans every story: a split in a
+    // header mints a paragraph the body revision knows nothing about, and against that key the
+    // map would have kept answering for the document as it was before.
+    //
+    // COST, measured: ~0.9 ms to rebuild at 7k anchors, against ~0.002 ms for a cached read.
+    // Spanning every story costs nothing measurable on top of the body alone — the two builds
+    // time the same, and whichever runs second in a bench looks slower, which is warm-up. The
+    // furniture and note parts are a handful of paragraphs beside a body's thousands.
+    //
+    // So the ~0.9 ms is the body index, and it is what a body edit paid before this spanned
+    // anything. It is not free: it lands on the snapshot path, and it goes on composing maps
+    // over every paragraph rather than on the walk (memoizing `allParagraphs` per part takes
+    // only ~7% off).
+    //
+    // If it ever needs to come down, the fix is a composed index that resolves a lookup across
+    // per-part sub-maps instead of merging them, so a `.get` costs O(parts) rather than
+    // O(paragraphs), and every production caller reads by key. Not done here: it changes the
+    // shape every consumer of `ParagraphAnchorIndex` sees, for a cost this branch did not add.
+    const revision = packageStore.packageRevision;
+    // AND which stories are open. Opening one mints its paraIds without publishing an edit, so
+    // the package revision does not move and an index built a moment earlier would be served
+    // for the rest of the session — which is what a host reading `snapshot()` on mount does.
+    const openStories = packageStore.openStoryToken();
+    if (
+      !anchorsCache ||
+      anchorsCache.revision !== revision ||
+      anchorsCache.openStories !== openStories
+    ) {
+      // Open story stores FIRST, so their live parts win the dedupe below. `w14:paraId` is
+      // minted when a story store opens and only reaches the coordinator's package on the
+      // first commit — so a header the reader has entered but not yet typed in carries none
+      // in the package copy, and indexing that copy could not address it.
+      const open = packageStore.openStoryParts();
+      const seen = new Set(open.map((part) => part.name));
+      // And an UNOPENED story is normalized on the way in, for the same reason from the other
+      // side: a header nobody has entered carries no `w14:paraId` at all, so indexing the
+      // package copy verbatim left every one of its paragraphs unaddressable until the reader
+      // happened to click into it. Minting is deterministic and seeded by the structural node
+      // id, so the ids computed here are the ones the store will mint when the story does
+      // open — the same paraId before and after, which is what makes an anchor durable.
+      const rest = furnitureAndNoteParts()
+        .filter((part) => !seen.has(part.name))
+        .map(normalizedForRead);
+      anchorsCache = {
+        revision,
+        openStories,
+        index: buildParagraphAnchorIndex([bodyStore().part, ...open, ...rest]),
+      };
     }
     return anchorsCache.index;
+  };
+
+  /**
+   * The payload every custom node binds, from EVERY story, merged.
+   *
+   * The review queue lists cards from every story, so it needs the payloads of every story. It
+   * asked for the body's, which meant a chip in a header produced a card with `data: undefined`
+   * — indistinguishable from a chip that genuinely carries none, which is the same confusion
+   * the activation helpers were fixed for.
+   *
+   * The store hangs off the MAIN part in every case: Word only reads one authored there. So the
+   * story varies per call and the data owner does not.
+   */
+  const customNodePayloadsAcrossStories = (): ReadonlyMap<string, CustomNodePayloadRead> => {
+    const owner = bodyStore().part.name;
+    const merged = new Map<string, CustomNodePayloadRead>();
+    for (const part of [bodyStore().part, ...furnitureAndNoteParts()]) {
+      for (const [controlId, payload] of customNodePayloadsByControl(
+        currentPackage(),
+        part.name,
+        owner
+      )) {
+        merged.set(controlId, payload);
+      }
+    }
+    return merged;
+  };
+
+  /**
+   * Every story part that is not the body: each header and footer, then the two note parts,
+   * deduplicated.
+   *
+   * NOTES ARE STORIES TOO. A tracked change or a comment inside a footnote paints on the page
+   * like any other, but the review queue once walked the body and the header/footer parts
+   * alone — so it was visible in the document and unreachable from every review surface, and
+   * `acceptAllRevisions` refuses while it is still there.
+   *
+   * Read straight from the package rather than through `resolveStory`, which would OPEN a
+   * store for every note part just to answer a read.
+   */
+  const storyParts = (): readonly OoxmlPart[] => [bodyStore().part, ...furnitureAndNoteParts()];
+
+  const furnitureAndNoteParts = (): OoxmlPart[] => {
+    const parts: OoxmlPart[] = [];
+    const seen = new Set<OoxmlPart>();
+    for (const section of resolvedHeaderFooterBySection().parts) {
+      for (const slots of [section.headers, section.footers]) {
+        for (const part of slots.values()) {
+          if (seen.has(part)) continue;
+          seen.add(part);
+          parts.push(part);
+        }
+      }
+    }
+    const pkg = currentPackage();
+    for (const noteKind of ['footnote', 'endnote'] as const) {
+      const part = resolveNotesPart(pkg, noteKind);
+      if (!part || seen.has(part)) continue;
+      seen.add(part);
+      parts.push(part);
+    }
+    return parts;
   };
 
   return {
@@ -1002,6 +1132,7 @@ export function openTreeSession(
         return { committed: true, rejected: false, opCount: mapped.ops.length };
       },
 
+      storyParts,
       bodyText: () => projectedText(bodyStore().part),
 
       storyText(scope) {
@@ -1164,9 +1295,23 @@ export function openTreeSession(
       },
 
       bookmarks: () => {
-        const store = bodyStore();
-        if (!bookmarksCache || bookmarksCache.revision !== store.revision) {
-          bookmarksCache = { revision: store.revision, index: buildBookmarkIndex(store.part) };
+        // EVERY STORY, keyed on the PACKAGE revision. A bookmark in a header is a bookmark in
+        // the document: an internal hyperlink that names it has to reach it, and the reader
+        // navigating to one has to land there. Reading the body alone answered that neither
+        // existed — navigation returned false and the link sat inert — and keying on the body
+        // revision meant a bookmark added in a header never invalidated the answer either.
+        //
+        // BODY FIRST so it wins a name clash, which is the existing first-in-order rule and
+        // what Word does: a duplicate name resolves to the body's.
+        const revision = packageStore.packageRevision;
+        if (!bookmarksCache || bookmarksCache.revision !== revision) {
+          const merged = new Map(buildBookmarkIndex(bodyStore().part));
+          for (const part of furnitureAndNoteParts()) {
+            for (const [name, anchor] of buildBookmarkIndex(part)) {
+              if (!merged.has(name)) merged.set(name, anchor);
+            }
+          }
+          bookmarksCache = { revision, index: merged };
         }
         return bookmarksCache.index;
       },
@@ -1200,29 +1345,7 @@ export function openTreeSession(
         const commentsExtendedPart = pkg.parts.get(
           commentsExtendedPartNameOf(pkg, store.part.name)
         );
-        const furnitureParts: OoxmlPart[] = [];
-        const seenFurniture = new Set<OoxmlPart>();
-        for (const section of resolvedHeaderFooterBySection().parts) {
-          for (const slots of [section.headers, section.footers]) {
-            for (const part of slots.values()) {
-              if (seenFurniture.has(part)) continue;
-              seenFurniture.add(part);
-              furnitureParts.push(part);
-            }
-          }
-        }
-        // NOTES ARE STORIES TOO. A tracked change or a comment inside a footnote paints on
-        // the page like any other, but the queue only ever walked the body and the
-        // header/footer parts — so it was visible in the document and unreachable from
-        // every review surface, and `acceptAllRevisions` refuses while it is still there.
-        // Read straight from the package rather than through `resolveStory`, which would
-        // OPEN a store for every derivation just to answer a read.
-        for (const noteKind of ['footnote', 'endnote'] as const) {
-          const part = resolveNotesPart(pkg, noteKind);
-          if (!part || seenFurniture.has(part)) continue;
-          seenFurniture.add(part);
-          furnitureParts.push(part);
-        }
+        const furnitureParts = furnitureAndNoteParts();
 
         const patchParagraphId =
           reviewCache && lastChange
@@ -1256,7 +1379,7 @@ export function openTreeSession(
               furnitureParts,
               commentsPart,
               commentsExtendedPart,
-              customNodePayloads: customNodePayloadsByControl(currentPackage(), store.part.name),
+              customNodePayloads: customNodePayloadsAcrossStories(),
             });
           }
         } else {
@@ -1269,7 +1392,7 @@ export function openTreeSession(
             // Resolved HERE because a payload lives in a customXml data part: the derivation
             // receives story parts, and reaching a package part from one is not something a
             // capability module can do.
-            customNodePayloads: customNodePayloadsByControl(currentPackage(), store.part.name),
+            customNodePayloads: customNodePayloadsAcrossStories(),
           });
         }
 
@@ -1286,13 +1409,23 @@ export function openTreeSession(
       },
 
       hasReviewContent() {
-        const store = bodyStore();
-        if (!reviewContentCache || reviewContentCache.revision !== store.revision) {
+        // EVERY story, and keyed on the PACKAGE revision.
+        //
+        // The contract asks whether THE DOCUMENT carries review content, and the free tier's
+        // upsell hint is the one thing that reads it. Walking the body alone answered `false`
+        // for a file whose tracked changes live in a header or a footnote — while
+        // `reviewItems` right beside it listed them correctly, so two derivations of one
+        // question disagreed. And keying on the body revision meant an accept inside a header
+        // moved only `packageRevision`, leaving a stale answer cached behind it.
+        const revision = packageStore.packageRevision;
+        if (!reviewContentCache || reviewContentCache.revision !== revision) {
+          const stories = [bodyStore().part, ...furnitureAndNoteParts()];
           reviewContentCache = {
-            revision: store.revision,
-            present:
-              collectRevisionSites(store.part).length > 0 ||
-              storyCarriesCommentAnchor(store.part.root),
+            revision,
+            present: stories.some(
+              (part) =>
+                collectRevisionSites(part).length > 0 || storyCarriesCommentAnchor(part.root)
+            ),
           };
         }
         return reviewContentCache.present;
@@ -1518,57 +1651,6 @@ export function openTreeSession(
       },
     },
   };
-}
-
-/**
- * Paragraph text joined by newlines, read from the CANONICAL TREE.
- *
- * Read through `paragraphTextOf` rather than the projection's `textContent`, because a tab
- * and a hard break are ATOM nodes in ProseMirror and contribute nothing to `textContent` —
- * so body text silently disagreed with the offsets the ops and the layout use. A caret at
- * offset 12 and a `bodyText().slice(12)` have to mean the same place.
- */
-function projectedText(part: OoxmlPart): string {
-  return bodyParagraphs(part)
-    .map((paragraph) => paragraphTextOf(part, paragraph.id) ?? '')
-    .join('\n');
-}
-
-/**
- * Whether the story contains a comment anchor (`w:commentRangeStart` /
- * `w:commentReference`), from STORE vocabulary alone.
- *
- * Deliberately not `commentAnchorsOfStory`: that is review-model derivation and
- * lives with the review module. This answers presence only, for
- * `hasReviewContent`, and must keep answering with no module registered.
- *
- * Memoized per immutable node, because `snapshot()` reads `hasReviewContent`
- * every tick: without the memo a comment-less document paid a full-tree walk
- * per keystroke (the answer only early-exits when an anchor IS found). An edit
- * replaces only the nodes on its path, so every untouched subtree answers from
- * the cache. Depth-capped like the sibling walks — nesting is the cheapest
- * unbounded axis in an attacker-controlled file.
- */
-const commentAnchorPresenceCache = new WeakMap<OoxmlElement, boolean>();
-
-function storyCarriesCommentAnchor(node: OoxmlElement, depth = 0): boolean {
-  if (depth > 64) return false;
-  const cached = commentAnchorPresenceCache.get(node);
-  if (cached !== undefined) return cached;
-  let present = false;
-  for (const child of node.children as readonly OoxmlNode[]) {
-    if (child.kind === 'textValue') continue;
-    if (
-      child.kind === 'commentRangeStart' ||
-      child.kind === 'commentReference' ||
-      storyCarriesCommentAnchor(child, depth + 1)
-    ) {
-      present = true;
-      break;
-    }
-  }
-  commentAnchorPresenceCache.set(node, present);
-  return present;
 }
 
 /** The origin a host should use when committing a reconciliation rather than a user edit. */

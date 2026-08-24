@@ -1,5 +1,12 @@
 # @eigenpal/docx-js-editor
 
+## 2.8.0
+
+### Patch Changes
+
+- 5ae7f4d: The style picker now labels built-in headings `Heading 4` through `Heading 9` instead of the lowercase name Word writes into `styles.xml`.
+  - @docx-editor.dev/i18n@2.8.0
+
 ## 2.7.0
 
 ### Patch Changes

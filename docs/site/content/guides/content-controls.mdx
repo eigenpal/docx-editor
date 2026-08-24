@@ -142,6 +142,97 @@ The inspector state carries `tag`, `alias`, `id`, `controlType`, `locked`, `remo
 
 A data-bound control refuses a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` says so rather than failing silently.
 
+## Creating a control in the editor
+
+`insertContentControl` authors a new control in the open document, as one undoable step. Select
+text to wrap it in a control, or leave the caret where it is to insert an empty control that
+shows Word's prompt for its type:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useDocxEditor } from '@docx-editor.dev/react';
+
+function InsertFieldButton() {
+  const editor = useDocxEditor();
+
+  return (
+    <button
+      type="button"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() =>
+        editor?.exec({
+          type: 'insertContentControl',
+          subtype: 'plainText',
+          tag: 'customerName',
+          title: 'Customer name',
+        })
+      }
+    >
+      Insert field
+    </button>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useDocxEditor } from '@docx-editor.dev/vue';
+
+const editor = useDocxEditor();
+
+function insertField() {
+  editor.value?.exec({
+    type: 'insertContentControl',
+    subtype: 'plainText',
+    tag: 'customerName',
+    title: 'Customer name',
+  });
+}
+</script>
+
+<template>
+  <button type="button" @mousedown.prevent @click="insertField()">Insert field</button>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`tag` is the identity you look the control back up by, and `title` is the label Word shows. An
+empty control holds its prompt until somebody types: the first character replaces the whole
+prompt, the way it does in Word.
+
+To address text other than the selection, pass a `target` that names a paragraph by its
+`paraId` and the phrase inside it:
+
+```ts
+editor.exec({
+  type: 'insertContentControl',
+  target: { paraId: '1B4C77A2', search: 'Acme GmbH' },
+  subtype: 'plainText',
+  tag: 'customerName',
+});
+```
+
+You can author `richText`, `plainText`, `dropdown` (also spelled `dropDownList`, as OOXML
+spells it), `comboBox`, and `date` controls. Checkbox, picture, and repeating-section controls
+carry content an insertion would have to invent, so they aren't authored here. A dropdown or
+combo box starts with no items: add them in Word, or design the template there and fill it
+from code.
+
+`editor.can()` answers the same refusal `exec` would, so a button can disable itself and show
+the reason. The command refuses rather than guessing when:
+
+- The selection crosses two paragraphs. A control over several paragraphs is a block wrapper,
+  which is a different element.
+- The position sits inside a hyperlink, a field, or another inline control. A control is a
+  sibling of the text around it, so those positions have no place to put one.
+
 ## Typed control chrome
 
 In the editor, typed controls get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. No wiring required.
@@ -151,6 +242,7 @@ In the editor, typed controls get an interactive trigger at the top-right of the
 - A control that _wraps_ a whole table cell or row is not supported (controls _inside_ a cell are).
 - A control inside a hyperlink is not surfaced.
 - `dataBinding` and repeating sections round-trip but have no live behavior: no bound-value resolution, no automatic repeat expansion.
+- Creating, filling, and removing a control are not recorded as tracked changes, even in suggesting mode. A reviewer sees the result, not a revision to accept or reject.
 
 ## Next steps
 

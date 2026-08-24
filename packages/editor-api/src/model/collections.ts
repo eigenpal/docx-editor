@@ -16,7 +16,6 @@ import {
   hydratedHandles,
   hydratedSpans,
   type AutomationOperation,
-  type AutomationTextProjection,
   type AutomationValue,
   type ObjectAddress,
   type RequestContext,
@@ -137,33 +136,29 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
  */
 export class RangeCollection extends ItemCollection<Range> {
   readonly #plan: (() => AutomationOperation) | null;
-  readonly #projection: AutomationTextProjection;
 
   /** @internal Ranges a read answers: where some text occurs. */
   static of(
     context: RequestContext,
     label: string,
     owner: ObjectPath,
-    plan: () => AutomationOperation,
-    projection: AutomationTextProjection = 'all'
+    plan: () => AutomationOperation
   ): RangeCollection {
-    return new RangeCollection(context, ObjectPath.derived(label, owner), plan, projection);
+    return new RangeCollection(context, ObjectPath.derived(label, owner), plan);
   }
 
   /** @internal Ranges a command answers: the pieces a split produced. Filled by that command. */
   static answered(context: RequestContext, label: string, owner: ObjectPath): RangeCollection {
-    return new RangeCollection(context, ObjectPath.derived(label, owner), null, 'all');
+    return new RangeCollection(context, ObjectPath.derived(label, owner), null);
   }
 
   private constructor(
     context: RequestContext,
     path: ObjectPath,
-    plan: (() => AutomationOperation) | null,
-    projection: AutomationTextProjection
+    plan: (() => AutomationOperation) | null
   ) {
     super(context, path);
     this.#plan = plan;
-    this.#projection = projection;
   }
 
   /** The first range. `ItemNotFound` at the sync if nothing matched. */
@@ -210,11 +205,11 @@ export class RangeCollection extends ItemCollection<Range> {
 
   /** @internal Build one member from an address the listing answered. */
   protected itemAt(label: string, address: ObjectAddress): Range {
-    return Range.at(this.context, label, address, this.#projection);
+    return Range.at(this.context, label, address);
   }
 
   /** @internal A member an edge accessor named before the sync that finds it. */
   protected promised(label: string, nullable: boolean): Range & PromisedItem {
-    return Range.promised(this.context, label, nullable, this.#projection);
+    return Range.promised(this.context, label, nullable);
   }
 }

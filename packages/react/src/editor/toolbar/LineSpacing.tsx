@@ -14,6 +14,7 @@ import { commandForSlotValue } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
+import { useParagraphDialog } from '../paragraph-dialog-host';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
@@ -57,9 +58,17 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   const editor = useDocxEditor();
   const spacing = useEditorState(selectSpacing, sameSpacing);
   const { isEnabled, disabledReason } = useEditorCommand('list.lineSpacing');
+  // The row opens a `setParagraphFormat` editor, so THAT is the command whose availability
+  // decides whether it works — not `list.lineSpacing`, whose gate it used to borrow. Asked
+  // through the same hook the dialog itself uses, so there is still one answer.
+  // Through the registry, so the row's enabled state has the same single source every
+  // other control does — `toolbarCommandState`, via the `paragraph.dialog` slot's probe.
+  const paragraphDialogCommand = useEditorCommand('paragraph.dialog');
+  const paragraphDialog = useParagraphDialog();
   const label = useToolbarLabel();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -106,6 +115,7 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   return (
     <span ref={rootRef} className="docx-toolbar__line-spacing" data-slot="list.lineSpacing">
       <button
+        ref={triggerRef}
         type="button"
         className={`docx-toolbar__button docx-toolbar__line-spacing-trigger${className ? ` ${className}` : ''}`}
         disabled={!isEnabled}
@@ -143,6 +153,29 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
               </button>
             );
           })}
+          <div className="docx-toolbar__menu-separator" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="docx-toolbar__menu-item"
+            // Its own slot, so the row is addressable like any other control and its
+            // enabled state comes from `toolbarCommandState` rather than a second
+            // implementation beside it.
+            data-slot="paragraph.dialog"
+            disabled={!paragraphDialogCommand.isEnabled}
+            title={paragraphDialogCommand.disabledReason ?? undefined}
+            onMouseDown={guardToolbarMousedown}
+            onClick={() => {
+              setOpen(false);
+              // The dialog lives above the toolbar: this part moves between the bar and the
+              // overflow panel, and a dialog mounted inside it went with it, mid-edit.
+              // The trigger, not the menu item: the menu closes in this same gesture, so
+              // the row the user clicked is gone by the time the dialog does.
+              paragraphDialog?.open(triggerRef.current);
+            }}
+          >
+            {label('lineSpacing.options')}
+          </button>
           <div className="docx-toolbar__menu-separator" role="separator" />
           <button
             type="button"

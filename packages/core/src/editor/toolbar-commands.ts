@@ -138,6 +138,10 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // names one field so `classifyCommand`'s "requires at least one field" gate passes; it is
   // never executed, and the dialog sends the user's real values.
   'file.pageSetup': { type: 'setPageSetup', orientation: 'portrait' },
+  // Same shape again: whether the selection's paragraphs can be reformatted is the engine's
+  // question, which values is the dialog's. One field so `classifyCommand`'s "requires at
+  // least one field" gate passes; never executed.
+  'paragraph.dialog': { type: 'setParagraphFormat', alignment: 'left' },
 };
 
 /**
@@ -424,6 +428,16 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       // unwired. Without this branch the row falls through to "not wired to an editor
       // command" and stays grey the day the engine starts authoring tables.
       if (id === 'table.insert' && shapeProbe.type === 'insertTable') {
+        const judged: CanResult = editor.can(shapeProbe);
+        return judged.ok
+          ? { id, enabled: true, disabledReason: null, active: false }
+          : { id, enabled: false, disabledReason: judged.reason, active: false };
+      }
+      // The Paragraph dialog is the same shape once more: the VALUES come from the form the
+      // chrome owns, so an allowed probe means the row can act — not that it is unwired.
+      // Without this branch the only route to the dialog reads "not connected to an editor
+      // command" and stays grey.
+      if (id === 'paragraph.dialog' && shapeProbe.type === 'setParagraphFormat') {
         const judged: CanResult = editor.can(shapeProbe);
         return judged.ok
           ? { id, enabled: true, disabledReason: null, active: false }

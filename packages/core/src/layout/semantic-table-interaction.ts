@@ -190,9 +190,20 @@ export function tableInteractionIndex(layout: SemanticLayout): TableInteractionI
   const occurrences: TableInteractionOccurrence[] = [];
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
     const page = layout.pages[pageIndex]!;
-    visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, (occ) => {
+    const take = (occ: TableInteractionOccurrence): void => {
       occurrences.push(occ);
-    });
+    };
+    visitTableBlocks(page.fragments, pageIndex, page.contentBox, 0, take);
+    // The HEADER and FOOTER stories. A table in one was never indexed, so hovering it
+    // offered no row or column handles at all — the table was there and inert.
+    //
+    // Each story carries its OWN origin. A story's fragments are laid out relative to its own
+    // box, not the page content box, so indexing them against the body's origin would place
+    // every handle at the wrong point on the page rather than fixing anything.
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      visitTableBlocks(story.fragments, pageIndex, story.box, 0, take);
+    }
   }
 
   const index: TableInteractionIndex = Object.freeze({
@@ -348,8 +359,15 @@ function tableLocalPoint(
 ): { readonly x: number; readonly y: number } | null {
   const page = layout.pages[occ.pageIndex];
   if (!page) return null;
-  const contentX = sheetX - page.contentBox.x - pageOffsetX;
-  const contentY = sheetY - page.contentBox.y;
+  // The OCCURRENCE's origin, not the page's content box. A table in a header is laid out
+  // relative to the header's box, and the occurrence carries that box for exactly this
+  // conversion. Using the page's origin for every occurrence had two failures at once: the
+  // real header table was never hit, and a point in the BODY at the same story-local offset
+  // matched it — so a column handle for the header appeared over body text and dragging it
+  // resized the header.
+  const origin = occ.pageContentBox;
+  const contentX = sheetX - origin.x - pageOffsetX;
+  const contentY = sheetY - origin.y;
   const table = occ.table;
   const localX = contentX - table.box.x;
   const localY = contentY - table.box.y;
@@ -368,8 +386,7 @@ function dividerHit(
   index: TableInteractionIndex,
   occ: TableInteractionOccurrence,
   localX: number,
-  localY: number,
-  layout: SemanticLayout
+  localY: number
 ): TableInteractionHit | null {
   if (occ.row.isHeaderRepeat) return null;
   const table = occ.table;
@@ -406,7 +423,6 @@ function dividerHit(
     const left = gridColumnIdAt(occ.row, edgeIndex - 1);
     const right = gridColumnIdAt(occ.row, edgeIndex);
     if (!left || !right) continue;
-    const page = layout.pages[occ.pageIndex]!;
     return {
       kind: 'columnDivider',
       pageIndex: occ.pageIndex,
@@ -418,7 +434,7 @@ function dividerHit(
       isHeaderRepeat: occ.row.isHeaderRepeat,
       nestingDepth: occ.nestingDepth,
       edgeX,
-      sheetY: page.contentBox.y + table.box.y + localY,
+      sheetY: occ.pageContentBox.y + table.box.y + localY,
     };
   }
   const rightEdge = table.columnEdges.at(-1)!;
@@ -426,7 +442,6 @@ function dividerHit(
     const lastCol = table.columnEdges.length - 2;
     const gridColumnId = gridColumnIdAt(occ.row, lastCol);
     if (!gridColumnId) return null;
-    const page = layout.pages[occ.pageIndex]!;
     return {
       kind: 'rightEdge',
       pageIndex: occ.pageIndex,
@@ -437,7 +452,7 @@ function dividerHit(
       isHeaderRepeat: occ.row.isHeaderRepeat,
       nestingDepth: occ.nestingDepth,
       edgeX: rightEdge,
-      sheetY: page.contentBox.y + table.box.y + localY,
+      sheetY: occ.pageContentBox.y + table.box.y + localY,
     };
   }
   return null;
@@ -483,7 +498,7 @@ export function findTableInteractionAt(
     if (!local) continue;
 
     consider(
-      dividerHit(index, occ, local.x, local.y, layout) ?? {
+      dividerHit(index, occ, local.x, local.y) ?? {
         kind: 'tableBody',
         pageIndex: occ.pageIndex,
         sourceRevision: index.sourceRevision,

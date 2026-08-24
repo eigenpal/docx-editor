@@ -63,15 +63,25 @@ export function customNodesOf(
   const definitions =
     options.nodes ?? editor.getCustomNodeDefinitions().filter(isCustomNodeDefinition);
   if (definitions.length === 0) return [];
-  const part = surface.session.part();
-  return recognizeCustomNodes(part, definitions, {
-    payloads: customNodePayloadsByControl(surface.session.currentPackage(), part.name),
-    onDiagnostic:
-      options.onDiagnostic ??
-      ((diagnostic) => {
-        editor.reportCustomNodeDiagnostic(diagnostic);
-      }),
-  });
+  // EVERY STORY, not the body alone. A chip in a header is a chip in the document, and reading
+  // only the body reported a document with fewer of them than the review queue beside it listed
+  // — so a host building a picker from this could not offer the one the reader was looking at.
+  const pkg = surface.session.currentPackage();
+  // The store hangs off the MAIN part in every case: Word only reads one authored there. So the
+  // part that holds the CONTROLS and the part that relates the STORE are two questions, and a
+  // furniture story answers them differently.
+  const owner = surface.session.part().name;
+  const onDiagnostic =
+    options.onDiagnostic ??
+    ((diagnostic: CustomNodeDiagnostic) => {
+      editor.reportCustomNodeDiagnostic(diagnostic);
+    });
+  return surface.session.storyParts().flatMap((part) =>
+    recognizeCustomNodes(part, definitions, {
+      payloads: customNodePayloadsByControl(pkg, part.name, owner),
+      onDiagnostic,
+    })
+  );
 }
 
 /** Instance-only surface on the concrete facade, the same escape hatch the write path uses. */

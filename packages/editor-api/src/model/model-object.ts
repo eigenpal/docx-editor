@@ -20,6 +20,7 @@ import {
   ClientObject,
   hydratedApplied,
   hydratedText,
+  internalsOf,
   selectedProperties,
   type AutomationOperation,
   type AutomationValue,
@@ -27,6 +28,11 @@ import {
 } from '../runtime/model-support.ts';
 
 export abstract class ModelObject extends ClientObject {
+  /** Runtime-wide revision view behind standard Office-compatible text reads and searches. */
+  protected revisionTextView(): 'all' | 'vanilla' {
+    return internalsOf(this.context).revisionTextView;
+  }
+
   /** Queue a read whose text answer becomes the loaded property `name`. */
   protected loadTextInto(name: string, plan: () => AutomationOperation): void {
     const label = `${this.path.label}.${name}`;

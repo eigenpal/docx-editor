@@ -1350,10 +1350,10 @@ export const ContextMenuItem: vue.DefineComponent<vue.ExtractPropTypes<{
     };
 }>> & Readonly<{}>, {
     disabledReason: string;
+    active: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
-    active: boolean;
     disabled: boolean;
     className: string;
     onSelect: () => void;
@@ -2374,6 +2374,7 @@ export interface DocxEditorNamespace {
     readonly PageNumber: typeof DocxEditorPageNumber;
     // (undocumented)
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
     // (undocumented)
@@ -2513,6 +2514,47 @@ export const DocxEditorPageSetupDialog: vue.DefineComponent<vue.ExtractPropTypes
 
 // @public (undocumented)
 export interface DocxEditorPageSetupDialogProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    onClose: () => void;
+    // (undocumented)
+    open: boolean;
+}
+
+// @public
+export const DocxEditorParagraphDialog: vue.DefineComponent<vue.ExtractPropTypes<{
+    open: {
+        type: BooleanConstructor;
+        required: true;
+    };
+    onClose: {
+        type: PropType<() => void>;
+        required: true;
+    };
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    open: {
+        type: BooleanConstructor;
+        required: true;
+    };
+    onClose: {
+        type: PropType<() => void>;
+        required: true;
+    };
+    className: {
+        type: StringConstructor;
+        default: undefined;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorParagraphDialogProps {
     // (undocumented)
     className?: string;
     // (undocumented)
@@ -4246,6 +4288,82 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+// @public
+export type ParagraphFlagState = boolean | null;
+
+// @public
+export interface ParagraphFormatRead {
+    readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
+    // (undocumented)
+    readonly contextualSpacing: ParagraphFlagState;
+    readonly disagrees: {
+        readonly alignment: boolean;
+        readonly spaceBeforePt: boolean;
+        readonly spaceAfterPt: boolean;
+        readonly lineSpacing: boolean;
+        readonly tabStops: boolean;
+        readonly indentLeft: boolean;
+        readonly indentRight: boolean;
+        readonly indentFirstLine: boolean;
+    };
+    readonly indentFirstLineTwips: number | null;
+    // (undocumented)
+    readonly indentLeftTwips: number | null;
+    // (undocumented)
+    readonly indentRightTwips: number | null;
+    readonly indentUnknown: boolean;
+    // (undocumented)
+    readonly keepLines: ParagraphFlagState;
+    // (undocumented)
+    readonly keepNext: ParagraphFlagState;
+    // (undocumented)
+    readonly lineSpacing: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore: ParagraphFlagState;
+    // (undocumented)
+    readonly spaceAfterPt: number | null;
+    // (undocumented)
+    readonly spaceBeforePt: number | null;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
+    // (undocumented)
+    readonly widowControl: ParagraphFlagState;
+}
+
+// @public
+export interface ParagraphFormatUpdate {
+    // (undocumented)
+    readonly alignment?: 'left' | 'center' | 'right' | 'justify';
+    // (undocumented)
+    readonly contextualSpacing?: boolean;
+    // (undocumented)
+    readonly indentFirstLineTwips?: number | null;
+    // (undocumented)
+    readonly indentLeftTwips?: number | null;
+    // (undocumented)
+    readonly indentRightTwips?: number | null;
+    // (undocumented)
+    readonly keepLines?: boolean;
+    // (undocumented)
+    readonly keepNext?: boolean;
+    // (undocumented)
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore?: boolean;
+    // (undocumented)
+    readonly spaceAfterPt?: number | null;
+    // (undocumented)
+    readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    readonly widowControl?: boolean;
+}
+
 // @public (undocumented)
 export interface ParagraphStyleItemProps extends ParagraphStylePartProps {
     // (undocumented)
@@ -4296,6 +4414,16 @@ export interface ParagraphStylePartProps {
 export interface ParagraphStyleProps extends ParagraphStylePartProps {
     // (undocumented)
     hidden?: boolean;
+}
+
+// @public
+export interface ParagraphTabStop {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
 }
 
 // @public
@@ -5152,6 +5280,19 @@ export interface UsePageSetupReturn {
     readonly isEnabled: ComputedRef<boolean>;
     // (undocumented)
     readonly pageSetup: ComputedRef<PageSetup | null>;
+}
+
+// @public
+export function useParagraphFormat(): UseParagraphFormatReturn;
+
+// @public
+export interface UseParagraphFormatReturn {
+    // (undocumented)
+    readonly apply: (update: ParagraphFormatUpdate) => boolean;
+    // (undocumented)
+    readonly format: ComputedRef<ParagraphFormatRead | null>;
+    // (undocumented)
+    readonly isEnabled: ComputedRef<boolean>;
 }
 
 // @public (undocumented)

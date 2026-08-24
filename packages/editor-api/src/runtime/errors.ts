@@ -96,7 +96,7 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'object to another one.',
   InvalidArgument: 'the argument is not one this API accepts.',
   ParagraphMarkInText:
-    'text cannot contain a paragraph mark. Use insertParagraph(...) or replaceParagraphs(...).',
+    'text cannot contain a paragraph mark. Use insertParagraph(...) for paragraph structure.',
   ItemNotFound: 'the collection has no such item.',
   NotSupported: 'this document host does not support that operation.',
   NotImplemented: 'this version does not implement that yet.',

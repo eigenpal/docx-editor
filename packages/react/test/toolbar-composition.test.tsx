@@ -472,6 +472,68 @@ describe('the shaped parts', () => {
     }
   });
 
+  test('the Paragraph dialog outlives the part that opened it', async () => {
+    // The line-spacing part moves between the formatting bar and the overflow panel every
+    // time the toolbar re-measures — a window resize, a browser zoom, opening devtools. A
+    // dialog mounted inside it went with it, mid-edit, with nothing written and no warning.
+    // It lives above the toolbar now, so unmounting the part leaves it standing.
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    await act(async () => {
+      (root.querySelector('button') as HTMLButtonElement).click();
+    });
+    const options = [...root.querySelectorAll('[role="menuitem"]')].find((row) =>
+      row.textContent?.includes('Line spacing options')
+    ) as HTMLButtonElement;
+    await act(async () => {
+      options.click();
+    });
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+
+    // The dialog is NOT inside the part — it portals to the body — which is what lets it
+    // survive the part going away.
+    const part = view.container.querySelector('[data-slot="list.lineSpacing"]');
+    expect(part?.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  test('closing the Paragraph dialog hands focus back to the line-spacing trigger', async () => {
+    // Leaving focus on `<body>` strands a keyboard user: arrow keys and typing both go
+    // nowhere, and it is a long walk back to the document. Returning it to the control that
+    // opened the dialog is the standard contract, and the one mechanism that touches
+    // neither the document selection nor the scroll position.
+    const { view, editor } = mountToolbar(<DocxEditorToolbar />);
+    await act(async () => {
+      editor().surface!.selectAll();
+    });
+    const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
+    const trigger = root.querySelector('button') as HTMLButtonElement;
+
+    await act(async () => {
+      trigger.click();
+    });
+    const options = [...root.querySelectorAll('[role="menuitem"]')].find((row) =>
+      row.textContent?.includes('Line spacing options')
+    ) as HTMLButtonElement;
+    expect(options).toBeTruthy();
+    await act(async () => {
+      options.click();
+    });
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+
+    const cancel = [...document.body.querySelectorAll('button')].find(
+      (node) => node.textContent?.trim() === 'Cancel'
+    )!;
+    await act(async () => {
+      cancel.click();
+    });
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
   test('the line-spacing menu applies a multiple and ticks the one in force', async () => {
     const { view, editor } = mountToolbar(<DocxEditorToolbar />);
     await act(async () => {
@@ -513,17 +575,21 @@ describe('the shaped parts', () => {
     const root = view.container.querySelector('[data-slot="list.lineSpacing"]')!;
     const trigger = root.querySelector('button') as HTMLButtonElement;
     const rows = () => [...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[];
+    // Indexed past the escape hatch: "Line spacing options…" opens the Paragraph dialog and
+    // is not one of the spacing rows this test is about.
+    const spacingRows = () => rows().slice(1);
 
     await act(async () => {
       trigger.click();
     });
     expect(rows().map((row) => row.textContent)).toEqual([
+      label('lineSpacing.options' as TranslationKey),
       label('lineSpacing.addSpaceBefore' as TranslationKey),
       label('lineSpacing.addSpaceAfter' as TranslationKey),
     ]);
 
     await act(async () => {
-      rows()[0]!.click();
+      spacingRows()[0]!.click();
     });
     expect(editor().snapshot().formatting?.spaceBeforePt).toBe(10);
 
@@ -531,9 +597,11 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     // Word never offers to add space that is already there.
-    expect(rows()[0]!.textContent).toBe(label('lineSpacing.removeSpaceBefore' as TranslationKey));
+    expect(spacingRows()[0]!.textContent).toBe(
+      label('lineSpacing.removeSpaceBefore' as TranslationKey)
+    );
     await act(async () => {
-      rows()[0]!.click();
+      spacingRows()[0]!.click();
     });
     // ZERO, not absent. Removing the attribute would let the paragraph inherit its style's
     // space again — on a Word default document that gives the space straight back, and the
@@ -543,7 +611,9 @@ describe('the shaped parts', () => {
     await act(async () => {
       trigger.click();
     });
-    expect(rows()[0]!.textContent).toBe(label('lineSpacing.addSpaceBefore' as TranslationKey));
+    expect(spacingRows()[0]!.textContent).toBe(
+      label('lineSpacing.addSpaceBefore' as TranslationKey)
+    );
   });
 
   test('line spacing and paragraph space are independent settings of one w:spacing', async () => {
@@ -567,7 +637,11 @@ describe('the shaped parts', () => {
       trigger.click();
     });
     await act(async () => {
-      ([...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[])[1]!.click();
+      // By LABEL, not by index: the menu also carries the "Line spacing options…" escape
+      // hatch, and an index would silently start clicking a different row.
+      ([...root.querySelectorAll('[role="menuitem"]')] as HTMLButtonElement[])
+        .find((row) => row.textContent === label('lineSpacing.addSpaceAfter' as TranslationKey))!
+        .click();
     });
 
     expect(editor().snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });
@@ -797,8 +871,10 @@ describe('the shaped parts', () => {
     // The selected row carries a ✓ glyph, so compare the label span rather than the row.
     const items = rows.map((row) => row.querySelector('span')?.textContent);
     // Word's gallery order, NOT the order the part lists them in, with the unranked style
-    // keeping its document position at the end.
-    expect(items).toEqual(['Normal', 'heading 1', 'Callout']);
+    // keeping its document position at the end. `Heading 1` is title-cased for display:
+    // Word writes the built-in name lowercase and title-cases it in its own UI. `Callout`
+    // is the document's own style, so its name is shown exactly as authored.
+    expect(items).toEqual(['Normal', 'Heading 1', 'Callout']);
     // The paragraph states no `w:pStyle` but IS written in the default style, so the tick
     // sits on it. Reading "no style" as "nothing selected" left every row unticked while
     // the trigger showed a placeholder for a style the list names.
@@ -829,7 +905,7 @@ describe('the shaped parts', () => {
       heading.click();
     });
     expect(editor().snapshot().formatting?.styleId).toBe('Heading1');
-    expect(trigger.textContent).toBe('heading 1');
+    expect(trigger.textContent).toBe('Heading 1');
   });
 
   test('save is NOT in the default bar (contextual slot); composed, it needs onSave to be live', async () => {

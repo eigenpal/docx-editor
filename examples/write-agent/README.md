@@ -23,10 +23,12 @@ The editor and direct tool tests still work.
 
 The writer asks for the document type, parties or audience, purpose, rules, tone, and length.
 The `create_document` schema requires all six answers.
-The tool calls `Body.replaceParagraphs` to replace the seeded body in one transaction.
+The tool calls the lower-level `replaceStoryBlocks` automation operation in one transaction.
 It then applies paragraph styles and supported document structure.
 
-Later turns call `read_document` with the explicit `vanilla` revision projection.
+The browser runtime uses `revisionTextView: 'vanilla'`, while the Word-compatible object model
+keeps the Office.js API shape.
+Later turns call `read_document` through the standard `text` properties and `search()` methods.
 The three proposal tools call `proposeReplacement`, `proposeInsertion`, and `proposeDeletion`.
 Insertion anchors call `range.select('End')` before the browser command.
 All comments and tracked changes use the author `Writer agent`.
@@ -43,7 +45,7 @@ The example uses workspace packages through `workspace:*`.
 
 ## Supported capabilities
 
-- Fresh atomic body replacement through editor-api.
+- Fresh atomic body replacement through the core automation protocol.
 - Title, heading, and normal paragraph styles through editor-api.
 - Explicit vanilla reads and search anchors through editor-api.
 - Bullet and numbered lists through browser editor commands.
@@ -53,7 +55,8 @@ The example uses workspace packages through `workspace:*`.
 
 ## Remaining API gaps
 
-Editor-api cannot create lists, headers, footers, page fields, or content controls.
+Editor-api cannot atomically replace all story blocks or create lists, headers, footers, page
+fields, or content controls.
 The example uses browser commands for lists, headers, footers, and page fields.
 It uses the core automation protocol for content-control creation.
 

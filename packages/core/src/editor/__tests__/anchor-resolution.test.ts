@@ -24,7 +24,7 @@ const PART = load(
   '<w:p w14:paraId="4C000001"><w:r><w:t>one</w:t><w:tab/><w:t>two two</w:t></w:r></w:p>' +
     '<w:p w14:paraId="4C000002"><w:r><w:t>second paragraph</w:t></w:r></w:p>'
 );
-const ANCHORS = buildParagraphAnchorIndex(PART);
+const ANCHORS = buildParagraphAnchorIndex([PART]);
 const [FIRST, SECOND] = [...ANCHORS.ordinalByNode.keys()];
 
 describe('resolveDocAnchor', () => {

@@ -1,10 +1,14 @@
-// The paginated surface's public contract (paginated-surface seam).
-//
-// This module owns the types a host programs against — options, state, perf counters,
-// the formatting snapshot and the surface interface itself. The composition root in
+// The paginated surface's public contract owns the types a host programs against.
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
 import type { IndentFormatting } from '../contracts/types.ts';
+import type {
+  ParagraphDisagreements,
+  ParagraphFlags,
+  SurfaceParagraphFormat,
+  ParagraphPropertyEdit,
+  ParagraphTabStop,
+} from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
@@ -228,6 +232,26 @@ export interface SurfaceFormatting {
    * must draw its handles somewhere and Word draws them at the first selected paragraph.
    */
   readonly indent: IndentFormatting | null;
+  /**
+   * The paragraph flags the Paragraph dialog shows as checkboxes, or null when the
+   * selection's paragraphs disagree about that one.
+   *
+   * `contextualSpacing` is "Don't add space between paragraphs of the same style"; the
+   * other four are its Pagination block. Each is read from the cascade, so a flag a STYLE
+   * sets reads as on — which is what a checkbox has to show.
+   */
+  readonly paragraphFlags: ParagraphFlags;
+  /**
+   * The paragraph's resolved custom tab stops, cascade included, or null when the selection
+   * disagrees or nothing is loaded. Positions in TWIPS, like every other measurement a
+   * control writes back.
+   */
+  readonly tabStops: readonly ParagraphTabStop[] | null;
+  /**
+   * Which of the paragraph-level reads above are `null` because the selection DISAGREES,
+   * as opposed to because nothing states them. See {@link ParagraphDisagreements}.
+   */
+  readonly disagrees: ParagraphDisagreements;
 }
 
 /**
@@ -561,6 +585,23 @@ export interface PaginatedSurface {
     options?: { readonly mergeAttributes?: boolean }
   ): void;
   /**
+   * Several paragraph properties in ONE transaction, so a dialog is one undo step.
+   *
+   * `setParagraphProperty` is this with a single entry. A dialog that fired one call per
+   * field would leave the user pressing Ctrl+Z five times to undo one OK, and would paint
+   * four intermediate layouts on the way.
+   */
+  setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
+  /**
+   * The Paragraph dialog as ONE write: alignment, indents, spacing, line spacing and the
+   * five paragraph flags, over every paragraph the selection touches.
+   *
+   * One transaction, so pressing OK is one undo step and the page repaints once. An omitted
+   * field is left as authored; `null` where the type allows it REMOVES the setting so the
+   * style supplies it again. Returns whether anything was written.
+   */
+  setParagraphFormat(update: SurfaceParagraphFormat): boolean;
+  /**
    * Word's Clear All Formatting: direct run properties off the selected text, and every
    * paragraph the selection touches back to the default style with its direct paragraph
    * properties and mark dropped.
@@ -586,11 +627,23 @@ export interface PaginatedSurface {
    */
   sectionProperties(): SectionProperties;
   /**
-   * The section GOVERNING one paragraph — what a ruler or dialog reflects when the
-   * caret sits in a multi-section document. Falls back to the body-level section for
-   * an unknown id.
+   * The section GOVERNING one paragraph — what a ruler or dialog reflects when the caret sits
+   * in a multi-section document.
+   *
+   * Body content answers for itself, whatever story is open. A header or footer belongs to the
+   * section that names its relationship, and a note to the section holding its reference mark.
+   * An id nothing settles falls back to the FIRST section: the tail is the document-wide answer
+   * and is wrong for everything not on the last page.
    */
   sectionPropertiesAt(paragraphId: string): SectionProperties;
+  /**
+   * How a section-addressed op should name the section `paragraphId` is in.
+   *
+   * `w:sectPr` lives on the body story, so such an op can only name body content — and a caret
+   * in a header or a note is not body content. Passing that caret straight through made every
+   * section write from furniture fail `unknown-paragraph`.
+   */
+  sectionAnchorParagraphAt(paragraphId: string): import('./section-scope.ts').SectionAnchor;
   /**
    * Write section page-setup fields — size, orientation, margins — as ONE undoable
    * transaction. Twips throughout; omitted fields are left as authored. With
@@ -833,6 +886,15 @@ export interface PaginatedSurface {
     resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
   ): void;
   destroy(): void;
+  /**
+   * The section a painted page belongs to, and the page that section starts on.
+   *
+   * Published because opening a furniture story without a page opens it without a section, and
+   * the section is what the ruler clamps to and what a new table's grid is divided from. One
+   * header part can serve several sections, so only the page settles which one the reader is
+   * looking at.
+   */
+  sectionAtPage(pageIndex: number): { sectionIndex: number; sectionStart: number };
   /** Active editing view — body, or an open header/footer story by rId. */
   activeScope(): ViewScope;
   /** Activate a view scope. Returns false when a header/footer rId cannot be opened. */
@@ -928,3 +990,11 @@ export interface PaginatedSurface {
 export type OpenPaginatedResult =
   | { readonly ok: true; readonly surface: PaginatedSurface }
   | { readonly ok: false; readonly reason: string; readonly detail?: string };
+
+export type {
+  ParagraphDisagreements,
+  ParagraphFlags,
+  ParagraphTabStop,
+  ParagraphPropertyEdit,
+  SurfaceParagraphFormat,
+} from './paragraph-format-contract.ts';

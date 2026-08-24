@@ -14,7 +14,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { AutomationSearchOptions } from '../runtime/model-support.ts';
 import { fail } from '../runtime/model-support.ts';
-import type { TextProjection } from './text-options.ts';
 
 /**
  * How a search is narrowed.
@@ -31,11 +30,6 @@ import type { TextProjection } from './text-options.ts';
  * @public
  */
 export interface SearchOptions {
-  /**
-   * Revision text to search. `all` is the compatibility default. `vanilla` keeps pending
-   * deletions visible and hides pending insertions.
-   */
-  readonly projection?: TextProjection;
   /** Match the query's case. Off by default, like Word's Find. */
   readonly matchCase?: boolean;
   /** Only match where the query stands alone as a word. */
@@ -54,7 +48,6 @@ const KNOWN: ReadonlySet<string> = new Set<keyof SearchOptions>([
   'ignorePunct',
   'ignoreSpace',
   'matchWildcards',
-  'projection',
 ]);
 
 /**
@@ -75,10 +68,7 @@ export function searchOptions(
     // ways than this subset selects (`matchPrefix`, `matchSuffix`, …), and silently ignoring one
     // would answer matches the caller did not ask for — which they would then edit at.
     if (!KNOWN.has(name)) fail({ code: 'InvalidArgument', target: `${target}.${name}` });
-    if (name === 'projection' && value !== undefined && value !== 'all' && value !== 'vanilla') {
-      fail({ code: 'InvalidArgument', target: `${target}.${name}` });
-    }
-    if (name !== 'projection' && value !== undefined && typeof value !== 'boolean') {
+    if (value !== undefined && typeof value !== 'boolean') {
       fail({ code: 'InvalidArgument', target: `${target}.${name}` });
     }
   }
@@ -88,7 +78,6 @@ export function searchOptions(
     ...(options.ignorePunct === undefined ? {} : { ignorePunct: options.ignorePunct }),
     ...(options.ignoreSpace === undefined ? {} : { ignoreSpace: options.ignoreSpace }),
     ...(options.matchWildcards === undefined ? {} : { matchWildcards: options.matchWildcards }),
-    ...(options.projection === undefined ? {} : { projection: options.projection }),
   };
   return Object.keys(selected).length === 0 ? undefined : selected;
 }

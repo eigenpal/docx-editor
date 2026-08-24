@@ -35,6 +35,7 @@ const BYTE_IDENTICAL_PATHS = [
   'editor/loading-snapshot.ts',
   'editor/menu/download.ts',
   'editor/menu/menu-keyboard.ts',
+  'editor/paragraph-dialog-fields.ts',
   'editor/scroller-geometry.ts',
   'editor/toolbar/toolbar-measure.ts',
   'editor/toolbar/toolbar-overflow.ts',

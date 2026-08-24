@@ -148,15 +148,25 @@ export function relatedTypedPart(
 export function commentsPartNameForStory(pkg: OoxmlPackage, storyPartName: string): string | null {
   const related = relatedTypedPart(pkg, storyPartName, COMMENTS_REL, COMMENTS_TYPE);
   if (related !== null) return related;
+  // A document has ONE comments part, and Word resolves it only through the main document's
+  // relationship (ECMA-376 §11.3.3). A header, a footer or a notes part normally declares no
+  // relationships at all, so without this a story fell through to the conventional name and
+  // any package that named its comments part something else lost every furniture comment.
+  const viaMain = relatedTypedPart(pkg, pkg.mainDocumentPart, COMMENTS_REL, COMMENTS_TYPE);
+  if (viaMain !== null) return viaMain;
   if (!pkg.parts.has(COMMENTS_PART)) return null;
   return resolveContentTypeOf(pkg, COMMENTS_PART) === COMMENTS_TYPE ? COMMENTS_PART : null;
 }
 
 /**
- * commentsExtended / commentsIds related from the story or from its comments part.
+ * commentsExtended / commentsIds related from the story, from its comments part, or from the
+ * main document.
  *
- * No conventional-name fallback: a header with its own comments part must not inherit the
- * body's `commentsExtended.xml` when paraIds collide.
+ * Still no conventional-NAME fallback: a story that declares its own comments part must not
+ * inherit the body's `commentsExtended.xml` when paraIds collide. The main document is a
+ * different matter — it is where Word puts the relationship, and a header that resolved its
+ * comments part from there has to resolve the thread state from there too, or every reply in
+ * furniture reads as a root comment and survives its own thread's deletion as an orphan.
  */
 export function metadataPartNamesFor(
   pkg: OoxmlPackage,
@@ -166,8 +176,12 @@ export function metadataPartNamesFor(
   const from = (rel: string, type: string | readonly string[]): string | null => {
     const viaStory = relatedTypedPart(pkg, storyPartName, rel, type);
     if (viaStory !== null) return viaStory;
-    if (commentsPartName === null || commentsPartName === storyPartName) return null;
-    return relatedTypedPart(pkg, commentsPartName, rel, type);
+    if (commentsPartName !== null && commentsPartName !== storyPartName) {
+      const viaComments = relatedTypedPart(pkg, commentsPartName, rel, type);
+      if (viaComments !== null) return viaComments;
+    }
+    if (storyPartName === pkg.mainDocumentPart) return null;
+    return relatedTypedPart(pkg, pkg.mainDocumentPart, rel, type);
   };
   return {
     extended: from(COMMENTS_EXTENDED_REL, COMMENTS_EXTENDED_TYPES),

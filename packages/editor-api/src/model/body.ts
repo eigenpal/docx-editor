@@ -18,14 +18,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   ObjectPath,
-  clientResult,
   fail,
   hydratedSpan,
   hydratedStyle,
   internalsOf,
-  hydratedText,
   type AutomationHandle,
-  type ClientResult,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -42,7 +39,6 @@ import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
 import { Range } from './range.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
-import { textProjection, type TextReadOptions } from './text-options.ts';
 
 /**
  * A story: the main body of a document, a header or footer variant, or a note's body — and
@@ -102,25 +98,6 @@ export class Body extends ModelObject {
    */
   get text(): string {
     return this.loadedProperty<string>('text');
-  }
-
-  /**
-   * Read this story under an explicit revision projection.
-   *
-   * The result is available after the next `sync()`. The `text` property keeps the historical
-   * `all` projection.
-   */
-  getText(options?: TextReadOptions): ClientResult<string> {
-    const target = `${this.path.label}.getText`;
-    const projection = textProjection(options, target);
-    const handle = this.#handle();
-    const { result, fill } = clientResult<string>(target);
-    this.read(
-      target,
-      () => ({ op: 'getText', target: handle, ...(projection ? { projection } : {}) }),
-      (value) => fill(hydratedText(value, target))
-    );
-    return result;
   }
 
   /** Every paragraph in this story in reading order, at every depth. */
@@ -243,29 +220,19 @@ export class Body extends ModelObject {
     const target = `${this.path.label}.search`;
     if (typeof searchText !== 'string') fail({ code: 'InvalidArgument', target });
     const selected = searchOptions(options, target);
-    const projection = selected?.projection ?? 'all';
     const handle = this.#handle();
-    return RangeCollection.of(
-      this.context,
-      target,
-      this.path,
-      () => ({
-        op: 'search',
-        scope: { body: handle },
-        text: searchText,
-        ...(selected === undefined ? {} : { options: selected }),
-      }),
-      projection
-    );
+    return RangeCollection.of(this.context, target, this.path, () => ({
+      op: 'search',
+      scope: { body: handle },
+      text: searchText,
+      options: {
+        ...(selected ?? {}),
+        projection: this.revisionTextView(),
+      },
+    }));
   }
 
-  /**
-   * Delete the story's removable content.
-   *
-   * Section-ending paragraphs and content-control wrappers remain because they define the
-   * existing story structure. A complex story can therefore retain several empty paragraphs.
-   * Use `replaceParagraphs([''])` when the caller needs fresh structure.
-   */
+  /** Empty the story, leaving one empty paragraph behind. */
   clear(): void {
     const handle = this.#handle();
     this.commandDiscarding('clear', () => ({
@@ -275,35 +242,7 @@ export class Body extends ModelObject {
     }));
   }
 
-  /**
-   * Replace the story's complete block structure with fresh plain paragraphs in one transaction.
-   *
-   * This is the fresh-document operation. It removes tables, content-control wrappers,
-   * paragraph-level section breaks, comments, and revisions from this story. For the main body,
-   * the final section properties remain and continue to define the replacement pages.
-   *
-   * Pass one string per paragraph. Each string must not contain a paragraph mark.
-   */
-  replaceParagraphs(paragraphs: readonly string[]): void {
-    const target = `${this.path.label}.replaceParagraphs`;
-    if (!Array.isArray(paragraphs) || paragraphs.length < 1 || paragraphs.length > 10_000) {
-      fail({ code: 'InvalidArgument', target });
-    }
-    const written = paragraphs.map((text) => insertableText(text, target));
-    const handle = this.#handle();
-    this.commandDiscarding('replaceParagraphs', () => ({
-      op: 'replaceStoryBlocks',
-      body: handle,
-      paragraphs: written,
-    }));
-  }
-
-  /**
-   * Write text over the whole story, or at either edge of it. Answers the text's own range.
-   *
-   * Text cannot contain a paragraph mark. Use `insertParagraph(...)` or
-   * `replaceParagraphs(...)` for paragraph structure.
-   */
+  /** Write text over the whole story, or at either edge of it. Answers the text's own range. */
   insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range {
     const target = `${this.path.label}.insertText`;
     const written = insertableText(text, target);
@@ -355,7 +294,11 @@ export class Body extends ModelObject {
     const selected = this.selection(request, ['text', 'style']);
     if (selected.includes('text')) {
       const handle = this.#handle();
-      this.loadTextInto('text', () => ({ op: 'getText', target: handle }));
+      this.loadTextInto('text', () => ({
+        op: 'getText',
+        target: handle,
+        projection: this.revisionTextView(),
+      }));
     }
     if (selected.includes('style')) this.#loadStyle();
   }

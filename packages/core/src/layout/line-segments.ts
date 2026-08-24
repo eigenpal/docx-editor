@@ -6,6 +6,7 @@
 import type { InlineDrawingRecord } from './drawing-layout.ts';
 import { documentOrderIndex } from './document-order.ts';
 import { paragraphFragmentsOf } from './semantic-records.ts';
+import { paragraphFragmentsOnPage } from './story-fragments.ts';
 import type {
   LineRecord,
   ParagraphFragmentRecord,
@@ -213,12 +214,12 @@ export function fragmentHolding(
   paragraphId: string
 ): ParagraphFragmentRecord | null {
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
+    for (const fragment of paragraphFragmentsOnPage(page)) {
       if (fragment.paragraphId === paragraphId) return fragment;
     }
   }
   for (const page of layout.pages) {
-    for (const fragment of paragraphFragmentsOf(page)) {
+    for (const fragment of paragraphFragmentsOnPage(page)) {
       if (fragmentParagraphs(fragment).includes(paragraphId)) return fragment;
     }
   }

@@ -206,7 +206,18 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Space before, space after, and line spacing (single, multiple, exactly, at least) all reach pagination. A 1.5-spaced or double-spaced document breaks pages where Word breaks them. The paragraph mark size counts in the last line metrics, like Word. Contextual spacing drops the gap between neighbours of the same style. Automatic spacing (w:beforeAutospacing, w:afterAutospacing) uses 14pt in body paragraphs and 0pt in list items and table cells.',
+      'Space before, space after, and line spacing (single, multiple, exactly, at least) all reach pagination. A 1.5-spaced or double-spaced document breaks pages where Word breaks them. The paragraph mark size counts in the last line metrics, like Word. Contextual spacing drops the gap between neighbours of the same style, and the Paragraph dialog sets it. Automatic spacing (w:beforeAutospacing, w:afterAutospacing) uses 14pt in body paragraphs and 0pt in list items and table cells.',
+  },
+  {
+    id: 'paragraphs.pagination',
+    name: 'Keep with next, keep lines, widow/orphan control',
+    category: 'paragraphs',
+    editing: 'full',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'w:keepNext, w:keepLines, w:widowControl and w:pageBreakBefore all reach pagination, and the Paragraph dialog sets each of them. A value a style supplies reads through the cascade, so a checkbox shows what is in force rather than only what the paragraph authors itself.',
   },
   {
     id: 'paragraphs.indentation',
@@ -250,7 +261,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      "Existing tab stops render, with right and decimal tabs and dot, hyphen, and underscore leaders. Positional tabs (w:ptab) render too, so a contents line reads as one: entry left, leader dots between, page number right. The document's own w:defaultTabStop is honoured, in the body and in headers and footers. A tab-stop editing UI is not built yet.",
+      "Existing tab stops render, with right and decimal tabs and dot, hyphen, and underscore leaders. Positional tabs (w:ptab) render too, so a contents line reads as one: entry left, leader dots between, page number right. The document's own w:defaultTabStop is honoured, in the body and in headers and footers. The Paragraph dialog sets, clears, and replaces tab stops, including clearing one that a style supplies. Bar tabs are preserved on save but aren't drawn or editable.",
   },
   {
     id: 'paragraphs.frames',
@@ -284,7 +295,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The toolbar toggle creates the numbering definition on first use, so a document that never carried a list can start one. Tab and the indent buttons change the level, and the marker changes with it.',
+      'The toolbar toggle creates the numbering definition on first use, so a document that never carried a list can start one. It also applies the List Paragraph style, the way Word does, which is what closes the space between consecutive items. Turning the list off leaves the paragraph in List Paragraph, and indented, as Word does; pressing Enter on an empty item leaves the list and returns to the margin. Tab and the indent buttons change the level, and the marker changes with it.',
   },
   {
     id: 'lists.numbered',
@@ -294,6 +305,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Numbered lists take the List Paragraph style on the same terms as bulleted ones, so consecutive items close up.',
   },
   {
     id: 'lists.custom-numbering',
@@ -633,7 +646,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have scoped header and footer editing: enter and exit the story, create and remove it, link and unlink to the previous section, and set the title-page and even/odd options. They also insert PAGE, NUMPAGES, and SECTIONPAGES. `editHeaderFooter` takes `variant`, `evenPage`, and `firstPage` on the shared Editor contract. Per-section first, even, and default variants paint like Word. Tracked changes, watermark authoring, and structural table edits inside furniture are not supported.',
+      'Both adapters have scoped header and footer editing: enter and exit the story, create and remove it, link and unlink to the previous section, and set the title-page and even/odd options. They also insert PAGE, NUMPAGES, and SECTIONPAGES. `editHeaderFooter` takes `variant`, `evenPage`, and `firstPage` on the shared Editor contract. Per-section first, even, and default variants paint like Word. Editing inside a header or footer matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup all act on the story you are in. Tracked changes work in a header or footer: you can suggest an edit there, and the review list shows it with the accept and reject verbs. Selection and comment highlight bands paint in the body only. Watermark authoring is not supported.',
     docsLink: '/docs/2.x/guides/headers-footers',
   },
   {
@@ -657,7 +670,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. Tracked note inserts and notes in headers and footers are out of scope.',
+      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Tracked note inserts and notes in headers and footers are out of scope.',
   },
   {
     id: 'layout.columns',
@@ -884,7 +897,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Block, inline, row, and cell controls are typed and addressable in every story, table cells, headers, footers, and note bodies included. A control around a row or cell lays out as that row or cell, and keeps its column, span, and row semantics. Find, create, fill, and remove a control by tag, title, or file id from the document object model. Content is editable, and tag, title, and lock are writable through the API, but they have no toolbar chrome. All four `w:lock` modes are enforced against what an edit would change, and an enclosing lock wins over an inner one. The editor resolves a write against every control it would land in, so filling an outer control cannot write into a locked or bound control nested at its edge. A lock protects the control and its content, not the rest of the document. Under `w:documentProtection w:edit="forms"` only control content is editable. Picture, repeating-section, custom-XML-bound, and docPart gallery controls are preserved as authored rather than typed; the editor refuses an edit inside a bound control, but it allows you to remove the control.',
+      'Block, inline, row, and cell controls are typed and addressable in every story, table cells, headers, footers, and note bodies included. A control around a row or cell lays out as that row or cell, and keeps its column, span, and row semantics. Find, create, fill, and remove a control by tag, title, or file id from the document object model. The open editor authors a control too, over the selection or at the caret, as one undoable step: a caret insertion arrives empty and showing its prompt, the way it does in Word. Content is editable, and tag, title, and lock are writable through the API, but they have no toolbar chrome. All four `w:lock` modes are enforced against what an edit would change, and an enclosing lock wins over an inner one. The editor resolves a write against every control it would land in, so filling an outer control cannot write into a locked or bound control nested at its edge. A lock protects the control and its content, not the rest of the document. Under `w:documentProtection w:edit="forms"` only control content is editable. Picture, repeating-section, custom-XML-bound, and docPart gallery controls are preserved as authored rather than typed; the editor refuses an edit inside a bound control, but it allows you to remove the control.',
     docsLink: '/docs/2.x/guides/content-controls',
   },
   {
@@ -971,10 +984,11 @@ export const wordFeatures: WordFeature[] = [
     id: 'collab.find-replace',
     name: 'Find & replace',
     category: 'collaboration',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes: 'Searches the body story. Text in headers, footers and notes is not matched.',
   },
   {
     id: 'collab.clipboard',

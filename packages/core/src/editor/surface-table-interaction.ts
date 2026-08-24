@@ -10,7 +10,7 @@ import { readEditableTableTopology } from '../store/store/tree-op-table-topology
 import { wmlAttributeValue } from '../store/store/tree-op-table-shared.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { BlockFragmentRecord, TableFragmentRecord } from '../layout/semantic-records.ts';
+import { findTableOnPage, offeredHit, partOfTableIn } from './surface-table-story.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import {
@@ -130,27 +130,6 @@ function plannerMode(input: SurfaceTableInteractionInput): { editable: boolean; 
   return { editable: !viewing, viewing };
 }
 
-function findTableOnPage(
-  layout: SemanticLayout,
-  tableId: string,
-  pageIndex: number
-): TableFragmentRecord | null {
-  const visit = (blocks: readonly BlockFragmentRecord[]): TableFragmentRecord | null => {
-    for (const block of blocks) {
-      if (block.kind !== 'table') continue;
-      if (block.tableId === tableId) return block;
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          const nested = visit(cell.blocks);
-          if (nested) return nested;
-        }
-      }
-    }
-    return null;
-  };
-  return visit(layout.pages[pageIndex]?.fragments ?? []);
-}
-
 function occurrenceRef(
   layout: SemanticLayout,
   hit: Extract<
@@ -257,19 +236,29 @@ export function createSurfaceTableInteraction(
     }
   }
 
+  /**
+   * A story-local point to CSS pixels on the sheet.
+   *
+   * `origin` is the box the coordinates are relative to. It defaults to the page's content
+   * box, which is right for the body and wrong for every other story: a header's fragments
+   * are laid out from the header's own box, so drawing their chrome against the page origin
+   * puts every handle down in the body.
+   */
   function cssPoint(
     pageIndex: number,
     contentX: number,
-    contentY: number
+    contentY: number,
+    origin?: { readonly x: number; readonly y: number }
   ): { left: number; top: number } {
     const input = host.read();
     const page = input.layout.pages[pageIndex];
     if (!page) return { left: 0, top: 0 };
+    const from = origin ?? page.contentBox;
     const scale = host.scale();
     const offsetX = host.pageOffsetX(pageIndex);
     return {
-      left: (page.contentBox.x + contentX + offsetX) * scale,
-      top: (page.contentBox.y + contentY) * scale,
+      left: (from.x + contentX + offsetX) * scale,
+      top: (from.y + contentY) * scale,
     };
   }
 
@@ -278,8 +267,9 @@ export function createSurfaceTableInteraction(
     hit: Extract<TableInteractionHit, { kind: 'columnDivider' | 'rightEdge' | 'rowDivider' }>
   ): void {
     const input = host.read();
-    const table = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
-    if (!table) return;
+    const found = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
+    if (!found) return;
+    const { table, origin } = found;
     const preview = document.createElement('div');
     preview.className = 'docx-table-resize-preview';
     preview.style.position = 'absolute';
@@ -288,7 +278,8 @@ export function createSurfaceTableInteraction(
     const pos = cssPoint(
       hit.pageIndex,
       vertical ? table.box.x + edgePt : table.box.x,
-      vertical ? table.box.y : table.box.y + edgePt
+      vertical ? table.box.y : table.box.y + edgePt,
+      origin
     );
     preview.style.left = `${pos.left}px`;
     preview.style.top = `${pos.top}px`;
@@ -352,8 +343,9 @@ export function createSurfaceTableInteraction(
     hit: Extract<TableInteractionHit, { kind: 'insertRow' | 'insertColumn' }>,
     input: SurfaceTableInteractionInput
   ): void {
-    const table = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
-    if (!table) return;
+    const found = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
+    if (!found) return;
+    const { table, origin } = found;
     const button = ensureInsertButton();
     removeExtraInsertButtons(button);
     insertHit = hit;
@@ -367,7 +359,7 @@ export function createSurfaceTableInteraction(
       button.className = 'docx-table-insert-row';
       button.setAttribute('aria-label', host.label('table.insertRowBelow'));
       const rowMidY = row.box.y + row.box.height / 2;
-      const pos = cssPoint(hit.pageIndex, table.box.x - 14, rowMidY);
+      const pos = cssPoint(hit.pageIndex, table.box.x - 14, rowMidY, origin);
       button.style.left = `${pos.left}px`;
       button.style.top = `${pos.top - 8}px`;
     } else {
@@ -381,7 +373,12 @@ export function createSurfaceTableInteraction(
       const right = table.columnEdges[cell.gridColumn + 1] ?? table.box.width;
       button.className = 'docx-table-insert-column';
       button.setAttribute('aria-label', host.label('table.insertColumnRight'));
-      const pos = cssPoint(hit.pageIndex, table.box.x + (left + right) / 2 - 8, table.box.y - 14);
+      const pos = cssPoint(
+        hit.pageIndex,
+        table.box.x + (left + right) / 2 - 8,
+        table.box.y - 14,
+        origin
+      );
       button.style.left = `${pos.left}px`;
       button.style.top = `${pos.top}px`;
     }
@@ -399,8 +396,9 @@ export function createSurfaceTableInteraction(
     if (drag || input.editingMode === 'view') return;
 
     if ((hit.kind === 'columnDivider' || hit.kind === 'rightEdge') && !hit.isHeaderRepeat) {
-      const table = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
-      if (!table) return;
+      const found = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
+      if (!found) return;
+      const { table, origin } = found;
       const handle = document.createElement('div');
       handle.className =
         hit.kind === 'rightEdge'
@@ -410,7 +408,7 @@ export function createSurfaceTableInteraction(
       handle.style.pointerEvents = 'auto';
       handle.style.cursor = 'col-resize';
       handle.dataset.active = 'true';
-      const pos = cssPoint(hit.pageIndex, table.box.x + hit.edgeX, table.box.y);
+      const pos = cssPoint(hit.pageIndex, table.box.x + hit.edgeX, table.box.y, origin);
       handle.style.left = `${pos.left - 3}px`;
       handle.style.top = `${pos.top}px`;
       handle.style.width = '6px';
@@ -420,15 +418,16 @@ export function createSurfaceTableInteraction(
     }
 
     if (hit.kind === 'rowDivider' && !hit.isHeaderRepeat) {
-      const table = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
-      if (!table) return;
+      const found = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
+      if (!found) return;
+      const { table, origin } = found;
       const handle = document.createElement('div');
       handle.className = 'docx-table-row-divider-handle layout-table-row-resize-handle';
       handle.style.position = 'absolute';
       handle.style.pointerEvents = 'auto';
       handle.style.cursor = 'row-resize';
       handle.dataset.active = 'true';
-      const pos = cssPoint(hit.pageIndex, table.box.x, table.box.y + hit.edgeY);
+      const pos = cssPoint(hit.pageIndex, table.box.x, table.box.y + hit.edgeY, origin);
       handle.style.left = `${pos.left}px`;
       handle.style.top = `${pos.top - 3}px`;
       handle.style.width = `${table.box.width * host.scale()}px`;
@@ -459,7 +458,7 @@ export function createSurfaceTableInteraction(
         where: 'below',
         target: tableRowOccurrenceTargetFrom(hit.sourceRevision, ref),
       },
-      part: host.session().part(),
+      part: partOfTableIn(host.session(), hit.tableId),
       layout: input.layout,
       storeRevision: input.storeRevision,
       selection: input.selection,
@@ -483,7 +482,7 @@ export function createSurfaceTableInteraction(
     const mode = plannerMode(input);
     const plan = planTableCommand({
       command: { type: 'insertColumn', where: 'right', target },
-      part: host.session().part(),
+      part: partOfTableIn(host.session(), hit.tableId),
       layout: input.layout,
       storeRevision: input.storeRevision,
       selection: input.selection,
@@ -510,7 +509,10 @@ export function createSurfaceTableInteraction(
     const target = hoverHit;
     const ref = occurrenceRef(input.layout, target);
     if (!ref) return;
-    const topo = readEditableTableTopology(host.session().part().root, target.tableId);
+    const topo = readEditableTableTopology(
+      partOfTableIn(host.session(), target.tableId).root,
+      target.tableId
+    );
     if (!topo.ok || (target.kind !== 'rowDivider' && topo.topology.hasMerge)) return;
 
     let leftTwips = 0;
@@ -632,7 +634,7 @@ export function createSurfaceTableInteraction(
     if (activeDrag.target.kind === 'rowDivider') {
       plan = planTableRowHeightResize(
         {
-          part: host.session().part(),
+          part: partOfTableIn(host.session(), activeDrag.target.tableId),
           layout: input.layout,
           storeRevision: input.storeRevision,
           selection: input.selection,
@@ -656,7 +658,7 @@ export function createSurfaceTableInteraction(
           columnWidthTwips,
           tableWidthTwips,
         },
-        part: host.session().part(),
+        part: partOfTableIn(host.session(), activeDrag.target.tableId),
         layout: input.layout,
         storeRevision: input.storeRevision,
         selection: input.selection,
@@ -685,7 +687,7 @@ export function createSurfaceTableInteraction(
           leftWidthTwips: leftTwips,
           rightWidthTwips: rightTwips,
         },
-        part: host.session().part(),
+        part: partOfTableIn(host.session(), activeDrag.target.tableId),
         layout: input.layout,
         storeRevision: input.storeRevision,
         selection: input.selection,
@@ -719,18 +721,19 @@ export function createSurfaceTableInteraction(
     if (!hoverHit || drag || input.editingMode === 'view') return;
     clearTimers();
     const hit = hitAtLastPointer(input);
-    if (!hit || hit.kind === 'tableBody') {
+    const offered = offeredHit(hit, input.selection.head.paragraphId);
+    if (!offered) {
       hoverHit = null;
       clearFurniture();
       return;
     }
-    if (tableInteractionTargetIdentity(hit) !== tableInteractionTargetIdentity(hoverHit)) {
+    if (tableInteractionTargetIdentity(offered) !== tableInteractionTargetIdentity(hoverHit)) {
       hoverHit = null;
       clearFurniture();
       return;
     }
-    hoverHit = hit;
-    paintHover(hit, input);
+    hoverHit = offered;
+    paintHover(offered, input);
   }
 
   function retireRetainedInsertButton(): void {
@@ -799,7 +802,8 @@ export function createSurfaceTableInteraction(
           pageIndex >= 0 ? pageIndex : undefined
         )
       : null;
-    if (!hit || hit.kind === 'tableBody') {
+    const offered = offeredHit(hit, input.selection.head.paragraphId);
+    if (!offered) {
       if (overInsertControl) return;
       if (!hideTimer && hoverHit) {
         hideTimer = setTimeout(() => {
@@ -814,11 +818,14 @@ export function createSurfaceTableInteraction(
       clearTimeout(hideTimer);
       hideTimer = null;
     }
-    if (hoverHit && tableInteractionHitIdentity(hit) === tableInteractionHitIdentity(hoverHit)) {
+    if (
+      hoverHit &&
+      tableInteractionHitIdentity(offered) === tableInteractionHitIdentity(hoverHit)
+    ) {
       return;
     }
-    hoverHit = hit;
-    paintHover(hit, input);
+    hoverHit = offered;
+    paintHover(offered, input);
   }
 
   function onPointerUp(event: PointerEvent): void {

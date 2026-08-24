@@ -14,6 +14,8 @@ export interface MenuContextValue {
   readonly onOpen: (() => void) | undefined;
   readonly onSave: (() => void) | undefined;
   readonly onPageSetup: (() => void) | undefined;
+  /** Open the Paragraph dialog. Undefined when the host has not composed one. */
+  readonly onParagraphDialog: (() => void) | undefined;
   readonly onReportIssue: (() => void) | undefined;
   readonly reportIssue: boolean | undefined;
 }
@@ -28,6 +30,7 @@ const defaultMenuContext: MenuContextValue = {
   onOpen: undefined,
   onSave: undefined,
   onPageSetup: undefined,
+  onParagraphDialog: undefined,
   onReportIssue: undefined,
   reportIssue: undefined,
 };

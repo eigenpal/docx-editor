@@ -31,6 +31,7 @@ import type { NoteMarkContext } from './note-projection.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import { paragraphBorders } from './paragraph-style.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { withResolvedListItems } from './list-resolve.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { noteStoryBlocks } from './story-roots.ts';
@@ -134,6 +135,13 @@ export interface LayoutNoteStoryOptions {
   readonly producer: string;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
+  /**
+   * `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker.
+   *
+   * Per story, like every other: `createListCounterState` is fresh per walk, so a numbered
+   * list in a footnote starts at `w:start` rather than continuing the body's sequence.
+   */
+  readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
   /**
    * Same projector seams the BODY walk uses. Without them a `w:hyperlink` or a HYPERLINK
@@ -225,12 +233,18 @@ export function layoutNoteStory(
     ? options.drawingsForPart?.(options.ownerPartName)
     : undefined;
 
+  const listItems = withResolvedListItems(
+    { numberingIndex: options.numberingIndex, styleCascade: options.styleCascade },
+    blocks
+  ).listItems;
+
   const flow = flowBlocksInBox(blocks, 0, width, 0, 0, {
     measurer: options.measurer,
     cache: options.cache,
     producer: `${options.producer}|${scopeId}`,
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
+    ...(listItems ? { listItems } : {}),
     noteMarks,
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),

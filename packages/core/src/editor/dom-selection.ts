@@ -69,7 +69,7 @@ function identityOf(element: Element): SpanIdentity | null {
   return { paragraphId, start, end };
 }
 
-function paragraphElements(
+export function paragraphElements(
   root: Element,
   paragraphId: string,
   suffix: string
@@ -100,14 +100,39 @@ function activeHeaderFooterRoot(root: Element): Element | null {
 }
 
 /**
+ * The page a painted node sits on, or undefined when it is not inside a sheet.
+ *
+ * Repeated table header rows share one paragraph id on every page they appear. The write
+ * path uses this to prefer the copy on the sheet the user is looking at.
+ */
+export function pageIndexOfNode(node: Node | null | undefined, root?: Element): number | undefined {
+  if (!node) return undefined;
+  if (root && !root.contains(node)) return undefined;
+  const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  const page = element?.closest('[data-page-index]');
+  const raw = (page as HTMLElement | null | undefined)?.dataset?.pageIndex;
+  if (raw === undefined || !/^\d{1,9}$/.test(raw)) return undefined;
+  return Number(raw);
+}
+
+/** The painted sheet for a page index, or null when that sheet is not in this tree. */
+function pageRoot(root: Element, pageIndex: number | undefined): Element | null {
+  if (pageIndex === undefined || !Number.isInteger(pageIndex) || pageIndex < 0) return null;
+  return root.querySelector(`[data-page-index="${pageIndex}"]`);
+}
+
+/**
  * Search roots for painted spans, preferring the active header/footer when one is open.
  *
  * Shared header/footer parts paint the same paragraph ids on every page; the active
- * container is the caret target the user entered.
+ * container is the caret target the user entered. A preferred page does the same job for
+ * body copies that share an id — a `w:tblHeader` row that repeats on later sheets.
  */
-function spanSearchRoots(root: Element): readonly Element[] {
+export function spanSearchRoots(root: Element, preferredPageIndex?: number): readonly Element[] {
   const active = activeHeaderFooterRoot(root);
-  return active ? [active, root] : [root];
+  if (active) return [active, root];
+  const page = pageRoot(root, preferredPageIndex);
+  return page && page !== root ? [page, root] : [root];
 }
 
 /** The first painted span at, above, or inside a node — whichever comes first in DOM order. */
@@ -292,9 +317,10 @@ export function domSelectionTouchesPages(root: Element, domSelection: Selection 
  */
 function domPointFromPosition(
   root: Element,
-  position: SemanticPosition
+  position: SemanticPosition,
+  preferredPageIndex?: number
 ): { node: Node; offset: number } | null {
-  for (const searchRoot of spanSearchRoots(root)) {
+  for (const searchRoot of spanSearchRoots(root, preferredPageIndex)) {
     const point = domPointFromPositionIn(searchRoot, position);
     if (point) return point;
   }
@@ -425,20 +451,29 @@ function emptyLinePosition(element: Element): SemanticPosition | null {
  * Write a model selection into the browser's own selection.
  *
  * Returns false when either endpoint is not painted — a position inside a page that is not
- * currently rendered, once virtualization lands.
+ * currently rendered, once virtualization lands. `preferredPageIndex` picks among painted
+ * copies of the same paragraph — a repeating `w:tblHeader` row — when the model cannot.
  */
 export function applySelectionToDom(
   root: Element,
   selection: SemanticSelection,
-  domSelection: Selection | null
+  domSelection: Selection | null,
+  options?: { readonly preferredPageIndex?: number }
 ): boolean {
   if (!domSelection) return false;
-  const anchor = domPointFromPosition(root, selection.anchor);
-  const head = domPointFromPosition(root, selection.head);
+  const preferredPageIndex =
+    options?.preferredPageIndex ?? pageIndexOfNode(domSelection.anchorNode, root);
+  const anchor = domPointFromPosition(root, selection.anchor, preferredPageIndex);
+  const head = domPointFromPosition(root, selection.head, preferredPageIndex);
   if (!anchor || !head) return false;
   const current = semanticSelectionFromDom(root, domSelection);
   // Already correct: re-setting it would collapse an in-progress drag and fight the user.
-  if (current && selectionsEqual(current, selection)) return true;
+  // Same model offsets on a DIFFERENT sheet are not correct — a repeating header paints
+  // those offsets on every page, and leaving the native range on page 0 is the bug.
+  if (current && selectionsEqual(current, selection)) {
+    const currentPage = pageIndexOfNode(domSelection.anchorNode, root);
+    if (preferredPageIndex === undefined || currentPage === preferredPageIndex) return true;
+  }
   try {
     // `setBaseAndExtent` keeps the anchor/head ORDER, which is what shift-arrow extends
     // from; collapsing and extending would lose the direction.

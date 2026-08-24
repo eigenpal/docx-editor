@@ -411,6 +411,18 @@ export const CHROME_GROUPS: readonly [{
         };
     }];
 }, {
+    readonly id: "paragraph";
+    readonly labelKey: "dialogs.paragraph.title";
+    readonly contextual: true;
+    readonly controls: readonly [{
+        readonly id: "dialog";
+        readonly labelKey: "lineSpacing.options";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }];
+}, {
     readonly id: "file";
     readonly labelKey: "toolbar.file";
     readonly contextual: true;
@@ -592,7 +604,7 @@ export interface ChromeGroup<Id extends string = string, ControlId extends strin
 }
 
 // @public
-export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'file' | 'insert';
+export type ChromeGroupId = 'history' | 'zoom' | 'styles' | 'font' | 'text' | 'script' | 'alignment' | 'list' | 'format' | 'review' | 'contentControl' | 'image' | 'table' | 'paragraph' | 'file' | 'insert';
 
 // @public
 export interface ChromeMenu {
@@ -646,7 +658,7 @@ export interface ChromeMenuSubmenuEntry {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1348,6 +1360,11 @@ export interface PaginatedSurface {
     revealParagraph(paragraphId: string, options?: RevealOptions): boolean;
     revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
     revisionAuthors(): ReadonlyMap<string, number>;
+    sectionAnchorParagraphAt(paragraphId: string): SectionAnchor;
+    sectionAtPage(pageIndex: number): {
+        sectionIndex: number;
+        sectionStart: number;
+    };
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
@@ -1381,6 +1398,8 @@ export interface PaginatedSurface {
             readonly numStart?: number;
         };
     }): boolean;
+    setParagraphFormat(update: SurfaceParagraphFormat): boolean;
+    setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
     }): void;
@@ -1461,6 +1480,41 @@ export interface PaginatedSurfaceState {
     // (undocumented)
     readonly selection: SemanticSelection;
 }
+
+// @public
+export interface ParagraphFlags {
+    // (undocumented)
+    readonly contextualSpacing: boolean | null;
+    // (undocumented)
+    readonly keepLines: boolean | null;
+    // (undocumented)
+    readonly keepNext: boolean | null;
+    // (undocumented)
+    readonly pageBreakBefore: boolean | null;
+    // (undocumented)
+    readonly widowControl: boolean | null;
+}
+
+// @public
+export interface ParagraphPropertyEdit {
+    readonly attributes?: Record<string, string | null>;
+    // (undocumented)
+    readonly localName: string;
+    readonly mergeAttributes?: boolean;
+}
+
+// @public
+export interface ParagraphTabStop {
+    // (undocumented)
+    readonly alignment: 'left' | 'center' | 'right' | 'decimal' | 'bar';
+    // (undocumented)
+    readonly leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
+    // (undocumented)
+    readonly positionTwips: number;
+}
+
+// @public
+export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage' | 'part'>, nodeId: string | undefined): OoxmlPart | null;
 
 // @public
 export function pointsToEmu(points: number): number;
@@ -1650,6 +1704,29 @@ value?: unknown): ExecResult;
 export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
 
 // @public
+export type SectionAnchor =
+/** Name this body paragraph. Its section is the one the caret is in. */
+    {
+    readonly kind: 'anchor';
+    readonly paragraphId: string;
+}
+/** One section: an anchor names nothing extra, so the op may omit it. */
+| {
+    readonly kind: 'whole-document';
+}
+/**
+* Several sections, and the caret's holds no paragraph to name.
+*
+* An omitted anchor here would write EVERY section, which is what `scope: 'document'` is
+* for — so answering it to a `scope: 'section'` request changes sections nobody asked
+* about. There is no anchor that reaches an empty final section: one exists only when every
+* paragraph already closes an earlier section, so nothing sits at or after it.
+*/
+| {
+    readonly kind: 'unaddressable';
+};
+
+// @public
 export interface SectionProperties {
     readonly breakType: SectionBreakType;
     // (undocumented)
@@ -1810,6 +1887,7 @@ export interface SurfaceFormatting {
     readonly bold: boolean;
     // (undocumented)
     readonly color: string | null;
+    readonly disagrees: ParagraphDisagreements;
     // (undocumented)
     readonly fontFamily: string | null;
     readonly fontSizeHalfPoints: number | null;
@@ -1822,6 +1900,7 @@ export interface SurfaceFormatting {
         readonly rule: 'multiple' | 'exact' | 'atLeast';
         readonly value: number;
     } | null;
+    readonly paragraphFlags: ParagraphFlags;
     // (undocumented)
     readonly spaceAfterPt: number | null;
     readonly spaceBeforePt: number | null;
@@ -1833,6 +1912,7 @@ export interface SurfaceFormatting {
     readonly subscript: boolean;
     // (undocumented)
     readonly superscript: boolean;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
     // (undocumented)
     readonly underline: boolean;
 }
@@ -1881,6 +1961,37 @@ export interface SurfaceOverlayCoordinates {
 export function surfacePaintScale(zoom: number): number;
 
 // @public
+export interface SurfaceParagraphFormat {
+    // (undocumented)
+    readonly alignment?: 'left' | 'center' | 'right' | 'both';
+    // (undocumented)
+    readonly contextualSpacing?: boolean;
+    readonly indentFirstLineTwips?: number | null;
+    // (undocumented)
+    readonly indentLeftTwips?: number | null;
+    // (undocumented)
+    readonly indentRightTwips?: number | null;
+    // (undocumented)
+    readonly keepLines?: boolean;
+    // (undocumented)
+    readonly keepNext?: boolean;
+    // (undocumented)
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore?: boolean;
+    // (undocumented)
+    readonly spaceAfterPt?: number | null;
+    // (undocumented)
+    readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    readonly widowControl?: boolean;
+}
+
+// @public
 export const TABLE_BORDER_STYLE_OPTIONS: readonly TableBorderStyleOption[];
 
 // @public
@@ -1898,7 +2009,7 @@ export interface TableBorderStyleOption {
     readonly labelKey: string;
     readonly previewClass: string;
     // (undocumented)
-    readonly value: TableBorderStyle_2;
+    readonly value: TableBorderStyle;
 }
 
 // @public
@@ -1911,7 +2022,7 @@ export interface TableBorderTargetOption {
 }
 
 // @public
-export type TableBorderTargetValue = TableBorderEdgeTarget_2 | 'none';
+export type TableBorderTargetValue = TableBorderEdgeTarget | 'none';
 
 // @public
 export interface TableBorderWidthOption {
@@ -1924,7 +2035,7 @@ export interface TableBorderWidthOption {
 // @public
 export interface TableChromeDraft {
     // (undocumented)
-    readonly activeTarget: TableBorderEdgeTarget_2;
+    readonly activeTarget: TableBorderEdgeTarget;
     // (undocumented)
     readonly spec: TableBorderSpec;
 }
@@ -1933,7 +2044,7 @@ export interface TableChromeDraft {
 export function tableChromeIconPaths(name: keyof typeof GENERATED_ICON_PATHS): readonly string[];
 
 // @public
-export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget_2): string;
+export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget): string;
 
 // @public
 export interface TableChromePick {
@@ -2076,6 +2187,7 @@ export interface TreeDocxSessionView {
     save(): Uint8Array;
     setCommentResolved(commentId: string, resolved: boolean): boolean;
     settingsRoot(): OoxmlElement | null;
+    storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;
     stylesRoot(): OoxmlElement | null;
     // (undocumented)

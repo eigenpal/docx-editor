@@ -302,7 +302,7 @@ export default [
       'packages/react/test/toolbar-composition.test.tsx',
     ],
     rules: {
-      'max-lines': ['error', { max: 1400, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1500, skipBlankLines: false, skipComments: false }],
     },
   },
 

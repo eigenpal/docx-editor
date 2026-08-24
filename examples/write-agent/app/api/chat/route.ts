@@ -23,7 +23,7 @@ Fresh document:
 - Supply a Title block, Heading 1 blocks, and Normal paragraphs.
 - Include at least one bullet block and one numbered block.
 - Mark at least one generic fillable field as a plain-text content control.
-- The tool atomically replaces the seeded body with Body.replaceParagraphs.
+- The tool atomically replaces the seeded body with the lower-level replaceStoryBlocks operation.
 - The tool also adds a header, footer, and page field.
 - Section columns are unsupported. Never claim they were added.
 

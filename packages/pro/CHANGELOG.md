@@ -1,5 +1,12 @@
 # @docx-editor.dev/pro
 
+## 2.8.0
+
+### Patch Changes
+
+- 25b8714: Derive the third-party notice for `@docx-editor.dev/pro` from every bundle it ships, not only the Vue one.
+- dab6700: Editing a custom node in a header, footer or note keeps its payload. Updating one and naming only its text used to drop the stored data, which then disappeared the next time the document opened.
+
 ## 2.7.0
 
 ## 2.6.1

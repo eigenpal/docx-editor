@@ -8,7 +8,7 @@
 // flattened cascade.
 
 import {
-  documentOrder,
+  everyStoryOrder,
   paragraphsInCells,
   spansInCells,
   spansInSelection,
@@ -16,6 +16,7 @@ import {
   type PageRecord,
   type ParagraphFragmentRecord,
   type ParagraphIndent,
+  type ResolvedTabStops,
   type SemanticLayout,
   type SemanticSelection,
   type StyleSpanRecord,
@@ -38,7 +39,12 @@ import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
-import { cascadedParagraphAttributes } from '../layout/paragraph-style.ts';
+import {
+  cascadedParagraphAttributes,
+  paragraphBreaksBefore,
+  paragraphContextualSpacing,
+} from '../layout/paragraph-style.ts';
+import { paragraphKeeps, type ParagraphKeeps } from '../layout/pagination-keeps.ts';
 
 /** One property as the ops and the layout records carry it: an element name plus attributes. */
 export interface SurfaceProperty {
@@ -165,6 +171,50 @@ export function paragraphPropertiesOf(
   }
   return index.get(paragraphId) ?? [];
 }
+
+const fragmentTabStopsByPage = new WeakMap<PageRecord, ReadonlyMap<string, ResolvedTabStops>>();
+
+function pageTabStops(page: PageRecord): ReadonlyMap<string, ResolvedTabStops> {
+  const cached = fragmentTabStopsByPage.get(page);
+  if (cached) return cached;
+  const stops = new Map<string, ResolvedTabStops>();
+  eachParagraphFragmentOnPage(page, (fragment) =>
+    recordFragment(stops, fragment, fragment.tabStops)
+  );
+  fragmentTabStopsByPage.set(page, stops);
+  return stops;
+}
+
+/**
+ * A paragraph's resolved tab stops, from the layout records, or null for a paragraph the
+ * published layout does not carry.
+ *
+ * Not derivable from {@link paragraphPropertiesOf}: `w:tabs` carries its meaning in `w:tab`
+ * CHILDREN and the flat property projection has none, so the cascade shows the element and
+ * not a single stop.
+ */
+export function paragraphTabStopsOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): ResolvedTabStops | null {
+  let index = fragmentTabStopsByLayout.get(layout);
+  if (!index) {
+    const built = new Map<string, ResolvedTabStops>();
+    // Through the PAGE memo, like the other two indexes. An incremental pass keeps most
+    // page records by identity, so a keystroke re-walks only the pages that moved rather
+    // than every line in the document.
+    for (const page of layout.pages) {
+      for (const [id, stops] of pageTabStops(page)) {
+        if (!built.has(id)) built.set(id, stops);
+      }
+    }
+    index = built;
+    fragmentTabStopsByLayout.set(layout, built);
+  }
+  return index.get(paragraphId) ?? null;
+}
+
+const fragmentTabStopsByLayout = new WeakMap<SemanticLayout, Map<string, ResolvedTabStops>>();
 
 /** A paragraph's effective indent, plus whether it sits inside a table. */
 export interface ParagraphIndentEntry {
@@ -447,20 +497,31 @@ export function withPendingFormatting(
 function selectionSpans(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  /**
+   * Reading order of the ACTIVE story.
+   *
+   * The RUN properties need it for the same reason the paragraph ones do. Without it a
+   * two-paragraph selection in a header ordered its endpoints against the body, gave up, and
+   * reported no spans at all — so Bold read false over bold text and the size box emptied.
+   */
+  paragraphOrder?: readonly string[]
 ): readonly StyleSpanRecord[] {
-  return cells && cells.length > 0
-    ? spansInCells(layout, cells)
-    : spansInSelection(layout, selection);
+  if (cells && cells.length > 0) return spansInCells(layout, cells);
+  // `everyStoryOrder`, not `documentOrder`. The fallback is only reached by a caller that
+  // named no story, and the body's order is wrong for every caret outside it — which is the
+  // exact defect the parameter above exists to prevent, left standing in its own fallback.
+  return spansInSelection(layout, selection, paragraphOrder ?? everyStoryOrder(layout));
 }
 
 /** The run properties in force across the selection, taken from its first span. */
 export function selectionRunProperties(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  cells?: readonly string[]
+  cells?: readonly string[],
+  paragraphOrder?: readonly string[]
 ): readonly SurfaceProperty[] {
-  return selectionSpans(layout, selection, cells)[0]?.props ?? [];
+  return selectionSpans(layout, selection, cells, paragraphOrder)[0]?.props ?? [];
 }
 
 /**
@@ -476,9 +537,11 @@ export function isRunPropertyActive(
   cells?: readonly string[],
   /** The value being toggled, for a property whose ON state is one member of an
    *  enumeration rather than a boolean (`w:vertAlign`). */
-  value?: string
+  value?: string,
+  /** Reading order of the ACTIVE story. See {@link selectionSpans}. */
+  paragraphOrder?: readonly string[]
 ): boolean {
-  const spans = selectionSpans(layout, selection, cells);
+  const spans = selectionSpans(layout, selection, cells, paragraphOrder);
   if (spans.length === 0) return false;
   const flagOf = (span: (typeof spans)[number]): boolean => {
     switch (localName) {
@@ -535,7 +598,7 @@ export function formattingAt(
    */
   paragraphOrder?: readonly string[]
 ): SurfaceFormatting {
-  const spans = selectionSpans(layout, selection, cells);
+  const spans = selectionSpans(layout, selection, cells, paragraphOrder);
   const styles = spans.map((span) => span.style);
   // Agreement across the WHOLE selection, or nothing. A collapsed caret yields the one
   // span beside it (Word's rule), so the toolbar reflects the run the user is typing in.
@@ -544,8 +607,13 @@ export function formattingAt(
     const first = pick(styles[0]!);
     return styles.every((style) => pick(style) === first) ? first : null;
   };
-  const agreedOver = <T>(values: readonly T[]): T | null =>
-    values.length > 0 && values.every((value) => value === values[0]) ? values[0]! : null;
+  // `same` defaults to identity; a caller whose value is a fresh object per paragraph passes
+  // its own comparison, or every selection would read as disagreeing.
+  const agreedOver = <T>(
+    values: readonly T[],
+    same: (a: T, b: T) => boolean = (a, b) => a === b
+  ): T | null =>
+    values.length > 0 && values.every((value) => same(value, values[0]!)) ? values[0]! : null;
 
   // Font family and size answer the EFFECTIVE value, the way Word's boxes do: a span
   // without a direct `w:rFonts`/`w:sz` falls back to what it inherits (style chain,
@@ -570,6 +638,28 @@ export function formattingAt(
   const touchedParagraphs = paragraphsTouched(layout, selection, cells, paragraphOrder);
   const paragraphValue = <T>(read: (properties: readonly SurfaceProperty[]) => T): T | null =>
     agreedOver(touchedParagraphs.map((id) => read(paragraphPropertiesOf(layout, id))));
+  /**
+   * Whether the touched paragraphs DISAGREE about one paragraph-level read.
+   *
+   * `paragraphValue` answers `null` for two different situations — the paragraphs disagree,
+   * and they agree that nothing states it — and a control cannot tell them apart. Showing a
+   * disagreement as a concrete value makes it uncorrectable, because the value that would
+   * fix it is the one already on screen; showing an absent value as "mixed" tells a single
+   * paragraph it disagrees with itself. So the two are reported separately.
+   */
+  const paragraphDisagrees = <T>(
+    read: (properties: readonly SurfaceProperty[]) => T,
+    same: (a: T, b: T) => boolean = (a, b) => a === b
+  ): boolean => {
+    if (touchedParagraphs.length < 2) return false;
+    const first = read(paragraphPropertiesOf(layout, touchedParagraphs[0]!));
+    // Short-circuits on the first difference, and reuses the per-paragraph property read
+    // the layout already memoizes. A Select All over a document whose paragraphs disagree
+    // stops at paragraph two rather than walking all of them five times over.
+    return touchedParagraphs.some(
+      (id, index) => index > 0 && !same(read(paragraphPropertiesOf(layout, id)), first)
+    );
+  };
   // Normalized BEFORE agreement: `w:jc` absent and `w:jc val="left"` are the same
   // alignment, and comparing the raw attribute would call them a mixed selection.
   //
@@ -597,7 +687,7 @@ export function formattingAt(
   // showed the raw number would be right half the time.
   const spacing = (properties: readonly SurfaceProperty[]) =>
     cascadedParagraphAttributes(properties, 'spacing') ?? undefined;
-  const lineSpacingText = paragraphValue((properties) => {
+  const lineSpacingTextOf = (properties: readonly SurfaceProperty[]): string => {
     const attributes = spacing(properties);
     const line = Number(attributes?.line);
     if (!Number.isFinite(line)) return '';
@@ -605,7 +695,8 @@ export function formattingAt(
     const rule = attributes?.lineRule ?? 'auto';
     if (rule === 'auto') return `multiple:${Math.round((line / 240) * 100) / 100}`;
     return `${rule === 'exact' ? 'exact' : 'atLeast'}:${Math.round((line / 20) * 100) / 100}`;
-  });
+  };
+  const lineSpacingText = paragraphValue(lineSpacingTextOf);
   const lineSpacing = ((): SurfaceFormatting['lineSpacing'] => {
     if (!lineSpacingText) return null;
     const [rule, value] = lineSpacingText.split(':');
@@ -620,11 +711,15 @@ export function formattingAt(
   // answer, and it is the same answer for the one question asked of it today: Word writes
   // `w:before="100"` beside the flag, so an auto-spaced paragraph reads non-zero and the
   // menu offers Remove, as Word's does.
+  const spacePtOf = (
+    properties: readonly SurfaceProperty[],
+    attribute: 'before' | 'after'
+  ): number | null => {
+    const raw = Number(spacing(properties)?.[attribute]);
+    return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
+  };
   const spacePt = (attribute: 'before' | 'after') =>
-    paragraphValue((properties) => {
-      const raw = Number(spacing(properties)?.[attribute]);
-      return Number.isFinite(raw) ? Math.round((raw / 20) * 100) / 100 : null;
-    });
+    paragraphValue((properties) => spacePtOf(properties, attribute));
   // Indent does NOT go null on disagreement, unlike everything above it: the values are the
   // FIRST touched paragraph's and `mixed` reports the rest per field. A ruler has to draw
   // its handles somewhere, and hiding them for Select All — the commonest indent gesture —
@@ -658,6 +753,19 @@ export function formattingAt(
     };
   })();
 
+  // The Paragraph dialog shows these as checkboxes, so each answers on / off / mixed.
+  //
+  // Delegated to the LAYOUT readers rather than folded here. A toggle is stated by the
+  // presence of its element, so a level that states `<w:keepNext/>` with no attributes has
+  // to override a lower level's `w:val="0"` — and an attribute-wise merge of the cascade
+  // cannot see that, because a level with no attributes contributes nothing to it. Reading
+  // it separately also let the two answers drift: `w:widowControl` defaults to ON
+  // (§17.3.1.44) and a second implementation defaulted it off. One reader, one answer.
+  const keeps = (pick: (resolved: ParagraphKeeps) => boolean) =>
+    paragraphValue((properties) => pick(paragraphKeeps(properties)));
+  const pageBreakBeforeFlag = paragraphValue(paragraphBreaksBefore);
+  const contextualSpacingFlag = paragraphValue(paragraphContextualSpacing);
+
   return {
     bold: styles.length > 0 && styles.every((entry) => entry.bold),
     italic: styles.length > 0 && styles.every((entry) => entry.italic),
@@ -678,7 +786,50 @@ export function formattingAt(
     lineSpacing,
     spaceBeforePt: spacePt('before'),
     spaceAfterPt: spacePt('after'),
+    disagrees: {
+      alignment: paragraphDisagrees((properties) => paragraphAlignment(properties)),
+      spaceBeforePt: paragraphDisagrees((properties) => spacePtOf(properties, 'before')),
+      spaceAfterPt: paragraphDisagrees((properties) => spacePtOf(properties, 'after')),
+      lineSpacing: paragraphDisagrees(lineSpacingTextOf),
+      tabStops: ((): boolean => {
+        if (touchedParagraphs.length < 2) return false;
+        const first = JSON.stringify(
+          paragraphTabStopsOf(layout, touchedParagraphs[0]!)?.stops ?? null
+        );
+        return touchedParagraphs.some(
+          (id, index) =>
+            index > 0 && JSON.stringify(paragraphTabStopsOf(layout, id)?.stops ?? null) !== first
+        );
+      })(),
+    },
     indent,
+    // Compared by VALUE across the selection, not by reference: the stops are a fresh array
+    // per paragraph, and two paragraphs with identical stops must read as agreeing.
+    tabStops:
+      agreedOver(
+        touchedParagraphs.map((id) => paragraphTabStopsOf(layout, id)?.stops ?? null),
+        (a, b) =>
+          a === null || b === null
+            ? a === b
+            : a.length === b.length &&
+              a.every(
+                (stop, index) =>
+                  Math.round(stop.positionPt * 20) === Math.round(b[index]!.positionPt * 20) &&
+                  stop.alignment === b[index]!.alignment &&
+                  (stop.leader ?? 'none') === (b[index]!.leader ?? 'none')
+              )
+      )?.map((stop) => ({
+        positionTwips: Math.round(stop.positionPt * 20),
+        alignment: stop.alignment,
+        ...(stop.leader ? { leader: stop.leader } : {}),
+      })) ?? null,
+    paragraphFlags: {
+      contextualSpacing: contextualSpacingFlag,
+      keepNext: keeps((resolved) => resolved.keepNext),
+      keepLines: keeps((resolved) => resolved.keepLines),
+      widowControl: keeps((resolved) => resolved.widowControl),
+      pageBreakBefore: pageBreakBeforeFlag,
+    },
   } satisfies SurfaceFormatting;
 }
 
@@ -704,9 +855,11 @@ function paragraphsTouched(
   if (selection.anchor.paragraphId === selection.head.paragraphId) {
     return [selection.head.paragraphId];
   }
-  // The ACTIVE story's order when the caller knows it; `documentOrder` is the body's, and a
-  // header selection resolves to -1 in it.
-  const order = paragraphOrder ?? documentOrder(layout);
+  // The ACTIVE story's order when the caller knows it, and every story when it does not.
+  // `documentOrder` is the body's, and a header selection resolves to -1 in it — so the
+  // fallback used to return the head paragraph alone and the caller saw a one-paragraph
+  // selection where the reader had made a two-paragraph one.
+  const order = paragraphOrder ?? everyStoryOrder(layout);
   const anchorIndex = order.indexOf(selection.anchor.paragraphId);
   const headIndex = order.indexOf(selection.head.paragraphId);
   if (anchorIndex === -1 || headIndex === -1) return [selection.head.paragraphId];

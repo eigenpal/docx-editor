@@ -165,9 +165,8 @@ application's other chrome.
 
 ### Choose one revision text projection
 
-The `text` property and a search without options use the `all` projection. This compatibility
-projection includes ordinary text, pending deletions, pending insertions, and both sides of a
-pending replacement.
+The runtime uses the `all` revision view by default. This view includes ordinary text, pending
+deletions, pending insertions, and both sides of a pending replacement.
 
 Use the `vanilla` projection when an agent must read the document before pending changes are
 accepted. It has these rules:
@@ -177,23 +176,27 @@ accepted. It has these rules:
 - A pending insertion is hidden and is not searchable.
 - A pending replacement shows its deleted original and hides its inserted replacement.
 
-Use the same projection for the read and the search:
+Choose the view when you create the runtime. The object model keeps the Office.js shape:
 
 ```ts
-const body = context.document.body;
-const text = body.getText({ projection: 'vanilla' });
-const matches = body.search('original phrase', {
-  projection: 'vanilla',
+const runtime = DocxEditor.createBrowser(editor, {
+  revisionTextView: 'vanilla',
 });
-matches.load('items');
-await context.sync();
 
-console.log(text.value);
+await runtime.run(async (context) => {
+  const body = context.document.body;
+  body.load('text');
+  const matches = body.search('original phrase');
+  matches.load('items');
+  await context.sync();
+
+  console.log(body.text);
+});
 ```
 
-A range returned by a `vanilla` search keeps that projection. Its `text` property, nested
-searches, and `getText()` calls use the same view. The range endpoints remain model offsets, so
-`insertText()`, `insertComment()`, and `select()` target the text that the search returned.
+A range returned by a search uses the runtime's revision view. Its `text` property and nested
+searches use the same view. The range endpoints remain model offsets, so `insertText()`,
+`insertComment()`, and `select()` target the text that the search returned.
 
 Selection does not change the insertion rule. `range.select()` selects the full range, so the
 reader's next text insertion replaces that phrase. Use `range.select('End')` to collapse the caret

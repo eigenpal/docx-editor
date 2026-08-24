@@ -12,6 +12,9 @@ import { writeClipboardText } from './clipboard-write.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
+import { storyScopeOfNodeId } from './surface-scope.ts';
+import type { StoryScope } from '@docx-editor.dev/core/store';
+import { paragraphFragmentsOfBlocks } from '@docx-editor.dev/core/layout';
 import {
   execEditHeaderFooter,
   execInsertPageField,
@@ -29,36 +32,7 @@ import {
 } from './docx-editor-notes.ts';
 import { isTableEditorCommand, planTableCommand } from './table-command-plan.ts';
 import { execImageCommand, isImageCommand } from './docx-editor-images.ts';
-
-/**
- * One side of `w:spacing`, as the attributes a `setParagraphSpacing` write states.
- *
- * `undefined` states nothing at all: the command names one side or both, and the side it
- * does not name keeps whatever the paragraph already authored.
- *
- * The other two attributes on the side go WITH the measurement, because each supersedes it
- * (§17.3.1.33): `w:beforeAutospacing` substitutes Word's own gap, and `w:beforeLines`
- * measures in hundredths of a line instead of twips. A merging write that left either in
- * place wrote a number the file then ignored — the same way the autospacing flag swallowed
- * this command whole before.
- *
- * They are cleared DIFFERENTLY, because their off values differ. `w:beforeAutospacing="0"`
- * is a real off, so it is written explicitly and blocks an inherited flag. `w:beforeLines`
- * has no off value — `"0"` means zero lines of space, which would supersede the twips beside
- * it and flatten the gap the caller just asked for — so the attribute is dropped instead.
- * That leaves one residual: a STYLE that states `w:beforeLines` still supersedes a direct
- * `w:before`, which this command cannot express and Word's own points-entry does not either.
- */
-function spacingSide(
-  side: 'before' | 'after',
-  points: number | null | undefined
-): Record<string, string | null> {
-  if (points === undefined) return {};
-  const autospacing = `${side}Autospacing`;
-  const lines = `${side}Lines`;
-  if (points === null) return { [side]: null, [autospacing]: null, [lines]: null };
-  return { [side]: String(Math.round(points * 20)), [autospacing]: '0', [lines]: null };
-}
+import { lineSpacingAttributes, spacingSideAttributes } from './paragraph-format-write.ts';
 
 /**
  * Run one admitted command against the surface.
@@ -100,12 +74,7 @@ export function execEditorCommand(
       // one attribute, two units, which is exactly why the command takes the rule's own.
       mounted.setParagraphProperty(
         'spacing',
-        command.rule === 'multiple'
-          ? { line: String(Math.round(command.value * 240)), lineRule: 'auto' }
-          : {
-              line: String(Math.round(command.value * 20)),
-              lineRule: command.rule === 'exact' ? 'exact' : 'atLeast',
-            },
+        lineSpacingAttributes({ rule: command.rule, value: command.value }),
         { mergeAttributes: true }
       );
       break;
@@ -124,8 +93,8 @@ export function execEditorCommand(
           // whole and the page did not move. Word clears the flag the same way when a value
           // is typed. An explicit `0` is written rather than the attribute dropped: dropping
           // it would let the inherited flag come back and win again.
-          ...spacingSide('before', command.beforePt),
-          ...spacingSide('after', command.afterPt),
+          ...spacingSideAttributes('before', command.beforePt),
+          ...spacingSideAttributes('after', command.afterPt),
         },
         { mergeAttributes: true }
       );
@@ -165,9 +134,66 @@ export function execEditorCommand(
       });
       break;
     }
+    case 'setParagraphFormat': {
+      // The contract says `justify`; `w:jc` spells it `both` — the same translation
+      // `setAlignment` makes.
+      const written = mounted.setParagraphFormat({
+        ...(command.alignment !== undefined
+          ? { alignment: command.alignment === 'justify' ? ('both' as const) : command.alignment }
+          : {}),
+        ...(command.spaceBeforePt !== undefined ? { spaceBeforePt: command.spaceBeforePt } : {}),
+        ...(command.spaceAfterPt !== undefined ? { spaceAfterPt: command.spaceAfterPt } : {}),
+        ...(command.lineSpacing !== undefined ? { lineSpacing: command.lineSpacing } : {}),
+        ...(command.indentLeftTwips !== undefined
+          ? { indentLeftTwips: command.indentLeftTwips }
+          : {}),
+        ...(command.indentRightTwips !== undefined
+          ? { indentRightTwips: command.indentRightTwips }
+          : {}),
+        ...(command.indentFirstLineTwips !== undefined
+          ? { indentFirstLineTwips: command.indentFirstLineTwips }
+          : {}),
+        ...(command.contextualSpacing !== undefined
+          ? { contextualSpacing: command.contextualSpacing }
+          : {}),
+        ...(command.keepNext !== undefined ? { keepNext: command.keepNext } : {}),
+        ...(command.keepLines !== undefined ? { keepLines: command.keepLines } : {}),
+        ...(command.widowControl !== undefined ? { widowControl: command.widowControl } : {}),
+        ...(command.pageBreakBefore !== undefined
+          ? { pageBreakBefore: command.pageBreakBefore }
+          : {}),
+        ...(command.tabStops !== undefined ? { tabStops: command.tabStops } : {}),
+      });
+      if (!written) {
+        return {
+          ok: false,
+          code: 'unsupported',
+          reason: mounted.state().lastRejection ?? 'the paragraph format could not be written here',
+        };
+      }
+      break;
+    }
     case 'setPageSetup': {
-      const anchor =
-        command.scope === 'section' ? mounted.state().selection.head.paragraphId : undefined;
+      // The anchor must name BODY content: `w:sectPr` lives on the body story, so the op
+      // resolves its target section by walking the body tree. A caret in a header or a note is
+      // not in that tree, so passing it straight through refused the whole write as
+      // `unknown-paragraph` — Page Setup's Apply and a ruler margin drag both did nothing from
+      // any furniture caret, with the dialog still reading the correct section beside them.
+      let anchor: string | undefined;
+      if (command.scope === 'section') {
+        const target = mounted.sectionAnchorParagraphAt(mounted.state().selection.head.paragraphId);
+        if (target.kind === 'unaddressable') {
+          // Writing every section instead is what `scope: 'document'` means, and doing it to a
+          // `scope: 'section'` request changes pages nobody asked about — quietly, because
+          // page geometry does not announce itself. A refusal is recoverable; that is not.
+          return {
+            ok: false,
+            code: 'unsupported',
+            reason: 'this section holds no paragraph to address it by',
+          };
+        }
+        anchor = target.kind === 'anchor' ? target.paragraphId : undefined;
+      }
       // When orientation arrives WITH explicit dimensions, the dimensions are
       // oriented here — Word stores landscape as swapped dimensions plus the
       // attribute. Orientation ALONE stays alone: the op swaps each written
@@ -175,6 +201,10 @@ export function execEditorCommand(
       let width = command.pageWidth;
       let height = command.pageHeight;
       if (command.orientation !== undefined && (width !== undefined || height !== undefined)) {
+        // No anchor here means `scope: 'document'`, or a single-section document — in both,
+        // the body-level properties ARE the caret's section. A `scope: 'section'` request
+        // that could not name its section was refused above rather than arriving with no
+        // anchor, which is what kept those two apart.
         const section = anchor ? mounted.sectionPropertiesAt(anchor) : mounted.sectionProperties();
         const w = width ?? section.pageSize.widthTwips;
         const h = height ?? section.pageSize.heightTwips;
@@ -447,6 +477,15 @@ export function execEditorCommand(
         payload
       );
       if (!resolved.ok) return resolved;
+      // OPEN the story the anchor names before selecting into it.
+      //
+      // The paraId index spans every story, so an anchor can name a header paragraph — and
+      // `snapshot().selection` hands one out whenever the caret is in one, which the contract
+      // says round-trips through here. Selecting it without entering left the caret on a
+      // paragraph the active scope had never heard of, and every keystroke after it was
+      // dropped with no refusal: the editor simply stopped accepting text.
+      const entered = enterStoryForSelection(mounted, resolved.selection);
+      if (!entered.ok) return entered;
       mounted.setSelection(resolved.selection);
       mounted.revealPosition(resolved.selection.head, { block: 'centerIfNeeded' });
       return { ok: true, changed: false };
@@ -459,4 +498,135 @@ export function execEditorCommand(
       return { ok: false, code: 'unsupported', reason: 'unsupported command' };
   }
   return null;
+}
+
+/** The scope id of the note whose painted fragments hold `paragraphId`, or null. */
+function noteScopeHolding(mounted: PaginatedSurface, paragraphId: string): string | null {
+  for (const page of mounted.layout().pages) {
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+          if (fragment.paragraphId === paragraphId) return note.scopeId;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * The page a furniture paragraph is painted on, with that page's section.
+ *
+ * A header opened WITHOUT a page is opened without a section, and the section is what the
+ * ruler clamps to and what `insertTableOp` divides into columns. One part can be the default
+ * header of several sections, so "the first section that names this rId" is a different page's
+ * geometry — a table sized for the wrong paper. The painted page settles it, exactly as the
+ * pointer seam already does when the reader clicks the same header.
+ */
+function headerFooterPageHolding(
+  mounted: PaginatedSurface,
+  paragraphId: string
+): { readonly pageIndex: number; readonly sectionIndex: number } | null {
+  const pages = mounted.layout().pages;
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex]!;
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      for (const fragment of paragraphFragmentsOfBlocks(story.fragments)) {
+        if (fragment.paragraphId !== paragraphId) continue;
+        return { pageIndex, sectionIndex: mounted.sectionAtPage(pageIndex).sectionIndex };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Whether two scopes name the same story.
+ *
+ * Structural, not `JSON.stringify`: stringify is key-order dependent and happens to work only
+ * because both values come from the same constructor. It also cannot separate two notes in one
+ * notes part, which the caller handles by note id.
+ */
+function sameStory(a: StoryScope, b: StoryScope): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'headerFooter' && b.kind === 'headerFooter') return a.rId === b.rId;
+  if (a.kind === 'notesPart' && b.kind === 'notesPart') return a.noteKind === b.noteKind;
+  return true;
+}
+
+/**
+ * Put the surface in the story a selection addresses, so the caret and the scope agree.
+ *
+ * A selection whose endpoints are in different stories is refused rather than half-applied:
+ * there is no scope in which both are addressable, and a caret split across two stores is the
+ * state that silently swallows input.
+ */
+function enterStoryForSelection(
+  mounted: PaginatedSurface,
+  selection: { readonly anchor: { paragraphId: string }; readonly head: { paragraphId: string } }
+): ExecResult {
+  const scope = storyScopeOfNodeId(mounted.session, selection.head.paragraphId, {
+    kind: 'body',
+  });
+  const anchorScope = storyScopeOfNodeId(mounted.session, selection.anchor.paragraphId, {
+    kind: 'body',
+  });
+  if (!sameStory(scope, anchorScope)) {
+    return {
+      ok: false,
+      code: 'unsupported',
+      reason: 'a selection cannot span two stories',
+    };
+  }
+  const active = mounted.activeScope();
+  if (scope.kind === 'body') {
+    if (active.kind !== 'body') {
+      mounted.exitNote?.();
+      mounted.exitHeaderFooter?.();
+    }
+    return { ok: true, changed: false };
+  }
+  if (scope.kind === 'headerFooter') {
+    if (active.kind === 'headerFooter' && active.rId === scope.rId) {
+      return { ok: true, changed: false };
+    }
+    mounted.exitNote?.();
+    // WITH the page, so the story opens against the section it is painted in.
+    const at = headerFooterPageHolding(mounted, selection.head.paragraphId);
+    const opened = mounted.enterHeaderFooter?.({
+      rId: scope.rId,
+      ...(at ? { pageIndex: at.pageIndex, sectionIndex: at.sectionIndex } : {}),
+    });
+    return opened
+      ? { ok: true, changed: false }
+      : { ok: false, code: 'unsupported', reason: 'that header or footer could not be opened' };
+  }
+  // A notes PART holds every note, so the scope has to name the NOTE the paragraph is in. The
+  // painted layout is what knows which one that is.
+  //
+  // BOTH endpoints, because `StoryScope` cannot tell two footnotes apart: every footnote in a
+  // document answers `{ kind: 'notesPart', noteKind: 'footnote' }`. So the story comparison
+  // above passed a selection running from footnote 1 to footnote 2, and this entered the
+  // head's note with the anchor left in a note that store has never heard of — the exact
+  // half-applied state the comparison exists to refuse. Typing over such a selection deleted
+  // neither endpoint's text and inserted at offset 0 of the wrong note.
+  const scopeId = noteScopeHolding(mounted, selection.head.paragraphId);
+  if (!scopeId) {
+    return { ok: false, code: 'notFound', reason: 'that note is not laid out' };
+  }
+  const anchorScopeId =
+    selection.anchor.paragraphId === selection.head.paragraphId
+      ? scopeId
+      : noteScopeHolding(mounted, selection.anchor.paragraphId);
+  if (anchorScopeId !== scopeId) {
+    return { ok: false, code: 'unsupported', reason: 'a selection cannot span two stories' };
+  }
+  if (active.kind === 'note' && active.id === scopeId) return { ok: true, changed: false };
+  mounted.exitHeaderFooter?.();
+  const opened = mounted.enterNote?.(scopeId);
+  return opened
+    ? { ok: true, changed: false }
+    : { ok: false, code: 'unsupported', reason: 'that note could not be opened' };
 }

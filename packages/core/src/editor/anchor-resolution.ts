@@ -89,7 +89,26 @@ export function resolveDocAnchor(
   if (typeof anchor.paraId !== 'string' || anchor.paraId.length === 0) {
     return { ok: false, code: 'invalidArgs', reason: 'paraId must be a non-empty string' };
   }
-  const nodeId = anchors.nodeByParaId.get(anchor.paraId.toUpperCase());
+  const canonical = anchor.paraId.toUpperCase();
+  if (anchors.ambiguousParaIds.has(canonical)) {
+    // REFUSED, not resolved to whichever story came first.
+    //
+    // `w14:paraId` is minted unique per PART and the contract's uniqueness is per document, so
+    // an authored file may repeat one across a header and the body. Preferring the caller's own
+    // part looks like a way out, and is not: every caller here passes the MAIN part, so the
+    // preference can only ever land on the body twin. An automation caller that read a header
+    // paragraph's paraId out of `snapshot()` and passed it straight back would be told `ok`
+    // with the caret in the body, and its next write would go to the wrong story.
+    //
+    // Refusing costs a hostile file's duplicates their addressability by paraId — node ids
+    // still reach them — and that is the failure worth having: it is visible.
+    return {
+      ok: false,
+      code: 'ambiguous',
+      reason: `paraId '${anchor.paraId}' is claimed by more than one story`,
+    };
+  }
+  const nodeId = anchors.nodeByParaId.get(canonical);
   if (nodeId === undefined) {
     return {
       ok: false,
@@ -97,7 +116,12 @@ export function resolveDocAnchor(
       reason: `no paragraph with paraId '${anchor.paraId}'`,
     };
   }
-  const text = paragraphTextOf(part, nodeId) ?? '';
+  // The node's OWN part. The index spans every story, so reading a header node's text out of
+  // the body part gave `''` — and an anchor with no `search` then returned `ok` with a
+  // zero-length span, installing a caret on a paragraph the open scope has never heard of and
+  // making every keystroke after it vanish with no refusal. An anchor WITH a search reported
+  // that its phrase "does not occur", which is a claim about the document that was false.
+  const text = paragraphTextOf(anchors.partByNode.get(nodeId) ?? part, nodeId) ?? '';
   if (anchor.search === undefined) {
     return { ok: true, span: { nodeId, start: 0, end: text.length } };
   }

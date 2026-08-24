@@ -65,6 +65,12 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
     ...(formatting.spaceBeforePt !== null ? { spaceBeforePt: formatting.spaceBeforePt } : {}),
     ...(formatting.spaceAfterPt !== null ? { spaceAfterPt: formatting.spaceAfterPt } : {}),
     ...(formatting.indent !== null ? { indent: formatting.indent } : {}),
+    // Always present, unlike the fields above: each flag carries its own null for "the
+    // selection disagrees", so an absent object and a disagreeing one would be the same
+    // value to a checkbox that has to tell them apart.
+    paragraphFlags: formatting.paragraphFlags,
+    disagrees: formatting.disagrees,
+    ...(formatting.tabStops !== null ? { tabStops: formatting.tabStops } : {}),
   };
 }
 
@@ -150,8 +156,11 @@ export function hyperlinkAtOf(surface: PaginatedSurface | null): HyperlinkInfo |
 /**
  * The `paragraphs` query: every editable paragraph in reading order, addressed the way
  * the contract addresses paragraphs. Scope is the MAIN part — a `container` naming any
- * other story answers `[]` (queries carry no error channel; the paraId map does not
- * reach those stories yet).
+ * other story answers `[]`, because queries carry no error channel and an empty list is the
+ * only thing this shape can say.
+ *
+ * That is a scope decision, not a capability one: the paraId index spans every story now, so
+ * widening this is a matter of settling what a `container` naming a header should return.
  */
 export function paragraphSummaries(
   surface: PaginatedSurface | null,
@@ -206,7 +215,10 @@ export function buildTableCommandPlannerInput(
 ): TableCommandPlannerInput {
   return {
     command,
-    part: surface.session.part(),
+    // The part the CARET is in, which is the part `applyTableCommandPlan` commits against.
+    // Planned against the body while a header was open, every op named a node the header store
+    // has never heard of, so a plan that validated cleanly was then rejected on apply.
+    part: surface.session.partFor(surface.storyScope()) ?? surface.session.part(),
     layout: surface.layout(),
     storeRevision: surface.session.packageRevision(),
     selection: surface.state().selection,
@@ -405,6 +417,42 @@ export function gateCommand(
           ok: false,
           code: 'unsupported',
           reason: 'insertNote requires body scope',
+        },
+      };
+    }
+  }
+  // A section break splits the body's `w:sectPr` chain, and `insertSectionBreak` already
+  // refuses outside the body. Without this arm the refusal was never PUBLISHED: `can` saw only
+  // the static break vocabulary, so the control rendered live in a header and pressing it did
+  // nothing at all. A gate the toolbar cannot see is a button that lies.
+  if (command.type === 'insertBreak' && command.kind === 'section') {
+    const active = surface.activeScope?.() ?? { kind: 'body' as const };
+    if (active.kind !== 'body') {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'a section break can only be inserted in the editable document body',
+        },
+      };
+    }
+  }
+  // A page break is body structure for the same reason, and the sibling arm above missed it.
+  // Only the body paginates: a header is laid out ONCE per variant at flow height and attached
+  // to every page, and a note flows inside the note area. So `w:br w:type="page"` written into
+  // `header1.xml` or `footnotes.xml` is markup nothing reads. The command reported `ok`, the
+  // part changed, and the screen did not — which is the failure mode this gate exists to stop.
+  // Word disables the gesture in those stories for the same reason.
+  if (command.type === 'insertBreak' && command.kind === 'page') {
+    const active = surface.activeScope?.() ?? { kind: 'body' as const };
+    if (active.kind !== 'body') {
+      return {
+        ok: false,
+        refusal: {
+          ok: false,
+          code: 'unsupported',
+          reason: 'a page break can only be inserted in the editable document body',
         },
       };
     }

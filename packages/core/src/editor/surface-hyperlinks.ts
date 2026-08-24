@@ -10,6 +10,7 @@
 // comes BACK — for the popover to show, for a click to open — is always the sanitized
 // projection layout already resolved, never the authored string.
 
+import { relationshipTargetIn, storyParagraphs, storyRootsOf } from '@docx-editor.dev/core/store';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import {
   hyperlinkTargetOf,
@@ -325,9 +326,27 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
     const caretParagraph = deps.selection().head.paragraphId;
     const near = linksIn(caretParagraph).find((link) => link.id === linkId);
     if (near) return near;
-    for (const paragraphId of deps.session.paragraphIdsIn(scope())) {
-      const found = linksIn(paragraphId).find((link) => link.id === linkId);
-      if (found) return found;
+
+    // EVERY STORY, each read through its OWN part. The fallback used to scan the paragraphs of
+    // whatever story was open, so a reader in the body who clicked a link painted in a header
+    // got null — and the popover that lets you follow or edit the link never opened. The link
+    // is in the story it is in, not in the one the reader happens to be standing in.
+    for (const part of deps.session.storyParts()) {
+      // Resolved against the part the link is IN, not the open story's. The relationship a
+      // header link names lives in `header1.xml.rels`, so resolving it through the reader's
+      // story found the link and then handed back a null `href` — the popover would have
+      // opened on a link with nowhere to go.
+      const resolveHere = (relationshipId: string) =>
+        relationshipTargetIn(deps.session.currentPackage(), part.name, relationshipId);
+      for (const story of storyRootsOf(part)) {
+        for (const paragraph of storyParagraphs(story.root)) {
+          const paragraphId = paragraph.id;
+          const found = hyperlinksInParagraph(part, paragraphId, resolveHere, deps.textOf).find(
+            (link) => link.id === linkId
+          );
+          if (found) return found;
+        }
+      }
     }
     return null;
   };

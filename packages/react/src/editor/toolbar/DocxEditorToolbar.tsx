@@ -43,6 +43,7 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useEditorState } from '../useEditorState';
 import { ToolbarContext, useToolbarLabelFor, type ToolbarTranslate } from './toolbar-context';
 import { ToolbarButton, chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
+import { ParagraphDialogHost } from '../paragraph-dialog-host';
 import {
   ToolbarOverflow,
   ToolbarOverflowControl,
@@ -391,29 +392,34 @@ function DocxEditorToolbarRoot(props: DocxEditorToolbarProps) {
 
   return (
     <ToolbarContext.Provider value={context}>
-      <div
-        ref={attach}
-        role="toolbar"
-        data-testid="docx-toolbar"
-        // `docx-editor` self-emitted: chrome CSS and --doc-* tokens are scoped under it, and
-        // `Root` renders no DOM — same pattern as `DocxEditorLoading`/`DocxEditorViewport`,
-        // so a composed toolbar is styled wherever the host puts it. Nesting under the
-        // packaged wrapper is fine; the stylesheet re-applies dark tokens to nested roots.
-        className={`${scopeClassName}docx-toolbar${className ? ` ${className}` : ''}`}
-        // One row when the bar measures itself, wrapping when it does not: the stylesheet
-        // reads this rather than guessing from a breakpoint.
-        {...(measuring ? { 'data-overflow': '' } : {})}
-        // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled
-        // button never receives mousedown, so per-button handlers cannot cover it.
-        // Form fields are exempt inside the guard itself.
-        onMouseDown={guardToolbarMousedown}
-      >
-        {includesTableChromeParts(children, preset) ? (
-          <TableChromeProvider>{content}</TableChromeProvider>
-        ) : (
-          content
-        )}
-      </div>
+      {/* OUTSIDE the measured element on purpose: the bar measures its own children to
+          decide what collapses into the overflow panel, and a dialog counted among them
+          fed that measurement — the panel re-measured, the dialog re-rendered, forever. */}
+      <ParagraphDialogHost>
+        <div
+          ref={attach}
+          role="toolbar"
+          data-testid="docx-toolbar"
+          // `docx-editor` self-emitted: chrome CSS and --doc-* tokens are scoped under it, and
+          // `Root` renders no DOM — same pattern as `DocxEditorLoading`/`DocxEditorViewport`,
+          // so a composed toolbar is styled wherever the host puts it. Nesting under the
+          // packaged wrapper is fine; the stylesheet re-applies dark tokens to nested roots.
+          className={`${scopeClassName}docx-toolbar${className ? ` ${className}` : ''}`}
+          // One row when the bar measures itself, wrapping when it does not: the stylesheet
+          // reads this rather than guessing from a breakpoint.
+          {...(measuring ? { 'data-overflow': '' } : {})}
+          // Container-level caret guard (CLAUDE.md focus-stealing pitfall): a disabled
+          // button never receives mousedown, so per-button handlers cannot cover it.
+          // Form fields are exempt inside the guard itself.
+          onMouseDown={guardToolbarMousedown}
+        >
+          {includesTableChromeParts(children, preset) ? (
+            <TableChromeProvider>{content}</TableChromeProvider>
+          ) : (
+            content
+          )}
+        </div>
+      </ParagraphDialogHost>
     </ToolbarContext.Provider>
   );
 }

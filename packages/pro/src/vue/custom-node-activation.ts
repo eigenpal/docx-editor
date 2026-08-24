@@ -8,6 +8,7 @@ import { computed, toValue, type ComputedRef, type MaybeRefOrGetter } from 'vue'
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { customNodePayloadsByControl } from '@docx-editor.dev/core/store';
+import { partOfNodeId } from '@docx-editor.dev/core/editor';
 import type { PaginatedSurface as EditorSurface } from '@docx-editor.dev/core/editor';
 import {
   isCustomNodeDefinition,
@@ -81,10 +82,20 @@ function payloadOf(
   const surface = (editor as (Editor & { readonly surface?: EditorSurface | null }) | null)
     ?.surface;
   if (!surface) return undefined;
-  const part = surface.session.part();
-  const source = customNodePayloadsByControl(surface.session.currentPackage(), part.name).get(
-    controlId
-  );
+  // The control is in ITS OWN story and the store hangs off the MAIN part, which are different
+  // parts. Asking the body for both handed the host `data: undefined` for a chip in a header,
+  // so a definition deriving its attrs from the payload produced different attrs there than in
+  // the body — silently, because absent data is also what a chip with no payload looks like.
+  //
+  // The story part comes from the PACKAGE, not from `partFor`. This runs inside a hook, and
+  // `partFor` opens a story store that is then retained for the session — a read that spends
+  // one of sixty-four slots every time a chip is activated.
+  const story = partOfNodeId(surface.session, controlId);
+  const source = customNodePayloadsByControl(
+    surface.session.currentPackage(),
+    (story ?? surface.session.part()).name,
+    surface.session.part().name
+  ).get(controlId);
   if (!source) return undefined;
   const parsed = parseCustomNodeData(definition.schema, source.data);
   return parsed.ok ? parsed.value : undefined;
