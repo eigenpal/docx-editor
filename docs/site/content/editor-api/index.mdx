@@ -163,6 +163,82 @@ model defines which operations to expose, how to describe them and how to handle
 such as `add_comment` performs its document work inside a `run` block. Keep its chat UI with the
 application's other chrome.
 
+### Expose focused tools to an agent
+
+Give each tool one document task. Validate its input before the tool reaches the document. Keep the
+complete read or write inside one `run` callback.
+
+This AI SDK example exposes one read tool and two small writing tools:
+
+```ts
+import type { DocxEditorRuntime } from '@docx-editor.dev/editor-api';
+import { tool } from 'ai';
+import { z } from 'zod';
+
+export function createDocumentTools(runtime: DocxEditorRuntime) {
+  return {
+    read_document: tool({
+      description: 'Read the current document text.',
+      inputSchema: z.object({}),
+      execute: async () =>
+        runtime.run(async (context) => {
+          const body = context.document.body;
+          body.load('text');
+          await context.sync();
+          return { text: body.text };
+        }),
+    }),
+
+    append_paragraph: tool({
+      description: 'Add one paragraph to the end of the document.',
+      inputSchema: z.object({
+        text: z.string().min(1),
+      }),
+      execute: async ({ text }) =>
+        runtime.run(async (context) => {
+          context.document.body.insertParagraph(text, 'End');
+          await context.sync();
+          return { inserted: true };
+        }),
+    }),
+
+    replace_exact_text: tool({
+      description: 'Replace one exact phrase when it occurs once.',
+      inputSchema: z.object({
+        search: z.string().min(1),
+        replacement: z.string(),
+      }),
+      execute: async ({ search, replacement }) =>
+        runtime.run(async (context) => {
+          const matches = context.document.body.search(search, {
+            matchCase: true,
+          });
+          matches.load('items');
+          await context.sync();
+
+          if (matches.items.length !== 1) {
+            return {
+              replaced: false,
+              reason: `Expected one match, found ${matches.items.length}.`,
+            };
+          }
+
+          matches.items[0].insertText(replacement, 'Replace');
+          await context.sync();
+          return { replaced: true };
+        }),
+    }),
+  };
+}
+```
+
+Return structured results instead of free-form status text. Refuse ambiguous writes instead of
+choosing a match for the agent. Use separate tools for comments, tracked proposals, tables, and
+content controls.
+
+For a complete tool catalog, see the
+[writer agent example](https://github.com/eigenpal/docx-editor/tree/main/examples/write-agent).
+
 ### Choose one revision text projection
 
 The runtime uses the `allMarkup` text projection by default. This projection includes ordinary
