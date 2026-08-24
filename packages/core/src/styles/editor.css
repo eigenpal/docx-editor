@@ -4637,6 +4637,8 @@ a.docx-hyperlink:focus-visible {
   height: 100%;
   min-height: 0;
   padding: 32px 0;
+  padding-inline-start: var(--docx-loading-inline-start, 0px);
+  padding-right: var(--docx-loading-right, 0px);
   overflow: auto;
   container-type: size;
   color: var(--doc-text-muted);

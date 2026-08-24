@@ -2,6 +2,8 @@ import { defineComponent, h, type CSSProperties, type PropType, type VNode } fro
 import type { DocxEditorChildren } from '../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
+import { useNavigationShift } from './navigation/navigation-layout';
+import { useReviewGutter } from './review-gutter';
 import { useEditorState } from './useEditorState';
 
 const selectShowLoading = (snapshot: EditorSnapshot) =>
@@ -46,6 +48,8 @@ const DocxEditorLoadingImpl = defineComponent({
   },
   setup(props, { slots }) {
     const showLoading = useEditorState(selectShowLoading);
+    const navigationShift = useNavigationShift();
+    const reviewGutter = useReviewGutter();
     const { t } = useTranslation();
 
     return () => {
@@ -53,9 +57,16 @@ const DocxEditorLoadingImpl = defineComponent({
       const classes = `docx-editor docx-editor__loading${
         props.overlay ? ' docx-editor__loading--overlay' : ''
       }${props.className ? ` ${props.className}` : ''}`;
+      const loadingStyle: CSSProperties = {
+        '--docx-loading-inline-start': `${
+          navigationShift.value + reviewGutter.value.inlineStart
+        }px`,
+        '--docx-loading-right': `${reviewGutter.value.inlineEnd}px`,
+        ...props.style,
+      };
       return h(
         'div',
-        { class: classes, style: props.style, role: 'status', ariaLive: 'polite' },
+        { class: classes, style: loadingStyle, role: 'status', ariaLive: 'polite' },
         slots.default?.() ??
           h('div', { class: 'docx-editor__loading-page' }, [
             h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),

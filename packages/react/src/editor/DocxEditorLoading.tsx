@@ -32,6 +32,8 @@ import type { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
+import { useNavigationShift } from './navigation/navigation-layout';
+import { useReviewGutter } from './review-gutter';
 import { useEditorState } from './useEditorState';
 
 /**
@@ -107,14 +109,21 @@ function DocxEditorLoadingImpl({
   children,
 }: DocxEditorLoadingProps) {
   const showLoading = useEditorState(selectShowLoading);
+  const navigationShift = useNavigationShift();
+  const reviewGutter = useReviewGutter();
   const { t } = useTranslation();
   if (!when && !showLoading) return null;
 
   const classes = `docx-editor docx-editor__loading${
     overlay ? ' docx-editor__loading--overlay' : ''
   }${className ? ` ${className}` : ''}`;
+  const loadingStyle = {
+    ['--docx-loading-inline-start' as string]: `${navigationShift + reviewGutter.inlineStart}px`,
+    ['--docx-loading-right' as string]: `${reviewGutter.inlineEnd}px`,
+    ...style,
+  } as CSSProperties;
   return (
-    <div className={classes} style={style} role="status" aria-live="polite">
+    <div className={classes} style={loadingStyle} role="status" aria-live="polite">
       {children ?? (
         <div className="docx-editor__loading-page">
           <span className="docx-editor-sr-only">{t('loading.label')}</span>

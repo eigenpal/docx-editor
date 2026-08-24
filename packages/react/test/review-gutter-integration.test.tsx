@@ -17,6 +17,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { DocxEditorLoading } from '../src/editor/DocxEditorLoading.tsx';
 import { ReviewRailContext } from '../src/editor/context.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -119,6 +120,7 @@ describe('the viewport’s review gutter', () => {
           <DocxEditorContent />
         </DocxEditorViewport>
         <RailStub />
+        <DocxEditorLoading when overlay />
       </DocxEditorRoot>
     );
     await settle();
@@ -126,6 +128,9 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.getAttribute('data-review-pane')).toBe('open');
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
+    const loading = container.querySelector('.docx-editor__loading') as HTMLElement;
+    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('44px');
+    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('44px');
   });
 
   test('a rail on a wide viewport keeps the full column, with nothing at the start', async () => {
@@ -136,6 +141,7 @@ describe('the viewport’s review gutter', () => {
           <DocxEditorContent />
         </DocxEditorViewport>
         <RailStub />
+        <DocxEditorLoading when overlay />
       </DocxEditorRoot>
     );
     await settle();
@@ -143,5 +149,8 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.getAttribute('data-review-pane')).toBe('open');
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
+    const loading = container.querySelector('.docx-editor__loading') as HTMLElement;
+    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
+    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('316px');
   });
 });

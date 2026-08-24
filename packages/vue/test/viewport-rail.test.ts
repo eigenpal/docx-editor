@@ -4,6 +4,7 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { defineComponent, h, onMounted, onUnmounted } from 'vue';
 import { DocxEditorNavigation } from '../src/editor/navigation';
+import { DocxEditorLoading } from '../src/editor/DocxEditorLoading';
 import { useReviewRailRegistry } from '../src/editor/context';
 import { useNavigationLayoutStore } from '../src/editor/navigation/navigation-layout';
 import { flush, mountEditorTree } from './helpers/mount';
@@ -64,6 +65,7 @@ describe('DocxEditorViewport review rail', () => {
     const view = mountEditorTree(() => [
       h(RailRegistrar),
       h(DocxEditorNavigation, { t: (key: string) => key }),
+      h(DocxEditorLoading, { when: true, overlay: true }),
     ]);
     await flush();
     const scroller = view.container.querySelector(
@@ -76,6 +78,9 @@ describe('DocxEditorViewport review rail', () => {
     expect(Number.parseFloat(shift)).toBeGreaterThanOrEqual(0);
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
+    const loading = view.container.querySelector('.docx-editor__loading') as HTMLElement;
+    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
+    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('316px');
     view.unmount();
   });
 
