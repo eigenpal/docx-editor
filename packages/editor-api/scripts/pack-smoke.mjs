@@ -10,12 +10,12 @@
 //   - a bundle that resolves at build time and throws on `import` in a plain Node process;
 //   - `require()` of the CJS output returning something a consumer cannot use;
 //   - the font shaper, the editor lane or a Node builtin leaking into the SERVER bundle;
-//   - a bare import other than the declared core dependency, or core being inlined and creating
+//   - a bare import other than the declared core peer, or core being inlined and creating
 //     a second engine in a page that already has one through an adapter.
 //
 // So this packs the package with `npm pack`, unpacks it into a temporary directory, and drives the
 // unpacked files with a plain `node`. No registry and no network: the unpacked package is linked to
-// the workspace's built core, exactly the one declared runtime dependency a real install provides.
+// the workspace's built core, exactly the one declared peer dependency a real install resolves.
 
 import { spawnSync } from 'node:child_process';
 import {
@@ -217,8 +217,8 @@ try {
     'dist/index.mjs imports a Node builtin, so it no longer runs in a worker'
   );
   check(
-    manifest.dependencies?.['@docx-editor.dev/core'],
-    'the package does not declare the external core engine as a dependency'
+    manifest.peerDependencies?.['@docx-editor.dev/core'],
+    'the package does not declare the external core engine as a peer dependency'
   );
   check(
     serverBundle.includes('@docx-editor.dev/core/automation'),
@@ -233,7 +233,7 @@ try {
     'dist/browser.mjs does not reach the editor lane'
   );
 
-  // Core is the only bare runtime dependency. Keeping it external is the one-core invariant:
+  // Core is the only bare specifier, declared as a peer. Keeping it external is the one-core invariant:
   // browser adapters and automation must resolve the same engine copy. Any other bare import is an
   // undeclared bundle leak, including the font shaper deliberately externalized for resolution.
   for (const name of ['dist/index.mjs', 'dist/index.js', 'dist/browser.mjs', 'dist/browser.js']) {

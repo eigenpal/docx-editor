@@ -115,30 +115,30 @@ describe('what the package depends on', () => {
     expect(declared.filter((name) => forbidden.includes(name))).toEqual([]);
   });
 
-  test('the engine is a runtime dependency, resolved rather than carried', () => {
+  test('the engine is a peer dependency, resolved rather than carried', () => {
     // `@docx-editor.dev/core` is a published package and stays external in both outputs, so a
     // consumer resolves one copy of the engine. Inlining it would put a second engine in this
     // tarball, and a page running this next to the adapter would hold two instances.
     // A plain range, never `workspace:*`: that protocol survives `changeset version` and
     // `npm publish` untouched, so it would reach the tarball and fail the consumer's
     // install. `scripts/__tests__/published-manifests.test.ts` holds the rule for every
-    // package; this asserts the range still points at the engine.
-    expect(manifest.dependencies?.['@docx-editor.dev/core']).toMatch(/^\^\d+\.\d+\.\d+/);
-    expect(Object.keys(manifest.devDependencies ?? {})).not.toContain('@docx-editor.dev/core');
+    // package; this asserts the range still points at the engine. Why the engine is a PEER
+    // rather than a regular dependency is `package-dependencies.test.ts`, next to this file.
+    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toMatch(/^\^\d+\.\d+\.\d+/);
   });
 
-  test('there are no peer dependencies left to be optional about', () => {
-    expect(manifest.peerDependencies).toBeUndefined();
+  test('the engine is the only peer dependency, and it is required', () => {
+    expect(Object.keys(manifest.peerDependencies ?? {})).toEqual(['@docx-editor.dev/core']);
     expect(manifest.peerDependenciesMeta).toBeUndefined();
   });
 
-  test('the engine is the only runtime dependency', () => {
+  test('there are no runtime dependencies left to nest', () => {
     // Everything else either bundles or is external for a build reason rather than a consumer
     // one. `harfbuzzjs` is listed as external in the tsup config only so the build can skip
     // RESOLVING the shaper the layout pass loads dynamically — the emitted bundles do not
     // mention it, which `scripts/pack-smoke.mjs` asserts against the tarball itself. A
     // dependency declared here that no output imports would be install weight for nothing.
-    expect(Object.keys(manifest.dependencies ?? {})).toEqual(['@docx-editor.dev/core']);
+    expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);
   });
 });
 

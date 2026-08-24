@@ -32,7 +32,7 @@ export default defineConfig({
   // redistributes on its own account.
   metafile: true,
   // `@docx-editor.dev/core` stays external by tsup's workspace-package behavior. It is a published
-  // package and a declared dependency, so the consumer resolves one copy of the engine. Inlining
+  // package and a declared peer, so the consumer resolves one copy of the engine. Inlining
   // it here would give a page running this alongside an adapter two engines.
   // `harfbuzzjs` is external to get the build to RESOLVE, not because the output needs it.
   //
@@ -43,6 +43,6 @@ export default defineConfig({
   //
   // Nothing then mentions `harfbuzzjs`: `createBrowserAutomationHost` takes an editor the host
   // already created, so this package needs the host adapter and not the text-measurement pass.
-  // `scripts/pack-smoke.mjs` allows only the declared core dependency to remain bare.
+  // `scripts/pack-smoke.mjs` allows only the declared core peer to remain bare.
   external: ['harfbuzzjs'],
 });

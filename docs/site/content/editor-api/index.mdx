@@ -13,8 +13,11 @@ seoTitle: 'Office.js-compatible DOCX editing API'
 You describe work against objects (paragraphs, ranges, comments, revisions, content controls) and one `sync()` sends it as a single ordered batch that either applies whole or not at all. The same code runs in two places: on a server over DOCX bytes, or in a page against a document a reader already has open.
 
 ```bash
-npm install @docx-editor.dev/editor-api
+npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 ```
+
+`@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
+project must resolve exactly one copy of it, shared with any editor adapter you install.
 
 ## On a server
 

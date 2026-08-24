@@ -23,7 +23,7 @@ applies whole or not at all. The same code drives bytes on a server and a docume
 already has open in a page.
 
 ```bash
-npm install @docx-editor.dev/editor-api
+npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 ```
 
 ## On a server
