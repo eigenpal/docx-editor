@@ -11,6 +11,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { writeClipboardText } from './clipboard-write.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
+import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import {
   execEditHeaderFooter,
   execInsertPageField,
@@ -274,6 +275,37 @@ export function execEditorCommand(
     case 'deleteText':
       mounted.deleteSelection();
       break;
+    case 'proposeInsertion':
+    case 'proposeDeletion':
+    case 'proposeReplacement': {
+      if (command.target !== undefined) {
+        const resolved = resolveDocTargetSelection(mounted, command.target);
+        if (!resolved.ok) {
+          return { ok: false, code: resolved.code, reason: resolved.reason };
+        }
+        mounted.setSelection(resolved.selection);
+      }
+      const kind =
+        command.type === 'proposeInsertion'
+          ? 'insertion'
+          : command.type === 'proposeDeletion'
+            ? 'deletion'
+            : 'replacement';
+      const text =
+        command.type === 'proposeInsertion'
+          ? command.text
+          : command.type === 'proposeReplacement'
+            ? command.replaceWith
+            : '';
+      if (!mounted.proposeTextChange(kind, text, command.author)) {
+        return {
+          ok: false,
+          code: 'invalidArgs',
+          reason: mounted.state().lastRejection ?? `${command.type} was refused`,
+        };
+      }
+      break;
+    }
     case 'undo':
       mounted.undo();
       break;

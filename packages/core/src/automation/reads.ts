@@ -51,6 +51,8 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { sectionReads, type AutomationSectionRead } from './sections.ts';
 import { styleIndex, type AutomationStyleIndex } from './styles.ts';
 import { BODY_STORY, HEADER_FOOTER_VARIANTS, storyKey, type AutomationStoryId } from './stories.ts';
+import type { AutomationTextProjection } from './operations.ts';
+import { projectParagraphText, type ProjectedParagraphText } from './text-projection.ts';
 
 /** The separator Word's own text properties put at a paragraph mark. */
 export const PARAGRAPH_MARK = '\r';
@@ -122,9 +124,14 @@ export interface AutomationStoryReads {
    */
   node(paragraphId: string): OoxmlNode | null;
   /** A paragraph's text in model-offset vocabulary, or null when it is not in the story. */
-  paragraphText(paragraphId: string): string | null;
+  paragraphText(paragraphId: string, projection?: AutomationTextProjection): string | null;
+  /** A paragraph projection with mappings back to model offsets. */
+  projectedText(
+    paragraphId: string,
+    projection?: AutomationTextProjection
+  ): ProjectedParagraphText | null;
   /** The story's paragraphs joined by a paragraph mark. */
-  text(): string;
+  text(projection?: AutomationTextProjection): string;
   /**
    * What the package's `styles.xml` declares, for the reads and writes that speak style NAMES.
    *
@@ -239,13 +246,27 @@ function storyReadsOver(
   // Text is read lazily and memoized: a story search touches every paragraph, while reading
   // one paragraph must not walk the whole body.
   const texts = new Map<string, string>();
-  const textOf = (paragraphId: string): string | null => {
+  const rawTextOf = (paragraphId: string): string | null => {
     if (!positions.has(paragraphId)) return null;
     const cached = texts.get(paragraphId);
     if (cached !== undefined) return cached;
     const text = paragraphTextOf(part, paragraphId) ?? '';
     texts.set(paragraphId, text);
     return text;
+  };
+  const projections = new Map<string, ProjectedParagraphText>();
+  const projectionOf = (
+    paragraphId: string,
+    projection: AutomationTextProjection = 'all'
+  ): ProjectedParagraphText | null => {
+    const node = byId.get(paragraphId);
+    if (!node || node.kind !== 'paragraph') return null;
+    const key = `${paragraphId}:${projection}`;
+    const cached = projections.get(key);
+    if (cached) return cached;
+    const projected = projectParagraphText(node, rawTextOf(paragraphId) ?? '', projection);
+    projections.set(key, projected);
+    return projected;
   };
 
   return {
@@ -260,11 +281,13 @@ function storyReadsOver(
     paragraph(paragraphId) {
       const node = byId.get(paragraphId);
       if (!node) return null;
-      return { nodeId: paragraphId, paraId: paraIdOf(node), text: textOf(paragraphId) ?? '' };
+      return { nodeId: paragraphId, paraId: paraIdOf(node), text: rawTextOf(paragraphId) ?? '' };
     },
     node: (paragraphId) => byId.get(paragraphId) ?? null,
-    paragraphText: textOf,
-    text: () => paragraphIds.map((id) => textOf(id) ?? '').join(PARAGRAPH_MARK),
+    paragraphText: (paragraphId, projection) => projectionOf(paragraphId, projection)?.text ?? null,
+    projectedText: projectionOf,
+    text: (projection) =>
+      paragraphIds.map((id) => projectionOf(id, projection)?.text ?? '').join(PARAGRAPH_MARK),
     styles,
   };
 }

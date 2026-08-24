@@ -58,5 +58,6 @@ export type {
   AutomationSearchOptions,
   AutomationSpan,
   AutomationSpanRef,
+  AutomationTextProjection,
   AutomationValue,
 } from '@docx-editor.dev/core/automation';

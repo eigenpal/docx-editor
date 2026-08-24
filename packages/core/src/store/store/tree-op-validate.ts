@@ -66,6 +66,7 @@ import {
   validateRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
 import { validateInsertTable } from './tree-op-insert-table.ts';
+import { validateReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
@@ -450,6 +451,9 @@ function validateRemoveContentControl(part: OoxmlPart, controlId: string): TreeO
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
   if (isDrawingTreeDocOp(op)) return validateDrawingOp(part, op);
+  if (op.op === 'replaceStoryBlocks') {
+    return validateReplaceStoryBlocks(part, op.storyRootId, op.paragraphs);
+  }
 
   // A NAMED OWNER IS AN ASSERTION ABOUT THE DOCUMENT, so it is checked before anything acts on
   // it. `inside` decides where the text goes AND what the refusals are resolved against — a name

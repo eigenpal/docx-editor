@@ -118,6 +118,7 @@ import {
   type LocaleStrings,
 } from '@docx-editor.dev/i18n';
 import { execEditorCommand } from './docx-editor-exec.ts';
+import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import {
   customNodeDiagnosticReporter,
@@ -1974,6 +1975,41 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       const gated = gateCommand(command, surface, mode, options);
       if (!gated.ok) return gated.refusal;
+      if (
+        command.type === 'proposeInsertion' ||
+        command.type === 'proposeDeletion' ||
+        command.type === 'proposeReplacement'
+      ) {
+        const writer = (command.author ?? config.author ?? '').trim();
+        if (!writer) {
+          return {
+            ok: false,
+            code: 'invalidArgs',
+            reason: `${command.type} requires a non-empty author`,
+          };
+        }
+        const resolved =
+          command.target === undefined
+            ? { ok: true as const, selection: surface!.state().selection }
+            : resolveDocTargetSelection(surface!, command.target);
+        if (!resolved.ok) return resolved;
+        const { anchor, head } = resolved.selection;
+        const collapsed = anchor.paragraphId === head.paragraphId && anchor.offset === head.offset;
+        if (command.type !== 'proposeInsertion' && collapsed) {
+          return {
+            ok: false,
+            code: 'invalidArgs',
+            reason: `${command.type} needs a non-collapsed selection`,
+          };
+        }
+        if (command.type === 'proposeReplacement' && anchor.paragraphId !== head.paragraphId) {
+          return {
+            ok: false,
+            code: 'unsupported',
+            reason: 'tracked replacement across paragraph marks is not supported',
+          };
+        }
+      }
       if (isImageCommand(command) && imageCommandHasIdentityFields(command)) {
         const pre = captureImageMutationPreconditions(editor);
         if (pre) {

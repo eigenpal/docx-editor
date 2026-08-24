@@ -419,6 +419,33 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
             supported: false,
             reason: 'DocTarget addressing is not supported; deletion removes the selection',
           };
+    case 'proposeInsertion':
+    case 'proposeReplacement': {
+      const text = command.type === 'proposeInsertion' ? command.text : command.replaceWith;
+      if (typeof text !== 'string' || /[\r\n\v\f\u2028\u2029]/.test(text)) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: `${command.type} requires text without a paragraph mark`,
+        };
+      }
+      if (command.author !== undefined && command.author.trim().length === 0) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: `${command.type} requires a non-empty author`,
+        };
+      }
+      return { supported: true, mutating: true };
+    }
+    case 'proposeDeletion':
+      return command.author !== undefined && command.author.trim().length === 0
+        ? {
+            supported: false,
+            code: 'invalidArgs',
+            reason: 'proposeDeletion requires a non-empty author',
+          }
+        : { supported: true, mutating: true };
     case 'setPageSetup': {
       const dims = [command.pageWidth, command.pageHeight];
       const margins = [

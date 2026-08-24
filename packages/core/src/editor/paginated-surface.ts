@@ -926,6 +926,66 @@ export function mountPaginatedSurface(
     }, 0);
   }
 
+  function commitProposedTextChange(
+    kind: 'insertion' | 'deletion' | 'replacement',
+    text: string,
+    authorOverride?: string
+  ): boolean {
+    flushTypeBuffer();
+    const author = authorOverride?.trim() || options.author?.trim();
+    if (!author) {
+      lastRejection = 'tracked changes need a non-empty author';
+      options.onChange?.(currentState());
+      return false;
+    }
+    const revision = { author, date: trackedDate() };
+    const range = orderedRange();
+    const collapsed =
+      range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset;
+    if (kind !== 'insertion' && collapsed) {
+      lastRejection = `${kind} needs a non-collapsed selection`;
+      options.onChange?.(currentState());
+      return false;
+    }
+    if (kind === 'replacement' && range.from.paragraphId !== range.to.paragraphId) {
+      lastRejection = 'tracked replacement across paragraph marks is not supported';
+      options.onChange?.(currentState());
+      return false;
+    }
+
+    const plan =
+      kind === 'insertion'
+        ? { ops: [] as readonly TreeDocOp[], collapseTo: range.from }
+        : deleteSelectionPlan();
+    const ops = attributeTrackedOps(plan.ops, revision);
+    let caret = plan.collapseTo;
+    if (kind === 'insertion' || kind === 'replacement') {
+      const insertAt =
+        kind === 'replacement'
+          ? range.to.offset - retractedByOwnInsertion(range.from, range.to)
+          : range.from.offset;
+      ops.push({
+        op: 'insertText',
+        paragraphId: plan.collapseTo.paragraphId,
+        offset: insertAt,
+        text,
+        revision,
+      });
+      caret = { paragraphId: plan.collapseTo.paragraphId, offset: insertAt + text.length };
+    }
+
+    let committed = false;
+    commit(
+      () => {
+        const result = applyOps(ops, selectionMark(), caretMark(caret));
+        committed = result.committed;
+        return result;
+      },
+      () => collapsedAt(caret)
+    );
+    return committed;
+  }
+
   const scheduler = createLayoutScheduler({
     // The DOCUMENT's geometry, exactly as the first paint uses. Omitting it meant the first
     // paint honoured A4 and the first committed edit silently repaginated onto Letter — every
@@ -2173,7 +2233,7 @@ export function mountPaginatedSurface(
     // header, a footer or a note is applied to that story rather than to the body.
     const attributed = trackedOps(ops);
     const result = session.applyTreeOps(attributed, selectionBefore, selectionAfter, scope);
-    if (result.committed && editingMode === 'suggest' && attributed.some(isTrackedEdit)) {
+    if (result.committed && attributed.some(isTrackedEdit)) {
       runtimeOptions.onTrackedChange?.();
     }
     return result;
@@ -2259,15 +2319,20 @@ export function mountPaginatedSurface(
     }
   }
 
-  /** Suggesting attributes text and structural row edits as Word tracked changes. */
-  function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
-    const author = options.author?.trim();
-    // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
-    // to write. The edit lands untracked rather than being refused: losing the user's typing
-    // to a missing configuration value would be the worse failure.
-    if (editingMode !== 'suggest' || !author) return [...ops];
-    const revision = { author, date: trackedDate() };
+  function attributeTrackedOps(
+    ops: readonly TreeDocOp[],
+    revision: import('../store/store/tree-op-types.ts').RevisionAttributionInput
+  ): TreeDocOp[] {
     return ops.flatMap((op): TreeDocOp[] => {
+      if (
+        (op.op === 'insertText' ||
+          op.op === 'deleteText' ||
+          op.op === 'insertTableRow' ||
+          op.op === 'deleteTableRow') &&
+        op.revision !== undefined
+      ) {
+        return [op];
+      }
       if (
         op.op === 'insertText' ||
         op.op === 'deleteText' ||
@@ -2306,6 +2371,16 @@ export function mountPaginatedSurface(
       }
       return [op];
     });
+  }
+
+  /** Suggesting attributes text and structural row edits as Word tracked changes. */
+  function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
+    const author = options.author?.trim();
+    // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
+    // to write. The edit lands untracked rather than being refused: losing the user's typing
+    // to a missing configuration value would be the worse failure.
+    if (editingMode !== 'suggest' || !author) return [...ops];
+    return attributeTrackedOps(ops, { author, date: trackedDate() });
   }
 
   /**
@@ -3616,6 +3691,7 @@ export function mountPaginatedSurface(
         () => collapsedAt({ paragraphId: start.paragraphId, offset: insertAt + text.length })
       );
     },
+    proposeTextChange: (kind, text, author) => commitProposedTextChange(kind, text, author),
 
     // The newline-aware sibling of `type`, declared below in this same scope. On the
     // contract because text arriving from OUTSIDE the editor — a paste from the clipboard,

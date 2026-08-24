@@ -163,6 +163,42 @@ model defines which operations to expose, how to describe them and how to handle
 such as `add_comment` performs its document work inside a `run` block. Keep its chat UI with the
 application's other chrome.
 
+### Choose one revision text projection
+
+The `text` property and a search without options use the `all` projection. This compatibility
+projection includes ordinary text, pending deletions, pending insertions, and both sides of a
+pending replacement.
+
+Use the `vanilla` projection when an agent must read the document before pending changes are
+accepted. It has these rules:
+
+- Ordinary text remains unchanged.
+- A pending deletion remains visible and searchable.
+- A pending insertion is hidden and is not searchable.
+- A pending replacement shows its deleted original and hides its inserted replacement.
+
+Use the same projection for the read and the search:
+
+```ts
+const body = context.document.body;
+const text = body.getText({ projection: 'vanilla' });
+const matches = body.search('original phrase', {
+  projection: 'vanilla',
+});
+matches.load('items');
+await context.sync();
+
+console.log(text.value);
+```
+
+A range returned by a `vanilla` search keeps that projection. Its `text` property, nested
+searches, and `getText()` calls use the same view. The range endpoints remain model offsets, so
+`insertText()`, `insertComment()`, and `select()` target the text that the search returned.
+
+Selection does not change the insertion rule. `range.select()` selects the full range, so the
+reader's next text insertion replaces that phrase. Use `range.select('End')` to collapse the caret
+and insert after the phrase.
+
 <Cards>
   <Card title="Office.js compatibility" href="/docs/2.x/editor-api/office-js-api">
     The supported subset, how compatibility is verified, and what it omits.

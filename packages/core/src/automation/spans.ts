@@ -12,7 +12,12 @@
 
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationEndpoint, AutomationHandle, AutomationSpan } from './protocol.ts';
-import type { AutomationParagraphRef, AutomationPoint, AutomationSpanRef } from './operations.ts';
+import type {
+  AutomationParagraphRef,
+  AutomationPoint,
+  AutomationSpanRef,
+  AutomationTextProjection,
+} from './operations.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyKey, type AutomationStoryId } from './stories.ts';
 
@@ -281,20 +286,26 @@ export function spanOffsets(
 export function spanText(
   span: ResolvedSpan,
   reads: AutomationStoryReads,
-  paragraphMark: string
+  paragraphMark: string,
+  projection: AutomationTextProjection = 'all'
 ): string {
   if (!span) return '';
   const ids = spanParagraphIds(span, reads);
   if (ids.length === 1) {
-    const text = reads.paragraphText(span.start.paragraphId) ?? '';
-    return text.slice(span.start.offset, span.end.offset);
+    return (
+      reads
+        .projectedText(span.start.paragraphId, projection)
+        ?.sliceRaw(span.start.offset, span.end.offset) ?? ''
+    );
   }
   return ids
     .map((id, position) => {
-      const text = reads.paragraphText(id) ?? '';
-      if (position === 0) return text.slice(span.start.offset);
-      if (position === ids.length - 1) return text.slice(0, span.end.offset);
-      return text;
+      const projected = reads.projectedText(id, projection);
+      if (!projected) return '';
+      const rawLength = (reads.paragraphText(id) ?? '').length;
+      if (position === 0) return projected.sliceRaw(span.start.offset, rawLength);
+      if (position === ids.length - 1) return projected.sliceRaw(0, span.end.offset);
+      return projected.text;
     })
     .join(paragraphMark);
 }

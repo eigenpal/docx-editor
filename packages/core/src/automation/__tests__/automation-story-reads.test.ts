@@ -81,6 +81,82 @@ describe("a story's text", () => {
   });
 });
 
+describe('revision text projections', () => {
+  const revisions =
+    '<w:p><w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+    '<w:del w:id="1" w:author="Ada"><w:r><w:delText>gone</w:delText></w:r></w:del>' +
+    '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>';
+
+  test('preserves all revision text by default and exposes the vanilla document explicitly', () => {
+    const host = open(docx(revisions));
+    const { body } = roots(host);
+    const paragraph = paragraphsOf(host, body)[0]!;
+    const response = host.execute({
+      operations: [
+        { op: 'getText', target: body },
+        { op: 'getText', target: body, projection: 'vanilla' },
+        { op: 'getText', target: paragraph, projection: 'vanilla' },
+      ],
+    });
+    expect(textAt(response, 0)).toBe('keep goneadded');
+    expect(textAt(response, 1)).toBe('keep gone');
+    expect(textAt(response, 2)).toBe('keep gone');
+  });
+
+  test('searches, reads, and edits through one vanilla offset mapping', () => {
+    const replacement =
+      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
+      '<w:del w:id="1" w:author="Ada"><w:r><w:delText>old</w:delText></w:r></w:del>' +
+      '<w:ins w:id="2" w:author="Ada"><w:r><w:t>new</w:t></w:r></w:ins>' +
+      '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>';
+    const host = open(docx(replacement));
+    const { body } = roots(host);
+    const searched = host.execute({
+      operations: [
+        {
+          op: 'search',
+          scope: { body },
+          text: 'before old after',
+          options: { projection: 'vanilla' },
+        },
+        { op: 'search', scope: { body }, text: 'new', options: { projection: 'vanilla' } },
+      ],
+    });
+    const [span] = spansAt(searched, 0);
+    expect(span).toBeDefined();
+    expect(spansAt(searched, 1)).toEqual([]);
+    expect(
+      textAt(
+        host.execute({
+          operations: [{ op: 'getSpanText', span: span!, projection: 'vanilla' }],
+        }),
+        0
+      )
+    ).toBe('before old after');
+
+    expect(
+      host.execute({ operations: [{ op: 'replaceSpan', span: span!, text: 'clean' }] }).ok
+    ).toBe(true);
+    expect(storyText(host, body)).toBe('clean');
+  });
+
+  test('refuses an unknown projection instead of silently choosing a view', () => {
+    const host = open(docx(revisions));
+    const { body } = roots(host);
+    const response = host.execute({
+      operations: [
+        {
+          op: 'search',
+          scope: { body },
+          text: 'gone',
+          options: { projection: 'resolved' as 'all' },
+        },
+      ],
+    });
+    expect(refusal(response)).toBe('unsupported-content');
+  });
+});
+
 describe('paragraph identity', () => {
   test("is the document's own w14:paraId when the file wrote one", () => {
     const host = open(docx(pWithId('alpha', '1A2B3C4D')));

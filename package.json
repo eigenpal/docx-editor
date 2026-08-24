@@ -5,6 +5,7 @@
   "workspaces": [
     "packages/*",
     "examples/agent",
+    "examples/write-agent",
     "examples/astro",
     "examples/automation",
     "examples/custom-nodes",
@@ -63,6 +64,7 @@
     "demo-doc:build": "bun scripts/demo-doc/build.ts",
     "dev": "ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true bun run --filter './examples/vite' --filter './examples/vue' dev",
     "dev:agent": "cd examples/agent && npm run dev",
+    "dev:write-agent": "bun run --filter './examples/write-agent' dev",
     "dev:astro": "cd examples/astro && npm run dev",
     "dev:custom-nodes": "bun run --filter './examples/custom-nodes' dev",
     "dev:demo": "bash examples/dev-all.sh",

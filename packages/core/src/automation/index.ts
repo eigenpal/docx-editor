@@ -87,6 +87,7 @@ export {
   type AutomationSearchOptions,
   type AutomationSelectionMode,
   type AutomationSpanRef,
+  type AutomationTextProjection,
 } from './operations.ts';
 
 // The headless host. The browser host adapter ships from the editor subpath, because it takes

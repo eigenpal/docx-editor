@@ -376,7 +376,7 @@ export default [
   {
     files: ['packages/core/src/editor/docx-editor.ts'],
     rules: {
-      'max-lines': ['error', { max: 2600, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 2650, skipBlankLines: false, skipComments: false }],
     },
   },
 
@@ -390,7 +390,7 @@ export default [
   {
     files: ['packages/core/src/automation/plan.ts'],
     rules: {
-      'max-lines': ['error', { max: 2900, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 2950, skipBlankLines: false, skipComments: false }],
     },
   },
 

@@ -26,6 +26,7 @@ import type {
 import type { EditorScope, ViewScope } from '../contracts/editor.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 import type { StoryScope } from '@docx-editor.dev/core/store';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hitTestFragments, pageAtY, type SemanticHit } from '../layout/semantic-hit-test.ts';
 import { parseNoteScopeId } from '../store/package/note-nodes.ts';
 import { lineSegments } from '../layout/line-segments.ts';
@@ -54,6 +55,35 @@ export function isHeaderFooterScope(
   scope: EditorScope | ViewScope | null | undefined
 ): scope is HeaderFooterViewScope {
   return scope?.kind === 'headerFooter' && typeof scope.rId === 'string' && scope.rId.length > 0;
+}
+
+type StoryScopeLookup = Pick<
+  TreeDocxSessionView,
+  'part' | 'headerFooterResolutionBySection' | 'partFor'
+>;
+
+/** Resolve a node's story from the canonical part name embedded in its id. */
+export function storyScopeOfNodeId(
+  session: StoryScopeLookup,
+  nodeId: string | undefined,
+  fallback: StoryScope
+): StoryScope {
+  const hash = nodeId?.indexOf('#') ?? -1;
+  const partName = hash === -1 ? '' : nodeId!.slice(0, hash);
+  if (partName.length === 0 || partName === session.part().name) return { kind: 'body' };
+  for (const section of session.headerFooterResolutionBySection()) {
+    for (const slots of [section.headers, section.footers]) {
+      for (const slot of slots.values()) {
+        if (slot.partName === partName) return { kind: 'headerFooter', rId: slot.rId };
+      }
+    }
+  }
+  for (const noteKind of ['footnote', 'endnote'] as const) {
+    if (session.partFor({ kind: 'notesPart', noteKind })?.name === partName) {
+      return { kind: 'notesPart', noteKind };
+    }
+  }
+  return fallback;
 }
 
 export function storyScopeOf(

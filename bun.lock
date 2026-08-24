@@ -254,11 +254,35 @@
         "vite": "^8.0.10",
       },
     },
+    "examples/write-agent": {
+      "name": "docx-editor-example-write-agent",
+      "dependencies": {
+        "@ai-sdk/openai": "^4.0.27",
+        "@ai-sdk/react": "^4.0.51",
+        "@docx-editor.dev/core": "workspace:*",
+        "@docx-editor.dev/editor-api": "workspace:*",
+        "@docx-editor.dev/pro": "workspace:*",
+        "@docx-editor.dev/react": "workspace:*",
+        "ai": "^7.0.48",
+        "fflate": "^0.8.2",
+        "next": "^16.2.7",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.0.0",
+        "@types/node": "^26.1.1",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.4",
+        "typescript": "^6.0.3",
+      },
+    },
     "packages/core": {
       "name": "@docx-editor.dev/core",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.6.0",
+        "@docx-editor.dev/i18n": "^2.7.0",
         "bidi-js": "1.0.3",
         "emf-converter": "2.0.2",
         "fast-xml-parser": "^5.10.1",
@@ -289,9 +313,9 @@
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "dependencies": {
-        "@docx-editor.dev/core": "^2.4.1",
+        "@docx-editor.dev/core": "^2.7.0",
       },
       "devDependencies": {
         "@microsoft/api-extractor": "^7.50.0",
@@ -301,7 +325,7 @@
     },
     "packages/fonts": {
       "name": "@docx-editor.dev/fonts",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "typescript": "^5.3.3",
@@ -309,7 +333,7 @@
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -317,7 +341,7 @@
     },
     "packages/nuxt": {
       "name": "@docx-editor.dev/nuxt",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "dependencies": {
         "@docx-editor.dev/vue": "^0.0.1",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
@@ -343,7 +367,7 @@
     },
     "packages/pro": {
       "name": "@docx-editor.dev/pro",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/i18n": "workspace:*",
@@ -377,9 +401,9 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.6.0",
+        "@docx-editor.dev/i18n": "^2.7.0",
         "@radix-ui/react-select": "^2.3.3",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -400,9 +424,9 @@
     },
     "packages/vue": {
       "name": "@docx-editor.dev/vue",
-      "version": "2.6.0",
+      "version": "2.7.0",
       "dependencies": {
-        "@docx-editor.dev/i18n": "^2.6.0",
+        "@docx-editor.dev/i18n": "^2.7.0",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
@@ -1782,6 +1806,8 @@
     "docx-editor-example-vite": ["docx-editor-example-vite@workspace:examples/vite"],
 
     "docx-editor-example-vue": ["docx-editor-example-vue@workspace:examples/vue"],
+
+    "docx-editor-example-write-agent": ["docx-editor-example-write-agent@workspace:examples/write-agent"],
 
     "dom-accessibility-api": ["dom-accessibility-api@0.5.16", "", {}, "sha512-X7BJ2yElsnOJ30pZF4uIIDfBEVgF4XEBxL9Bxhy6dnrm5hkzqmsWHGTiHqRiITNhMyFLyAiWndIJP7Z1NTteDg=="],
 
@@ -3740,6 +3766,8 @@
     "docx-editor-example-vue/vite": ["vite@8.1.5", "", { "dependencies": { "lightningcss": "^1.32.0", "picomatch": "^4.0.5", "postcss": "^8.5.17", "rolldown": "~1.1.5", "tinyglobby": "^0.2.17" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.3.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw=="],
 
     "docx-editor-example-vue/vue": ["vue@3.5.34", "", { "dependencies": { "@vue/compiler-dom": "3.5.34", "@vue/compiler-sfc": "3.5.34", "@vue/runtime-dom": "3.5.34", "@vue/server-renderer": "3.5.34", "@vue/shared": "3.5.34" }, "peerDependencies": { "typescript": "*" }, "optionalPeers": ["typescript"] }, "sha512-WdLBG9gm02OgJIG9axd5Hpx0TFLdzVgfG2evFFu8Rur5O/IoGc5cMjnjh3tPL6GnRGsYvUhBSKVPYVcxRKpMCA=="],
+
+    "docx-editor-example-write-agent/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "dom-serializer/entities": ["entities@4.5.0", "", {}, "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw=="],
 

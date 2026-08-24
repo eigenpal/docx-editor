@@ -58,24 +58,32 @@ const STYLES =
   '<w:rPr><w:sz w:val="32"/></w:rPr></w:style>' +
   '</w:styles>';
 
+function packageBytes(documentXml: string, stylesXml?: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        (stylesXml
+          ? '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+          : '') +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        (stylesXml ? `<Relationship Id="rId2" Type="${STYLES_REL}" Target="styles.xml"/>` : '') +
+        '</Relationships>'
+    ),
+    'word/document.xml': strToU8(documentXml),
+    ...(stylesXml ? { 'word/styles.xml': strToU8(stylesXml) } : {}),
+  });
+}
+
 /** Representative bytes: a style cascade, a table, inline furniture, section properties. */
-const REPRESENTATIVE: Uint8Array = zipSync({
-  '[Content_Types].xml': strToU8(
-    `<Types xmlns="${CT}">` +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
-      '</Types>'
-  ),
-  '_rels/.rels': strToU8(
-    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-  ),
-  'word/_rels/document.xml.rels': strToU8(
-    `<Relationships xmlns="${REL}"><Relationship Id="rId2" Type="${STYLES_REL}" Target="styles.xml"/></Relationships>`
-  ),
-  'word/document.xml': strToU8(DOCUMENT),
-  'word/styles.xml': strToU8(STYLES),
-});
+const REPRESENTATIVE = packageBytes(DOCUMENT, STYLES);
 
 function serverHost(bytes: Uint8Array = REPRESENTATIVE): AutomationHost {
   const opened = createServerAutomationHost(bytes);
@@ -83,21 +91,24 @@ function serverHost(bytes: Uint8Array = REPRESENTATIVE): AutomationHost {
   return opened.host;
 }
 
-function browserHost(): { host: AutomationHost; editor: DocxEditorInstance } {
+function browserHost(bytes: Uint8Array = REPRESENTATIVE): {
+  host: AutomationHost;
+  editor: DocxEditorInstance;
+} {
   const container = document.createElement('div');
-  const editor = createDocxEditor({ container, document: REPRESENTATIVE });
+  const editor = createDocxEditor({ container, document: bytes });
   if (!editor.surface) throw new Error('surface failed to mount');
   return { host: createBrowserAutomationHost(editor), editor };
 }
 
 /** The two hosts under test, plus the editor the browser one borrowed. */
-function bothHosts(): {
+function bothHosts(bytes: Uint8Array = REPRESENTATIVE): {
   server: AutomationHost;
   browser: AutomationHost;
   editor: DocxEditorInstance;
 } {
-  const { host, editor } = browserHost();
-  return { server: serverHost(), browser: host, editor };
+  const { host, editor } = browserHost(bytes);
+  return { server: serverHost(bytes), browser: host, editor };
 }
 
 /**
@@ -244,6 +255,57 @@ describe('the two hosts read the same document identically', () => {
     expect(observed.server).toEqual(observed.browser);
     expect(observed.server.changed).toBe(false);
     expect(observed.server.events).toEqual([]);
+  });
+});
+
+describe('revision projections use one automation contract in both hosts', () => {
+  test('vanilla read, search, range read, and edit agree', () => {
+    const revisionDocument =
+      `<w:document xmlns:w="${W}"><w:body><w:p>` +
+      '<w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+      '<w:del w:id="1" w:author="Ada"><w:r><w:delText>gone</w:delText></w:r></w:del>' +
+      '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins>' +
+      '</w:p></w:body></w:document>';
+    const hosts = bothHosts(packageBytes(revisionDocument));
+    const run = (host: AutomationHost): unknown => {
+      const { body } = handlesOf(host);
+      const reads = host.execute({
+        operations: [
+          { op: 'getText', target: body },
+          { op: 'getText', target: body, projection: 'vanilla' },
+          {
+            op: 'search',
+            scope: { body },
+            text: 'keep gone',
+            options: { projection: 'vanilla' },
+          },
+          { op: 'search', scope: { body }, text: 'added', options: { projection: 'vanilla' } },
+        ],
+      });
+      const hit = reads.results[2];
+      if (hit?.status !== 'ok' || hit.value.kind !== 'spans' || !hit.value.spans[0]) {
+        throw new Error('expected one vanilla search result');
+      }
+      const span = hit.value.spans[0];
+      const rangeRead = host.execute({
+        operations: [{ op: 'getSpanText', span, projection: 'vanilla' }],
+      });
+      const write = host.execute({
+        operations: [{ op: 'replaceSpan', span, text: 'kept' }],
+      });
+      return {
+        reads: reads.results,
+        rangeRead: rangeRead.results,
+        write: { ok: write.ok, changed: write.changed },
+        final: textOf(host, body),
+      };
+    };
+    const result = onBoth(hosts, run);
+    expect(normalizeTokens(result.server)).toEqual(normalizeTokens(result.browser));
+    expect(result.server).toMatchObject({
+      write: { ok: true, changed: true },
+      final: 'keptadded',
+    });
   });
 });
 

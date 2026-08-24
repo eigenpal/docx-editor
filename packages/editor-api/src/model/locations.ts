@@ -88,6 +88,6 @@ export const selectionMode = (value: unknown, target: string): SelectionMode =>
  */
 export function insertableText(value: unknown, target: string): string {
   if (typeof value !== 'string') fail({ code: 'InvalidArgument', target });
-  if (/[\r\n\v\f\u2028\u2029]/.test(value)) fail({ code: 'InvalidArgument', target });
+  if (/[\r\n\v\f\u2028\u2029]/.test(value)) fail({ code: 'ParagraphMarkInText', target });
   return value;
 }

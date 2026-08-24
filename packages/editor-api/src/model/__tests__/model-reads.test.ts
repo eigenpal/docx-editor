@@ -60,6 +60,57 @@ describe('the document and its body', () => {
   });
 });
 
+describe('revision text projections', () => {
+  const document = docx(
+    '<w:p><w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+      '<w:del w:id="1" w:author="Ada"><w:r><w:delText>gone</w:delText></w:r></w:del>' +
+      '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>'
+  );
+
+  test('keeps compatibility reads and offers a consistent vanilla read-search-range view', async () => {
+    const runtime = await serverRuntime(document);
+    const result = await runtime.run(async (context) => {
+      const body = context.document.body;
+      body.load('text');
+      const vanilla = body.getText({ projection: 'vanilla' });
+      const found = body.search('gone', { projection: 'vanilla' });
+      const inserted = body.search('added', { projection: 'vanilla' });
+      found.load('items');
+      inserted.load('items');
+      await context.sync();
+
+      const range = found.items[0]!;
+      range.load('text');
+      const explicitRange = range.getText();
+      await context.sync();
+      const before = {
+        compatibility: body.text,
+        vanilla: vanilla.value,
+        range: range.text,
+        explicitRange: explicitRange.value,
+        hiddenMatches: inserted.items.length,
+      };
+
+      range.insertText('kept', 'Replace');
+      await context.sync();
+      const after = body.getText({ projection: 'all' });
+      await context.sync();
+      return { before, after: after.value };
+    });
+
+    expect(result).toEqual({
+      before: {
+        compatibility: 'keep goneadded',
+        vanilla: 'keep gone',
+        range: 'gone',
+        explicitRange: 'gone',
+        hiddenMatches: 0,
+      },
+      after: 'keep keptadded',
+    });
+  });
+});
+
 describe('the paragraphs of a story', () => {
   test('are the paragraphs the document has, in reading order', async () => {
     const runtime = await serverRuntime();

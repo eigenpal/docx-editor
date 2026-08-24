@@ -24,11 +24,7 @@
 //    shape, one structural edit per paragraph per sync, is untouched.
 //
 import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-ops.ts';
-import {
-  findOccurrences,
-  isSearchableQuery,
-  SEARCH_MATCH_LIMIT,
-} from '../store/store/text-match.ts';
+import { isSearchableQuery } from '../store/store/text-match.ts';
 import {
   directParagraphProperties,
   mergedParagraphMarkProperties,
@@ -87,6 +83,7 @@ import {
 } from './links.ts';
 import { listReads, membershipIn, MAX_LIST_LEVEL, type AutomationListRead } from './lists.ts';
 import { pageSetupProperties, type AutomationSectionRead } from './sections.ts';
+import { projectedSearchSpans } from './search.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
@@ -722,6 +719,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     text: string,
     options: AutomationSearchOptions | undefined
   ): PlannedOperation => {
+    if (
+      options?.projection !== undefined &&
+      options.projection !== 'all' &&
+      options.projection !== 'vanilla'
+    )
+      return refuse('unsupported-content', 'unknown text projection', 'projection');
     if (options?.matchWildcards === true)
       return refuse(
         'unsupported-capability',
@@ -746,35 +749,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const requested = options?.limit;
     if (requested !== undefined && (!Number.isInteger(requested) || requested < 0))
       return refuse('invalid-offset', 'limit must be a non-negative integer', String(requested));
-    let budget = Math.min(requested ?? SEARCH_MATCH_LIMIT, SEARCH_MATCH_LIMIT);
-
-    const spans: AutomationSpan[] = [];
     // An empty story has nothing to scan. Answering no matches is the truth about it, and it is
     // not the same answer as a refusal — there is no error in searching a document with no text.
-    const ids = spanParagraphIds(scope, reads);
-    const last = ids.length - 1;
-    // Paragraph by paragraph, in reading order. A match never crosses a paragraph mark, which
-    // is what Word's Find does too: a paragraph break is a boundary, not a character to match.
-    for (const [position, paragraphId] of ids.entries()) {
-      if (budget <= 0) break;
-      const paragraphText = reads.paragraphText(paragraphId) ?? '';
-      const found = findOccurrences(paragraphText, text, budget, {
-        matchCase: options?.matchCase === true,
-        wholeWord: options?.matchWholeWord === true,
-        // The scope clips only its own two ends; everything between them is whole.
-        ...(position === 0 && scope ? { from: scope.start.offset } : {}),
-        ...(position === last && scope ? { to: scope.end.offset } : {}),
-      });
-      for (const occurrence of found.matches) {
-        const paragraph = handles.paragraph(paragraphId, reads.story);
-        spans.push({
-          start: { paragraph, offset: occurrence.start },
-          end: { paragraph, offset: occurrence.start + occurrence.length },
-        });
-      }
-      budget -= found.matches.length;
-    }
-    return query({ kind: 'spans', spans });
+    return query({
+      kind: 'spans',
+      spans: projectedSearchSpans(reads, scope, handles, text, options),
+    });
   };
 
   const planInsertText = (plan: StoryPlan, at: ResolvedPoint, text: string): PlannedOperation => {
@@ -976,6 +956,47 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       span: spanOf({ start, end: { ...start, offset: text.length } }),
     });
     return { ok: true, kind: 'command', ops, story: reads.story, answer };
+  };
+
+  const planReplaceStoryBlocks = (
+    plan: StoryPlan,
+    paragraphs: readonly string[]
+  ): PlannedOperation => {
+    if (
+      !Array.isArray(paragraphs) ||
+      paragraphs.length < 1 ||
+      paragraphs.length > 10_000 ||
+      paragraphs.some((text) => typeof text !== 'string' || PARAGRAPH_BREAKING.test(text))
+    ) {
+      return refuse(
+        'unsupported-content',
+        'replaceStoryBlocks needs 1-10000 strings without paragraph marks',
+        'paragraphs'
+      );
+    }
+    const pin = pinWrite(plan);
+    if (pin) return pin;
+    for (const paragraphId of plan.reads.paragraphIds) {
+      const conflict = claim(plan, paragraphId);
+      if (conflict) return conflict;
+    }
+    plan.order.splice(0, plan.order.length);
+    for (let index = 0; index < paragraphs.length; index += 1) {
+      insertSlot(plan, index);
+    }
+    return {
+      ok: true,
+      kind: 'command',
+      ops: [
+        {
+          op: 'replaceStoryBlocks',
+          storyRootId: plan.reads.root.id,
+          paragraphs,
+        },
+      ],
+      story: plan.reads.story,
+      answer: () => APPLIED,
+    };
   };
 
   const planInsertParagraph = (
@@ -1704,12 +1725,21 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
 
       case 'getText': {
+        if (
+          operation.projection !== undefined &&
+          operation.projection !== 'all' &&
+          operation.projection !== 'vanilla'
+        )
+          return refuse('unsupported-content', 'unknown text projection', 'projection');
         const body = handles.resolve(operation.target, 'body');
         if (body) {
           const story = storyOfHandle(operation.target, 'body', handles, packageReads);
           if (!story.ok)
             return refuse(story.code, 'that handle does not name a body', story.detail);
-          return query({ kind: 'text', text: story.value.text() });
+          return query({
+            kind: 'text',
+            text: story.value.text(operation.projection ?? 'all'),
+          });
         }
         const paragraph = resolveParagraphHandle(operation.target, handles, packageReads);
         if (!paragraph.ok)
@@ -1721,18 +1751,30 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = packageReads.story(paragraph.value.story);
         return query({
           kind: 'text',
-          text: story?.paragraphText(paragraph.value.paragraphId) ?? '',
+          text:
+            story?.paragraphText(paragraph.value.paragraphId, operation.projection ?? 'all') ?? '',
         });
       }
 
       case 'getSpanText': {
+        if (
+          operation.projection !== undefined &&
+          operation.projection !== 'all' &&
+          operation.projection !== 'vanilla'
+        )
+          return refuse('unsupported-content', 'unknown text projection', 'projection');
         const resolved = resolveSpanRef(operation.span, handles, packageReads);
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
         const story = storyOfSpanRef(operation.span, handles, packageReads);
         if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
         return query({
           kind: 'text',
-          text: spanText(resolved.value, story.value, PARAGRAPH_MARK),
+          text: spanText(
+            resolved.value,
+            story.value,
+            PARAGRAPH_MARK,
+            operation.projection ?? 'all'
+          ),
         });
       }
 
@@ -1786,6 +1828,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planReplaceSpan(planFor(story), resolved.value, operation.text);
+      }
+
+      case 'replaceStoryBlocks': {
+        const story = storyOfHandle(operation.body, 'body', handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+        return planReplaceStoryBlocks(planFor(story.value), operation.paragraphs);
       }
 
       case 'insertParagraph': {

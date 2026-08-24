@@ -460,6 +460,10 @@ const TREE_OP_REACH: {
   }),
   // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
+  replaceStoryBlocks: (op) => ({
+    kind: 'nodes',
+    targets: [{ nodeId: op.storyRootId, structural: true }],
+  }),
   // Page setup, section furniture and note numbering are properties OF the document. They change
   // no content, so no control's lock speaks to them; forms protection still does.
   setSectionProperties: () => ({ kind: 'documentProperties' }),

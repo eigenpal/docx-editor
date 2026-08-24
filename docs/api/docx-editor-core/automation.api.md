@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
 export const AUTOMATION_QUERY_OPERATIONS: readonly ["getDocument", "getBody", "getParagraphs", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
@@ -220,11 +220,13 @@ export type AutomationOperation =
 | {
     readonly op: 'getText';
     readonly target: AutomationHandle;
+    readonly projection?: AutomationTextProjection;
 }
 /** Text between two endpoints, with a carriage return at every paragraph mark crossed. */
 | {
     readonly op: 'getSpanText';
     readonly span: AutomationSpanRef;
+    readonly projection?: AutomationTextProjection;
 }
 /**
 * A paragraph's own identity as the DOCUMENT writes it (`w14:paraId`).
@@ -275,6 +277,17 @@ export type AutomationOperation =
     readonly op: 'replaceSpan';
     readonly span: AutomationSpanRef;
     readonly text: string;
+}
+/**
+* Replace a story's complete block structure with fresh plain paragraphs.
+*
+* This is the fresh-document operation. It removes tables, content controls, paragraph-level
+* section marks, comments, and revisions. A body's final page-level section properties survive.
+*/
+| {
+    readonly op: 'replaceStoryBlocks';
+    readonly body: AutomationHandle;
+    readonly paragraphs: readonly string[];
 }
 /**
 * Insert a paragraph beside another one. Answers the NEW paragraph's handle.
@@ -1079,6 +1092,7 @@ export interface AutomationSearchOptions {
     // (undocumented)
     readonly matchWholeWord?: boolean;
     readonly matchWildcards?: boolean;
+    readonly projection?: AutomationTextProjection;
 }
 
 // @public
@@ -1114,6 +1128,9 @@ export type AutomationStoryId = {
     readonly noteKind: NoteKind;
     readonly noteId: number;
 };
+
+// @public
+export type AutomationTextProjection = 'all' | 'vanilla';
 
 // @public
 export type AutomationUnsubscribe = () => void;

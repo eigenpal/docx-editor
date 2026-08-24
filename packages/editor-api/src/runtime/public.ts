@@ -58,6 +58,8 @@ export {
   type RevisionType,
   type SearchOptions,
   type SelectionMode,
+  type TextProjection,
+  type TextReadOptions,
 } from '../model/index.ts';
 export { ClientObject } from './client-object.ts';
 export { ClientResult } from './client-result.ts';

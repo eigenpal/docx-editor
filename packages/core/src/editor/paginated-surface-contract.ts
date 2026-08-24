@@ -380,6 +380,12 @@ export interface PaginatedSurface {
   /** One-based page at the caret, or at the centre of the mounted viewport. */
   currentPage(mode?: 'viewport' | 'caret'): number;
   type(text: string): void;
+  /** Author one explicit tracked text change without changing the editing mode. */
+  proposeTextChange(
+    kind: 'insertion' | 'deletion' | 'replacement',
+    text: string,
+    author?: string
+  ): boolean;
   /**
    * Queue plain typed text for a batched commit at the caret.
    *

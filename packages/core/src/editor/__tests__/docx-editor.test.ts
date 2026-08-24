@@ -140,6 +140,16 @@ describe('createDocxEditor', () => {
     if (!spent.ok) expect(spent.reason).toBe('nothing to undo');
   });
 
+  test('insertText replaces a full selection rather than appending after it', () => {
+    const { editor } = mount(p('selected phrase'));
+    editor.surface!.selectAll();
+    expect(editor.exec({ type: 'insertText', text: 'replacement' })).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(editor.surface!.session.bodyText()).toBe('replacement');
+  });
+
   test('undo/redo enablement follows the history', () => {
     const { editor } = mount(p('ab'));
     expect(editor.can({ type: 'undo' }).ok).toBe(false);
