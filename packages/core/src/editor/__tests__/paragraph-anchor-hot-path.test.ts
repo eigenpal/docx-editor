@@ -6,8 +6,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
+import { nodeIndexTestRecorder } from '../../store/package/ooxml-edit.ts';
 import { selectionRangeOf } from '../docx-editor-derive.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { mountPaginatedSurface } from '../paginated-surface.ts';
 import type { DocRange } from '../../contracts/editor.ts';
 import type { PaginatedSurface } from '../paginated-surface-contract.ts';
 import { STORY_KINDS } from './story-parity-contract.ts';
@@ -58,6 +60,42 @@ function selectionRangeOracle(surface: PaginatedSurface): DocRange | null {
     ? { from: { paraId: headParaId }, to: { paraId: anchorParaId } }
     : { from: { paraId: anchorParaId }, to: { paraId: headParaId } };
 }
+
+const WARM_SIZES = [320, 2_560, 12_700] as const;
+
+function loadScaleDocument(paragraphCount: number): Uint8Array {
+  const body = Array.from({ length: paragraphCount }, (_, index) =>
+    para(`paragraph ${index}`)
+  ).join('');
+  return docxFromBody(body);
+}
+
+describe('direct paraIdOf warm path', () => {
+  for (const size of WARM_SIZES) {
+    test(`${size} paragraphs: warm insertText performs zero complete index builds`, () => {
+      const recorder = nodeIndexTestRecorder();
+      recorder.reset();
+      const container = document.createElement('div');
+      document.body.append(container);
+      const opened = mountPaginatedSurface(container, loadScaleDocument(size), { scale: 1 });
+      if (!opened.ok) throw new Error(opened.reason);
+      const surface = opened.surface;
+      try {
+        const paragraphId = surface.session.paragraphIds()[Math.floor(size / 2)]!;
+        expect(surface.session.paraIdOf(paragraphId)).toMatch(/^[0-9A-F]{8}$/);
+        expect(recorder.completeBuilds).toBeGreaterThan(0);
+        recorder.reset();
+        surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'x' }]);
+        expect(surface.session.paraIdOf(paragraphId)).toMatch(/^[0-9A-F]{8}$/);
+        expect(recorder.completeBuilds).toBe(0);
+        expect(recorder.completeVisits).toBe(0);
+      } finally {
+        surface.destroy();
+        container.remove();
+      }
+    });
+  }
+});
 
 describe('paragraph anchor hot path', () => {
   test('collapsed body caret resolves through session.paraIdOf', () => {

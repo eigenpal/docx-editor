@@ -73,35 +73,55 @@ describe('body paragraph section index parity', () => {
     const body = `${para('s0-a')}${breakPara('12240')}${para('s1-a')}${breakPara('15840')}${para('s2-a')}`;
     const part = load(body);
     const oracle = buildBodyParagraphSectionIndex(part);
-    const opened = mountPaginatedSurface(document.createElement('div'), docxFromBody(body), {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, docxFromBody(body), {
       scale: 1,
     });
     if (!opened.ok) throw new Error(opened.reason);
-    for (const [paragraphId, sectionIndex] of oracle) {
-      expect(bodyParagraphSectionIndexForSession(opened.surface.session, part, paragraphId)).toBe(
-        sectionIndex
-      );
+    try {
+      for (const [paragraphId, sectionIndex] of oracle) {
+        expect(bodyParagraphSectionIndexForSession(opened.surface.session, part, paragraphId)).toBe(
+          sectionIndex
+        );
+      }
+    } finally {
+      opened.surface.destroy();
+      container.remove();
     }
   });
 
   test('returns null for non-body ids without rebuilding on every lookup', () => {
     const part = load(`${para('one')}${para('two')}`);
-    const opened = mountPaginatedSurface(
-      document.createElement('div'),
-      docxFromBody(`${para('one')}${para('two')}`),
-      { scale: 1 }
-    );
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, docxFromBody(`${para('one')}${para('two')}`), {
+      scale: 1,
+    });
     if (!opened.ok) throw new Error(opened.reason);
-    const recorder = bodySectionIndexTestRecorder();
-    recorder.reset();
-    expect(
-      bodyParagraphSectionIndexForSession(opened.surface.session, part, '/word/header1.xml#missing')
-    ).toBeNull();
-    expect(
-      bodyParagraphSectionIndexForSession(opened.surface.session, part, '/word/footer2.xml#missing')
-    ).toBeNull();
-    expect(recorder.rebuilds).toBe(0);
-    expect(recorder.traversalVisits).toBe(0);
+    try {
+      const recorder = bodySectionIndexTestRecorder();
+      recorder.reset();
+      expect(
+        bodyParagraphSectionIndexForSession(
+          opened.surface.session,
+          part,
+          '/word/header1.xml#missing'
+        )
+      ).toBeNull();
+      expect(
+        bodyParagraphSectionIndexForSession(
+          opened.surface.session,
+          part,
+          '/word/footer2.xml#missing'
+        )
+      ).toBeNull();
+      expect(recorder.rebuilds).toBe(0);
+      expect(recorder.traversalVisits).toBe(0);
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
   });
 
   for (const size of WARM_SIZES) {
@@ -110,19 +130,25 @@ describe('body paragraph section index parity', () => {
       recorder.reset();
       const bytes = loadScaleDocument(size);
       const container = document.createElement('div');
+      document.body.append(container);
       const opened = mountPaginatedSurface(container, bytes, { scale: 1 });
       if (!opened.ok) throw new Error(opened.reason);
       const surface = opened.surface;
-      const paragraphId = middleParagraphId(surface.session.part());
-      bodySectionIndexOf(surface.session, paragraphId);
-      expect(recorder.rebuilds).toBe(1);
-      expect(recorder.traversalVisits).toBe(1);
-      for (let index = 0; index < 3; index += 1) {
-        surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'w' }]);
+      try {
+        const paragraphId = middleParagraphId(surface.session.part());
         bodySectionIndexOf(surface.session, paragraphId);
+        expect(recorder.rebuilds).toBe(1);
+        expect(recorder.traversalVisits).toBe(1);
+        for (let index = 0; index < 3; index += 1) {
+          surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'w' }]);
+          bodySectionIndexOf(surface.session, paragraphId);
+        }
+        expect(recorder.rebuilds).toBe(1);
+        expect(recorder.traversalVisits).toBe(1);
+      } finally {
+        surface.destroy();
+        container.remove();
       }
-      expect(recorder.rebuilds).toBe(1);
-      expect(recorder.traversalVisits).toBe(1);
     });
   }
 
@@ -131,13 +157,19 @@ describe('body paragraph section index parity', () => {
     recorder.reset();
     const bytes = loadScaleDocument(4);
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, bytes, { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
     const surface = opened.surface;
-    const paragraphId = surface.session.paragraphIds()[0]!;
-    bodySectionIndexOf(surface.session, paragraphId);
-    surface.session.applyTreeOps([{ op: 'splitParagraph', paragraphId, offset: 1 }]);
-    bodySectionIndexOf(surface.session, paragraphId);
-    expect(recorder.rebuilds).toBe(2);
+    try {
+      const paragraphId = surface.session.paragraphIds()[0]!;
+      bodySectionIndexOf(surface.session, paragraphId);
+      surface.session.applyTreeOps([{ op: 'splitParagraph', paragraphId, offset: 1 }]);
+      bodySectionIndexOf(surface.session, paragraphId);
+      expect(recorder.rebuilds).toBe(2);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
   });
 });

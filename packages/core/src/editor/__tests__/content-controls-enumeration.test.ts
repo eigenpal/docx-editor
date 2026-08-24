@@ -75,158 +75,204 @@ describe('contentControls enumeration cache', () => {
   test('returns frozen summaries that cannot be mutated by consumers', () => {
     const body = sdt('<w:tag w:val="frozen"/>', para('one'));
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, docxFromBody(body), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
-    const summaries = contentControlsOf(opened.surface);
-    expect(Object.isFrozen(summaries)).toBe(true);
-    expect(Object.isFrozen(summaries[0]!)).toBe(true);
-    expect(() => {
-      (summaries as ContentControlSummary[]).push({
-        id: 'x',
-        controlType: 'richText',
-      });
-    }).toThrow();
+    try {
+      const summaries = contentControlsOf(opened.surface);
+      expect(Object.isFrozen(summaries)).toBe(true);
+      expect(Object.isFrozen(summaries[0]!)).toBe(true);
+      expect(() => {
+        (summaries as ContentControlSummary[]).push({
+          id: 'x',
+          controlType: 'richText',
+        });
+      }).toThrow();
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
   });
 
   for (const size of WARM_SIZES) {
-    test(`${size} paragraphs: warm text edits reuse enumeration cache with zero traversals`, () => {
-      const recorder = contentControlEnumerationTestRecorder();
-      recorder.reset();
-      const bytes = loadHostileControlDocument(size, 340, 20);
-      const container = document.createElement('div');
-      const opened = mountPaginatedSurface(container, bytes, { scale: 1 });
-      if (!opened.ok) throw new Error(opened.reason);
-      const surface = opened.surface;
-      const paragraphId = surface.session.paragraphIds()[Math.floor(size / 2)]!;
-      contentControlsOf(surface);
-      expect(recorder.rebuilds).toBe(1);
-      const visitsAfterCold = {
-        topLevel: recorder.topLevelVisits,
-        control: recorder.controlVisits,
-      };
-      for (let index = 0; index < 3; index += 1) {
-        surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'w' }]);
-        surface.layout();
-        contentControlsOf(surface);
-      }
-      expect(recorder.rebuilds).toBe(1);
-      expect(recorder.topLevelVisits).toBe(visitsAfterCold.topLevel);
-      expect(recorder.controlVisits).toBe(visitsAfterCold.control);
-    });
+    test(
+      `${size} paragraphs: warm text edits reuse enumeration cache with zero traversals`,
+      () => {
+        const recorder = contentControlEnumerationTestRecorder();
+        recorder.reset();
+        const bytes = loadHostileControlDocument(size, 340, 20);
+        const container = document.createElement('div');
+        document.body.append(container);
+        const opened = mountPaginatedSurface(container, bytes, { scale: 1 });
+        if (!opened.ok) throw new Error(opened.reason);
+        const surface = opened.surface;
+        try {
+          const paragraphId = surface.session.paragraphIds()[Math.floor(size / 2)]!;
+          contentControlsOf(surface);
+          expect(recorder.rebuilds).toBe(1);
+          const visitsAfterCold = {
+            topLevel: recorder.topLevelVisits,
+            control: recorder.controlVisits,
+          };
+          for (let index = 0; index < 3; index += 1) {
+            surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'w' }]);
+            surface.layout();
+            contentControlsOf(surface);
+          }
+          expect(recorder.rebuilds).toBe(1);
+          expect(recorder.topLevelVisits).toBe(visitsAfterCold.topLevel);
+          expect(recorder.controlVisits).toBe(visitsAfterCold.control);
+        } finally {
+          surface.destroy();
+          container.remove();
+        }
+      },
+      size >= 12_700 ? { timeout: 120_000 } : undefined
+    );
   }
 
   test('insertContentControl invalidates the session enumeration cache', () => {
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, docxFromBody(para('one')), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
     const surface = opened.surface;
-    const recorder = contentControlEnumerationTestRecorder();
-    recorder.reset();
-    contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(1);
-    const paragraphId = surface.session.paragraphIds()[0]!;
-    surface.session.applyTreeOps([
-      {
-        op: 'insertContentControl',
-        paragraphId,
-        start: 0,
-        end: 1,
-        type: 'richText',
-        tag: 'new',
-      },
-    ]);
-    surface.layout();
-    const after = contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(2);
-    expect(after.some((summary) => summary.tag === 'new')).toBe(true);
+    try {
+      const recorder = contentControlEnumerationTestRecorder();
+      recorder.reset();
+      contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(1);
+      const paragraphId = surface.session.paragraphIds()[0]!;
+      surface.session.applyTreeOps([
+        {
+          op: 'insertContentControl',
+          paragraphId,
+          start: 0,
+          end: 1,
+          type: 'richText',
+          tag: 'new',
+        },
+      ]);
+      surface.layout();
+      const after = contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(2);
+      expect(after.some((summary) => summary.tag === 'new')).toBe(true);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
   });
 
   test('removeContentControl invalidates the session enumeration cache', () => {
     const body = sdt('<w:tag w:val="gone"/>', para('one'));
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, docxFromBody(body), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
     const surface = opened.surface;
-    const recorder = contentControlEnumerationTestRecorder();
-    recorder.reset();
-    const before = contentControlsOf(surface);
-    expect(before).toHaveLength(1);
-    surface.session.applyTreeOps([
-      { op: 'removeContentControl', controlId: before[0]!.id, keepContent: true },
-    ]);
-    surface.layout();
-    contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(2);
-    expect(contentControlsOf(surface)).toHaveLength(0);
+    try {
+      const recorder = contentControlEnumerationTestRecorder();
+      recorder.reset();
+      const before = contentControlsOf(surface);
+      expect(before).toHaveLength(1);
+      surface.session.applyTreeOps([
+        { op: 'removeContentControl', controlId: before[0]!.id, keepContent: true },
+      ]);
+      surface.layout();
+      contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(2);
+      expect(contentControlsOf(surface)).toHaveLength(0);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
   });
 
   test('undo and redo invalidate the session enumeration cache', () => {
     const body = sdt('<w:tag w:val="undo"/>', para('one'));
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, docxFromBody(body), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
     const surface = opened.surface;
-    const recorder = contentControlEnumerationTestRecorder();
-    recorder.reset();
-    contentControlsOf(surface);
-    surface.session.applyTreeOps([
-      {
-        op: 'setContentControlProperties',
-        controlId: contentControlsOf(surface)[0]!.id,
-        tag: 'changed',
-      },
-    ]);
-    surface.layout();
-    contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(2);
-    surface.session.undo();
-    surface.layout();
-    contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(3);
-    surface.session.redo();
-    surface.layout();
-    contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(4);
+    try {
+      const recorder = contentControlEnumerationTestRecorder();
+      recorder.reset();
+      contentControlsOf(surface);
+      surface.session.applyTreeOps([
+        {
+          op: 'setContentControlProperties',
+          controlId: contentControlsOf(surface)[0]!.id,
+          tag: 'changed',
+        },
+      ]);
+      surface.layout();
+      contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(2);
+      surface.session.undo();
+      surface.layout();
+      contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(3);
+      surface.session.redo();
+      surface.layout();
+      contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(4);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
   });
 
   test('outer lock change updates inherited lock on stable inner metadata', () => {
     const body = sdt('<w:tag w:val="outer"/>', sdt('<w:tag w:val="inner"/>', para('nested')));
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, docxFromBody(body), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
     const surface = opened.surface;
-    const inner = contentControlsOf(surface, { tag: 'inner' })[0]!;
-    expect(inner.locked).toBeUndefined();
-    const outer = contentControlsOf(surface, { tag: 'outer' })[0]!;
-    surface.session.applyTreeOps([
-      {
-        op: 'setContentControlProperties',
-        controlId: outer.id,
-        lock: 'contentLocked',
-      },
-    ]);
-    surface.layout();
-    expect(contentControlsOf(surface, { tag: 'inner' })[0]!.locked).toBe(true);
+    try {
+      const inner = contentControlsOf(surface, { tag: 'inner' })[0]!;
+      expect(inner.locked).toBeUndefined();
+      const outer = contentControlsOf(surface, { tag: 'outer' })[0]!;
+      surface.session.applyTreeOps([
+        {
+          op: 'setContentControlProperties',
+          controlId: outer.id,
+          lock: 'contentLocked',
+        },
+      ]);
+      surface.layout();
+      expect(contentControlsOf(surface, { tag: 'inner' })[0]!.locked).toBe(true);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
   });
 
   test('body text edits preserve enumeration; structural edits invalidate', () => {
     const body = sdt('<w:tag w:val="plain"/>', para('one'));
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, docxFromBody(body), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
     const surface = opened.surface;
-    const recorder = contentControlEnumerationTestRecorder();
-    recorder.reset();
-    const baseline = contentControlsOf(surface);
-    const paragraphId = surface.session.paragraphIds()[0]!;
-    surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'x' }]);
-    surface.layout();
-    const warm = contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(1);
-    expect(warm).toEqual(baseline);
-    surface.session.applyTreeOps([{ op: 'splitParagraph', paragraphId, offset: 1 }]);
-    surface.layout();
-    contentControlsOf(surface);
-    expect(recorder.rebuilds).toBe(2);
+    try {
+      const recorder = contentControlEnumerationTestRecorder();
+      recorder.reset();
+      const baseline = contentControlsOf(surface);
+      const paragraphId = surface.session.paragraphIds()[0]!;
+      surface.session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'x' }]);
+      surface.layout();
+      const warm = contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(1);
+      expect(warm).toEqual(baseline);
+      surface.session.applyTreeOps([{ op: 'splitParagraph', paragraphId, offset: 1 }]);
+      surface.layout();
+      contentControlsOf(surface);
+      expect(recorder.rebuilds).toBe(2);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
   });
 });

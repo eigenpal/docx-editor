@@ -282,52 +282,68 @@ function loadScaleNumberedDocument(paragraphCount: number): Uint8Array {
 
 describe('withResolvedListItems session warm path', () => {
   for (const size of WARM_SIZES) {
-    test(`${size} blocks: proven text-local edits perform zero block visits`, () => {
-      const recorder = listResolveBlockVisitTestRecorder();
-      recorder.reset();
-      const container = document.createElement('div');
-      const opened = mountPaginatedSurface(container, loadScaleNumberedDocument(size), {
-        scale: 1,
-      });
-      if (!opened.ok) throw new Error(opened.reason);
-      const surface = opened.surface;
-      surface.layout();
-      expect(recorder.blockVisits).toBeGreaterThan(0);
-      const session = surface.layoutSession();
-      const listItemsBefore = listResolveSessionMemoListItemsForTest(session);
-      expect(listItemsBefore).toBeDefined();
-      const blocks = storyBlocks(surface.session.part());
-      const leadParagraph = blocks.find((block) => block.kind === 'paragraph');
-      expect(leadParagraph?.kind).toBe('paragraph');
-      recorder.reset();
-      surface.session.applyTreeOps([
-        { op: 'insertText', paragraphId: leadParagraph!.id, offset: 0, text: 'x' },
-      ]);
-      surface.layout();
-      expect(recorder.blockVisits).toBe(0);
-      expect(listResolveSessionMemoListItemsForTest(session)).toBe(listItemsBefore);
-    });
+    test(
+      `${size} blocks: proven text-local edits perform zero block visits`,
+      () => {
+        const recorder = listResolveBlockVisitTestRecorder();
+        recorder.reset();
+        const container = document.createElement('div');
+        document.body.append(container);
+        const opened = mountPaginatedSurface(container, loadScaleNumberedDocument(size), {
+          scale: 1,
+        });
+        if (!opened.ok) throw new Error(opened.reason);
+        const surface = opened.surface;
+        try {
+          surface.layout();
+          expect(recorder.blockVisits).toBeGreaterThan(0);
+          const session = surface.layoutSession();
+          const listItemsBefore = listResolveSessionMemoListItemsForTest(session);
+          expect(listItemsBefore).toBeDefined();
+          const blocks = storyBlocks(surface.session.part());
+          const leadParagraph = blocks.find((block) => block.kind === 'paragraph');
+          expect(leadParagraph?.kind).toBe('paragraph');
+          recorder.reset();
+          surface.session.applyTreeOps([
+            { op: 'insertText', paragraphId: leadParagraph!.id, offset: 0, text: 'x' },
+          ]);
+          surface.layout();
+          expect(recorder.blockVisits).toBe(0);
+          expect(listResolveSessionMemoListItemsForTest(session)).toBe(listItemsBefore);
+        } finally {
+          surface.destroy();
+          container.remove();
+        }
+      },
+      size >= 12_700 ? { timeout: 120_000 } : undefined
+    );
   }
 
   test('numbering dependency changes fall back and recompute', () => {
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, loadScaleNumberedDocument(4), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
     const surface = opened.surface;
-    surface.layout();
-    const session = surface.layoutSession();
-    const { numberingIndex } = createSurfaceStyleDeps(surface.session);
-    const first = withResolvedListItemsForSession(
-      { numberingIndex: numberingIndex() },
-      storyBlocks(surface.session.part()),
-      session
-    );
-    const freshIndex = buildNumberingIndex(surface.session.numberingRoot()!);
-    const second = withResolvedListItemsForSession(
-      { numberingIndex: freshIndex },
-      storyBlocks(surface.session.part()),
-      session
-    );
-    expect(second.listItems).not.toBe(first.listItems);
+    try {
+      surface.layout();
+      const session = surface.layoutSession();
+      const { numberingIndex } = createSurfaceStyleDeps(surface.session);
+      const first = withResolvedListItemsForSession(
+        { numberingIndex: numberingIndex() },
+        storyBlocks(surface.session.part()),
+        session
+      );
+      const freshIndex = buildNumberingIndex(surface.session.numberingRoot()!);
+      const second = withResolvedListItemsForSession(
+        { numberingIndex: freshIndex },
+        storyBlocks(surface.session.part()),
+        session
+      );
+      expect(second.listItems).not.toBe(first.listItems);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
   });
 });

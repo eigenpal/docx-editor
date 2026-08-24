@@ -29,12 +29,18 @@ describe('layout revision marker on painted pages', () => {
   test('mountPaginatedSurface stamps `.docx-pages[data-revision]` after paint', () => {
     const body = `<w:p><w:r><w:t>hello</w:t></w:r></w:p>`;
     const container = document.createElement('div');
+    document.body.append(container);
     const opened = mountPaginatedSurface(container, docxFromBody(body), { scale: 1 });
     if (!opened.ok) throw new Error(opened.reason);
-    const pages = container.querySelector('.docx-pages');
-    expect(pages).not.toBeNull();
-    const raw = pages!.getAttribute('data-revision');
-    expect(raw).not.toBeNull();
-    expect(Number.isFinite(Number(raw))).toBe(true);
+    try {
+      const pages = container.querySelector('.docx-pages');
+      expect(pages).not.toBeNull();
+      const raw = pages!.getAttribute('data-revision');
+      expect(raw).not.toBeNull();
+      expect(Number.isFinite(Number(raw))).toBe(true);
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
   });
 });
