@@ -11,6 +11,7 @@ import { CompilerState, Extractor, ExtractorConfig } from '@microsoft/api-extrac
 import fs from 'node:fs';
 import path from 'node:path';
 import { evaluateForgottenExportPolicy } from './api-extractor-forgotten-exports.mjs';
+import { canonicalizeApiReport } from './api-snapshot-canonicalize.mjs';
 import { collectNamedExports } from './named-exports.mjs';
 
 function slugForKey(key) {
@@ -217,8 +218,33 @@ export function runApiExtractor(options) {
     totalErrors += result.errorCount;
     totalWarnings += result.warningCount;
 
-    if (!isLocal && result.apiReportChanged) {
-      driftedEntries.push(target);
+    // The dts emit order of inferred object types (Vue's ExtractPropTypes
+    // blocks) is machine-dependent, so the raw report text is not comparable
+    // across machines. Canonicalize the committed snapshot (sorted property
+    // signatures inside anonymous object types) and compare/write through the
+    // same canonical form.
+    const reportPath = path.join(reportDir, `${target.slug}.api.md`);
+    const tempReportPath = path.join(tempDir, `${target.slug}.api.md`);
+    if (isLocal) {
+      // In local mode Extractor already copied its raw report over
+      // `reportPath`; rewrite it in canonical form.
+      const raw = fs.readFileSync(reportPath, 'utf8');
+      const canonical = canonicalizeApiReport(raw);
+      if (canonical !== raw) fs.writeFileSync(reportPath, canonical);
+    } else if (result.apiReportChanged) {
+      // Raw texts differ. Only call it drift when the canonical forms differ
+      // too — a pure emit-order difference is not drift.
+      const committed = fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : null;
+      const generated = fs.existsSync(tempReportPath)
+        ? fs.readFileSync(tempReportPath, 'utf8')
+        : null;
+      if (
+        committed === null ||
+        generated === null ||
+        canonicalizeApiReport(committed) !== canonicalizeApiReport(generated)
+      ) {
+        driftedEntries.push(target);
+      }
     }
   }
 

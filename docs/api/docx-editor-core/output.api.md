@@ -32,14 +32,14 @@ export interface PaintOptions {
     readonly activeHeaderFooterRId?: string;
     readonly ariaHidden?: boolean;
     readonly contentControlChrome?: {
-        readonly showAll?: boolean;
         readonly activeIds?: ReadonlySet<string>;
-        readonly hoverIds?: ReadonlySet<string>;
-        readonly suppressedIds?: ReadonlySet<string>;
-        readonly checkedIds?: ReadonlySet<string>;
         readonly additionalBoundaries?: readonly ContentControlBoundaryRecord[];
-        readonly tocControlIds?: ReadonlySet<string>;
+        readonly checkedIds?: ReadonlySet<string>;
+        readonly hoverIds?: ReadonlySet<string>;
         readonly readOnly?: boolean;
+        readonly showAll?: boolean;
+        readonly suppressedIds?: ReadonlySet<string>;
+        readonly tocControlIds?: ReadonlySet<string>;
     };
     readonly defaultFontFamily?: string;
     // (undocumented)

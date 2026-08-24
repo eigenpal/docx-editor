@@ -50,469 +50,545 @@ export interface CustomNodeContextMenuProps {
 // @public (undocumented)
 export const DocxEditorReview: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
         asChild: BooleanConstructor;
-        hidden: BooleanConstructor;
-        t: {
-            type: PropType<(key: string, params?: Record<string, string | number>) => string>;
-            default: undefined;
-        };
         card: {
+            default: undefined;
             type: PropType<{
                 className?: string;
             }>;
-            default: undefined;
         };
-        furniture: {
-            type: PropType<VNode | VNode[]>;
-            default: undefined;
-        };
-        preset: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
-        stack: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
-        gap: {
-            type: NumberConstructor;
-            default: number;
-        };
+        className: StringConstructor;
         filter: {
-            type: PropType<(item: ReviewItemView) => boolean>;
             default: undefined;
-        };
-        structural: {
-            type: BooleanConstructor;
-            default: boolean;
+            type: PropType<(item: ReviewItemView) => boolean>;
         };
         formatting: {
-            type: BooleanConstructor;
             default: boolean;
+            type: BooleanConstructor;
+        };
+        furniture: {
+            default: undefined;
+            type: PropType<VNode | VNode[]>;
+        };
+        gap: {
+            default: number;
+            type: NumberConstructor;
+        };
+        hidden: BooleanConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        stack: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        structural: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        t: {
+            default: undefined;
+            type: PropType<(key: string, params?: Record<string, string | number>) => string>;
         };
     }>> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        asChild: boolean;
+        card: {
+            className?: string;
+        };
         filter: (item: ReviewItemView) => boolean;
-        hidden: boolean;
-        t: (key: string, params?: Record<string, string | number>) => string;
-        structural: boolean;
+        formatting: boolean;
         furniture: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }> | VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>[];
-        formatting: boolean;
-        asChild: boolean;
         gap: number;
+        hidden: boolean;
         preset: boolean;
-        card: {
-            className?: string;
-        };
         stack: boolean;
+        structural: boolean;
+        t: (key: string, params?: Record<string, string | number>) => string;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
         asChild: BooleanConstructor;
-        hidden: BooleanConstructor;
-        t: {
-            type: PropType<(key: string, params?: Record<string, string | number>) => string>;
-            default: undefined;
-        };
         card: {
+            default: undefined;
             type: PropType<{
                 className?: string;
             }>;
-            default: undefined;
         };
-        furniture: {
-            type: PropType<VNode | VNode[]>;
-            default: undefined;
-        };
-        preset: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
-        stack: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
-        gap: {
-            type: NumberConstructor;
-            default: number;
-        };
+        className: StringConstructor;
         filter: {
-            type: PropType<(item: ReviewItemView) => boolean>;
             default: undefined;
-        };
-        structural: {
-            type: BooleanConstructor;
-            default: boolean;
+            type: PropType<(item: ReviewItemView) => boolean>;
         };
         formatting: {
-            type: BooleanConstructor;
             default: boolean;
+            type: BooleanConstructor;
+        };
+        furniture: {
+            default: undefined;
+            type: PropType<VNode | VNode[]>;
+        };
+        gap: {
+            default: number;
+            type: NumberConstructor;
+        };
+        hidden: BooleanConstructor;
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        stack: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        structural: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        t: {
+            default: undefined;
+            type: PropType<(key: string, params?: Record<string, string | number>) => string>;
         };
     }>> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | null, {}, {}, {}, {
+        asChild: boolean;
+        card: {
+            className?: string;
+        };
         filter: (item: ReviewItemView) => boolean;
-        hidden: boolean;
-        t: (key: string, params?: Record<string, string | number>) => string;
-        structural: boolean;
+        formatting: boolean;
         furniture: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }> | VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>[];
-        formatting: boolean;
-        asChild: boolean;
         gap: number;
+        hidden: boolean;
         preset: boolean;
-        card: {
-            className?: string;
-        };
         stack: boolean;
+        structural: boolean;
+        t: (key: string, params?: Record<string, string | number>) => string;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    className: StringConstructor;
     asChild: BooleanConstructor;
-    hidden: BooleanConstructor;
-    t: {
-        type: PropType<(key: string, params?: Record<string, string | number>) => string>;
-        default: undefined;
-    };
     card: {
+        default: undefined;
         type: PropType<{
             className?: string;
         }>;
-        default: undefined;
     };
-    furniture: {
-        type: PropType<VNode | VNode[]>;
-        default: undefined;
-    };
-    preset: {
-        type: BooleanConstructor;
-        default: boolean;
-    };
-    stack: {
-        type: BooleanConstructor;
-        default: boolean;
-    };
-    gap: {
-        type: NumberConstructor;
-        default: number;
-    };
+    className: StringConstructor;
     filter: {
-        type: PropType<(item: ReviewItemView) => boolean>;
         default: undefined;
-    };
-    structural: {
-        type: BooleanConstructor;
-        default: boolean;
+        type: PropType<(item: ReviewItemView) => boolean>;
     };
     formatting: {
-        type: BooleanConstructor;
         default: boolean;
+        type: BooleanConstructor;
+    };
+    furniture: {
+        default: undefined;
+        type: PropType<VNode | VNode[]>;
+    };
+    gap: {
+        default: number;
+        type: NumberConstructor;
+    };
+    hidden: BooleanConstructor;
+    preset: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    stack: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    structural: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    t: {
+        default: undefined;
+        type: PropType<(key: string, params?: Record<string, string | number>) => string>;
     };
 }>> & Readonly<{}>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    asChild: boolean;
+    card: {
+        className?: string;
+    };
     filter: (item: ReviewItemView) => boolean;
-    hidden: boolean;
-    t: (key: string, params?: Record<string, string | number>) => string;
-    structural: boolean;
+    formatting: boolean;
     furniture: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>[];
-    formatting: boolean;
-    asChild: boolean;
     gap: number;
+    hidden: boolean;
     preset: boolean;
-    card: {
-        className?: string;
-    };
     stack: boolean;
+    structural: boolean;
+    t: (key: string, params?: Record<string, string | number>) => string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
-    List: vue.DefineComponent<vue.ExtractPropTypes<{
-        stack: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
-        positions: {
-            type: PropType<ReadonlyMap<string, number>>;
-            default: undefined;
-        };
-        collapsed: {
-            type: PropType<ReadonlySet<string>>;
-            default: undefined;
-        };
-        scale: {
-            type: NumberConstructor;
-            default: number;
-        };
-        offset: {
-            type: NumberConstructor;
-            default: number;
-        };
-        window: {
-            type: PropType<{
-                top: number;
-                bottom: number;
-            } | null>;
-            default: null;
-        };
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
-        [key: string]: any;
-    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        stack: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
-        positions: {
-            type: PropType<ReadonlyMap<string, number>>;
-            default: undefined;
-        };
-        collapsed: {
-            type: PropType<ReadonlySet<string>>;
-            default: undefined;
-        };
-        scale: {
-            type: NumberConstructor;
-            default: number;
-        };
-        offset: {
-            type: NumberConstructor;
-            default: number;
-        };
-        window: {
-            type: PropType<{
-                top: number;
-                bottom: number;
-            } | null>;
-            default: null;
-        };
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-    }>> & Readonly<{}>, {
-        hidden: boolean;
-        offset: number;
-        window: {
-            top: number;
-            bottom: number;
-        } | null;
-        scale: number;
-        collapsed: ReadonlySet<string>;
-        stack: boolean;
-        positions: ReadonlyMap<string, number>;
-    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Empty: vue.DefineComponent<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        hidden: BooleanConstructor;
+    Accept: vue.DefineComponent<vue.ExtractPropTypes<{
         asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | string>;
+        };
     }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | string>;
+        };
     }>> & Readonly<{}>, {
-        hidden: boolean;
         asChild: boolean;
+        hidden: boolean;
+        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Card: vue.DefineComponent<vue.ExtractPropTypes<{
+    AddComment: vue.DefineComponent<vue.ExtractPropTypes<{
         className: StringConstructor;
+        drafting: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
         hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
+        top: {
+            default: null;
+            type: PropType<number | null>;
+        };
     }>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
         className: StringConstructor;
+        drafting: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
         hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
+        top: {
+            default: null;
+            type: PropType<number | null>;
+        };
     }>> & Readonly<{}>, {
+        drafting: boolean;
         hidden: boolean;
-        asChild: boolean;
-    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Avatar: vue.DefineComponent<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
-    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
-    }>> & Readonly<{}>, {
-        hidden: boolean;
-        asChild: boolean;
+        top: number | null;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Author: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
     }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
     }>> & Readonly<{}>, {
-        hidden: boolean;
         asChild: boolean;
+        hidden: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Time: vue.DefineComponent<vue.ExtractPropTypes<{
+    Avatar: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
     }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
     }>> & Readonly<{}>, {
-        hidden: boolean;
         asChild: boolean;
-    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Summary: vue.DefineComponent<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
-    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-        asChild: BooleanConstructor;
-    }>> & Readonly<{}>, {
         hidden: boolean;
-        asChild: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Accept: vue.DefineComponent<vue.ExtractPropTypes<{
+    Balloon: vue.DefineComponent<vue.ExtractPropTypes<{
         className: StringConstructor;
-        asChild: BooleanConstructor;
         hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
-    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        asChild: BooleanConstructor;
-        hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
-    }>> & Readonly<{}>, {
-        hidden: boolean;
-        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
-            [key: string]: any;
-        }>;
-        asChild: boolean;
-    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Reject: vue.DefineComponent<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        asChild: BooleanConstructor;
-        hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
-    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        asChild: BooleanConstructor;
-        hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
-    }>> & Readonly<{}>, {
-        hidden: boolean;
-        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
-            [key: string]: any;
-        }>;
-        asChild: boolean;
-    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Resolve: vue.DefineComponent<vue.ExtractPropTypes<{
-        className: StringConstructor;
-        asChild: BooleanConstructor;
-        hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
     }>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
         className: StringConstructor;
-        asChild: BooleanConstructor;
         hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
     }>> & Readonly<{}>, {
         hidden: boolean;
-        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
-            [key: string]: any;
-        }>;
-        asChild: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Reopen: vue.DefineComponent<vue.ExtractPropTypes<{
-        className: StringConstructor;
+    Card: vue.DefineComponent<vue.ExtractPropTypes<{
         asChild: BooleanConstructor;
+        className: StringConstructor;
         hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
     }>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
         asChild: BooleanConstructor;
+        className: StringConstructor;
         hidden: BooleanConstructor;
-        icon: {
-            type: PropType<VNode | string>;
-            default: undefined;
-        };
     }>> & Readonly<{}>, {
-        hidden: boolean;
-        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
-            [key: string]: any;
-        }>;
         asChild: boolean;
+        hidden: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Delete: vue.DefineComponent<vue.ExtractPropTypes<{
-        className: StringConstructor;
         asChild: BooleanConstructor;
+        className: StringConstructor;
         hidden: BooleanConstructor;
         icon: {
-            type: PropType<VNode | string>;
             default: undefined;
+            type: PropType<VNode | string>;
         };
     }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        className: StringConstructor;
         asChild: BooleanConstructor;
+        className: StringConstructor;
         hidden: BooleanConstructor;
         icon: {
-            type: PropType<VNode | string>;
             default: undefined;
+            type: PropType<VNode | string>;
         };
     }>> & Readonly<{}>, {
+        asChild: boolean;
         hidden: boolean;
         icon: string | VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Draft: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        left: {
+            default: null;
+            type: PropType<number | null>;
+        };
+        top: {
+            default: number;
+            type: NumberConstructor;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        left: {
+            default: null;
+            type: PropType<number | null>;
+        };
+        top: {
+            default: number;
+            type: NumberConstructor;
+        };
+    }>> & Readonly<{}>, {
+        hidden: boolean;
+        left: number | null;
+        top: number;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Empty: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+    }>> & Readonly<{}>, {
         asChild: boolean;
+        hidden: boolean;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    List: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        collapsed: {
+            default: undefined;
+            type: PropType<ReadonlySet<string>>;
+        };
+        hidden: BooleanConstructor;
+        offset: {
+            default: number;
+            type: NumberConstructor;
+        };
+        positions: {
+            default: undefined;
+            type: PropType<ReadonlyMap<string, number>>;
+        };
+        scale: {
+            default: number;
+            type: NumberConstructor;
+        };
+        stack: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        window: {
+            default: null;
+            type: PropType<{
+                bottom: number;
+                top: number;
+            } | null>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        collapsed: {
+            default: undefined;
+            type: PropType<ReadonlySet<string>>;
+        };
+        hidden: BooleanConstructor;
+        offset: {
+            default: number;
+            type: NumberConstructor;
+        };
+        positions: {
+            default: undefined;
+            type: PropType<ReadonlyMap<string, number>>;
+        };
+        scale: {
+            default: number;
+            type: NumberConstructor;
+        };
+        stack: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        window: {
+            default: null;
+            type: PropType<{
+                bottom: number;
+                top: number;
+            } | null>;
+        };
+    }>> & Readonly<{}>, {
+        collapsed: ReadonlySet<string>;
+        hidden: boolean;
+        offset: number;
+        positions: ReadonlyMap<string, number>;
+        scale: number;
+        stack: boolean;
+        window: {
+            bottom: number;
+            top: number;
+        } | null;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Markers: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | ((item: ReviewItemView) => VNode | null | undefined)>;
+        };
+        offset: {
+            default: number;
+            type: NumberConstructor;
+        };
+        scale: {
+            default: number;
+            type: NumberConstructor;
+        };
+        window: {
+            default: null;
+            type: PropType<{
+                bottom: number;
+                top: number;
+            } | null>;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | ((item: ReviewItemView) => VNode | null | undefined)>;
+        };
+        offset: {
+            default: number;
+            type: NumberConstructor;
+        };
+        scale: {
+            default: number;
+            type: NumberConstructor;
+        };
+        window: {
+            default: null;
+            type: PropType<{
+                bottom: number;
+                top: number;
+            } | null>;
+        };
+    }>> & Readonly<{}>, {
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }> | ((item: ReviewItemView) => VNode | null | undefined);
+        offset: number;
+        scale: number;
+        window: {
+            bottom: number;
+            top: number;
+        } | null;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Reject: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | string>;
+        };
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | string>;
+        };
+    }>> & Readonly<{}>, {
+        asChild: boolean;
+        hidden: boolean;
+        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Reopen: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | string>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+        icon: {
+            default: undefined;
+            type: PropType<VNode | string>;
+        };
+    }>> & Readonly<{}>, {
+        asChild: boolean;
+        hidden: boolean;
+        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Replies: vue.DefineComponent<vue.ExtractPropTypes<{
         className: StringConstructor;
@@ -534,129 +610,53 @@ export const DocxEditorReview: {
     }>> & Readonly<{}>, {
         hidden: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Markers: vue.DefineComponent<vue.ExtractPropTypes<{
-        scale: {
-            type: NumberConstructor;
-            default: number;
-        };
-        offset: {
-            type: NumberConstructor;
-            default: number;
-        };
-        window: {
-            type: PropType<{
-                top: number;
-                bottom: number;
-            } | null>;
-            default: null;
-        };
+    Resolve: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
         icon: {
-            type: PropType<VNode | ((item: ReviewItemView) => VNode | null | undefined)>;
             default: undefined;
+            type: PropType<VNode | string>;
         };
-    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        scale: {
-            type: NumberConstructor;
-            default: number;
-        };
-        offset: {
-            type: NumberConstructor;
-            default: number;
-        };
-        window: {
-            type: PropType<{
-                top: number;
-                bottom: number;
-            } | null>;
-            default: null;
-        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
         icon: {
-            type: PropType<VNode | ((item: ReviewItemView) => VNode | null | undefined)>;
             default: undefined;
+            type: PropType<VNode | string>;
         };
     }>> & Readonly<{}>, {
+        asChild: boolean;
         hidden: boolean;
-        offset: number;
-        window: {
-            top: number;
-            bottom: number;
-        } | null;
-        scale: number;
-        icon: VNode<vue.RendererNode, vue.RendererElement, {
+        icon: string | VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
-        }> | ((item: ReviewItemView) => VNode | null | undefined);
+        }>;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    AddComment: vue.DefineComponent<vue.ExtractPropTypes<{
-        top: {
-            type: PropType<number | null>;
-            default: null;
-        };
-        drafting: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
+    Summary: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
-        [key: string]: any;
-    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        top: {
-            type: PropType<number | null>;
-            default: null;
-        };
-        drafting: {
-            type: BooleanConstructor;
-            default: boolean;
-        };
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
     }>> & Readonly<{}>, {
-        top: number | null;
-        hidden: boolean;
-        drafting: boolean;
-    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Draft: vue.DefineComponent<vue.ExtractPropTypes<{
-        top: {
-            type: NumberConstructor;
-            default: number;
-        };
-        left: {
-            type: PropType<number | null>;
-            default: null;
-        };
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
-        [key: string]: any;
-    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-        top: {
-            type: NumberConstructor;
-            default: number;
-        };
-        left: {
-            type: PropType<number | null>;
-            default: null;
-        };
-        className: StringConstructor;
-        hidden: BooleanConstructor;
-    }>> & Readonly<{}>, {
-        left: number | null;
-        top: number;
+        asChild: boolean;
         hidden: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-    Balloon: vue.DefineComponent<vue.ExtractPropTypes<{
+    Time: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
-    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
-        [key: string]: any;
-    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
     }>> & Readonly<{}>, {
+        asChild: boolean;
         hidden: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 };
@@ -706,8 +706,8 @@ export interface ReviewMarkersProps extends ReviewPartProps {
     scale?: number;
     // (undocumented)
     window?: {
-        top: number;
         bottom: number;
+        top: number;
     } | null;
 }
 
@@ -808,12 +808,12 @@ export interface UseReviewReturn {
 
 // @public (undocumented)
 export function useStackedReviewPositions(items: MaybeRefOrGetter_2<readonly {
-    readonly key: string;
     readonly anchorY: number | null;
+    readonly key: string;
 }[]>, heights: MaybeRefOrGetter_2<ReadonlyMap<string, number>>, options?: MaybeRefOrGetter_2<{
+    readonly defaultHeight?: number;
     readonly gap?: number;
     readonly scale?: number;
-    readonly defaultHeight?: number;
 }>): ComputedRef<ReadonlyMap<string, number>>;
 
 // (No @packageDocumentation comment for this package)

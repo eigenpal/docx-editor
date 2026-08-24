@@ -19,13 +19,13 @@ export type EditorScope = {
 * store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
 */
 | {
-    kind: 'note';
     id: string;
+    kind: 'note';
 }
 /** A text box or floating frame with its own content, addressed by id. */
 | {
-    kind: 'frame';
     id: string;
+    kind: 'frame';
 }
 /** Read-only aggregate across every view. Valid for queries, not for writes. */
 | {
@@ -40,8 +40,8 @@ export type InteractionOutcome<T> = {
     readonly ok: true;
     readonly value: T;
 } | {
-    readonly ok: false;
     readonly code: InteractionOutcomeCode;
+    readonly ok: false;
     readonly reason: string;
 };
 
@@ -58,15 +58,15 @@ export interface SemanticIdentity {
 
 // @public
 export type SemanticTarget = {
+    readonly affinity: InteractionAffinity;
+    readonly graphemeOffset: number;
+    readonly identity: SemanticIdentity;
     readonly kind: 'text';
     readonly scope: ViewScope;
-    readonly identity: SemanticIdentity;
-    readonly graphemeOffset: number;
-    readonly affinity: InteractionAffinity;
 } | {
     readonly kind: 'atomic';
-    readonly scope: ViewScope;
     readonly objectId: string;
+    readonly scope: ViewScope;
 };
 
 // @public

@@ -13,9 +13,9 @@ export type ColorValue = {
     readonly value: string;
 } | {
     readonly kind: 'theme';
+    readonly shade?: number;
     readonly slot: string;
     readonly tint?: number;
-    readonly shade?: number;
 } | {
     readonly kind: 'auto';
 };
@@ -27,8 +27,8 @@ export type ContainerRef = {
     part: 'header' | 'footer';
     rId: string;
 } | {
-    part: 'footnote' | 'endnote';
     noteId: number;
+    part: 'footnote' | 'endnote';
 };
 
 // @public
@@ -152,11 +152,11 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 
 // @public
 export type ExecResult = {
-    ok: true;
     changed: boolean;
+    ok: true;
 } | {
-    ok: false;
     code: ExecErrorCode;
+    ok: false;
     reason: string;
     target?: DocTarget;
 };
@@ -192,9 +192,9 @@ export interface IndentFormatting {
     readonly firstLine: number;
     readonly left: number;
     readonly mixed: {
+        readonly firstLine: boolean;
         readonly left: boolean;
         readonly right: boolean;
-        readonly firstLine: boolean;
     };
     readonly right: number;
 }
@@ -412,8 +412,8 @@ export interface SectionProperties {
     readonly margins: PageMargins;
     // (undocumented)
     readonly pageSize: {
-        widthTwips: number;
         heightTwips: number;
+        widthTwips: number;
     };
     readonly titlePage?: boolean;
 }

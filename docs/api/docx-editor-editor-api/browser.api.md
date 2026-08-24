@@ -112,8 +112,8 @@ export abstract class ClientObject implements RuntimeManagedObject {
 export class ClientResult<T> {
     // @internal
     static create<T>(target: string): {
-        result: ClientResult<T>;
         fill: (value: T) => void;
+        result: ClientResult<T>;
     };
     get isLoaded(): boolean;
     get value(): T;
@@ -236,13 +236,13 @@ export type ContentControlValue = {
     readonly kind: 'listItem';
     readonly value: string;
 } | {
-    readonly kind: 'checkbox';
     readonly checked: boolean;
+    readonly kind: 'checkbox';
 }
 /** `YYYY-MM-DD`, or a full ISO-8601 instant. */
 | {
-    readonly kind: 'date';
     readonly iso: string;
+    readonly kind: 'date';
 };
 
 // @public

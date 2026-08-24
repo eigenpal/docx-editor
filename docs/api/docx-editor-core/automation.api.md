@@ -70,11 +70,11 @@ export type AutomationContentControlValue = {
     readonly kind: 'listItem';
     readonly value: string;
 } | {
-    readonly kind: 'checkbox';
     readonly checked: boolean;
+    readonly kind: 'checkbox';
 } | {
-    readonly kind: 'date';
     readonly iso: string;
+    readonly kind: 'date';
 };
 
 // @public
@@ -219,14 +219,14 @@ export type AutomationOperation =
 */
 | {
     readonly op: 'getText';
-    readonly target: AutomationHandle;
     readonly projection?: AutomationTextProjection;
+    readonly target: AutomationHandle;
 }
 /** Text between two endpoints, with a carriage return at every paragraph mark crossed. */
 | {
     readonly op: 'getSpanText';
-    readonly span: AutomationSpanRef;
     readonly projection?: AutomationTextProjection;
+    readonly span: AutomationSpanRef;
 }
 /**
 * A paragraph's own identity as the DOCUMENT writes it (`w14:paraId`).
@@ -247,9 +247,9 @@ export type AutomationOperation =
 */
 | {
     readonly op: 'search';
+    readonly options?: AutomationSearchOptions;
     readonly scope: AutomationSpanRef;
     readonly text: string;
-    readonly options?: AutomationSearchOptions;
 }
 /**
 * Insert text at a position. Answers the span the inserted text occupies.
@@ -295,19 +295,19 @@ export type AutomationOperation =
 * Resolved after the commit, because the paragraph it names does not exist until then.
 */
 | {
-    readonly op: 'insertParagraph';
     readonly anchor: AutomationParagraphRef;
-    readonly where: 'before' | 'after';
+    readonly op: 'insertParagraph';
     readonly text: string;
+    readonly where: 'before' | 'after';
 }
 /**
 * Split a paragraph at every occurrence of any delimiter. Answers a span per resulting
 * paragraph, in reading order, including the one that keeps the original identity.
 */
 | {
+    readonly delimiters: readonly string[];
     readonly op: 'splitParagraph';
     readonly paragraph: AutomationHandle;
-    readonly delimiters: readonly string[];
     readonly trimDelimiters?: boolean;
     readonly trimSpacing?: boolean;
 }
@@ -352,9 +352,9 @@ export type AutomationOperation =
 * read back — and would turn a caller's string into a new part.
 */
 | {
+    readonly name: string;
     readonly op: 'setStyle';
     readonly span: AutomationSpanRef;
-    readonly name: string;
 }
 /** One paragraph's own paragraph properties, in points. */
 | {
@@ -381,8 +381,8 @@ export type AutomationOperation =
 * is which.
 */
 | {
-    readonly op: 'getSections';
     readonly document: AutomationHandle;
+    readonly op: 'getSections';
 }
 /** One section's page geometry, in points. */
 | {
@@ -427,8 +427,8 @@ export type AutomationOperation =
 }
 /** One note's story, as a BODY. Two notes in one part are two stories. */
 | {
-    readonly op: 'getNoteBody';
     readonly note: AutomationHandle;
+    readonly op: 'getNoteBody';
 }
 /**
 * One note's story as plain text.
@@ -469,8 +469,8 @@ export type AutomationOperation =
 }
 /** A list's `w:numId`, as the number the file states. */
 | {
-    readonly op: 'getListId';
     readonly list: AutomationHandle;
+    readonly op: 'getListId';
 }
 /**
 * One story's list by the `w:numId` its paragraphs share, refused where none does.
@@ -490,9 +490,9 @@ export type AutomationOperation =
 * error: a list is free to skip a level.
 */
 | {
-    readonly op: 'getListParagraphs';
-    readonly list: AutomationHandle;
     readonly level?: number;
+    readonly list: AutomationHandle;
+    readonly op: 'getListParagraphs';
 }
 /**
 * The list a paragraph is in.
@@ -586,8 +586,8 @@ export type AutomationOperation =
 * that held them, and a stale range would point a caller at whatever moved into their place.
 */
 | {
-    readonly op: 'getBookmarkRange';
     readonly bookmark: AutomationHandle;
+    readonly op: 'getBookmarkRange';
 }
 /**
 * The comments anchored in a scope, in document order — the TOP-LEVEL ones.
@@ -601,23 +601,23 @@ export type AutomationOperation =
 }
 /** Replies to one comment, in document order. */
 | {
-    readonly op: 'getCommentReplies';
     readonly comment: AutomationHandle;
+    readonly op: 'getCommentReplies';
 }
 /** The `w:id` the comments part holds a comment under. */
 | {
-    readonly op: 'getCommentId';
     readonly comment: AutomationHandle;
+    readonly op: 'getCommentId';
 }
 /** Who wrote a comment. `CT_TrackChange` requires it, so a comment always has one. */
 | {
-    readonly op: 'getCommentAuthor';
     readonly comment: AutomationHandle;
+    readonly op: 'getCommentAuthor';
 }
 /** `@w:date` verbatim, or empty where the file wrote none. Never invented. */
 | {
-    readonly op: 'getCommentDate';
     readonly comment: AutomationHandle;
+    readonly op: 'getCommentDate';
 }
 /** A comment's body as plain text. */
 | {
@@ -739,17 +739,17 @@ export type AutomationOperation =
 * all-decision scoped to that exact canonical note root. Both forms agree for the main story.
 */
 | {
-    readonly op: 'acceptAllRevisions';
     readonly body: AutomationHandle;
-} | {
     readonly op: 'acceptAllRevisions';
-    readonly document: AutomationHandle;
 } | {
-    readonly op: 'rejectAllRevisions';
+    readonly document: AutomationHandle;
+    readonly op: 'acceptAllRevisions';
+} | {
     readonly body: AutomationHandle;
-} | {
     readonly op: 'rejectAllRevisions';
+} | {
     readonly document: AutomationHandle;
+    readonly op: 'rejectAllRevisions';
 }
 /**
 * Put the reader's selection on a span. Requires the `selection` capability, so a headless
@@ -767,9 +767,9 @@ export type AutomationOperation =
 * obtain an addressable range. Requires the `selection` capability, like `selectSpan`.
 */
 | {
-    readonly op: 'selectBookmark';
     readonly bookmark: AutomationHandle;
     readonly mode: AutomationSelectionMode;
+    readonly op: 'selectBookmark';
 }
 /**
 * The content controls a scope holds, outermost first and in document order.
@@ -813,8 +813,8 @@ export type AutomationOperation =
 }
 /** `w:alias` — what Word's UI calls the title. Empty where absent. */
 | {
-    readonly op: 'getContentControlTitle';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlTitle';
 }
 /**
 * `w:id` as a STRING, and empty where the file wrote none.
@@ -824,8 +824,8 @@ export type AutomationOperation =
 * not an identity however it is spelled.
 */
 | {
-    readonly op: 'getContentControlFileId';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlFileId';
 }
 /** The control's type: `richText`, `plainText`, `dropDownList`, `comboBox`, `date`, … */
 | {
@@ -865,8 +865,8 @@ export type AutomationOperation =
 }
 /** The paragraphs the control holds, in reading order. Empty for an inline control's own. */
 | {
-    readonly op: 'getContentControlParagraphs';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlParagraphs';
 }
 /**
 * The span the control's content covers, so a caller can read or format it.
@@ -901,9 +901,9 @@ export type AutomationOperation =
 }
 /** Remove the control. `keepContent` is Word's own "Remove content control". */
 | {
-    readonly op: 'deleteContentControl';
     readonly contentControl: AutomationHandle;
     readonly keepContent: boolean;
+    readonly op: 'deleteContentControl';
 }
 /**
 * Put text into the control, at `replace` (its value) or at one edge of its content.
@@ -913,10 +913,10 @@ export type AutomationOperation =
 * write would be two refusals instead of one.
 */
 | {
-    readonly op: 'insertContentControlText';
-    readonly contentControl: AutomationHandle;
-    readonly text: string;
     readonly at: 'replace' | 'start' | 'end';
+    readonly contentControl: AutomationHandle;
+    readonly op: 'insertContentControlText';
+    readonly text: string;
 }
 /** Wrap a span in a new control of the named type. */
 | {
@@ -943,14 +943,14 @@ export type AutomationOperation =
 * both would be an insertion the caller thinks is a wrap.
 */
 | {
-    readonly op: 'insertCustomNode';
     readonly at?: AutomationPoint;
+    readonly lock?: AutomationContentControlLock;
+    readonly op: 'insertCustomNode';
+    readonly payload?: AutomationCustomNodePayload;
     readonly span?: AutomationSpanRef;
     readonly tag: string;
     readonly text: string;
     readonly title?: string;
-    readonly lock?: AutomationContentControlLock;
-    readonly payload?: AutomationCustomNodePayload;
 };
 
 // @public
@@ -961,8 +961,8 @@ export type AutomationOperationResult = {
     readonly status: 'ok';
     readonly value: AutomationValue;
 } | {
-    readonly status: 'error';
     readonly error: AutomationError;
+    readonly status: 'error';
 } | {
     readonly status: 'skipped';
 };
@@ -1062,26 +1062,26 @@ export interface AutomationParagraphFormatWrite {
 export type AutomationParagraphRef = {
     readonly paragraph: AutomationHandle;
 } | {
-    readonly body: AutomationHandle;
     readonly at: 'first' | 'last';
+    readonly body: AutomationHandle;
 };
 
 // @public
 export type AutomationPoint = AutomationEndpoint | {
+    readonly at: 'start' | 'end';
     readonly paragraph: AutomationHandle;
-    readonly at: 'start' | 'end';
 } | {
-    readonly body: AutomationHandle;
     readonly at: 'start' | 'end';
+    readonly body: AutomationHandle;
 };
 
 // @public
 export type AutomationSaveResult = {
-    readonly ok: true;
     readonly bytes: Uint8Array;
+    readonly ok: true;
 } | {
-    readonly ok: false;
     readonly error: AutomationError;
+    readonly ok: false;
 };
 
 // @public
@@ -1110,8 +1110,8 @@ export interface AutomationSpan {
 
 // @public
 export type AutomationSpanRef = {
-    readonly start: AutomationPoint;
     readonly end: AutomationPoint;
+    readonly start: AutomationPoint;
 } | {
     readonly paragraph: AutomationHandle;
 } | {
@@ -1127,8 +1127,8 @@ export type AutomationStoryId = {
     readonly variant: HeaderFooterVariant;
 } | {
     readonly kind: 'note';
-    readonly noteKind: NoteKind;
     readonly noteId: number;
+    readonly noteKind: NoteKind;
 };
 
 // @public
@@ -1139,11 +1139,11 @@ export type AutomationUnsubscribe = () => void;
 
 // @public
 export type AutomationValue = {
-    readonly kind: 'handle';
     readonly handle: AutomationHandle;
+    readonly kind: 'handle';
 } | {
-    readonly kind: 'handles';
     readonly handles: readonly AutomationHandle[];
+    readonly kind: 'handles';
 } | {
     readonly kind: 'text';
     readonly text: string;
@@ -1162,11 +1162,11 @@ export type AutomationValue = {
 * declared before it can be sent. A record keyed by strings would let a host answer anything.
 */
 | {
-    readonly kind: 'font';
     readonly font: AutomationFontRead;
+    readonly kind: 'font';
 } | {
-    readonly kind: 'paragraphFormat';
     readonly format: AutomationParagraphFormatRead;
+    readonly kind: 'paragraphFormat';
 }
 /** One section's page geometry, in points. */
 | {
@@ -1226,12 +1226,12 @@ export type ServerAutomationHostRejection = OoxmlPackageRejection | 'no-main-doc
 
 // @public
 export type ServerAutomationHostResult = {
-    readonly ok: true;
     readonly host: AutomationHost;
+    readonly ok: true;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: ServerAutomationHostRejection;
-    readonly detail?: string;
 };
 
 // (No @packageDocumentation comment for this package)

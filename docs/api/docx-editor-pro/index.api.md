@@ -27,8 +27,8 @@ export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
 // @public
 export interface CustomNode<Schema extends StandardSchemaV1 | undefined = any> extends CustomNodeDefinition<Schema> {
     readonly dataOf: (node: {
-        readonly name?: string;
         readonly data?: unknown;
+        readonly name?: string;
     } | null | undefined) => InferSchemaOutput<Schema> | undefined;
 }
 
@@ -40,9 +40,9 @@ export type CustomNodeDataResult<Output> = {
     readonly ok: true;
     readonly value: Output;
 } | {
+    readonly issues: readonly string[];
     readonly ok: false;
     readonly reason: CustomNodeDataRejection;
-    readonly issues: readonly string[];
 };
 
 // @public
@@ -52,8 +52,8 @@ export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefine
     };
     readonly fromDocx?: (input: {
         readonly attrs: Readonly<Record<string, string>>;
-        readonly text: string;
         readonly data?: InferSchemaOutput<Schema>;
+        readonly text: string;
     }) => Readonly<Record<string, string>> | null;
     readonly label?: string;
     readonly name: string;
@@ -64,12 +64,12 @@ export interface CustomNodeDefinition<Schema extends StandardSchemaV1 | undefine
     readonly preserveOnExport?: boolean | 'text';
     readonly reviewCard?: (node: {
         readonly attrs: Readonly<Record<string, string>>;
-        readonly text: string;
         readonly data?: InferSchemaOutput<Schema>;
+        readonly text: string;
     }) => {
-        readonly title: string;
         readonly detail?: string;
         readonly icon?: string;
+        readonly title: string;
     } | null;
     readonly schema?: Schema;
     readonly tagAttrs?: (data: InferSchemaOutput<Schema>) => Readonly<Record<string, string>>;
@@ -89,8 +89,8 @@ export interface CustomNodeDiagnostic {
 export interface CustomNodeInput<Schema extends StandardSchemaV1 | undefined = any> {
     readonly alias?: string;
     readonly at?: {
-        readonly paragraphId: string;
         readonly offset: number;
+        readonly paragraphId: string;
     };
     readonly attrs?: Readonly<Record<string, string>>;
     readonly data?: InferSchemaInput<Schema>;
@@ -170,19 +170,19 @@ export interface CustomNodeXmlOptions<Schema extends StandardSchemaV1 | undefine
 // @public
 export type CustomNodeXmlResult = {
     readonly ok: true;
-    readonly xml: string;
     readonly store?: CustomNodeXmlStore;
+    readonly xml: string;
 } | {
-    readonly ok: false;
     readonly code: 'invalidArgs';
+    readonly ok: false;
     readonly reason: string;
 };
 
 // @public
 export interface CustomNodeXmlStore {
     readonly contentTypeOverride: {
-        readonly partName: string;
         readonly contentType: string;
+        readonly partName: string;
     };
     readonly itemPartName: string;
     // (undocumented)
@@ -192,8 +192,8 @@ export interface CustomNodeXmlStore {
     readonly propsXml: string;
     readonly relationships: readonly {
         readonly from: string;
-        readonly type: string;
         readonly target: string;
+        readonly type: string;
     }[];
     readonly storeItemId: string;
 }
@@ -221,10 +221,10 @@ export interface DocumentExportOptions {
 
 // @public
 export type DocumentExportResult = {
-    readonly ok: true;
     readonly bytes: Uint8Array;
-    readonly unwrapped: number;
+    readonly ok: true;
     readonly removed: number;
+    readonly unwrapped: number;
 } | {
     readonly ok: false;
     readonly reason: string;
@@ -238,9 +238,9 @@ export type EncodeTagResult = {
     readonly ok: true;
     readonly tag: string;
 } | {
+    readonly length: number;
     readonly ok: false;
     readonly reason: 'tag-overflow';
-    readonly length: number;
 };
 
 // @public
@@ -324,8 +324,8 @@ export interface StandardSchemaIssue {
 
 // @public
 export type StandardSchemaResult<Output> = {
-    readonly value: Output;
     readonly issues?: undefined;
+    readonly value: Output;
 } | {
     readonly issues: readonly StandardSchemaIssue[];
 };
@@ -334,13 +334,13 @@ export type StandardSchemaResult<Output> = {
 export interface StandardSchemaV1<Input = unknown, Output = Input> {
     // (undocumented)
     readonly '~standard': {
-        readonly version: 1;
-        readonly vendor: string;
-        readonly validate: (value: unknown) => StandardSchemaResult<Output> | Promise<StandardSchemaResult<Output>>;
         readonly types?: {
             readonly input: Input;
             readonly output: Output;
         } | undefined;
+        readonly validate: (value: unknown) => StandardSchemaResult<Output> | Promise<StandardSchemaResult<Output>>;
+        readonly vendor: string;
+        readonly version: 1;
     };
 }
 

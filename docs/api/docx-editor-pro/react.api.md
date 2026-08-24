@@ -121,8 +121,8 @@ export interface ReviewMarkersProps {
     // (undocumented)
     scale?: number;
     window?: {
-        top: number;
         bottom: number;
+        top: number;
     } | null;
 }
 
@@ -195,12 +195,12 @@ export interface UseReviewReturn {
 
 // @public
 export function useStackedReviewPositions(items: readonly {
-    readonly key: string;
     readonly anchorY: number | null;
+    readonly key: string;
 }[], heights: ReadonlyMap<string, number>, options?: {
+    readonly defaultHeight?: number;
     readonly gap?: number;
     readonly scale?: number;
-    readonly defaultHeight?: number;
 }): ReadonlyMap<string, number>;
 
 // (No @packageDocumentation comment for this package)

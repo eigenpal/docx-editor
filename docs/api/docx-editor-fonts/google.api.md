@@ -38,8 +38,8 @@ export interface GoogleFontLoadFailure {
 
 // @public
 export function googleFonts(options?: GoogleFontsOptions): (request: {
-    readonly families: readonly string[];
     readonly defaultFamily: string;
+    readonly families: readonly string[];
 }) => Promise<GoogleFontsFragment>;
 
 // @public

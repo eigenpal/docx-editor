@@ -28,9 +28,9 @@ export interface AddCommentRequest {
 
 // @public
 export type AddCommentResult = {
-    readonly ok: true;
-    readonly commentId: string;
     readonly change: TreeModelChange | null;
+    readonly commentId: string;
+    readonly ok: true;
 } | {
     readonly ok: false;
     readonly reason: TreeOpRejection | 'invalid-author';
@@ -97,8 +97,8 @@ export interface AtomicFieldSpan {
 
 // @public
 export function atomicFieldSpansOf(paragraph: OoxmlParagraphNode, options?: {
-    readonly maxNesting?: number;
     readonly maxInstructionChars?: number;
+    readonly maxNesting?: number;
 }): readonly AtomicFieldSpan[];
 
 // @public
@@ -120,8 +120,8 @@ export function atomicNoteSpansOf(paragraph: OoxmlParagraphNode): readonly Atomi
 export interface AuditPort {
     // (undocumented)
     record(entry: {
-        readonly kind: string;
         readonly at: number;
+        readonly kind: string;
         readonly meta?: Record<string, unknown>;
     }): void;
 }
@@ -187,8 +187,8 @@ export type BookmarkIndex = ReadonlyMap<string, BookmarkAnchor>;
 
 // @public
 export function bookmarkPairNodes(mint: () => string, name: string, id: string): {
-    readonly start: OoxmlNode;
     readonly end: OoxmlNode;
+    readonly start: OoxmlNode;
 };
 
 // @public
@@ -350,8 +350,8 @@ export function collectNodeIds(part: OoxmlPart): Set<string>;
 
 // @public (undocumented)
 export function collectNoteReferences(part: OoxmlPart, options?: {
-    readonly maxHits?: number;
     readonly budget?: NoteReferenceScanBudget;
+    readonly maxHits?: number;
 }): readonly NoteReferenceHit[];
 
 // @public
@@ -414,10 +414,10 @@ export function commentInitials(comment: CommentRecord): string;
 // @public
 export function commentItemsOf(comments: readonly CommentRecord[], anchors: readonly {
     commentId: string;
-    partName: string;
-    start: ReviewPosition;
     end: ReviewPosition;
     orphaned: boolean;
+    partName: string;
+    start: ReviewPosition;
 }[], threadState: ReadonlyMap<string, CommentThreadState>): ReviewCommentItem[];
 
 // @public
@@ -478,65 +478,65 @@ export type ComparatorName = keyof typeof COMPARATORS;
 
 // @public
 export const COMPARATORS: {
-    readonly authoredState: {
-        readonly id: "dev.docx-editor.core.comparator.authored-state";
-        readonly mode: "canonical-exact";
-        readonly ephemera: readonly ["revision", "provenance", "producedAt", "commitId"];
-        readonly note: "canonical normalized authored records; ephemera excluded";
-    };
     readonly anchor: {
+        readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.anchor";
         readonly mode: "exact";
-        readonly ephemera: readonly [];
         readonly note: "internal anchor identity/affinity compares exactly";
     };
-    readonly yjsStateVector: {
-        readonly id: "dev.docx-editor.core.comparator.yjs-state-vector";
+    readonly authoredState: {
+        readonly ephemera: readonly ["revision", "provenance", "producedAt", "commitId"];
+        readonly id: "dev.docx-editor.core.comparator.authored-state";
+        readonly mode: "canonical-exact";
+        readonly note: "canonical normalized authored records; ephemera excluded";
+    };
+    readonly benchmarkEvidence: {
+        readonly ephemera: readonly [];
+        readonly id: "dev.docx-editor.core.comparator.benchmark-evidence";
         readonly mode: "sync-optimization-only";
-        readonly ephemera: readonly [];
-        readonly note: "exchange optimization only; never proves update or delete-set coverage";
-    };
-    readonly shapedRun: {
-        readonly id: "dev.docx-editor.core.comparator.shaped-run";
-        readonly mode: "exact";
-        readonly ephemera: readonly [];
-        readonly note: "glyph ids, clusters, and fixed-point advances compare exactly";
-    };
-    readonly paginationFingerprint: {
-        readonly id: "dev.docx-editor.core.comparator.pagination-fingerprint";
-        readonly mode: "exact";
-        readonly ephemera: readonly [];
-        readonly note: "page/column boundaries, break causes, fixed-point geometry compare exactly";
-    };
-    readonly semanticTree: {
-        readonly id: "dev.docx-editor.core.comparator.semantic-tree";
-        readonly mode: "exact";
-        readonly ephemera: readonly [];
-        readonly note: "reading order, roles, headings, alt text compare exactly";
+        readonly note: "diagnostic evidence, not an equivalence basis";
     };
     readonly hitTest: {
+        readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.hit-test";
         readonly mode: "exact";
-        readonly ephemera: readonly [];
         readonly note: "resolved hit target and cluster affinity compare exactly";
     };
+    readonly paginationFingerprint: {
+        readonly ephemera: readonly [];
+        readonly id: "dev.docx-editor.core.comparator.pagination-fingerprint";
+        readonly mode: "exact";
+        readonly note: "page/column boundaries, break causes, fixed-point geometry compare exactly";
+    };
     readonly pdfSemantics: {
+        readonly ephemera: readonly ["objectNumber", "producer", "creationDate", "modDate", "subsetTag"];
         readonly id: "dev.docx-editor.core.comparator.pdf-semantics";
         readonly mode: "canonical-exact";
-        readonly ephemera: readonly ["objectNumber", "producer", "creationDate", "modDate", "subsetTag"];
         readonly note: "canonical semantic PDF objects; container ephemera excluded";
     };
     readonly rasterCheckpoint: {
+        readonly ephemera: readonly [];
         readonly id: "dev.docx-editor.core.comparator.raster-checkpoint";
         readonly mode: "tolerance";
-        readonly ephemera: readonly [];
         readonly note: "documented unavoidable raster comparison; explicit tolerance only";
     };
-    readonly benchmarkEvidence: {
-        readonly id: "dev.docx-editor.core.comparator.benchmark-evidence";
-        readonly mode: "sync-optimization-only";
+    readonly semanticTree: {
         readonly ephemera: readonly [];
-        readonly note: "diagnostic evidence, not an equivalence basis";
+        readonly id: "dev.docx-editor.core.comparator.semantic-tree";
+        readonly mode: "exact";
+        readonly note: "reading order, roles, headings, alt text compare exactly";
+    };
+    readonly shapedRun: {
+        readonly ephemera: readonly [];
+        readonly id: "dev.docx-editor.core.comparator.shaped-run";
+        readonly mode: "exact";
+        readonly note: "glyph ids, clusters, and fixed-point advances compare exactly";
+    };
+    readonly yjsStateVector: {
+        readonly ephemera: readonly [];
+        readonly id: "dev.docx-editor.core.comparator.yjs-state-vector";
+        readonly mode: "sync-optimization-only";
+        readonly note: "exchange optimization only; never proves update or delete-set coverage";
     };
 };
 
@@ -704,8 +704,8 @@ export function contentControlPropertiesOf(control: OoxmlNode): ContentControlPr
 
 // @public
 export function contentControlsIn(root: OoxmlNode, options?: {
-    readonly maxDepth?: number;
     readonly limit?: number;
+    readonly maxDepth?: number;
 }): readonly ContentControlEntry[];
 
 // @public
@@ -753,8 +753,8 @@ export interface ContentTypeRecords {
 
 // @public
 export function contentTypesPartBytes(pkg: OoxmlPackage): {
-    readonly storageKey: string;
     readonly bytes: Uint8Array;
+    readonly storageKey: string;
 } | null;
 
 // @public
@@ -767,9 +767,9 @@ export interface Contribution {
     readonly payload?: unknown;
     readonly replaceable?: ReplacementPolicy;
     readonly replaces?: {
+        readonly priority?: number;
         readonly targetId: string;
         readonly targetRange: string;
-        readonly priority?: number;
     };
     // (undocumented)
     readonly version: string;
@@ -834,8 +834,8 @@ export interface CustomNodeExportRequest {
 export type CustomNodeExportResult = {
     readonly ok: true;
     readonly pkg: OoxmlPackage;
-    readonly unwrapped: number;
     readonly removed: number;
+    readonly unwrapped: number;
 } | {
     readonly ok: false;
     readonly reason: string;
@@ -854,8 +854,8 @@ dataOwnerPartName?: string): ReadonlyMap<string, CustomNodePayloadRead>;
 
 // @public
 export function customNodePayloadsOf(pkg: OoxmlPackage, storyPartName: string, namespaceUri: string): ReadonlyMap<string, {
-    readonly label: string;
     readonly data: string;
+    readonly label: string;
 }>;
 
 // @public
@@ -897,13 +897,13 @@ export type CustomNodeWriteRejection = TreeOpRejection
 
 // @public (undocumented)
 export type CustomNodeWriteResult = {
-    readonly ok: true;
     readonly change: TreeModelChange | null;
     readonly nodeId?: string;
+    readonly ok: true;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: CustomNodeWriteRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -1011,17 +1011,17 @@ export function deobfuscateFont(bytes: Uint8Array, fontKey: string): Uint8Array 
 
 // @public
 export const DEPENDENCY_KEY_IDS: {
-    readonly style: "dev.docx-editor.core.dep.style";
+    readonly annotation: "dev.docx-editor.core.dep.annotation";
+    readonly field: "dev.docx-editor.core.dep.field";
+    readonly font: "dev.docx-editor.core.dep.font";
+    readonly headerFooter: "dev.docx-editor.core.dep.header-footer";
+    readonly image: "dev.docx-editor.core.dep.image";
+    readonly note: "dev.docx-editor.core.dep.note";
     readonly numbering: "dev.docx-editor.core.dep.numbering";
     readonly section: "dev.docx-editor.core.dep.section";
     readonly story: "dev.docx-editor.core.dep.story";
-    readonly font: "dev.docx-editor.core.dep.font";
-    readonly image: "dev.docx-editor.core.dep.image";
+    readonly style: "dev.docx-editor.core.dep.style";
     readonly table: "dev.docx-editor.core.dep.table";
-    readonly field: "dev.docx-editor.core.dep.field";
-    readonly note: "dev.docx-editor.core.dep.note";
-    readonly headerFooter: "dev.docx-editor.core.dep.header-footer";
-    readonly annotation: "dev.docx-editor.core.dep.annotation";
 };
 
 // @public
@@ -1086,9 +1086,9 @@ export function diffSemanticDigests(before: SemanticDigest, after: SemanticDiges
 
 // @public
 export type DigestDifference = {
-    readonly path: string;
-    readonly before: string;
     readonly after: string;
+    readonly before: string;
+    readonly path: string;
 };
 
 // @public
@@ -1158,8 +1158,8 @@ export interface DrawingPositionInput {
 
 // @public
 export type DrawingPropertyIdResult = {
-    readonly ok: true;
     readonly id: number;
+    readonly ok: true;
 } | {
     readonly ok: false;
     readonly reason: 'invalidArgs';
@@ -1228,29 +1228,29 @@ export function ensureNumberingLevel(pkg: OoxmlPackage, numId: string, level: nu
 
 // @public (undocumented)
 export type EquationExpression = {
-    readonly kind: 'row';
     readonly items: readonly EquationExpression[];
+    readonly kind: 'row';
 } | {
     readonly kind: 'text';
     readonly value: string;
 } | {
+    readonly denominator: EquationExpression;
     readonly kind: 'fraction';
     readonly numerator: EquationExpression;
-    readonly denominator: EquationExpression;
 } | {
+    readonly degree?: EquationExpression;
     readonly kind: 'radical';
     readonly radicand: EquationExpression;
-    readonly degree?: EquationExpression;
 } | {
-    readonly kind: 'script';
     readonly base: EquationExpression;
+    readonly kind: 'script';
     readonly subscript?: EquationExpression;
     readonly superscript?: EquationExpression;
 } | {
-    readonly kind: 'nary';
-    readonly operator: string;
     readonly body: EquationExpression;
+    readonly kind: 'nary';
     readonly lowerLimit?: EquationExpression;
+    readonly operator: string;
     readonly upperLimit?: EquationExpression;
 } | {
     readonly kind: 'fallback';
@@ -1350,9 +1350,9 @@ export type FixtureOutcome = 'applied' | 'aborted' | 'validation' | 'conflict' |
 export type FixtureSource = {
     readonly kind: 'create';
 } | {
+    readonly bytesRef: string;
     readonly kind: 'docx';
     readonly sha256: string;
-    readonly bytesRef: string;
 };
 
 // @public
@@ -1445,34 +1445,34 @@ export type HeaderFooterLifecycleImpact = 'flow-structural' | 'global';
 
 // @public
 export type HeaderFooterLifecycleOp = {
+    readonly evenAndOddHeaders?: boolean;
+    readonly kind: HeaderFooterKind;
     readonly op: 'createHeaderFooter';
     readonly sectionIndex: number;
-    readonly kind: HeaderFooterKind;
-    readonly variant: HeaderFooterVariant;
     readonly titlePage?: boolean;
-    readonly evenAndOddHeaders?: boolean;
+    readonly variant: HeaderFooterVariant;
 } | {
+    readonly kind: HeaderFooterKind;
     readonly op: 'deleteHeaderFooter';
     readonly sectionIndex: number;
-    readonly kind: HeaderFooterKind;
     readonly variant: HeaderFooterVariant;
 } | {
+    readonly kind: HeaderFooterKind;
     readonly op: 'linkToPrevious';
     readonly sectionIndex: number;
-    readonly kind: HeaderFooterKind;
     readonly variant: HeaderFooterVariant;
 } | {
+    readonly kind: HeaderFooterKind;
     readonly op: 'unlinkFromPrevious';
     readonly sectionIndex: number;
-    readonly kind: HeaderFooterKind;
     readonly variant: HeaderFooterVariant;
 } | {
+    readonly evenAndOddHeaders?: boolean;
+    readonly footerDistanceTwips?: number;
+    readonly headerDistanceTwips?: number;
     readonly op: 'setSectionFurnitureOptions';
     readonly sectionIndex?: number;
     readonly titlePage?: boolean;
-    readonly evenAndOddHeaders?: boolean;
-    readonly headerDistanceTwips?: number;
-    readonly footerDistanceTwips?: number;
 };
 
 // @public
@@ -1480,15 +1480,15 @@ export type HeaderFooterLifecycleRejection = 'invalidArgs' | 'tree-invariant';
 
 // @public
 export type HeaderFooterLifecycleResult = {
+    readonly createdPartName?: string;
+    readonly createdRId?: string;
+    readonly impact: HeaderFooterLifecycleImpact;
     readonly ok: true;
     readonly package: OoxmlPackage;
-    readonly impact: HeaderFooterLifecycleImpact;
-    readonly createdRId?: string;
-    readonly createdPartName?: string;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: HeaderFooterLifecycleRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -1530,11 +1530,11 @@ export type HeaderFooterVariant = 'default' | 'first' | 'even';
 
 // @public
 export type HrefProjection = {
-    readonly ok: true;
     readonly href: string;
+    readonly ok: true;
 } | {
-    readonly ok: false;
     readonly inert: true;
+    readonly ok: false;
 };
 
 // @public
@@ -1603,10 +1603,10 @@ export interface ImageDecodePort {
     }> | null>;
     // (undocumented)
     decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
-        pixelWidth: number;
-        pixelHeight: number;
         dpiX: number;
         dpiY: number;
+        pixelHeight: number;
+        pixelWidth: number;
     }>>;
 }
 
@@ -1623,8 +1623,8 @@ export type ImageRelationshipResolution = {
     readonly raw: string;
 } | {
     readonly mode: 'external';
-    readonly sinkSafe: boolean;
     readonly raw: string;
+    readonly sinkSafe: boolean;
 } | {
     readonly mode: 'missing';
 };
@@ -1664,20 +1664,20 @@ export function imageResourceLookupFor(pkg: OoxmlPackage, options: CreateImageRe
 
 // @public
 export type ImageResourceState = {
-    readonly kind: 'ready';
-    readonly partName: string;
     readonly contentId: string;
-    readonly resourceKey: string;
-    readonly validatedHandle: ValidatedImageBytesHandle;
-    readonly mime: RenderableImageMime;
-    readonly pixelWidth: number;
-    readonly pixelHeight: number;
     readonly dpiX: number;
     readonly dpiY: number;
+    readonly kind: 'ready';
+    readonly mime: RenderableImageMime;
+    readonly partName: string;
+    readonly pixelHeight: number;
+    readonly pixelWidth: number;
+    readonly resourceKey: string;
+    readonly validatedHandle: ValidatedImageBytesHandle;
 } | {
     readonly kind: 'unrenderable';
-    readonly partName: string | null;
     readonly mime: RenderableImageMime | PreservedImageMime | 'unknown';
+    readonly partName: string | null;
     readonly reason: 'unsupported-format' | 'non-picture-graphic' | 'signature-mismatch' | 'decode-failed' | 'resource-limit';
 } | {
     readonly kind: 'external';
@@ -1699,11 +1699,11 @@ export type ImpactClass = 'text-local' | 'paragraph-local' | 'flow-structural' |
 
 // @public
 export type IndexResult = {
-    readonly ok: true;
     readonly index: ContentTypeIndex;
+    readonly ok: true;
 } | {
-    readonly ok: false;
     readonly error: ContentTypeError;
+    readonly ok: false;
 };
 
 // @public
@@ -1930,9 +1930,9 @@ export type LimitUnit = 'bytes' | 'count' | 'depth' | 'ratio' | 'passes';
 
 // @public (undocumented)
 export type LinearMathOmmlResult = {
-    readonly ok: true;
-    readonly expression: EquationExpression;
     readonly equation: OoxmlGenericElementNode;
+    readonly expression: EquationExpression;
+    readonly ok: true;
 } | {
     readonly ok: false;
     readonly reason: LinearMathRejection;
@@ -1940,8 +1940,8 @@ export type LinearMathOmmlResult = {
 
 // @public (undocumented)
 export type LinearMathParseResult = {
-    readonly ok: true;
     readonly expression: EquationExpression;
+    readonly ok: true;
 } | {
     readonly ok: false;
     readonly reason: LinearMathRejection;
@@ -2102,8 +2102,8 @@ export function noteAtomText(): typeof NOTE_ATOM_CHAR;
 // @public
 export type NoteDiagnostic = {
     readonly code: 'dangling-note-reference';
-    readonly noteKind: NoteKind;
     readonly noteId: number;
+    readonly noteKind: NoteKind;
     readonly sourceNodeId?: string;
 } | {
     readonly code: 'note-reference-scan-truncated';
@@ -2126,37 +2126,37 @@ export type NoteLifecycleImpact = 'flow-structural' | 'global';
 
 // @public
 export type NoteLifecycleOp = {
-    readonly op: 'insertNote';
     readonly noteKind: NoteKind;
-    readonly paragraphId: string;
     readonly offset: number;
+    readonly op: 'insertNote';
+    readonly paragraphId: string;
 } | {
-    readonly op: 'deleteNote';
+    readonly noteId: number;
     readonly noteKind: NoteKind;
-    readonly noteId: number;
+    readonly op: 'deleteNote';
 } | {
+    readonly fromKind: NoteKind;
+    readonly noteId: number;
     readonly op: 'convertNote';
-    readonly fromKind: NoteKind;
-    readonly noteId: number;
 } | {
+    readonly fromKind: NoteKind;
     readonly op: 'convertAllNotes';
-    readonly fromKind: NoteKind;
 } | {
-    readonly op: 'setNoteProperties';
-    readonly scope: 'document' | 'section';
-    readonly sectionIndex?: number;
-    readonly footnote?: {
-        readonly numFmt?: string;
-        readonly numRestart?: string;
-        readonly position?: string;
-        readonly numStart?: number;
-    };
     readonly endnote?: {
         readonly numFmt?: string;
         readonly numRestart?: string;
-        readonly position?: string;
         readonly numStart?: number;
+        readonly position?: string;
     };
+    readonly footnote?: {
+        readonly numFmt?: string;
+        readonly numRestart?: string;
+        readonly numStart?: number;
+        readonly position?: string;
+    };
+    readonly op: 'setNoteProperties';
+    readonly scope: 'document' | 'section';
+    readonly sectionIndex?: number;
 };
 
 // @public
@@ -2169,16 +2169,16 @@ export type NoteLifecycleRejection = 'invalidArgs' | 'tree-invariant';
 
 // @public
 export type NoteLifecycleResult = {
-    readonly ok: true;
-    readonly package: OoxmlPackage;
+    readonly createdPartName?: string;
     readonly impact: NoteLifecycleImpact;
     readonly noteId?: number;
     readonly noteKind?: NoteKind;
-    readonly createdPartName?: string;
+    readonly ok: true;
+    readonly package: OoxmlPackage;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: NoteLifecycleRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -2513,8 +2513,8 @@ export type OoxmlEditResult = {
     readonly ok: true;
     readonly part: OoxmlPart;
 } | {
-    readonly ok: false;
     readonly issues: readonly OoxmlInvariantIssue[];
+    readonly ok: false;
 };
 
 // @public
@@ -2643,8 +2643,8 @@ export type OoxmlInvariantIssueCode = 'invalid-id' | 'duplicate-id' | 'invalid-n
 export type OoxmlInvariantResult = {
     readonly ok: true;
 } | {
-    readonly ok: false;
     readonly issues: readonly OoxmlInvariantIssue[];
+    readonly ok: false;
 };
 
 // @public
@@ -2736,9 +2736,9 @@ export type OoxmlPackageResult = {
     readonly ok: true;
     readonly package: OoxmlPackage;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: OoxmlPackageRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -2930,16 +2930,16 @@ export function orderedContentControlProperties(children: readonly OoxmlNode[]):
 
 // @public
 export const ORIGIN_IDS: {
-    readonly mutationHuman: "dev.docx-editor.core.origin.mutation.human";
+    readonly awareness: "dev.docx-editor.core.origin.awareness";
     readonly mutationAgent: "dev.docx-editor.core.origin.mutation.agent";
-    readonly mutationRemote: "dev.docx-editor.core.origin.mutation.remote";
-    readonly mutationUndo: "dev.docx-editor.core.origin.mutation.undo";
-    readonly mutationRedo: "dev.docx-editor.core.origin.mutation.redo";
+    readonly mutationHuman: "dev.docx-editor.core.origin.mutation.human";
     readonly mutationMigration: "dev.docx-editor.core.origin.mutation.migration";
+    readonly mutationRedo: "dev.docx-editor.core.origin.mutation.redo";
+    readonly mutationRemote: "dev.docx-editor.core.origin.mutation.remote";
     readonly mutationRepair: "dev.docx-editor.core.origin.mutation.repair";
     readonly mutationServer: "dev.docx-editor.core.origin.mutation.server";
+    readonly mutationUndo: "dev.docx-editor.core.origin.mutation.undo";
     readonly projection: "dev.docx-editor.core.origin.projection";
-    readonly awareness: "dev.docx-editor.core.origin.awareness";
 };
 
 // @public
@@ -2973,18 +2973,18 @@ export interface PackageInvariantIssue {
 export type PackageInvariantResult = {
     readonly ok: true;
 } | {
-    readonly ok: false;
     readonly issues: readonly PackageInvariantIssue[];
+    readonly ok: false;
 };
 
 // @public
 export type PackageTransactResult = {
-    readonly ok: true;
     readonly change: TreeModelChange | null;
+    readonly ok: true;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: StoryTargetRejection | TreeOpRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -2994,8 +2994,8 @@ export const PAGE_BREAK_CHAR = "\f";
 export interface ParagraphDigest {
     readonly genericStructure: readonly string[];
     readonly ordinal: number;
-    readonly paragraphProperties: readonly string[];
     readonly paraId: string | null;
+    readonly paragraphProperties: readonly string[];
     readonly path: string;
     readonly runProperties: readonly (readonly string[])[];
     readonly text: string;
@@ -3047,8 +3047,8 @@ export function parseNoteId(raw: string | undefined): number | null;
 
 // @public
 export function parseNoteScopeId(id: string): {
-    readonly noteKind: NoteKind;
     readonly noteId: number;
+    readonly noteKind: NoteKind;
 } | null;
 
 // @public
@@ -3068,11 +3068,11 @@ export interface PersistencePort {
 
 // @public
 export function planTocEntries(part: OoxmlPart, outline: readonly TocOutlineHeading[], instruction: TocInstruction, pageNumberByParagraphId: ReadonlyMap<string, string>, excludeParagraphIds: ReadonlySet<string>): {
-    readonly entries: readonly TocEntryPlan[];
     readonly bookmarksToCreate: readonly {
-        paragraphId: string;
         name: string;
+        paragraphId: string;
     }[];
+    readonly entries: readonly TocEntryPlan[];
 };
 
 // @public
@@ -3113,11 +3113,11 @@ export type PreservedImageMime = 'image/tiff' | 'image/x-emf' | 'image/x-wmf';
 
 // @public
 export function projectDrawing(drawing: OoxmlDrawingNode, context: Readonly<{
-    ownerPartName: string;
-    supportedMcRequires: ReadonlySet<string>;
     limits: DrawingProjectionLimits;
     namespaceScope?: ReadonlyMap<string, string>;
+    ownerPartName: string;
     resolveRelationship?: RelationshipTargetResolver;
+    supportedMcRequires: ReadonlySet<string>;
 }>): DrawingProjection | null;
 
 // @public
@@ -3174,8 +3174,8 @@ export type RegistryErrorCode = 'invalid-id' | 'invalid-version' | 'duplicate-ex
 // @public
 export type RelationshipError = {
     readonly code: 'duplicate-id';
-    readonly ownerPart: string;
     readonly id: string;
+    readonly ownerPart: string;
 };
 
 // @public
@@ -3196,11 +3196,11 @@ export interface RelationshipRecord {
 
 // @public
 export type RelationshipSetResult = {
-    readonly ok: true;
     readonly byOwner: ReadonlyMap<string, readonly RelationshipRecord[]>;
+    readonly ok: true;
 } | {
-    readonly ok: false;
     readonly error: RelationshipError;
+    readonly ok: false;
 };
 
 // @public
@@ -3208,16 +3208,16 @@ export function relationshipsOf(pkg: OoxmlPackage, ownerPart: string): readonly 
 
 // @public
 export function relationshipTargetIn(pkg: OoxmlPackage, ownerPart: string, relationshipId: string): {
-    readonly target: string;
     readonly external: boolean;
     readonly sinkSafe?: boolean;
+    readonly target: string;
 } | null;
 
 // @public
 export type RelationshipTargetResolver = (relationshipId: string) => {
-    readonly target: string;
     readonly external: boolean;
     readonly sinkSafe?: boolean;
+    readonly target: string;
 } | null;
 
 // @public
@@ -3329,12 +3329,12 @@ export interface ResolvedRegistry {
 // @public
 export type ResolvedRelationship = {
     readonly mode: 'Internal';
-    readonly target: NameResult;
     readonly raw: string;
+    readonly target: NameResult;
 } | {
     readonly mode: 'External';
-    readonly sinkSafe: NameResult;
     readonly raw: string;
+    readonly sinkSafe: NameResult;
 };
 
 // @public
@@ -3377,8 +3377,8 @@ export function resolveRelationship(rec: RelationshipRecord): ResolvedRelationsh
 
 // @public
 export type ResolveResult = {
-    readonly ok: true;
     readonly contentType: string;
+    readonly ok: true;
     readonly source: 'override' | 'default';
 } | {
     readonly ok: false;
@@ -3409,12 +3409,12 @@ export interface ResourceLimits {
 
 // @public
 export const RESULT_IDS: {
+    readonly aborted: "dev.docx-editor.core.result.aborted";
     readonly applied: "dev.docx-editor.core.result.applied";
-    readonly validation: "dev.docx-editor.core.result.validation";
+    readonly authorization: "dev.docx-editor.core.result.authorization";
     readonly conflict: "dev.docx-editor.core.result.conflict";
     readonly resource: "dev.docx-editor.core.result.resource";
-    readonly authorization: "dev.docx-editor.core.result.authorization";
-    readonly aborted: "dev.docx-editor.core.result.aborted";
+    readonly validation: "dev.docx-editor.core.result.validation";
 };
 
 // @public
@@ -3527,8 +3527,8 @@ export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
 export function runAddressRanges(paragraph: Extract<OoxmlNode, {
     kind: 'paragraph';
 }>): Map<string, {
-    start: number;
     end: number;
+    start: number;
 }>;
 
 // @public
@@ -3550,19 +3550,19 @@ export function runsCovering(part: OoxmlPart, paragraphId: string, start: number
 
 // @public
 export const RUNTIME_PORT_IDS: {
-    readonly fonts: "dev.docx-editor.core.port.fonts";
-    readonly shaping: "dev.docx-editor.core.port.shaping";
-    readonly images: "dev.docx-editor.core.port.images";
-    readonly clock: "dev.docx-editor.core.port.clock";
-    readonly identity: "dev.docx-editor.core.port.identity";
-    readonly persistence: "dev.docx-editor.core.port.persistence";
-    readonly transport: "dev.docx-editor.core.port.transport";
-    readonly scheduling: "dev.docx-editor.core.port.scheduling";
     readonly audit: "dev.docx-editor.core.port.audit";
     readonly authorization: "dev.docx-editor.core.port.authorization";
-    readonly resourceAccounting: "dev.docx-editor.core.port.resource-accounting";
     readonly cancellation: "dev.docx-editor.core.port.cancellation";
+    readonly clock: "dev.docx-editor.core.port.clock";
     readonly externalResourceConsent: "dev.docx-editor.core.port.external-resource-consent";
+    readonly fonts: "dev.docx-editor.core.port.fonts";
+    readonly identity: "dev.docx-editor.core.port.identity";
+    readonly images: "dev.docx-editor.core.port.images";
+    readonly persistence: "dev.docx-editor.core.port.persistence";
+    readonly resourceAccounting: "dev.docx-editor.core.port.resource-accounting";
+    readonly scheduling: "dev.docx-editor.core.port.scheduling";
+    readonly shaping: "dev.docx-editor.core.port.shaping";
+    readonly transport: "dev.docx-editor.core.port.transport";
 };
 
 // @public
@@ -3656,9 +3656,9 @@ export function setCommentResolved(store: TreeDocumentStore, commentId: string, 
 
 // @public
 export type SetCommentResolvedResult = {
-    readonly ok: true;
-    readonly changed: boolean;
     readonly change: TreeModelChange | null;
+    readonly changed: boolean;
+    readonly ok: true;
 } | {
     readonly ok: false;
     readonly reason: TreeOpRejection | 'unknown-comment';
@@ -3714,12 +3714,12 @@ export function storyParagraphs(root: OoxmlNode): readonly OoxmlNode[];
 // @public
 export type StoryResolveResult = {
     readonly ok: true;
-    readonly story: TreeStoryRef;
     readonly store: TreeDocumentStore;
+    readonly story: TreeStoryRef;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: StoryTargetRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -3885,61 +3885,61 @@ export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "d
 // @public
 export type TreeDocOp = {
     readonly op: 'replaceStoryBlocks';
-    readonly storyRootId: string;
     readonly paragraphs: readonly string[];
+    readonly storyRootId: string;
 } | {
-    readonly op: 'insertToc';
-    readonly beforeParagraphId: string;
-    readonly instruction: string;
     readonly alias: string;
-    readonly entries: readonly {
-        readonly level: number;
-        readonly text: string;
-        readonly headingParagraphId: string;
-        readonly bookmarkName: string;
-        readonly pageNumberText: string;
-    }[];
+    readonly beforeParagraphId: string;
     readonly bookmarksToCreate: readonly {
-        readonly paragraphId: string;
         readonly name: string;
+        readonly paragraphId: string;
     }[];
+    readonly entries: readonly {
+        readonly bookmarkName: string;
+        readonly headingParagraphId: string;
+        readonly level: number;
+        readonly pageNumberText: string;
+        readonly text: string;
+    }[];
+    readonly instruction: string;
+    readonly op: 'insertToc';
 } | {
+    readonly bias?: 'left' | 'right';
+    readonly inside?: string;
+    readonly offset: number;
     readonly op: 'insertText';
     readonly paragraphId: string;
-    readonly offset: number;
-    readonly text: string;
     readonly revision?: RevisionAttributionInput;
-    readonly inside?: string;
-    readonly bias?: 'left' | 'right';
+    readonly text: string;
 } | {
+    readonly end: number;
     readonly op: 'deleteText';
     readonly paragraphId: string;
-    readonly start: number;
-    readonly end: number;
     readonly revision?: RevisionAttributionInput;
+    readonly start: number;
 } | {
+    readonly kind: 'ins' | 'del';
     readonly op: 'setParagraphMarkRevision';
     readonly paragraphId: string;
-    readonly kind: 'ins' | 'del';
     readonly revision: RevisionAttributionInput;
 } | {
     readonly op: 'proposeParagraphMerge';
     readonly paragraphId: string;
     readonly revision: RevisionAttributionInput;
 } | {
-    readonly op: 'insertCommentMarker';
-    readonly paragraphId: string;
-    readonly offset: number;
     readonly commentId: string;
     readonly marker: 'start' | 'end' | 'reference';
+    readonly offset: number;
+    readonly op: 'insertCommentMarker';
+    readonly paragraphId: string;
 } | {
+    readonly localName?: string;
     readonly op: 'acceptRevision';
     readonly revision: RevisionAddress;
-    readonly localName?: string;
 } | {
+    readonly localName?: string;
     readonly op: 'rejectRevision';
     readonly revision: RevisionAddress;
-    readonly localName?: string;
 } | {
     readonly op: 'acceptAllRevisions';
     readonly scopeRootId?: string;
@@ -3947,348 +3947,348 @@ export type TreeDocOp = {
     readonly op: 'rejectAllRevisions';
     readonly scopeRootId?: string;
 } | {
+    readonly offset: number;
     readonly op: 'insertTab';
     readonly paragraphId: string;
-    readonly offset: number;
 } | {
+    readonly offset: number;
     readonly op: 'insertHardBreak';
     readonly paragraphId: string;
-    readonly offset: number;
 } | {
+    readonly offset: number;
     readonly op: 'insertPageBreak';
     readonly paragraphId: string;
-    readonly offset: number;
 } | {
+    readonly field: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y';
+    readonly offset: number;
     readonly op: 'insertPageField';
     readonly paragraphId: string;
-    readonly offset: number;
-    readonly field: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y';
 } | {
+    readonly level: number;
     readonly op: 'setListLevel';
     readonly paragraphId: string;
-    readonly level: number;
 } | {
     readonly op: 'setParagraphMarkProperties';
     readonly paragraphId: string;
     readonly properties: readonly OoxmlProperty[];
 } | {
+    readonly level?: number;
+    readonly numId: string | null;
     readonly op: 'setListNumbering';
     readonly paragraphId: string;
-    readonly numId: string | null;
-    readonly level?: number;
 } | {
+    readonly inForcePositionsTwips?: readonly number[];
     readonly op: 'setParagraphTabStops';
     readonly paragraphId: string;
     readonly stops: readonly TabStopWrite[];
-    readonly inForcePositionsTwips?: readonly number[];
 } | {
+    readonly offset: number;
     readonly op: 'splitParagraph';
     readonly paragraphId: string;
-    readonly offset: number;
 } | {
+    readonly offsets: readonly number[];
     readonly op: 'splitParagraphMany';
     readonly paragraphId: string;
-    readonly offsets: readonly number[];
     readonly revision?: RevisionAttributionInput;
 } | {
-    readonly op: 'joinParagraphs';
     readonly firstId: string;
+    readonly op: 'joinParagraphs';
     readonly secondId: string;
 } | {
+    readonly end: number;
     readonly op: 'setRunProperties';
     readonly paragraphId: string;
-    readonly start: number;
-    readonly end: number;
     readonly properties: readonly OoxmlProperty[];
+    readonly start: number;
     readonly targetRunIds?: readonly string[];
 } | {
     readonly op: 'setParagraphProperties';
     readonly paragraphId: string;
     readonly properties: readonly OoxmlProperty[];
 } | {
-    readonly op: 'setSectionProperties';
-    readonly pageWidthTwips?: number;
-    readonly pageHeightTwips?: number;
-    readonly orientation?: 'portrait' | 'landscape';
-    readonly marginTopTwips?: number;
-    readonly marginRightTwips?: number;
+    readonly anchorParagraphId?: string;
     readonly marginBottomTwips?: number;
     readonly marginLeftTwips?: number;
-    readonly anchorParagraphId?: string;
+    readonly marginRightTwips?: number;
+    readonly marginTopTwips?: number;
+    readonly op: 'setSectionProperties';
+    readonly orientation?: 'portrait' | 'landscape';
+    readonly pageHeightTwips?: number;
+    readonly pageWidthTwips?: number;
 } | {
     readonly op: 'setSectionMark';
     readonly paragraphId: string;
 } | {
+    readonly anchor?: string;
+    readonly end: number;
     readonly op: 'insertHyperlink';
     readonly paragraphId: string;
+    readonly relationshipId?: string;
     readonly start: number;
-    readonly end: number;
-    readonly relationshipId?: string;
-    readonly anchor?: string;
-    readonly tooltip?: string;
     readonly styleId?: string;
-} | {
-    readonly op: 'setHyperlinkTarget';
-    readonly linkId: string;
-    readonly relationshipId?: string;
-    readonly anchor?: string;
     readonly tooltip?: string;
 } | {
-    readonly op: 'removeHyperlink';
+    readonly anchor?: string;
     readonly linkId: string;
+    readonly op: 'setHyperlinkTarget';
+    readonly relationshipId?: string;
+    readonly tooltip?: string;
 } | {
-    readonly op: 'setMathEquation';
+    readonly linkId: string;
+    readonly op: 'removeHyperlink';
+} | {
     readonly equationId: string;
     readonly linear: string;
+    readonly op: 'setMathEquation';
 } | {
-    readonly op: 'removeMathEquation';
     readonly equationId: string;
+    readonly op: 'removeMathEquation';
 } | {
-    readonly op: 'insertInlineContentControl';
-    readonly paragraphId: string;
-    readonly offset: number;
-    readonly tag: string;
-    readonly text: string;
     readonly alias?: string;
-    readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
     readonly dataBinding?: {
         readonly prefixMappings: string;
-        readonly xpath: string;
         readonly storeItemId: string;
+        readonly xpath: string;
     };
+    readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
+    readonly offset: number;
+    readonly op: 'insertInlineContentControl';
+    readonly paragraphId: string;
+    readonly tag: string;
+    readonly text: string;
 } | {
-    readonly op: 'addRepeatingSectionItem';
     readonly controlId: string;
     readonly index?: number;
+    readonly op: 'addRepeatingSectionItem';
 } | {
-    readonly op: 'removeRepeatingSectionItem';
     readonly controlId: string;
     readonly index: number;
+    readonly op: 'removeRepeatingSectionItem';
 } | {
-    readonly op: 'deleteBlock';
     readonly blockId: string;
+    readonly op: 'deleteBlock';
 } | {
-    readonly op: 'insertTable';
     readonly beforeParagraphId: string;
-    readonly rows: number;
     readonly cols: number;
     readonly columnWidthTwips: number;
+    readonly op: 'insertTable';
+    readonly rows: number;
 } | {
     readonly op: 'insertTableRow';
-    readonly tableId: string;
-    readonly rowId: string;
-    readonly where: 'above' | 'below';
     readonly revision?: RevisionAttributionInput;
+    readonly rowId: string;
+    readonly tableId: string;
+    readonly where: 'above' | 'below';
 } | {
     readonly op: 'deleteTableRow';
-    readonly tableId: string;
-    readonly rowId: string;
     readonly referenceCellId?: string;
     readonly revision?: RevisionAttributionInput;
-} | {
-    readonly op: 'insertTableColumn';
+    readonly rowId: string;
     readonly tableId: string;
-    readonly where: 'left' | 'right';
+} | {
     readonly gridColumnId: string;
-} | {
     readonly op: 'insertTableColumn';
     readonly tableId: string;
     readonly where: 'left' | 'right';
-    readonly referenceCellId: string;
 } | {
+    readonly op: 'insertTableColumn';
+    readonly referenceCellId: string;
+    readonly tableId: string;
+    readonly where: 'left' | 'right';
+} | {
+    readonly gridColumnId: string;
     readonly op: 'deleteTableColumn';
     readonly tableId: string;
-    readonly gridColumnId: string;
 } | {
-    readonly op: 'setTableColumnWidths';
-    readonly tableId: string;
     readonly leftGridColumnId: string;
-    readonly rightGridColumnId: string;
     readonly leftWidthTwips: number;
+    readonly op: 'setTableColumnWidths';
+    readonly rightGridColumnId: string;
     readonly rightWidthTwips: number;
+    readonly tableId: string;
 } | {
+    readonly columnWidthTwips: number;
+    readonly gridColumnId: string;
     readonly op: 'setTableRightEdgeWidth';
     readonly tableId: string;
-    readonly gridColumnId: string;
-    readonly columnWidthTwips: number;
     readonly tableWidthTwips: number;
 } | {
-    readonly op: 'setTableRowHeight';
-    readonly tableId: string;
-    readonly rowId: string;
     readonly heightTwips: number;
-} | {
-    readonly op: 'setTableCellBorders';
+    readonly op: 'setTableRowHeight';
+    readonly rowId: string;
     readonly tableId: string;
+} | {
     readonly cellIds: readonly string[];
+    readonly op: 'setTableCellBorders';
     readonly scope: 'none';
+    readonly tableId: string;
     readonly target: TableBorderEdgeTarget;
 } | {
-    readonly op: 'setTableCellBorders';
-    readonly tableId: string;
     readonly cellIds: readonly string[];
+    readonly op: 'setTableCellBorders';
     readonly scope: TableBorderEdgeTarget;
     readonly spec: TableBorderSpecInput;
-} | {
-    readonly op: 'setTableCellFill';
     readonly tableId: string;
+} | {
     readonly cellIds: readonly string[];
     readonly color: TreeDocColorValue | null;
+    readonly op: 'setTableCellFill';
+    readonly tableId: string;
 } | {
+    readonly alignment: 'top' | 'center' | 'bottom';
+    readonly cellIds: readonly string[];
     readonly op: 'setTableCellVerticalAlignment';
     readonly tableId: string;
-    readonly cellIds: readonly string[];
-    readonly alignment: 'top' | 'center' | 'bottom';
 } | {
+    readonly evenAndOddHeaders?: boolean;
+    readonly kind: 'header' | 'footer';
     readonly op: 'createHeaderFooter';
     readonly sectionIndex: number;
-    readonly kind: 'header' | 'footer';
-    readonly variant: 'default' | 'first' | 'even';
     readonly titlePage?: boolean;
-    readonly evenAndOddHeaders?: boolean;
+    readonly variant: 'default' | 'first' | 'even';
 } | {
+    readonly kind: 'header' | 'footer';
     readonly op: 'deleteHeaderFooter';
     readonly sectionIndex: number;
-    readonly kind: 'header' | 'footer';
     readonly variant: 'default' | 'first' | 'even';
 } | {
+    readonly kind: 'header' | 'footer';
     readonly op: 'linkToPrevious';
     readonly sectionIndex: number;
-    readonly kind: 'header' | 'footer';
     readonly variant: 'default' | 'first' | 'even';
 } | {
+    readonly kind: 'header' | 'footer';
     readonly op: 'unlinkFromPrevious';
     readonly sectionIndex: number;
-    readonly kind: 'header' | 'footer';
     readonly variant: 'default' | 'first' | 'even';
 } | {
+    readonly evenAndOddHeaders?: boolean;
+    readonly footerDistanceTwips?: number;
+    readonly headerDistanceTwips?: number;
     readonly op: 'setSectionFurnitureOptions';
     readonly sectionIndex?: number;
     readonly titlePage?: boolean;
-    readonly evenAndOddHeaders?: boolean;
-    readonly headerDistanceTwips?: number;
-    readonly footerDistanceTwips?: number;
 } | {
-    readonly op: 'insertNote';
     readonly noteKind: 'footnote' | 'endnote';
-    readonly paragraphId: string;
     readonly offset: number;
+    readonly op: 'insertNote';
+    readonly paragraphId: string;
 } | {
-    readonly op: 'deleteNote';
+    readonly noteId: number;
     readonly noteKind: 'footnote' | 'endnote';
-    readonly noteId: number;
+    readonly op: 'deleteNote';
 } | {
+    readonly fromKind: 'footnote' | 'endnote';
+    readonly noteId: number;
     readonly op: 'convertNote';
-    readonly fromKind: 'footnote' | 'endnote';
-    readonly noteId: number;
 } | {
+    readonly fromKind: 'footnote' | 'endnote';
     readonly op: 'convertAllNotes';
-    readonly fromKind: 'footnote' | 'endnote';
 } | {
-    readonly op: 'setContentControlValue';
     readonly controlId: string;
+    readonly op: 'setContentControlValue';
     readonly value: string | ContentControlValueInput;
 } | {
-    readonly op: 'setContentControlProperties';
-    readonly controlId: string;
-    readonly tag?: string | null;
     readonly alias?: string | null;
+    readonly controlId: string;
     readonly lock?: ContentControlLock;
+    readonly op: 'setContentControlProperties';
+    readonly tag?: string | null;
 } | {
-    readonly op: 'removeContentControl';
     readonly controlId: string;
     readonly keepContent?: boolean;
+    readonly op: 'removeContentControl';
 } | {
+    readonly alias?: string;
+    readonly end: number;
+    readonly lock?: ContentControlLock;
     readonly op: 'insertContentControl';
     readonly paragraphId: string;
     readonly start: number;
-    readonly end: number;
-    readonly type: InsertableContentControlKind;
     readonly tag?: string;
-    readonly alias?: string;
-    readonly lock?: ContentControlLock;
+    readonly type: InsertableContentControlKind;
 } | {
-    readonly op: 'setNoteProperties';
-    readonly scope: 'document' | 'section';
-    readonly sectionIndex?: number;
-    readonly footnote?: {
-        readonly numFmt?: string;
-        readonly numRestart?: string;
-        readonly position?: string;
-        readonly numStart?: number;
-    };
     readonly endnote?: {
         readonly numFmt?: string;
         readonly numRestart?: string;
-        readonly position?: string;
         readonly numStart?: number;
+        readonly position?: string;
     };
+    readonly footnote?: {
+        readonly numFmt?: string;
+        readonly numRestart?: string;
+        readonly numStart?: number;
+        readonly position?: string;
+    };
+    readonly op: 'setNoteProperties';
+    readonly scope: 'document' | 'section';
+    readonly sectionIndex?: number;
 } | {
+    readonly drawing: OoxmlDrawingNode;
+    readonly offset: number;
     readonly op: 'insertDrawing';
     readonly paragraphId: string;
-    readonly offset: number;
-    readonly drawing: OoxmlDrawingNode;
 } | {
-    readonly op: 'replaceDrawingResource';
     readonly drawingNodeId: string;
+    readonly op: 'replaceDrawingResource';
     readonly relationshipId: string;
 } | {
-    readonly op: 'deleteDrawing';
     readonly drawingNodeId: string;
+    readonly op: 'deleteDrawing';
     readonly revision?: RevisionAttributionInput;
 } | {
-    readonly op: 'resizeDrawing';
     readonly drawingNodeId: string;
     readonly extentEmu: {
         readonly cx: number;
         readonly cy: number;
     };
+    readonly op: 'resizeDrawing';
 } | {
-    readonly op: 'cropDrawing';
-    readonly drawingNodeId: string;
     readonly crop: SourceCrop;
-} | {
-    readonly op: 'positionDrawing';
     readonly drawingNodeId: string;
+    readonly op: 'cropDrawing';
+} | {
+    readonly drawingNodeId: string;
+    readonly op: 'positionDrawing';
     readonly position: DrawingPositionInput;
 } | {
-    readonly op: 'setDrawingWrap';
     readonly drawingNodeId: string;
+    readonly op: 'setDrawingWrap';
     readonly wrap: ImageWrapTarget;
 } | {
-    readonly op: 'setDrawingMetadata';
-    readonly drawingNodeId: string;
-    readonly title: string;
     readonly description: string;
+    readonly drawingNodeId: string;
     readonly hyperlink?: string | null;
+    readonly op: 'setDrawingMetadata';
+    readonly title: string;
 } | {
-    readonly op: 'setDrawingLocks';
     readonly drawingNodeId: string;
     readonly locks: DrawingLocksInput;
+    readonly op: 'setDrawingLocks';
 } | {
-    readonly op: 'transformDrawing';
-    readonly drawingNodeId: string;
     readonly action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
+    readonly drawingNodeId: string;
+    readonly op: 'transformDrawing';
 } | {
+    readonly bookmarksToCreate: readonly {
+        readonly name: string;
+        readonly paragraphId: string;
+    }[];
+    readonly entries: readonly {
+        readonly bookmarkName: string;
+        readonly headingParagraphId: string;
+        readonly level: number;
+        readonly pageNumberText: string;
+        readonly text: string;
+    }[];
     readonly op: 'replaceTocResult';
     readonly tocId: string;
-    readonly entries: readonly {
-        readonly level: number;
-        readonly text: string;
-        readonly headingParagraphId: string;
-        readonly bookmarkName: string;
-        readonly pageNumberText: string;
-    }[];
-    readonly bookmarksToCreate: readonly {
-        readonly paragraphId: string;
-        readonly name: string;
-    }[];
 } | {
     readonly op: 'rewriteTocPageNumbers';
     readonly tocId: string;
     readonly updates: readonly {
-        readonly paragraphId: string;
         readonly pageNumberText: string;
+        readonly paragraphId: string;
     }[];
 };
 

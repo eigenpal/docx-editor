@@ -20,9 +20,9 @@ export type ColorValue = {
     readonly value: string;
 } | {
     readonly kind: 'theme';
+    readonly shade?: number;
     readonly slot: string;
     readonly tint?: number;
-    readonly shade?: number;
 } | {
     readonly kind: 'auto';
 };
@@ -34,8 +34,8 @@ export type ContainerRef = {
     part: 'header' | 'footer';
     rId: string;
 } | {
-    part: 'footnote' | 'endnote';
     noteId: number;
+    part: 'footnote' | 'endnote';
 };
 
 // @public
@@ -135,28 +135,28 @@ export interface DocEdits {
     // (undocumented)
     acceptRevision: {
         id: number;
-        part?: 'body' | 'footnote' | 'endnote';
         noteId?: number;
+        part?: 'body' | 'footnote' | 'endnote';
     };
     // (undocumented)
     addComment: {
+        author: string;
         target: DocTarget;
         text: string;
-        author: string;
     };
     // (undocumented)
     addRepeatingSectionItem: {
-        target: DocTarget;
         index?: number;
+        target: DocTarget;
     };
     adjustIndent: {
-        target: DocTarget;
         direction: 'increase' | 'decrease';
+        target: DocTarget;
     };
     // (undocumented)
     applyFormatting: {
-        target: DocTarget;
         marks: RunFormatting;
+        target: DocTarget;
     };
     // (undocumented)
     applyVariables: {
@@ -168,32 +168,32 @@ export interface DocEdits {
     };
     // (undocumented)
     insertBreak: {
-        target: DocTarget;
         kind: 'page' | 'column' | 'line' | 'section';
+        target: DocTarget;
     };
     insertContentControl: {
-        target: DocTarget;
         subtype: InsertableContentControlType;
         tag?: string;
+        target: DocTarget;
         title?: string;
     };
     // (undocumented)
     insertHyperlink: {
-        target: DocTarget;
         href: string;
+        target: DocTarget;
         text?: string;
     };
     // (undocumented)
     insertImage: {
-        target: DocTarget;
         data: Uint8Array;
         extent?: Extent;
+        target: DocTarget;
     };
     // (undocumented)
     insertTable: {
-        target: DocTarget;
-        rows: number;
         cols: number;
+        rows: number;
+        target: DocTarget;
     };
     // (undocumented)
     insertText: {
@@ -206,27 +206,27 @@ export interface DocEdits {
     };
     // (undocumented)
     proposeDeletion: {
-        target: DocTarget;
         author: string;
+        target: DocTarget;
     };
     // (undocumented)
     proposeInsertion: {
+        author: string;
         target: DocTarget;
         text: string;
-        author: string;
     };
     proposeReplacement: {
-        target: DocTarget;
-        replaceWith: string;
         author: string;
+        replaceWith: string;
+        target: DocTarget;
     };
     // (undocumented)
     rejectAllRevisions: Record<never, never>;
     // (undocumented)
     rejectRevision: {
         id: number;
-        part?: 'body' | 'footnote' | 'endnote';
         noteId?: number;
+        part?: 'body' | 'footnote' | 'endnote';
     };
     // (undocumented)
     removeContentControl: {
@@ -238,8 +238,8 @@ export interface DocEdits {
     };
     // (undocumented)
     removeRepeatingSectionItem: {
-        target: DocTarget;
         index: number;
+        target: DocTarget;
     };
     // (undocumented)
     replaceText: {
@@ -248,9 +248,9 @@ export interface DocEdits {
     };
     // (undocumented)
     replyComment: {
+        author: string;
         commentId: string;
         text: string;
-        author: string;
     };
     // (undocumented)
     resolveComment: {
@@ -263,8 +263,8 @@ export interface DocEdits {
     };
     // (undocumented)
     setParagraphStyle: {
-        target: DocTarget;
         styleId: string;
+        target: DocTarget;
     };
     // (undocumented)
     setVariable: {
@@ -276,8 +276,8 @@ export interface DocEdits {
         target: DocTarget;
     };
     toggleList: {
-        target: DocTarget;
         kind: 'bullet' | 'ordered';
+        target: DocTarget;
     };
 }
 
@@ -302,8 +302,8 @@ export interface DocQueries {
     };
     // (undocumented)
     findText: {
-        text: string;
         container?: ContainerRef;
+        text: string;
     };
     // (undocumented)
     paragraphs: {
@@ -381,11 +381,11 @@ export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typ
 
 // @public
 export type ExecResult = {
-    ok: true;
     changed: boolean;
+    ok: true;
 } | {
-    ok: false;
     code: ExecErrorCode;
+    ok: false;
     reason: string;
     target?: DocTarget;
 };
@@ -413,9 +413,9 @@ export interface IndentFormatting {
     readonly firstLine: number;
     readonly left: number;
     readonly mixed: {
+        readonly firstLine: boolean;
         readonly left: boolean;
         readonly right: boolean;
-        readonly firstLine: boolean;
     };
     readonly right: number;
 }
@@ -550,8 +550,8 @@ export interface SectionProperties {
     readonly margins: PageMargins;
     // (undocumented)
     readonly pageSize: {
-        widthTwips: number;
         heightTwips: number;
+        widthTwips: number;
     };
     readonly titlePage?: boolean;
 }

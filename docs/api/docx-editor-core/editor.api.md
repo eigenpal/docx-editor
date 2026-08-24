@@ -40,8 +40,6 @@ export function captureImageMutationPreconditions(editor: Pick<DocxEditorInstanc
 
 // @public
 export const CHROME_GROUPS: readonly [{
-    readonly id: "history";
-    readonly labelKey: "formattingBar.groups.history";
     readonly controls: readonly [{
         readonly id: "undo";
         readonly labelKey: "formattingBar.undoShortcut";
@@ -57,59 +55,59 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "history";
+    readonly labelKey: "formattingBar.groups.history";
 }, {
-    readonly id: "zoom";
-    readonly labelKey: "formattingBar.groups.zoom";
     readonly controls: readonly [{
         readonly id: "level";
-        readonly shape: "stepper";
-        readonly valueText: "100%";
         readonly labelKey: "formattingBar.groups.zoom";
         readonly paths: null;
-        readonly valueKey: "zoom.zoomLevel";
+        readonly shape: "stepper";
         readonly state: {
             readonly kind: "command";
         };
+        readonly valueKey: "zoom.zoomLevel";
+        readonly valueText: "100%";
     }];
+    readonly id: "zoom";
+    readonly labelKey: "formattingBar.groups.zoom";
 }, {
-    readonly id: "styles";
-    readonly labelKey: "formattingBar.groups.styles";
     readonly controls: readonly [{
         readonly id: "style";
-        readonly shape: "dropdown";
         readonly labelKey: "styles.selectAriaLabel";
         readonly paths: null;
-        readonly valueKey: "styles.normalText";
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "value";
         };
+        readonly valueKey: "styles.normalText";
     }];
+    readonly id: "styles";
+    readonly labelKey: "formattingBar.groups.styles";
 }, {
-    readonly id: "font";
-    readonly labelKey: "formattingBar.groups.font";
     readonly controls: readonly [{
         readonly id: "family";
-        readonly shape: "dropdown";
         readonly labelKey: "font.selectAriaLabel";
         readonly paths: null;
-        readonly valueKey: "font.sansSerif";
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "value";
         };
+        readonly valueKey: "font.sansSerif";
     }, {
         readonly id: "size";
-        readonly shape: "stepper";
-        readonly valueText: "11";
         readonly labelKey: "fontSize.listLabel";
         readonly paths: null;
-        readonly valueKey: "fontSize.label";
+        readonly shape: "stepper";
         readonly state: {
             readonly kind: "value";
         };
+        readonly valueKey: "fontSize.label";
+        readonly valueText: "11";
     }];
+    readonly id: "font";
+    readonly labelKey: "formattingBar.groups.font";
 }, {
-    readonly id: "text";
-    readonly labelKey: "formattingBar.groups.textFormatting";
     readonly controls: readonly [{
         readonly id: "bold";
         readonly labelKey: "formattingBar.boldShortcut";
@@ -140,22 +138,22 @@ export const CHROME_GROUPS: readonly [{
         };
     }, {
         readonly id: "color";
-        readonly shape: "colorSplit";
-        readonly swatch: "#ff0000";
         readonly labelKey: "formattingBar.fontColor";
         readonly paths: readonly string[];
+        readonly shape: "colorSplit";
         readonly state: {
             readonly kind: "value";
         };
+        readonly swatch: "#ff0000";
     }, {
         readonly id: "highlight";
-        readonly shape: "colorSplit";
-        readonly swatch: "#ffff00";
         readonly labelKey: "formattingBar.highlightColor";
         readonly paths: readonly string[];
+        readonly shape: "colorSplit";
         readonly state: {
             readonly kind: "value";
         };
+        readonly swatch: "#ffff00";
     }, {
         readonly id: "link";
         readonly labelKey: "formattingBar.insertLinkShortcut";
@@ -164,9 +162,9 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "text";
+    readonly labelKey: "formattingBar.groups.textFormatting";
 }, {
-    readonly id: "script";
-    readonly labelKey: "formattingBar.groups.script";
     readonly controls: readonly [{
         readonly id: "super";
         readonly labelKey: "formattingBar.superscript";
@@ -182,9 +180,9 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "script";
+    readonly labelKey: "formattingBar.groups.script";
 }, {
-    readonly id: "alignment";
-    readonly labelKey: "formattingBar.groups.alignment";
     readonly controls: readonly [{
         readonly id: "left";
         readonly labelKey: "alignment.alignLeft";
@@ -214,9 +212,9 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "alignment";
+    readonly labelKey: "formattingBar.groups.alignment";
 }, {
-    readonly id: "list";
-    readonly labelKey: "formattingBar.groups.listFormatting";
     readonly controls: readonly [{
         readonly id: "bullet";
         readonly labelKey: "lists.bulletList";
@@ -247,16 +245,16 @@ export const CHROME_GROUPS: readonly [{
         };
     }, {
         readonly id: "lineSpacing";
-        readonly shape: "dropdown";
         readonly labelKey: "lineSpacing.label";
         readonly paths: readonly string[];
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "command";
         };
     }];
+    readonly id: "list";
+    readonly labelKey: "formattingBar.groups.listFormatting";
 }, {
-    readonly id: "format";
-    readonly labelKey: "formattingBar.clearFormatting";
     readonly controls: readonly [{
         readonly id: "clear";
         readonly labelKey: "formattingBar.clearFormatting";
@@ -265,30 +263,30 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "format";
+    readonly labelKey: "formattingBar.clearFormatting";
 }, {
-    readonly id: "review";
-    readonly labelKey: "formattingBar.commentsAndChanges";
     readonly controls: readonly [{
         readonly id: "comments";
-        readonly shape: "icon";
         readonly labelKey: "formattingBar.commentsAndChanges";
         readonly paths: readonly string[];
+        readonly shape: "icon";
         readonly state: {
             readonly kind: "command";
         };
     }, {
         readonly id: "editingMode";
-        readonly shape: "dropdown";
         readonly labelKey: "editingMode.label";
-        readonly valueKey: "editingMode.editing";
         readonly paths: readonly string[];
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "command";
         };
+        readonly valueKey: "editingMode.editing";
     }];
+    readonly id: "review";
+    readonly labelKey: "formattingBar.commentsAndChanges";
 }, {
-    readonly id: "contentControl";
-    readonly labelKey: "contentControl.group";
     readonly contextual: true;
     readonly controls: readonly [{
         readonly id: "showAll";
@@ -319,9 +317,9 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "contentControl";
+    readonly labelKey: "contentControl.group";
 }, {
-    readonly id: "image";
-    readonly labelKey: "formattingBar.groups.image";
     readonly contextual: true;
     readonly controls: readonly [{
         readonly id: "insert";
@@ -339,26 +337,26 @@ export const CHROME_GROUPS: readonly [{
         };
     }, {
         readonly id: "wrap";
-        readonly shape: "dropdown";
         readonly labelKey: "formattingBar.imageWrap";
         readonly paths: readonly string[];
-        readonly valueKey: "imageWrap.inline";
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "value";
         };
+        readonly valueKey: "imageWrap.inline";
     }, {
         readonly id: "altText";
-        readonly shape: "dropdown";
         readonly labelKey: "formattingBar.altText";
         readonly paths: null;
-        readonly valueKey: "imageProperties.altText";
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "value";
         };
+        readonly valueKey: "imageProperties.altText";
     }];
+    readonly id: "image";
+    readonly labelKey: "formattingBar.groups.image";
 }, {
-    readonly id: "table";
-    readonly labelKey: "formattingBar.groups.table";
     readonly contextual: true;
     readonly controls: readonly [{
         readonly id: "insert";
@@ -369,50 +367,50 @@ export const CHROME_GROUPS: readonly [{
         };
     }, {
         readonly id: "borderTarget";
-        readonly shape: "dropdown";
         readonly labelKey: "table.borders.tooltip";
         readonly paths: readonly string[];
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "value";
         };
     }, {
         readonly id: "borderColor";
-        readonly shape: "colorSplit";
-        readonly swatch: "#000000";
         readonly labelKey: "table.borderColor";
         readonly paths: readonly string[];
+        readonly shape: "colorSplit";
         readonly state: {
             readonly kind: "value";
         };
+        readonly swatch: "#000000";
     }, {
         readonly id: "borderStyle";
-        readonly shape: "dropdown";
         readonly labelKey: "table.borders.styleAriaLabel";
         readonly paths: readonly string[];
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "value";
         };
     }, {
         readonly id: "borderWidth";
-        readonly shape: "dropdown";
         readonly labelKey: "table.borderWidth";
         readonly paths: readonly string[];
+        readonly shape: "dropdown";
         readonly state: {
             readonly kind: "value";
         };
     }, {
         readonly id: "cellFill";
-        readonly shape: "colorSplit";
-        readonly swatch: "#ffffff";
         readonly labelKey: "table.cellFillColor";
         readonly paths: readonly string[];
+        readonly shape: "colorSplit";
         readonly state: {
             readonly kind: "value";
         };
+        readonly swatch: "#ffffff";
     }];
+    readonly id: "table";
+    readonly labelKey: "formattingBar.groups.table";
 }, {
-    readonly id: "paragraph";
-    readonly labelKey: "dialogs.paragraph.title";
     readonly contextual: true;
     readonly controls: readonly [{
         readonly id: "dialog";
@@ -422,9 +420,9 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "paragraph";
+    readonly labelKey: "dialogs.paragraph.title";
 }, {
-    readonly id: "file";
-    readonly labelKey: "toolbar.file";
     readonly contextual: true;
     readonly controls: readonly [{
         readonly id: "open";
@@ -448,9 +446,9 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "file";
+    readonly labelKey: "toolbar.file";
 }, {
-    readonly id: "insert";
-    readonly labelKey: "toolbar.insert";
     readonly contextual: true;
     readonly controls: readonly [{
         readonly id: "footnote";
@@ -523,6 +521,8 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }];
+    readonly id: "insert";
+    readonly labelKey: "toolbar.insert";
 }];
 
 // @public
@@ -672,8 +672,8 @@ export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewIte
 
 // @public
 export type ColorLowerResult = {
-    readonly ok: true;
     readonly color: TreeDocColorValue;
+    readonly ok: true;
 } | ColorLowerRefusal;
 
 // @public
@@ -690,22 +690,22 @@ export function composeFontConfiguration(base: FontConfigurationBase, ...fragmen
 
 // @public
 export function computeImageResizeResult(options: {
-    readonly handle: ImageResizeHandle;
-    readonly startWidthEmu: number;
-    readonly startHeightEmu: number;
-    readonly startBounds: {
-        readonly x: number;
-        readonly y: number;
-        readonly width: number;
-        readonly height: number;
-    };
-    readonly startPosition: DrawingPositionInput | null;
     readonly anchorFrameOrigin?: AnchorFrameOrigin | null;
     readonly deltaXPt: number;
     readonly deltaYPt: number;
-    readonly transform: DrawingTransform;
-    readonly preserveAspect: boolean;
+    readonly handle: ImageResizeHandle;
     readonly kind: 'inline' | 'anchored';
+    readonly preserveAspect: boolean;
+    readonly startBounds: {
+        readonly height: number;
+        readonly width: number;
+        readonly x: number;
+        readonly y: number;
+    };
+    readonly startHeightEmu: number;
+    readonly startPosition: DrawingPositionInput | null;
+    readonly startWidthEmu: number;
+    readonly transform: DrawingTransform;
 }): ImageResizeResult;
 
 // @public
@@ -871,10 +871,10 @@ export interface EquationActivation {
     readonly equation: SurfaceEquation;
     // (undocumented)
     readonly rect: {
-        readonly left: number;
-        readonly top: number;
-        readonly right: number;
         readonly bottom: number;
+        readonly left: number;
+        readonly right: number;
+        readonly top: number;
     };
 }
 
@@ -918,13 +918,13 @@ export interface FinalizedImageOverlayInteraction extends ImageResizeResult {
 
 // @public
 export function finalizeImageOverlayInteraction(options: {
-    readonly session: ImageInteractionSession;
+    readonly accumulatedScrollPt: number;
+    readonly anchorFrameOrigin: AnchorFrameOrigin | null;
+    readonly aspectLocked: boolean;
     readonly deltaXPt: number;
     readonly deltaYPt: number;
-    readonly accumulatedScrollPt: number;
-    readonly aspectLocked: boolean;
+    readonly session: ImageInteractionSession;
     readonly shiftKey: boolean;
-    readonly anchorFrameOrigin: AnchorFrameOrigin | null;
 }): FinalizedImageOverlayInteraction;
 
 // @public
@@ -1015,10 +1015,10 @@ export interface HyperlinkActivation {
     // (undocumented)
     readonly link: SurfaceHyperlink;
     readonly rect: {
-        readonly left: number;
-        readonly top: number;
         readonly bottom: number;
+        readonly left: number;
         readonly right: number;
+        readonly top: number;
     };
 }
 
@@ -1031,10 +1031,10 @@ export interface HyperlinkChromeHandlers {
 // @public
 export interface HyperlinkOps {
     applyHyperlink(input: {
-        readonly url?: string;
         readonly anchor?: string;
         readonly text?: string;
         readonly tooltip?: string;
+        readonly url?: string;
     }): boolean;
     fieldLinkAtCaret(): SurfaceHyperlink | null;
     linkAtCaret(): SurfaceHyperlink | null;
@@ -1087,10 +1087,10 @@ export interface ImageDecodePort {
     }> | null>;
     // (undocumented)
     decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
-        pixelWidth: number;
-        pixelHeight: number;
         dpiX: number;
         dpiY: number;
+        pixelHeight: number;
+        pixelWidth: number;
     }>>;
 }
 
@@ -1117,10 +1117,10 @@ export interface ImageInteractionSession {
     readonly preconditions: ImageMutationPreconditions;
     // (undocumented)
     readonly startBounds: {
+        readonly height: number;
+        readonly width: number;
         readonly x: number;
         readonly y: number;
-        readonly width: number;
-        readonly height: number;
     };
     // (undocumented)
     readonly startHeightEmu: number;
@@ -1148,10 +1148,10 @@ export interface ImageResizeResult {
     readonly position: DrawingPositionInput | null;
     // (undocumented)
     readonly previewBounds: {
+        readonly height: number;
+        readonly width: number;
         readonly x: number;
         readonly y: number;
-        readonly width: number;
-        readonly height: number;
     };
     // (undocumented)
     readonly widthEmu: number;
@@ -1228,9 +1228,9 @@ export type OpenPaginatedResult = {
     readonly ok: true;
     readonly surface: PaginatedSurface;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: string;
-    readonly detail?: string;
 };
 
 // @public
@@ -1249,10 +1249,10 @@ export interface OverlayFrameRect {
 
 // @public
 export function overlayFrameToSheetCssPixels(layout: SemanticLayout, frame: OverlayFrameRect, coordinates: SurfaceOverlayCoordinates): {
+    readonly height: number;
     readonly left: number;
     readonly top: number;
     readonly width: number;
-    readonly height: number;
 };
 
 // @public
@@ -1266,14 +1266,14 @@ export interface PaginatedSurface {
     // (undocumented)
     applyDrawingOps(ops: readonly DrawingTreeDocOp[]): TreeApplyResult;
     applyHeaderFooterLifecycle(op: {
+        readonly evenAndOddHeaders?: boolean;
+        readonly footerDistanceTwips?: number;
+        readonly headerDistanceTwips?: number;
+        readonly kind?: 'header' | 'footer';
         readonly op: 'createHeaderFooter' | 'deleteHeaderFooter' | 'linkToPrevious' | 'unlinkFromPrevious' | 'setSectionFurnitureOptions';
         readonly sectionIndex?: number;
-        readonly kind?: 'header' | 'footer';
-        readonly variant?: 'default' | 'first' | 'even';
         readonly titlePage?: boolean;
-        readonly evenAndOddHeaders?: boolean;
-        readonly headerDistanceTwips?: number;
-        readonly footerDistanceTwips?: number;
+        readonly variant?: 'default' | 'first' | 'even';
     }): {
         readonly ok: true;
     } | {
@@ -1315,17 +1315,17 @@ export interface PaginatedSurface {
     editingMode(): SurfaceEditingMode;
     enqueueType(text: string): void;
     enterHeaderFooter(args: {
-        readonly rId: string;
-        readonly pageIndex?: number;
-        readonly sectionIndex?: number;
         readonly kind?: 'header' | 'footer';
-        readonly variant?: 'default' | 'first' | 'even';
+        readonly pageIndex?: number;
         readonly position?: SemanticPosition;
+        readonly rId: string;
+        readonly sectionIndex?: number;
+        readonly variant?: 'default' | 'first' | 'even';
     }): boolean;
     // (undocumented)
     enterNote(scopeId: string, position?: {
-        paragraphId: string;
         offset: number;
+        paragraphId: string;
     }): boolean;
     // (undocumented)
     readonly equations: EquationOps;
@@ -1339,15 +1339,15 @@ export interface PaginatedSurface {
     formatting(): SurfaceFormatting;
     headerFooterState(): {
         readonly editing: 'header' | 'footer' | null;
-        readonly sectionIndex: number;
-        readonly variant?: 'default' | 'first' | 'even';
-        readonly rId?: string;
-        readonly partName?: string;
-        readonly inherited?: boolean;
-        readonly titlePage?: boolean;
         readonly evenAndOddHeaders?: boolean;
-        readonly headerDistanceTwips?: number;
         readonly footerDistanceTwips?: number;
+        readonly headerDistanceTwips?: number;
+        readonly inherited?: boolean;
+        readonly partName?: string;
+        readonly rId?: string;
+        readonly sectionIndex: number;
+        readonly titlePage?: boolean;
+        readonly variant?: 'default' | 'first' | 'even';
     } | null;
     readonly hyperlinks: HyperlinkOps;
     // (undocumented)
@@ -1371,8 +1371,8 @@ export interface PaginatedSurface {
     layoutSession(): {
         readonly stats: {
             readonly placed: number;
-            readonly total: number;
             readonly reusedPages: number;
+            readonly total: number;
         };
     };
     // (undocumented)
@@ -1390,8 +1390,8 @@ export interface PaginatedSurface {
     releaseSelection(pin: SelectionPin): void;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
-        readonly expectedPackageRevision: number;
         readonly commitGuard?: () => boolean;
+        readonly expectedPackageRevision: number;
     }): Promise<ImageIntentResult>;
     retainedSelection(): SemanticSelection | null;
     retainSelection(): SelectionPin;
@@ -1417,26 +1417,26 @@ export interface PaginatedSurface {
     // (undocumented)
     setEditingMode(mode: SurfaceEditingMode): void;
     setIndent(update: {
+        readonly firstLine?: number | null;
         readonly left?: number | null;
         readonly right?: number | null;
-        readonly firstLine?: number | null;
     }): boolean;
     // (undocumented)
     setNoteProperties(args: {
-        readonly scope: 'document' | 'section';
-        readonly sectionIndex?: number;
-        readonly footnote?: {
-            readonly numFmt?: string;
-            readonly numRestart?: string;
-            readonly position?: string;
-            readonly numStart?: number;
-        };
         readonly endnote?: {
             readonly numFmt?: string;
             readonly numRestart?: string;
-            readonly position?: string;
             readonly numStart?: number;
+            readonly position?: string;
         };
+        readonly footnote?: {
+            readonly numFmt?: string;
+            readonly numRestart?: string;
+            readonly numStart?: number;
+            readonly position?: string;
+        };
+        readonly scope: 'document' | 'section';
+        readonly sectionIndex?: number;
     }): boolean;
     setParagraphFormat(update: SurfaceParagraphFormat): boolean;
     setParagraphProperties(entries: readonly ParagraphPropertyEdit[]): void;
@@ -1447,14 +1447,14 @@ export interface PaginatedSurface {
     setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     setSectionProperties(update: {
-        readonly pageWidthTwips?: number;
-        readonly pageHeightTwips?: number;
-        readonly orientation?: 'portrait' | 'landscape';
-        readonly marginTopTwips?: number;
-        readonly marginRightTwips?: number;
+        readonly anchorParagraphId?: string;
         readonly marginBottomTwips?: number;
         readonly marginLeftTwips?: number;
-        readonly anchorParagraphId?: string;
+        readonly marginRightTwips?: number;
+        readonly marginTopTwips?: number;
+        readonly orientation?: 'portrait' | 'landscape';
+        readonly pageHeightTwips?: number;
+        readonly pageWidthTwips?: number;
     }): boolean;
     setSelection(next: SemanticSelection): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
@@ -1564,9 +1564,9 @@ export function pointsToEmu(points: number): number;
 // @public
 export function positionInputFromPropertiesCommand(command: {
     readonly horizontalEmu?: number;
-    readonly verticalEmu?: number;
     readonly relativeToH?: string;
     readonly relativeToV?: string;
+    readonly verticalEmu?: number;
 }, selected: {
     readonly position?: DrawingPositionInput | null;
 } | null): DrawingPositionInput;
@@ -1577,9 +1577,9 @@ export function probeTableChromeCommand(slot: TableChromeSlotId, draft?: TableCh
 // @public
 export function propertiesCommandHasPositionFields(command: {
     readonly horizontalEmu?: number;
-    readonly verticalEmu?: number;
     readonly relativeToH?: string;
     readonly relativeToV?: string;
+    readonly verticalEmu?: number;
 }): boolean;
 
 // @public
@@ -1610,8 +1610,8 @@ export function resolveSvgIntrinsicSize(bytes: Uint8Array, limits: ImageResource
 export function resolveThemeColorHex(color: Extract<ColorValue, {
     kind: 'theme';
 }>, themeColors: readonly DocumentThemeColorEntry[]): {
-    ok: true;
     hex: string;
+    ok: true;
 } | {
     ok: false;
     reason: string;
@@ -1634,9 +1634,9 @@ export interface ReviewModelInput {
     readonly commentsPart?: OoxmlPart | undefined;
     // (undocumented)
     readonly customNodePayloads?: ReadonlyMap<string, {
-        readonly nodeId: string;
-        readonly label: string;
         readonly data: string;
+        readonly label: string;
+        readonly nodeId: string;
     }> | undefined;
     readonly customNodes?: readonly unknown[] | undefined;
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
@@ -1690,14 +1690,14 @@ export type RulerIndentHandle = 'firstLine' | 'hanging' | 'left' | 'right';
 
 // @public
 export function rulerPageBox(pages: readonly {
-    readonly index: number;
     readonly box: {
-        width: number;
         height: number;
+        width: number;
     };
+    readonly index: number;
 }[]): {
-    width: number;
     height: number;
+    width: number;
 } | null;
 
 // @public

@@ -129,10 +129,10 @@ export { composeFontConfiguration }
 
 // @public (undocumented)
 export const CONTENT_CONTROL_SLOTS: {
-    readonly showAll: "contentControl.showAll";
     readonly formFill: "contentControl.formFill";
     readonly inspector: "contentControl.inspector";
     readonly remove: "contentControl.remove";
+    readonly showAll: "contentControl.showAll";
 };
 
 // @public
@@ -197,13 +197,13 @@ export interface ContextMenuAnchor {
 // @public (undocumented)
 export const ContextMenuCellVerticalAlignment: vue.DefineComponent<vue.ExtractPropTypes<{
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
     };
 }>> & Readonly<{}>, {
     hidden: boolean;
@@ -242,103 +242,103 @@ export interface ContextMenuContextValue {
 // @public (undocumented)
 export const ContextMenuCopy: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    shortcutKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
     shortcutKey: string;
-    className: string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -346,103 +346,103 @@ export const ContextMenuCopy: {
 // @public (undocumented)
 export const ContextMenuCut: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    shortcutKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
     shortcutKey: string;
-    className: string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -450,103 +450,103 @@ export const ContextMenuCut: {
 // @public (undocumented)
 export const ContextMenuDelete: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    shortcutKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
     shortcutKey: string;
-    className: string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -554,103 +554,103 @@ export const ContextMenuDelete: {
 // @public (undocumented)
 export const ContextMenuDeleteTable: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    hidden: {
-        type: BooleanConstructor;
-        default: undefined;
     };
     destructive: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
-    destructive: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -658,103 +658,103 @@ export const ContextMenuDeleteTable: {
 // @public (undocumented)
 export const ContextMenuDeleteTableColumn: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    hidden: {
-        type: BooleanConstructor;
-        default: undefined;
     };
     destructive: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
-    destructive: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -762,103 +762,103 @@ export const ContextMenuDeleteTableColumn: {
 // @public (undocumented)
 export const ContextMenuDeleteTableRow: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    hidden: {
-        type: BooleanConstructor;
-        default: undefined;
     };
     destructive: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
-    destructive: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -866,103 +866,103 @@ export const ContextMenuDeleteTableRow: {
 // @public (undocumented)
 export const ContextMenuInsertColumnLeft: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    hidden: {
-        type: BooleanConstructor;
-        default: undefined;
     };
     destructive: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
-    destructive: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -970,103 +970,103 @@ export const ContextMenuInsertColumnLeft: {
 // @public (undocumented)
 export const ContextMenuInsertColumnRight: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    hidden: {
-        type: BooleanConstructor;
-        default: undefined;
     };
     destructive: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
-    destructive: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -1074,103 +1074,103 @@ export const ContextMenuInsertColumnRight: {
 // @public (undocumented)
 export const ContextMenuInsertRowAbove: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    hidden: {
-        type: BooleanConstructor;
-        default: undefined;
     };
     destructive: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
-    destructive: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -1178,184 +1178,184 @@ export const ContextMenuInsertRowAbove: {
 // @public (undocumented)
 export const ContextMenuInsertRowBelow: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
+            default: undefined;
             type: StringConstructor;
-            default: undefined;
-        };
-        hidden: {
-            type: BooleanConstructor;
-            default: undefined;
         };
         destructive: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
-        destructive: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    hidden: {
-        type: BooleanConstructor;
-        default: undefined;
     };
     destructive: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
-    destructive: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
 
 // @public (undocumented)
 export const ContextMenuItem: vue.DefineComponent<vue.ExtractPropTypes<{
-    label: {
-        type: StringConstructor;
-        required: true;
-    };
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    shortcut: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    disabled: {
-        type: BooleanConstructor;
-        default: undefined;
-    };
-    disabledReason: {
-        type: StringConstructor;
-        default: undefined;
-    };
     active: {
+        default: undefined;
         type: BooleanConstructor;
-        default: undefined;
-    };
-    onSelect: {
-        type: PropType<() => void>;
-        default: undefined;
     };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
+    };
+    disabled: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    disabledReason: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    label: {
+        required: true;
+        type: StringConstructor;
+    };
+    onSelect: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+    shortcut: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    label: {
-        type: StringConstructor;
-        required: true;
-    };
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    shortcut: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    disabled: {
-        type: BooleanConstructor;
-        default: undefined;
-    };
-    disabledReason: {
-        type: StringConstructor;
-        default: undefined;
-    };
     active: {
+        default: undefined;
         type: BooleanConstructor;
-        default: undefined;
-    };
-    onSelect: {
-        type: PropType<() => void>;
-        default: undefined;
     };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
+    };
+    disabled: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    disabledReason: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    label: {
+        required: true;
+        type: StringConstructor;
+    };
+    onSelect: {
+        default: undefined;
+        type: PropType<() => void>;
+    };
+    shortcut: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
-    disabledReason: string;
     active: boolean;
+    className: string;
+    disabled: boolean;
+    disabledReason: string;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
-    disabled: boolean;
-    className: string;
     onSelect: () => void;
     shortcut: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
@@ -1382,142 +1382,142 @@ export interface ContextMenuItemProps {
 
 // @public (undocumented)
 export const ContextMenuPaste: vue.DefineComponent<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    shortcutKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    shortcutKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
+    className: string;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
     shortcutKey: string;
-    className: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const ContextMenuRefreshToc: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -1525,88 +1525,88 @@ export const ContextMenuRefreshToc: {
 // @public (undocumented)
 export const ContextMenuRefreshTocPageNumbers: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
-        className: string;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
-    className: string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -1614,103 +1614,103 @@ export const ContextMenuRefreshTocPageNumbers: {
 // @public (undocumented)
 export const ContextMenuSelectAll: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        icon: {
-            type: PropType<VNode>;
-            default: undefined;
-        };
-        labelKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
-        shortcutKey: {
-            type: StringConstructor;
-            default: undefined;
-        };
         className: {
-            type: StringConstructor;
             default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        shortcutKey: {
+            default: undefined;
+            type: StringConstructor;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
         hidden: boolean;
         icon: VNode<vue.RendererNode, vue.RendererElement, {
             [key: string]: any;
         }>;
         labelKey: string;
         shortcutKey: string;
-        className: string;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    icon: {
-        type: PropType<VNode>;
-        default: undefined;
-    };
-    labelKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    shortcutKey: {
-        type: StringConstructor;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
     hidden: boolean;
     icon: VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>;
     labelKey: string;
     shortcutKey: string;
-    className: string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -1725,87 +1725,87 @@ export { createFontSource }
 
 // @public @deprecated (undocumented)
 export const DocumentName: vue.DefineComponent<vue.ExtractPropTypes<{
-    value: {
-        type: StringConstructor;
-        default: string;
-    };
     onChange: {
-        type: PropType<(value: string) => void>;
         default: undefined;
+        type: PropType<(value: string) => void>;
+    };
+    value: {
+        default: string;
+        type: StringConstructor;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    value: {
-        type: StringConstructor;
-        default: string;
-    };
     onChange: {
-        type: PropType<(value: string) => void>;
         default: undefined;
+        type: PropType<(value: string) => void>;
+    };
+    value: {
+        default: string;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
-    value: string;
     onChange: (value: string) => void;
+    value: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const DocumentOutline: vue.DefineComponent<vue.ExtractPropTypes<{
     headings: {
+        required: true;
         type: PropType<readonly OutlineHeading_2[]>;
-        required: true;
-    };
-    onHeadingClick: {
-        type: PropType<(blockId: string) => void>;
-        required: true;
-    };
-    onClose: {
-        type: PropType<() => void>;
-        required: true;
-    };
-    topOffset: {
-        type: NumberConstructor;
-        default: number;
-    };
-    scrollLeft: {
-        type: NumberConstructor;
-        default: number;
     };
     leftOffset: {
-        type: NumberConstructor;
         default: number;
+        type: NumberConstructor;
+    };
+    onClose: {
+        required: true;
+        type: PropType<() => void>;
+    };
+    onHeadingClick: {
+        required: true;
+        type: PropType<(blockId: string) => void>;
+    };
+    scrollLeft: {
+        default: number;
+        type: NumberConstructor;
+    };
+    topOffset: {
+        default: number;
+        type: NumberConstructor;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     headings: {
+        required: true;
         type: PropType<readonly OutlineHeading_2[]>;
-        required: true;
-    };
-    onHeadingClick: {
-        type: PropType<(blockId: string) => void>;
-        required: true;
-    };
-    onClose: {
-        type: PropType<() => void>;
-        required: true;
-    };
-    topOffset: {
-        type: NumberConstructor;
-        default: number;
-    };
-    scrollLeft: {
-        type: NumberConstructor;
-        default: number;
     };
     leftOffset: {
-        type: NumberConstructor;
         default: number;
+        type: NumberConstructor;
+    };
+    onClose: {
+        required: true;
+        type: PropType<() => void>;
+    };
+    onHeadingClick: {
+        required: true;
+        type: PropType<(blockId: string) => void>;
+    };
+    scrollLeft: {
+        default: number;
+        type: NumberConstructor;
+    };
+    topOffset: {
+        default: number;
+        type: NumberConstructor;
     };
 }>> & Readonly<{}>, {
-    topOffset: number;
-    scrollLeft: number;
     leftOffset: number;
+    scrollLeft: number;
+    topOffset: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 export { DocxDocument }
@@ -1835,23 +1835,23 @@ export const DocxEditorColorByChangeType: vue.DefineComponent<{}, () => null, {}
 // @public (undocumented)
 export const DocxEditorContent: vue.DefineComponent<vue.ExtractPropTypes<{
     class: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     class: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
     class: string;
@@ -1886,54 +1886,54 @@ export interface DocxEditorContentProps {
 // @public (undocumented)
 export const DocxEditorContextMenu: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    t: {
-        type: PropType<ToolbarTranslate>;
-        default: undefined;
-    };
-    preset: {
-        type: BooleanConstructor;
-        default: boolean;
     };
     disabled: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
     };
     onOpenChange: {
-        type: PropType<(open: boolean) => void>;
         default: undefined;
+        type: PropType<(open: boolean) => void>;
+    };
+    preset: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    t: {
+        default: undefined;
+        type: PropType<ToolbarTranslate>;
     };
 }>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    t: {
-        type: PropType<ToolbarTranslate>;
-        default: undefined;
-    };
-    preset: {
-        type: BooleanConstructor;
-        default: boolean;
     };
     disabled: {
-        type: BooleanConstructor;
         default: undefined;
+        type: BooleanConstructor;
     };
     onOpenChange: {
-        type: PropType<(open: boolean) => void>;
         default: undefined;
+        type: PropType<(open: boolean) => void>;
+    };
+    preset: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    t: {
+        default: undefined;
+        type: PropType<ToolbarTranslate>;
     };
 }>> & Readonly<{}>, {
-    t: ToolbarTranslate;
-    disabled: boolean;
     className: string;
-    preset: boolean;
+    disabled: boolean;
     onOpenChange: (open: boolean) => void;
+    preset: boolean;
+    t: ToolbarTranslate;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -2002,37 +2002,37 @@ export interface DocxEditorContextMenuProps {
 
 // @public (undocumented)
 export const DocxEditorDocumentOutline: vue.DefineComponent<vue.ExtractPropTypes<{
-    onClose: {
-        type: PropType<() => void>;
+    leftOffset: {
         default: undefined;
+        type: NumberConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
     };
     topOffset: {
-        type: NumberConstructor;
         default: number;
-    };
-    leftOffset: {
         type: NumberConstructor;
-        default: undefined;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    onClose: {
-        type: PropType<() => void>;
+    leftOffset: {
         default: undefined;
+        type: NumberConstructor;
+    };
+    onClose: {
+        default: undefined;
+        type: PropType<() => void>;
     };
     topOffset: {
-        type: NumberConstructor;
         default: number;
-    };
-    leftOffset: {
         type: NumberConstructor;
-        default: undefined;
     };
 }>> & Readonly<{}>, {
+    leftOffset: number;
     onClose: () => void;
     topOffset: number;
-    leftOffset: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -2053,36 +2053,36 @@ export const DocxEditorEquation: vue.DefineComponent<{}, () => vue.VNode<vue.Ren
 // @public (undocumented)
 export const DocxEditorFontNotice: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
     t: {
-        type: PropType<TFunction>;
         default: undefined;
+        type: PropType<TFunction>;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
     t: {
-        type: PropType<TFunction>;
         default: undefined;
+        type: PropType<TFunction>;
     };
 }>> & Readonly<{}>, {
-    t: TFunction;
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
+    t: TFunction;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -2098,15 +2098,15 @@ export interface DocxEditorFontNoticeProps {
 // @public
 export const DocxEditorHeaderFooterChrome: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
     className: string;
@@ -2120,34 +2120,34 @@ export interface DocxEditorHeaderFooterChromeProps {
 
 // @public (undocumented)
 export const DocxEditorHorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    unit: {
+        default: undefined;
+        type: PropType<"inch" | "cm">;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    unit: {
+        default: undefined;
+        type: PropType<"inch" | "cm">;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
     unit: "cm" | "inch";
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -2178,38 +2178,38 @@ export interface DocxEditorHyperLinkNamespace {
 
 // @public
 export const DocxEditorImagePropertiesDialog: vue.DefineComponent<vue.ExtractPropTypes<{
-    open: {
-        type: BooleanConstructor;
-        required: true;
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     onClose: {
-        type: PropType<() => void>;
         required: true;
+        type: PropType<() => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: undefined;
+    open: {
+        required: true;
+        type: BooleanConstructor;
     };
     triggerRef: {
-        type: PropType<RefObject<HTMLElement | null>>;
         default: undefined;
+        type: PropType<RefObject<HTMLElement | null>>;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    open: {
-        type: BooleanConstructor;
-        required: true;
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     onClose: {
-        type: PropType<() => void>;
         required: true;
+        type: PropType<() => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: undefined;
+    open: {
+        required: true;
+        type: BooleanConstructor;
     };
     triggerRef: {
-        type: PropType<RefObject<HTMLElement | null>>;
         default: undefined;
+        type: PropType<RefObject<HTMLElement | null>>;
     };
 }>> & Readonly<{}>, {
     className: string;
@@ -2256,15 +2256,15 @@ export interface DocxEditorLoadingProps {
 // @public (undocumented)
 export const DocxEditorLoadingSpinner: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
     className: string;
@@ -2433,15 +2433,15 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
 // @public (undocumented)
 export const DocxEditorNotesChrome: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
     className: string;
@@ -2456,27 +2456,27 @@ export interface DocxEditorNotesChromeProps {
 // @public (undocumented)
 export const DocxEditorPageNumber: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -2489,30 +2489,30 @@ export interface DocxEditorPageNumberProps {
 
 // @public (undocumented)
 export const DocxEditorPageSetupDialog: vue.DefineComponent<vue.ExtractPropTypes<{
-    open: {
-        type: BooleanConstructor;
-        required: true;
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     onClose: {
-        type: PropType<() => void>;
         required: true;
+        type: PropType<() => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: undefined;
+    open: {
+        required: true;
+        type: BooleanConstructor;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    open: {
-        type: BooleanConstructor;
-        required: true;
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     onClose: {
-        type: PropType<() => void>;
         required: true;
+        type: PropType<() => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: undefined;
+    open: {
+        required: true;
+        type: BooleanConstructor;
     };
 }>> & Readonly<{}>, {
     className: string;
@@ -2530,30 +2530,30 @@ export interface DocxEditorPageSetupDialogProps {
 
 // @public
 export const DocxEditorParagraphDialog: vue.DefineComponent<vue.ExtractPropTypes<{
-    open: {
-        type: BooleanConstructor;
-        required: true;
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     onClose: {
-        type: PropType<() => void>;
         required: true;
+        type: PropType<() => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: undefined;
+    open: {
+        required: true;
+        type: BooleanConstructor;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    open: {
-        type: BooleanConstructor;
-        required: true;
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     onClose: {
-        type: PropType<() => void>;
         required: true;
+        type: PropType<() => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: undefined;
+    open: {
+        required: true;
+        type: BooleanConstructor;
     };
 }>> & Readonly<{}>, {
     className: string;
@@ -2635,117 +2635,117 @@ export interface DocxEditorRef {
 
 // @public (undocumented)
 export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
-    document: {
-        type: PropType<DocumentSource>;
+    author: {
         default: undefined;
+        type: StringConstructor;
+    };
+    document: {
+        default: undefined;
+        type: PropType<DocumentSource>;
     };
     fonts: {
+        default: undefined;
         type: PropType<DocxEditorRootProps["fonts"]>;
-        default: undefined;
-    };
-    author: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    locale: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    translate: {
-        type: PropType<DocxEditorRootProps["translate"]>;
-        default: undefined;
-    };
-    modules: {
-        type: PropType<readonly EditorModule[]>;
-        default: undefined;
-    };
-    mode: {
-        type: PropType<"edit" | "view" | "suggesting">;
-        default: undefined;
-    };
-    zoom: {
-        type: NumberConstructor;
-        default: undefined;
-    };
-    zoomMode: {
-        type: PropType<ZoomMode | "auto">;
-        default: undefined;
-    };
-    tableInteractionLabel: {
-        type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
-        default: undefined;
     };
     imageDecodePort: {
-        type: PropType<ImageDecodePort>;
         default: undefined;
+        type: PropType<ImageDecodePort>;
+    };
+    locale: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    mode: {
+        default: undefined;
+        type: PropType<"edit" | "view" | "suggesting">;
+    };
+    modules: {
+        default: undefined;
+        type: PropType<readonly EditorModule[]>;
+    };
+    tableInteractionLabel: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
+    };
+    translate: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps["translate"]>;
+    };
+    zoom: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    zoomMode: {
+        default: undefined;
+        type: PropType<ZoomMode | "auto">;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
-    ready: (_editor: Editor) => true;
     change: (_change: DocumentChange) => true;
     fontError: (_error: unknown) => true;
+    ready: (_editor: Editor) => true;
 }, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    document: {
-        type: PropType<DocumentSource>;
+    author: {
         default: undefined;
+        type: StringConstructor;
+    };
+    document: {
+        default: undefined;
+        type: PropType<DocumentSource>;
     };
     fonts: {
+        default: undefined;
         type: PropType<DocxEditorRootProps["fonts"]>;
-        default: undefined;
-    };
-    author: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    locale: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    translate: {
-        type: PropType<DocxEditorRootProps["translate"]>;
-        default: undefined;
-    };
-    modules: {
-        type: PropType<readonly EditorModule[]>;
-        default: undefined;
-    };
-    mode: {
-        type: PropType<"edit" | "view" | "suggesting">;
-        default: undefined;
-    };
-    zoom: {
-        type: NumberConstructor;
-        default: undefined;
-    };
-    zoomMode: {
-        type: PropType<ZoomMode | "auto">;
-        default: undefined;
-    };
-    tableInteractionLabel: {
-        type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
-        default: undefined;
     };
     imageDecodePort: {
-        type: PropType<ImageDecodePort>;
         default: undefined;
+        type: PropType<ImageDecodePort>;
+    };
+    locale: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    mode: {
+        default: undefined;
+        type: PropType<"edit" | "view" | "suggesting">;
+    };
+    modules: {
+        default: undefined;
+        type: PropType<readonly EditorModule[]>;
+    };
+    tableInteractionLabel: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps["tableInteractionLabel"]>;
+    };
+    translate: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps["translate"]>;
+    };
+    zoom: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    zoomMode: {
+        default: undefined;
+        type: PropType<ZoomMode | "auto">;
     };
 }>> & Readonly<{
     onChange?: ((_change: DocumentChange) => any) | undefined;
-    onReady?: ((_editor: Editor) => any) | undefined;
     onFontError?: ((_error: unknown) => any) | undefined;
+    onReady?: ((_editor: Editor) => any) | undefined;
 }>, {
-    document: DocumentSource;
-    locale: string;
-    zoom: number;
-    fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     author: string;
-    mode: "suggesting" | "edit" | "view";
+    document: DocumentSource;
+    fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
-    zoomMode: "auto" | ZoomMode;
-    translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
+    locale: string;
+    mode: "suggesting" | "edit" | "view";
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: "table.insertRowBelow" | "table.insertColumnRight") => string) | undefined;
+    translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
+    zoom: number;
+    zoomMode: "auto" | ZoomMode;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -2924,70 +2924,70 @@ export interface DocxEditorToolbarProps {
 
 // @public (undocumented)
 export const DocxEditorVerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    unit: {
+        default: undefined;
+        type: PropType<"inch" | "cm">;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    unit: {
+        default: undefined;
+        type: PropType<"inch" | "cm">;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
     unit: "cm" | "inch";
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const DocxEditorViewport: vue.DefineComponent<vue.ExtractPropTypes<{
     class: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     class: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     class: string;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -3133,152 +3133,152 @@ export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState'
 
 // @public (undocumented)
 export const HorizontalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
-    pageSetup: {
-        type: PropType<RulerPageSetup | null>;
-        default: null;
-    };
-    zoom: {
-        type: NumberConstructor;
-        default: number;
+    className: {
+        default: string;
+        type: StringConstructor;
     };
     editable: {
-        type: BooleanConstructor;
         default: boolean;
-    };
-    onLeftMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
-        default: undefined;
-    };
-    onRightMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
-        default: undefined;
-    };
-    onMarginDragEnd: {
-        type: PropType<() => void>;
-        default: undefined;
-    };
-    showIndentHandles: {
         type: BooleanConstructor;
-        default: boolean;
     };
     indent: {
-        type: PropType<RulerIndent | null>;
         default: null;
+        type: PropType<RulerIndent | null>;
     };
     indentEditable: {
-        type: BooleanConstructor;
         default: boolean;
+        type: BooleanConstructor;
     };
     onIndentChange: {
-        type: PropType<(indent: RulerIndent) => void>;
         default: undefined;
+        type: PropType<(indent: RulerIndent) => void>;
     };
     onIndentDragEnd: {
+        default: undefined;
         type: PropType<() => void>;
+    };
+    onLeftMarginChange: {
         default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: string;
-    };
-    className: {
-        type: StringConstructor;
-        default: string;
-    };
-    style: {
-        type: PropType<CSSProperties>;
+    onMarginDragEnd: {
         default: undefined;
+        type: PropType<() => void>;
     };
-    tabMarks: {
-        type: PropType<RulerTabStop[] | null>;
-        default: null;
+    onRightMarginChange: {
+        default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
     onTabMarkRemove: {
-        type: PropType<(positionTwips: number) => void>;
         default: undefined;
+        type: PropType<(positionTwips: number) => void>;
+    };
+    pageSetup: {
+        default: null;
+        type: PropType<RulerPageSetup | null>;
+    };
+    showIndentHandles: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    style: {
+        default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    tabMarks: {
+        default: null;
+        type: PropType<RulerTabStop[] | null>;
+    };
+    unit: {
+        default: string;
+        type: PropType<"inch" | "cm">;
+    };
+    zoom: {
+        default: number;
+        type: NumberConstructor;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    pageSetup: {
-        type: PropType<RulerPageSetup | null>;
-        default: null;
-    };
-    zoom: {
-        type: NumberConstructor;
-        default: number;
+    className: {
+        default: string;
+        type: StringConstructor;
     };
     editable: {
-        type: BooleanConstructor;
         default: boolean;
-    };
-    onLeftMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
-        default: undefined;
-    };
-    onRightMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
-        default: undefined;
-    };
-    onMarginDragEnd: {
-        type: PropType<() => void>;
-        default: undefined;
-    };
-    showIndentHandles: {
         type: BooleanConstructor;
-        default: boolean;
     };
     indent: {
-        type: PropType<RulerIndent | null>;
         default: null;
+        type: PropType<RulerIndent | null>;
     };
     indentEditable: {
-        type: BooleanConstructor;
         default: boolean;
+        type: BooleanConstructor;
     };
     onIndentChange: {
-        type: PropType<(indent: RulerIndent) => void>;
         default: undefined;
+        type: PropType<(indent: RulerIndent) => void>;
     };
     onIndentDragEnd: {
+        default: undefined;
         type: PropType<() => void>;
+    };
+    onLeftMarginChange: {
         default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: string;
-    };
-    className: {
-        type: StringConstructor;
-        default: string;
-    };
-    style: {
-        type: PropType<CSSProperties>;
+    onMarginDragEnd: {
         default: undefined;
+        type: PropType<() => void>;
     };
-    tabMarks: {
-        type: PropType<RulerTabStop[] | null>;
-        default: null;
+    onRightMarginChange: {
+        default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
     onTabMarkRemove: {
-        type: PropType<(positionTwips: number) => void>;
         default: undefined;
+        type: PropType<(positionTwips: number) => void>;
+    };
+    pageSetup: {
+        default: null;
+        type: PropType<RulerPageSetup | null>;
+    };
+    showIndentHandles: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    style: {
+        default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    tabMarks: {
+        default: null;
+        type: PropType<RulerTabStop[] | null>;
+    };
+    unit: {
+        default: string;
+        type: PropType<"inch" | "cm">;
+    };
+    zoom: {
+        default: number;
+        type: NumberConstructor;
     };
 }>> & Readonly<{}>, {
-    zoom: number;
-    pageSetup: _docx_editor_dev_core.PageSetup | null;
-    style: CSSProperties;
-    indent: RulerIndent | null;
-    editable: boolean;
     className: string;
-    onLeftMarginChange: (marginTwips: number) => void;
-    onRightMarginChange: (marginTwips: number) => void;
-    onMarginDragEnd: () => void;
-    showIndentHandles: boolean;
+    editable: boolean;
+    indent: RulerIndent | null;
     indentEditable: boolean;
     onIndentChange: (indent: RulerIndent) => void;
     onIndentDragEnd: () => void;
-    unit: "cm" | "inch";
-    tabMarks: RulerTabStop[] | null;
+    onLeftMarginChange: (marginTwips: number) => void;
+    onMarginDragEnd: () => void;
+    onRightMarginChange: (marginTwips: number) => void;
     onTabMarkRemove: (positionTwips: number) => void;
+    pageSetup: _docx_editor_dev_core.PageSetup | null;
+    showIndentHandles: boolean;
+    style: CSSProperties;
+    tabMarks: RulerTabStop[] | null;
+    unit: "cm" | "inch";
+    zoom: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -3367,35 +3367,35 @@ export interface HyperLinkProps extends HyperLinkPartProps {
 
 // @public (undocumented)
 export const ImageAltText: vue.DefineComponent<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>> & Readonly<{}>, {
-    hidden: boolean;
-    className: string;
     asChild: boolean;
+    className: string;
+    hidden: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -3405,68 +3405,68 @@ export const ImageInsertProvider: vue.DefineComponent<{}, () => vue.VNode<vue.Re
 
 // @public (undocumented)
 export const ImageInsertTrigger: vue.DefineComponent<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>> & Readonly<{}>, {
-    hidden: boolean;
-    className: string;
     asChild: boolean;
+    className: string;
+    hidden: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
 export const ImagePropertiesTrigger: vue.DefineComponent<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>> & Readonly<{}>, {
-    hidden: boolean;
-    className: string;
     asChild: boolean;
+    className: string;
+    hidden: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -3483,35 +3483,35 @@ export interface ImagePropertiesTriggerProps {
 
 // @public (undocumented)
 export const ImageWrap: vue.DefineComponent<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>> & Readonly<{}>, {
-    hidden: boolean;
-    className: string;
     asChild: boolean;
+    className: string;
+    hidden: boolean;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 export { ImageWrapTarget }
@@ -3540,15 +3540,15 @@ export { LOADING_SNAPSHOT }
 // @public (undocumented)
 export const LocaleProvider: vue.DefineComponent<vue.ExtractPropTypes<{
     i18n: {
-        type: PropType<Translations>;
         default: undefined;
+        type: PropType<Translations>;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>[] | undefined, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     i18n: {
-        type: PropType<Translations>;
         default: undefined;
+        type: PropType<Translations>;
     };
 }>> & Readonly<{}>, {
     i18n: _docx_editor_dev_i18n.PartialLocaleStrings;
@@ -3694,97 +3694,97 @@ export const NAVIGATION_PANE_WIDTH = 280;
 // @public (undocumented)
 export const NavigationClose: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const NavigationFind: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const NavigationHeader: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const NavigationHeadings: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -3815,34 +3815,34 @@ export interface NavigationShiftInput {
 
 // @public (undocumented)
 export const NavigationTab: vue.DefineComponent<vue.ExtractPropTypes<{
-    value: {
-        type: PropType<NavigationTabValue>;
-        required: true;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    value: {
+        required: true;
+        type: PropType<NavigationTabValue>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    value: {
-        type: PropType<NavigationTabValue>;
-        required: true;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    value: {
+        required: true;
+        type: PropType<NavigationTabValue>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -3854,25 +3854,25 @@ export interface NavigationTabProps extends NavigationPartProps {
 // @public (undocumented)
 export const NavigationTabs: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -3881,58 +3881,58 @@ export type NavigationTabValue = 'headings' | 'find';
 // @public (undocumented)
 export const NavigationTitle: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const NavigationToggle: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
     };
 }>> & Readonly<{}>, {
-    style: CSSProperties;
     className: string;
+    style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export type NormalizedImagePayload = {
-    readonly ok: true;
     readonly bytes: Uint8Array;
-    readonly mime: SupportedImageMime;
-    readonly widthPoints: number;
     readonly heightPoints: number;
+    readonly mime: SupportedImageMime;
+    readonly ok: true;
+    readonly widthPoints: number;
 } | {
     readonly ok: false;
     readonly reasonKey: string;
@@ -3973,31 +3973,31 @@ export interface OutlineHeadingItem {
 // @public (undocumented)
 export const PageIndicator: vue.DefineComponent<vue.ExtractPropTypes<{
     currentPage: {
-        type: NumberConstructor;
         required: true;
+        type: NumberConstructor;
     };
     totalPages: {
-        type: NumberConstructor;
         required: true;
+        type: NumberConstructor;
     };
     visible: {
-        type: BooleanConstructor;
         required: true;
+        type: BooleanConstructor;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     currentPage: {
-        type: NumberConstructor;
         required: true;
+        type: NumberConstructor;
     };
     totalPages: {
-        type: NumberConstructor;
         required: true;
+        type: NumberConstructor;
     };
     visible: {
-        type: BooleanConstructor;
         required: true;
+        type: BooleanConstructor;
     };
 }>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
@@ -4038,70 +4038,70 @@ export interface PageSetupUpdate {
 
 // @public (undocumented)
 export const PaginatedDocxEditor: vue.DefineComponent<vue.ExtractPropTypes<{
-    source: {
-        type: PropType<Uint8Array>;
-        required: true;
-    };
-    scale: {
-        type: NumberConstructor;
-        default: undefined;
-    };
-    measurer: {
-        type: PropType<TextMeasurer>;
-        default: undefined;
-    };
-    onStateChange: {
-        type: PropType<(state: PaginatedSurfaceState) => void>;
-        default: undefined;
-    };
-    onError: {
-        type: PropType<(reason: string, detail?: string) => void>;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     documentFontFamily: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
+    };
+    measurer: {
+        default: undefined;
+        type: PropType<TextMeasurer>;
+    };
+    onError: {
+        default: undefined;
+        type: PropType<(reason: string, detail?: string) => void>;
+    };
+    onStateChange: {
+        default: undefined;
+        type: PropType<(state: PaginatedSurfaceState) => void>;
+    };
+    scale: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    source: {
+        required: true;
+        type: PropType<Uint8Array>;
     };
 }>, () => VNode, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    source: {
-        type: PropType<Uint8Array>;
-        required: true;
-    };
-    scale: {
-        type: NumberConstructor;
-        default: undefined;
-    };
-    measurer: {
-        type: PropType<TextMeasurer>;
-        default: undefined;
-    };
-    onStateChange: {
-        type: PropType<(state: PaginatedSurfaceState) => void>;
-        default: undefined;
-    };
-    onError: {
-        type: PropType<(reason: string, detail?: string) => void>;
-        default: undefined;
-    };
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
     documentFontFamily: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
+    };
+    measurer: {
+        default: undefined;
+        type: PropType<TextMeasurer>;
+    };
+    onError: {
+        default: undefined;
+        type: PropType<(reason: string, detail?: string) => void>;
+    };
+    onStateChange: {
+        default: undefined;
+        type: PropType<(state: PaginatedSurfaceState) => void>;
+    };
+    scale: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    source: {
+        required: true;
+        type: PropType<Uint8Array>;
     };
 }>> & Readonly<{}>, {
-    measurer: TextMeasurer;
-    scale: number;
     className: string;
+    documentFontFamily: string;
+    measurer: TextMeasurer;
     onError: (reason: string, detail?: string) => void;
     onStateChange: (state: PaginatedSurfaceState) => void;
-    documentFontFamily: string;
+    scale: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
@@ -4158,108 +4158,108 @@ export interface PaginatedDocxEditorProps {
 
 // @public @deprecated (undocumented)
 export const PaginatedDocxEditorShell: vue.DefineComponent<vue.ExtractPropTypes<{
-    source: {
-        type: PropType<Uint8Array>;
-        required: true;
-    };
-    documentName: {
+    className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    scale: {
-        type: NumberConstructor;
-        default: undefined;
-    };
-    measurer: {
-        type: PropType<TextMeasurer>;
-        default: undefined;
-    };
-    onStateChange: {
-        type: PropType<(state: PaginatedSurfaceState) => void>;
-        default: undefined;
-    };
-    onError: {
-        type: PropType<(reason: string, detail?: string) => void>;
-        default: undefined;
-    };
-    onSave: {
-        type: PropType<(bytes: Uint8Array) => void>;
-        default: undefined;
     };
     colorMode: {
+        default: undefined;
         type: PropType<"light" | "dark">;
-        default: undefined;
-    };
-    onZoomChange: {
-        type: PropType<(zoom: number) => void>;
-        default: undefined;
     };
     documentFontFamily: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
-    className: {
-        type: StringConstructor;
+    documentName: {
         default: undefined;
+        type: StringConstructor;
+    };
+    measurer: {
+        default: undefined;
+        type: PropType<TextMeasurer>;
+    };
+    onError: {
+        default: undefined;
+        type: PropType<(reason: string, detail?: string) => void>;
+    };
+    onSave: {
+        default: undefined;
+        type: PropType<(bytes: Uint8Array) => void>;
+    };
+    onStateChange: {
+        default: undefined;
+        type: PropType<(state: PaginatedSurfaceState) => void>;
+    };
+    onZoomChange: {
+        default: undefined;
+        type: PropType<(zoom: number) => void>;
+    };
+    scale: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    source: {
+        required: true;
+        type: PropType<Uint8Array>;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    source: {
-        type: PropType<Uint8Array>;
-        required: true;
-    };
-    documentName: {
+    className: {
+        default: undefined;
         type: StringConstructor;
-        default: undefined;
-    };
-    scale: {
-        type: NumberConstructor;
-        default: undefined;
-    };
-    measurer: {
-        type: PropType<TextMeasurer>;
-        default: undefined;
-    };
-    onStateChange: {
-        type: PropType<(state: PaginatedSurfaceState) => void>;
-        default: undefined;
-    };
-    onError: {
-        type: PropType<(reason: string, detail?: string) => void>;
-        default: undefined;
-    };
-    onSave: {
-        type: PropType<(bytes: Uint8Array) => void>;
-        default: undefined;
     };
     colorMode: {
+        default: undefined;
         type: PropType<"light" | "dark">;
-        default: undefined;
-    };
-    onZoomChange: {
-        type: PropType<(zoom: number) => void>;
-        default: undefined;
     };
     documentFontFamily: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
-    className: {
-        type: StringConstructor;
+    documentName: {
         default: undefined;
+        type: StringConstructor;
+    };
+    measurer: {
+        default: undefined;
+        type: PropType<TextMeasurer>;
+    };
+    onError: {
+        default: undefined;
+        type: PropType<(reason: string, detail?: string) => void>;
+    };
+    onSave: {
+        default: undefined;
+        type: PropType<(bytes: Uint8Array) => void>;
+    };
+    onStateChange: {
+        default: undefined;
+        type: PropType<(state: PaginatedSurfaceState) => void>;
+    };
+    onZoomChange: {
+        default: undefined;
+        type: PropType<(zoom: number) => void>;
+    };
+    scale: {
+        default: undefined;
+        type: NumberConstructor;
+    };
+    source: {
+        required: true;
+        type: PropType<Uint8Array>;
     };
 }>> & Readonly<{}>, {
-    measurer: TextMeasurer;
-    scale: number;
     className: string;
-    onError: (reason: string, detail?: string) => void;
-    onSave: (bytes: Uint8Array) => void;
     colorMode: "light" | "dark";
-    onStateChange: (state: PaginatedSurfaceState) => void;
     documentFontFamily: string;
     documentName: string;
+    measurer: TextMeasurer;
+    onError: (reason: string, detail?: string) => void;
+    onSave: (bytes: Uint8Array) => void;
+    onStateChange: (state: PaginatedSurfaceState) => void;
     onZoomChange: (zoom: number) => void;
+    scale: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -4304,13 +4304,13 @@ export interface ParagraphFormatRead {
     readonly contextualSpacing: ParagraphFlagState;
     readonly disagrees: {
         readonly alignment: boolean;
-        readonly spaceBeforePt: boolean;
-        readonly spaceAfterPt: boolean;
-        readonly lineSpacing: boolean;
-        readonly tabStops: boolean;
+        readonly indentFirstLine: boolean;
         readonly indentLeft: boolean;
         readonly indentRight: boolean;
-        readonly indentFirstLine: boolean;
+        readonly lineSpacing: boolean;
+        readonly spaceAfterPt: boolean;
+        readonly spaceBeforePt: boolean;
+        readonly tabStops: boolean;
     };
     readonly indentFirstLineTwips: number | null;
     // (undocumented)
@@ -4396,11 +4396,11 @@ export interface ParagraphStyleOption {
     readonly name: string;
     // (undocumented)
     readonly preview: {
+        readonly bold: boolean;
+        readonly color: string | null;
         readonly fontFamily: string | null;
         readonly fontSizePt: number | null;
-        readonly bold: boolean;
         readonly italic: boolean;
-        readonly color: string | null;
     };
     // (undocumented)
     readonly styleId: string;
@@ -4656,15 +4656,15 @@ export const TitleBarRight: vue.DefineComponent<{}, () => vue.VNode<vue.Renderer
 // @public @deprecated (undocumented)
 export const Toolbar: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     className: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{}>, {
     className: string;
@@ -4703,56 +4703,56 @@ export interface ToolbarAlignmentComponent {
 // @public @deprecated (undocumented)
 export const ToolbarButton: vue.DefineComponent<vue.ExtractPropTypes<{
     active: {
+        default: undefined;
         type: BooleanConstructor;
-        default: undefined;
-    };
-    disabled: {
-        type: BooleanConstructor;
-        default: undefined;
-    };
-    title: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    className: {
-        type: StringConstructor;
-        default: undefined;
     };
     ariaLabel: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    disabled: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    title: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>, () => VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, "click"[], "click", vue.PublicProps, Readonly<vue.ExtractPropTypes<{
     active: {
+        default: undefined;
         type: BooleanConstructor;
-        default: undefined;
-    };
-    disabled: {
-        type: BooleanConstructor;
-        default: undefined;
-    };
-    title: {
-        type: StringConstructor;
-        default: undefined;
-    };
-    className: {
-        type: StringConstructor;
-        default: undefined;
     };
     ariaLabel: {
-        type: StringConstructor;
         default: undefined;
+        type: StringConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    disabled: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    title: {
+        default: undefined;
+        type: StringConstructor;
     };
 }>> & Readonly<{
     onClick?: ((...args: any[]) => any) | undefined;
 }>, {
-    ariaLabel: string;
-    title: string;
     active: boolean;
-    disabled: boolean;
+    ariaLabel: string;
     className: string;
+    disabled: boolean;
+    title: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
@@ -4796,67 +4796,67 @@ export const ToolbarGroup: vue.DefineComponent<{}, () => VNode<vue.RendererNode,
 // @public (undocumented)
 export const ToolbarImageProperties: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        className: {
-            type: StringConstructor;
+        asChild: {
             default: undefined;
+            type: BooleanConstructor;
+        };
+        className: {
+            default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
-        };
-        asChild: {
             type: BooleanConstructor;
-            default: undefined;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
-        hidden: boolean;
-        className: string;
         asChild: boolean;
+        className: string;
+        hidden: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
-        P: {};
         B: {};
-        D: {};
         C: {};
-        M: {};
+        D: {};
         Defaults: {};
+        M: {};
+        P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        className: {
-            type: StringConstructor;
+        asChild: {
             default: undefined;
+            type: BooleanConstructor;
+        };
+        className: {
+            default: undefined;
+            type: StringConstructor;
         };
         hidden: {
-            type: BooleanConstructor;
             default: undefined;
-        };
-        asChild: {
             type: BooleanConstructor;
-            default: undefined;
         };
     }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
-        hidden: boolean;
-        className: string;
         asChild: boolean;
+        className: string;
+        hidden: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    className: {
-        type: StringConstructor;
+    asChild: {
         default: undefined;
+        type: BooleanConstructor;
+    };
+    className: {
+        default: undefined;
+        type: StringConstructor;
     };
     hidden: {
-        type: BooleanConstructor;
         default: undefined;
-    };
-    asChild: {
         type: BooleanConstructor;
-        default: undefined;
     };
 }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
-    hidden: boolean;
-    className: string;
     asChild: boolean;
+    className: string;
+    hidden: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxSlot: "image.properties";
 };
@@ -4896,9 +4896,9 @@ export interface ToolbarProps {
     fontFamilies?: ReadonlyArray<string | FontOption>;
     // (undocumented)
     imageContext?: {
-        wrapType: string;
-        displayMode: string;
         cssFloat: string | null;
+        displayMode: string;
+        wrapType: string;
     } | null;
     // (undocumented)
     inline?: boolean;
@@ -4918,13 +4918,13 @@ export interface ToolbarProps {
     onInsertSectionBreakNextPage?: () => void;
     // (undocumented)
     onInsertShape?: (data: {
-        shapeType: string;
-        width: number;
-        height: number;
         fillColor?: string;
         fillType?: string;
-        outlineWidth?: number;
+        height: number;
         outlineColor?: string;
+        outlineWidth?: number;
+        shapeType: string;
+        width: number;
     }) => void;
     // (undocumented)
     onInsertTable?: (rows: number, columns: number) => void;
@@ -4978,13 +4978,13 @@ export interface ToolbarProps {
     style?: CSSProperties;
     // (undocumented)
     tableContext?: {
+        canSplitCell?: boolean;
+        cellBackgroundColor?: string;
+        cellBorderColor?: ColorValue;
+        columnCount?: number;
+        hasMultiCellSelection?: boolean;
         isInTable: boolean;
         rowCount?: number;
-        columnCount?: number;
-        canSplitCell?: boolean;
-        hasMultiCellSelection?: boolean;
-        cellBorderColor?: ColorValue;
-        cellBackgroundColor?: string;
     } | null;
     // (undocumented)
     theme?: Theme | null;
@@ -5355,8 +5355,8 @@ export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: strin
 
 // @public (undocumented)
 export function useTranslation(): {
-    t: TFunction;
     catalogue: ShallowRef<LocaleStrings>;
+    t: TFunction;
 };
 
 // @public (undocumented)
@@ -5397,89 +5397,89 @@ export const VERSION: string;
 
 // @public (undocumented)
 export const VerticalRuler: vue.DefineComponent<vue.ExtractPropTypes<{
-    pageSetup: {
-        type: PropType<RulerPageSetup | null>;
-        default: null;
-    };
-    zoom: {
-        type: NumberConstructor;
-        default: number;
+    className: {
+        default: string;
+        type: StringConstructor;
     };
     editable: {
-        type: BooleanConstructor;
         default: boolean;
-    };
-    onTopMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
-        default: undefined;
+        type: BooleanConstructor;
     };
     onBottomMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
         default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
     onMarginDragEnd: {
-        type: PropType<() => void>;
         default: undefined;
+        type: PropType<() => void>;
     };
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: string;
+    onTopMarginChange: {
+        default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: string;
+    pageSetup: {
+        default: null;
+        type: PropType<RulerPageSetup | null>;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    unit: {
+        default: string;
+        type: PropType<"inch" | "cm">;
+    };
+    zoom: {
+        default: number;
+        type: NumberConstructor;
     };
 }>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
-    pageSetup: {
-        type: PropType<RulerPageSetup | null>;
-        default: null;
-    };
-    zoom: {
-        type: NumberConstructor;
-        default: number;
+    className: {
+        default: string;
+        type: StringConstructor;
     };
     editable: {
-        type: BooleanConstructor;
         default: boolean;
-    };
-    onTopMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
-        default: undefined;
+        type: BooleanConstructor;
     };
     onBottomMarginChange: {
-        type: PropType<(marginTwips: number) => void>;
         default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
     onMarginDragEnd: {
-        type: PropType<() => void>;
         default: undefined;
+        type: PropType<() => void>;
     };
-    unit: {
-        type: PropType<"inch" | "cm">;
-        default: string;
+    onTopMarginChange: {
+        default: undefined;
+        type: PropType<(marginTwips: number) => void>;
     };
-    className: {
-        type: StringConstructor;
-        default: string;
+    pageSetup: {
+        default: null;
+        type: PropType<RulerPageSetup | null>;
     };
     style: {
-        type: PropType<CSSProperties>;
         default: undefined;
+        type: PropType<CSSProperties>;
+    };
+    unit: {
+        default: string;
+        type: PropType<"inch" | "cm">;
+    };
+    zoom: {
+        default: number;
+        type: NumberConstructor;
     };
 }>> & Readonly<{}>, {
-    zoom: number;
+    className: string;
+    editable: boolean;
+    onBottomMarginChange: (marginTwips: number) => void;
+    onMarginDragEnd: () => void;
+    onTopMarginChange: (marginTwips: number) => void;
     pageSetup: _docx_editor_dev_core.PageSetup | null;
     style: CSSProperties;
-    editable: boolean;
-    className: string;
-    onMarginDragEnd: () => void;
     unit: "cm" | "inch";
-    onTopMarginChange: (marginTwips: number) => void;
-    onBottomMarginChange: (marginTwips: number) => void;
+    zoom: number;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)

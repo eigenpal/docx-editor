@@ -31,9 +31,9 @@ export type MapResult = {
     readonly ok: true;
     readonly ops: readonly TreeDocOp[];
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: TreeBindingRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -47,9 +47,9 @@ export type OpenTreeSessionResult = {
     readonly ok: true;
     readonly session: TreeDocxSession;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: TreeSessionRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -66,9 +66,9 @@ export const PROJECTION_ORIGIN: "dev.docx-editor.core.origin.projection";
 
 // @public
 export function reconcileDoc(previousDoc: Node_2, part: OoxmlPart, change: {
-    readonly dirty: readonly string[];
     readonly created: readonly string[];
     readonly deleted: readonly string[];
+    readonly dirty: readonly string[];
     readonly splitJoin: readonly unknown[];
 } | null): Node_2;
 
@@ -164,17 +164,17 @@ export interface TreeDocxSessionView {
     // (undocumented)
     redo(): SelectionMark | null;
     relationshipTarget(relationshipId: string, scope?: StoryScope): {
-        readonly target: string;
         readonly external: boolean;
+        readonly target: string;
     } | null;
     removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
     rendersText(): boolean;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
     replyToComment(parentCommentId: string | null, anchor: {
-        paragraphId: string;
-        start: number;
         end: number;
         endParagraphId?: string;
+        paragraphId: string;
+        start: number;
     }, text: string, author: string,
     date?: string, scope?: StoryScope): string | null;
     reviewItems(): readonly ReviewItem[];

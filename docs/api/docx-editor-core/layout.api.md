@@ -25,15 +25,15 @@ export function appliedSpaceBefore(before: number, previousAfter: number, atTopO
 
 // @public
 export function applyLineSpacing(spacing: ParagraphLineSpacing, naturalHeight: number, naturalBaseline: number): {
-    height: number;
     baseline: number;
+    height: number;
 };
 
 // @public
 export function attachNotesToLayout(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, options?: {
     readonly fallbackReasons?: readonly NotePaginationFallbackReason[];
-    readonly paragraphSectionIndex?: ReadonlyMap<string, number>;
     readonly memo?: unknown;
+    readonly paragraphSectionIndex?: ReadonlyMap<string, number>;
 }): NotesAttachResult;
 
 // @public
@@ -51,9 +51,9 @@ export interface BidiEmbeddingLevels {
     readonly levels: Uint8Array;
     // (undocumented)
     readonly paragraphs: readonly {
-        readonly start: number;
         readonly end: number;
         readonly level: number;
+        readonly start: number;
     }[];
 }
 
@@ -66,13 +66,13 @@ export function borderExtentPt(edge: ResolvedTableBorderEdge | TableBorderSide |
 // @public
 export interface BorderGridGeometry {
     readonly cellBoxes: readonly (readonly {
-        readonly width: number;
         readonly height: number;
+        readonly width: number;
     }[])[];
     readonly columnWidthsPt: readonly number[];
     readonly rowBands: readonly {
-        readonly y: number;
         readonly height: number;
+        readonly y: number;
     }[];
 }
 
@@ -100,8 +100,8 @@ export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null, themeFon
 // @public
 export type CacheLookup<V> = {
     readonly hit: true;
-    readonly value: V;
     readonly provenance: CacheProvenance;
+    readonly value: V;
 } | CacheMiss;
 
 // @public
@@ -119,9 +119,9 @@ export type CacheMiss = {
     readonly reason: 'resource-changed';
     readonly resourceKey: string;
 } | {
+    readonly epoch: keyof OperationSnapshot;
     readonly hit: false;
     readonly reason: 'epoch-changed';
-    readonly epoch: keyof OperationSnapshot;
 };
 
 // @public
@@ -176,12 +176,12 @@ export interface CaretAtOptions {
 
 // @public
 export function caretBoxOnLine(line: LineRecord, offset: number, measurer: TextMeasurer | undefined, segment?: {
-    readonly spans: readonly StyleSpanRecord[];
     readonly drawings: readonly InlineDrawingRecord[];
+    readonly spans: readonly StyleSpanRecord[];
 } | null): {
+    height: number;
     x: number;
     y: number;
-    height: number;
 };
 
 // @public
@@ -279,11 +279,11 @@ export function cellSelectionBetween(layout: SemanticLayout, anchor: TableCellAd
 
 // @public
 export function cellSelectionRects(layout: SemanticLayout, cellIds: readonly string[]): readonly {
+    height: number;
     pageIndex: number;
+    width: number;
     x: number;
     y: number;
-    width: number;
-    height: number;
 }[];
 
 // @public
@@ -376,9 +376,9 @@ export function computeDoubleBorderMetricsPt(widthPt: number): CompoundBorderMet
 // @public
 export function computeFootnoteReserves(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, noteMarks: NoteMarkContext,
 passMemo?: unknown): {
+    readonly reasons: readonly NotePaginationFallbackReason[];
     readonly reserves: ReadonlyMap<number, number>;
     readonly stable: boolean;
-    readonly reasons: readonly NotePaginationFallbackReason[];
 };
 
 // @public
@@ -386,9 +386,9 @@ export function contentControlAtPoint(layout: SemanticLayout, pageIndex: number,
 
 // @public
 export function contentControlAtSemantic(layout: SemanticLayout, point: {
+    readonly pageIndex?: number;
     readonly x: number;
     readonly y: number;
-    readonly pageIndex?: number;
 }): ContentControlBoundaryRecord | null;
 
 // @public
@@ -769,11 +769,11 @@ export const fontRequestKey: (request: FontRequest) => string;
 // @public
 export class FontResolutionError extends Error {
     constructor(code: FontResolutionErrorCode, request: FontRequest, details?: {
-        readonly limit?: number;
         readonly actual?: number;
+        readonly actualHash?: string;
         readonly diagnostic?: string;
         readonly expectedHash?: string;
-        readonly actualHash?: string;
+        readonly limit?: number;
     });
     // (undocumented)
     readonly actual?: number;
@@ -862,8 +862,8 @@ export interface FontSubstitution {
 export type FontValidationResult = {
     readonly valid: true;
 } | {
-    readonly valid: false;
     readonly diagnostic: string;
+    readonly valid: false;
 };
 
 // @public
@@ -886,8 +886,8 @@ export function formatPageNumber(value: number, format: string | undefined): str
 
 // @public
 export function formatRevisionOf(properties: readonly {
-    readonly localName: string;
     readonly attributes?: Readonly<Record<string, string>>;
+    readonly localName: string;
 }[]): RevisionAttribution | null;
 
 // @public
@@ -997,10 +997,10 @@ export interface HarfBuzzShapeCacheEvent {
 // @public
 export class HarfBuzzShapingError extends Error {
     constructor(code: HarfBuzzShapingErrorCode, details?: {
-        readonly limit?: number;
         readonly actual?: number;
-        readonly diagnostic?: string;
         readonly cause?: unknown;
+        readonly diagnostic?: string;
+        readonly limit?: number;
     });
     // (undocumented)
     readonly actual?: number;
@@ -1077,10 +1077,10 @@ export interface HeaderFooterStoryRecord {
     // (undocumented)
     readonly kind: 'header' | 'footer';
     readonly pageFieldProjector?: (context: {
-        readonly pageNumber: number;
-        readonly pageCount: number;
-        readonly sectionPageCount?: number;
         readonly format?: string;
+        readonly pageCount: number;
+        readonly pageNumber: number;
+        readonly sectionPageCount?: number;
     }) => HeaderFooterStoryRecord;
     readonly part?: OoxmlPart;
     // (undocumented)
@@ -1112,9 +1112,9 @@ export function hitTestPage(layout: SemanticLayout, pageIndex: number, point: Hi
 
 // @public
 export function hitTestSemantic(layout: SemanticLayout, point: {
+    readonly pageIndex?: number;
     readonly x: number;
     readonly y: number;
-    readonly pageIndex?: number;
 }): CaretGeometry | null;
 
 // @public
@@ -1307,14 +1307,14 @@ export interface LayoutShapingOptions {
     };
     // (undocumented)
     readonly environment: {
-        readonly variationAxes: Readonly<Record<string, number>>;
-        readonly shapingLibrary: VersionedShapingLibrary;
-        readonly unicodeDataVersion: string;
-        readonly normalization: NormalizationPolicy;
-        readonly language: string;
         readonly features: Readonly<Record<string, number>>;
         readonly fixedPointScale: number;
+        readonly language: string;
+        readonly normalization: NormalizationPolicy;
         readonly roundingMode: FixedPointRoundingMode;
+        readonly shapingLibrary: VersionedShapingLibrary;
+        readonly unicodeDataVersion: string;
+        readonly variationAxes: Readonly<Record<string, number>>;
     };
     // (undocumented)
     readonly fonts: FontResourceSnapshot;
@@ -1387,10 +1387,10 @@ export type ListMarkerAlign = 'left' | 'center' | 'right';
 
 // @public
 export function listMarkerBox(item: ResolvedListItem, markerWidth: number, lineY: number, lineHeight: number): {
+    height: number;
+    width: number;
     x: number;
     y: number;
-    width: number;
-    height: number;
 } | null;
 
 // @public
@@ -1498,8 +1498,8 @@ export function mergeListIndent(levelIndent: NumberingLevelIndent, inherited: re
 
 // @public
 export function moveCaret(layout: SemanticLayout, position: SemanticPosition, command: NavigationCommand, desiredX?: number | null, options?: MoveCaretOptions): {
-    position: SemanticPosition;
     desiredX: number | null;
+    position: SemanticPosition;
 } | null;
 
 // @public
@@ -1691,9 +1691,9 @@ export interface NumberingLevelIndent {
     // (undocumented)
     readonly right: number;
     readonly stated?: {
+        readonly firstLineOffset: boolean;
         readonly left: boolean;
         readonly right: boolean;
-        readonly firstLineOffset: boolean;
     };
 }
 
@@ -1728,8 +1728,8 @@ export type OperationSnapshotField = keyof OperationSnapshot;
 export type OperationSnapshotGuard = {
     readonly status: 'current';
 } | {
-    readonly status: 'restart';
     readonly changed: readonly OperationSnapshotField[];
+    readonly status: 'restart';
 };
 
 // @public
@@ -1755,10 +1755,10 @@ export interface PageGeometry {
     readonly height: number;
     // (undocumented)
     readonly margin: {
-        readonly top: number;
-        readonly right: number;
         readonly bottom: number;
         readonly left: number;
+        readonly right: number;
+        readonly top: number;
     };
     // (undocumented)
     readonly width: number;
@@ -1785,9 +1785,9 @@ export interface PageRecord {
     readonly index: number;
     readonly noteStream?: PageNoteStream;
     readonly pageFieldSource?: {
+        readonly format?: string;
         readonly pageNumber: number;
         readonly sectionPageCount: number;
-        readonly format?: string;
     };
 }
 
@@ -1962,10 +1962,10 @@ export interface ParagraphLayoutInputs {
     readonly contextualSpacing: boolean;
     // (undocumented)
     readonly indent: {
+        firstLine: number;
+        hanging: number;
         left: number;
         right: number;
-        hanging: number;
-        firstLine: number;
     };
     // (undocumented)
     readonly inheritedRunProperties: readonly OoxmlProperty[];
@@ -2089,8 +2089,8 @@ export function readCellBorders(tcPr: OoxmlElement | undefined): CellBorderBox;
 
 // @public
 export function readNumPr(paragraphPropertyNodes: readonly OoxmlNode[]): {
-    numId: string;
     ilvl: number;
+    numId: string;
 } | null;
 
 // @public
@@ -2296,31 +2296,31 @@ export interface ResourceDependencyProvenance {
 
 // @public
 export function reviewAnchorIndex<TPage extends {
-    readonly index: number;
     readonly contentBox: {
         readonly y: number;
     };
+    readonly index: number;
 }>(layout: {
     readonly pages: readonly TPage[];
 }, paragraphFragments: (page: TPage) => readonly {
-    readonly paragraphId: string;
     readonly box: {
         readonly y: number;
     };
     readonly lines?: readonly {
-        readonly range: {
-            readonly end: number;
-        };
         readonly box: {
             readonly y: number;
         };
+        readonly range: {
+            readonly end: number;
+        };
         readonly spans?: readonly {
             readonly range: {
-                readonly paragraphId: string;
                 readonly end: number;
+                readonly paragraphId: string;
             };
         }[];
     }[];
+    readonly paragraphId: string;
 }[]): Map<string, ReviewParagraphAnchor>;
 
 // @public
@@ -2386,9 +2386,9 @@ export interface ReviewModelInput {
     readonly commentsPart?: OoxmlPart | undefined;
     // (undocumented)
     readonly customNodePayloads?: ReadonlyMap<string, {
-        readonly nodeId: string;
-        readonly label: string;
         readonly data: string;
+        readonly label: string;
+        readonly nodeId: string;
     }> | undefined;
     readonly customNodes?: readonly unknown[] | undefined;
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
@@ -2402,16 +2402,16 @@ export interface ReviewParagraphAnchor {
     readonly fragmentY: number;
     // (undocumented)
     readonly lines?: readonly {
-        readonly range: {
-            readonly end: number;
-        };
         readonly box: {
             readonly y: number;
         };
+        readonly range: {
+            readonly end: number;
+        };
         readonly spans?: readonly {
             readonly range: {
-                readonly paragraphId: string;
                 readonly end: number;
+                readonly paragraphId: string;
             };
         }[];
     }[];
@@ -2591,8 +2591,8 @@ export interface SectionProperties {
     readonly pageNumbering?: SectionPageNumbering;
     // (undocumented)
     readonly pageSize: {
-        readonly widthTwips: number;
         readonly heightTwips: number;
+        readonly widthTwips: number;
     };
     // (undocumented)
     readonly titlePage: boolean;
@@ -2867,10 +2867,10 @@ export interface ShapedRunComparatorInputs {
     readonly direction: TextDirection;
     // (undocumented)
     readonly fontSpans: readonly {
-        readonly glyphStart: number;
-        readonly glyphEnd: number;
         readonly fallbackIndex: number | null;
         readonly font: FontFingerprintInputs;
+        readonly glyphEnd: number;
+        readonly glyphStart: number;
     }[];
     // (undocumented)
     readonly glyphs: readonly ShapedGlyph[];
@@ -3056,8 +3056,8 @@ export interface StyleSpanRecord {
     readonly fieldAtom?: FieldAtomMarker;
     readonly link?: SpanLinkRecord;
     readonly noteNav?: {
-        readonly scopeId: string;
         readonly direction: 'to-note' | 'to-body';
+        readonly scopeId: string;
     };
     readonly projected?: boolean;
     readonly props: readonly OoxmlProperty[];
@@ -3121,9 +3121,9 @@ export type TableBorderSide = {
 } | {
     readonly state: 'none';
 } | {
+    readonly color: string | null;
     readonly state: 'edge';
     readonly style: TableBorderStyle;
-    readonly color: string | null;
     readonly widthPt: number;
 };
 
@@ -3280,8 +3280,8 @@ export type TextDirection = 'ltr' | 'rtl';
 // @public
 export interface TextMeasurer {
     lineMetrics(style: ResolvedRunStyle): {
-        height: number;
         baseline: number;
+        height: number;
     };
     measure(text: string, style: ResolvedRunStyle): number;
 }
@@ -3347,13 +3347,13 @@ export function withNumberingStyleLinks(index: NumberingIndex, styleCascade: Sty
 
 // @public
 export function withResolvedListItems<T extends {
-    readonly numberingIndex?: NumberingIndex;
-    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-    readonly styleCascade?: StyleCascadeTable;
     readonly isFontAvailable?: (family: string) => boolean;
-}>(options: T, blocks: readonly OoxmlElement[]): T & {
-    readonly numberingIndex: NumberingIndex;
     readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    readonly numberingIndex?: NumberingIndex;
+    readonly styleCascade?: StyleCascadeTable;
+}>(options: T, blocks: readonly OoxmlElement[]): T & {
+    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    readonly numberingIndex: NumberingIndex;
 };
 
 // @public

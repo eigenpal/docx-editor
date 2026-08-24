@@ -125,10 +125,10 @@ export { composeFontConfiguration }
 
 // @public
 export const CONTENT_CONTROL_SLOTS: {
-    readonly showAll: "contentControl.showAll";
     readonly formFill: "contentControl.formFill";
     readonly inspector: "contentControl.inspector";
     readonly remove: "contentControl.remove";
+    readonly showAll: "contentControl.showAll";
 };
 
 // @public
@@ -784,39 +784,39 @@ export interface DocxEditorRulerProps {
 
 // @public @deprecated (undocumented)
 export function DocxEditorShell(input: {
-    i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
-    isDark?: boolean;
-    onEditorError: (error: Error) => void;
-    containerRef: React.Ref<HTMLDivElement>;
-    scrollContainerRef: React.Ref<HTMLDivElement>;
-    editorContentRef: React.Ref<HTMLDivElement>;
     className: string | undefined;
+    containerRef: React.Ref<HTMLDivElement>;
     containerStyle: CSSProperties;
-    mainContentStyle: CSSProperties;
+    dialogs: ReactNode;
     editorContainerStyle: CSSProperties;
-    showRuler: boolean;
-    readOnlyProp: boolean | undefined;
-    showOutline: boolean;
-    showOutlineButton: boolean;
-    sidebarOpen: boolean;
-    minLayoutWidth: number;
-    toolbarHeight: number;
+    editorContentRef: React.Ref<HTMLDivElement>;
     editorScrollLeft: number;
     expandedSidebarItem: string | null;
-    trackedChanges: readonly TrackedChangeSummary[];
-    onScrollContainerMouseDown: (e: React.MouseEvent) => void;
+    fileInputs: ReactNode;
+    horizontalRulerProps: HorizontalRulerProps_2;
+    i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
+    isDark?: boolean;
+    mainContentStyle: CSSProperties;
+    minLayoutWidth: number;
     onEditorBgMouseDown: (e: React.MouseEvent) => void;
     onEditorContextMenu: (e: React.MouseEvent) => void;
-    horizontalRulerProps: HorizontalRulerProps_2;
-    verticalRulerProps: VerticalRulerProps$1;
-    outlineProps: OutlineProps;
+    onEditorError: (error: Error) => void;
+    onScrollContainerMouseDown: (e: React.MouseEvent) => void;
     onToggleOutline: () => void;
-    scrollPageInfo: ScrollPageInfo;
-    toolbar: ReactNode;
-    pagedArea: ReactNode;
+    outlineProps: OutlineProps;
     overlays: ReactNode;
-    dialogs: ReactNode;
-    fileInputs: ReactNode;
+    pagedArea: ReactNode;
+    readOnlyProp: boolean | undefined;
+    scrollContainerRef: React.Ref<HTMLDivElement>;
+    scrollPageInfo: ScrollPageInfo;
+    showOutline: boolean;
+    showOutlineButton: boolean;
+    showRuler: boolean;
+    sidebarOpen: boolean;
+    toolbar: ReactNode;
+    toolbarHeight: number;
+    trackedChanges: readonly TrackedChangeSummary[];
+    verticalRulerProps: VerticalRulerProps$1;
 }): react.JSX.Element;
 
 // @public
@@ -1416,11 +1416,11 @@ export function NavigationToggle(input: NavigationPartProps): ReactElement;
 
 // @public (undocumented)
 export type NormalizedImagePayload = {
-    readonly ok: true;
     readonly bytes: Uint8Array;
-    readonly mime: SupportedImageMime;
-    readonly widthPoints: number;
     readonly heightPoints: number;
+    readonly mime: SupportedImageMime;
+    readonly ok: true;
+    readonly widthPoints: number;
 } | {
     readonly ok: false;
     readonly reasonKey: string;
@@ -1579,13 +1579,13 @@ export interface ParagraphFormatRead {
     readonly contextualSpacing: ParagraphFlagState;
     readonly disagrees: {
         readonly alignment: boolean;
-        readonly spaceBeforePt: boolean;
-        readonly spaceAfterPt: boolean;
-        readonly lineSpacing: boolean;
-        readonly tabStops: boolean;
+        readonly indentFirstLine: boolean;
         readonly indentLeft: boolean;
         readonly indentRight: boolean;
-        readonly indentFirstLine: boolean;
+        readonly lineSpacing: boolean;
+        readonly spaceAfterPt: boolean;
+        readonly spaceBeforePt: boolean;
+        readonly tabStops: boolean;
     };
     readonly indentFirstLineTwips: number | null;
     // (undocumented)
@@ -1669,11 +1669,11 @@ export interface ParagraphStyleOption {
     // (undocumented)
     readonly name: string;
     readonly preview: {
+        readonly bold: boolean;
+        readonly color: string | null;
         readonly fontFamily: string | null;
         readonly fontSizePt: number | null;
-        readonly bold: boolean;
         readonly italic: boolean;
-        readonly color: string | null;
     };
     // (undocumented)
     readonly styleId: string;
@@ -1814,43 +1814,43 @@ export interface SlotProps extends HTMLAttributes<HTMLElement> {
 // @public
 export interface TableBorderColorNamespace extends TableChromePartComponent {
     readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
-    readonly docxSlot: 'table.borderColor';
     readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
     readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderColor';
 }
 
 // @public
 export interface TableBorderStyleNamespace extends TableChromePartComponent {
     readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
-    readonly docxSlot: 'table.borderStyle';
     readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderStyle';
 }
 
 // @public
 export interface TableBorderTargetNamespace extends TableChromePartComponent {
     readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
-    readonly docxSlot: 'table.borderTarget';
     readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderTarget';
 }
 
 // @public
 export interface TableBorderWidthNamespace extends TableChromePartComponent {
     readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
-    readonly docxSlot: 'table.borderWidth';
     readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderWidth';
 }
 
 // @public
 export interface TableCellFillNamespace extends TableChromePartComponent {
     readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
-    readonly docxSlot: 'table.cellFill';
     readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
     readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.cellFill';
 }
 
 // @public
@@ -1861,9 +1861,9 @@ export interface TableChromeItemProps extends TableChromePartProps {
 // @public
 export interface TableChromePartComponent extends ToolbarSlotPartComponent {
     readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
-    readonly docxSlot: TableChromeSlotId;
     readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
     readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: TableChromeSlotId;
 }
 
 // @public
@@ -1970,9 +1970,9 @@ export interface ToolbarProps {
     enableShortcuts?: boolean;
     fontFamilies?: ReadonlyArray<string | FontOption>;
     imageContext?: {
-        wrapType: string;
-        displayMode: string;
         cssFloat: string | null;
+        displayMode: string;
+        wrapType: string;
     } | null;
     inline?: boolean;
     onFormat?: (action: FormattingAction) => void;
@@ -1983,16 +1983,16 @@ export interface ToolbarProps {
     onInsertSectionBreakContinuous?: () => void;
     onInsertSectionBreakNextPage?: () => void;
     onInsertShape?: (data: {
-        shapeType: string;
-        width: number;
-        height: number;
         fillColor?: string;
         fillType?: string;
-        outlineWidth?: number;
+        height: number;
         outlineColor?: string;
+        outlineWidth?: number;
+        shapeType: string;
+        width: number;
     }) => void;
-    onInsertTable?: (rows: number, columns: number) => void;
     onInsertTOC?: () => void;
+    onInsertTable?: (rows: number, columns: number) => void;
     onOpen?: () => void;
     onOpenImageProperties?: () => void;
     onPageSetup?: () => void;
@@ -2017,13 +2017,13 @@ export interface ToolbarProps {
     showZoomControl?: boolean;
     style?: CSSProperties;
     tableContext?: {
+        canSplitCell?: boolean;
+        cellBackgroundColor?: string;
+        cellBorderColor?: ColorValue;
+        columnCount?: number;
+        hasMultiCellSelection?: boolean;
         isInTable: boolean;
         rowCount?: number;
-        columnCount?: number;
-        canSplitCell?: boolean;
-        hasMultiCellSelection?: boolean;
-        cellBorderColor?: ColorValue;
-        cellBackgroundColor?: string;
     } | null;
     theme?: Theme | null;
     zoom?: number;
@@ -2331,8 +2331,8 @@ export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: strin
 
 // @public (undocumented)
 export function useTranslation(): {
-    t: TFunction;
     catalogue: LocaleStrings;
+    t: TFunction;
 };
 
 // @public
