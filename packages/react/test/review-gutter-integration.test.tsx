@@ -157,8 +157,9 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('44px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('44px');
     const loading = container.querySelector('.docx-editor__loading') as HTMLElement;
-    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
-    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
+    expect(
+      loading.querySelector('.docx-paginated-surface > .docx-pages > .docx-page')
+    ).not.toBeNull();
   });
 
   test('a rail on a wide viewport keeps the full column, with nothing at the start', async () => {
@@ -189,7 +190,8 @@ describe('the viewport’s review gutter', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
     const loading = container.querySelector('.docx-editor__loading') as HTMLElement;
-    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
-    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
+    expect(
+      loading.querySelector('.docx-paginated-surface > .docx-pages > .docx-page')
+    ).not.toBeNull();
   });
 });

@@ -98,8 +98,9 @@ describe('DocxEditorViewport review rail', () => {
     expect(scroller.style.getPropertyValue('--docx-review-gutter')).toBe('316px');
     expect(scroller.style.getPropertyValue('--docx-review-gutter-start')).toBe('0px');
     const loading = view.container.querySelector('.docx-editor__loading') as HTMLElement;
-    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
-    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
+    expect(
+      loading.querySelector('.docx-paginated-surface > .docx-pages > .docx-page')
+    ).not.toBeNull();
     view.unmount();
   });
 
@@ -127,8 +128,9 @@ describe('DocxEditorViewport review rail', () => {
     ) as HTMLElement;
     expect(scroller.style.getPropertyValue('--docx-nav-shift')).toBe('128px');
     const loading = view.container.querySelector('.docx-editor__loading') as HTMLElement;
-    expect(loading.style.getPropertyValue('--docx-loading-inline-start')).toBe('0px');
-    expect(loading.style.getPropertyValue('--docx-loading-right')).toBe('0px');
+    expect(
+      loading.querySelector('.docx-paginated-surface > .docx-pages > .docx-page')
+    ).not.toBeNull();
     view.unmount();
   });
 

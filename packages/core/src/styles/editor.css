@@ -4636,23 +4636,15 @@ a.docx-hyperlink:focus-visible {
    Loading surface (`DocxEditor.Loading`)
    --------------------------------------------------------------------------- */
 
-/* Fills whatever box the host places it in, so the same declaration works as a
-   full-page screen and as an in-viewport overlay. */
+/* Fills whatever box the host places it in. The default child uses the real paginated
+   surface and page classes, so its position and paper styling match a loaded document. */
 .docx-editor__loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
+  display: block;
   box-sizing: border-box;
   width: 100%;
   height: 100%;
   min-height: 0;
-  padding: 32px 0;
-  padding-inline-start: var(--docx-loading-inline-start, 0px);
-  padding-right: var(--docx-loading-right, 0px);
   overflow: auto;
-  container-type: size;
   color: var(--doc-text-muted);
   font-size: 14px;
 }
@@ -4686,25 +4678,28 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
-/* The default screen resembles the first page before its contents arrive. It uses the
-   same full-size US Letter proportions and shadow as the painted surface. Only the
-   available width can reduce it; short viewports scroll as the painted surface does. */
-.docx-editor__loading-page {
+/* The loading sheet uses the same surface tree as a painted document:
+   `.docx-paginated-surface > .docx-pages > .docx-page`. React and Vue apply the layout
+   page size and zoom to the surface. The shared surface margin and page rule then control
+   centring, paper colour, and shadow without a second approximation. */
+.docx-editor__loading-surface > .docx-pages {
   position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.docx-editor__loading-page {
+  position: absolute;
+  inset: 0;
   box-sizing: border-box;
-  flex: none;
-  width: min(816px, calc(100cqw - 32px));
-  aspect-ratio: 8.5 / 11;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  padding: clamp(28px, 9.09%, 96px) clamp(24px, 11.76%, 96px);
-  background: var(--doc-page-bg-rendered);
-  border: 1px solid var(--doc-border-light);
-  box-shadow: 0 1px 3px var(--doc-shadow);
 }
 
 .docx-editor__loading-page-status {
   position: absolute;
-  top: min(50%, calc(50cqh - 32px));
+  top: 50%;
   right: 0;
   left: 0;
   display: flex;

@@ -359,8 +359,12 @@ describe('DocxEditor.Loading', () => {
   test('renders one packaged loading page when the host supplies no children', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
+    const surface = el.querySelector('.docx-paginated-surface') as HTMLElement;
 
     expect(el.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
+    expect(surface.querySelector(':scope > .docx-pages > .docx-page')).not.toBeNull();
+    expect(surface.style.width).toBe('816px');
+    expect(surface.style.height).toBe('1056px');
     expect(el.querySelector('.docx-editor__loading-lines')).toBeNull();
     expect(el.querySelector(SPINNER)).not.toBeNull();
     expect(el.getAttribute('role')).toBe('status');

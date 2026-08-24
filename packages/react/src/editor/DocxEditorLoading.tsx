@@ -32,6 +32,7 @@ import type { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
+import { twipsToPixels } from '../lib/units';
 import { useEditorState } from './useEditorState';
 
 /**
@@ -41,6 +42,19 @@ import { useEditorState } from './useEditorState';
  */
 const selectShowLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
+
+interface LoadingPageSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+const selectLoadingPageSize = (snapshot: EditorSnapshot): LoadingPageSize => ({
+  width: twipsToPixels(snapshot.pageSetup?.pageWidthTwips ?? 12_240) * snapshot.zoom,
+  height: twipsToPixels(snapshot.pageSetup?.pageHeightTwips ?? 15_840) * snapshot.zoom,
+});
+
+const sameLoadingPageSize = (a: LoadingPageSize, b: LoadingPageSize) =>
+  a.width === b.width && a.height === b.height;
 
 /** Props for `DocxEditor.Loading`. @public */
 export interface DocxEditorLoadingProps {
@@ -107,24 +121,27 @@ function DocxEditorLoadingImpl({
   children,
 }: DocxEditorLoadingProps) {
   const showLoading = useEditorState(selectShowLoading);
+  const pageSize = useEditorState(selectLoadingPageSize, sameLoadingPageSize);
   const { t } = useTranslation();
   if (!when && !showLoading) return null;
 
   const classes = `docx-editor docx-editor__loading${
     overlay ? ' docx-editor__loading--overlay' : ''
   }${className ? ` ${className}` : ''}`;
-  const loadingStyle = {
-    ['--docx-loading-inline-start' as string]: '0px',
-    ['--docx-loading-right' as string]: '0px',
-    ...style,
-  } as CSSProperties;
   return (
-    <div className={classes} style={loadingStyle} role="status" aria-live="polite">
+    <div className={classes} style={style} role="status" aria-live="polite">
       {children ?? (
-        <div className="docx-editor__loading-page">
-          <div className="docx-editor__loading-page-status">
-            <DocxEditorLoadingSpinner />
-            <span className="docx-editor-sr-only">{t('loading.label')}</span>
+        <div
+          className="docx-paginated-surface docx-editor__loading-surface"
+          style={{ width: pageSize.width, height: pageSize.height }}
+        >
+          <div className="docx-pages">
+            <div className="docx-page docx-editor__loading-page">
+              <div className="docx-editor__loading-page-status">
+                <DocxEditorLoadingSpinner />
+                <span className="docx-editor-sr-only">{t('loading.label')}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

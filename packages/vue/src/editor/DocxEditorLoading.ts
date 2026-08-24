@@ -2,10 +2,15 @@ import { defineComponent, h, type CSSProperties, type PropType, type VNode } fro
 import type { DocxEditorChildren } from '../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
+import { twipsToPixels } from '../lib/units';
 import { useEditorState } from './useEditorState';
 
 const selectShowLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
+const selectLoadingPageSize = (snapshot: EditorSnapshot) => ({
+  width: twipsToPixels(snapshot.pageSetup?.pageWidthTwips ?? 12_240) * snapshot.zoom,
+  height: twipsToPixels(snapshot.pageSetup?.pageHeightTwips ?? 15_840) * snapshot.zoom,
+});
 
 /** Props for `DocxEditor.Loading`. @public */
 export interface DocxEditorLoadingProps {
@@ -46,6 +51,7 @@ const DocxEditorLoadingImpl = defineComponent({
   },
   setup(props, { slots }) {
     const showLoading = useEditorState(selectShowLoading);
+    const pageSize = useEditorState(selectLoadingPageSize);
     const { t } = useTranslation();
 
     return () => {
@@ -53,21 +59,30 @@ const DocxEditorLoadingImpl = defineComponent({
       const classes = `docx-editor docx-editor__loading${
         props.overlay ? ' docx-editor__loading--overlay' : ''
       }${props.className ? ` ${props.className}` : ''}`;
-      const loadingStyle: CSSProperties = {
-        '--docx-loading-inline-start': '0px',
-        '--docx-loading-right': '0px',
-        ...props.style,
-      };
       return h(
         'div',
-        { class: classes, style: loadingStyle, role: 'status', ariaLive: 'polite' },
+        { class: classes, style: props.style, role: 'status', ariaLive: 'polite' },
         slots.default?.() ??
-          h('div', { class: 'docx-editor__loading-page' }, [
-            h('div', { class: 'docx-editor__loading-page-status' }, [
-              h(DocxEditorLoadingSpinner),
-              h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),
-            ]),
-          ])
+          h(
+            'div',
+            {
+              class: 'docx-paginated-surface docx-editor__loading-surface',
+              style: {
+                width: `${pageSize.value.width}px`,
+                height: `${pageSize.value.height}px`,
+              },
+            },
+            [
+              h('div', { class: 'docx-pages' }, [
+                h('div', { class: 'docx-page docx-editor__loading-page' }, [
+                  h('div', { class: 'docx-editor__loading-page-status' }, [
+                    h(DocxEditorLoadingSpinner),
+                    h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),
+                  ]),
+                ]),
+              ]),
+            ]
+          )
       );
     };
   },
