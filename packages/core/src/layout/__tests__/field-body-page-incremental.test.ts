@@ -114,6 +114,64 @@ describe('body page fields across an incremental re-layout in one session', () =
   });
 });
 
+describe('page fields on section pages the edit did not touch', () => {
+  // Both tests run TWO sections so the multi-section publish path (and its per-page memo) is
+  // the one under test — single-section fixtures never reach it.
+  const twoSections = (s1Filler: number, s2Filler: number, mutate?: (body: string) => string) => {
+    const body =
+      simpleField('SECTIONPAGES') +
+      simpleField('NUMPAGES') +
+      filler(s1Filler, 's1') +
+      `<w:p><w:pPr>${tightSectPr()}</w:pPr><w:r><w:t>s1 end</w:t></w:r></w:p>` +
+      filler(s2Filler, 's2') +
+      tightSectPr();
+    return partOf(mutate ? mutate(body) : body);
+  };
+
+  test('SECTIONPAGES on the section first page updates when the section tail grows', () => {
+    // The field's own page is untouched by the edit, so its section-local record is reused
+    // and the publish memo answers for it — `sectionPageCount` is the one memo-key component
+    // nothing else pins, and dropping it left this exact stale value.
+    const session = createLayoutSession();
+    const first = lay(twoSections(16, 6), 1, session);
+    const firstCount = Number(spanOfKind(first, 'SECTIONPAGES').span.text);
+    expect(firstCount).toBeGreaterThan(1);
+
+    const second = lay(twoSections(36, 6), 2, session);
+    const secondCount = Number(spanOfKind(second, 'SECTIONPAGES').span.text);
+    expect(secondCount).toBeGreaterThan(firstCount);
+    expect(secondCount).toBe(
+      spanOfKind(second, 'SECTIONPAGES').page.pageFieldSource?.sectionPageCount
+    );
+  });
+
+  test('NUMPAGES on an untouched section updates with the total, and holds identity without it', () => {
+    const session = createLayoutSession();
+    const first = lay(twoSections(16, 6), 1, session);
+    const firstTotal = first.pages.length;
+    expect(spanOfKind(first, 'NUMPAGES').span.text).toBe(String(firstTotal));
+
+    // Grow the OTHER section: the NUMPAGES sheet is untouched, but the total moved, so the
+    // substituted text must move with it — through a fresh record, or paint never repaints.
+    const second = lay(twoSections(16, 26), 2, session);
+    expect(second.pages.length).toBeGreaterThan(firstTotal);
+    const grown = spanOfKind(second, 'NUMPAGES');
+    expect(grown.span.text).toBe(String(second.pages.length));
+    expect(grown.page).not.toBe(spanOfKind(first, 'NUMPAGES').page);
+
+    // A count-stable edit in the other section keeps the NUMPAGES sheet by identity.
+    const third = lay(
+      twoSections(16, 26, (body) => body.replace('s2 3', 's2 3!')),
+      3,
+      session
+    );
+    expect(third.pages.length).toBe(second.pages.length);
+    const held = spanOfKind(third, 'NUMPAGES');
+    expect(held.span.text).toBe(String(third.pages.length));
+    expect(held.page).toBe(grown.page);
+  });
+});
+
 describe('body page fields in a genuine two-section document', () => {
   test('section 2 PAGE restarts and SECTIONPAGES counts section 2, distinct from NUMPAGES', () => {
     // Section 1: enough one-line paragraphs to fill more than one page, ended by a mid-body sectPr.

@@ -69,8 +69,10 @@ export const PAGE_REUSE_GUARDS = {
   footnotes: 'rebuilt',
   endnotes: 'rebuilt',
   noteStream: 'rebuilt',
-  // `withPageFieldSources` re-annotates every page every pass, which is what keeps PAGE and
-  // SECTIONPAGES right when only the numbering moved.
+  // Every reuse path revalidates the stamped numbering before returning a prior record: the
+  // publish memo keys on (pageNumber, sectionPageCount, format), and the span-identity branch
+  // checks the same values against its first page — so a PAGE or SECTIONPAGES move always
+  // reaches `withPageFieldSources` for a fresh stamp.
   pageFieldSource: 'rebuilt',
   // `attachContentControlBoundaries`, from `finish()`, rebuilds the per-page boundaries every
   // pass and early-returns only on a matching control-context token.

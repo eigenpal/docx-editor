@@ -320,7 +320,6 @@ function publishSectionPage(
  * An empty final section is still laid out when its break type requires a new sheet: that
  * materializes the blank page Word keeps for the section's geometry and furniture.
  */
-
 export function layoutMultiSectionDocument(
   blocks: readonly OoxmlElement[],
   sections: readonly DocumentSection[],
@@ -456,6 +455,20 @@ export function layoutMultiSectionDocument(
     const displayedStart = numbering?.start !== undefined ? numbering.start : nextDisplayed;
     const format = numbering?.fmt;
 
+    // The stack checks prove the sheets did not MOVE; this proves their displayed numbering
+    // did not either. `displayedStart` is inherited through every section before this one, so
+    // a continuous section merging into its host (indices and counts unchanged here) can still
+    // shift a later span's PAGE values. The published pages carry what they were stamped with,
+    // so the first one answers for the whole span.
+    const firstPrevious = prevSpan?.remappedPages[0];
+    const numberingUnchanged =
+      prevSpan === undefined ||
+      prevSpan.remappedPages.length === 0 ||
+      (firstPrevious?.pageFieldSource !== undefined &&
+        firstPrevious.pageFieldSource.pageNumber === displayedStart &&
+        firstPrevious.pageFieldSource.sectionPageCount === prevSpan.remappedPages.length &&
+        firstPrevious.pageFieldSource.format === format);
+
     let remapped: readonly PageRecord[];
     if (continues) {
       // The section's first page is not a sheet: it is the tail of the one before it. Its
@@ -489,7 +502,7 @@ export function layoutMultiSectionDocument(
         remappedAll.push(page);
       }
       nextDisplayed = displayedStart + sectionPageCount;
-    } else if (localUnchanged && stackUnchanged) {
+    } else if (localUnchanged && stackUnchanged && numberingUnchanged) {
       remapped = prevSpan.remappedPages;
       reusedPages += remapped.length;
       for (const page of remapped) {
