@@ -74,17 +74,22 @@ describe('the convergence comparison agrees with the map', () => {
   const fields = Object.entries(FLOW_CHECKPOINT_GUARDS) as [string, FlowCheckpointGuard][];
 
   for (const [field, guard] of fields) {
+    // Word boundary, not substring: a future `mark.pageFragmentsExtra` must not satisfy
+    // the `pageFragments` gate.
+    const reads = new RegExp(`\\bmark\\.${field}\\b`);
     if (guard === 'restore-only') {
       test(`'${field}' is restore-only and the convergence region never reads it`, () => {
         // If convergence starts comparing it, the map (and its documented argument for
-        // never comparing it) is stale — reclassify it, do not just silence this.
-        expect(region.includes(`mark.${field}`)).toBe(false);
+        // never comparing it) is stale — reclassify it, do not just silence this. The
+        // region deliberately ends BEFORE convergenceTailShiftAllowed: the shift-delta
+        // arithmetic after the condition may read any field it likes.
+        expect(reads.test(region)).toBe(false);
       });
     } else {
       test(`'${field}' (${guard}) is read by the convergence region`, () => {
         // A 'compared' field that vanished from the condition converges a mismatched
         // flow: the exact silent failure deferredAnchoredDrawings shipped once.
-        expect(region.includes(`mark.${field}`)).toBe(true);
+        expect(reads.test(region)).toBe(true);
       });
     }
   }

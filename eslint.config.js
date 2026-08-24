@@ -220,6 +220,15 @@ export default [
             'push/splice/Math.* sites are grandfathered — audit that the collection is ' +
             'bounded before adding one.',
         },
+        // Constructor varargs grow the same stack: `new Foo(...arr)` is not a
+        // CallExpression, so it needs its own selector.
+        {
+          selector: 'NewExpression > SpreadElement',
+          message:
+            'Spreading an array into a constructor grows the argument stack with the ' +
+            'document and throws on attacker-sized input. Pass the array itself ' +
+            '(new Set(items), not new Set(...items)).',
+        },
       ],
     },
   },

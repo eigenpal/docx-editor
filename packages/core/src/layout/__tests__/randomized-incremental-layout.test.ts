@@ -11,6 +11,12 @@
 // Determinism: fixed seeds, and a pure inline PRNG (mulberry32) — no wall clock, no
 // Math.random, no dependency. A failure prints the seed and the accumulated edit script,
 // which replays the exact sequence.
+//
+// Scope: every step re-parses the document, so this exercises the STRING-KEYED half of
+// incrementality — flow keys, checkpoints, convergence, section spans. The identity-keyed
+// half (prepared-block memos, the paragraph key memo hit test, prepass `bodies` identity)
+// needs a store-driven variant that mutates one retained tree; that is tracked follow-up
+// work, not covered here.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -212,10 +218,14 @@ describe('incremental layout equals from-scratch layout on random edit sequences
       const first = lay(load(renderDoc(doc)), 1, session);
       expect(first.pages.length).toBeGreaterThan(1);
 
+      let reusedSteps = 0;
+      let partialSteps = 0;
       for (let step = 0; step < STEPS; step += 1) {
         log.push(randomEdit(doc, rand, step));
         const part = load(renderDoc(doc));
         const incremental = publishedShapeOf(lay(part, step + 2, session));
+        if (session.stats.reusedPages > 0) reusedSteps += 1;
+        if (session.stats.placed < session.stats.total) partialSteps += 1;
         const fresh = publishedShapeOf(lay(part, step + 2));
         if (incremental !== fresh) {
           throw new Error(
@@ -225,6 +235,11 @@ describe('incremental layout equals from-scratch layout on random edit sequences
           );
         }
       }
+      // Anti-vacuity: an oracle comparing full pass against full pass proves nothing. If
+      // resume ever breaks outright, equality above still holds — these counters are what
+      // fail. Floors sit well under the measured behavior (17+ reuse steps per seed).
+      expect(reusedSteps).toBeGreaterThanOrEqual(8);
+      expect(partialSteps).toBeGreaterThanOrEqual(8);
     });
   }
 });

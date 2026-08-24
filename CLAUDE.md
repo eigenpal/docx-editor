@@ -31,10 +31,10 @@ One engine. Thin chrome on top.
 | `editor-api`  | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license         |
 | `pro`         | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license         |
 | `fonts`       | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                      |
-| `vue`, `nuxt` | WIP, not shipping                                                                                                                                                                              | private                        |
+| `vue`         | The Vue 3 adapter twin, parity-gated against `react`                                                                                                                                           | published                      |
+| `nuxt`        | Nuxt module over the Vue adapter                                                                                                                                                               | WIP, private                   |
 
-React is the only real adapter today. Parity rules below are the target, not the
-state.
+React and Vue both ship; the parity gates below keep them from drifting.
 
 **The engine must resolve to ONE copy.** It holds module-level state — the
 HarfBuzz shaper and its cache budget, the grapheme boundary strategy, layout
@@ -160,8 +160,8 @@ bun run i18n:validate
 openspec validate typed-ooxml-paragraph-editor --strict
 ```
 
-- `bun run lint`'s errors are the `max-lines` caps (1000 lines for most files, up to 3250 for
-  the handful already past it) and the `no-restricted-syntax` bans (HTML-from-strings sinks
+- `bun run lint`'s errors are the `max-lines` caps (1000 lines for most files, per-file caps up
+  to 3500 for the handful already past it) and the `no-restricted-syntax` bans (HTML-from-strings sinks
   everywhere, varargs array spread in `core/src/{store,layout}`). Nothing else catches the caps,
   so adding to a large file passes typecheck and the whole suite and fails CI. Extract; do not
   raise the cap — `scripts/check-eslint-max-lines-globs.mjs` also fails a cap that drifts more

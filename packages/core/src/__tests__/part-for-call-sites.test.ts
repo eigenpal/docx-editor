@@ -7,32 +7,40 @@
 // rest of the session, silently. A pure read routes through `partOfNodeId`
 // (`editor/surface-scope.ts`) or another store read API instead.
 //
-// So every `partFor(` in non-test source is pinned here, in the manner of
-// `prosemirror-isolation.test.ts`. Add a new site only for a WRITE that needs the open
-// store, then update this list; a removed site fails too, so the list ratchets down.
+// So every `partFor(` in non-test source is pinned here — across every package that can
+// reach a session, not just core — in the manner of `prosemirror-isolation.test.ts`. Add
+// a new site only for a WRITE that needs the open store, then update this list; a removed
+// site fails too, so the list ratchets down. Occurrences count comment MENTIONS as well
+// as calls, deliberately: the census stays a dumb grep so it cannot be argued with.
 
 import { describe, expect, test } from 'bun:test';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
+const PACKAGES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
-/** file (relative to src/) → number of `partFor(` occurrences, definitions included. */
+/** Every published package's src root that could hold a call site. */
+const SCANNED_ROOTS = ['core/src', 'pro/src', 'editor-api/src', 'react/src', 'vue/src'];
+
+/** file (relative to packages/) → number of `partFor(` occurrences, definitions included. */
 const PINNED_CALL_SITES: Readonly<Record<string, number>> = {
-  'automation/server-host.ts': 1,
-  'binding/tree-session.ts': 7, // includes the TreeEditingSession facade definition
-  'editor/doc-target-resolution.ts': 2,
-  'editor/docx-editor-derive.ts': 1,
-  'editor/docx-editor-images.ts': 1,
-  'editor/paginated-surface.ts': 10,
-  'editor/surface-equations.ts': 1,
-  'editor/surface-format.ts': 1,
-  'editor/surface-hf-editing.ts': 1,
-  'editor/surface-hyperlinks.ts': 1,
-  'editor/surface-scope.ts': 2, // storyScopeOfNodeId — documented as a known debt in-file
-  'editor/surface-structure.ts': 1,
-  'store/store/tree-package-store.ts': 1, // the definition itself
+  'core/src/automation/server-host.ts': 1,
+  'core/src/binding/tree-session.ts': 7, // includes the TreeEditingSession facade definition
+  'core/src/editor/doc-target-resolution.ts': 2,
+  'core/src/editor/docx-editor-derive.ts': 1,
+  'core/src/editor/docx-editor-images.ts': 1,
+  'core/src/editor/paginated-surface.ts': 10,
+  'core/src/editor/surface-equations.ts': 1,
+  'core/src/editor/surface-format.ts': 1,
+  'core/src/editor/surface-hf-editing.ts': 1,
+  'core/src/editor/surface-hyperlinks.ts': 1,
+  'core/src/editor/surface-scope.ts': 2, // storyScopeOfNodeId — documented as a known debt in-file
+  'core/src/editor/surface-structure.ts': 1,
+  'core/src/store/store/tree-package-store.ts': 1, // the definition itself
+  // Custom-node payload writes genuinely need the open store (they mutate the part).
+  'pro/src/custom-nodes/insert-custom-node.ts': 1,
+  'pro/src/custom-nodes/update-custom-node.ts': 3,
 };
 
 function* sourceFiles(directory: string): Generator<string> {
@@ -50,9 +58,13 @@ function* sourceFiles(directory: string): Generator<string> {
 describe('partFor stays a write-path API', () => {
   test('the call-site census matches the pinned list exactly', () => {
     const census: Record<string, number> = {};
-    for (const file of sourceFiles(SRC)) {
-      const count = (readFileSync(file, 'utf8').match(/\bpartFor\(/g) ?? []).length;
-      if (count > 0) census[relative(SRC, file).split(sep).join('/')] = count;
+    for (const root of SCANNED_ROOTS) {
+      const absolute = join(PACKAGES, root);
+      if (!existsSync(absolute)) throw new Error(`census root missing: ${root}`);
+      for (const file of sourceFiles(absolute)) {
+        const count = (readFileSync(file, 'utf8').match(/\bpartFor\(/g) ?? []).length;
+        if (count > 0) census[relative(PACKAGES, file).split(sep).join('/')] = count;
+      }
     }
     const sorted = Object.fromEntries(Object.entries(census).sort(([a], [b]) => (a < b ? -1 : 1)));
     // A NEW site: partFor opens and permanently retains a story store (cap 64). If this
@@ -63,6 +75,6 @@ describe('partFor stays a write-path API', () => {
   });
 
   test('the census is not vacuous: it sees the definition', () => {
-    expect(PINNED_CALL_SITES['store/store/tree-package-store.ts']).toBeGreaterThan(0);
+    expect(PINNED_CALL_SITES['core/src/store/store/tree-package-store.ts']).toBeGreaterThan(0);
   });
 });

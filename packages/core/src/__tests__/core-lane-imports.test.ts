@@ -96,8 +96,15 @@ function* sourceFiles(directory: string): Generator<string> {
 
 // One statement at a time, so `import type` classifies the whole statement. A mixed
 // `import { value, type T }` counts as a VALUE import, which is the conservative reading.
+//
+// The clause between the keyword and `from` excludes `;` and quotes rather than being
+// length-capped. Both restrictions are load-bearing: a char budget silently DROPPED any
+// import whose specifier list outgrew it (a 39-line layout import already had), and a
+// clause that could cross a `;` let a from-less `export type X = ...;` statement pair
+// with the NEXT statement's `from`, recording a VALUE import as type-only — which would
+// let it hide under a pinned type grandfather.
 const STATIC_IMPORT =
-  /(?:^|\n)\s*(import|export)\s+(type\s+)?[\s\S]{0,600}?from\s*['"]([^'"]+)['"]/g;
+  /(?:^|\n)[ \t]*(import|export)\s+(type\s+)?([^;'"`]*?)from\s*['"]([^'"]+)['"]/g;
 const BARE_IMPORT = /(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g;
 const DYNAMIC_IMPORT = /\bimport\(\s*['"]([^'"]+)['"]/g;
 
@@ -113,7 +120,7 @@ function edgesOf(file: string): ImportEdge[] {
       edges.push({ file: relativePath, to: target, typeOnly, specifier });
     }
   };
-  for (const match of source.matchAll(STATIC_IMPORT)) record(match[3]!, match[2] !== undefined);
+  for (const match of source.matchAll(STATIC_IMPORT)) record(match[4]!, match[2] !== undefined);
   for (const match of source.matchAll(BARE_IMPORT)) record(match[1]!, false);
   for (const match of source.matchAll(DYNAMIC_IMPORT)) record(match[1]!, false);
   return edges;

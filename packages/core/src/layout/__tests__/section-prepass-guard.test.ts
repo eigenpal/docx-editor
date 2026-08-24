@@ -26,15 +26,18 @@ describe('the prepassValid expression agrees with the map', () => {
   const fields = Object.entries(SECTION_PREPASS_GUARDS) as [string, SectionPrepassGuard][];
 
   for (const [field, guard] of fields) {
+    // Word boundary, not substring: a future `prepassMemo.keysExtra` must not satisfy
+    // the `keys` gate.
+    const reads = new RegExp(`\\bprepassMemo\\.${field}\\b`);
     if (guard === 'validity-checked') {
       test(`'${field}' has a prepassValid clause`, () => {
-        expect(region.includes(`prepassMemo.${field}`)).toBe(true);
+        expect(reads.test(region)).toBe(true);
       });
     } else {
       test(`'${field}' is derived-covered and prepassValid never reads it`, () => {
         // If the expression starts comparing it, the field is no longer a pure derivation
         // of the checked inputs — reclassify it, do not just silence this.
-        expect(region.includes(`prepassMemo.${field}`)).toBe(false);
+        expect(reads.test(region)).toBe(false);
       });
     }
   }
