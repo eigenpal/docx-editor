@@ -195,3 +195,55 @@ describe('note properties follow the caret’s own section', () => {
     expect(first?.footnote.resolved.numFmt).toBe('decimal');
   });
 });
+
+describe('the notePropertiesState memo tracks every input of the computation', () => {
+  test('re-entering a shared header from another section refreshes the answer', () => {
+    const editor = mount();
+    const surface = editor.surface!;
+    // Section 0 declares `rId10`; section 1 inherits the same part. Entering is UI state:
+    // it moves no revision and lands the caret on the SAME header paragraph both times, so
+    // a key of revision + paragraph id alone pins the first section's answer forever.
+    expect(surface.enterHeaderFooter({ rId: HEADER_R_ID, sectionIndex: 0 })).toBe(true);
+    expect(surface.notePropertiesState()?.sectionIndex).toBe(0);
+    expect(surface.notePropertiesState()?.footnote.resolved.numFmt).toBe('decimal');
+
+    surface.exitHeaderFooter();
+    expect(surface.enterHeaderFooter({ rId: HEADER_R_ID, sectionIndex: 1 })).toBe(true);
+    expect(surface.headerFooterState()?.sectionIndex).toBe(1);
+    const reentered = surface.notePropertiesState();
+    expect(reentered?.sectionIndex).toBe(1);
+    expect(reentered?.footnote.resolved.numFmt).toBe('lowerRoman');
+  });
+
+  test('a note-properties write invalidates the memo at a standing caret', () => {
+    const editor = mount();
+    const surface = editor.surface!;
+    expect(surface.notePropertiesState()?.footnote.resolved.numFmt).toBe('decimal');
+    // The write moves the package revision while the caret stands still.
+    expect(
+      surface.setNoteProperties({
+        scope: 'section',
+        sectionIndex: 0,
+        footnote: { numFmt: 'upperLetter' },
+      })
+    ).toBe(true);
+    expect(surface.notePropertiesState()?.footnote.resolved.numFmt).toBe('upperLetter');
+  });
+
+  test('an unmoved caret returns the identical snapshot, offset moves included', () => {
+    const editor = mount();
+    const surface = editor.surface!;
+    const first = surface.notePropertiesState();
+    expect(first).not.toBeNull();
+    expect(surface.notePropertiesState()).toBe(first!);
+    // The computation reads only the head PARAGRAPH; section membership cannot change
+    // within one paragraph, so an offset move must not recompute. This pins the invariant
+    // that keeps the selection offset out of the memo key.
+    const paragraphId = surface.state().selection.head.paragraphId;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 3 },
+      head: { paragraphId, offset: 3 },
+    });
+    expect(surface.notePropertiesState()).toBe(first!);
+  });
+});

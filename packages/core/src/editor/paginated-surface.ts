@@ -173,6 +173,9 @@ import { createImageOps } from './surface-image-ops.ts';
 import { createHeaderFooterScopeController } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
+import { settingsPartOf } from '../store/package/note-properties.ts';
+import { resolveNotesPart } from '../store/package/note-references.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 
 export type {
   ContentControlOps,
@@ -538,8 +541,36 @@ export function mountPaginatedSurface(
   /** Filled once selection sync exists; enter/exit need its noteModelMoved/mirror helpers. */
   let hfScope: ReturnType<typeof createHeaderFooterScopeController> | null = null;
   let noteOps: ReturnType<typeof createNoteOps> | null = null;
-  let cachedNoteProperties: ReturnType<typeof notePropertiesStateOf> = null;
-  let cachedNotePropertiesKey = '';
+  /**
+   * Memo for `notePropertiesState`, keyed on the COMPLETE read set of
+   * {@link notePropertiesStateOf}. `packageRevision` covers every publishing
+   * mutation (story transact, lifecycle ops, undo/redo, `publishStoryWrite`
+   * all bump it), but two kinds of input move without one. The open
+   * header/footer occurrence is UI state: inheritance lets one part serve
+   * several sections, so re-entering it from another section changes the
+   * answer while the revision and the caret paragraph both stand still. And
+   * shell installs (`replacePackageShell`, `installPackageSnapshot`) can swap
+   * parts without a bump, so the parts the computation walks — body for
+   * `w:sectPr` and note references, settings for `w:footnotePr`/`w:endnotePr`,
+   * the notes parts for a note caret's citing paragraph — join by object
+   * identity, for the same reason `currentPackage()` keys on identity rather
+   * than revision. The selection OFFSET is deliberately absent: the
+   * computation reads only the head paragraph id, and section membership
+   * cannot change within one paragraph (pinned in
+   * `__tests__/note-properties-section.test.ts`).
+   */
+  let notePropertiesCache: {
+    readonly packageRevision: number;
+    readonly paragraphId: string;
+    readonly bodyPart: OoxmlPart;
+    readonly settingsPart: OoxmlPart | null;
+    readonly footnotesPart: OoxmlPart | null;
+    readonly endnotesPart: OoxmlPart | null;
+    readonly headerFooterOpen: boolean;
+    readonly headerFooterRId: string | null;
+    readonly headerFooterSectionIndex: number | null;
+    readonly result: ReturnType<typeof notePropertiesStateOf>;
+  } | null = null;
   const storyScope = () =>
     storyScopeOf(hfScope?.getActive() ?? null, noteOps?.activeNoteScope() ?? null);
   const noteScopeId = () => noteOps?.activeNoteScope()?.id ?? null;
@@ -4721,13 +4752,47 @@ export function mountPaginatedSurface(
       return noteOps!.exitNote();
     },
     notePropertiesState: () => {
+      // See notePropertiesCache for why each field is in the key.
       const paragraphId = surface.state().selection.head.paragraphId;
-      const key = `${session.packageRevision()}:${paragraphId}`;
-      if (key === cachedNotePropertiesKey) return cachedNoteProperties;
-      const fresh = notePropertiesStateOf(surface);
-      cachedNoteProperties = fresh;
-      cachedNotePropertiesKey = key;
-      return fresh;
+      const packageRevision = session.packageRevision();
+      const pkg = session.currentPackage();
+      const bodyPart = session.part();
+      const settingsPart = settingsPartOf(pkg);
+      const footnotesPart = resolveNotesPart(pkg, 'footnote');
+      const endnotesPart = resolveNotesPart(pkg, 'endnote');
+      const headerFooterOpen = surface.activeScope().kind === 'headerFooter';
+      const hfState = surface.headerFooterState();
+      const headerFooterRId = hfState?.rId ?? null;
+      const headerFooterSectionIndex = hfState?.sectionIndex ?? null;
+      const cached = notePropertiesCache;
+      if (
+        cached &&
+        cached.packageRevision === packageRevision &&
+        cached.paragraphId === paragraphId &&
+        cached.bodyPart === bodyPart &&
+        cached.settingsPart === settingsPart &&
+        cached.footnotesPart === footnotesPart &&
+        cached.endnotesPart === endnotesPart &&
+        cached.headerFooterOpen === headerFooterOpen &&
+        cached.headerFooterRId === headerFooterRId &&
+        cached.headerFooterSectionIndex === headerFooterSectionIndex
+      ) {
+        return cached.result;
+      }
+      const result = notePropertiesStateOf(surface);
+      notePropertiesCache = {
+        packageRevision,
+        paragraphId,
+        bodyPart,
+        settingsPart,
+        footnotesPart,
+        endnotesPart,
+        headerFooterOpen,
+        headerFooterRId,
+        headerFooterSectionIndex,
+        result,
+      };
+      return result;
     },
     notePreviewText: (scopeId) => notePreviewTextOf(session, scopeId),
     applyTableCommandPlan(plan: TableCommandPlan): ExecResult {
