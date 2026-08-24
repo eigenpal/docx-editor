@@ -860,6 +860,7 @@ export type AutomationOperation =
 | {
     readonly op: 'getContentControlText';
     readonly contentControl: AutomationHandle;
+    readonly projection?: AutomationTextProjection;
 }
 /** The paragraphs the control holds, in reading order. Empty for an inline control's own. */
 | {

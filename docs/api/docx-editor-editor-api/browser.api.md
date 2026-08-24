@@ -337,8 +337,6 @@ export type DocxEditorErrorCode =
 | 'ObjectInUse'
 /** An argument or load option this API does not accept. */
 | 'InvalidArgument'
-/** Text carried a paragraph mark where the API accepts one paragraph's text only. */
-| 'ParagraphMarkInText'
 /** The collection has no such item — `getFirst()` on an empty one. */
 | 'ItemNotFound'
 /** The host cannot do this at all — a capability it reports false. */

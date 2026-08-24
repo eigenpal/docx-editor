@@ -656,7 +656,11 @@ export type AutomationOperation =
   /** Whether the control removes itself on the first edit (`w:temporary`). */
   | { readonly op: 'getContentControlTemporary'; readonly contentControl: AutomationHandle }
   /** The text the control encloses, as the document reads it. */
-  | { readonly op: 'getContentControlText'; readonly contentControl: AutomationHandle }
+  | {
+      readonly op: 'getContentControlText';
+      readonly contentControl: AutomationHandle;
+      readonly projection?: AutomationTextProjection;
+    }
   /** The paragraphs the control holds, in reading order. Empty for an inline control's own. */
   | { readonly op: 'getContentControlParagraphs'; readonly contentControl: AutomationHandle }
   /**

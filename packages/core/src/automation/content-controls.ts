@@ -22,6 +22,7 @@ import { collectStoryParagraphs } from '../store/package/story-blocks.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { contentControlLockAt } from '../store/store/tree-op-content-controls.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import type { AutomationTextProjection } from './operations.ts';
 import type { AutomationStoryReads } from './reads.ts';
 
 /**
@@ -132,8 +133,32 @@ export function contentControlSpan(
 }
 
 /** The text the control encloses, as the document reads it. */
-export function contentControlText(node: OoxmlNode): string {
-  return contentControlTextOf(node);
+export function contentControlText(
+  reads: AutomationStoryReads,
+  node: OoxmlNode,
+  projection: AutomationTextProjection = 'all'
+): string {
+  // Preserve the existing content-control value semantics for ordinary reads.
+  if (projection === 'all') return contentControlTextOf(node);
+  const span = contentControlSpan(reads, node);
+  if (!span) return '';
+  const first = reads.indexOf(span.start.paragraphId);
+  const last = reads.indexOf(span.end.paragraphId);
+  if (first < 0 || last < first) return '';
+  const text: string[] = [];
+  for (let index = first; index <= last; index += 1) {
+    const paragraphId = reads.paragraphIds[index]!;
+    const projected = reads.projectedText(paragraphId, projection);
+    const raw = reads.paragraphText(paragraphId);
+    if (!projected || raw === null) return '';
+    text.push(
+      projected.sliceRaw(
+        index === first ? span.start.offset : 0,
+        index === last ? span.end.offset : raw.length
+      )
+    );
+  }
+  return text.join('\r');
 }
 
 function readOf(reads: AutomationStoryReads, node: OoxmlNode): AutomationContentControlRead {

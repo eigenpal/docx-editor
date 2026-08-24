@@ -89,6 +89,35 @@ describe('explicit tracked-change commands', () => {
     }
   });
 
+  test('proposeReplacement retracts the same author’s insertion in edit mode', () => {
+    const { editor, dispose } = mounted('Agent');
+    try {
+      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 2 },
+        head: { paragraphId, offset: 2 },
+      });
+      expect(editor.exec({ type: 'proposeInsertion', text: 'X', author: 'Agent' })).toMatchObject({
+        ok: true,
+        changed: true,
+      });
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 4 },
+      });
+
+      expect(
+        editor.exec({ type: 'proposeReplacement', replaceWith: 'Y', author: 'Agent' })
+      ).toMatchObject({ ok: true, changed: true });
+      const xml = xmlOf(editor);
+      expect(xml).not.toContain('<w:t>X</w:t>');
+      expect(xml).toContain('<w:delText>bc</w:delText>');
+      expect(xml).toContain('<w:t>Y</w:t>');
+    } finally {
+      dispose();
+    }
+  });
+
   test('can and exec agree on missing authors, collapsed deletion, and paragraph marks', () => {
     const noAuthor = mounted();
     try {

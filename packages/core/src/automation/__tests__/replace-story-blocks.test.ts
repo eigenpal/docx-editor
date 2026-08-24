@@ -34,4 +34,19 @@ describe('replaceStoryBlocks', () => {
     expect(xml.match(/w14:paraId="[0-9A-F]{8}"/g)).toHaveLength(3);
     expect(xml).toContain('w:w="12240"');
   });
+
+  test('refuses invalid XML text before applying the replacement', () => {
+    const host = open(docx(p('original')));
+    const { body } = roots(host);
+    const response = host.execute({
+      operations: [{ op: 'replaceStoryBlocks', body, paragraphs: ['invalid\u0001text'] }],
+    });
+
+    expect(response).toMatchObject({
+      ok: false,
+      changed: false,
+      results: [{ status: 'error', error: { code: 'unsupported-content' } }],
+    });
+    expect(savedMainXml(host)).toContain('original');
+  });
 });

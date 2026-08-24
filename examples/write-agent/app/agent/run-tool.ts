@@ -244,9 +244,16 @@ async function insertTable(
   );
   requireExec(editor.exec({ type: 'insertTable', rows, cols }), 'insert table');
 
-  const cellParagraphIds = (await currentParagraphIds(runtime)).filter((id) => !before.has(id));
+  const createdParagraphIds = (await currentParagraphIds(runtime)).filter((id) => !before.has(id));
   const cellTexts = parsed.data.rows.flat();
+  // Core inserts one empty separator paragraph before a table when the previous sibling is
+  // another table. Word otherwise merges the adjacent tables when it reopens the document.
+  const cellParagraphIds =
+    createdParagraphIds.length === cellTexts.length + 1
+      ? createdParagraphIds.slice(1)
+      : createdParagraphIds;
   if (cellParagraphIds.length !== cellTexts.length) {
+    requireExec(editor.exec({ type: 'undo' }), 'roll back incomplete table');
     throw new Error(
       `insertTable created ${cellParagraphIds.length} cell paragraphs for ${cellTexts.length} cells`
     );
@@ -278,10 +285,11 @@ function writeHeaderFooter(editor: DocxEditorInstance, input: Record<string, unk
   return ok({ header: parsed.data.header, footer: `${parsed.data.footerPrefix}X of Y` });
 }
 
-async function selectExactRangeEnd(
+async function selectExactRange(
   runtime: DocxEditorRuntime,
   paragraphId: string,
-  phrase: string
+  phrase: string,
+  location: 'Select' | 'End'
 ): Promise<void> {
   await runtime.run(async (context) => {
     const hits = context.document.body.search(phrase, {
@@ -302,7 +310,7 @@ async function selectExactRangeEnd(
     if (matches.length > 1) {
       throw new Error(`phrase "${phrase}" is ambiguous in paragraph ${paragraphId}`);
     }
-    matches[0]!.select('End');
+    matches[0]!.select(location);
     await context.sync();
   });
 }
@@ -316,7 +324,7 @@ async function proposeInsertion(
   const after = String(input.after ?? '');
   const text = String(input.text ?? '');
   if (!paragraphId || !after || !text) return fail('paragraphId, after, and text are required.');
-  await selectExactRangeEnd(runtime, paragraphId, after);
+  await selectExactRange(runtime, paragraphId, after, 'End');
   requireExec(
     editor.exec({ type: 'proposeInsertion', text, author: WRITER_AUTHOR }),
     'proposeInsertion'
@@ -324,18 +332,19 @@ async function proposeInsertion(
   return ok(`Suggested insertion after "${after}".`);
 }
 
-function proposeReplacement(
+async function proposeReplacement(
+  runtime: DocxEditorRuntime,
   editor: DocxEditorInstance,
   input: Record<string, unknown>
-): ToolResult {
+): Promise<ToolResult> {
   const paragraphId = String(input.paragraphId ?? '');
   const search = String(input.search ?? '');
   const replaceWith = String(input.replaceWith ?? '');
   if (!paragraphId || !search) return fail('paragraphId and search are required.');
+  await selectExactRange(runtime, paragraphId, search, 'Select');
   requireExec(
     editor.exec({
       type: 'proposeReplacement',
-      target: { paraId: paragraphId, search },
       replaceWith,
       author: WRITER_AUTHOR,
     }),
@@ -344,14 +353,18 @@ function proposeReplacement(
   return ok(`Suggested replacement for "${search}".`);
 }
 
-function proposeDeletion(editor: DocxEditorInstance, input: Record<string, unknown>): ToolResult {
+async function proposeDeletion(
+  runtime: DocxEditorRuntime,
+  editor: DocxEditorInstance,
+  input: Record<string, unknown>
+): Promise<ToolResult> {
   const paragraphId = String(input.paragraphId ?? '');
   const search = String(input.search ?? '');
   if (!paragraphId || !search) return fail('paragraphId and search are required.');
+  await selectExactRange(runtime, paragraphId, search, 'Select');
   requireExec(
     editor.exec({
       type: 'proposeDeletion',
-      target: { paraId: paragraphId, search },
       author: WRITER_AUTHOR,
     }),
     'proposeDeletion'
@@ -380,11 +393,11 @@ export async function runWriterTool(
       case 'write_header_footer':
         return writeHeaderFooter(editor, input);
       case 'propose_replacement':
-        return proposeReplacement(editor, input);
+        return proposeReplacement(runtime, editor, input);
       case 'propose_insertion':
         return proposeInsertion(runtime, editor, input);
       case 'propose_deletion':
-        return proposeDeletion(editor, input);
+        return proposeDeletion(runtime, editor, input);
       default:
         return fail(`Unknown tool: ${name}`);
     }

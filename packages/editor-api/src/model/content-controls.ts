@@ -368,7 +368,11 @@ export class ContentControl extends ModelObject implements PromisedItem {
       );
     }
     if (selected.includes('text')) {
-      this.loadTextInto('text', () => ({ op: 'getContentControlText', contentControl }));
+      this.loadTextInto('text', () => ({
+        op: 'getContentControlText',
+        contentControl,
+        projection: this.revisionTextView(),
+      }));
     }
     // ONE read behind both flags: `cannotEdit` and `cannotDelete` are the two halves of one
     // `ST_Lock`, so asking for either loads the lock and both are answered from it. Two reads

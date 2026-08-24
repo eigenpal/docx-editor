@@ -113,6 +113,28 @@ describe('revision text projections', () => {
       after: 'keep kept',
     });
   });
+
+  test('uses the runtime revision view for content-control text', async () => {
+    const controlled = docx(
+      '<w:p><w:sdt><w:sdtPr><w:id w:val="7"/><w:tag w:val="field"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+        '<w:del w:id="1" w:author="Ada"><w:r><w:delText>gone</w:delText></w:r></w:del>' +
+        '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins>' +
+        '</w:sdtContent></w:sdt></w:p>'
+    );
+    const runtime = await createServer(controlled, { revisionTextView: 'vanilla' });
+    const text = await runtime.run(async (context) => {
+      const controls = context.document.body.contentControls;
+      controls.load();
+      await context.sync();
+      const control = controls.items[0]!;
+      control.load('text');
+      await context.sync();
+      return control.text;
+    });
+
+    expect(text).toBe('keep gone');
+  });
 });
 
 describe('the paragraphs of a story', () => {

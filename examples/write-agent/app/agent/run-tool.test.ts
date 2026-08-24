@@ -38,7 +38,7 @@ describe('writer agent browser tools', () => {
     if (GlobalRegistrator.isRegistered) GlobalRegistrator.unregister();
   });
 
-  test('builds rich structure and creates three attributed proposals', async () => {
+  test('builds rich structure and creates attributed proposals', async () => {
     const created = await runWriterTool(runtime, editor, 'create_document', {
       brief,
       title: 'Mutual NDA',
@@ -94,35 +94,45 @@ describe('writer agent browser tools', () => {
         ['Effective date', 'To be completed'],
       ],
     });
+    const secondTable = await runWriterTool(runtime, editor, 'insert_table', {
+      beforeParagraphId: id('Key dates'),
+      rows: [
+        ['Owner', 'Status'],
+        ['Legal team', 'Pending review'],
+      ],
+    });
     const furniture = await runWriterTool(runtime, editor, 'write_header_footer', {
       header: 'Mutual NDA',
       footerPrefix: 'Page ',
     });
-    expect([lists.success, controls.success, table.success, furniture.success]).toEqual([
-      true,
-      true,
-      true,
-      true,
-    ]);
+    expect([
+      lists.success,
+      controls.success,
+      table.success,
+      secondTable.success,
+      furniture.success,
+    ]).toEqual([true, true, true, true, true]);
 
     const read = await runWriterTool(runtime, editor, 'read_document', {});
     const records = JSON.parse(read.output) as { id: string; text: string }[];
-    expect(records).toHaveLength(17);
+    expect(records).toHaveLength(21);
     expect(records.every((record) => /^[0-9A-F]{8}$/.test(record.id))).toBe(true);
     expect(records.map((record) => record.text)).toContain('Milestone');
     expect(records.map((record) => record.text)).toContain('To be completed');
+    expect(records.map((record) => record.text)).toContain('Owner');
+    expect(records.map((record) => record.text)).toContain('Pending review');
     const purpose = records.find((record) => record.text.includes('possible project'));
     expect(purpose).toBeDefined();
 
-    const replacement = await runWriterTool(runtime, editor, 'propose_replacement', {
-      paragraphId: purpose!.id,
-      search: 'possible project',
-      replaceWith: 'potential transaction',
-    });
     const insertion = await runWriterTool(runtime, editor, 'propose_insertion', {
       paragraphId: purpose!.id,
       after: 'evaluate',
       text: ' carefully',
+    });
+    const replacement = await runWriterTool(runtime, editor, 'propose_replacement', {
+      paragraphId: purpose!.id,
+      search: 'evaluate a possible',
+      replaceWith: 'assess a potential',
     });
     const deletion = await runWriterTool(runtime, editor, 'propose_deletion', {
       paragraphId: purpose!.id,
@@ -138,11 +148,7 @@ describe('writer agent browser tools', () => {
       await context.sync();
       return collection.items.map((item) => ({ type: item.type, author: item.author }));
     });
-    expect(revisions.map((revision) => revision.type).sort()).toEqual([
-      'Delete',
-      'Insert',
-      'Replace',
-    ]);
+    expect(revisions.map((revision) => revision.type).sort()).toEqual(['Delete', 'Replace']);
     expect(revisions.every((revision) => revision.author === 'Writer agent')).toBe(true);
   });
 });

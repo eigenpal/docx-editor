@@ -1060,7 +1060,7 @@ export function mountPaginatedSurface(
     if (kind === 'insertion' || kind === 'replacement') {
       const insertAt =
         kind === 'replacement'
-          ? range.to.offset - retractedByOwnInsertion(range.from, range.to)
+          ? range.to.offset - retractedByInsertionAuthor(range.from, range.to, author)
           : range.from.offset;
       ops.push({
         op: 'insertText',
@@ -4977,8 +4977,17 @@ export function mountPaginatedSurface(
   }
 
   function retractedByOwnInsertion(from: SemanticPosition, to: SemanticPosition): number {
-    const author = options.author?.trim();
-    if (editingMode !== 'suggest' || !author) return 0;
+    if (editingMode !== 'suggest') return 0;
+    return retractedByInsertionAuthor(from, to, options.author);
+  }
+
+  function retractedByInsertionAuthor(
+    from: SemanticPosition,
+    to: SemanticPosition,
+    authorValue?: string
+  ): number {
+    const author = authorValue?.trim();
+    if (!author) return 0;
     if (from.paragraphId !== to.paragraphId) return 0;
     const part = session.partFor(storyScope()) ?? session.part();
     const paragraph = findNode(part, to.paragraphId);

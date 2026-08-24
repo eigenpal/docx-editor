@@ -74,6 +74,7 @@ import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { isStoryId } from './stories.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { authorableHyperlinkTarget } from '../store/package/hyperlink-part.ts';
+import { isValidXmlText } from '../store/package/sinks.ts';
 import {
   bookmarkIn,
   bookmarkReads,
@@ -966,11 +967,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       !Array.isArray(paragraphs) ||
       paragraphs.length < 1 ||
       paragraphs.length > 10_000 ||
-      paragraphs.some((text) => typeof text !== 'string' || PARAGRAPH_BREAKING.test(text))
+      paragraphs.some(
+        (text) => typeof text !== 'string' || PARAGRAPH_BREAKING.test(text) || !isValidXmlText(text)
+      )
     ) {
       return refuse(
         'unsupported-content',
-        'replaceStoryBlocks needs 1-10000 strings without paragraph marks',
+        'replaceStoryBlocks needs 1-10000 valid XML text strings without paragraph marks',
         'paragraphs'
       );
     }
@@ -2591,7 +2594,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'getContentControlText': {
         const found = controlOf(operation.contentControl);
         if (!('control' in found)) return found;
-        return query({ kind: 'text', text: contentControlText(found.node) });
+        return query({
+          kind: 'text',
+          text: contentControlText(found.reads, found.node, operation.projection),
+        });
       }
 
       case 'getContentControlParagraphs': {

@@ -99,7 +99,7 @@ describe('writing text into a story', () => {
         context.document.body.insertText('one\ntwo', 'End');
       })
     );
-    expect(code).toBe('ParagraphMarkInText');
+    expect(code).toBe('InvalidArgument');
     expect(await paragraphTexts(runtime)).toEqual(['alpha', 'beta']);
   });
 });
