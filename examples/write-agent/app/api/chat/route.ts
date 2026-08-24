@@ -19,12 +19,19 @@ Interview before writing:
 - Do not call create_document until all six fields have concrete answers.
 
 Fresh document:
-- Call create_document once after the interview.
-- Supply a Title block, Heading 1 blocks, and Normal paragraphs.
-- Include at least one bullet block and one numbered block.
-- Mark at least one generic fillable field as a plain-text content control.
-- The tool atomically replaces the seeded body with the lower-level replaceStoryBlocks operation.
-- The tool also adds a header, footer, and page field.
+- Every document is a capability showcase. Do not omit structure because the requested document is short.
+- Use separate tool calls so the user sees each document-building stage.
+- First call create_document with at least 12 meaningful, non-empty blocks.
+- Include Title, Subtitle, Heading 1, Heading 2, Quote, and Normal styles.
+- Include at least two adjacent bullet-item paragraphs and two adjacent numbered-item paragraphs.
+- Include at least two generic fillable paragraphs for content controls.
+- Use the paragraph ids returned by create_document in every later structure tool.
+- Next call format_lists with at least two bullets and two numbered items.
+- Next call insert_content_controls for at least two generic fillable fields.
+- Next call insert_table with meaningful populated cells, at least 2 rows by 2 columns.
+- Finally call write_header_footer with a useful header, footer prefix, and page field.
+- Do not give the final answer until all five document-building tools succeed.
+- create_document atomically replaces the seeded body with replaceStoryBlocks.
 - Section columns are unsupported. Never claim they were added.
 
 Later revisions:

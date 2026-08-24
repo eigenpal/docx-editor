@@ -23,8 +23,16 @@ The editor and direct tool tests still work.
 
 The writer asks for the document type, parties or audience, purpose, rules, tone, and length.
 The `create_document` schema requires all six answers.
-The tool calls the lower-level `replaceStoryBlocks` automation operation in one transaction.
-It then applies paragraph styles and supported document structure.
+The agent then uses five visible tool calls:
+
+1. Write styled paragraphs with `create_document`.
+2. Format bullet and numbered lists with `format_lists`.
+3. Add tagged fields with `insert_content_controls`.
+4. Insert and populate a table with `insert_table`.
+5. Write the header, footer, and page field with `write_header_footer`.
+
+`create_document` calls the lower-level `replaceStoryBlocks` automation operation in one
+transaction. Every generated document uses all five calls.
 
 The browser runtime uses `revisionTextView: 'vanilla'`, while the Word-compatible object model
 keeps the Office.js API shape.
@@ -49,15 +57,16 @@ The example uses workspace packages through `workspace:*`.
 - Title, heading, and normal paragraph styles through editor-api.
 - Explicit vanilla reads and search anchors through editor-api.
 - Bullet and numbered lists through browser editor commands.
+- Populated tables through browser editor commands and editor-api paragraph targeting.
 - Header, footer, and page fields through browser editor commands.
 - Plain-text content-control creation through the core automation protocol.
 - Tracked insertion, deletion, and replacement through browser editor commands.
 
 ## Remaining API gaps
 
-Editor-api cannot atomically replace all story blocks or create lists, headers, footers, page
-fields, or content controls.
-The example uses browser commands for lists, headers, footers, and page fields.
+Editor-api cannot atomically replace all story blocks or create lists, tables, headers, footers,
+page fields, or content controls.
+The example uses browser commands for lists, tables, headers, footers, and page fields.
 It uses the core automation protocol for content-control creation.
 
 No current editor-api or browser editor command sets section columns.

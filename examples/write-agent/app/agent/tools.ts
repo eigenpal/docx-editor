@@ -17,10 +17,10 @@ export const briefSchema = z.object({
 });
 
 const blockSchema = z.object({
-  text: z.string(),
-  style: z.enum(['Title', 'Heading 1', 'Normal']).default('Normal'),
-  list: z.enum(['none', 'bullet', 'numbered']).default('none'),
-  contentControl: z.boolean().default(false),
+  text: z.string().min(1),
+  style: z
+    .enum(['Title', 'Subtitle', 'Heading 1', 'Heading 2', 'Quote', 'Normal'])
+    .default('Normal'),
 });
 
 export function hasEnoughBrief(value: unknown): boolean {
@@ -30,7 +30,46 @@ export function hasEnoughBrief(value: unknown): boolean {
 export const createDocumentSchema = z.object({
   brief: briefSchema,
   title: z.string().min(2),
-  blocks: z.array(blockSchema).min(3).max(200),
+  blocks: z.array(blockSchema).min(8).max(200),
+});
+
+export const formatListsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        paragraphId,
+        kind: z.enum(['bullet', 'numbered']),
+      })
+    )
+    .min(4),
+});
+
+export const insertTableSchema = z.object({
+  beforeParagraphId: paragraphId,
+  rows: z
+    .array(z.array(z.string().min(1)).min(2).max(6))
+    .min(2)
+    .max(8)
+    .refine((rows) => rows.every((row) => row.length === rows[0]?.length), {
+      message: 'Every table row must have the same number of cells.',
+    }),
+});
+
+export const insertContentControlsSchema = z.object({
+  fields: z
+    .array(
+      z.object({
+        paragraphId,
+        tag: z.string().min(1).max(64),
+        title: z.string().min(1).max(64),
+      })
+    )
+    .min(2),
+});
+
+export const writeHeaderFooterSchema = z.object({
+  header: z.string().min(1),
+  footerPrefix: z.string().min(1).default('Page '),
 });
 
 export const WRITER_TOOLS = {
@@ -41,8 +80,27 @@ export const WRITER_TOOLS = {
   }),
   create_document: tool({
     description:
-      'Replace the complete seeded body with a fresh structured draft. Call only after all six interview fields are known.',
+      'Replace the complete seed with styled paragraphs. This starts the required multi-tool document build.',
     inputSchema: createDocumentSchema,
+  }),
+  format_lists: tool({
+    description:
+      'Format at least two adjacent paragraphs as bullets and two adjacent paragraphs as numbering.',
+    inputSchema: formatListsSchema,
+  }),
+  insert_table: tool({
+    description:
+      'Insert and populate a meaningful table before a paragraph. Use at least two rows and two columns.',
+    inputSchema: insertTableSchema,
+  }),
+  insert_content_controls: tool({
+    description:
+      'Wrap at least two generic fillable paragraphs in tagged plain-text content controls.',
+    inputSchema: insertContentControlsSchema,
+  }),
+  write_header_footer: tool({
+    description: 'Write the document header, footer prefix, and Page X of Y field.',
+    inputSchema: writeHeaderFooterSchema,
   }),
   propose_replacement: tool({
     description: 'Suggest a tracked replacement for one exact phrase in one paragraph.',
@@ -71,7 +129,11 @@ export const WRITER_TOOLS = {
 
 const LABELS: Record<string, string> = {
   read_document: 'Reading the vanilla document',
-  create_document: 'Creating the fresh document',
+  create_document: 'Writing styled paragraphs',
+  format_lists: 'Formatting lists',
+  insert_table: 'Inserting and filling a table',
+  insert_content_controls: 'Adding content controls',
+  write_header_footer: 'Writing the header and footer',
   propose_replacement: 'Suggesting a replacement',
   propose_insertion: 'Suggesting an insertion',
   propose_deletion: 'Suggesting a deletion',

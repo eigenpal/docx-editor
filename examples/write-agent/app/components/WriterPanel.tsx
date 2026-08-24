@@ -142,7 +142,8 @@ export function WriterPanel({
         {chat.error ? <div className="agent-error">{chat.error.message}</div> : null}
       </div>
       <div className="capability-note">
-        Columns remain unsupported. Lists, header, footer, and page fields use browser commands.
+        Every draft showcases styles, lists, a populated table, content controls, headers, footers,
+        and page fields. Columns remain unsupported.
       </div>
       <div className="agent-composer">
         <form

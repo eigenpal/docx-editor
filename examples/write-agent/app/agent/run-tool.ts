@@ -6,7 +6,13 @@ import {
 } from '@docx-editor.dev/editor-api/browser';
 import { createBrowserAutomationHost, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import type { AutomationBatchResponse, AutomationHandle } from '@docx-editor.dev/core/automation';
-import { createDocumentSchema } from './tools';
+import {
+  createDocumentSchema,
+  formatListsSchema,
+  insertContentControlsSchema,
+  insertTableSchema,
+  writeHeaderFooterSchema,
+} from './tools';
 
 export const WRITER_AUTHOR = 'Writer agent';
 
@@ -49,6 +55,17 @@ export function createWriterRuntime(editor: DocxEditorInstance): DocxEditorRunti
   return EditorApi.createBrowser(editor, {
     author: WRITER_AUTHOR,
     revisionTextView: 'vanilla',
+  });
+}
+
+async function currentParagraphIds(runtime: DocxEditorRuntime): Promise<readonly string[]> {
+  return runtime.run(async (context) => {
+    const paragraphs = context.document.body.paragraphs;
+    paragraphs.load();
+    await context.sync();
+    paragraphs.items.forEach((paragraph) => paragraph.load('uniqueLocalId'));
+    await context.sync();
+    return paragraphs.items.map((paragraph) => paragraph.uniqueLocalId);
   });
 }
 
@@ -118,67 +135,147 @@ async function createDocument(
     return collection.items.map((paragraph) => paragraph.uniqueLocalId);
   });
 
-  blocks.forEach((block, index) => {
-    if (block.list === 'none') return;
-    requireExec(
-      editor.exec({
-        type: 'setSelection',
-        anchor: { paraId: paragraphIds[index]! },
-      }),
-      `select paragraph ${index + 1}`
-    );
-    requireExec(
-      editor.exec({
-        type: 'toggleList',
-        kind: block.list === 'bullet' ? 'bullet' : 'ordered',
-      }),
-      `${block.list} list`
-    );
-  });
-
-  const controls = blocks
-    .map((block, index) => (block.contentControl ? index : -1))
-    .filter((index) => index >= 0);
-  if (controls.length > 0) {
-    const paragraphs = handlesAt(host.execute({ operations: [{ op: 'getParagraphs', body }] }), 0);
-    const response = host.execute({
-      operations: controls.map((index) => ({
-        op: 'insertContentControl' as const,
-        span: { paragraph: paragraphs[index]! },
-        subtype: 'plainText' as const,
-        tag: `writer-field-${index + 1}`,
-        title: `Writer field ${index + 1}`,
-      })),
-    });
-    const refusal = response.results.find((result) => result.status === 'error');
-    if (refusal?.status === 'error') {
-      throw new Error(
-        `content control: ${refusal.error.code}: ${refusal.error.detail ?? 'operation refused'}`
-      );
-    }
-  }
-
-  requireExec(editor.exec({ type: 'editHeaderFooter', position: 'header' }), 'open header');
-  requireExec(editor.exec({ type: 'insertText', text: title }), 'write header');
-  requireExec(editor.exec({ type: 'exitHeaderFooter' }), 'close header');
-  requireExec(editor.exec({ type: 'editHeaderFooter', position: 'footer' }), 'open footer');
-  requireExec(editor.exec({ type: 'insertText', text: 'Page ' }), 'write footer');
-  requireExec(editor.exec({ type: 'insertPageField', field: 'PAGE_X_OF_Y' }), 'insert page field');
-  requireExec(editor.exec({ type: 'exitHeaderFooter' }), 'close footer');
-
   return ok({
     created: true,
     paragraphCount: blocks.length,
     title,
-    capabilities: {
-      headings: 'editor-api',
-      normalParagraphs: 'editor-api',
-      bulletsAndNumbering: 'browser editor commands',
-      contentControls: 'core automation protocol',
-      headerFooterAndPageFields: 'browser editor commands',
-      sectionColumns: 'unsupported: no current editor-api or browser editor command',
-    },
+    paragraphs: blocks.map((block, index) => ({
+      index,
+      paragraphId: paragraphIds[index],
+      text: block.text,
+      style: block.style,
+    })),
   });
+}
+
+function formatLists(editor: DocxEditorInstance, input: Record<string, unknown>): ToolResult {
+  const parsed = formatListsSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail(
+      `format_lists input is incomplete: ${parsed.error.issues[0]?.message ?? 'invalid'}`
+    );
+  }
+  const bulletCount = parsed.data.items.filter((item) => item.kind === 'bullet').length;
+  const numberedCount = parsed.data.items.length - bulletCount;
+  if (bulletCount < 2 || numberedCount < 2) {
+    return fail('format_lists requires at least two bullet items and two numbered items.');
+  }
+  parsed.data.items.forEach((item) => {
+    requireExec(
+      editor.exec({ type: 'setSelection', anchor: { paraId: item.paragraphId } }),
+      `select list paragraph ${item.paragraphId}`
+    );
+    requireExec(
+      editor.exec({
+        type: 'toggleList',
+        kind: item.kind === 'bullet' ? 'bullet' : 'ordered',
+      }),
+      `${item.kind} list`
+    );
+  });
+  return ok({ formatted: parsed.data.items.length, bullets: bulletCount, numbered: numberedCount });
+}
+
+async function insertContentControls(
+  runtime: DocxEditorRuntime,
+  editor: DocxEditorInstance,
+  input: Record<string, unknown>
+): Promise<ToolResult> {
+  const parsed = insertContentControlsSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail(
+      `insert_content_controls input is incomplete: ${parsed.error.issues[0]?.message ?? 'invalid'}`
+    );
+  }
+  const host = createBrowserAutomationHost(editor);
+  const document = handleAt(host.execute({ operations: [{ op: 'getDocument' }] }), 0);
+  const body = handleAt(host.execute({ operations: [{ op: 'getBody', document }] }), 0);
+  const paragraphIds = await currentParagraphIds(runtime);
+  const paragraphHandles = handlesAt(
+    host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+    0
+  );
+  const byId = new Map(paragraphIds.map((id, index) => [id, paragraphHandles[index]!]));
+  const response = host.execute({
+    operations: parsed.data.fields.map((field) => {
+      const paragraph = byId.get(field.paragraphId);
+      if (!paragraph) throw new Error(`paragraph ${field.paragraphId} is unavailable`);
+      return {
+        op: 'insertContentControl' as const,
+        span: { paragraph },
+        subtype: 'plainText' as const,
+        tag: field.tag,
+        title: field.title,
+      };
+    }),
+  });
+  const refusal = response.results.find((result) => result.status === 'error');
+  if (refusal?.status === 'error') {
+    throw new Error(
+      `content control: ${refusal.error.code}: ${refusal.error.detail ?? 'operation refused'}`
+    );
+  }
+  return ok({
+    inserted: parsed.data.fields.length,
+    fields: parsed.data.fields.map(({ tag, title }) => ({ tag, title })),
+  });
+}
+
+async function insertTable(
+  runtime: DocxEditorRuntime,
+  editor: DocxEditorInstance,
+  input: Record<string, unknown>
+): Promise<ToolResult> {
+  const parsed = insertTableSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail(
+      `insert_table input is incomplete: ${parsed.error.issues[0]?.message ?? 'invalid'}`
+    );
+  }
+  const before = new Set(await currentParagraphIds(runtime));
+  const rows = parsed.data.rows.length;
+  const cols = parsed.data.rows[0]!.length;
+  requireExec(
+    editor.exec({
+      type: 'setSelection',
+      anchor: { paraId: parsed.data.beforeParagraphId },
+    }),
+    `select table anchor ${parsed.data.beforeParagraphId}`
+  );
+  requireExec(editor.exec({ type: 'insertTable', rows, cols }), 'insert table');
+
+  const cellParagraphIds = (await currentParagraphIds(runtime)).filter((id) => !before.has(id));
+  const cellTexts = parsed.data.rows.flat();
+  if (cellParagraphIds.length !== cellTexts.length) {
+    throw new Error(
+      `insertTable created ${cellParagraphIds.length} cell paragraphs for ${cellTexts.length} cells`
+    );
+  }
+  cellTexts.forEach((text, index) => {
+    requireExec(
+      editor.exec({ type: 'setSelection', anchor: { paraId: cellParagraphIds[index]! } }),
+      `select table cell ${index + 1}`
+    );
+    requireExec(editor.exec({ type: 'insertText', text }), `write table cell ${index + 1}`);
+  });
+  return ok({ inserted: true, rows, columns: cols, cells: cellTexts.length });
+}
+
+function writeHeaderFooter(editor: DocxEditorInstance, input: Record<string, unknown>): ToolResult {
+  const parsed = writeHeaderFooterSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail(
+      `write_header_footer input is incomplete: ${parsed.error.issues[0]?.message ?? 'invalid'}`
+    );
+  }
+  requireExec(editor.exec({ type: 'editHeaderFooter', position: 'header' }), 'open header');
+  requireExec(editor.exec({ type: 'insertText', text: parsed.data.header }), 'write header');
+  requireExec(editor.exec({ type: 'exitHeaderFooter' }), 'close header');
+  requireExec(editor.exec({ type: 'editHeaderFooter', position: 'footer' }), 'open footer');
+  requireExec(editor.exec({ type: 'insertText', text: parsed.data.footerPrefix }), 'write footer');
+  requireExec(editor.exec({ type: 'insertPageField', field: 'PAGE_X_OF_Y' }), 'insert page field');
+  requireExec(editor.exec({ type: 'exitHeaderFooter' }), 'close footer');
+  return ok({ header: parsed.data.header, footer: `${parsed.data.footerPrefix}X of Y` });
 }
 
 async function selectExactRangeEnd(
@@ -274,6 +371,14 @@ export async function runWriterTool(
         return readDocument(runtime);
       case 'create_document':
         return createDocument(runtime, editor, input);
+      case 'format_lists':
+        return formatLists(editor, input);
+      case 'insert_table':
+        return insertTable(runtime, editor, input);
+      case 'insert_content_controls':
+        return insertContentControls(runtime, editor, input);
+      case 'write_header_footer':
+        return writeHeaderFooter(editor, input);
       case 'propose_replacement':
         return proposeReplacement(editor, input);
       case 'propose_insertion':

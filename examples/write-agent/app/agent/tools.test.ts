@@ -23,8 +23,13 @@ describe('writer agent tools', () => {
         title: 'Mutual non-disclosure agreement',
         blocks: [
           { text: 'Title', style: 'Title' },
+          { text: 'Subtitle', style: 'Subtitle' },
           { text: 'Purpose', style: 'Heading 1' },
-          { text: 'Terms', style: 'Normal', list: 'numbered', contentControl: true },
+          { text: 'Scope', style: 'Heading 2' },
+          { text: 'First term', style: 'Normal' },
+          { text: 'Second term', style: 'Normal' },
+          { text: 'Third term', style: 'Normal' },
+          { text: 'Summary', style: 'Quote' },
         ],
       }).success
     ).toBe(true);
@@ -33,13 +38,17 @@ describe('writer agent tools', () => {
     );
   });
 
-  test('the catalog exposes creation and all tracked proposal commands', () => {
+  test('the catalog exposes granular structure and tracked proposal commands', () => {
     expect(Object.keys(WRITER_TOOLS).sort()).toEqual([
       'create_document',
+      'format_lists',
+      'insert_content_controls',
+      'insert_table',
       'propose_deletion',
       'propose_insertion',
       'propose_replacement',
       'read_document',
+      'write_header_footer',
     ]);
   });
 });
