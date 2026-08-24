@@ -259,14 +259,20 @@ describe('A2 — new abstractNum/num land at their CT_Numbering (17.9.16) positi
     expect(names).toEqual(['numPicBullet', 'abstractNum', 'num', 'numIdMacAtCleanup']);
   });
 
-  test('the existing definition is reused rather than duplicated', () => {
+  test('the existing template is reused with a fresh counter instance', () => {
     const first = ensured(load({ numbering: BUSY_NUMBERING }), 'bullet');
-    expect(first.numId).toBe('7');
+    expect(first.numId).toBe('8');
     expect(childNames(numberingRoot(first.pkg))).toEqual([
       'numPicBullet',
       'abstractNum',
       'num',
+      'num',
       'numIdMacAtCleanup',
+    ]);
+    const nums = named(numberingRoot(first.pkg), 'num');
+    expect(nums.map((num) => attribute(named(num, 'abstractNumId')[0]!, 'val'))).toEqual([
+      '4',
+      '4',
     ]);
   });
 });
@@ -398,11 +404,12 @@ describe('the saved package reopens with the list intact', () => {
     }
   });
 
-  test('a second toggle in the same package reuses the definition it just made', () => {
+  test('a second disconnected list reuses the template with a fresh counter', () => {
     const first = ensured(load(), 'bullet');
     const second = ensured(first.pkg, 'bullet');
-    expect(second.numId).toBe(first.numId);
+    expect(second.numId).not.toBe(first.numId);
     expect(named(numberingRoot(second.pkg), 'abstractNum')).toHaveLength(1);
+    expect(named(numberingRoot(second.pkg), 'num')).toHaveLength(2);
   });
 
   test('bullet then ordered gives two definitions, still in sequence order', () => {

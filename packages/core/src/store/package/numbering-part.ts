@@ -233,9 +233,9 @@ export interface EnsuredListDefinition {
 /**
  * Find or create a list definition of `kind`, returning the package that holds it.
  *
- * An existing definition of the same kind is REUSED rather than duplicated: Word does the
- * same, and a document that gains one `w:abstractNum` per toggled paragraph becomes
- * unreadable. Returns null only when the part cannot be built at all.
+ * An existing abstract definition of the same kind is reused, but every disconnected list
+ * gets a fresh `w:num` instance. Counters belong to `w:num`, so reusing that instance would
+ * continue an earlier list. Returns null only when the part cannot be built at all.
  */
 export function ensureListDefinition(
   pkg: OoxmlPackage,
@@ -249,57 +249,65 @@ export function ensureListDefinition(
   const abstractNums = childrenNamed(root, 'abstractNum');
   const nums = childrenNamed(root, 'num');
 
-  // Reuse: the first `w:num` whose abstract definition already formats this kind.
+  // Reuse the first matching TEMPLATE, not its counter instance. Two disconnected lists
+  // can share one `w:abstractNum`, but each needs its own `w:num` to start at the authored
+  // level baseline. Reusing the earlier `w:num` made a new list after 39 items begin at 40.
   const wantedFormat = kind === 'bullet' ? 'bullet' : 'decimal';
-  for (const num of nums) {
-    const numId = attribute(num, 'numId');
-    const abstractRef = childrenNamed(num, 'abstractNumId')[0];
-    const abstractId = abstractRef ? attribute(abstractRef, 'val') : undefined;
-    if (!numId || !abstractId) continue;
-    const abstract = abstractNums.find((node) => attribute(node, 'abstractNumId') === abstractId);
-    if (!abstract) continue;
+  const matchingAbstract = abstractNums.find((abstract) => {
+    const abstractId = attribute(abstract, 'abstractNumId');
+    if (!abstractId || !/^\d{1,9}$/.test(abstractId)) return false;
     const firstLevel = childrenNamed(abstract, 'lvl').find(
       (level) => attribute(level, 'ilvl') === '0' || attribute(level, 'ilvl') === undefined
     );
     const format = firstLevel ? childrenNamed(firstLevel, 'numFmt')[0] : undefined;
-    if (format && attribute(format, 'val') === wantedFormat) return { pkg, numId };
-  }
+    return format !== undefined && attribute(format, 'val') === wantedFormat;
+  });
 
-  const abstractNumId = nextFreeId(abstractNums, 'abstractNumId');
+  const matchingAbstractId = matchingAbstract
+    ? Number(attribute(matchingAbstract, 'abstractNumId'))
+    : null;
+  const abstractNumId = matchingAbstractId ?? nextFreeId(abstractNums, 'abstractNumId');
   const numId = nextFreeId(nums, 'numId');
-  // The new definitions are authored as their own document, shape-verified, then GRAFTED
-  // under fresh ids. `w:abstractNum` must precede every `w:num` (17.9.1), and Word's
-  // reader is strict about it, so the two groups are inserted at their own boundaries
-  // rather than appended.
+  // New elements are authored as their own document, shape-verified, then GRAFTED under
+  // fresh node ids. A matching template needs only a new counter instance.
+  const createsAbstract = matchingAbstract === undefined;
   const authored = authoredElements(
-    abstractNumXml(kind, abstractNumId) +
+    (createsAbstract ? abstractNumXml(kind, abstractNumId) : '') +
       `<w:num w:numId="${numId}"><w:abstractNumId w:val="${abstractNumId}"/></w:num>`,
-    [
-      {
-        localName: 'abstractNum',
-        attribute: { localName: 'abstractNumId', value: String(abstractNumId) },
-      },
-      { localName: 'num', attribute: { localName: 'numId', value: String(numId) } },
-    ]
+    createsAbstract
+      ? [
+          {
+            localName: 'abstractNum',
+            attribute: { localName: 'abstractNumId', value: String(abstractNumId) },
+          },
+          { localName: 'num', attribute: { localName: 'numId', value: String(numId) } },
+        ]
+      : [{ localName: 'num', attribute: { localName: 'numId', value: String(numId) } }]
   );
   if (!authored) return null;
   const nextId = createNodeIdAllocator(numbering);
-  const [newAbstract, newNum] = authored.map((node) => withFreshIds(node, nextId));
-  if (!newAbstract || !newNum) return null;
+  const fresh = authored.map((node) => withFreshIds(node, nextId));
+  const newAbstract = createsAbstract ? fresh[0] : undefined;
+  const newNum = fresh[createsAbstract ? 1 : 0];
+  if ((createsAbstract && !newAbstract) || !newNum) return null;
 
-  // Each lands at its CT_NUMBERING_SEQUENCE slot — see `sequenceInsertIndex`. `w:num` is
-  // positioned against the children the `w:abstractNum` insert produced, so the two agree.
-  const withAbstract = insertChildren(
-    numbering,
-    root.id,
-    sequenceInsertIndex(root.children, CT_NUMBERING_SEQUENCE, 'abstractNum'),
-    [newAbstract]
-  );
-  if (!withAbstract.ok) return null;
+  // A new `w:abstractNum` must precede every `w:num` (17.9.1). Each element lands at its
+  // CT_NUMBERING_SEQUENCE slot, while a reused template leaves existing children untouched.
+  let partWithAbstract = numbering;
+  if (newAbstract) {
+    const inserted = insertChildren(
+      numbering,
+      root.id,
+      sequenceInsertIndex(root.children, CT_NUMBERING_SEQUENCE, 'abstractNum'),
+      [newAbstract]
+    );
+    if (!inserted.ok) return null;
+    partWithAbstract = inserted.part;
+  }
   const withNum = insertChildren(
-    withAbstract.part,
+    partWithAbstract,
     root.id,
-    sequenceInsertIndex(withAbstract.part.root.children, CT_NUMBERING_SEQUENCE, 'num'),
+    sequenceInsertIndex(partWithAbstract.root.children, CT_NUMBERING_SEQUENCE, 'num'),
     [newNum]
   );
   if (!withNum.ok) return null;

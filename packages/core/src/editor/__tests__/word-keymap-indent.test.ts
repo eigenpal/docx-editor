@@ -129,6 +129,17 @@ const markerOf = (surface: PaginatedSurface) => {
   return undefined;
 };
 
+const markerFor = (surface: PaginatedSurface, paragraphId: string) => {
+  for (const page of surface.layout().pages) {
+    for (const fragment of page.fragments) {
+      if (fragment.kind === 'paragraph' && fragment.paragraphId === paragraphId) {
+        return fragment.marker;
+      }
+    }
+  }
+  return undefined;
+};
+
 describe('Increase/Decrease Indent', () => {
   test('a list item changes LEVEL, and its marker changes with it', () => {
     const surface = mount(listItem('alpha'), true);
@@ -378,7 +389,7 @@ describe('Bullets and Numbering', () => {
     expect(markerOf(surface)?.text).toBe('1.');
   });
 
-  test('a document that already has numbering reuses its definition', () => {
+  test('a document that already has numbering reuses its template', () => {
     const surface = mount(listItem('alpha') + '<w:p><w:r><w:t>beta</w:t></w:r></w:p>', true);
     const before = JSON.stringify(surface.session.part().root);
     surface.selectAll();
@@ -388,6 +399,43 @@ describe('Bullets and Numbering', () => {
     const reopened = mountBytes(numbering);
     expect(markerOf(reopened)).toMatchObject({ text: '•' });
     expect(before).toContain('numPr');
+  });
+
+  test('a new ordered list after earlier items starts at one', () => {
+    const decimalNumbering =
+      '<w:abstractNum w:abstractNumId="7">' +
+      '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>' +
+      '<w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>' +
+      '</w:abstractNum><w:num w:numId="7"><w:abstractNumId w:val="7"/></w:num>';
+    const orderedItem = (text: string) =>
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="7"/>' +
+      `</w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const earlier = Array.from({ length: 39 }, (_, index) => orderedItem(`item ${index + 1}`)).join(
+      ''
+    );
+    const surface = mount(
+      earlier +
+        '<w:p><w:r><w:t>ordinary paragraph</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>new list</w:t></w:r></w:p>',
+      true,
+      { numberingXml: decimalNumbering }
+    );
+    const target = surface.session.paragraphIds().at(-1)!;
+    surface.setSelection({
+      anchor: { paragraphId: target, offset: 0 },
+      head: { paragraphId: target, offset: 0 },
+    });
+
+    expect(surface.toggleList('ordered')).toBe(true);
+    expect(markerFor(surface, target)?.text).toBe('1.');
+
+    surface.setSelection({
+      anchor: { paragraphId: target, offset: 'new list'.length },
+      head: { paragraphId: target, offset: 'new list'.length },
+    });
+    createKeyDownHandler(surface)(key({ key: 'Enter' }));
+    const next = surface.session.paragraphIds().at(-1)!;
+    expect(markerFor(surface, next)?.text).toBe('2.');
   });
 
   test('the toggle keeps the rest of w:pPr', () => {
