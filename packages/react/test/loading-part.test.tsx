@@ -329,20 +329,19 @@ describe('DocxEditor.Loading', () => {
 
     expect(el.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
     expect(el.querySelectorAll('.docx-editor__loading-lines > span')).toHaveLength(11);
-    expect(el.querySelector(SPINNER)).not.toBeNull();
-    // Announced as a live status, and the decorative spinner is hidden from it.
+    expect(el.querySelector(SPINNER)).toBeNull();
     expect(el.getAttribute('role')).toBe('status');
     expect(el.getAttribute('aria-live')).toBe('polite');
-    expect(el.querySelector(SPINNER)!.getAttribute('aria-hidden')).toBe('true');
   });
 
-  test('the default screen shows localized text inside the document page', () => {
+  test('the default screen announces localized text without showing a label', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
     const page = el.querySelector('.docx-editor__loading-page')!;
     const lines = el.querySelector('.docx-editor__loading-lines')!;
 
-    expect(page.textContent).toContain('Loading…');
+    expect(page.textContent).toContain('Loading');
+    expect(page.querySelector('.docx-editor-sr-only')).not.toBeNull();
     expect(lines.getAttribute('aria-hidden')).toBe('true');
   });
 

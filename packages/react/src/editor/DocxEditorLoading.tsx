@@ -117,10 +117,7 @@ function DocxEditorLoadingImpl({
     <div className={classes} style={style} role="status" aria-live="polite">
       {children ?? (
         <div className="docx-editor__loading-page">
-          <div className="docx-editor__loading-page-status">
-            <DocxEditorLoadingSpinner />
-            <span>{t('loading.label')}…</span>
-          </div>
+          <span className="docx-editor-sr-only">{t('loading.label')}</span>
           <div className="docx-editor__loading-lines" aria-hidden="true">
             <span />
             <span />

@@ -306,7 +306,8 @@ describe('DocxEditorLoading composition', () => {
     expect(container.querySelector('.docx-editor__loading')).not.toBeNull();
     expect(container.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
     expect(container.querySelectorAll('.docx-editor__loading-lines > span')).toHaveLength(11);
-    expect(container.textContent).toContain('Loading…');
+    expect(container.querySelector('.docx-editor__loading-spinner')).toBeNull();
+    expect(container.querySelector('.docx-editor-sr-only')?.textContent).toBe('Loading');
     app.unmount();
     container.remove();
   });
