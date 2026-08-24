@@ -437,9 +437,6 @@ export interface DocxEditorDocumentOutlineProps {
 }
 
 // @public
-export function DocxEditorEquation(): react.JSX.Element | null;
-
-// @public
 export function DocxEditorFontNotice(input: DocxEditorFontNoticeProps): react.JSX.Element | null;
 
 // @public
@@ -588,7 +585,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly ContentControl: typeof DocxEditorContentControl;
     readonly ContextMenu: typeof ContextMenu;
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
-    readonly Equation: typeof DocxEditorEquation;
     readonly FontNotice: typeof DocxEditorFontNotice;
     readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
     readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;

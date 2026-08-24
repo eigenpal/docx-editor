@@ -30,7 +30,6 @@ import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/Do
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
-import { DocxEditorEquation } from '../editor/DocxEditorEquation';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
 import { DocxEditorContextMenu, ContextMenu } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
@@ -161,8 +160,6 @@ export interface DocxEditorNamespace {
   readonly FontNotice: typeof DocxEditorFontNotice;
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
-  /** The default linear-math popover for a clicked Office Math equation. */
-  readonly Equation: typeof DocxEditorEquation;
   readonly HyperLink: typeof DocxEditorHyperLink;
   readonly ContextMenu: typeof ContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
@@ -324,7 +321,6 @@ const DocxEditorFrame = defineComponent({
             chrome.value ? h(DocxEditorNotesChrome) : null,
             h(DocxEditorContent),
             h(DocxEditorHyperLink, { hidden: hyperlinkPopup.value === false }),
-            h(DocxEditorEquation),
             contextMenu.value === false
               ? null
               : h(DocxEditorContextMenu, {
@@ -533,7 +529,6 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
-  Equation: DocxEditorEquation,
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenu,
   ContentControl: DocxEditorContentControl,

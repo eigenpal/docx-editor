@@ -21,7 +21,6 @@ import type {
 import type { FontConfigurationFragment, FontResolver } from './font-composition.ts';
 import type { PaginatedSurface } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
-import type { EquationActivation } from './surface-equations.ts';
 
 /**
  * Everything {@link createDocxEditor} accepts. Every field is optional.
@@ -160,11 +159,6 @@ export interface HyperlinkChromeHandlers {
   readonly onRequest?: () => void;
 }
 
-/** Host chrome that edits a clicked Office Math equation. */
-export interface EquationChromeHandlers {
-  readonly onPopover?: (activation: EquationActivation) => void;
-}
-
 /**
  * The concrete facade type: the full `Editor` contract plus the instance-only surface.
  *
@@ -189,8 +183,6 @@ export interface DocxEditorInstance extends Editor {
    * command needs.
    */
   setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
-  /** Wire the host equation popover to painted equation clicks. */
-  setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
   /**
    * Monotonic version of the observable editor state. Bumps whenever anything
    * `snapshot()` reports could have moved — a committed change, a selection move, zoom,

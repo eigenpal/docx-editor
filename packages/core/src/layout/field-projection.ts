@@ -24,7 +24,6 @@ import {
   hardBreakKind,
   hasLegacyFormFieldData,
   isFldSimple,
-  projectOmmlEquation,
   type DocumentProperties,
   type OoxmlNode,
   type OoxmlParagraphNode,
@@ -111,7 +110,6 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
-import { equationRunStyle } from './equation-layout.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import {
   contentControlContentChildren,
@@ -235,7 +233,6 @@ export function piecesOfParagraph(
       readonly measureText?: string;
       readonly noteNav?: FieldAwarePiece['noteNav'];
       readonly inlineDrawing?: InlineDrawingLayoutInput;
-      readonly equation?: FieldAwarePiece['equation'];
       /**
        * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the
        * walk has left the wrapper that owns it — a buffered field result is the only such
@@ -263,7 +260,6 @@ export function piecesOfParagraph(
         ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
         ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
         ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
-        ...(extras?.equation ? { equation: extras.equation } : {}),
         ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
         ...attribution,
@@ -936,15 +932,6 @@ export function piecesOfParagraph(
     namespaceScope: ReadonlyMap<string, string>,
     sdtDepth: number
   ): void => {
-    const equation = projectOmmlEquation(child);
-    if (equation) {
-      const start = offset++;
-      if (revisionsAreDeletion(revisions) && deletedRanges)
-        appendModelRange(deletedRanges, start, offset);
-      const style = equationRunStyle(resolveRunStyle(inheritedRunProperties, themeFonts));
-      if (style.hidden || !revisionsVisible(revisions, displayMode)) return;
-      return push('\uFFFC', inheritedRunProperties, style, true, start, offset, { equation });
-    }
     if (isFldSimple(child)) {
       projectSimpleField(child, depth);
       return;

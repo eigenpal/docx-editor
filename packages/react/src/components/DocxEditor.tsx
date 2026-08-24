@@ -23,7 +23,6 @@ import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/Do
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
-import { DocxEditorEquation } from '../editor/DocxEditorEquation';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
 import {
   ContextMenu as DocxEditorContextMenuCompound,
@@ -298,7 +297,6 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {chrome ? <DocxEditorNotesChrome /> : null}
         <DocxEditorContent />
         <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
-        <DocxEditorEquation />
         {contextMenu === false ? null : (
           <DocxEditorContextMenu
             t={translate}
@@ -499,8 +497,6 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** Header/footer scope chrome while editing page furniture. */
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
-  /** The default linear-math popover for a clicked Office Math equation. */
-  readonly Equation: typeof DocxEditorEquation;
   /**
    * The link popover — target readout, copy, edit, unlink — and its parts. Mounted by
    * default inside the viewport; `hyperlinkPopup={false}` removes it.
@@ -540,7 +536,6 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
-  Equation: DocxEditorEquation,
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenuCompound,
   ContentControl: DocxEditorContentControl,

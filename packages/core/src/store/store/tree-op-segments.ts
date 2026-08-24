@@ -28,18 +28,6 @@ import {
   isContentControlNode,
 } from './tree-op-nodes.ts';
 
-/** Office Math Markup Language namespace (ECMA-376 Part 1, §22.1). */
-const OMML_NAMESPACE_URI = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
-
-/** A paragraph-level inline equation. Its internal OMML is one editable model atom. */
-function isMathEquation(node: OoxmlNode): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.namespaceUri === OMML_NAMESPACE_URI &&
-    node.localName === 'oMath'
-  );
-}
-
 /** One addressable unit of paragraph text: text, tab, hard break, or atomic field. */
 export interface Segment {
   readonly runId: string;
@@ -289,11 +277,6 @@ function walkParagraph(
   const visitInline = (child: OoxmlNode, depth: number): void => {
     const start = offset;
     if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) {
-      record(child, start);
-      return;
-    }
-    if (isMathEquation(child)) {
-      emitAtom({ runId: child.id, node: child, removeNodeIds: [child.id] });
       record(child, start);
       return;
     }

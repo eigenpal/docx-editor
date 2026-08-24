@@ -25,7 +25,6 @@ import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layou
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
-import type { EquationSpanRecord } from './equation-layout.ts';
 
 export type {
   InlineDrawingRecord,
@@ -204,8 +203,6 @@ export interface StyleSpanRecord {
    * and selection mapping refuses them the way it refuses markers.
    */
   readonly projected?: boolean;
-  /** Paint-ready geometry for one atomic Office Math equation. */
-  readonly equation?: EquationSpanRecord;
   /**
    * Footnote/endnote navigation metadata for projected note atoms.
    *

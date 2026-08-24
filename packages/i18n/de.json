@@ -725,14 +725,5 @@
     "bodyOnlySectionBreak": null,
     "bodyOnlyToc": null,
     "furnitureOnlyPageField": null
-  },
-  "equationPopup": {
-    "apply": null,
-    "delete": null,
-    "inputLabel": null,
-    "placeholder": null,
-    "refused": null,
-    "syntaxHelp": null,
-    "title": null
   }
 }

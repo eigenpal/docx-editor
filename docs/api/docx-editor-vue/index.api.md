@@ -2045,11 +2045,6 @@ export interface DocxEditorDocumentOutlineProps {
     topOffset?: number;
 }
 
-// @public
-export const DocxEditorEquation: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
-    [key: string]: any;
-}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
-
 // @public (undocumented)
 export const DocxEditorFontNotice: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
@@ -2359,7 +2354,6 @@ export interface DocxEditorNamespace {
     readonly ContextMenu: typeof ContextMenu;
     // (undocumented)
     readonly DocumentOutline: typeof DocxEditorDocumentOutline;
-    readonly Equation: typeof DocxEditorEquation;
     // (undocumented)
     readonly FontNotice: typeof DocxEditorFontNotice;
     // (undocumented)

@@ -21,7 +21,6 @@ export {
 } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
-export { DocxEditorEquation } from './editor/DocxEditorEquation';
 
 export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
 export {

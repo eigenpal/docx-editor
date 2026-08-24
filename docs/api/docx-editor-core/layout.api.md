@@ -605,91 +605,6 @@ export function enumerateDocumentSections(part: OoxmlPart, displayMode?: Revisio
 // @public
 export function enumerateDocumentSectionsBounded(part: OoxmlPart, displayMode?: RevisionDisplayMode): DocumentSectionsEnumeration;
 
-// @public (undocumented)
-export interface EquationFractionGeometry extends EquationGeometryBase {
-    // (undocumented)
-    readonly bar: LayoutBox;
-    // (undocumented)
-    readonly denominator: EquationGeometry;
-    // (undocumented)
-    readonly kind: 'fraction';
-    // (undocumented)
-    readonly numerator: EquationGeometry;
-}
-
-// @public (undocumented)
-export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationScriptGeometry | EquationNaryGeometry;
-
-// @public (undocumented)
-export interface EquationNaryGeometry extends EquationGeometryBase {
-    // (undocumented)
-    readonly body: EquationGeometry;
-    // (undocumented)
-    readonly kind: 'nary';
-    // (undocumented)
-    readonly lowerLimit?: EquationGeometry;
-    // (undocumented)
-    readonly operator: EquationTextGeometry;
-    // (undocumented)
-    readonly upperLimit?: EquationGeometry;
-}
-
-// @public (undocumented)
-export interface EquationRadicalGeometry extends EquationGeometryBase {
-    // (undocumented)
-    readonly bar: LayoutBox;
-    // (undocumented)
-    readonly degree?: EquationGeometry;
-    // (undocumented)
-    readonly kind: 'radical';
-    // (undocumented)
-    readonly radicand: EquationGeometry;
-    // (undocumented)
-    readonly sign: EquationTextGeometry;
-}
-
-// @public (undocumented)
-export interface EquationRowGeometry extends EquationGeometryBase {
-    // (undocumented)
-    readonly items: readonly EquationGeometry[];
-    // (undocumented)
-    readonly kind: 'row';
-}
-
-// @public (undocumented)
-export interface EquationScriptGeometry extends EquationGeometryBase {
-    // (undocumented)
-    readonly base: EquationGeometry;
-    // (undocumented)
-    readonly kind: 'script';
-    // (undocumented)
-    readonly subscript?: EquationGeometry;
-    // (undocumented)
-    readonly superscript?: EquationGeometry;
-}
-
-// @public
-export interface EquationSpanRecord {
-    // (undocumented)
-    readonly fallbackText: string;
-    // (undocumented)
-    readonly geometry: EquationGeometry;
-    // (undocumented)
-    readonly sourceNodeId: string;
-    // (undocumented)
-    readonly truncated: boolean;
-}
-
-// @public (undocumented)
-export interface EquationTextGeometry extends EquationGeometryBase {
-    // (undocumented)
-    readonly fontSizePt: number;
-    // (undocumented)
-    readonly kind: 'text' | 'fallback';
-    // (undocumented)
-    readonly text: string;
-}
-
 // @public
 export function everyStoryOrder(layout: SemanticLayout): string[];
 
@@ -1212,9 +1127,6 @@ export interface LayoutCacheStats {
     // (undocumented)
     readonly size: number;
 }
-
-// @public
-export function layoutEquation(projection: OmmlEquationProjection, measurer: TextMeasurer, style: ResolvedRunStyle): EquationSpanRecord;
 
 // @public
 export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, hfPageContext?: HeaderFooterPageContext, documentProperties?: DocumentProperties, inputs?: HeaderFooterStoryInputs): HeaderFooterStoryLayout;
@@ -3052,7 +2964,6 @@ export interface StyleSpanRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly caretEdges?: readonly number[];
-    readonly equation?: EquationSpanRecord;
     readonly fieldAtom?: FieldAtomMarker;
     readonly link?: SpanLinkRecord;
     readonly noteNav?: {

@@ -808,7 +808,6 @@ export interface DocxEditorInstance extends Editor {
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
-    setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setRevisionStyles(styles: RevisionStyles): void;
     stateVersion(): number;
@@ -864,43 +863,6 @@ export const EMU_PER_POINT = 12700;
 
 // @public
 export function emuToOverlayPoints(emu: number): number;
-
-// @public
-export interface EquationActivation {
-    // (undocumented)
-    readonly equation: SurfaceEquation;
-    // (undocumented)
-    readonly rect: {
-        readonly left: number;
-        readonly top: number;
-        readonly right: number;
-        readonly bottom: number;
-    };
-}
-
-// @public
-export function equationAtPosition(equations: readonly SurfaceEquation[], position: SemanticPosition): SurfaceEquation | null;
-
-// @public
-export interface EquationChromeHandlers {
-    // (undocumented)
-    readonly onPopover?: (activation: EquationActivation) => void;
-}
-
-// @public
-export interface EquationOps {
-    // (undocumented)
-    applyEquation(equationId: string, linear: string): boolean;
-    can(equationId: string, action: EquationAction): EquationCanResult;
-    // (undocumented)
-    equationAtCaret(): SurfaceEquation | null;
-    // (undocumented)
-    equationById(equationId: string): SurfaceEquation | null;
-    // (undocumented)
-    equationsInCaretParagraph(): SurfaceEquation[];
-    // (undocumented)
-    removeEquation(equationId: string): boolean;
-}
 
 // @public
 export function executeImageCommand(editor: DocxEditorInstance, command: Extract<EditorCommand, {
@@ -1327,8 +1289,6 @@ export interface PaginatedSurface {
         paragraphId: string;
         offset: number;
     }): boolean;
-    // (undocumented)
-    readonly equations: EquationOps;
     exitHeaderFooter(): void;
     exitListOnEmptyItem(): boolean;
     // (undocumented)
@@ -1483,8 +1443,6 @@ export interface PaginatedSurfaceOptions {
     readonly measurer?: TextMeasurer;
     // (undocumented)
     readonly onChange?: (state: PaginatedSurfaceState) => void;
-    // (undocumented)
-    readonly onEquationPopover?: (activation: EquationActivation) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
     readonly onRequestHyperlink?: () => void;
     readonly pointer?: 'engine' | 'native';
@@ -1909,23 +1867,6 @@ export function sourceCropFromCropPercent(crop: ImageCropPercent): SourceCrop;
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
-
-// @public
-export interface SurfaceEquation {
-    // (undocumented)
-    readonly end: number;
-    // (undocumented)
-    readonly fallbackText: string;
-    // (undocumented)
-    readonly id: string;
-    // (undocumented)
-    readonly linear: string;
-    // (undocumented)
-    readonly paragraphId: string;
-    // (undocumented)
-    readonly start: number;
-    readonly supported: boolean;
-}
 
 // @public
 export interface SurfaceExtent {

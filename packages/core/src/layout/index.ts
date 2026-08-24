@@ -288,17 +288,6 @@ export {
 } from './list-resolve.ts';
 export { createFixedMeasurer } from './fixed-measurer.ts';
 export {
-  layoutEquation,
-  type EquationFractionGeometry,
-  type EquationGeometry,
-  type EquationNaryGeometry,
-  type EquationRadicalGeometry,
-  type EquationRowGeometry,
-  type EquationScriptGeometry,
-  type EquationSpanRecord,
-  type EquationTextGeometry,
-} from './equation-layout.ts';
-export {
   DEFAULT_CANVAS_FONT_STACK,
   isCanvasMeasurementAvailable,
   resolveDefaultSurfaceMeasurer,

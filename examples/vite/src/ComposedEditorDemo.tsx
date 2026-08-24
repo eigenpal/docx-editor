@@ -686,7 +686,6 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}
               <DocxEditor.HyperLink />
-              <DocxEditor.Equation />
               {/* The review rail (PRO): tracked changes and comments as cards beside the
                   page, with accept / reject / reply. Imported from
                   `@docx-editor.dev/pro/react` and enabled by the `reviewModule()` on the
