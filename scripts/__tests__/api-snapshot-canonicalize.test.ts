@@ -138,6 +138,52 @@ describe('canonicalizeApiReport', () => {
     );
   });
 
+  test('an odd apostrophe in a block comment does not stop sorting', () => {
+    const input = report(
+      [
+        "/** it's a thing */",
+        'export type Z = {',
+        '    d: 1;',
+        '    c: 2;',
+        '};',
+      ].join('\n')
+    );
+    expect(canonicalizeApiReport(input)).toBe(
+      report(
+        [
+          "/** it's a thing */",
+          'export type Z = {',
+          '    c: 2;',
+          '    d: 1;',
+          '};',
+        ].join('\n')
+      )
+    );
+  });
+
+  test('sorts function-typed property values correctly', () => {
+    const input = report(
+      [
+        'export const x: {',
+        '    onFoo?: (e: X) => void;',
+        '    bar: string;',
+        '    onBaz: (a: string, b: { z: 1; y: 2; }) => Promise<void>;',
+        '};',
+      ].join('\n')
+    );
+    expect(canonicalizeApiReport(input)).toBe(
+      report(
+        [
+          'export const x: {',
+          '    bar: string;',
+          '    onBaz: (a: string, b: { y: 2; z: 1; }) => Promise<void>;',
+          '    onFoo?: (e: X) => void;',
+          '};',
+        ].join('\n')
+      )
+    );
+  });
+
   test('leaves markdown outside the ts fence untouched', () => {
     const input = ['# Title {not: code; other: thing;}', '', '```ts', 'export const a: 1;', '```', ''].join(
       '\n'

@@ -652,8 +652,8 @@ export class RequestContext {
     get [INTERNALS](): ContextInternals;
     // @internal
     static begin(session: RuntimeSession): {
-        context: RequestContext;
         adopt: (objects: readonly ClientObject[]) => void;
+        context: RequestContext;
         finish: () => void;
     };
     get capabilities(): DocumentCapabilities;

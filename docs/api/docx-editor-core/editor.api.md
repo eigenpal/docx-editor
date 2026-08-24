@@ -1780,8 +1780,8 @@ export interface SectionProperties {
     readonly pageNumbering?: SectionPageNumbering;
     // (undocumented)
     readonly pageSize: {
-        readonly widthTwips: number;
         readonly heightTwips: number;
+        readonly widthTwips: number;
     };
     // (undocumented)
     readonly titlePage: boolean;
@@ -1849,10 +1849,10 @@ export interface SelectedImageState {
     readonly id: string;
     // (undocumented)
     readonly intrinsic: Readonly<{
-        readonly pixelWidth: number;
-        readonly pixelHeight: number;
         readonly dpiX: number;
         readonly dpiY: number;
+        readonly pixelHeight: number;
+        readonly pixelWidth: number;
     }> | null;
     // (undocumented)
     readonly kind: DrawingKind;
@@ -2002,8 +2002,8 @@ export interface SurfaceNavigation {
     destroy(): void;
     goToBookmark(name: string): boolean;
     goToPosition(position: {
-        paragraphId: string;
         offset: number;
+        paragraphId: string;
     }): boolean;
     openExternal(href: string | null): boolean;
 }
@@ -2137,8 +2137,8 @@ export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertCol
 // @public
 export interface TextMeasurer {
     lineMetrics(style: ResolvedRunStyle): {
-        height: number;
         baseline: number;
+        height: number;
     };
     measure(text: string, style: ResolvedRunStyle): number;
 }
@@ -2227,17 +2227,17 @@ export interface TreeDocxSessionView {
     // (undocumented)
     redo(): SelectionMark | null;
     relationshipTarget(relationshipId: string, scope?: StoryScope): {
-        readonly target: string;
         readonly external: boolean;
+        readonly target: string;
     } | null;
     removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
     rendersText(): boolean;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
     replyToComment(parentCommentId: string | null, anchor: {
-        paragraphId: string;
-        start: number;
         end: number;
         endParagraphId?: string;
+        paragraphId: string;
+        start: number;
     }, text: string, author: string,
     date?: string, scope?: StoryScope): string | null;
     reviewItems(): readonly ReviewItem[];
@@ -2274,9 +2274,9 @@ export function validateRasterHeader(bytes: Uint8Array, mime: SupportedImageMime
 // @public
 export function validateSetImagePositionCommand(command: {
     readonly horizontalEmu?: number;
-    readonly verticalEmu?: number;
     readonly relativeToH?: string;
     readonly relativeToV?: string;
+    readonly verticalEmu?: number;
 }, mode: 'frame' | 'simple'): boolean;
 
 // @public

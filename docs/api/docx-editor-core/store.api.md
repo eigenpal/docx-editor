@@ -4480,13 +4480,13 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 
 // @public
 export type TreeOpResult = {
+    readonly effect: TreeOpEffect;
     readonly ok: true;
     readonly part: OoxmlPart;
-    readonly effect: TreeOpEffect;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: TreeOpRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -4558,8 +4558,8 @@ export type TreeStoryRef = {
     readonly rId: string;
 } | {
     readonly kind: 'notesPart';
-    readonly partName: string;
     readonly noteKind: 'footnote' | 'endnote';
+    readonly partName: string;
 };
 
 // @public
@@ -4582,12 +4582,12 @@ export interface TreeTransactOptions {
 
 // @public
 export type TreeTransactResult = {
-    readonly ok: true;
     readonly change: TreeModelChange | null;
+    readonly ok: true;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: TreeOpRejection;
-    readonly detail?: string;
 };
 
 // @public
@@ -4673,11 +4673,11 @@ export function withEmbeddedImage(pkg: OoxmlPackage, ownerPartName: string, inpu
     bytes: Uint8Array;
     mime: SupportedImageMime;
 }>): Readonly<{
-    ok: true;
-    pkg: OoxmlPackage;
-    partName: string;
-    relationshipId: string;
     docPrId: number;
+    ok: true;
+    partName: string;
+    pkg: OoxmlPackage;
+    relationshipId: string;
 }> | Readonly<{
     ok: false;
     reason: 'invalidArgs' | 'invalid-image';
@@ -4709,9 +4709,9 @@ export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage;
 
 // @public
 export function withRelationship(pkg: OoxmlPackage, ownerPart: string, type: string, rawTarget: string): {
+    readonly ok: boolean;
     readonly pkg: OoxmlPackage;
     readonly relationshipId: string;
-    readonly ok: boolean;
 };
 
 // @public
@@ -4743,10 +4743,10 @@ export interface XmlLimits {
 
 // @public
 export type XmlNode = {
-    readonly type: 'element';
-    readonly name: string;
     readonly attributes: Readonly<Record<string, string>>;
     readonly children: readonly XmlNode[];
+    readonly name: string;
+    readonly type: 'element';
 } | {
     readonly type: 'text';
     readonly value: string;
@@ -4760,8 +4760,8 @@ export type XmlRejection = 'too-large' | 'dtd-forbidden' | 'entity-forbidden' | 
 
 // @public
 export type XmlResult = {
-    readonly ok: true;
     readonly nodes: readonly XmlNode[];
+    readonly ok: true;
 } | {
     readonly ok: false;
     readonly reason: XmlRejection;
@@ -4777,12 +4777,12 @@ export interface ZipLimits {
 
 // @public
 export type ZipReadResult = {
-    readonly ok: true;
     readonly entries: ReadonlyMap<string, Uint8Array>;
+    readonly ok: true;
 } | {
+    readonly detail?: string;
     readonly ok: false;
     readonly reason: ZipRejection;
-    readonly detail?: string;
 };
 
 // @public

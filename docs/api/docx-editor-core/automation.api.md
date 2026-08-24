@@ -192,8 +192,8 @@ export type AutomationOperation =
 }
 /** The main story of a document. */
 | {
-    readonly op: 'getBody';
     readonly document: AutomationHandle;
+    readonly op: 'getBody';
 }
 /**
 * A story's paragraphs, in reading order.
@@ -203,8 +203,8 @@ export type AutomationOperation =
 * Word's own paragraph collection contains them. A story with no paragraphs answers none.
 */
 | {
-    readonly op: 'getParagraphs';
     readonly body: AutomationHandle;
+    readonly op: 'getParagraphs';
 }
 /** The paragraphs a span covers, in reading order. */
 | {
@@ -261,8 +261,8 @@ export type AutomationOperation =
 * order-independent.
 */
 | {
-    readonly op: 'insertText';
     readonly at: AutomationPoint;
+    readonly op: 'insertText';
     readonly text: string;
 }
 /**
@@ -285,8 +285,8 @@ export type AutomationOperation =
 * section marks, comments, and revisions. A body's final page-level section properties survive.
 */
 | {
-    readonly op: 'replaceStoryBlocks';
     readonly body: AutomationHandle;
+    readonly op: 'replaceStoryBlocks';
     readonly paragraphs: readonly string[];
 }
 /**
@@ -330,9 +330,9 @@ export type AutomationOperation =
 * so sizing a bulleted paragraph without it leaves the bullet at the old size.
 */
 | {
+    readonly font: AutomationFontWrite;
     readonly op: 'setFont';
     readonly span: AutomationSpanRef;
-    readonly font: AutomationFontWrite;
 }
 /**
 * The paragraph style NAME every paragraph a span covers agrees on.
@@ -363,9 +363,9 @@ export type AutomationOperation =
 }
 /** Author paragraph properties. Only the fields present are written. */
 | {
+    readonly format: AutomationParagraphFormatWrite;
     readonly op: 'setParagraphFormat';
     readonly paragraph: AutomationParagraphRef;
-    readonly format: AutomationParagraphFormatWrite;
 }
 /** Remove a paragraph and everything in it. */
 | {
@@ -409,9 +409,9 @@ export type AutomationOperation =
 * document did not have.
 */
 | {
+    readonly kind: 'header' | 'footer';
     readonly op: 'getFurniture';
     readonly section: AutomationHandle;
-    readonly kind: 'header' | 'footer';
     readonly variant: HeaderFooterVariant;
 }
 /**
@@ -421,9 +421,9 @@ export type AutomationOperation =
 * caller can reach: reporting them would say the document has two more footnotes than it has.
 */
 | {
-    readonly op: 'getNotes';
     readonly document: AutomationHandle;
     readonly noteKind: NoteKind;
+    readonly op: 'getNotes';
 }
 /** One note's story, as a BODY. Two notes in one part are two stories. */
 | {
@@ -437,14 +437,14 @@ export type AutomationOperation =
 * without requiring that intermediate handle: paragraphs joined by one `\r` paragraph mark.
 */
 | {
-    readonly op: 'getNoteText';
     readonly note: AutomationHandle;
+    readonly op: 'getNoteText';
     readonly projection?: AutomationTextProjection;
 }
 /** Whether a note is a footnote or an endnote. */
 | {
-    readonly op: 'getNoteKind';
     readonly note: AutomationHandle;
+    readonly op: 'getNoteKind';
 }
 /**
 * Delete a note: its body in the notes part and every reference that reached it.
@@ -453,8 +453,8 @@ export type AutomationOperation =
 * `AUTOMATION_SOLITARY_OPERATIONS`.
 */
 | {
-    readonly op: 'deleteNote';
     readonly note: AutomationHandle;
+    readonly op: 'deleteNote';
 }
 /**
 * Every list one story holds, in the order its numbers first appear.
@@ -464,8 +464,8 @@ export type AutomationOperation =
 * still two lists, because the paragraphs are not in the same story.
 */
 | {
-    readonly op: 'getLists';
     readonly body: AutomationHandle;
+    readonly op: 'getLists';
 }
 /** A list's `w:numId`, as the number the file states. */
 | {
@@ -479,9 +479,9 @@ export type AutomationOperation =
 * numbering DEFINITION, and a list handle for it would answer no paragraphs forever.
 */
 | {
-    readonly op: 'getListById';
     readonly body: AutomationHandle;
     readonly id: number;
+    readonly op: 'getListById';
 }
 /**
 * A list's paragraphs in reading order, or only the ones at one level.
@@ -517,9 +517,9 @@ export type AutomationOperation =
 * outside 0-8 is refused rather than clamped: nothing defines a format there.
 */
 | {
+    readonly level: number;
     readonly op: 'setListLevel';
     readonly paragraph: AutomationHandle;
-    readonly level: number;
 }
 /**
 * Add a paragraph to a list, at one of its edges. Answers the NEW paragraph.
@@ -529,10 +529,10 @@ export type AutomationOperation =
 * end of one and Enter is pressed.
 */
 | {
-    readonly op: 'insertListParagraph';
     readonly list: AutomationHandle;
-    readonly where: 'start' | 'end';
+    readonly op: 'insertListParagraph';
     readonly text: string;
+    readonly where: 'start' | 'end';
 }
 /**
 * Where a span points: an absolute URL, `#anchor`, or empty for text in no link.
@@ -576,8 +576,8 @@ export type AutomationOperation =
 }
 /** The name a bookmark is declared with. */
 | {
-    readonly op: 'getBookmarkName';
     readonly bookmark: AutomationHandle;
+    readonly op: 'getBookmarkName';
 }
 /**
 * The range a bookmark's two markers enclose.
@@ -621,18 +621,18 @@ export type AutomationOperation =
 }
 /** A comment's body as plain text. */
 | {
-    readonly op: 'getCommentText';
     readonly comment: AutomationHandle;
+    readonly op: 'getCommentText';
 }
 /** The words a comment is about. Refused for a comment the file gave no usable range. */
 | {
-    readonly op: 'getCommentRange';
     readonly comment: AutomationHandle;
+    readonly op: 'getCommentRange';
 }
 /** Whether the thread is resolved (`w15:commentEx/@w15:done`). */
 | {
-    readonly op: 'getCommentResolved';
     readonly comment: AutomationHandle;
+    readonly op: 'getCommentResolved';
 }
 /**
 * Create a top-level comment anchored to a span.
@@ -644,11 +644,11 @@ export type AutomationOperation =
 * Answers the NEW comment whose id is minted inside the package transaction.
 */
 | {
+    readonly author: string;
+    readonly date?: string;
     readonly op: 'insertComment';
     readonly span: AutomationSpanRef;
     readonly text: string;
-    readonly author: string;
-    readonly date?: string;
 }
 /**
 * Resolve a comment thread, or reopen it.
@@ -657,8 +657,8 @@ export type AutomationOperation =
 * the parent alone would leave a reply reading as open under a closed remark.
 */
 | {
-    readonly op: 'setCommentResolved';
     readonly comment: AutomationHandle;
+    readonly op: 'setCommentResolved';
     readonly resolved: boolean;
 }
 /**
@@ -672,11 +672,11 @@ export type AutomationOperation =
 * another writer may have changed in between.
 */
 | {
-    readonly op: 'replyToComment';
-    readonly comment: AutomationHandle;
-    readonly text: string;
     readonly author: string;
+    readonly comment: AutomationHandle;
     readonly date?: string;
+    readonly op: 'replyToComment';
+    readonly text: string;
 }
 /**
 * Delete one comment object.
@@ -686,8 +686,8 @@ export type AutomationOperation =
 * one package transaction and one undo unit, but they cannot share a batch with any other write.
 */
 | {
-    readonly op: 'deleteComment';
     readonly comment: AutomationHandle;
+    readonly op: 'deleteComment';
 }
 /**
 * The tracked changes of a story, in document order.
@@ -697,8 +697,8 @@ export type AutomationOperation =
 * such as a complete tracked row.
 */
 | {
-    readonly op: 'getRevisions';
     readonly body: AutomationHandle;
+    readonly op: 'getRevisions';
 }
 /** Word's name for the kind of change: `Insert`, `Delete`, `Replace`, `Property`, … */
 | {
@@ -756,9 +756,9 @@ export type AutomationOperation =
 * host refuses it rather than pretending to have a caret.
 */
 | {
+    readonly mode: AutomationSelectionMode;
     readonly op: 'selectSpan';
     readonly span: AutomationSpanRef;
-    readonly mode: AutomationSelectionMode;
 }
 /**
 * Put the reader's selection on the range a bookmark currently encloses.
@@ -790,9 +790,9 @@ export type AutomationOperation =
 * choosing document order is the choice a caller can predict.
 */
 | {
+    readonly id: number;
     readonly op: 'getContentControlById';
     readonly scope: AutomationContentControlScope;
-    readonly id: number;
 }
 /** Every control in a scope carrying a tag, in document order. */
 | {
@@ -808,8 +808,8 @@ export type AutomationOperation =
 }
 /** `w:tag`, or empty where the file wrote none. Never invented. */
 | {
-    readonly op: 'getContentControlTag';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlTag';
 }
 /** `w:alias` — what Word's UI calls the title. Empty where absent. */
 | {
@@ -829,13 +829,13 @@ export type AutomationOperation =
 }
 /** The control's type: `richText`, `plainText`, `dropDownList`, `comboBox`, `date`, … */
 | {
-    readonly op: 'getContentControlSubtype';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlSubtype';
 }
 /** The `ST_Lock` in force, INCLUDING what an enclosing control imposes. */
 | {
-    readonly op: 'getContentControlLock';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlLock';
 }
 /**
 * Whether the control declares `w:dataBinding`.
@@ -844,23 +844,23 @@ export type AutomationOperation =
 * protocol boundary, and the binding target is never resolved or fetched.
 */
 | {
-    readonly op: 'getContentControlIsBound';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlIsBound';
 }
 /** Whether the control is showing its placeholder rather than a value (`w:showingPlcHdr`). */
 | {
-    readonly op: 'getContentControlPlaceholderShown';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlPlaceholderShown';
 }
 /** Whether the control removes itself on the first edit (`w:temporary`). */
 | {
-    readonly op: 'getContentControlTemporary';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlTemporary';
 }
 /** The text the control encloses, as the document reads it. */
 | {
-    readonly op: 'getContentControlText';
     readonly contentControl: AutomationHandle;
+    readonly op: 'getContentControlText';
     readonly projection?: AutomationTextProjection;
 }
 /** The paragraphs the control holds, in reading order. Empty for an inline control's own. */
@@ -875,9 +875,9 @@ export type AutomationOperation =
 * answer those same edges because a control's boundary marks occupy no offset here.
 */
 | {
-    readonly op: 'getContentControlRange';
     readonly contentControl: AutomationHandle;
     readonly location?: AutomationContentControlRangeLocation;
+    readonly op: 'getContentControlRange';
 }
 /**
 * Write the control's value in the vocabulary its own type accepts.
@@ -887,17 +887,17 @@ export type AutomationOperation =
 * same reasons or a form is only as protected as the path a caller happened to take.
 */
 | {
-    readonly op: 'setContentControlValue';
     readonly contentControl: AutomationHandle;
+    readonly op: 'setContentControlValue';
     readonly value: AutomationContentControlValue;
 }
 /** Author tag, title or lock. An omitted member is left as it is; `null` removes it. */
 | {
-    readonly op: 'setContentControlProperties';
     readonly contentControl: AutomationHandle;
+    readonly lock?: AutomationContentControlLock;
+    readonly op: 'setContentControlProperties';
     readonly tag?: string | null;
     readonly title?: string | null;
-    readonly lock?: AutomationContentControlLock;
 }
 /** Remove the control. `keepContent` is Word's own "Remove content control". */
 | {

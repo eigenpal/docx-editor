@@ -40,6 +40,23 @@ function skipLineComment(text, i) {
   return nl === -1 ? text.length : nl;
 }
 
+/**
+ * Skip a comment starting at `i`: a `//` comment to end of line, or a
+ * block comment to its closing delimiter.
+ * Returns the index just past the comment, or `i` when there is none.
+ * Block comments matter: an apostrophe inside a TSDoc comment must not be
+ * mistaken for the start of a string literal.
+ */
+function skipComment(text, i) {
+  if (text[i] !== '/') return i;
+  if (text[i + 1] === '/') return skipLineComment(text, i);
+  if (text[i + 1] === '*') {
+    const end = text.indexOf('*/', i + 2);
+    return end === -1 ? text.length : end + 2;
+  }
+  return i;
+}
+
 /** Index of the `}` matching the `{` at `open`, or -1. */
 function matchingBrace(text, open) {
   let depth = 0;
@@ -47,8 +64,9 @@ function matchingBrace(text, open) {
     const c = text[i];
     if (c === "'" || c === '"' || c === '`') {
       i = skipString(text, i) - 1;
-    } else if (c === '/' && text[i + 1] === '/') {
-      i = skipLineComment(text, i) - 1;
+    } else if (c === '/') {
+      const next = skipComment(text, i);
+      if (next !== i) i = next - 1;
     } else if (c === '{') {
       depth++;
     } else if (c === '}') {
@@ -71,8 +89,9 @@ function splitTopLevelMembers(body) {
     const c = body[i];
     if (c === "'" || c === '"' || c === '`') {
       i = skipString(body, i) - 1;
-    } else if (c === '/' && body[i + 1] === '/') {
-      i = skipLineComment(body, i) - 1;
+    } else if (c === '/') {
+      const next = skipComment(body, i);
+      if (next !== i) i = next - 1;
     } else if (c === '{' || c === '(' || c === '[') {
       depth++;
     } else if (c === '}' || c === ')' || c === ']') {
@@ -120,8 +139,8 @@ function canonicalizeTypeText(text) {
       const end = skipString(text, i);
       out += text.slice(i, end);
       i = end;
-    } else if (c === '/' && text[i + 1] === '/') {
-      const end = skipLineComment(text, i);
+    } else if (c === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) {
+      const end = skipComment(text, i);
       out += text.slice(i, end);
       i = end;
     } else if (c === '{') {
