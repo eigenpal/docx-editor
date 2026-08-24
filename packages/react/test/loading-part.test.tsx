@@ -423,6 +423,10 @@ describe('packaged DocxEditor loading screen', () => {
     expect(
       (view.container.querySelector('[data-testid="docx-toolbar"]') as HTMLFieldSetElement).disabled
     ).toBe(true);
+    expect(
+      (view.container.querySelector('[data-testid="editing-mode-trigger"]') as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
   });
 
   test('keeps the default loading page up while a large document opens', async () => {

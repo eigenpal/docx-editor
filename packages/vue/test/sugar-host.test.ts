@@ -29,6 +29,10 @@ describe('DocxEditor sugar host', () => {
     expect(
       (view.container.querySelector('[data-testid="docx-toolbar"]') as HTMLFieldSetElement).disabled
     ).toBe(true);
+    expect(
+      (view.container.querySelector('[data-testid="editing-mode-trigger"]') as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
     view.unmount();
   });
 

@@ -3662,8 +3662,10 @@ a.docx-hyperlink:focus-visible {
   user-select: none;
 }
 
-.docx-toolbar__picker[aria-disabled='true'] {
+.docx-toolbar__picker[aria-disabled='true'],
+.docx-toolbar__picker:disabled {
   opacity: 0.5;
+  cursor: default;
 }
 
 .docx-toolbar__picker-caret {

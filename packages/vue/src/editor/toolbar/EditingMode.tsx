@@ -11,6 +11,8 @@ import type { ToolbarSlotPartComponent } from './parts';
 
 const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
   snapshot.editingMode ?? 'editing';
+const selectLoading = (snapshot: EditorSnapshot) =>
+  snapshot.isLoading || snapshot.isOpening === true;
 
 interface ModeOption {
   readonly mode: DocumentEditingMode;
@@ -69,6 +71,7 @@ export const ToolbarEditingMode = defineComponent({
   setup(props) {
     const editorRef = useDocxEditor();
     const mode = useEditorState(selectMode);
+    const loading = useEditorState(selectLoading);
     const label = useToolbarLabel();
     const { t } = useTranslation();
     const open = ref(false);
@@ -150,7 +153,7 @@ export const ToolbarEditingMode = defineComponent({
             aria-haspopup="menu"
             aria-expanded={open.value}
             aria-label={label(control?.labelKey ?? 'editingMode.label')}
-            disabled={!state.enabled}
+            disabled={loading.value || !state.enabled}
             {...(disabledReason ? { title: disabledReason } : {})}
             onMousedown={guardToolbarMousedown}
             onClick={() => {

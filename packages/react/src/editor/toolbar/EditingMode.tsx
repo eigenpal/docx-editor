@@ -21,6 +21,8 @@ import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 
 const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
   snapshot.editingMode ?? 'editing';
+const selectLoading = (snapshot: EditorSnapshot) =>
+  snapshot.isLoading || snapshot.isOpening === true;
 
 interface ModeOption {
   readonly mode: DocumentEditingMode;
@@ -70,6 +72,7 @@ export interface ToolbarEditingModeProps {
 export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProps) {
   const editor = useDocxEditor();
   const mode = useEditorState(selectMode);
+  const loading = useEditorState(selectLoading);
   const label = useToolbarLabel();
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -167,7 +170,7 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label(control?.labelKey ?? 'editingMode.label')}
-        disabled={!state.enabled}
+        disabled={loading || !state.enabled}
         {...(disabledReason ? { title: disabledReason } : {})}
         onMouseDown={guardToolbarMousedown}
         onClick={() => setOpen((previous) => !previous)}
