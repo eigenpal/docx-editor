@@ -24,6 +24,7 @@ import {
   type OoxmlNode,
   type StoryScope,
   type TreeDocOp,
+  type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { retractedLengthOf } from '../store/store/tree-op-retraction.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
@@ -1091,6 +1092,8 @@ export function mountPaginatedSurface(
   // Every committed transaction, whatever produced it — this surface, undo, or another
   // editor sharing the store — reaches layout the same way.
   const unsubscribe = session.subscribe((modelChange) => {
+    // Before anything downstream can read the index against the new revision.
+    retainReviewOrderIndex(modelChange);
     // A commit from OUTSIDE this surface retires the armed typing format: the tree it was
     // armed against has moved, and the offsets it is anchored to no longer mean what they
     // did. This surface's own commits already cleared it before running their ops (and
@@ -1324,9 +1327,36 @@ export function mountPaginatedSurface(
    * `setValue` and `remove` then rewrote and deleted body content while the reader was
    * editing a header.
    */
+  /**
+   * Single-slot memo for the body branch of {@link contentControlAtCaret}.
+   *
+   * `state()` resolves the active control on every read, and hosts read state repeatedly
+   * between changes, so the geometry hit-test ran again and again against an unchanged layout
+   * and selection. Both inputs are replaced, never mutated, so identity is a sound key: a
+   * commit republishes the layout, a caret move reassigns the selection, and a zoom relayouts.
+   * The story branch stays unmemoized — it reads the live part, which neither key covers.
+   */
+  let contentControlAtCaretMemo: {
+    readonly layout: SemanticLayout;
+    readonly selection: SemanticSelection;
+    readonly result: ContentControlBoundaryRecord | null;
+  } | null = null;
   function contentControlAtCaret(): ContentControlBoundaryRecord | null {
     const scope = storyScope();
     if (scope.kind !== 'body') return contentControlInStoryAtCaret(scope);
+    if (
+      contentControlAtCaretMemo &&
+      contentControlAtCaretMemo.layout === currentLayout &&
+      contentControlAtCaretMemo.selection === selection
+    ) {
+      return contentControlAtCaretMemo.result;
+    }
+    const result = resolveBodyContentControlAtCaret();
+    contentControlAtCaretMemo = { layout: currentLayout, selection, result };
+    return result;
+  }
+
+  function resolveBodyContentControlAtCaret(): ContentControlBoundaryRecord | null {
     const caret = caretAt(currentLayout, selection.head, measurer);
     if (!caret) return null;
     const found = contentControlAtSemantic(currentLayout, {
@@ -2196,7 +2226,7 @@ export function mountPaginatedSurface(
       ...(contentControlChrome ? { contentControlChrome } : {}),
     });
     // Paint just rebuilt every span, so the caret's field lost its mark with the old DOM.
-    syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
+    syncActiveFieldShading(pagesLayer, collapsedCaretPosition(), { domReplaced: true });
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
     // Viewing mode hides write affordances the painter cannot know about — today the
     // blank header/footer "double-click to add" band.
@@ -3007,6 +3037,34 @@ export function mountPaginatedSurface(
     readonly bodyRoot: object;
     readonly index: Map<string, number>;
   } | null = null;
+  /**
+   * Carry the index across a commit that cannot reorder paragraphs.
+   *
+   * The key is (package revision, body root) and a keystroke moves both, so without this the
+   * memo guaranteed exactly one whole-document rebuild per keystroke — the #391 shape, in the
+   * render path. A text-local commit with no created, deleted, split or joined paragraphs
+   * preserves every paragraph id and their order in every story, so the index is re-stamped
+   * to the values the next read will key on. Anything wider drops it, and commits that bypass
+   * the subscription (a package-shell edit) leave a stale key the read-side check rebuilds —
+   * the safe direction.
+   */
+  function retainReviewOrderIndex(change: TreeModelChange): void {
+    if (!reviewOrderIndexCache) return;
+    if (
+      change.impact === 'text-local' &&
+      change.created.length === 0 &&
+      change.deleted.length === 0 &&
+      change.splitJoin.length === 0
+    ) {
+      reviewOrderIndexCache = {
+        packageRevision: session.packageRevision(),
+        bodyRoot: session.part().root,
+        index: reviewOrderIndexCache.index,
+      };
+    } else {
+      reviewOrderIndexCache = null;
+    }
+  }
   function reviewOrderIndex(): Map<string, number> {
     const packageRevision = session.packageRevision();
     const bodyRoot = session.part().root;
@@ -3132,6 +3190,12 @@ export function mountPaginatedSurface(
     if (pinned) return resolveReviewThread(pinned);
     const at = selection?.head;
     if (!at) return null;
+    // An empty queue still builds the order index. NOT gated: the index's `partFor` reads are
+    // what durably open the note stores on first render, and skipping them moved paraId
+    // minting into the first note edit — where undo can no longer unwind it to opening bytes
+    // (`story-parity-scope-transitions.test.ts`). The retention above makes the build a
+    // once-per-structural-change cost rather than a per-keystroke one, which is the part that
+    // was worth having.
     // The covering items, innermost first, minus the one the reader dismissed. Returning
     // null for a dismissed innermost item hid every item under it too: dismissing a comment
     // that wraps a revision meant the revision could never become active either.
