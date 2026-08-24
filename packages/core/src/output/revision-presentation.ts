@@ -71,10 +71,10 @@ export interface RevisionAuthorAssignments {
  * How painted tracked changes are coloured.
  *
  * - `'author'` (the DEFAULT) — every change takes its author's colour from the
- *   `--doc-review-author-N` ramp, assigned by order of first appearance in the document.
- *   Word's own default, and the reason it is this engine's: a paragraph three people
- *   edited has to read as three people. Restyle a slot under `.docx-editor` to change the
- *   ramp.
+ *   `--doc-review-author-N` ramp. An attached document seeds slots by order of first
+ *   appearance, then keeps those assignments stable for that session. Word's own default,
+ *   and the reason it is this engine's: a paragraph three people edited has to read as three
+ *   people. Restyle a slot under `.docx-editor` to change the ramp.
  * - `'kind'` — insertions and deletions take the two kind colours
  *   (`--doc-revision-insertion` / `--doc-revision-deletion`), so "added" and "removed" are
  *   what a reader tells apart at a glance, whoever proposed them.
@@ -96,7 +96,7 @@ export interface ReviewAuthorInfo {
   /** The `w:author` string, exactly as the file carries it. */
   readonly author: string;
   /**
-   * Rank by order of first appearance — an UNBOUNDED index, not a ramp slot.
+   * Stable session rank, seeded by order of first appearance — an UNBOUNDED index.
    *
    * The ramp defines {@link REVIEW_AUTHOR_SLOTS} colours and every DOM hook wraps into it,
    * so the ninth author ranks 8 here and carries `data-review-author-slot="0"`. Building a
@@ -318,19 +318,31 @@ export function revisionStyleContextKey(context: RevisionStyleContext | null): s
  */
 const contextCache = new WeakMap<
   SemanticLayout,
-  { option: RevisionStyles | undefined; context: RevisionStyleContext | null }
+  {
+    option: RevisionStyles | undefined;
+    authorSlots: ReadonlyMap<string, number> | undefined;
+    context: RevisionStyleContext | null;
+  }
 >();
 
-/** Resolve the public option against a layout, or `null` for the default kind colouring. */
+/**
+ * Resolve the public option against a layout, or `null` for the default kind colouring.
+ *
+ * `authorSlots` is the attached surface's stable assignment when one exists. A standalone
+ * painter has no session and keeps deriving the assignment from the layout.
+ */
 export function revisionStyleContextOf(
   option: RevisionStyles | undefined,
-  layout: SemanticLayout
+  layout: SemanticLayout,
+  authorSlots?: ReadonlyMap<string, number>
 ): RevisionStyleContext | null {
   // OMITTED MEANS BY AUTHOR. Word's default, and the one this engine takes: colour answers
   // who proposed the change, decoration answers what it was. `'kind'` is the opt-out.
   if (option === 'kind') return null;
   const cached = contextCache.get(layout);
-  if (cached && cached.option === option) return cached.context;
+  if (cached && cached.option === option && cached.authorSlots === authorSlots) {
+    return cached.context;
+  }
   const styles = revisionAuthorStylesOf(option);
   const others =
     option === undefined || option === 'author' ? 'author' : (option.others ?? 'author');
@@ -338,10 +350,10 @@ export function revisionStyleContextOf(
   // Returning a context for it would cost a full walk per paint and mark every tracked span
   // with a slot hook, for no visible difference.
   if (styles.size === 0 && others === 'kind') {
-    contextCache.set(layout, { option, context: null });
+    contextCache.set(layout, { option, authorSlots, context: null });
     return null;
   }
-  const authorSlots = authorSlotsOf(layout);
+  const resolvedAuthorSlots = authorSlots ?? authorSlotsOf(layout);
   const classTokens = new Map<string, readonly string[]>();
   for (const [author, style] of styles) {
     if (!style.spanClassName) continue;
@@ -349,13 +361,13 @@ export function revisionStyleContextOf(
     if (tokens.length > 0) classTokens.set(author, tokens);
   }
   const context: RevisionStyleContext = {
-    authorSlots,
+    authorSlots: resolvedAuthorSlots,
     styles,
     classTokens,
     others,
-    key: computeContextKey(authorSlots, styles, others),
+    key: computeContextKey(resolvedAuthorSlots, styles, others),
   };
-  contextCache.set(layout, { option, context });
+  contextCache.set(layout, { option, authorSlots, context });
   return context;
 }
 
@@ -528,6 +540,40 @@ export function reviewAuthorSlotsOf(
     if (!combined.has(author)) combined.set(author, combined.size);
   }
   return combined ?? documentSlots;
+}
+
+/**
+ * One attached document's author-slot allocator.
+ *
+ * The first resolve seeds the assignment in document order. Later resolves keep every slot
+ * already issued, including slots whose author is temporarily absent. New authors append after
+ * the reserved range, so deleting and undoing a decision cannot recolour another reviewer.
+ */
+export interface StableReviewAuthorSlots {
+  resolve(
+    documentSlots: ReadonlyMap<string, number>,
+    reviewAuthors: Iterable<string>
+  ): ReadonlyMap<string, number>;
+}
+
+export function createStableReviewAuthorSlots(): StableReviewAuthorSlots {
+  const reserved = new Map<string, number>();
+  let nextSlot = 0;
+  return {
+    resolve(documentSlots, reviewAuthors) {
+      const current = reviewAuthorSlotsOf(documentSlots, reviewAuthors);
+      for (const author of current.keys()) {
+        if (reserved.has(author)) continue;
+        reserved.set(author, nextSlot);
+        nextSlot += 1;
+      }
+      return new Map(
+        [...current.keys()]
+          .map((author) => [author, reserved.get(author)!] as const)
+          .sort((left, right) => left[1] - right[1])
+      );
+    },
+  };
 }
 
 /**

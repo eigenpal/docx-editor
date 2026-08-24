@@ -2828,6 +2828,22 @@ export function paintSemanticLayout(
   layout: SemanticLayout,
   options: PaintOptions = {}
 ): void {
+  paintSemanticLayoutWithAuthorSlots(container, layout, options);
+}
+
+/**
+ * Paint with the attached surface's stable author-slot assignment.
+ *
+ * Internal editor-to-output seam. Standalone consumers use {@link paintSemanticLayout}.
+ *
+ * @internal
+ */
+export function paintSemanticLayoutWithAuthorSlots(
+  container: HTMLElement,
+  layout: SemanticLayout,
+  options: PaintOptions,
+  authorSlots?: ReadonlyMap<string, number>
+): void {
   const chrome = options.contentControlChrome;
   // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
   // entering a TOC rebuild every page, which detached the node the gesture started on.
@@ -2859,7 +2875,7 @@ export function paintSemanticLayout(
   const tocKey = chrome?.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : '';
   // Once per paint, from the WHOLE layout, so every page shares one author→slot map and an
   // incremental repaint cannot disagree with a full one.
-  const revisionStyles = revisionStyleContextOf(options.revisionStyles, layout);
+  const revisionStyles = revisionStyleContextOf(options.revisionStyles, layout, authorSlots);
   const resolved = {
     scale: options.scale ?? 96 / 72,
     ariaHidden: options.ariaHidden ?? true,
@@ -2903,8 +2919,8 @@ export function paintSemanticLayout(
     `ro:${readOnlyKey}|tocEmpty:${emptyTocKey}|` +
     `${options.imageUrlPort ? 'url' : ''}|` +
     `${drawingPaintStringsCacheToken(drawingStrings)}|` +
-    // The slot map derives from the whole layout: an edit elsewhere can renumber an author,
-    // recolouring pages whose own records did not change. The key must move with the map.
+    // The slot map belongs to this paint. A standalone paint derives it from the layout; an
+    // attached surface supplies its stable session map. The key must move when that map moves.
     `rev:${revisionStyleContextKey(revisionStyles)}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;

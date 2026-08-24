@@ -47,6 +47,31 @@ The adapter SHALL present comment threads and revisions in a sidebar, each ancho
 - **WHEN** card positions are computed
 - **THEN** they derive from semantic layout records, not from measuring painted DOM
 
+### Requirement: Author colours remain stable during an attached document session
+
+The review surface SHALL assign each author one colour slot for the lifetime of an attached
+document session. Tracked text, comment cards, revision cards, markers, and highlight hooks SHALL
+consume that same assignment. Removing an author's last visible item SHALL reserve their slot, so
+undo restores the item without recolouring that author or another reviewer. Attaching another
+document SHALL start a new assignment from that document's author order.
+
+#### Scenario: A commenter adds an earlier tracked change
+
+- **WHEN** a comment-only author has a card and then adds a tracked change before existing revisions
+- **THEN** the existing comment card keeps its colour slot
+- **AND** the new tracked text and revision card use that same slot
+
+#### Scenario: Removal and undo preserve the assignment
+
+- **WHEN** an author's last tracked change is removed and then restored by undo
+- **THEN** the restored change uses its previous slot
+- **AND** no other author's slot changes
+
+#### Scenario: Another document starts a new assignment
+
+- **WHEN** a different document attaches to the editor
+- **THEN** its author slots are seeded from that document rather than the previous session
+
 #### Scenario: Selecting a card selects its range
 
 - **WHEN** the user selects a comment card

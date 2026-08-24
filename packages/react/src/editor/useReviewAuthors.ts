@@ -19,6 +19,7 @@ const NOOP_UNSUBSCRIBE = () => {};
  *
  * Both halves of review: authors of tracked changes first, numbered by where their first
  * change appears, then authors who only commented. One person is one colour across the two.
+ * Once assigned, a slot stays with that author for the attached document session.
  *
  * A read of the rendered projection, not of the package: a resolved view hides the
  * revisions it has resolved away, so an author whose only change is hidden there is listed

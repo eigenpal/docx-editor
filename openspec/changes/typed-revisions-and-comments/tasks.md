@@ -151,6 +151,7 @@ Counts are measured per part; see the fixture-evidence tables in `proposal.md`. 
 - [x] 6.50 The replacement text is inserted AFTER the struck words. A tracked deletion keeps its characters, so inserting at the selection start put the replacement before them: mid-sentence replacements showed as two unrelated cards and a reviewer could accept one half
 - [x] 6.51 A paragraph-mark revision anchors at the paragraph's END, where the pilcrow is. Collapsed to offset 0, a tracked Enter's card never opened at the break that made it, activating it threw the caret to the paragraph start, and its zero-width range painted no band
 - [x] 6.52 `w:instrText` becomes `w:delInstrText` inside a deletion (§17.16.23) — the reject path already renamed it back, so the write path could never produce what that code exists to undo. Extending your own `w:ins` is bounded to the same editing moment, matching the deletion path. A stale refusal is cleared when the mode changes
+- [x] 6.53 Author colour slots remain stable for one attached document session. A comment-only author who later adds an earlier tracked change keeps the card colour already assigned to them, tracked text consumes the same map, deleted slots stay reserved for undo, and another attachment reseeds the assignment
 
 ## 9. Verification and honest scope
 
@@ -193,73 +194,73 @@ inferred. None is a merge artefact alone — the merge made several of them reac
 none blocks the slice, so they land on their own branch rather than growing this one.
 
 - [x] 12.1 **The offset model is forked — closed by delegation, not by patching.**
-  `paragraphOffsetIndex` (`store/tree-op-segments.ts`) records every node's `[start, end)`
-  from `segmentsOf`'s OWN walk, at no cost to `segmentsOf` itself, and the three private
-  walkers are gone: `tree-op-tracked.ts` `lengthOf`, `comment-anchors.ts`
-  `textLengthOfRunChild`, and `review-model.ts` `runLength`. Was: none descends into
-  `w:hyperlink`; none gives a note reference or an atomic field its length of 1; one counted a
-  field's `w:instrText` as visible characters
+      `paragraphOffsetIndex` (`store/tree-op-segments.ts`) records every node's `[start, end)`
+      from `segmentsOf`'s OWN walk, at no cost to `segmentsOf` itself, and the three private
+      walkers are gone: `tree-op-tracked.ts` `lengthOf`, `comment-anchors.ts`
+      `textLengthOfRunChild`, and `review-model.ts` `runLength`. Was: none descends into
+      `w:hyperlink`; none gives a note reference or an atomic field its length of 1; one counted a
+      field's `w:instrText` as visible characters
 - [x] 12.2 Comment anchors delegate. A comment after a hyperlink anchors past it, and markers
-  written INSIDE a `w:hyperlink` — what Word writes when you comment on link text — yield an
-  anchor instead of reporting the comment `orphaned`
+      written INSIDE a `w:hyperlink` — what Word writes when you comment on link text — yield an
+      anchor instead of reporting the comment `orphaned`
 - [x] 12.3 Threading: two comments over two ADJACENT hyperlinks anchor over their own links.
-  Coincidence is additionally refused on a ZERO-WIDTH range, which is evidence of nothing —
-  two remarks covering no characters sit at the same offset for any number of reasons
+      Coincidence is additionally refused on a ZERO-WIDTH range, which is evidence of nothing —
+      two remarks covering no characters sit at the same offset for any number of reasons
 - [x] 12.4 Suggesting mode delegates. In a paragraph carrying a footnote, endnote or field a
-  tracked insert lands where asked, an insert at the true paragraph end is accepted, and a
-  delete strikes exactly the selected units
+      tracked insert lands where asked, an insert at the true paragraph end is accepted, and a
+      delete strikes exactly the selected units
 - [x] 12.4a **Beyond the finding, and found by the losslessness sweep it made possible.** An
-  ATOM is one addressable unit spread over several nodes, and the tracked writer now respects
-  that grouping: striking a complex field strikes all of it (`w:instrText` becoming
-  `w:delInstrText`) rather than leaving a `w:del` around the `begin` with the `end` outside it,
-  which accepting then turned into an orphaned field; typing at a field's model end lands
-  after the field instead of between its chrome runs, where the words were invisible and
-  stayed invisible. A `w:fldSimple` is struck from INSIDE, because `CT_RunTrackChange` takes
-  `EG_ContentRunContent` and that has no `fldSimple` in it — which also widened the tree
-  invariant, since the same shape in a file Word wrote was demoting the field on READ. An
-  insertion whose offset falls INSIDE another author's deletion is placed after it rather than
-  refused `offset-out-of-range`; a `w:fldSimple` or `w:hyperlink` the resolution empties is
-  dropped, matching what the untracked delete does. Gated by
-  `store/__tests__/tracked-edit-losslessness.test.ts`: over every insert position, delete
-  range and replacement range of nine paragraph shapes, reject-all returns the D9 semantic
-  digest through a save and reopen, and accept-all equals the untracked edit
+      ATOM is one addressable unit spread over several nodes, and the tracked writer now respects
+      that grouping: striking a complex field strikes all of it (`w:instrText` becoming
+      `w:delInstrText`) rather than leaving a `w:del` around the `begin` with the `end` outside it,
+      which accepting then turned into an orphaned field; typing at a field's model end lands
+      after the field instead of between its chrome runs, where the words were invisible and
+      stayed invisible. A `w:fldSimple` is struck from INSIDE, because `CT_RunTrackChange` takes
+      `EG_ContentRunContent` and that has no `fldSimple` in it — which also widened the tree
+      invariant, since the same shape in a file Word wrote was demoting the field on READ. An
+      insertion whose offset falls INSIDE another author's deletion is placed after it rather than
+      refused `offset-out-of-range`; a `w:fldSimple` or `w:hyperlink` the resolution empties is
+      dropped, matching what the untracked delete does. Gated by
+      `store/__tests__/tracked-edit-losslessness.test.ts`: over every insert position, delete
+      range and replacement range of nine paragraph shapes, reject-all returns the D9 semantic
+      digest through a save and reopen, and accept-all equals the untracked edit
 - [x] 12.5 **Section addressing desyncs from the filtered block list.** `enumerateDocumentSections`
-  takes the display mode and passes it to `storyBlocks`, so the indices it hands out belong to
-  the list `semantic-layout.ts` slices. Was: body text landed under the wrong section's page
-  geometry. The comment above `revisionRemovesParagraph` predicted exactly this
+      takes the display mode and passes it to `storyBlocks`, so the indices it hands out belong to
+      the list `semantic-layout.ts` slices. Was: body text landed under the wrong section's page
+      geometry. The comment above `revisionRemovesParagraph` predicted exactly this
 - [x] 12.6 `MAX_INLINE_DEPTH` is now `MAX_REVISION_DEPTH`, taken from the layout walk rather
-  than restated. At a local 8 against layout's 32, a paragraph nested past 8 was called empty
-  while layout still emitted its spans, so file-controlled nesting dropped visible text
+      than restated. At a local 8 against layout's 32, a paragraph nested past 8 was called empty
+      while layout still emitted its spans, so file-controlled nesting dropped visible text
 - [x] 12.7 A comment reply grafts the coordinator's package into the story store before the
-  write (`graftPackage`, the narrow documented lane, referenced again), so publishing the
-  result no longer discards a `numbering.xml` graft or a minted hyperlink relationship — the
-  dangling `w:numPr` / `r:id` on save
+      write (`graftPackage`, the narrow documented lane, referenced again), so publishing the
+      result no longer discards a `numbering.xml` graft or a minted hyperlink relationship — the
+      dangling `w:numPr` / `r:id` on save
 - [x] 12.8 A comments relationship is honoured only when the target's declared CONTENT TYPE
-  agrees, or when the package does not hold that part yet — so a crafted package cannot
-  redirect a comment write into `settings.xml`. The READ side resolves the same way the write
-  side does instead of hardcoding `/word/comments.xml`
+      agrees, or when the package does not hold that part yet — so a crafted package cannot
+      redirect a comment write into `settings.xml`. The READ side resolves the same way the write
+      side does instead of hardcoding `/word/comments.xml`
 - [ ] 12.9 A reply to a reply is unreachable: the rail filters every `parentId` from the top
-  level and renders exactly one level of replies
+      level and renders exactly one level of replies
 - [ ] 12.10 A multi-site revision (a tracked row insertion) yields two cards with identical
-  ids — the grouping key includes `localName`, the card id does not
+      ids — the grouping key includes `localName`, the card id does not
 - [x] 12.11 `w:rPrChange` anchors over the RUN it decorates: `locateSites` places a run's own
-  `w:rPr` subtree at the run's range. It stopped at the run, so the card sorted to the end of
-  the rail, had no geometry, painted no band, and the caret in tracked-formatted text
-  activated nothing while accept/reject stayed offered
+      `w:rPr` subtree at the run's range. It stopped at the run, so the card sorted to the end of
+      the rail, had no geometry, painted no band, and the caret in tracked-formatted text
+      activated nothing while accept/reject stayed offered
 - [ ] 12.12 `pairReplacements` is deletions x insertions and the thread walk is per-comment
-  ancestor chains: ~128ms at 2000 revisions, ~255ms at 4000 comments, both on file-controlled
-  input and both re-run per paint
+      ancestor chains: ~128ms at 2000 revisions, ~255ms at 4000 comments, both on file-controlled
+      input and both re-run per paint
 - [ ] 12.13 Accept/reject render live in Viewing and fail silently — the rail ignores editing
-  mode, `useReview.accept/reject` discard the `ExecResult`, and the facade replaces the
-  engine's refusal with an invented string
+      mode, `useReview.accept/reject` discard the `ExecResult`, and the facade replaces the
+      engine's refusal with an invented string
 - [ ] 12.14 `nextCommentId` returns `highest + 1` unguarded where `nextRevisionId` clamps to
-  signed 32-bit and wraps
+      signed 32-bit and wraps
 - [ ] 12.15 Headers, footers, notes and comment anchors call `storyBlocks` unfiltered, so they
-  resolve revisions in a different mode than the body on the same page
+      resolve revisions in a different mode than the body on the same page
 - [ ] 12.16 `revisionRemovesParagraph` defaults to `'proposed'` while every call site defaults
-  to `'all-markup'`; its unit tests call it bare and assert behaviour no production path reaches
+      to `'all-markup'`; its unit tests call it bare and assert behaviour no production path reaches
 - [ ] 12.17 The projection drops a mark-deleted paragraph only when it renders empty; it never
-  performs the join when content survives, so `proposed` still differs from accept-all on a
-  case the fixture does not contain
+      performs the join when content survives, so `proposed` still differs from accept-all on a
+      case the fixture does not contain
 - [ ] 12.18 `RevisionDisplayMode` is plumbed through all of layout with no editor facade — no
-  read, no command, no snapshot field — so the mode is permanently `all-markup` to any host
+      read, no command, no snapshot field — so the mode is permanently `all-markup` to any host

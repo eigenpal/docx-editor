@@ -159,6 +159,69 @@ describe('the comment band carries its author', () => {
     expect(cardSlot(view, 'Grace Hopper')).toBe('1');
   });
 
+  test('a comment card keeps its colour when its author adds an earlier tracked change', async () => {
+    const { view, editor } = await mount();
+    const comment = view.container.querySelector<HTMLElement>(
+      '.docx-review__card[data-kind="comment"][data-review-author="Grace Hopper"]'
+    )!;
+    expect(comment.dataset.reviewAuthorSlot).toBe('1');
+    expect(comment.style.getPropertyValue('--doc-review-author-current')).toBe(
+      'var(--doc-review-author-1)'
+    );
+
+    await act(async () => {
+      editor.setEditingMode('suggesting');
+      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 0 },
+      });
+      editor.surface!.type('X');
+    });
+
+    const cards = [
+      ...view.container.querySelectorAll<HTMLElement>(
+        '.docx-review__card[data-review-author="Grace Hopper"]'
+      ),
+    ];
+    expect(cards).toHaveLength(2);
+    expect(cards.every((card) => card.dataset.reviewAuthorSlot === '1')).toBe(true);
+    expect(
+      cards.every(
+        (card) =>
+          card.style.getPropertyValue('--doc-review-author-current') ===
+          'var(--doc-review-author-1)'
+      )
+    ).toBe(true);
+    expect(
+      view.container.querySelector<HTMLElement>('.docx-revision[data-review-author="Grace Hopper"]')
+        ?.dataset.reviewAuthorSlot
+    ).toBe('1');
+    expect(
+      view.container.querySelector<HTMLElement>('.docx-revision[data-review-author="Grace Hopper"]')
+        ?.style.color
+    ).toBe('var(--doc-review-author-1)');
+    expect(comment.isConnected).toBe(true);
+    expect(comment.dataset.kind).toBe('comment');
+
+    const revision = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.author === 'Grace Hopper')!;
+    await act(async () => {
+      expect(editor.rejectReviewItem(revision.key).ok).toBe(true);
+    });
+    expect(comment.dataset.reviewAuthorSlot).toBe('1');
+
+    await act(async () => {
+      expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    });
+    expect(comment.dataset.reviewAuthorSlot).toBe('1');
+    expect(
+      view.container.querySelector<HTMLElement>('.docx-revision[data-review-author="Grace Hopper"]')
+        ?.dataset.reviewAuthorSlot
+    ).toBe('1');
+  });
+
   test('the band stays Word’s yellow: the author is a handle, not a default', async () => {
     const { view } = await mount();
     const band = view.container.querySelector<HTMLElement>(

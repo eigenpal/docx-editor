@@ -70,20 +70,19 @@ import {
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
-import {
-  paintSelectionOverlay,
-  paintSemanticLayout,
-  type OverlayRect,
-} from '@docx-editor.dev/core/output';
+import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
 // internal for the IME lane, not something the output barrel should offer consumers.
-import { discardRetainedPaint } from '../output/semantic-paint.ts';
+import {
+  discardRetainedPaint,
+  paintSemanticLayoutWithAuthorSlots,
+} from '../output/semantic-paint.ts';
 // By module path: the roster walk is an engine internal, not part of the output barrel's
 // public surface. See the note there.
 import {
   authorSlotsOf,
+  createStableReviewAuthorSlots,
   reviewAuthorsOf,
-  reviewAuthorSlotsOf,
   type ReviewAuthorInfo,
 } from '../output/revision-presentation.ts';
 import {
@@ -713,6 +712,9 @@ export function mountPaginatedSurface(
   // because a colour change must never cost the reader their undo history to a remount.
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
+  // One allocator per ATTACHED surface. Reattaching creates another surface and reseeds from
+  // that document, while edits, deletions and undo inside this surface keep every issued slot.
+  const stableAuthorSlots = createStableReviewAuthorSlots();
   // One roster per layout instance, so `revisionAuthors()` is cheap to poll and callers can
   // key their own caches on the returned map's identity. Keyed on the review queue too: a
   // COMMENT-ONLY author is in the roster and in no layout record, so a queue that moved
@@ -2222,27 +2224,32 @@ export function mountPaginatedSurface(
     const activeHf = hfScope?.getActive() ?? null;
     const contentControlChrome = contentControlChromeOptions();
     const emptyTocIds = emptyTocPlaceholderParagraphIds(session.part());
-    paintSemanticLayout(pagesLayer, currentLayout, {
-      scale,
-      readOnlyParagraphIds: tocParagraphIds(),
-      ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
-      ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
-      ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
-      materialize: materializedSet,
-      ariaHidden: false,
-      drawingStrings,
-      ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
-      ...(revisionStyles !== undefined ? { revisionStyles } : {}),
-      shadeFormFields: shadeFormFields(),
-      ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
-      ...(activeHf
-        ? {
-            activeHeaderFooterRId: activeHf.scope.rId,
-            activeHeaderFooterPageIndex: activeHf.pageIndex,
-          }
-        : {}),
-      ...(contentControlChrome ? { contentControlChrome } : {}),
-    });
+    paintSemanticLayoutWithAuthorSlots(
+      pagesLayer,
+      currentLayout,
+      {
+        scale,
+        readOnlyParagraphIds: tocParagraphIds(),
+        ...(emptyTocIds.size > 0 ? { emptyTocPlaceholderIds: emptyTocIds } : {}),
+        ...(options.fontAlias ? { fontAlias: options.fontAlias } : {}),
+        ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
+        materialize: materializedSet,
+        ariaHidden: false,
+        drawingStrings,
+        ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+        ...(revisionStyles !== undefined ? { revisionStyles } : {}),
+        shadeFormFields: shadeFormFields(),
+        ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
+        ...(activeHf
+          ? {
+              activeHeaderFooterRId: activeHf.scope.rId,
+              activeHeaderFooterPageIndex: activeHf.pageIndex,
+            }
+          : {}),
+        ...(contentControlChrome ? { contentControlChrome } : {}),
+      },
+      reviewAuthorState().value
+    );
     // Paint just rebuilt every span, so the caret's field lost its mark with the old DOM.
     syncActiveFieldShading(pagesLayer, collapsedCaretPosition(), { domReplaced: true });
     setHeaderFooterEditingChrome(container, pagesLayer, activeHf != null);
@@ -3281,7 +3288,7 @@ export function mountPaginatedSurface(
     if (prior !== null && prior.layout === currentLayout && prior.items === items) {
       if (prior.styles === revisionStyles) return prior;
     }
-    const next = reviewAuthorSlotsOf(
+    const next = stableAuthorSlots.resolve(
       authorSlotsOf(currentLayout),
       (function* authors() {
         for (const item of items) yield reviewItemAuthor(item);
