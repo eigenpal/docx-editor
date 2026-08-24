@@ -7,6 +7,7 @@
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { findNode } from '../package/ooxml-edit.ts';
+import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equation.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
@@ -458,6 +459,25 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (restriction) return restriction;
     }
     if (op.op === 'setHyperlinkTarget') return validateHyperlinkTarget(op);
+    return null;
+  }
+
+  if (op.op === 'setMathEquation' || op.op === 'removeMathEquation') {
+    const equation = findNode(part, op.equationId);
+    if (!equation) return 'unknown-paragraph';
+    if (
+      equation.kind === 'textValue' ||
+      equation.kind !== 'generic' ||
+      equation.namespaceUri !== OFFICE_MATH_NAMESPACE_URI ||
+      equation.localName !== 'oMath'
+    ) {
+      return 'not-a-paragraph';
+    }
+    const restriction = nodeTouchesContentRestriction(part, op.equationId);
+    if (restriction) return restriction;
+    if (op.op === 'setMathEquation' && !parseLinearMath(op.linear).ok) {
+      return 'invalid-property-value';
+    }
     return null;
   }
 

@@ -15,6 +15,7 @@ import {
   caretAt,
   defaultTabIntervalFromSettings,
   enumerateDocumentSections,
+  enumerateDocumentSectionsBounded,
   geometryOfSection,
   layoutHeaderFooterStory,
   pagesToMaterialize,
@@ -38,7 +39,7 @@ import {
   resolveFootnoteProperties,
   settingsPartOf,
 } from '../store/package/note-properties.ts';
-import { resolveNotesPart } from '../store/package/note-references.ts';
+import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 
 export interface FurnitureSource {
   /** Single-section / final-section furniture fallback. */
@@ -512,15 +513,20 @@ export function createNotesLayoutInput(env: {
   const endnotesPart = resolveNotesPart(pkg, 'endnote');
   if (!footnotesPart && !endnotesPart) return undefined;
 
+  const part = env.session.part();
+  // Word commonly writes separator-only note parts. Skip note pagination unless the body
+  // contains a real citation. The collector reuses unchanged container answers by identity.
+  if (collectNoteReferences(part).length === 0) return undefined;
+
   const settings = settingsPartOf(pkg);
   const docFnAuthored = authoredDocumentFootnoteProperties(settings);
   const docEnAuthored = authoredDocumentEndnoteProperties(settings);
   const documentFootnoteProps = resolveFootnoteProperties(undefined, docFnAuthored);
   const documentEndnoteProps = resolveEndnoteProperties(undefined, docEnAuthored);
 
-  const part = env.session.part();
-  const sections = enumerateDocumentSections(part);
-  const sectPrBySection = sectionSectPrNodes(part, sections);
+  const sectionEnumeration = enumerateDocumentSectionsBounded(part);
+  const sections = sectionEnumeration.sections;
+  const sectPrBySection = sectionSectPrNodes(part, sections, sectionEnumeration.truncated);
   const footnotePropsBySection = sections.map((_, index) =>
     resolveFootnoteProperties(
       authoredFootnotePropertiesFromSectPr(sectPrBySection[index]),
@@ -585,9 +591,17 @@ export function createNotesLayoutInput(env: {
 /** SectPr nodes index-aligned with {@link enumerateDocumentSections}. */
 function sectionSectPrNodes(
   part: OoxmlPart,
-  sections: ReturnType<typeof enumerateDocumentSections>
+  sections: ReturnType<typeof enumerateDocumentSections>,
+  truncated: boolean
 ): readonly (OoxmlElement | undefined)[] {
   const blocks = storyBlocks(part);
+  if (!truncated) {
+    return sections.map((section) => {
+      if (section.blockStart === section.blockEndExclusive) return undefined;
+      const block = blocks[section.blockEndExclusive - 1];
+      return block?.kind === 'paragraph' ? paragraphSectionNode(block) : undefined;
+    });
+  }
   const nodes: (OoxmlElement | undefined)[] = [];
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index]!;

@@ -6,8 +6,8 @@
 // background colour.
 //
 // So layout marks which spans ARE fields (`data-field-atom`, painted once) and this toggles one
-// class as the caret moves — the same division the open review item already uses. Cost is one
-// class removal and one query per caret move, against a document that never relayouts.
+// class as the caret moves — the same division the open review item already uses. Cost is at
+// most one query per caret move, against a document that never relayouts.
 
 const ACTIVE_CLASS = 'docx-field-atom--active';
 /** What paint adds only where shading is enabled for that field. */
@@ -20,6 +20,21 @@ export interface FieldShadingCaret {
 }
 
 /**
+ * What this module last did to a layer, so the next sync starts from bookkeeping, not queries.
+ *
+ * `marked` is every element carrying {@link ACTIVE_CLASS} — this function is the class's only
+ * writer, so the list is complete and the removal sweep needs no DOM query. `caretKey` is the
+ * caret the marks were resolved for: a sync that lands on the same caret against the same DOM
+ * has nothing to do, which is the arrow-key-then-mirror double call every caret move used to
+ * pay twice. Keyed weakly so a detached surface holds nothing.
+ */
+interface LayerShadingState {
+  caretKey: string | null;
+  marked: HTMLElement[];
+}
+const shadingStateByLayer = new WeakMap<HTMLElement, LayerShadingState>();
+
+/**
  * Move the "caret is in this field" mark to whichever field atom holds `caret`.
  *
  * `caret` is null when the selection is not collapsed, and every mark then comes off: a range
@@ -27,14 +42,29 @@ export interface FieldShadingCaret {
  * selection. Focus and IME composition are deliberately NOT part of that test — Word keeps a
  * field shaded while the caret is in it, and losing the shading on every blur would flicker it
  * away each time the user reached for the toolbar.
+ *
+ * `domReplaced` says the spans the marks live on were just rebuilt — a paint — so the caret
+ * being where it already was proves nothing and the marks must be re-resolved. Every other
+ * caller leaves it off and an unmoved caret costs no query at all.
  */
 export function syncActiveFieldShading(
   pagesLayer: HTMLElement,
-  caret: FieldShadingCaret | null
+  caret: FieldShadingCaret | null,
+  options?: { readonly domReplaced?: boolean }
 ): void {
-  for (const marked of pagesLayer.querySelectorAll(`.${ACTIVE_CLASS}`)) {
-    marked.classList.remove(ACTIVE_CLASS);
+  let state = shadingStateByLayer.get(pagesLayer);
+  if (!state) {
+    state = { caretKey: null, marked: [] };
+    shadingStateByLayer.set(pagesLayer, state);
   }
+  // NUL-joined: a paragraph id cannot carry one, so the key cannot collide across ids.
+  const caretKey = caret ? `${caret.paragraphId}\u0000${caret.offset}` : null;
+  if (!options?.domReplaced && caretKey === state.caretKey) return;
+  // Removing a class from a node paint already replaced is harmless; a RETAINED page keeps
+  // its nodes, and those are exactly the marks that must come off here.
+  for (const marked of state.marked) marked.classList.remove(ACTIVE_CLASS);
+  state.marked = [];
+  state.caretKey = caretKey;
   if (!caret) return;
 
   // `.docx-field-atom`, NOT `[data-field-atom]`. The attribute marks every field result so a
@@ -65,5 +95,6 @@ export function syncActiveFieldShading(
     // other text, and all of them publish the same model range — marking one shaded half a
     // cross-reference while `always` (resolved in paint, per span) shaded all of it.
     candidate.classList.add(ACTIVE_CLASS);
+    state.marked.push(candidate);
   }
 }

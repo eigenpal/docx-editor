@@ -28,6 +28,9 @@ const FOOTER_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
 const SETTINGS_REL_TYPE =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
+const NO_RELATIONSHIPS: readonly RelationshipRecord[] = Object.freeze([]);
+// Keep this equal to layout's MAX_DOCUMENT_SECTIONS without adding a store → layout edge.
+const MAX_SECTION_PROPERTY_NODES = 4_096;
 
 /** `w:headerReference w:type` vocabulary (ECMA-376 §17.10.5): default, first page, even pages. */
 export type HeaderFooterVariant = 'default' | 'first' | 'even';
@@ -108,22 +111,49 @@ function findBody(root: OoxmlNode): OoxmlElement | undefined {
   return undefined;
 }
 
-/**
- * Body story blocks in document order, flattening block SDTs — same shape as layout's
- * `storyBlocks`, duplicated here so the store package does not import layout.
- */
-function bodyBlocks(body: OoxmlElement): OoxmlElement[] {
-  const blocks: OoxmlElement[] = [];
-  walkStoryBlocks(body.children, 0, (block) => blocks.push(block));
-  return blocks;
-}
-
 function paragraphSectPr(paragraph: OoxmlElement): OoxmlElement | undefined {
   const pPr =
     paragraph.children.find((child) => child.kind === 'paragraphProperties') ??
     childNamed(paragraph, 'pPr');
   if (!pPr || pPr.kind === 'textValue') return undefined;
   return childNamed(pPr, 'sectPr');
+}
+
+interface SectionPropertySubtreeSummary {
+  readonly blockCount: number;
+  readonly sectionProperties: readonly OoxmlElement[];
+  readonly lastBlockEndsSection: boolean;
+}
+
+const sectionPropertySubtreeSummaries = new WeakMap<OoxmlNode, SectionPropertySubtreeSummary>();
+
+/**
+ * Section markers under one immutable direct body child.
+ *
+ * A text edit rebuilds one child and the body ancestry. Unchanged siblings keep these summaries,
+ * so header/footer resolution does not flatten every table and content-control subtree again.
+ */
+function sectionPropertySummaryOf(node: OoxmlNode): SectionPropertySubtreeSummary {
+  const cached = sectionPropertySubtreeSummaries.get(node);
+  if (cached) return cached;
+  let blockCount = 0;
+  let lastBlockEndsSection = false;
+  const sectionProperties: OoxmlElement[] = [];
+  walkStoryBlocks([node], 0, (block) => {
+    blockCount += 1;
+    const sectPr = block.kind === 'paragraph' ? paragraphSectPr(block) : undefined;
+    lastBlockEndsSection = sectPr !== undefined;
+    if (sectPr && sectionProperties.length < MAX_SECTION_PROPERTY_NODES) {
+      sectionProperties.push(sectPr);
+    }
+  });
+  const result = Object.freeze({
+    blockCount,
+    sectionProperties: Object.freeze(sectionProperties),
+    lastBlockEndsSection,
+  });
+  sectionPropertySubtreeSummaries.set(node, result);
+  return result;
 }
 
 /**
@@ -135,18 +165,21 @@ function paragraphSectPr(paragraph: OoxmlElement): OoxmlElement | undefined {
 export function collectSectionPropertyNodes(root: OoxmlNode): Array<OoxmlElement | null> {
   const body = findBody(root);
   if (!body) return [];
-  const blocks = bodyBlocks(body);
   const found: Array<OoxmlElement | null> = [];
-  let blockStart = 0;
-  for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks[index]!;
-    if (block.kind !== 'paragraph') continue;
-    const sectPr = paragraphSectPr(block);
-    if (!sectPr) continue;
-    found.push(sectPr);
-    blockStart = index + 1;
+  let blockCount = 0;
+  let lastBlockEndsSection = false;
+  for (const child of body.children) {
+    const summary = sectionPropertySummaryOf(child);
+    if (summary.blockCount === 0) continue;
+    blockCount += summary.blockCount;
+    for (const sectPr of summary.sectionProperties) {
+      if (found.length >= MAX_SECTION_PROPERTY_NODES) return found;
+      found.push(sectPr);
+    }
+    lastBlockEndsSection = summary.lastBlockEndsSection;
   }
-  if (blockStart < blocks.length || found.length === 0) {
+  if (found.length >= MAX_SECTION_PROPERTY_NODES) return found;
+  if (blockCount === 0 || !lastBlockEndsSection) {
     found.push(childNamed(body, 'sectPr') ?? null);
   } else {
     const bodySectPr = childNamed(body, 'sectPr');
@@ -227,20 +260,70 @@ function partsFromSlots(
   return result;
 }
 
-/**
- * Resolve header/footer parts for every section with declared-vs-inherited metadata.
- *
- * Index aligns with `enumerateDocumentSections` in the layout package. Existing merged
- * maps stay available via {@link resolveHeaderFooterPartsBySection}.
- */
-export function resolveHeaderFooterResolutionBySection(
-  pkg: OoxmlPackage
-): readonly HeaderFooterSectionResolution[] {
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) return [];
+/** Convert resolved metadata without repeating section discovery and relationship resolution. */
+export function headerFooterPartsFromResolution(
+  resolution: readonly HeaderFooterSectionResolution[]
+): readonly HeaderFooterParts[] {
+  return resolution.map((section) => ({
+    headers: partsFromSlots(section.headers),
+    footers: partsFromSlots(section.footers),
+    evenAndOddHeaders: section.evenAndOddHeaders,
+    titlePage: section.titlePage,
+  }));
+}
 
-  const relationships = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
+interface HeaderFooterResolutionMemo {
+  readonly sectionProperties: readonly (OoxmlElement | null)[];
+  readonly evenAndOddHeaders: boolean;
+  readonly slotParts: readonly OoxmlPart[];
+  readonly resolution: readonly HeaderFooterSectionResolution[];
+  readonly parts: readonly HeaderFooterParts[];
+}
+
+const headerFooterResolutionByRelationships = new WeakMap<object, HeaderFooterResolutionMemo>();
+
+function sameSectionProperties(
+  left: readonly (OoxmlElement | null)[],
+  right: readonly (OoxmlElement | null)[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((sectionProperties, index) => sectionProperties === right[index])
+  );
+}
+
+function slotPartsOf(resolution: readonly HeaderFooterSectionResolution[]): readonly OoxmlPart[] {
+  const parts = new Set<OoxmlPart>();
+  for (const section of resolution) {
+    for (const slots of [section.headers, section.footers]) {
+      for (const slot of slots.values()) parts.add(slot.part);
+    }
+  }
+  return [...parts];
+}
+
+function resolveHeaderFooterBySection(pkg: OoxmlPackage): HeaderFooterResolutionMemo | null {
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (!main) return null;
+
+  const packageRelationships = pkg.relationships.get(pkg.mainDocumentPart);
+  const relationships = packageRelationships ?? NO_RELATIONSHIPS;
   const evenAndOddHeaders = readEvenAndOddHeaders(pkg, relationships);
+  const sectionProperties = collectSectionPropertyNodes(main.root);
+  const memoKey =
+    packageRelationships ??
+    sectionProperties.find((node): node is OoxmlElement => node !== null) ??
+    NO_RELATIONSHIPS;
+  const cached = headerFooterResolutionByRelationships.get(memoKey);
+  if (
+    cached &&
+    cached.evenAndOddHeaders === evenAndOddHeaders &&
+    sameSectionProperties(cached.sectionProperties, sectionProperties) &&
+    cached.slotParts.every((part) => pkg.parts.get(part.name) === part)
+  ) {
+    return cached;
+  }
+
   const partForReference = (
     relId: string | undefined,
     typeUri: string
@@ -251,25 +334,13 @@ export function resolveHeaderFooterResolutionBySection(
     const resolved = resolveRelationship(record);
     if (resolved.mode !== 'Internal' || !resolved.target.ok) return undefined;
     const part = pkg.parts.get(resolved.target.partName);
-    if (!part) return undefined;
-    return { part, rId: relId };
+    return part ? { part, rId: relId } : undefined;
   };
-
-  const sectPrNodes = collectSectionPropertyNodes(main.root);
-  if (sectPrNodes.length === 0) {
-    return [
-      Object.freeze({
-        headers: new Map(),
-        footers: new Map(),
-        evenAndOddHeaders,
-        titlePage: false,
-      }),
-    ];
-  }
 
   const result: HeaderFooterSectionResolution[] = [];
   let previous: HeaderFooterSectionResolution | undefined;
-  for (const sectPr of sectPrNodes) {
+  const nodes = sectionProperties.length > 0 ? sectionProperties : [null];
+  for (const sectPr of nodes) {
     const declared = sectPr
       ? referencesFromSectPr(sectPr, partForReference)
       : { headers: new Map(), footers: new Map(), titlePage: false };
@@ -282,7 +353,28 @@ export function resolveHeaderFooterResolutionBySection(
     result.push(resolved);
     previous = resolved;
   }
-  return result;
+  const resolution = Object.freeze(result);
+  const memo = Object.freeze({
+    sectionProperties,
+    evenAndOddHeaders,
+    slotParts: Object.freeze(slotPartsOf(resolution)),
+    resolution,
+    parts: Object.freeze(headerFooterPartsFromResolution(resolution)),
+  });
+  headerFooterResolutionByRelationships.set(memoKey, memo);
+  return memo;
+}
+
+/**
+ * Resolve header/footer parts for every section with declared-vs-inherited metadata.
+ *
+ * Index aligns with `enumerateDocumentSections` in the layout package. Existing merged
+ * maps stay available via {@link resolveHeaderFooterPartsBySection}.
+ */
+export function resolveHeaderFooterResolutionBySection(
+  pkg: OoxmlPackage
+): readonly HeaderFooterSectionResolution[] {
+  return resolveHeaderFooterBySection(pkg)?.resolution ?? [];
 }
 
 /**
@@ -291,12 +383,7 @@ export function resolveHeaderFooterResolutionBySection(
  * Index aligns with `enumerateDocumentSections` in the layout package.
  */
 export function resolveHeaderFooterPartsBySection(pkg: OoxmlPackage): readonly HeaderFooterParts[] {
-  return resolveHeaderFooterResolutionBySection(pkg).map((section) => ({
-    headers: partsFromSlots(section.headers),
-    footers: partsFromSlots(section.footers),
-    evenAndOddHeaders: section.evenAndOddHeaders,
-    titlePage: section.titlePage,
-  }));
+  return resolveHeaderFooterBySection(pkg)?.parts ?? [];
 }
 
 /**

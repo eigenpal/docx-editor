@@ -2336,6 +2336,17 @@ export function layoutSemanticDocumentWithNotes<
   runBody: (opts: Opts) => SemanticLayout
 ): SemanticLayout {
   const packageRefs = collectBodyNoteReferences(part);
+  if (packageRefs.length === 0) {
+    if (optionsWithLists.session) {
+      optionsWithLists.session.notes = null;
+      optionsWithLists.session.notePageBottomReserves = null;
+    }
+    return runBody({
+      ...optionsWithLists,
+      noteMarks: undefined,
+      pageBottomReserves: undefined,
+    });
+  }
   const paragraphSectionIndex = paragraphSectionIndexOf(
     part,
     sections,

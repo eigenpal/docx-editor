@@ -348,6 +348,11 @@ const TREE_OP_REACH: {
   // controls the walk passes through on its way down to the link.
   setHyperlinkTarget: (op) => whole(op.linkId),
   removeHyperlink: (op) => ({ kind: 'nodes', targets: [{ nodeId: op.linkId, structural: true }] }),
+  setMathEquation: (op) => whole(op.equationId),
+  removeMathEquation: (op) => ({
+    kind: 'nodes',
+    targets: [{ nodeId: op.equationId, structural: true }],
+  }),
   acceptRevision: (op) => ({
     kind: 'revisions',
     action: 'accept',

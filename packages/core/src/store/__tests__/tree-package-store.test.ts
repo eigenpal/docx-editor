@@ -379,6 +379,22 @@ describe('TreeDocxSession — package-aware HF mutation', () => {
     expect(reopened.session.storyText({ kind: 'headerFooter', rId: 'rId7' })).toBe('Z-SHARED');
   });
 
+  test('a body text edit keeps header and footer resolution by identity', () => {
+    const opened = openTreeSession(sharedHeaderDoc());
+    if (!opened.ok) throw new Error(opened.reason);
+    const session = opened.session;
+    const beforeParts = session.headerFooterPartsBySection();
+    const beforeResolution = session.headerFooterResolutionBySection();
+    const bodyId = session.paragraphIds()[0]!;
+
+    const result = session.applyTreeOps([
+      { op: 'insertText', paragraphId: bodyId, offset: 0, text: 'Z-' },
+    ]);
+    expect(result.committed).toBe(true);
+    expect(session.headerFooterPartsBySection()).toBe(beforeParts);
+    expect(session.headerFooterResolutionBySection()).toBe(beforeResolution);
+  });
+
   test('invalid HF rId is rejected without mutating the body', () => {
     const opened = openTreeSession(bodyAndHeaderDoc());
     if (!opened.ok) throw new Error(opened.reason);

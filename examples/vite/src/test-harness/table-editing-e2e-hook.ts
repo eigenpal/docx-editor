@@ -22,6 +22,7 @@ import {
 import {
   canonicalOoxmlFingerprint,
   diffSemanticDigests,
+  paragraphTextOf,
   readOoxmlPackage,
   semanticDigest,
   type OoxmlPart,
@@ -82,6 +83,7 @@ export interface DocxEditorE2EHook {
     readonly head: { readonly paragraphId: string; readonly offset: number };
   } | null;
   benchmarkParagraphText(paragraphId: string): string | null;
+  benchmarkParagraphModelText(paragraphId: string): string | null;
   prepareClipboardBenchmark(
     startFraction: number,
     endFraction: number
@@ -280,7 +282,6 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
       return detailedTableSnapshot(tableByMarker(part, marker));
     },
     outerTableIsolationEqual(bytes) {
-      const before = readTableEditingReadbackFromPart(readTableEditingPackage(bytes));
       const afterPart = documentPart(getEditor());
       const beforePart = readTableEditingPackage(bytes);
       if (!afterPart) return false;
@@ -343,6 +344,10 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
     benchmarkParagraphText(paragraphId) {
       const currentSurface = surface(getEditor());
       return currentSurface ? paragraphTextFromLayout(currentSurface.layout(), paragraphId) : null;
+    },
+    benchmarkParagraphModelText(paragraphId) {
+      const part = documentPart(getEditor());
+      return part ? paragraphTextOf(part, paragraphId) : null;
     },
     prepareClipboardBenchmark(startFraction, endFraction) {
       const currentSurface = surface(getEditor());

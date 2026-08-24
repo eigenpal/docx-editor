@@ -198,6 +198,18 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * revision, so a bare map would grow with the history rather than with the document.
  */
 const paragraphsByPart = createRecentRootCache<OoxmlNode[]>(16);
+const paragraphsByStoryChild = new WeakMap<OoxmlNode, readonly OoxmlNode[]>();
+
+function appendStoryChildParagraphs(child: OoxmlNode, into: OoxmlNode[]): void {
+  let paragraphs = paragraphsByStoryChild.get(child);
+  if (!paragraphs) {
+    const collected: OoxmlNode[] = [];
+    collectStoryParagraphs([child], collected, 0);
+    paragraphs = Object.freeze(collected);
+    paragraphsByStoryChild.set(child, paragraphs);
+  }
+  for (const paragraph of paragraphs) into.push(paragraph);
+}
 
 export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
   const cached = paragraphsByPart.get(part);
@@ -209,7 +221,7 @@ export function allParagraphs(part: OoxmlPart): OoxmlNode[] {
   const paragraphs: OoxmlNode[] = [];
   for (const story of storyRootsOf(part)) {
     if (story.root.kind === 'textValue') continue;
-    collectStoryParagraphs(story.root.children, paragraphs, 0);
+    for (const child of story.root.children) appendStoryChildParagraphs(child, paragraphs);
   }
   paragraphsByPart.set(part, paragraphs);
   return paragraphs;

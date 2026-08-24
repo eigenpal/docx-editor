@@ -1,0 +1,14 @@
+{
+  "sourceCategory": "user-reported-reproduction-fixture",
+  "purpose": "browser typing-latency audit for large-document hot paths",
+  "notes": "Pinned from the reported large-document reproduction after an automated security inventory. This file is not generated. External hyperlinks and field instructions stay inert at read time.",
+  "fixtures": {
+    "typing-perf-521pp.docx": {
+      "sha256": "afe6043ba2c66d162ae9de9bbd03c360e7bb7ef139db5365a1d56d2408b4e0e6",
+      "byteSize": 425906,
+      "expectedPageCount": 521,
+      "targetParagraphContentMarker": "Total Element Categories: 50+",
+      "targetParagraphNodeId": "/word/document.xml#0.0.8"
+    }
+  }
+}

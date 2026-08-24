@@ -20,10 +20,12 @@ import type { DocAnchor, DocLocation, DocRange } from '../contracts/types.ts';
 import {
   WML_NAMESPACE_URI,
   contentControlContentChildren,
+  contentControlsIn,
   findNode,
   isContentControl,
   parentNodeOf,
   validateTreeOp,
+  type ContentControlEntry,
   type OoxmlContentControlNode,
   type OoxmlElement,
   type OoxmlGenericElementNode,
@@ -31,8 +33,14 @@ import {
   type OoxmlPart,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import type { TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
+import {
+  cachedContentControlSummaries,
+  noteContentControlEnumerationControlVisits,
+  noteContentControlEnumerationTopLevelVisit,
+} from './content-control-enumeration-cache.ts';
 import {
   resolveContentControlInsertion,
   type InsertContentControlCommand,
@@ -191,6 +199,76 @@ function summaryOf(control: OoxmlElement, part?: OoxmlPart): ContentControlSumma
   };
 }
 
+const summaryByControlNode = new WeakMap<
+  OoxmlElement,
+  {
+    readonly properties: OoxmlElement | undefined;
+    readonly lockAncestors: string;
+    readonly summary: ContentControlSummary;
+  }
+>();
+
+function contentLockAncestorKey(part: OoxmlPart, control: OoxmlElement): string {
+  const parts: string[] = [];
+  let current = parentNodeOf(part, control.id);
+  while (current) {
+    if (isContentControlNode(current)) {
+      parts.push(`${current.id}:${contentEditingLocked(propertiesOf(current)) ? 1 : 0}`);
+    }
+    current = parentNodeOf(part, current.id);
+  }
+  return parts.join('|');
+}
+
+function freezeContentControlSummary(summary: ContentControlSummary): ContentControlSummary {
+  return Object.freeze({
+    ...summary,
+    ...(summary.tag !== undefined ? { tag: summary.tag } : {}),
+    ...(summary.alias !== undefined ? { alias: summary.alias } : {}),
+    ...(summary.locked ? { locked: true as const } : {}),
+  });
+}
+
+function freezeContentControlSummaries(
+  summaries: readonly ContentControlSummary[]
+): readonly ContentControlSummary[] {
+  return Object.freeze(summaries.map((summary) => freezeContentControlSummary(summary)));
+}
+
+function summaryForEntry(entry: ContentControlEntry, part: OoxmlPart): ContentControlSummary {
+  const control = entry.node;
+  const properties = propertiesOf(control);
+  const lockAncestors = contentLockAncestorKey(part, control);
+  const cached = summaryByControlNode.get(control);
+  if (cached && cached.properties === properties && cached.lockAncestors === lockAncestors) {
+    return cached.summary;
+  }
+  const summary = freezeContentControlSummary(summaryOf(control, part));
+  summaryByControlNode.set(control, { properties, lockAncestors, summary });
+  return summary;
+}
+
+function summariesForPart(part: OoxmlPart): readonly ContentControlSummary[] {
+  noteContentControlEnumerationTopLevelVisit();
+  const entries = contentControlsIn(part.root);
+  noteContentControlEnumerationControlVisits(entries.length);
+  return entries.map((entry) => summaryForEntry(entry, part));
+}
+
+function rebuildContentControlSummaries(
+  session: TreeDocxSessionView
+): readonly ContentControlSummary[] {
+  return freezeContentControlSummaries(
+    session.storyParts().flatMap((part) => summariesForPart(part))
+  );
+}
+
+function allContentControlSummaries(
+  session: TreeDocxSessionView
+): readonly ContentControlSummary[] {
+  return cachedContentControlSummaries(session, () => rebuildContentControlSummaries(session));
+}
+
 function matchesFilter(summary: ContentControlSummary, filter?: ContentControlFilter): boolean {
   if (!filter) return true;
   if (filter.tag !== undefined && summary.tag !== filter.tag) return false;
@@ -260,17 +338,8 @@ function inlineControlsContaining(
     .map((range) => summaryOf(range.control, part));
 }
 
-function collectContentControls(part: OoxmlPart): ContentControlSummary[] {
-  const controls: ContentControlSummary[] = [];
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (isContentControlNode(node)) {
-      controls.push(summaryOf(node, part));
-    }
-    for (const child of node.children) walk(child);
-  };
-  walk(part.root);
-  return controls;
+export function collectContentControlsOracle(part: OoxmlPart): ContentControlSummary[] {
+  return [...summariesForPart(part)];
 }
 
 function blockAncestorsOf(part: OoxmlPart, paragraphId: string): ContentControlSummary[] {
@@ -293,15 +362,17 @@ function blockAncestorsOf(part: OoxmlPart, paragraphId: string): ContentControlS
  * documents: the list never contained the control the caret was standing in, and a host
  * building a picker from it could not offer what the user was looking at.
  */
+/** @internal Re-export for warm-path tests. */
+export { contentControlEnumerationTestRecorder } from './content-control-enumeration-cache.ts';
+
 export function contentControlsOf(
   surface: PaginatedSurface | null,
   filter?: ContentControlFilter
 ): readonly ContentControlSummary[] {
   if (!surface) return [];
-  return surface.session
-    .storyParts()
-    .flatMap((part) => collectContentControls(part))
-    .filter((summary) => matchesFilter(summary, filter));
+  const all = allContentControlSummaries(surface.session);
+  if (!filter) return all;
+  return all.filter((summary) => matchesFilter(summary, filter));
 }
 
 /**

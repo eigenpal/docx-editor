@@ -977,6 +977,13 @@ export const DEFAULT_LIMITS: ResourceLimits;
 // @public
 export const DEFAULT_MAX_EDITABLE_STORY_PARTS = 64;
 
+// @public (undocumented)
+export const DEFAULT_OMML_LIMITS: Readonly<{
+    maxDepth: 24;
+    maxNodes: 256;
+    maxTextLength: 512;
+}>;
+
 // @public
 export const DEFAULT_OOXML_PACKAGE_LIMITS: Required<Pick<OoxmlPackageLimits, 'maxXmlParts' | 'maxRelationships'>>;
 
@@ -1218,6 +1225,40 @@ export function ensureListDefinition(pkg: OoxmlPackage, kind: ListKind): Ensured
 
 // @public
 export function ensureNumberingLevel(pkg: OoxmlPackage, numId: string, level: number, kind: ListKind): OoxmlPackage | null;
+
+// @public (undocumented)
+export type EquationExpression = {
+    readonly kind: 'row';
+    readonly items: readonly EquationExpression[];
+} | {
+    readonly kind: 'text';
+    readonly value: string;
+} | {
+    readonly kind: 'fraction';
+    readonly numerator: EquationExpression;
+    readonly denominator: EquationExpression;
+} | {
+    readonly kind: 'radical';
+    readonly radicand: EquationExpression;
+    readonly degree?: EquationExpression;
+} | {
+    readonly kind: 'script';
+    readonly base: EquationExpression;
+    readonly subscript?: EquationExpression;
+    readonly superscript?: EquationExpression;
+} | {
+    readonly kind: 'nary';
+    readonly operator: string;
+    readonly body: EquationExpression;
+    readonly lowerLimit?: EquationExpression;
+    readonly upperLimit?: EquationExpression;
+} | {
+    readonly kind: 'fallback';
+    readonly text: string;
+};
+
+// @public
+export function equationExpressionToLinearMath(expression: EquationExpression): string;
 
 // @public
 export function escapeCssString(value: string): string;
@@ -1887,6 +1928,31 @@ export interface LimitSpec {
 // @public
 export type LimitUnit = 'bytes' | 'count' | 'depth' | 'ratio' | 'passes';
 
+// @public (undocumented)
+export type LinearMathOmmlResult = {
+    readonly ok: true;
+    readonly expression: EquationExpression;
+    readonly equation: OoxmlGenericElementNode;
+} | {
+    readonly ok: false;
+    readonly reason: LinearMathRejection;
+};
+
+// @public (undocumented)
+export type LinearMathParseResult = {
+    readonly ok: true;
+    readonly expression: EquationExpression;
+} | {
+    readonly ok: false;
+    readonly reason: LinearMathRejection;
+};
+
+// @public (undocumented)
+export type LinearMathRejection = 'empty' | 'invalid-syntax' | 'invalid-xml-text' | 'depth-limit' | 'node-limit' | 'text-limit';
+
+// @public
+export function linearMathToOmml(input: string, nextId: NextNodeId, limits?: OmmlLimits): LinearMathOmmlResult;
+
 // @public
 export interface LinkableReviewItem {
     // (undocumented)
@@ -2169,6 +2235,9 @@ export function noteTypeOf(node: OoxmlNode): NoteType | undefined;
 export function nullRecord<T = unknown>(): Record<string, T>;
 
 // @public
+export const OFFICE_MATH_NAMESPACE_URI = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+
+// @public
 export const OFFICE_RELATIONSHIP_NAMESPACE_URI = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 // @public
@@ -2177,6 +2246,30 @@ export interface OffsetSpan {
     readonly end: number;
     // (undocumented)
     readonly start: number;
+}
+
+// @public (undocumented)
+export interface OmmlEquationProjection {
+    // (undocumented)
+    readonly expression: EquationExpression;
+    // (undocumented)
+    readonly fallbackText: string;
+    // (undocumented)
+    readonly sourceNodeId: OoxmlNodeId;
+    // (undocumented)
+    readonly truncated: boolean;
+    // (undocumented)
+    readonly visitedNodes: number;
+}
+
+// @public
+export interface OmmlLimits {
+    // (undocumented)
+    readonly maxDepth?: number;
+    // (undocumented)
+    readonly maxNodes?: number;
+    // (undocumented)
+    readonly maxTextLength?: number;
 }
 
 // @public
@@ -2947,6 +3040,9 @@ export function parseAuthoredNoteProperties(propsNode: OoxmlNode | null | undefi
 export function parseContentControlId(raw: string | undefined): number | undefined;
 
 // @public
+export function parseLinearMath(input: string, limits?: OmmlLimits): LinearMathParseResult;
+
+// @public
 export function parseNoteId(raw: string | undefined): number | null;
 
 // @public
@@ -3023,6 +3119,9 @@ export function projectDrawing(drawing: OoxmlDrawingNode, context: Readonly<{
     namespaceScope?: ReadonlyMap<string, string>;
     resolveRelationship?: RelationshipTargetResolver;
 }>): DrawingProjection | null;
+
+// @public
+export function projectOmmlEquation(node: OoxmlNode, limits?: OmmlLimits): OmmlEquationProjection | null;
 
 // @public
 export function propertyContainer(parent: OoxmlNode | null | undefined, kind: 'paragraphProperties' | 'runProperties', localName: 'pPr' | 'rPr'): OoxmlNode | undefined;
@@ -3781,7 +3880,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers"];
 
 // @public
 export type TreeDocOp = {
@@ -3937,6 +4036,13 @@ export type TreeDocOp = {
 } | {
     readonly op: 'removeHyperlink';
     readonly linkId: string;
+} | {
+    readonly op: 'setMathEquation';
+    readonly equationId: string;
+    readonly linear: string;
+} | {
+    readonly op: 'removeMathEquation';
+    readonly equationId: string;
 } | {
     readonly op: 'insertInlineContentControl';
     readonly paragraphId: string;

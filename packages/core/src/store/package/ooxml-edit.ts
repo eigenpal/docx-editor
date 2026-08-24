@@ -80,12 +80,37 @@ interface PartIndex {
 
 const partIndexes = new WeakMap<OoxmlElement, PartIndex>();
 
+let nodeIndexCompleteBuilds = 0;
+let nodeIndexCompleteVisits = 0;
+
+/** @internal Warm-path recorder for root node-index complete builds used by `findNode`. */
+export function nodeIndexTestRecorder(): {
+  readonly completeBuilds: number;
+  readonly completeVisits: number;
+  reset(): void;
+} {
+  return {
+    get completeBuilds() {
+      return nodeIndexCompleteBuilds;
+    },
+    get completeVisits() {
+      return nodeIndexCompleteVisits;
+    },
+    reset() {
+      nodeIndexCompleteBuilds = 0;
+      nodeIndexCompleteVisits = 0;
+    },
+  };
+}
+
 function nodeIndexFor(root: OoxmlElement): PartIndex {
   const cached = partIndexes.get(root);
   if (cached) return cached;
+  nodeIndexCompleteBuilds += 1;
   const nodes = new Map<string, OoxmlNode>();
   const parents = new Map<string, string>();
   const walk = (node: OoxmlNode, parentId: string | null): void => {
+    nodeIndexCompleteVisits += 1;
     if (!nodes.has(node.id)) {
       nodes.set(node.id, node);
       if (parentId !== null) parents.set(node.id, parentId);

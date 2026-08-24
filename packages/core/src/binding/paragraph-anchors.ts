@@ -26,7 +26,8 @@ import { allParagraphs } from './tree-binding.ts';
  */
 const validParaIds = new WeakMap<OoxmlNode, string | null>();
 
-function validParaIdOf(paragraph: OoxmlNode): string | null {
+/** Validated `w14:paraId` of one paragraph node; null when absent or invalid. */
+export function validatedParaIdOfNode(paragraph: OoxmlNode): string | null {
   const cached = validParaIds.get(paragraph);
   if (cached !== undefined) return cached;
   const paraId = paraIdOf(paragraph);
@@ -73,6 +74,70 @@ export interface ParagraphAnchorIndex {
   readonly claimantsByParaId: ReadonlyMap<string, readonly string[]>;
 }
 
+class LivePartByNodeMap implements ReadonlyMap<string, OoxmlPart> {
+  readonly #nodeIds: ReadonlyMap<string, number>;
+  readonly #parts: readonly OoxmlPart[];
+
+  constructor(nodeIds: ReadonlyMap<string, number>, parts: readonly OoxmlPart[]) {
+    this.#nodeIds = nodeIds;
+    this.#parts = parts;
+  }
+
+  get size(): number {
+    return this.#nodeIds.size;
+  }
+
+  get(nodeId: string): OoxmlPart | undefined {
+    if (!this.#nodeIds.has(nodeId)) return undefined;
+    return this.#parts.find((part) => nodeId.startsWith(`${part.name}#`));
+  }
+
+  has(nodeId: string): boolean {
+    return this.get(nodeId) !== undefined;
+  }
+
+  *entries(): MapIterator<[string, OoxmlPart]> {
+    for (const nodeId of this.#nodeIds.keys()) {
+      const part = this.get(nodeId);
+      if (part) yield [nodeId, part];
+    }
+  }
+
+  keys(): MapIterator<string> {
+    return this.#nodeIds.keys();
+  }
+
+  *values(): MapIterator<OoxmlPart> {
+    for (const [, part] of this.entries()) yield part;
+  }
+
+  [Symbol.iterator](): MapIterator<[string, OoxmlPart]> {
+    return this.entries();
+  }
+
+  forEach(
+    callbackfn: (value: OoxmlPart, key: string, map: ReadonlyMap<string, OoxmlPart>) => void,
+    thisArg?: unknown
+  ): void {
+    for (const [nodeId, part] of this.entries()) callbackfn.call(thisArg, part, nodeId, this);
+  }
+}
+
+/**
+ * Reuse all paragraph-address maps while pointing node reads at the current immutable parts.
+ *
+ * Safe only when the paragraph id and paraId sets are unchanged, as enforced by the session.
+ */
+export function refreshParagraphAnchorParts(
+  index: ParagraphAnchorIndex,
+  parts: readonly OoxmlPart[]
+): ParagraphAnchorIndex {
+  return Object.freeze({
+    ...index,
+    partByNode: new LivePartByNodeMap(index.ordinalByNode, parts),
+  });
+}
+
 /** Build the index over every editable paragraph of every story, in reading order. */
 export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): ParagraphAnchorIndex {
   const paraIdByNode = new Map<string, string>();
@@ -91,7 +156,7 @@ export function buildParagraphAnchorIndex(parts: readonly OoxmlPart[]): Paragrap
       ordinalByNode.set(paragraph.id, ordinal);
       partByNode.set(paragraph.id, part);
       ordinal += 1;
-      const paraId = validParaIdOf(paragraph);
+      const paraId = validatedParaIdOfNode(paragraph);
       if (paraId === null) continue;
       paraIdByNode.set(paragraph.id, paraId);
       const canonical = paraId.toUpperCase();

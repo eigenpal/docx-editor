@@ -112,13 +112,14 @@ export function pageSetupOf(surface: PaginatedSurface | null): PageSetup | null 
 export function selectionRangeOf(surface: PaginatedSurface | null): DocRange | null {
   if (!surface) return null;
   const { anchor, head } = surface.state().selection;
+  if (anchor.paragraphId === head.paragraphId) {
+    const paraId = surface.session.paraIdOf(anchor.paragraphId);
+    if (paraId === null) return null;
+    return { from: { paraId }, to: { paraId } };
+  }
   const anchors = surface.session.paragraphAnchors();
   const anchorParaId = anchors.paraIdByNode.get(anchor.paragraphId);
   const headParaId = anchors.paraIdByNode.get(head.paragraphId);
-  // Normalization maps every editable paragraph at open, so this misses only when
-  // identity could not be established at all (the fail-open path on a pathological
-  // file) or a pre-layout placeholder id appears — null is the honest answer for both,
-  // never a fabricated range.
   if (anchorParaId === undefined || headParaId === undefined) return null;
   const anchorOrdinal = anchors.ordinalByNode.get(anchor.paragraphId) ?? 0;
   const headOrdinal = anchors.ordinalByNode.get(head.paragraphId) ?? 0;
@@ -142,10 +143,10 @@ export function hyperlinkAtOf(surface: PaginatedSurface | null): HyperlinkInfo |
   if (!surface) return null;
   const link = surface.hyperlinks.linkAtCaret();
   if (!link) return null;
-  const paraId = surface.session.paragraphAnchors().paraIdByNode.get(link.paragraphId);
+  const paraId = surface.session.paraIdOf(link.paragraphId);
   // A `DocRange` addresses paragraphs by `w14:paraId`; without one there is no honest
   // range to report, and a fabricated one is worse than none.
-  if (paraId === undefined) return null;
+  if (paraId === null) return null;
   return {
     href: link.href ?? '',
     range: { from: { paraId }, to: { paraId } },

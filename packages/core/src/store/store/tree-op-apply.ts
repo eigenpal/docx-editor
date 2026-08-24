@@ -9,6 +9,7 @@
 import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
 import { fieldAtomText } from '../package/field-nodes.ts';
 import { isContentRevisionKind, W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { linearMathToOmml } from '../package/omml-equation.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlAttribute,
@@ -275,6 +276,38 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
   if (op.op === 'removeHyperlink') return applyRemoveHyperlink(part, op.linkId, options);
+  if (op.op === 'setMathEquation' || op.op === 'removeMathEquation') {
+    const equation = findNode(part, op.equationId);
+    if (!equation || equation.kind === 'textValue') {
+      return { ok: false, reason: 'tree-invariant' };
+    }
+    let ancestor: OoxmlNode | null = equation;
+    let paragraph: OoxmlParagraphNode | null = null;
+    while (ancestor) {
+      if (ancestor.kind === 'paragraph') {
+        paragraph = ancestor;
+        break;
+      }
+      ancestor = parentOf(part, ancestor.id);
+    }
+    if (!paragraph) return { ok: false, reason: 'tree-invariant' };
+    const effect: TreeOpEffect = {
+      dirty: [paragraph.id],
+      created: [],
+      deleted: [],
+      dependencyKeys: TEXT_DEPS,
+      impact: 'text-local',
+    };
+    if (op.op === 'removeMathEquation') {
+      return fromEdit(removeNode(part, equation.id, options), effect);
+    }
+    const generated = linearMathToOmml(op.linear, createNodeIdAllocator(part));
+    if (!generated.ok) return { ok: false, reason: 'invalid-property-value' };
+    // Retain the equation identity. An open popover and an undo record both address the
+    // complete math atom, while every internal OMML node receives a fresh part-scoped id.
+    const replacement = { ...generated.equation, id: equation.id };
+    return fromEdit(replaceNode(part, equation.id, replacement, options), effect);
+  }
   if (op.op === 'insertCommentMarker') {
     const paragraph = findNode(part, op.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph')
@@ -678,7 +711,32 @@ function applyInsertContent(
   }
   if (after) {
     const run = findNode(part, after.runId);
-    if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+    if (!run || run.kind !== 'run') {
+      // A paragraph-level atom, such as `m:oMath`, has no owning `w:r`. Typing at its
+      // leading edge creates a sibling run before it. Treating the atom id as a run id
+      // made the otherwise valid caret position fail with `tree-invariant`.
+      const parent = parentOf(part, after.node.id);
+      if (
+        after.removeNodeIds !== undefined &&
+        parent?.kind === 'paragraph' &&
+        parent.id === paragraph.id
+      ) {
+        const index = parent.children.findIndex((child) => child.id === after.node.id);
+        if (index < 0) return { ok: false, reason: 'tree-invariant' };
+        inserted = fromEdit(
+          insertChildren(
+            part,
+            parent.id,
+            index,
+            [runElement(nextId, nodes)],
+            deferOptions(options, control)
+          ),
+          effect
+        );
+        return finishContentEdit(inserted, control, options);
+      }
+      return { ok: false, reason: 'tree-invariant' };
+    }
     // The START boundary of a deletion, reached when nothing to the left takes the text:
     // the new content goes before the wrapper, never into the struck run's head.
     const relocated = insertBesideDeletion(part, paragraph, run, nodes, 'before', {
@@ -724,6 +782,30 @@ function applyInsertContent(
           return finishContentEdit(inserted, control, options);
         }
       }
+    }
+  }
+
+  // A paragraph-level atom has no owning run. At its trailing boundary, insert a sibling
+  // run AFTER the atom instead of appending to the paragraph's last run, which can only be
+  // before it. The atom segment names its complete removable node, and the direct-parent
+  // check keeps run-owned fields and drawings on their existing insertion paths.
+  if (before?.removeNodeIds && before.removeNodeIds.length === 1) {
+    const atom = findNode(part, before.removeNodeIds[0]!);
+    const parent = atom ? parentOf(part, atom.id) : null;
+    if (atom && parent?.kind === 'paragraph' && parent.id === paragraph.id) {
+      const index = parent.children.findIndex((child) => child.id === atom.id);
+      if (index < 0) return { ok: false, reason: 'tree-invariant' };
+      inserted = fromEdit(
+        insertChildren(
+          part,
+          parent.id,
+          index + 1,
+          [runElement(nextId, nodes)],
+          deferOptions(options, control)
+        ),
+        effect
+      );
+      return finishContentEdit(inserted, control, options);
     }
   }
 
@@ -874,12 +956,18 @@ function applyPlaceholderReplace(
   let nextControl = replaceControlContent(control, contentChildren, nextId);
   nextControl = withUpdatedProperties(nextControl, clearShowingPlaceholder);
 
+  // A BLOCK placeholder replace deletes the prompt's paragraph(s) and mints a fresh one, so
+  // the paragraph set changes and the effect must say so. Reporting it as 'text-local' with
+  // empty created/deleted told paragraph-keyed caches they could keep their answer, and a
+  // retained review order index then had no entry for the minted paragraph — an item anchored
+  // in it listed in the rail but never activated from a caret. The inline branch really is
+  // text-local: the owner paragraph survives, only its runs are replaced.
   const effect: TreeOpEffect = {
     dirty: owner ? [owner.id] : [control.id],
-    created: [],
-    deleted: [],
+    created: inline ? [] : contentChildren.map((child) => child.id),
+    deleted: inline ? [] : placeholderParagraphIdsOf(control),
     dependencyKeys: TEXT_DEPS,
-    impact: isTemporaryControl(control) ? 'flow-structural' : 'text-local',
+    impact: !inline || isTemporaryControl(control) ? 'flow-structural' : 'text-local',
   };
 
   if (isTemporaryControl(control)) {
@@ -895,6 +983,24 @@ function applyPlaceholderReplace(
   }
 
   return fromEdit(replaceNode(part, control.id, nextControl, options), effect);
+}
+
+/** Paragraph ids a block placeholder replace removes along with the prompt content. */
+function placeholderParagraphIdsOf(control: OoxmlNode): string[] {
+  if (control.kind === 'textValue') return [];
+  const content = contentControlContentOf(control);
+  if (!content) return [];
+  const ids: string[] = [];
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 32) return;
+    if (node.kind === 'paragraph') {
+      ids.push(node.id);
+      return;
+    }
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  for (const child of content.children) walk(child, 0);
+  return ids;
 }
 
 function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {

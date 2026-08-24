@@ -24,12 +24,6 @@ export interface DetectedToc {
   readonly instruction: TocInstruction;
 }
 
-interface ParagraphSite {
-  readonly paragraph: OoxmlElement;
-  readonly containerId: string;
-  readonly contentControlId?: string;
-}
-
 interface OpenField {
   readonly beginNodeId: string;
   readonly beginParagraphId: string;
@@ -48,34 +42,6 @@ function bodyOf(part: OoxmlPart): OoxmlElement | null {
     if (child.kind === 'body') return child;
   }
   return null;
-}
-
-function paragraphSites(part: OoxmlPart): ParagraphSite[] {
-  const body = bodyOf(part);
-  if (!body) return [];
-  const sites: ParagraphSite[] = [];
-
-  const collect = (
-    children: readonly OoxmlNode[],
-    containerId: string,
-    contentControlId: string | undefined,
-    depth: number
-  ): void => {
-    for (const child of children) {
-      if (child.kind === 'paragraph') {
-        sites.push({ paragraph: child, containerId, contentControlId });
-        continue;
-      }
-      if (!isContentControl(child) || depth >= TOC_MAX_FIELD_NESTING) continue;
-      for (const content of child.children) {
-        if (isContentControlContent(content)) {
-          collect(content.children, content.id, child.id, depth + 1);
-        }
-      }
-    }
-  };
-  collect(body.children, body.id, undefined, 0);
-  return sites;
 }
 
 const fieldTokensByParagraph = new WeakMap<OoxmlElement, readonly OoxmlNode[]>();
@@ -97,15 +63,30 @@ function fieldTokens(paragraph: OoxmlElement): readonly OoxmlNode[] {
   return tokens;
 }
 
-/** Memoized per immutable part identity; a commit replaces the part object. */
-const detectBodyTocsCache = new WeakMap<OoxmlPart, readonly DetectedToc[]>();
+type DetectedTocCandidate = Omit<DetectedToc, 'id'>;
+type ContainerTocResult = DetectedToc | DetectedTocCandidate;
 
-function detectBodyTocsUncached(part: OoxmlPart): readonly DetectedToc[] {
+const EMPTY_TOCS: readonly DetectedToc[] = Object.freeze([]);
+const detectedTocsByContainer = new WeakMap<OoxmlElement, readonly DetectedToc[]>();
+
+/**
+ * Detect fields whose paragraphs share one direct container.
+ *
+ * A commit rebuilds the edited ancestor chain. Unchanged content-control containers retain
+ * their identity, so their complete TOC answers remain reusable across part revisions.
+ */
+function detectTocsInContainer(
+  container: OoxmlElement,
+  contentControlId: string | undefined,
+  depth: number
+): readonly DetectedToc[] {
+  const cached = detectedTocsByContainer.get(container);
+  if (cached) return cached;
   const stack: (OpenField | null)[] = [];
-  const completed: Omit<DetectedToc, 'id'>[] = [];
+  const completed: ContainerTocResult[] = [];
 
-  for (const site of paragraphSites(part)) {
-    for (const token of fieldTokens(site.paragraph)) {
+  const processParagraph = (paragraph: OoxmlElement): void => {
+    for (const token of fieldTokens(paragraph)) {
       const type = fldCharType(token);
       if (type === 'begin') {
         if (stack.length >= TOC_MAX_FIELD_NESTING) {
@@ -113,9 +94,9 @@ function detectBodyTocsUncached(part: OoxmlPart): readonly DetectedToc[] {
         } else {
           stack.push({
             beginNodeId: token.id,
-            beginParagraphId: site.paragraph.id,
-            containerId: site.containerId,
-            contentControlId: site.contentControlId,
+            beginParagraphId: paragraph.id,
+            containerId: container.id,
+            contentControlId,
             instructionChunks: [],
             resultParagraphIds: [],
             instructionLength: 0,
@@ -147,15 +128,15 @@ function detectBodyTocsUncached(part: OoxmlPart): readonly DetectedToc[] {
         ended &&
         ended.separated &&
         !ended.invalid &&
-        ended.containerId === site.containerId &&
-        ended.beginParagraphId !== site.paragraph.id
+        ended.containerId === container.id &&
+        ended.beginParagraphId !== paragraph.id
       ) {
         const instruction = parseTocInstruction(ended.instructionChunks.join(''));
         if (instruction) {
           completed.push({
             beginNodeId: ended.beginNodeId,
             beginParagraphId: ended.beginParagraphId,
-            endParagraphId: site.paragraph.id,
+            endParagraphId: paragraph.id,
             resultParagraphIds: ended.resultParagraphIds,
             containerId: ended.containerId,
             ...(ended.contentControlId ? { contentControlId: ended.contentControlId } : {}),
@@ -169,34 +150,58 @@ function detectBodyTocsUncached(part: OoxmlPart): readonly DetectedToc[] {
       if (
         field &&
         field.separated &&
-        field.beginParagraphId !== site.paragraph.id &&
-        field.containerId === site.containerId
+        field.beginParagraphId !== paragraph.id &&
+        field.containerId === container.id
       ) {
-        field.resultParagraphIds.push(site.paragraph.id);
+        field.resultParagraphIds.push(paragraph.id);
       }
+    }
+  };
+
+  for (const child of container.children) {
+    if (child.kind === 'paragraph') {
+      processParagraph(child);
+      continue;
+    }
+    if (!isContentControl(child) || depth >= TOC_MAX_FIELD_NESTING) continue;
+    for (const content of child.children) {
+      if (!isContentControlContent(content)) continue;
+      completed.push(...detectTocsInContainer(content, child.id, depth + 1));
     }
   }
 
   const controlCounts = new Map<string, number>();
   for (const toc of completed) {
-    if (toc.contentControlId) {
+    if (!('id' in toc) && toc.contentControlId) {
       controlCounts.set(toc.contentControlId, (controlCounts.get(toc.contentControlId) ?? 0) + 1);
     }
   }
-  return completed.map((toc) => ({
-    ...toc,
-    id:
-      toc.contentControlId && controlCounts.get(toc.contentControlId) === 1
-        ? toc.contentControlId
-        : toc.beginNodeId,
-  }));
+  const result = completed.map(
+    (toc): DetectedToc =>
+      'id' in toc
+        ? toc
+        : {
+            ...toc,
+            id:
+              toc.contentControlId && controlCounts.get(toc.contentControlId) === 1
+                ? toc.contentControlId
+                : toc.beginNodeId,
+          }
+  );
+  const immutable = result.length > 0 ? Object.freeze(result) : EMPTY_TOCS;
+  detectedTocsByContainer.set(container, immutable);
+  return immutable;
 }
+
+/** Memoized per immutable part identity for repeated reads within one revision. */
+const detectBodyTocsCache = new WeakMap<OoxmlPart, readonly DetectedToc[]>();
 
 /** Discover refreshable body TOCs without evaluating any field instruction. */
 export function detectBodyTocs(part: OoxmlPart): readonly DetectedToc[] {
   const cached = detectBodyTocsCache.get(part);
   if (cached) return cached;
-  const result = detectBodyTocsUncached(part);
+  const body = bodyOf(part);
+  const result = body ? detectTocsInContainer(body, undefined, 0) : EMPTY_TOCS;
   detectBodyTocsCache.set(part, result);
   return result;
 }

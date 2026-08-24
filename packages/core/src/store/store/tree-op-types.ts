@@ -529,6 +529,22 @@ export type TreeDocOp =
     }
   | {
       /**
+       * Replace one preserved `m:oMath` atom from bounded linear-math input.
+       *
+       * The complete equation changes as one unit. Internal OMML text never enters the
+       * paragraph offset space, so callers cannot leave a partially edited math tree.
+       */
+      readonly op: 'setMathEquation';
+      readonly equationId: string;
+      readonly linear: string;
+    }
+  | {
+      /** Remove one complete `m:oMath` atom. */
+      readonly op: 'removeMathEquation';
+      readonly equationId: string;
+    }
+  | {
+      /**
        * Insert a NEW run-level content control at a text offset: `w:sdt` with a
        * `w:sdtPr` carrying the given tag (and alias/lock) and a `w:sdtContent`
        * holding one run of `text`.
@@ -998,6 +1014,8 @@ export const TREE_DOC_OP_KINDS = [
   'insertHyperlink',
   'setHyperlinkTarget',
   'removeHyperlink',
+  'setMathEquation',
+  'removeMathEquation',
   'setContentControlValue',
   'removeContentControl',
   'insertInlineContentControl',

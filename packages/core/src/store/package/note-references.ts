@@ -245,6 +245,40 @@ function paragraphNoteHitsOf(
   return hits;
 }
 
+const NO_NOTE_HITS: readonly NoteReferenceHit[] = Object.freeze([]);
+
+/**
+ * Note-reference hits under one immutable container.
+ *
+ * A text edit replaces one paragraph and its ancestors. Unchanged sibling containers keep
+ * their identity, so their complete answer remains reusable across part revisions.
+ */
+const containerNoteHitMemos = new WeakMap<OoxmlNode, readonly NoteReferenceHit[]>();
+
+function subtreeNoteHitsOf(
+  node: OoxmlNode,
+  partName: string,
+  depth: number
+): readonly NoteReferenceHit[] {
+  if (node.kind === 'textValue' || depth > 64) return NO_NOTE_HITS;
+  if (node.kind === 'paragraph') return paragraphNoteHitsOf(node, partName);
+  const cached = containerNoteHitMemos.get(node);
+  if (cached) return cached;
+
+  let hits: NoteReferenceHit[] | null = null;
+  for (const child of node.children) {
+    const childHits = subtreeNoteHitsOf(child, partName, depth + 1);
+    if (childHits.length === 0) continue;
+    hits ??= [];
+    const remaining = MAX_NOTE_REFERENCE_SCAN - hits.length;
+    if (remaining <= 0) break;
+    hits.push(...childHits.slice(0, remaining));
+  }
+  const result: readonly NoteReferenceHit[] = hits ? Object.freeze(hits) : NO_NOTE_HITS;
+  containerNoteHitMemos.set(node, result);
+  return result;
+}
+
 export function collectNoteReferences(
   part: OoxmlPart,
   options?: {
@@ -256,6 +290,11 @@ export function collectNoteReferences(
   // unbounded maxHits and rely on the visited-node budget (+ truncation) instead.
   const maxHits = options?.maxHits ?? MAX_NOTE_REFERENCE_SCAN;
   const budget = options?.budget;
+  if (maxHits <= 0) return NO_NOTE_HITS;
+  if (budget === undefined && maxHits <= MAX_NOTE_REFERENCE_SCAN) {
+    const all = subtreeNoteHitsOf(part.root, part.name, 0);
+    return all.length > maxHits ? all.slice(0, maxHits) : all;
+  }
   const memoized = budget === undefined;
   const hits: NoteReferenceHit[] = [];
 

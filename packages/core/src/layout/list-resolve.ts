@@ -26,6 +26,65 @@ import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
+import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
+import type { LayoutScope } from './layout-scheduler.ts';
+import type { LayoutSession } from './layout-session.ts';
+
+interface ListResolveChangeEvidence {
+  readonly preservesNumberedSequence: boolean;
+}
+
+const listResolveEvidenceBySession = new WeakMap<LayoutSession, ListResolveChangeEvidence>();
+let listResolveBlockVisits = 0;
+
+/** @internal Read session-scoped list resolve memo for tests. */
+export function listResolveSessionMemoListItemsForTest(
+  session: LayoutSession
+): ReadonlyMap<string, ResolvedListItem> | undefined {
+  return lastStoryResolvesBySession.get(session)?.listItems;
+}
+
+/** @internal Warm-path recorder for list resolve block walks. */
+export function listResolveBlockVisitTestRecorder(): {
+  readonly blockVisits: number;
+  reset(): void;
+} {
+  return {
+    get blockVisits() {
+      return listResolveBlockVisits;
+    },
+    reset() {
+      listResolveBlockVisits = 0;
+    },
+  };
+}
+
+/**
+ * Attach one-use layout scope evidence before semantic layout runs.
+ *
+ * @internal
+ */
+export function attachListResolveChangeEvidence(session: LayoutSession, scope: LayoutScope): void {
+  const storySafe =
+    scope.dependencyKeys.size === 0 ||
+    [...scope.dependencyKeys].every((key) => key === DEPENDENCY_KEY_IDS.story);
+  listResolveEvidenceBySession.set(session, {
+    preservesNumberedSequence:
+      scope.impact === 'text-local' &&
+      !scope.structural &&
+      scope.created.size === 0 &&
+      scope.deleted.size === 0 &&
+      storySafe,
+  });
+}
+
+function consumeListResolveChangeEvidence(
+  session: LayoutSession
+): ListResolveChangeEvidence | undefined {
+  const evidence = listResolveEvidenceBySession.get(session);
+  listResolveEvidenceBySession.delete(session);
+  return evidence;
+}
 
 /** Fields of {@link ResolvedRunStyle} that change a marker's measured width. */
 function markerMeasureToken(style: ResolvedRunStyle): string {
@@ -449,6 +508,14 @@ export function resolveStoryListItems(
   return map;
 }
 
+interface ResolvedListItemsMemoEntry {
+  readonly rawIndex: NumberingIndex | undefined;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly isFontAvailable: ((family: string) => boolean) | undefined;
+  readonly linkedIndex: NumberingIndex;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+}
+
 /**
  * Memo for {@link withResolvedListItems}, keyed on the blocks array (stable per part via
  * the `storyBlocks` memo) and validated against the remaining RAW inputs by identity —
@@ -457,56 +524,57 @@ export function resolveStoryListItems(
  * O(document) item map at module scope. A miss on any input recomputes the sequential
  * full-story counter walk exactly as before.
  */
-const resolvedListItemsMemos = new WeakMap<
-  readonly OoxmlElement[],
-  {
-    readonly rawIndex: NumberingIndex | undefined;
-    readonly styleCascade: StyleCascadeTable | undefined;
-    readonly isFontAvailable: ((family: string) => boolean) | undefined;
-    readonly linkedIndex: NumberingIndex;
-    readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
-  }
->();
+const resolvedListItemsMemos = new WeakMap<readonly OoxmlElement[], ResolvedListItemsMemoEntry>();
 
-/**
- * Attach a full-story list-item map to layout options.
- *
- * Resolves once over `blocks` (body story including table cells) so counters continue across
- * section boundaries. No-ops when numbering is absent.
- */
-export function withResolvedListItems<
-  T extends {
-    readonly numberingIndex?: NumberingIndex;
-    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-    readonly styleCascade?: StyleCascadeTable;
-    /**
-     * Host oracle for "is this font family really loaded". Supplied, a Symbol/Wingdings
-     * bullet keeps the file's own private-use codepoint so the authored typeface draws it;
-     * absent, it falls back to the Unicode equivalent rather than a tofu box.
-     *
-     * The resolve is memoized on this function's IDENTITY: a host whose answers change
-     * over time (a font finished loading) must supply a new closure at that point, or the
-     * memo will keep serving marker glyphs computed from the old answers.
-     */
-    readonly isFontAvailable?: (family: string) => boolean;
-  },
->(
+/** Session-stable outer memo for semantic body layout. */
+const resolvedListItemsMemosBySession = new WeakMap<LayoutSession, ResolvedListItemsMemoEntry>();
+
+type WithResolvedListItemsOptions = {
+  readonly numberingIndex?: NumberingIndex;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  readonly styleCascade?: StyleCascadeTable;
+  readonly isFontAvailable?: (family: string) => boolean;
+};
+
+function resolvedListItemsMemoHit(
+  options: WithResolvedListItemsOptions,
+  blocks: readonly OoxmlElement[],
+  memoOwner: LayoutSession | undefined
+): ResolvedListItemsMemoEntry | undefined {
+  const memo = memoOwner
+    ? resolvedListItemsMemosBySession.get(memoOwner)
+    : resolvedListItemsMemos.get(blocks);
+  if (
+    memo &&
+    memo.rawIndex === options.numberingIndex &&
+    memo.styleCascade === options.styleCascade &&
+    memo.isFontAvailable === options.isFontAvailable
+  ) {
+    return memo;
+  }
+  return undefined;
+}
+
+function rememberResolvedListItemsMemo(
+  blocks: readonly OoxmlElement[],
+  memoOwner: LayoutSession | undefined,
+  entry: ResolvedListItemsMemoEntry
+): void {
+  if (memoOwner) resolvedListItemsMemosBySession.set(memoOwner, entry);
+  else resolvedListItemsMemos.set(blocks, entry);
+}
+
+function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
   options: T,
-  blocks: readonly OoxmlElement[]
+  blocks: readonly OoxmlElement[],
+  memoOwner: LayoutSession | undefined
 ): T & {
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
-  // A caller-supplied item map bypasses the memo: the memo exists for the resolve below,
-  // and a pre-supplied map carries its own provenance.
   if (options.listItems === undefined) {
-    const memo = resolvedListItemsMemos.get(blocks);
-    if (
-      memo &&
-      memo.rawIndex === options.numberingIndex &&
-      memo.styleCascade === options.styleCascade &&
-      memo.isFontAvailable === options.isFontAvailable
-    ) {
+    const memo = resolvedListItemsMemoHit(options, blocks, memoOwner);
+    if (memo && memoOwner === undefined) {
       return {
         ...options,
         numberingIndex: memo.linkedIndex,
@@ -514,12 +582,20 @@ export function withResolvedListItems<
       };
     }
   }
-  // Published already linked (§17.9.21), so every reader of the index — not just the item
-  // map built here — sees the levels a `w:numStyleLink` delegates to.
-  const numberingIndex = withNumberingStyleLinks(
-    options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
-    options.styleCascade
-  );
+  const memoBeforeResolve =
+    options.listItems === undefined
+      ? resolvedListItemsMemoHit(options, blocks, memoOwner)
+      : undefined;
+  const numberingIndex =
+    memoBeforeResolve &&
+    memoBeforeResolve.rawIndex === options.numberingIndex &&
+    memoBeforeResolve.styleCascade === options.styleCascade &&
+    memoBeforeResolve.isFontAvailable === options.isFontAvailable
+      ? memoBeforeResolve.linkedIndex
+      : withNumberingStyleLinks(
+          options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
+          options.styleCascade
+        );
   const listItems =
     options.listItems ??
     (numberingIndex.nums.size > 0
@@ -528,11 +604,12 @@ export function withResolvedListItems<
           options.numberingIndex,
           numberingIndex,
           options.styleCascade,
-          options.isFontAvailable
+          options.isFontAvailable,
+          memoOwner
         )
       : undefined);
   if (options.listItems === undefined) {
-    resolvedListItemsMemos.set(blocks, {
+    rememberResolvedListItemsMemo(blocks, memoOwner, {
       rawIndex: options.numberingIndex,
       styleCascade: options.styleCascade,
       isFontAvailable: options.isFontAvailable,
@@ -547,12 +624,52 @@ export function withResolvedListItems<
   };
 }
 
+/**
+ * Attach a full-story list-item map to layout options.
+ *
+ * Resolves once over `blocks` (body story including table cells) so counters continue across
+ * section boundaries. No-ops when numbering is absent.
+ */
+export function withResolvedListItems<
+  T extends {
+    readonly numberingIndex?: NumberingIndex;
+    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    readonly styleCascade?: StyleCascadeTable;
+    readonly isFontAvailable?: (family: string) => boolean;
+  },
+>(
+  options: T,
+  blocks: readonly OoxmlElement[]
+): T & {
+  readonly numberingIndex: NumberingIndex;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+} {
+  return withResolvedListItemsInternal(options, blocks, undefined);
+}
+
+/**
+ * Session-stable list resolve for semantic body layout.
+ *
+ * @internal
+ */
+export function withResolvedListItemsForSession<T extends WithResolvedListItemsOptions>(
+  options: T,
+  blocks: readonly OoxmlElement[],
+  session: LayoutSession
+): T & {
+  readonly numberingIndex: NumberingIndex;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+} {
+  return withResolvedListItemsInternal(options, blocks, session);
+}
+
 /** Numbered paragraphs of one top-level block, memoized per (immutable block, cascade). */
 interface NumberedBlockMemo {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly numbered: readonly OoxmlElement[];
 }
 const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
+const NO_NUMBERED_PARAGRAPHS: readonly OoxmlElement[] = Object.freeze([]);
 
 function numberedParagraphsOfBlock(
   block: OoxmlElement,
@@ -560,9 +677,10 @@ function numberedParagraphsOfBlock(
 ): readonly OoxmlElement[] {
   const cached = numberedBlockMemos.get(block);
   if (cached && cached.styleCascade === styleCascade) return cached.numbered;
-  const numbered = walkStoryParagraphs([block]).filter(
+  const collected = walkStoryParagraphs([block]).filter(
     (paragraph) => paragraphListPrelude(paragraph, styleCascade).numPr !== null
   );
+  const numbered = collected.length > 0 ? collected : NO_NUMBERED_PARAGRAPHS;
   numberedBlockMemos.set(block, { styleCascade, numbered });
   return numbered;
 }
@@ -588,38 +706,90 @@ interface LastStoryResolve {
   readonly rawIndex: NumberingIndex | undefined;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly isFontAvailable: ((family: string) => boolean) | undefined;
-  readonly numbered: readonly OoxmlElement[];
+  readonly blocks: readonly OoxmlElement[];
+  readonly numberedByBlock: readonly (readonly OoxmlElement[])[];
   readonly listItems: ReadonlyMap<string, ResolvedListItem>;
 }
-const lastStoryResolves = new WeakMap<OoxmlElement, LastStoryResolve>();
+const lastStoryResolvesByAnchor = new WeakMap<OoxmlElement, LastStoryResolve>();
+const lastStoryResolvesBySession = new WeakMap<LayoutSession, LastStoryResolve>();
+
+function sameNumberingSequence(a: readonly OoxmlElement[], b: readonly OoxmlElement[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((paragraph, index) => {
+      const previous = b[index];
+      if (!previous || paragraph.id !== previous.id) return false;
+      const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+      const previousProperties = previous.children.find(
+        (child) => child.kind === 'paragraphProperties'
+      );
+      return properties === previousProperties;
+    })
+  );
+}
 
 function resolveStoryListItemsStable(
   blocks: readonly OoxmlElement[],
   rawIndex: NumberingIndex | undefined,
   linkedIndex: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined,
-  isFontAvailable?: (family: string) => boolean
+  isFontAvailable: ((family: string) => boolean) | undefined,
+  memoOwner: LayoutSession | undefined
 ): ReadonlyMap<string, ResolvedListItem> {
-  const anchor = blocks[0];
-  const numbered: OoxmlElement[] = [];
-  for (const block of blocks) {
-    const blockNumbered = numberedParagraphsOfBlock(block, styleCascade);
-    for (const paragraph of blockNumbered) numbered.push(paragraph);
-  }
-  const last = anchor ? lastStoryResolves.get(anchor) : undefined;
+  const first = blocks[0];
+  const lastBlock = blocks[blocks.length - 1];
+  const last = memoOwner
+    ? lastStoryResolvesBySession.get(memoOwner)
+    : ((first ? lastStoryResolvesByAnchor.get(first) : undefined) ??
+      (lastBlock ? lastStoryResolvesByAnchor.get(lastBlock) : undefined));
+  const evidence = memoOwner ? consumeListResolveChangeEvidence(memoOwner) : undefined;
   if (
+    evidence?.preservesNumberedSequence &&
     last &&
     last.rawIndex === rawIndex &&
     last.styleCascade === styleCascade &&
-    last.isFontAvailable === isFontAvailable &&
-    last.numbered.length === numbered.length &&
-    last.numbered.every((node, index) => node === numbered[index])
+    last.isFontAvailable === isFontAvailable
   ) {
     return last.listItems;
   }
+
+  const numberedByBlock = new Array<readonly OoxmlElement[]>(blocks.length);
+  let numberedSequenceUnchanged =
+    last !== undefined &&
+    last.rawIndex === rawIndex &&
+    last.styleCascade === styleCascade &&
+    last.isFontAvailable === isFontAvailable &&
+    last.blocks.length === blocks.length;
+  for (let index = 0; index < blocks.length; index += 1) {
+    listResolveBlockVisits += 1;
+    const block = blocks[index]!;
+    const numbered =
+      last && last.blocks[index] === block
+        ? last.numberedByBlock[index]!
+        : numberedParagraphsOfBlock(block, styleCascade);
+    numberedByBlock[index] = numbered;
+    if (
+      numberedSequenceUnchanged &&
+      !sameNumberingSequence(numbered, last!.numberedByBlock[index]!)
+    ) {
+      numberedSequenceUnchanged = false;
+    }
+  }
+  if (last && numberedSequenceUnchanged) {
+    const next = { ...last, blocks, numberedByBlock };
+    if (memoOwner) lastStoryResolvesBySession.set(memoOwner, next);
+    else {
+      if (first) lastStoryResolvesByAnchor.set(first, next);
+      if (lastBlock && lastBlock !== first) lastStoryResolvesByAnchor.set(lastBlock, next);
+    }
+    return last.listItems;
+  }
   const listItems = resolveStoryListItems(blocks, linkedIndex, styleCascade, isFontAvailable);
-  if (anchor) {
-    lastStoryResolves.set(anchor, { rawIndex, styleCascade, isFontAvailable, numbered, listItems });
+  const next = { rawIndex, styleCascade, isFontAvailable, blocks, numberedByBlock, listItems };
+  if (memoOwner) lastStoryResolvesBySession.set(memoOwner, next);
+  else {
+    if (first) lastStoryResolvesByAnchor.set(first, next);
+    if (lastBlock && lastBlock !== first) lastStoryResolvesByAnchor.set(lastBlock, next);
   }
   return listItems;
 }

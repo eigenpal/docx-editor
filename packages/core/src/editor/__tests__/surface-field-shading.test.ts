@@ -124,6 +124,35 @@ describe('the caret marks the field it sits in', () => {
     expect(activeSpans()).toHaveLength(0);
   });
 
+  test('a repaint re-resolves the mark onto the rebuilt spans', () => {
+    // Paint replaces the span nodes, so the mark left with the old DOM. The caret has not
+    // moved — which is exactly the case `domReplaced` exists for: same caret, new nodes.
+    syncActiveFieldShading(layer, { paragraphId: 'p1', offset: 5 });
+    expect(activeSpans()).toHaveLength(1);
+    const stale = activeSpans()[0]!;
+    const fresh = document.createElement('span');
+    fresh.dataset.paragraphId = 'p1';
+    fresh.dataset.start = '5';
+    fresh.dataset.end = '6';
+    fresh.dataset.fieldAtom = 'field';
+    fresh.classList.add('docx-field-atom');
+    stale.replaceWith(fresh);
+    syncActiveFieldShading(layer, { paragraphId: 'p1', offset: 5 }, { domReplaced: true });
+    expect(activeSpans()).toHaveLength(1);
+    expect(activeSpans()[0]).not.toBe(stale);
+    expect(stale.classList.contains(ACTIVE)).toBe(false);
+  });
+
+  test('an unmoved caret against unchanged DOM is a no-op', () => {
+    // The mirror-to-DOM pass calls this right after the render pass on every keystroke. The
+    // second call must not pay a page-layer query for a caret that did not move.
+    syncActiveFieldShading(layer, { paragraphId: 'p1', offset: 5 });
+    const marked = activeSpans()[0]!;
+    syncActiveFieldShading(layer, { paragraphId: 'p1', offset: 5 });
+    expect(activeSpans()).toHaveLength(1);
+    expect(activeSpans()[0]).toBe(marked);
+  });
+
   test('every span a wrapped result broke into is marked', () => {
     // Line breaking splits a field's result at its spaces, and all of those spans publish the
     // same one-unit model range. Stopping at the first shaded half a cross-reference, while

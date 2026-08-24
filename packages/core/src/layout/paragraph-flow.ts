@@ -70,6 +70,7 @@ import {
   topAndBottomSkipBeforeLine,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
+import { createEquationLayouter } from './equation-layout.ts';
 
 /**
  * How far past the line's right edge a span may reach before it counts as overflow.
@@ -182,6 +183,8 @@ export interface ParagraphFlowOptions {
    * would need `cacheToken` folded into those producers too.
    */
   readonly themeFonts?: ThemeFonts;
+  /** Stable measurement producer token for cross-break equation geometry reuse. */
+  readonly equationCacheToken?: string;
   /**
    * Paragraph-mark cascade for empty-line metrics and last-line mark height.
    * When omitted, falls back to the content `inheritedRunProperties` argument.
@@ -213,6 +216,8 @@ interface Piece {
   readonly link?: import('./semantic-records.ts').SpanLinkRecord;
   /** Typed inline drawing occupying one UTF-16 model unit. */
   readonly inlineDrawing?: import('./drawing-layout.ts').InlineDrawingLayoutInput;
+  /** Bounded OMML equation occupying one UTF-16 model unit. */
+  readonly equation?: FieldAwarePiece['equation'];
 }
 
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
@@ -702,6 +707,9 @@ export function breakParagraph(
       },
     ];
   });
+  const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
+  const equationLayoutOf = (piece: FieldAwarePiece) =>
+    piece.equation ? layoutEquation(piece.equation, piece.style) : null;
   if (pieces.length === 0 && flow?.suppressEmptyPlaceholderLine) {
     return [];
   }
@@ -795,6 +803,14 @@ export function breakParagraph(
       probeLineIndex += 1;
     };
     for (const piece of pieces) {
+      const equation = equationLayoutOf(piece);
+      if (equation) {
+        const width = equation.geometry.box.width;
+        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
+        if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
+        probeWidth += width;
+        continue;
+      }
       if (piece.inlineDrawing) {
         const width = measureInlineDrawing(piece.inlineDrawing.projection).totalWidth;
         if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
@@ -1291,6 +1307,40 @@ export function breakParagraph(
       // after the break. Suppressing that remainder put "After Column Break" flush with
       // the prior column's first line.
       trailingLineBreak = true;
+      continue;
+    }
+    if (piece.equation) {
+      const equation = equationLayoutOf(piece)!;
+      const atomWidth = equation.geometry.box.width;
+      const hasContent = line.spans.length > 0 || line.drawings.length > 0;
+      if (hasContent && line.width + atomWidth > lineAvailable()) closeLine();
+      if (!ensurePlacementWidth(atomWidth)) continue;
+      const priorDescent = Math.max(0, line.height - line.baseline);
+      const equationDescent = Math.max(
+        0,
+        equation.geometry.box.height - equation.geometry.baseline
+      );
+      line.baseline = Math.max(line.baseline, equation.geometry.baseline);
+      line.height = line.baseline + Math.max(priorDescent, equationDescent);
+      line.spans.push({
+        range: { paragraphId, start: piece.start, end: piece.end },
+        text: '\uFFFC',
+        props: piece.props,
+        style: piece.style,
+        box: {
+          x: lineOrigin() + line.width,
+          y: 0,
+          width: atomWidth,
+          height: equation.geometry.box.height,
+        },
+        projected: true,
+        equation,
+        ...revisionsOf(piece),
+      });
+      line.width += atomWidth;
+      line.end = piece.end;
+      wordStartSpan = -1;
+      lastEmitted = '';
       continue;
     }
     if (piece.projected && !piece.inlineDrawing && piece.text === '\uFFFC') {

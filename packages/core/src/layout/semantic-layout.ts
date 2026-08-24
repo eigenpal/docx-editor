@@ -173,7 +173,12 @@ import {
   type TextMeasurer,
 } from './semantic-records.ts';
 import type { NumberingIndex } from './numbering-index.ts';
-import { firstLineShift, withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
+import {
+  firstLineShift,
+  withResolvedListItems,
+  withResolvedListItemsForSession,
+  type ResolvedListItem,
+} from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
 import {
   NO_DEFERRED_DRAWINGS,
@@ -592,15 +597,26 @@ export function layoutSemanticDocument(
       drawingSourceOrderByContext.set(options.inlineDrawingLayout, drawingSourceOrder);
     }
   }
-  const optionsWithLists = withResolvedListItems(
-    drawingSourceOrder
-      ? {
-          ...optionsWithControlContext,
-          drawingSourceOrder,
-        }
-      : optionsWithControlContext,
-    blocks
-  );
+  const optionsWithLists = options.session
+    ? withResolvedListItemsForSession(
+        drawingSourceOrder
+          ? {
+              ...optionsWithControlContext,
+              drawingSourceOrder,
+            }
+          : optionsWithControlContext,
+        blocks,
+        options.session
+      )
+    : withResolvedListItems(
+        drawingSourceOrder
+          ? {
+              ...optionsWithControlContext,
+              drawingSourceOrder,
+            }
+          : optionsWithControlContext,
+        blocks
+      );
 
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
     if (sections.length > 1) {
@@ -649,6 +665,10 @@ export function layoutSemanticDocument(
   };
 
   if (!options.notes) {
+    if (options.session) {
+      options.session.notes = null;
+      options.session.notePageBottomReserves = null;
+    }
     return finish(runBody(optionsWithLists));
   }
 
@@ -1758,6 +1778,7 @@ function layoutBlocksPass(
         : undefined,
       {
         lineSpacing: entry.lineSpacing,
+        equationCacheToken: producer,
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
