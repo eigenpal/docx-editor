@@ -2,8 +2,11 @@
   "name": "docx-editor-example-write-agent",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3004",
-    "build": "next build",
+    "build:workspace-packages": "cd ../.. && bun run build:packages",
+    "predev": "bun run build:workspace-packages",
+    "dev": "next dev --webpack --port 3004",
+    "prebuild": "bun run build:workspace-packages",
+    "build": "next build --webpack",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "start": "next start --port 3004"
