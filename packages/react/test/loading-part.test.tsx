@@ -323,10 +323,12 @@ describe('DocxEditor.Loading', () => {
     );
   });
 
-  test('renders the packaged spinner when the host supplies no children', () => {
+  test('renders one packaged document scaffold when the host supplies no children', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
 
+    expect(el.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
+    expect(el.querySelectorAll('.docx-editor__loading-lines > span')).toHaveLength(11);
     expect(el.querySelector(SPINNER)).not.toBeNull();
     // Announced as a live status, and the decorative spinner is hidden from it.
     expect(el.getAttribute('role')).toBe('status');
@@ -334,14 +336,14 @@ describe('DocxEditor.Loading', () => {
     expect(el.querySelector(SPINNER)!.getAttribute('aria-hidden')).toBe('true');
   });
 
-  test('the default screen has something to announce, not an empty live region', () => {
-    // The spinner is aria-hidden, so without a text node `role="status"` would announce
-    // "" — worse than having no live region at all.
+  test('the default screen shows localized text inside the document page', () => {
     const view = render(<DocxEditorLoading when />);
     const el = view.container.querySelector(LOADING)!;
+    const page = el.querySelector('.docx-editor__loading-page')!;
+    const lines = el.querySelector('.docx-editor__loading-lines')!;
 
-    expect(el.textContent!.trim().length).toBeGreaterThan(0);
-    expect(el.querySelector('.docx-editor-sr-only')).not.toBeNull();
+    expect(page.textContent).toContain('Loading…');
+    expect(lines.getAttribute('aria-hidden')).toBe('true');
   });
 
   test('carries its own token scope, so it is styled wherever it is composed', () => {

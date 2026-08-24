@@ -67,9 +67,9 @@ export interface DocxEditorLoadingProps {
   /** Inline styles for the loading container, as on `DocxEditor.Viewport`. */
   style?: CSSProperties;
   /**
-   * The loading screen. Omitted, a neutral spinner rendered from the `--doc-*` tokens is
-   * used, so the batteries-included path has something to show. Compose your own around
-   * `DocxEditor.Loading.Spinner` to keep the packaged indicator beside your own copy.
+   * The loading screen. Omitted, a document-page scaffold rendered from the `--doc-*`
+   * tokens is used. Compose your own around `DocxEditor.Loading.Spinner` to keep the
+   * packaged indicator beside your own copy.
    */
   children?: DocxEditorChildren;
 }
@@ -116,12 +116,25 @@ function DocxEditorLoadingImpl({
   return (
     <div className={classes} style={style} role="status" aria-live="polite">
       {children ?? (
-        <>
-          <DocxEditorLoadingSpinner />
-          {/* The spinner is decorative, so the live region would otherwise announce an
-              empty string — worse than having no region at all. */}
-          <span className="docx-editor-sr-only">{t('loading.label')}</span>
-        </>
+        <div className="docx-editor__loading-page">
+          <div className="docx-editor__loading-page-status">
+            <DocxEditorLoadingSpinner />
+            <span>{t('loading.label')}…</span>
+          </div>
+          <div className="docx-editor__loading-lines" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
       )}
     </div>
   );

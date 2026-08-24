@@ -284,6 +284,9 @@ describe('DocxEditorLoading composition', () => {
     app.mount(container);
     await nextTick();
     expect(container.querySelector('.docx-editor__loading')).not.toBeNull();
+    expect(container.querySelectorAll('.docx-editor__loading-page')).toHaveLength(1);
+    expect(container.querySelectorAll('.docx-editor__loading-lines > span')).toHaveLength(11);
+    expect(container.textContent).toContain('Loading…');
     app.unmount();
     container.remove();
   });

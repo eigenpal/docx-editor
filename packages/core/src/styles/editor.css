@@ -4635,6 +4635,7 @@ a.docx-hyperlink:focus-visible {
   width: 100%;
   height: 100%;
   min-height: 0;
+  container-type: size;
   color: var(--doc-text-muted);
   font-size: 14px;
 }
@@ -4668,11 +4669,88 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
-/* The default screen when the host supplies no children.
-   `display` and `box-sizing` are explicit rather than inherited from Tailwind's
-   preflight: the part emits its own `docx-editor`, so it can be composed somewhere the
-   preflight does not reach, and an inline span would otherwise measure 42px and only
-   size at all by accident of being a flex item. */
+/* The default screen resembles the first page before its contents arrive. It uses the
+   same US Letter proportions and shadow as the painted surface. Container units let the
+   page respond to both axes, including narrow or short overlay viewports. */
+.docx-editor__loading-page {
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  width: min(816px, calc(100cqw - 32px), calc((100cqh - 32px) * 0.772727));
+  aspect-ratio: 8.5 / 11;
+  overflow: hidden;
+  padding: clamp(28px, 9.09%, 96px) clamp(24px, 11.76%, 96px);
+  background: var(--doc-page-bg-rendered);
+  border: 1px solid var(--doc-border-light);
+  box-shadow: 0 1px 3px var(--doc-shadow);
+}
+
+.docx-editor__loading-page-status {
+  position: absolute;
+  inset: 30% 12% auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--doc-text-muted);
+  font-size: 14px;
+}
+
+/* Restrained paragraph shapes make the page read as a document, not a generic card.
+   The whole scaffold breathes together instead of sending separate waves through it. */
+.docx-editor__loading-lines {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(7px, 1.25cqw, 12px);
+  animation: docx-editor-loading-pulse 1.8s ease-in-out infinite;
+}
+
+.docx-editor__loading-lines > span {
+  display: block;
+  width: 100%;
+  height: clamp(5px, 0.74cqw, 8px);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--doc-text-muted) 14%, var(--doc-page-bg-rendered));
+}
+
+.docx-editor__loading-lines > span:nth-child(1) {
+  width: 48%;
+  height: clamp(8px, 1.1cqw, 12px);
+  margin-bottom: clamp(7px, 1.25cqw, 12px);
+}
+
+.docx-editor__loading-lines > span:nth-child(3),
+.docx-editor__loading-lines > span:nth-child(8) {
+  width: 91%;
+}
+
+.docx-editor__loading-lines > span:nth-child(4) {
+  width: 73%;
+  margin-bottom: clamp(32px, 7cqw, 64px);
+}
+
+.docx-editor__loading-lines > span:nth-child(6),
+.docx-editor__loading-lines > span:nth-child(10) {
+  width: 84%;
+}
+
+.docx-editor__loading-lines > span:nth-child(11) {
+  width: 62%;
+}
+
+@keyframes docx-editor-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.42;
+  }
+
+  50% {
+    opacity: 0.82;
+  }
+}
+
+/* `display` and `box-sizing` are explicit rather than inherited from Tailwind's
+   preflight. The loading part can sit outside the host's utility scope. */
 .docx-editor__loading-spinner {
   display: block;
   box-sizing: border-box;
@@ -4687,6 +4765,12 @@ a.docx-hyperlink:focus-visible {
   animation: docx-editor-loading-spin 0.8s linear infinite;
 }
 
+.docx-editor__loading-page-status .docx-editor__loading-spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
 @keyframes docx-editor-loading-spin {
   to {
     transform: rotate(360deg);
@@ -4695,7 +4779,8 @@ a.docx-hyperlink:focus-visible {
 
 /* Respect a reduced-motion preference: keep the indicator, drop the rotation. */
 @media (prefers-reduced-motion: reduce) {
-  .docx-editor__loading-spinner {
+  .docx-editor__loading-spinner,
+  .docx-editor__loading-lines {
     animation: none;
   }
 }

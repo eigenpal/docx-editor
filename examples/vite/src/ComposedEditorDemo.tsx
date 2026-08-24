@@ -706,10 +706,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 big file behind one painted frame and reports `isOpening`, so picking a
                 large document through Open DOCX shows this screen instead of freezing
                 on the old one. It renders nothing while the document is on screen. */}
-            <DocxEditor.Loading overlay>
-              <DocxEditor.Loading.Spinner />
-              <span>Loading document…</span>
-            </DocxEditor.Loading>
+            <DocxEditor.Loading overlay />
             {/* Floating diagnostics chrome, above the overlay panels. */}
             <PerfHud />
             <CitationPopover
@@ -730,12 +727,9 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         </div>
       ) : (
         // The library's loading surface rather than a hand-rolled div: rendered outside
-        // a `Root` it always shows, which is exactly this branch's condition. Children
-        // replace the packaged screen, so the spinner is composed back in by name.
-        <DocxEditor.Loading className="demo-loading">
-          <DocxEditor.Loading.Spinner />
-          <span>Loading document…</span>
-        </DocxEditor.Loading>
+        // a `Root` it always shows, which is exactly this branch's condition. Its default
+        // page scaffold uses the active locale and the same paper tokens as the editor.
+        <DocxEditor.Loading className="demo-loading" />
       )}
     </div>
   );

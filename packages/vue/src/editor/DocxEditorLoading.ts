@@ -56,10 +56,18 @@ const DocxEditorLoadingImpl = defineComponent({
       return h(
         'div',
         { class: classes, style: props.style, role: 'status', ariaLive: 'polite' },
-        slots.default?.() ?? [
-          h(DocxEditorLoadingSpinner),
-          h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),
-        ]
+        slots.default?.() ??
+          h('div', { class: 'docx-editor__loading-page' }, [
+            h('div', { class: 'docx-editor__loading-page-status' }, [
+              h(DocxEditorLoadingSpinner),
+              h('span', `${t('loading.label')}…`),
+            ]),
+            h(
+              'div',
+              { class: 'docx-editor__loading-lines', ariaHidden: 'true' },
+              Array.from({ length: 11 }, () => h('span'))
+            ),
+          ])
       );
     };
   },
