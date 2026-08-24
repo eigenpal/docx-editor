@@ -72,6 +72,11 @@ document SHALL start a new assignment from that document's author order.
 - **WHEN** a different document attaches to the editor
 - **THEN** its author slots are seeded from that document rather than the previous session
 
+#### Scenario: An internal remount keeps the assignment
+
+- **WHEN** font resolution or another internal operation remounts the same attached document
+- **THEN** every author keeps the slot assigned before the remount
+
 #### Scenario: Selecting a card selects its range
 
 - **WHEN** the user selects a comment card

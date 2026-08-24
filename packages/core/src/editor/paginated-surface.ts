@@ -84,6 +84,7 @@ import {
   createStableReviewAuthorSlots,
   reviewAuthorsOf,
   type ReviewAuthorInfo,
+  type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -219,6 +220,7 @@ export function mountPaginatedSurface(
 ): OpenPaginatedResult {
   const runtimeOptions = options as PaginatedSurfaceOptions & {
     readonly onTrackedChange?: () => void;
+    readonly reviewAuthorSlots?: StableReviewAuthorSlots;
   };
   const opened = openTreeSession(
     bytes,
@@ -712,9 +714,9 @@ export function mountPaginatedSurface(
   // because a colour change must never cost the reader their undo history to a remount.
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
-  // One allocator per ATTACHED surface. Reattaching creates another surface and reseeds from
-  // that document, while edits, deletions and undo inside this surface keep every issued slot.
-  const stableAuthorSlots = createStableReviewAuthorSlots();
+  // The facade owns this across internal remounts of the SAME attached document. A direct
+  // surface mount has no facade session, so it correctly starts a fresh assignment here.
+  const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
   // One roster per layout instance, so `revisionAuthors()` is cheap to poll and callers can
   // key their own caches on the returned map's identity. Keyed on the review queue too: a
   // COMMENT-ONLY author is in the roster and in no layout record, so a queue that moved

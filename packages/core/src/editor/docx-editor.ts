@@ -48,6 +48,10 @@ import {
   type SemanticLayout,
   type SemanticPosition,
 } from '../layout/index.ts';
+import {
+  createStableReviewAuthorSlots,
+  type StableReviewAuthorSlots,
+} from '../output/revision-presentation.ts';
 import type {
   DocumentEditingMode,
   ReviewActivationOptions,
@@ -273,6 +277,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
   const revisionStyleState = createRevisionStyleState(config.revisionStyles);
+  /**
+   * Author colours belong to the loaded DOCUMENT, not to one surface instance.
+   *
+   * Font resolution and attach rebuild the surface from the same bytes. They reuse this
+   * assignment. `loadBytes` replaces it before a true document load mounts.
+   */
+  let reviewAuthorSlots: StableReviewAuthorSlots = createStableReviewAuthorSlots();
   /**
    * True once the reader has moved the mode themselves.
    *
@@ -506,6 +517,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(revisionStyleState.current() !== undefined
         ? { revisionStyles: revisionStyleState.current() }
         : {}),
+      reviewAuthorSlots,
       editingMode:
         editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
       // The free engine renders the FINAL-STATE projection (Word's "No Markup"):
@@ -657,6 +669,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // A load supersedes any open still waiting on its frame: drop the superseded bytes.
     openScheduler.cancel();
     loadSeq += 1;
+    reviewAuthorSlots = createStableReviewAuthorSlots();
     shapedMeasurer = undefined;
     shapedProducer = undefined;
     // An on-demand answer describes the document that asked for it. Carrying it into the

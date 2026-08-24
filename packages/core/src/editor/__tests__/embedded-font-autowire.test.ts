@@ -22,6 +22,7 @@ import { sha256FontBytes } from '../../layout/index.ts';
 import { deobfuscateFont } from '../../store/package/embedded-fonts.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { embeddedFontSources } from '../embedded-font-sources.ts';
+import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -103,6 +104,10 @@ function docxWithEmbeds(body: string, embeds: readonly EmbedEntry[]): Uint8Array
 
 const p = (text: string, family = 'DejaVu Sans') =>
   `<w:p><w:r><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+
+const insertion = (id: number, author: string, text: string) =>
+  `<w:ins w:id="${id}" w:author="${author}" w:date="2026-01-01T00:00:00Z">` +
+  `<w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:ins>`;
 
 /** Controllable proportional browser metrics, deliberately unlike the fixed 6pt grid. */
 function mockCanvasContext(): CanvasRenderingContext2D {
@@ -224,6 +229,66 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     // Settled: no further remount happens once shaped layout is in place.
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(editor.surface).toBe(surfaceAfterResolve);
+    editor.destroy();
+  });
+
+  test('a same-document remount keeps author slots, while a true load resets them', async () => {
+    const container = document.createElement('div');
+    const trackedBody =
+      '<w:p><w:r><w:rPr><w:rFonts w:ascii="DejaVu Sans" w:hAnsi="DejaVu Sans"/></w:rPr>' +
+      '<w:t xml:space="preserve">base </w:t></w:r>' +
+      insertion(1, 'Ada', 'one ') +
+      insertion(2, 'Bea', 'two ') +
+      insertion(3, 'Cora', 'three') +
+      '</w:p>';
+    const editor = createDocxEditor({
+      container,
+      document: docxWithEmbeds(trackedBody, EMBED_BOTH),
+      author: 'Grace',
+      modules: [stubReviewModule()],
+    });
+    await mounted(editor);
+    expect(
+      new Map(editor.getReviewAuthors().map((author) => [author.author, author.slot]))
+    ).toEqual(
+      new Map([
+        ['Ada', 0],
+        ['Bea', 1],
+        ['Cora', 2],
+      ])
+    );
+
+    editor.setEditingMode('suggesting');
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 0 },
+    });
+    editor.surface!.type('X');
+    const slotsBeforeRemount = new Map(
+      editor.getReviewAuthors().map((author) => [author.author, author.slot])
+    );
+    expect(slotsBeforeRemount.get('Grace')).toBe(3);
+    const surfaceBeforeResolve = editor.surface;
+
+    // Detach/attach and font resolution both rebuild through `mountBytes` for the SAME load.
+    // This path is deterministic even when the font promise settles before the test can
+    // observe its own remount under a loaded parallel run.
+    editor.detach();
+    editor.attach(container);
+    await mounted(editor);
+    await fontsSettled(editor);
+
+    expect(editor.surface).not.toBe(surfaceBeforeResolve);
+    expect(
+      new Map(editor.getReviewAuthors().map((author) => [author.author, author.slot]))
+    ).toEqual(slotsBeforeRemount);
+
+    editor.load(docxWithEmbeds(`<w:p>${insertion(1, 'Grace', 'new document')}</w:p>`, []));
+    expect(editor.surface!.session.bodyText()).toBe('new document');
+    expect(editor.getReviewAuthors()).toEqual([
+      { author: 'Grace', slot: 0, color: 'var(--doc-review-author-0)' },
+    ]);
     editor.destroy();
   });
 
