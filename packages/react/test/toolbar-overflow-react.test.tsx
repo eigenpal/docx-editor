@@ -424,16 +424,31 @@ describe('toolbar overflow integration', () => {
     expect(rule).toContain('max-height: min(72vh, 560px)');
   });
 
-  test('More and its nested Zoom picker are not clipped by overflow containers', () => {
+  test('More keeps every nested picker visible on small screens', () => {
     const coreCss = readFileSync(
       new URL('../../core/src/styles/editor.css', import.meta.url),
       'utf8'
     );
-    const nestedMenuRule =
+    const zoomRule =
       coreCss.match(
         /\.docx-toolbar__more-panel:has\(\.docx-toolbar__zoom-menu\)\s*\{[^}]+\}/
       )?.[0] ?? '';
-    expect(nestedMenuRule).toContain('overflow-y: visible');
+    expect(zoomRule).toContain('overflow-y: visible');
+
+    const fontSizeRule =
+      coreCss.match(/\.docx-toolbar__more-panel \.docx-toolbar__font-size-menu\s*\{[^}]+\}/)?.[0] ??
+      '';
+    expect(fontSizeRule).toContain('right: 0');
+    expect(fontSizeRule).toContain('left: auto');
+
+    const lowerMenuRule =
+      coreCss.match(
+        /\.docx-toolbar__more-panel \.docx-toolbar__alignment-popup,\s*\.docx-toolbar__more-panel \.docx-toolbar__line-spacing-menu\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(lowerMenuRule).toContain('top: auto');
+    expect(lowerMenuRule).toContain('right: 0');
+    expect(lowerMenuRule).toContain('bottom: 100%');
+    expect(lowerMenuRule).toContain('left: auto');
 
     const demoCss = readFileSync(
       new URL('../../../examples/vite/src/styles.css', import.meta.url),

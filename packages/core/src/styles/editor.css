@@ -3540,6 +3540,22 @@ a.docx-hyperlink:focus-visible {
   overflow-y: visible;
 }
 
+/* Right-edge controls open toward the panel instead of beyond the viewport. */
+.docx-toolbar__more-panel .docx-toolbar__font-size-menu {
+  right: 0;
+  left: auto;
+}
+
+/* The lower controls have no room below them in a small scrollport. Their compact menus
+ * open upward and toward the panel, while the panel keeps its scroll position and bounds. */
+.docx-toolbar__more-panel .docx-toolbar__alignment-popup,
+.docx-toolbar__more-panel .docx-toolbar__line-spacing-menu {
+  top: auto;
+  right: 0;
+  bottom: 100%;
+  left: auto;
+}
+
 .docx-toolbar__more-section + .docx-toolbar__more-section {
   margin-top: 4px;
   padding-top: 4px;
