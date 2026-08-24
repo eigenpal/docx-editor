@@ -113,7 +113,7 @@ export const DocxEditorEquation = defineComponent({
         let disposed = false;
         let ownerDocument: Document | null = null;
         let onKeyDown: ((event: KeyboardEvent) => void) | null = null;
-        let onMouseDown: ((event: MouseEvent) => void) | null = null;
+        let onPointerDown: ((event: PointerEvent) => void) | null = null;
         queueMicrotask(() => {
           if (disposed) return;
           const panel = panelElement;
@@ -125,18 +125,18 @@ export const DocxEditorEquation = defineComponent({
             event.preventDefault();
             close(true);
           };
-          onMouseDown = (event: MouseEvent): void => {
+          onPointerDown = (event: PointerEvent): void => {
             if (event.target instanceof view.Node && panel.contains(event.target)) return;
             close();
           };
           ownerDocument.addEventListener('keydown', onKeyDown);
-          ownerDocument.addEventListener('mousedown', onMouseDown, true);
+          ownerDocument.addEventListener('pointerdown', onPointerDown, true);
         });
         onCleanup(() => {
           disposed = true;
           if (ownerDocument && onKeyDown) ownerDocument.removeEventListener('keydown', onKeyDown);
-          if (ownerDocument && onMouseDown) {
-            ownerDocument.removeEventListener('mousedown', onMouseDown, true);
+          if (ownerDocument && onPointerDown) {
+            ownerDocument.removeEventListener('pointerdown', onPointerDown, true);
           }
         });
       },

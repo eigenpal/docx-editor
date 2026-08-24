@@ -60,6 +60,10 @@ describe('semantic equation paint', () => {
       record.equation!.geometry.box.height,
       5
     );
+    expect(Number.parseFloat(equation!.style.verticalAlign)).toBeCloseTo(
+      -(record.equation!.geometry.box.height - record.equation!.geometry.baseline),
+      5
+    );
     expect(equation!.querySelector('.docx-equation-fraction')).not.toBeNull();
     expect(equation!.querySelector('.docx-equation-radical')).not.toBeNull();
     expect(equation!.querySelector('.docx-equation-script')).not.toBeNull();

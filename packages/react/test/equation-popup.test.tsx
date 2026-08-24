@@ -152,7 +152,7 @@ describe('default React equation popover', () => {
     const outside = document.createElement('button');
     mounted.view.container.append(outside);
     outside.focus();
-    fireEvent.mouseDown(outside);
+    fireEvent.pointerDown(outside);
     expect(mounted.view.queryByTestId('equation-popup')).toBeNull();
     await tick();
     expect(document.activeElement).toBe(outside);
@@ -242,11 +242,11 @@ describe('default React equation popover', () => {
     let added = 0;
     let removed = 0;
     ownerDocument.addEventListener = ((type: string, ...args: unknown[]) => {
-      if (type === 'keydown' || type === 'mousedown') added++;
+      if (type === 'keydown' || type === 'pointerdown') added++;
       return originalAdd(type, ...(args as [EventListenerOrEventListenerObject, boolean?]));
     }) as typeof ownerDocument.addEventListener;
     ownerDocument.removeEventListener = ((type: string, ...args: unknown[]) => {
-      if (type === 'keydown' || type === 'mousedown') removed++;
+      if (type === 'keydown' || type === 'pointerdown') removed++;
       return originalRemove(type, ...(args as [EventListenerOrEventListenerObject, boolean?]));
     }) as typeof ownerDocument.removeEventListener;
     try {

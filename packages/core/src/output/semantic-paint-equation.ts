@@ -135,9 +135,9 @@ export function mountEquationGeometry(
   host.style.lineHeight = '0';
   host.style.pointerEvents = 'auto';
   host.style.userSelect = 'none';
-  // An inline-block with absolute children exposes its bottom edge as its CSS baseline.
-  // Raise that edge by the layout-published descent so the equation baseline meets the line.
-  host.style.verticalAlign = `${(geometry.box.height - geometry.baseline) * scale}px`;
+  // An inline-block exposes its bottom edge as its CSS baseline. Move the box down by its
+  // published descent so the equation's internal baseline meets the surrounding text.
+  host.style.verticalAlign = `${-(geometry.box.height - geometry.baseline) * scale}px`;
   const fragment = document.createDocumentFragment();
   paintNode(document, fragment, geometry, scale);
   host.append(fragment);

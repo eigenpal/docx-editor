@@ -131,7 +131,7 @@ describe('default Vue equation popover', () => {
     const outside = document.createElement('button');
     view.container.append(outside);
     outside.focus();
-    outside.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
     await nextTick();
     expect(view.container.querySelector('[data-testid="equation-popup"]')).toBeNull();
     expect(document.activeElement).toBe(outside);
@@ -220,11 +220,11 @@ describe('default Vue equation popover', () => {
     let added = 0;
     let removed = 0;
     ownerDocument.addEventListener = ((type: string, ...args: unknown[]) => {
-      if (type === 'keydown' || type === 'mousedown') added++;
+      if (type === 'keydown' || type === 'pointerdown') added++;
       return originalAdd(type, ...(args as [EventListenerOrEventListenerObject, boolean?]));
     }) as typeof ownerDocument.addEventListener;
     ownerDocument.removeEventListener = ((type: string, ...args: unknown[]) => {
-      if (type === 'keydown' || type === 'mousedown') removed++;
+      if (type === 'keydown' || type === 'pointerdown') removed++;
       return originalRemove(type, ...(args as [EventListenerOrEventListenerObject, boolean?]));
     }) as typeof ownerDocument.removeEventListener;
     try {

@@ -111,15 +111,15 @@ export function DocxEditorEquation() {
       event.preventDefault();
       close(true);
     };
-    const onMouseDown = (event: MouseEvent): void => {
+    const onPointerDown = (event: PointerEvent): void => {
       if (event.target instanceof view.Node && panel.contains(event.target)) return;
       close();
     };
     ownerDocument.addEventListener('keydown', onKeyDown);
-    ownerDocument.addEventListener('mousedown', onMouseDown, true);
+    ownerDocument.addEventListener('pointerdown', onPointerDown, true);
     return () => {
       ownerDocument.removeEventListener('keydown', onKeyDown);
-      ownerDocument.removeEventListener('mousedown', onMouseDown, true);
+      ownerDocument.removeEventListener('pointerdown', onPointerDown, true);
     };
   }, [state, close]);
 
