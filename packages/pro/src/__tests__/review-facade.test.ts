@@ -1106,9 +1106,8 @@ describe('the review pane', () => {
 
   test('reopens when suggesting commits another tracked change', () => {
     const editor = mount({ body: '<w:p><w:r><w:t>plain text</w:t></w:r></w:p>' });
-    editor.setEditingMode('suggesting');
-    editor.exec({ type: 'toggleReviewPane' });
     expect(editor.isReviewPaneOpen()).toBe(false);
+    editor.setEditingMode('suggesting');
 
     editor.surface!.type('X');
 

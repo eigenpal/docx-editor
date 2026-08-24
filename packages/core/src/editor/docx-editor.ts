@@ -431,6 +431,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** Monotonic mount generation for async image mutation preconditions. */
   let mountGeneration = 0;
   let cachedVersion = -1;
+  /** Closed until a mounted review model confirms that the document has review content. */
+  let reviewPaneOpen = false;
 
   /** Called at every place observable state can move. Derivation stays lazy. */
   function bump(): void {
@@ -595,6 +597,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     parseError = null;
     surface = result.surface;
+    // Keep the loading page centred and its comments control inactive until the review
+    // model exists. Once open completes, show the pane only when the model found content.
+    reviewPaneOpen = reviewEnabled && surface.session.hasReviewContent();
     adoptDocumentTracking();
     sweepCustomNodePayloadsOnOpen(surface, modules);
     mountGeneration += 1;
@@ -1332,9 +1337,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** Word writes `@w:date` to the second; milliseconds group with nothing. */
   const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
-
-  /** Open by default: a document with comments should show them without being asked. */
-  let reviewPaneOpen = true;
 
   /** Paragraph id to document position, memoized per layout. */
   const paragraphOrderCache = new WeakMap<SemanticLayout, Map<string, number>>();
