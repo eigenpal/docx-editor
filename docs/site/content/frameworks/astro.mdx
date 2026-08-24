@@ -5,7 +5,7 @@ category: 'Frameworks'
 seoTitle: 'Astro DOCX editor setup'
 ---
 
-By the end of this page you have an Astro page that mounts the editor as a React island, opens a `.docx` from disk, and downloads the edited result.
+This guide shows an Astro page that mounts the editor as a React island, opens a `.docx` from disk, and downloads the edited result.
 
 ## Install
 
@@ -14,7 +14,7 @@ npm install @docx-editor.dev/react @docx-editor.dev/core
 npx astro add react
 ```
 
-`astro add react` wires `@astrojs/react` into `astro.config.mjs` for you.
+`astro add react` adds `@astrojs/react` to `astro.config.mjs`.
 
 ## Mount the editor
 
@@ -83,7 +83,7 @@ export function Editor() {
 
 ## Why this pattern
 
-`client:only="react"` is the key directive. `client:load` would still server-render the component once to produce static HTML, and the editor crashes on `window` during that pass. `client:only` skips SSR for the island entirely and renders it in the browser only. The rest of the page stays zero-JS static HTML.
+`client:only="react"` is required. `client:load` would still server-render the component once to produce static HTML, and SSR throws when `window` is undefined during that pass. `client:only` skips SSR for the island entirely and renders it in the browser only. The rest of the page stays zero-JS static HTML.
 
 Styles need no extra setup: the stylesheet import sits inside the island component, and Astro's Vite pipeline bundles CSS imported from `client:only` components like any other module.
 
@@ -103,5 +103,5 @@ bun run dev:astro   # http://localhost:4321
 
 - [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
 - [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Astro DOCX editor guide](/blog/astro-docx-editor): the long-form walkthrough
+- [Astro DOCX editor guide](/blog/astro-docx-editor): the detailed walkthrough
 - [Astro example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/astro)

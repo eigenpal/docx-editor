@@ -26,7 +26,7 @@ import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-edi
 </template>
 ```
 
-- `DocxEditorRoot` owns the editor and provides it to descendants.
+- `DocxEditorRoot` holds the editor and provides it to descendants.
 - `DocxEditorViewport` supplies the scroll and page-layout container.
 - `DocxEditorContent` mounts the painted, editable document surface.
 
@@ -52,7 +52,7 @@ For full prop types, see the
 
 ## `provideDocxEditor()`
 
-Call `provideDocxEditor()` when a parent layout owns the editor. The helper
+Call `provideDocxEditor()` when a parent layout holds the editor. The helper
 provides one editor instance to the returned root and its descendants.
 
 ```vue
@@ -75,9 +75,9 @@ const { DocxEditorRoot, rootProps, rootListeners, editorRef } = provideDocxEdito
 `editorRef` tracks the same instance that `useDocxEditor()` returns in
 descendants.
 
-## Customization ladder
+## Customization options
 
-Use the first option that meets your needs:
+Use the first option that meets your requirements:
 
 1. Set a class or a `--doc-*` color token.
 2. Replace a part's `icon` prop.
@@ -135,8 +135,8 @@ state and disabled reasons from the editor.
 
 ### Add a host toolbar action
 
-Use `DocxEditorToolbar.Action` for an action without a registry slot. Ask
-`useEditorCommand()` whether the command can run.
+Use `DocxEditorToolbar.Action` for an action without a registry slot. Call
+`useEditorCommand()` to read whether the command can run.
 
 ```vue
 <script setup lang="ts">
@@ -239,8 +239,8 @@ the menus that your product changes.
 </DocxEditorMenu>
 ```
 
-Use `open-handler` and `save-handler` for composed Vue menu actions. The sugar
-host exposes these actions as `@open` and `@save`.
+Use `open-handler` and `save-handler` for composed Vue menu actions.
+`<DocxEditor>` exposes these actions as `@open` and `@save`.
 
 ## Custom navigation pane
 
@@ -258,7 +258,7 @@ Each navigation part accepts its own class.
 </DocxEditorNavigation>
 ```
 
-The headings list reads the document outline from the editor.
+The headings list uses the document outline from the editor.
 
 ## Custom loading screen
 
@@ -375,7 +375,7 @@ See [Tracked changes](/docs/2.x/pro/tracked-changes) for author colors.
 
 ## Custom labels
 
-Chrome reads labels from the active locale catalog. Pass a translator only when
+Chrome resolves labels from the active locale catalog. Pass a translator only when
 you need label overrides.
 
 ```vue
@@ -553,7 +553,7 @@ import {
 
 An omitted part has no interface.
 
-## Layout pitfalls
+## Layout constraints
 
 Place the navigation pane and viewport in a row with `position: relative`. The
 pane uses that row as its positioning context.

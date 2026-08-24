@@ -21,13 +21,13 @@ Press Escape or click the close action to save and leave header/footer editing.
 
 ## PAGE and NUMPAGES fields
 
-Page-number fields are stored as real Word fields, not static text. The page view renders the resolved value on each page (page 3 of a 10-page document shows "3" and "10"), values update as the document reflows, and the fields round-trip to OOXML so Word keeps them live.
+Page-number fields are stored as real Word fields, not static text. The page view renders the resolved value on each page (page 3 of a 10-page document shows "3" and "10"), values update as the document reflows, and the fields round-trip to OOXML so Word continues to evaluate them as fields.
 
 A "Page X of Y" footer is the two inserts with literal text between them: type the text "Page ", insert the page number, type " of " with the surrounding spaces, insert the total page count.
 
 ## Per-section headers and footers
 
-The OOXML model attaches header and footer references to sections, and the editor honors it:
+The OOXML model attaches header and footer references to sections, and the editor implements that model:
 
 - Each section can reference `default`, `first`, and `even` header and footer parts (`w:headerReference` / `w:footerReference`).
 - **Different first page** (`w:titlePg`) shows the `first` variant on a section's first page. Typical use: no header on a title page.
@@ -42,7 +42,7 @@ Watermarks live in header parts (that is how Word models them). Their VML or
 DrawingML markup and image payloads are preserved through editing and save.
 
 Dedicated watermark rendering, insertion, editing, and headless authoring are not
-supported yet. Existing watermarks remain inert rather than being dropped.
+supported. Existing watermarks remain inert rather than being dropped.
 
 ## Next steps
 

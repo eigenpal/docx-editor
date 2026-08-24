@@ -5,7 +5,7 @@ category: 'Guides'
 seoTitle: 'Images and floating pictures'
 ---
 
-DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip through the engine. Both adapters ship insert, wrap, properties, alt text, and selection-overlay authoring.
+DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip through the engine. Both adapters provide insert, wrap, properties, alt text, and selection-overlay authoring.
 
 ## Supported formats
 
@@ -17,7 +17,7 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 | TIFF, EMF, WMF                              | No insert                            | Rasterized when conversion succeeds; labeled placeholder otherwise | Preserved; no zero-click fetch            |
 | External `r:link` / `TargetMode="External"` | No auto-load                         | Placeholder + preserved rel                                        | Preserved; explicit user gesture to embed |
 
-Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and participate in pagination through their authored extent.
+Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
 
 BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down
 bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended
@@ -30,7 +30,7 @@ image keeps its extent and shows a labeled placeholder.
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the
 file never run and external references in it are never fetched. Its intrinsic size is read from
 `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`.
-An SVG whose root element cannot be read renders as a placeholder rather than being guessed at.
+An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 
 ## Reading selection state
 
@@ -148,7 +148,7 @@ Partially rendered:
 
 Preserved inertly:
 
-- VML (`w:pict`); watermark rendering and editing remain planned
+- VML (`w:pict`); watermark rendering and editing are not supported
 - `w:object` / `w:altChunk`: generic preservation with diagnostics
 - Tracked-change accept/reject on drawings
 

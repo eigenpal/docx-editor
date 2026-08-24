@@ -5,7 +5,7 @@ category: 'Guides'
 seoTitle: 'Content controls (SDTs)'
 ---
 
-Word content controls (`w:sdt`, Structured Document Tags) are labeled, bounded regions of a document. A control carries a stable `tag`, `title`, and `id`. That stability makes them the natural anchor for templates and programmatic filling: design the template in Word, tag the fillable regions, then fill them by tag from code.
+Word content controls (`w:sdt`, Structured Document Tags) are labeled, bounded regions of a document. A control carries a stable `tag`, `title`, and `id`. Use those identifiers as addresses for templates and programmatic filling: design the template in Word, tag the fillable regions, then fill them by tag from code.
 
 The editor parses controls into the canonical tree, keeps them editable, renders their boundary, and round-trips them with structural fidelity. Properties it does not model, such as `w:dataBinding` and `w15:repeatingSection`, remain as generic nodes and survive editing and save.
 
@@ -140,7 +140,7 @@ The inspector state carries `tag`, `alias`, `id`, `controlType`, `locked`, `remo
 
 `showAll` / `setShowAll` toggles boundary rendering for every control, and `formFill` / `setFormFill` puts the document into fill-only mode, where the caret can enter controls but not the text around them. The packaged `ContentControl` part is the inspector panel over exactly this API, and `CONTENT_CONTROL_SLOTS` lists the matching chrome slot ids.
 
-A data-bound control refuses a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` says so rather than failing silently.
+A data-bound control rejects a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` reports the reason instead of dropping the write.
 
 ## Creating a control in the editor
 
@@ -204,7 +204,7 @@ function insertField() {
 </FrameworkTabs>
 
 `tag` is the identity you look the control back up by, and `title` is the label Word shows. An
-empty control holds its prompt until somebody types: the first character replaces the whole
+empty control holds its prompt until the user types: the first character replaces the whole
 prompt, the way it does in Word.
 
 To address text other than the selection, pass a `target` that names a paragraph by its
@@ -221,12 +221,12 @@ editor.exec({
 
 You can author `richText`, `plainText`, `dropdown` (also spelled `dropDownList`, as OOXML
 spells it), `comboBox`, and `date` controls. Checkbox, picture, and repeating-section controls
-carry content an insertion would have to invent, so they aren't authored here. A dropdown or
+carry content an insertion would have to invent, so they are not authored here. A dropdown or
 combo box starts with no items: add them in Word, or design the template there and fill it
 from code.
 
 `editor.can()` answers the same refusal `exec` would, so a button can disable itself and show
-the reason. The command refuses rather than guessing when:
+the reason. The command rejects the operation when:
 
 - The selection crosses two paragraphs. A control over several paragraphs is a block wrapper,
   which is a different element.
@@ -235,7 +235,7 @@ the reason. The command refuses rather than guessing when:
 
 ## Typed control chrome
 
-In the editor, typed controls get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. No wiring required.
+In the editor, typed controls get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. These controls work without host event handlers.
 
 ## Current limits
 

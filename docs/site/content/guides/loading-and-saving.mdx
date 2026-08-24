@@ -5,7 +5,7 @@ category: 'Guides'
 seoTitle: 'Loading and saving DOCX documents'
 ---
 
-The editor takes a `.docx` file in and gives a `.docx` file back. Everything happens client-side: no upload, no conversion service.
+The editor accepts `.docx` data and serializes the edited document to `.docx`. Load and save run in the browser. The editor does not upload or convert through a service.
 
 ## Input formats
 
@@ -52,7 +52,7 @@ Paragraph.
 </Framework>
 </FrameworkTabs>
 
-Omitting `document` is not the same thing. It means no document at all, so the editor shows
+Omitting `document` differs from `'blank'`. It means no document at all, so the editor shows
 its loading screen and every control stays disabled. Use `undefined` only while your own
 fetch is still running.
 
@@ -237,7 +237,7 @@ editorRef.value?.load(nextBytes);
 
 ## Saving
 
-Two paths matter:
+Use one of these save paths:
 
 - `save()` on the ref returns `Promise<ArrayBuffer | null>`
 - The packaged File → Save action, which you override with `onSave` in React and the
@@ -345,7 +345,7 @@ onBeforeUnmount(() => {
 </Framework>
 </FrameworkTabs>
 
-Pick a debounce window that matches your backend's write tolerance. 1 to 2 seconds is a reasonable default.
+Pick a debounce window that matches your backend's write tolerance. Use a 1–2 second debounce unless your API requires another interval.
 
 ## Next steps
 

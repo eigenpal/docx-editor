@@ -12,7 +12,7 @@ For all signatures, see the [React API reference](/docs/2.x/api/react).
 ## Document and mount state
 
 Use `document` for the document source.
-Use `fonts` to improve measurement fidelity.
+Use `fonts` to supply font metrics for measurement.
 
 | Prop       | Type                                                             | Description                                                                     |
 | ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -47,7 +47,7 @@ comments, and custom nodes.
 
 | Prop      | Type                      | Description                                                   |
 | --------- | ------------------------- | ------------------------------------------------------------- |
-| `modules` | `readonly EditorModule[]` | Capability modules that the editor reads during construction. |
+| `modules` | `readonly EditorModule[]` | Capability modules that the editor loads during construction. |
 
 Keep the array identity stable.
 A new array causes the editor to rebuild.
@@ -89,11 +89,11 @@ These props control the packaged frame around the document.
 
 ## Dark mode
 
-`colorMode` changes the editor chrome.
-The document canvas remains faithful to the DOCX file.
-The setting does not change saved or printed output.
+`colorMode` changes the editor chrome and applies a display transform to the document canvas.
+The setting does not change authored document colors or saved output.
+Printing uses a light page regardless of this setting.
 
-This example controls the chrome theme:
+This example controls the editor color mode:
 
 ```tsx
 const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
@@ -109,7 +109,7 @@ For theme behavior, see the [Dark mode guide](/docs/2.x/guides/dark-mode).
 ## Fonts
 
 `fonts` supplies font bytes for text measurement.
-Accurate metrics improve line wraps and page breaks.
+Matching metrics produce line wraps and page breaks that match Word more closely.
 The editor loads supported embedded fonts without extra configuration.
 The font picker combines declared document fonts with configured fonts.
 Use `useFontFamily()` to read that list.

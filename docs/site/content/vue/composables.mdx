@@ -1,6 +1,6 @@
 ---
 title: 'Composables'
-description: 'The Vue API the packaged chrome is built on: subscribe to editor state, run commands, read the document outline, search, and drive page setup.'
+description: 'Vue composables used by the packaged chrome: subscribe to editor state, run commands, read the document outline, search, and drive page setup.'
 category: 'Vue'
 order: 38
 ---
@@ -9,8 +9,8 @@ Call each composable during `setup()` inside `DocxEditor.Root`. The packaged
 `<DocxEditor>` also renders this root.
 
 These composables return a ref, or a plain object that holds refs. A template
-unwraps a ref only when the ref is a top-level binding. A ref that sits on a
-returned object stays a ref, so read it with `.value` in the template and in
+unwraps a ref only when the ref is a top-level binding. A ref that is a property
+of a returned object stays a ref, so read it with `.value` in the template and in
 script code.
 
 ## useEditorCommand
@@ -142,7 +142,8 @@ their `at` value.
 
 ## useEditorSnapshot
 
-Returns a revision ref for an editor. Use it for custom external-store wiring.
+Returns a revision ref for an editor. Use it for a custom external-store
+subscription.
 
 ## useZoom
 
@@ -172,7 +173,7 @@ const font = useFontFamily();
 </template>
 ```
 
-The current family sits on the `value` member, and that member is a computed
+The current family is on the `value` member, and that member is a computed
 ref. Read it as `font.value.value`.
 
 `useParagraphStyle` provides the same pattern for paragraph styles.
@@ -210,8 +211,8 @@ use twips. Set `scope` to `'section'` or `'document'`.
 ## useParagraphFormat
 
 Use `useParagraphFormat` to read and change the paragraph at the selection.
-`apply` sends every field as one command, so a dialog's worth of changes is one
-undo step. Read the returned refs with `.value`:
+`apply` sends the supplied fields as one command, so one call creates one undo
+step. Read the returned refs with `.value`:
 
 ```vue
 <script setup lang="ts">
@@ -233,13 +234,12 @@ function toggle() {
 </template>
 ```
 
-A field reads `null` when the selected paragraphs disagree about it. A checkbox
-shows that as indeterminate. A number field has no such state: it opens on a
-default rather than on either value in play, and stays there until you change it.
-Nothing is written for a field you don't touch, so the paragraphs keep disagreeing. Omit a field to leave it as
-authored. The spacing, line-spacing and indent fields also take `null`, which
-removes the setting so the style supplies it again. That isn't the same as
-writing a zero, which blocks the style.
+A field is `null` when selected paragraphs have different values. A checkbox
+shows an indeterminate state. A number field has no indeterminate state. It shows
+a default until you change it. Omitted fields are not written, so existing values
+stay. Spacing, line-spacing, and indent fields also accept `null`. That value
+clears the local setting so the style supplies it. Writing `0` sets an explicit
+value instead.
 
 For the whole form, `DocxEditorParagraphDialog` is the Paragraph dialog over
 this composable.
@@ -326,7 +326,7 @@ Returns the horizontal page offset caused by the open navigation pane.
 ## useReviewGutter
 
 Returns the inline reservations for the active review rail.
-The full card column changes to balanced marker strips on narrow viewports.
+The full card column changes to compact marker strips on narrow viewports.
 
 ## useDocxSource
 

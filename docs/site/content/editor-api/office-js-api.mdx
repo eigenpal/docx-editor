@@ -7,9 +7,9 @@ order: 53
 
 `@docx-editor.dev/editor-api` implements an Office.js-compatible object model.
 `context.document.body.paragraphs`, `load()` then `sync()`, `search(text, options)`,
-`getFirstOrNullObject()` and `isNullObject` are the same members you already write. To port Word
-add-in code, change how the batch opens, then read the divergences below: a few of them cost your
-batch an extra `sync()`.
+`getFirstOrNullObject()` and `isNullObject` are the same members as Office.js Word add-in code. To
+port Word add-in code, change how the batch opens, then read
+[Divergences](#divergences): some divergences require one extra `sync()` per batch.
 
 ## Compatibility boundaries
 
@@ -18,7 +18,7 @@ batch an extra `sync()`.
   callback uses the same object model.
 - This repository authors every public type. The package does not vendor, copy or generate code
   from Microsoft's declarations.
-- The API implements the subset listed below.
+- The API implements the subset in [What is implemented](#what-is-implemented).
 
 ## How compatibility is verified
 
@@ -40,13 +40,13 @@ reference declarations, and the published package contains no reference data.
 The document, its body, paragraphs, ranges and the collections over them; search with `matchCase` / `matchWholeWord`; character formatting through `font`; paragraph formatting (style, alignment, indents, spacing); lists and list items; bookmarks; sections and page setup; footnotes and endnotes; comments with replies and a resolved flag; revisions with accept and reject, individually or all at once; and content controls, addressed by id, tag or title.
 
 The lifecycle around them carries over unchanged: `load()` declares reads, `sync()` is the only
-round trip, and `getFirstOrNullObject` / `getLastOrNullObject` answer an object rather than throwing.
-A proxy survives every `sync()` inside the `run` that created it. To use it in a later `run`, add it
-to `context.trackedObjects`, return it, then adopt it with `runtime.run(object, callback)`. A proxy
-that is not tracked is released when its `run` ends.
+round trip, and `getFirstOrNullObject` / `getLastOrNullObject` return an object rather than throwing.
+A proxy remains valid across every `sync()` inside the `run` that created it. To use it in a later
+`run`, add it to `context.trackedObjects`, return it, then adopt it with
+`runtime.run(object, callback)`. A proxy that is not tracked is released when its `run` ends.
 
 `LoadQueryOptions.expand` remains in the public type for source compatibility, but navigation-property
-expansion is not supported yet. A non-empty `expand` is rejected immediately with
+expansion is not supported. A non-empty `expand` is rejected immediately with
 `InvalidArgument` targeting the object's `.expand` option; omit it or pass `expand: []`. Load a
 navigation object or collection explicitly and sync it in the usual way.
 
@@ -63,7 +63,7 @@ structured story for traversal and edits.
 
 In a browser runtime, `Range.select()` and `Bookmark.select()` also navigate the editor viewport to
 the selected content, matching Word's contract. Selection capability is the only preflight required:
-each operation owns its reveal and verifies selection again at `sync()`. The reveal uses paginated
+each operation performs its own reveal and verifies selection again at `sync()`. The reveal uses paginated
 layout coordinates, so it works when the target page is virtualized and has no painted element yet.
 A server runtime refuses either `select()` with `NotSupported` because it has no reader or viewport.
 
@@ -168,7 +168,7 @@ The following APIs are absent from the public types, so code that uses them fail
 
 - `ContentControl.id` is a string because DOCX files can repeat or omit the value.
 - `ContentControl.subtype` reports the file format's terms.
-- An item accessor answers an object that is not usable yet. `getFirst()`, `getLast()` and their
+- An item accessor returns an object that is not usable yet. `getFirst()`, `getLast()` and their
   `OrNullObject` forms need one `await context.sync()` before you can load or write through the
   object they return. Which object it is comes back from a read, and a batch has to name its targets
   before it is sent, so resolving it in place would mean several round trips per `sync()`. Using it
@@ -188,7 +188,7 @@ The following APIs are absent from the public types, so code that uses them fail
 - A collection loads its items, not their properties. `paragraphs.load('text')` and
   `paragraphs.load('items/text')` are refused with `InvalidArgument`. Load the collection, sync, then
   load what you want from the items, for the same reason: the items are not addressable until the
-  first read has answered.
+  first read returns.
 
   ```ts
   const paragraphs = context.document.body.paragraphs;
@@ -209,9 +209,9 @@ document and still refuses a bound control if the file changed after `isBound` w
 ## Migrating an add-in
 
 1. Replace `Word.run(async (context) => { … })` with a runtime you construct: `DocxEditor.createServer(bytes, { author })` on a server, `DocxEditor.createBrowser(editor, { author })` in a page when the script replies to comments. The callback body is the part that stays the same.
-2. Expect the same load/sync discipline you already write. Reads still have to be declared, and a property you did not load still fails.
-3. Add the syncs the divergences above describe. The statements stay the same; a batch that reaches an item accessor or a collection's item properties needs one more round trip than it does in an add-in.
-4. Check the omissions above. If your add-in walks tables or inserts pictures, that work has no equivalent here yet.
+2. Expect the same load/sync discipline as Office.js Word add-in code. Reads still have to be declared, and a property you did not load still fails.
+3. Add the syncs that [Divergences](#divergences) describe. The statements stay the same; a batch that reaches an item accessor or a collection's item properties needs one more round trip than it does in an add-in.
+4. Check [Omissions](#omissions). If your add-in walks tables or inserts pictures, that work has no equivalent in this API.
 
 ## Next steps
 

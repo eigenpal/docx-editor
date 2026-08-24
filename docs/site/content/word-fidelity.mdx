@@ -10,8 +10,8 @@ seoTitle: 'Word feature support and fidelity'
 ## Overview
 
 - **Browser editor use is client-side.** Parsing, rendering, editing, and serialization run in the browser for normal `<DocxEditor>` usage. The server-side editing API runs wherever you host it.
-- **`.docx` in, `.docx` out.** The editor reads OOXML and writes OOXML. Untouched content, unsupported markup, and package payloads survive editing and save.
-- **Apache 2.0** for every published package except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`. Those two ship under the EigenPal Pro Evaluation License 1.0: evaluate freely, and use a commercial agreement for production. Versions follow **SemVer**, and CI tracks the public API with generated snapshots.
+- **The editor reads OOXML and writes OOXML.** Untouched content, unsupported markup, and package payloads survive editing and save.
+- **Apache 2.0** for every published package except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`. Those two use the EigenPal Pro Evaluation License 1.0. Internal, non-production evaluation is free. Production use requires a commercial agreement. Versions follow **SemVer**, and CI tracks the public API with generated snapshots.
 - **Commercial support**: [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com).
 
 ## Feature matrix
@@ -22,12 +22,12 @@ Every feature is tracked on three axes:
 - **Rendering**: does it display the way Microsoft Word renders it?
 - **Round-trip**: does it survive open, edit, save, and reopen without loss?
 
-A construct the editor doesn't model is retained as inert content and written
-back with structural fidelity; that's the "Preserved" status below.
+A construct the editor does not model is retained as inert content and written
+back with structural fidelity; that is the "Preserved" status below.
 
 <FeatureSummary />
 
-**Legend**: Full = works like Word · Partial = works with noted limits ·
+**Legend**: Full = matches Word behavior for this feature · Partial = works with noted limits ·
 Render only = displays correctly, not editable · Preserved = carried inertly
 through editing and save · Planned = on the roadmap · No = not supported.
 
@@ -73,7 +73,7 @@ through editing and save · Planned = on the roadmap · No = not supported.
 
 ## Rendering fidelity
 
-The editor does not let the browser lay out the document. A DOM-free layout
+The editor does not use browser layout for the document. A DOM-free layout
 pass positions every line and every page break from Word's own metrics: twips,
 the document's fonts and themes, and its section and margin geometry. The
 editor then paints the visible pages from that result. The layout pass decides
@@ -81,17 +81,17 @@ where a line or a page breaks, never the browser. The output is plain DOM text,
 not a canvas bitmap.
 
 How the pipeline achieves this is in
-[Architecture](/docs/2.x/core/architecture). To judge fidelity yourself, open
+[Architecture](/docs/2.x/core/architecture). To compare fidelity, open
 one of your own documents in the [live demo](https://docx-editor.dev/editor)
 next to Word.
 
 ## Drawings, shapes and legacy images
 
-These rows in the "Images & drawings" matrix are not Full yet, but their
+These rows in the "Images & drawings" matrix are not Full, but their
 authored markup and payloads survive editing and save.
 
 - **Text boxes**: story content renders read-only inside the authored extent;
-  editing, linked chains, autofit, and rotation are not built yet.
+  editing, linked chains, autofit, and rotation are not implemented.
 - **Drawing shapes**: unsupported geometry reserves its extent with a
   placeholder; the original markup is preserved.
 - **WMF / EMF**: rasterized where supported, otherwise shown as a placeholder;
@@ -99,22 +99,22 @@ authored markup and payloads survive editing and save.
 
 ## Round-trip behavior
 
-A `.docx` file is a ZIP of XML parts, and Word writes a lot of XML the
-editor has no reason to model: bookmarks, custom XML parts, mail-merge fields,
+A `.docx` file is a ZIP of XML parts, and Word writes XML constructs the
+editor does not model: bookmarks, custom XML parts, mail-merge fields,
 compatibility settings, VBA projects.
 
 This editor's pipeline is parse → document model → edit → serialize. On save,
 the canonical tree preserves the structure and semantics of every parsed XML
-part, while package payloads pass through untouched. Concretely:
+part, while package payloads pass through untouched. In detail:
 
 - Unmodeled XML elements and attributes are kept as generic nodes and
   re-emitted in place, including legacy VML, custom XML, and add-in markup.
 - Non-XML payloads such as media, VBA projects, embedded fonts, and OLE
   binaries are copied through the ZIP untouched.
 - References stay intact. The editor does not rename or renumber a relationship ID, bookmark name, field code, style ID, or numbering definition.
-- Output is canonical OOXML, not only valid. Tracked changes are real `w:ins` and `w:del` revisions that Word's review pane understands, theme colors stay theme references, and numbering keeps its definitions.
+- Output is canonical OOXML, not only valid. Tracked changes are real `w:ins` and `w:del` revisions that appear in Word's review pane, theme colors stay theme references, and numbering keeps its definitions.
 
-How it's tested: CI round-trips a corpus of real documents through two oracles,
+Test coverage: CI round-trips a corpus of real documents through two oracles,
 a canonical fingerprint over the tree and a save-and-reopen semantic digest.
 Serializer tests assert that specific constructs survive, such as revisions,
 fields, hyperlinks, and content controls. Browser end-to-end tests drive the
@@ -129,21 +129,21 @@ bug. Attach it to a
 
 - **Normal editor use is browser-only.** The editor package does not upload documents or call a conversion API.
 - **No macro execution.** VBA macros and embedded code are not evaluated.
-- **The editing API is host-controlled.** [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) ships no network transport and no model integration. The browser entry drives an editor already in the page, so the DOCX never leaves it. The server entry runs wherever you host it. Your own code decides what reaches a model.
+- **The editing API is host-controlled.** [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) ships no network transport and no LLM or external AI integration. The browser entry drives an editor already in the page, so the DOCX never leaves it. The server entry runs wherever you host it. Your own code decides what reaches an external service or model.
 
 ## Bundle and performance
 
 - `-core` ships subpath exports that tree-shake independently.
 - The engine is a peer dependency of the adapters, so one copy resolves for the whole tree.
 - Lazy-load the editor (`next/dynamic`, `React.lazy`) to keep it out of the initial bundle.
-- The layout engine caches per-block measurements; an edit doesn't re-measure the document.
+- The layout engine caches per-block measurements; an edit does not re-measure unchanged blocks.
 
 No published benchmarks; test with your own documents in the
 [live demo](https://docx-editor.dev/editor).
 
 ## Stability, license and support
 
-- **Apache 2.0** for every package except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`. Those two ship under the EigenPal Pro Evaluation License 1.0: free to evaluate internally, and production use needs a written agreement from [licensing@eigenpal.com](mailto:licensing@eigenpal.com).
+- **Apache 2.0** for every package except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`. Those two ship under the EigenPal Pro Evaluation License 1.0: internal evaluation is free, and production use needs a written agreement from [licensing@eigenpal.com](mailto:licensing@eigenpal.com).
 - **SemVer** via changesets; all packages share one version number.
 - The public API is tracked by [API Extractor snapshots](https://github.com/eigenpal/docx-editor/tree/main/docs/api); CI fails on drift.
 - Contributions need a one-time [CLA](https://github.com/eigenpal/docx-editor/blob/main/CLA.md).
@@ -154,6 +154,6 @@ for priority features and support contracts.
 
 ## Next steps
 
-- [Quickstart](/docs/2.x/quickstart): the load, edit, save loop
+- [Quickstart](/docs/2.x/quickstart): the load, edit, and save workflow
 - [Architecture](/docs/2.x/core/architecture): the pipeline in depth
-- [Tracked changes](/docs/2.x/pro/tracked-changes): the review model in practice
+- [Tracked changes](/docs/2.x/pro/tracked-changes): tracked-change and comment behavior

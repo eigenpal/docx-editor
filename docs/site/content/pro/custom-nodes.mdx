@@ -7,11 +7,11 @@ order: 63
 
 Use a custom node for an element DOCX has no type for: a citation, an @mention, a merge field, a
 signature placeholder. Each is stored as an inline Word content control (`w:sdt`), so Word renders
-its text and hands it back unchanged.
+its text and returns the control unchanged.
 
 Requires the custom-nodes module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
-## A citation, end to end
+## Citation example
 
 <FrameworkTabs>
 <Framework value="react">
@@ -138,17 +138,18 @@ defineProps<{ bytes: Uint8Array }>();
 </Framework>
 </FrameworkTabs>
 
-Cite drops `(Smith 2024)` at the caret as a chip. Save, open in Word, bring it back: the chip is
-recognized again, payload included.
+Insert places `(Smith 2024)` at the caret as a chip. After you save, open the file in Word, and
+reopen it here, the editor recognizes the chip and its payload again.
 
-## I want to
+## Common tasks
 
 <Cards>
   <Card title="Store data on a node" href="#define-a-node">
     A payload validated by your schema, up to 262,144 UTF-16 code units, kept in a customXml part.
   </Card>
   <Card title="Show a chip and react to clicks" href="#render-the-chips">
-    `CustomNodeChrome` paints recognized nodes and gives you the click, hover and rect.
+    `CustomNodeChrome` paints recognized nodes and exposes click and hover handlers and the node
+    rect.
   </Card>
   <Card title="Insert, edit or delete a node" href="#insert-update-remove">
     Three functions, one transaction and one undo step each.
@@ -156,7 +157,7 @@ recognized again, payload included.
   <Card title="Find every node in the document" href="#read-the-nodes">
     `customNodesOf(editor)` in body order, `dataOf` to get your type back.
   </Card>
-  <Card title="Strip my markup before sending a file out" href="#save-vs-export">
+  <Card title="Remove custom-node markup before export" href="#save-vs-export">
     `saveForExport` applies each definition's `preserveOnExport`.
   </Card>
   <Card title="Write nodes on a server" href="#common-configurations">
@@ -179,23 +180,23 @@ const Citation = defineCustomNode({
 ```
 
 `schema` is any [Standard Schema](https://standardschema.dev): zod, valibot, arktype. The pro
-package bundles none of them, so bring the one you already use.
+package bundles none of them, so install the schema library your project already uses.
 
 - Invalid data is rejected before anything is written to the document.
 - Data read back out is returned as your type instead of `unknown`.
 
-Payloads also arrive from `.docx` files someone else wrote, so the schema is what stands between
-that JSON and your code. Async validation is refused.
+Payloads also arrive from `.docx` files someone else wrote, so the schema validates that JSON
+before your code uses it. Async validation is refused.
 
 `text` reads the schema's _output_, so a `.default()` or a `.transform()` has already run.
 
 A node can skip `schema` and keep everything in its tag, which Word caps at 64 characters. See
 [nodes without a payload](/docs/2.x/pro/custom-nodes-reference#nodes-without-a-payload).
 
-Modules are read once, at construction. Changing the array afterwards does nothing; remount the Root.
+Modules are read once, at construction. Changing the array after construction has no effect; remount the Root.
 
 Everything else is optional: `label` and `chrome.color` for the chip, `onClick` / `onHover` /
-`onEdit`, `reviewCard` for a sidebar card, `preserveOnExport` for what leaves. See the
+`onEdit`, `reviewCard` for a sidebar card, `preserveOnExport` for export behavior. See the
 [reference](/docs/2.x/pro/custom-nodes-reference#definecustomnode).
 
 ## Render the chips
@@ -255,7 +256,7 @@ An activated node carries `name`, `attrs`, `tag`, `data` and `rect` (viewport-re
 anchoring your own popover), plus `nodeId` and `text` when they resolve.
 
 Remove can be refused, by a locked wrapper or a document open for viewing. Pass
-`onRemoveRefused(node, reason)` to show the engine's reason; without it the menu just closes.
+`onRemoveRefused(node, reason)` to show the engine's reason; without it, the menu closes.
 
 ## Insert, update, remove
 
@@ -279,7 +280,7 @@ const result = updateCustomNode(editor, Citation, card.nodeId, { data: next });
 if (result.ok && result.nodeId) setCard({ ...card, nodeId: result.nodeId });
 ```
 
-A payload the schema rejected comes back with `issues`, each pointing at a field:
+A payload the schema rejected returns with `issues`, each pointing at a field:
 
 ```ts
 const result = insertCustomNode(editor, Citation, { data: form });
@@ -365,7 +366,7 @@ if (!outgoing.ok) throw new Error(outgoing.reason);
 download(outgoing.bytes);
 ```
 
-`preserveOnExport` decides per definition: `true` (default) travels whole, `'text'` keeps the words
+`preserveOnExport` decides per definition: `true` (default) keeps the full control, `'text'` keeps the words
 and drops the control, `false` removes the node and its content. A tag no definition claims is never
 touched.
 
@@ -381,7 +382,7 @@ not become a node again.
 ## Common configurations
 
 **A mention, no payload.** Everything fits in the tag, so there is no schema and no customXml part.
-`fromDocx` clamps the untrusted strings a `.docx` hands you, or returns `null` to leave the control
+`fromDocx` clamps the untrusted strings a `.docx` supplies, or returns `null` to leave the control
 literal:
 
 ```ts
@@ -406,8 +407,8 @@ const InternalNote = defineCustomNode({
 
 **A node written on a server.** `customNodeXml` builds the same control as XML without an editor or
 DOM. For a payload-bearing node, server authoring must also add the payload package parts, their
-relationships and the properties part's content-type override. The document opens here with the
-node recognized:
+relationships and the properties part's content-type override. When the document opens in this
+editor, the node is recognized:
 
 ```ts
 import { customNodeXml } from '@docx-editor.dev/pro';

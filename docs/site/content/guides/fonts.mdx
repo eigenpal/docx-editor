@@ -6,7 +6,7 @@ seoTitle: 'Fonts and text measurement'
 ---
 
 The editor measures text with a real shaping engine (HarfBuzz) whenever it has font
-bytes to measure with. With no fonts at all it still works: layout falls back to a
+bytes to measure with. With no fonts, the editor still opens: layout falls back to a
 fixed-width estimate, but wrap and page-break points are then approximations rather
 than Word's. This guide covers the three ways fonts reach the editor, the two ways of
 timing them, and how they combine.
@@ -16,7 +16,7 @@ timing them, and how they combine.
 **1. Fonts embedded in the document, automatic.** A `.docx` can carry the faces it was
 written in. When it does, the editor extracts them on load and measures with them. No
 configuration, no assets, no network: a document that brings its own fonts is
-Word-accurate out of the box, in metrics and in pixels. The editor also registers the
+Word-accurate without extra font configuration, in metrics and in pixels. The editor also registers the
 embedded bytes with the browser so the painted pages show the real glyphs, not a platform
 substitute.
 
@@ -25,9 +25,9 @@ declares. A `.docx` controls its own font names, and the browser's font registry
 page-wide, so registering a document's `Segoe UI` would repaint your application's own
 buttons and dialogs with glyphs from that file.
 
-**2. Metric-compatible substitutes, one call.** Most documents use Word's default
+**2. Metric-compatible substitutes via `loadDefaultFonts`.** Most documents use Word's default
 fonts (Calibri, Cambria, Times New Roman, Arial, Courier New), which are proprietary
-and cannot be bundled. The optional `@docx-editor.dev/fonts` package ships open-licensed
+and cannot be bundled. The optional `@docx-editor.dev/fonts` package provides open-licensed
 faces built to match their metrics: identical advance widths, so lines wrap where Word
 wraps them:
 
@@ -127,7 +127,7 @@ Importing the package fetches nothing.
 
 **3. Your own fonts, explicit URLs.** For brand fonts or licensed copies of the real
 faces, `loadFonts` fetches URLs you specify and caches them locally. When you pin a
-`sha256:` hash it gates admission hard. Pin it for any URL not under your sole
+`sha256:` hash it rejects the bytes when the hash does not match. Pin it for any URL not under your sole
 control:
 
 ```ts
@@ -153,8 +153,8 @@ const fonts = composeFontConfiguration(brand, await loadDefaultFonts());
 `loadFonts` never rejects for a single bad source: it returns the admitted sources plus
 a typed `failures` list, so the editor can open with partial coverage.
 
-You never have to compute a hash by hand. Pins are optional: omit `hash` for URLs on
-your own origin and `loadFonts` computes one for you. When you do want to pin a
+You do not need to supply a hash. Pins are optional: omit `hash` for URLs on
+your own origin and `loadFonts` computes one. When you do want to pin a
 third-party URL, run it once without a pin and read the values back off the result:
 
 ```ts
@@ -165,8 +165,8 @@ console.log(result.sources.map((source) => `${source.id}: ${source.hash}`));
 Paste those into your source list (or generate the list at build time, which is how
 `@docx-editor.dev/fonts` bakes the hashes for its own assets).
 
-Already hold the bytes, from a file input, IndexedDB, or a bundler import? `createFontSource`
-turns them into a source directly, with the hash computed for you. It returns a typed
+If you already have font bytes from a file input, IndexedDB, or a bundler import, `createFontSource`
+turns them into a source directly, with the hash computed. It returns a typed
 failure rather than throwing when the descriptor or the bytes are unusable:
 
 ```ts
@@ -255,8 +255,8 @@ const fonts = useFonts(async ({ families, defaultFamily }) => {
 </Callout>
 
 `useFonts` exists because the editor root rebuilds its instance when `fonts` changes
-identity. An inline resolver is a new function on every render, which would rebuild the
-editor forever. `useFonts` returns one resolver for the component's life. It also merges
+identity. An inline resolver is a new function on every render, which rebuilds the
+editor on every render. `useFonts` returns one resolver for the component's life. It also merges
 origins, so on-demand and upfront faces compose:
 
 ```ts
@@ -296,7 +296,7 @@ measuring accurately.
 Font errors reach you as `onFontError` on the React root, as the `@font-error` emit on
 the Vue root, and as an option on `createDocxEditor`. Each error carries a typed `code`
 (`missing`, `malformed`, `overLimit`, `hashMismatch`, …) and, where known, the face
-`request` it concerns. To answer "am I measuring Word-accurately right now?", read
+`request` it concerns. To check whether measurement uses shaped fonts, read
 `fontMeasurement()` on the editor instance:
 
 <FrameworkTabs>
@@ -351,11 +351,11 @@ usable font source; `resolving: true` means shaped resolution is still in flight
 
 ## Serving the shaper's WASM yourself
 
-The text shaper is a WASM binary that ships inside `@docx-editor.dev/core` and
+The text shaper is a WASM binary included in `@docx-editor.dev/core` and
 loads lazily when fonts resolve. Webpack, Turbopack, and Vite emit it as an
-asset automatically, so most apps need no setup.
+asset automatically, so those bundlers need no extra setup for this asset.
 
-Some bundlers don't emit `new URL(..., import.meta.url)` assets. esbuild and Bun
+Some bundlers do not emit `new URL(..., import.meta.url)` assets. esbuild and Bun
 are the common ones, and so is any build that inlines dynamic imports, such as a
 library bundle. Those builds succeed and then fail at runtime, reaching
 `onFontError` as an `EditorFontError` with code `wasmUnavailable`:
@@ -410,7 +410,7 @@ await copyFile(
 );
 ```
 
-Re-run that step on every upgrade. The shaper refuses a binary from a different
+Re-run that step on every upgrade. The shaper rejects a binary from a different
 version, so a stale copy fails the same way a missing one does.
 
 Call `setHarfBuzzWasmUrl` before the first editor. The shaper reads the location
@@ -425,11 +425,11 @@ configuration. Serving it from another origin needs that origin in your
 either way.
 
 Serve the copy from the installed package version. The shaper compares the
-HarfBuzz library version it loads against the one it was built for, and refuses a
+HarfBuzz library version it loads against the one it was built for, and rejects a
 mismatch instead of measuring text with unverified metrics.
 
 Because the shaper is bundled into the package, an npm `overrides` entry for
-`harfbuzzjs` doesn't change the code that runs. Upgrade `@docx-editor.dev/core`
+`harfbuzzjs` does not change the code that runs. Upgrade `@docx-editor.dev/core`
 instead.
 
 ## Caveats

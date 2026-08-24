@@ -117,7 +117,7 @@ An explicit `mode` overrides the document setting. The toolbar can switch betwee
 
 The `'view'` mode keeps the editor read-only. Enforced protection overrides this rule when the document permits only tracked changes.
 
-The `<DocxEditor>` component defaults `mode` to `'edit'`, so the packaged editor opens every document ready to type.
+The `<DocxEditor>` component defaults `mode` to `'edit'`, so the packaged editor opens every document in editing mode.
 
 ## What gets tracked
 
@@ -145,7 +145,7 @@ Resolved views also merge paragraphs when a revision deletes the paragraph mark.
 The editor colors each reviewer's changes, and you can override the ramp, declare
 per-author colors and avatars, or color by change type instead.
 
-For all of it, see [Review colors and styling](/docs/2.x/pro/review-styling).
+For details, see [Review colors and styling](/docs/2.x/pro/review-styling).
 
 ## The review sidebar
 
@@ -345,7 +345,7 @@ Use `useStackedReviewPositions(items, heights, { gap, scale })` for the packaged
 
 Pass the editor render scale from `editor.getRenderScale()` as `scale`.
 
-Card heights use CSS pixels, while anchors use document points. The default scale of `1` makes spacing about one-third too large.
+Card heights use CSS pixels, while anchors use document points. The default scale of `1` makes spacing approximately one-third too large.
 
 ## Host content inside a card
 
@@ -581,7 +581,7 @@ Filtering and activation use these rules:
 8. `setActive` returns `false` without moving the caret when activation is excluded or no range exists.
 9. `setActive` can also return `false` when the item's story cannot open.
 
-### Where an activated item lands
+### Scroll position after activation
 
 `setActive` centers an item when scrolling is required. It does not move an item that is already visible.
 

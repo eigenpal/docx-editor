@@ -5,7 +5,7 @@ category: 'Frameworks'
 seoTitle: 'Remix DOCX editor setup'
 ---
 
-This page builds a Remix route that loads a `.docx`, keeps SSR and hydration intact, and downloads the edited file.
+This guide shows a Remix route that loads a `.docx`, keeps SSR and hydration intact, and downloads the edited file.
 
 ## Install
 
@@ -84,9 +84,9 @@ export function Editor() {
 
 ## Why this pattern
 
-The pattern solves two problems, one per half:
+The pattern solves two problems, one for SSR hydration and one for bundling:
 
-- The `mounted` guard renders the same loading markup on the server and on the first client paint, so hydration never mismatches. Without it the editor would try to render during SSR and crash on `window`.
+- The `mounted` guard renders the same loading markup on the server and on the first client paint, so hydration never mismatches. Without it, SSR would evaluate the editor and throw when `window` is undefined.
 - `lazy()` keeps the editor bundle out of the server build and out of the route's initial chunk.
 
 ## Run the example
@@ -105,5 +105,5 @@ bun run dev:remix   # http://localhost:3001
 
 - [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
 - [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Remix DOCX editor guide](/blog/remix-docx-editor): the long-form walkthrough
+- [Remix DOCX editor guide](/blog/remix-docx-editor): the detailed walkthrough
 - [Remix example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/remix)

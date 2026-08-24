@@ -8,7 +8,7 @@ order: 64
 The API surface of [custom nodes](/docs/2.x/pro/custom-nodes). Start with the guide if you have not
 built one yet.
 
-A node stores what it knows in two places:
+A node stores data in two places:
 
 | Location    | Holds               | Limit                                              |
 | ----------- | ------------------- | -------------------------------------------------- |
@@ -29,10 +29,10 @@ preserves both.
 
 ### Payload and text
 
-| Parameter | Type                                                       | Description                                                                                                  |
-| --------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `schema`  | zod (or any [Standard Schema](https://standardschema.dev)) | Shape of the payload. Nothing is bundled; bring your own. A schema that validates asynchronously is refused. |
-| `text`    | `(data) => string`                                         | What the document shows, from the payload. Reads the schema's output type.                                   |
+| Parameter | Type                                                       | Description                                                                                                                              |
+| --------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`  | zod (or any [Standard Schema](https://standardschema.dev)) | Shape of the payload. The package does not include a schema library; supply your own. A schema that validates asynchronously is refused. |
+| `text`    | `(data) => string`                                         | What the document shows, from the payload. Reads the schema's output type.                                                               |
 
 ### Chrome
 
@@ -51,7 +51,7 @@ preserves both.
 | `preserveOnExport` | `boolean \| 'text'`                        | Controls whether export keeps, unwraps or removes the node. See [preserveOnExport](#preserveonexport).                                                                      |
 | `tagAttrs`         | `(data) => Record<string, string>`         | A reader without the payload store should still identify the node.                                                                                                          |
 | `payloadNamespace` | `string`                                   | You need a specific customXml namespace. Defaults to one from `tagPrefix`. It goes into an XPath prefix declaration, so quotes, angle brackets and ampersands are rejected. |
-| `fromDocx`         | `({ attrs, text, data }) => attrs \| null` | The node has **no** schema and keeps its data in the tag, or you need to disown a control by returning `null`.                                                              |
+| `fromDocx`         | `({ attrs, text, data }) => attrs \| null` | The node has **no** schema and keeps its data in the tag, or you need to leave a control unrecognized by returning `null`.                                                  |
 
 The returned `CustomNode` carries [`dataOf`](#dataof) alongside the definition.
 
@@ -67,8 +67,8 @@ customNodesModule({ nodes: [Citation], onDiagnostic });
 | `onDiagnostic` | `({ code, name, nodeId, issues }) => void` | `'payload-invalid'` or `'payload-missing'` on a node it read. |
 | `licenseKey`   | `string`                                   | Never validated at construction, never touches the network.   |
 
-The listener belongs to the editor the module is registered on. Two editors on one page hear only
-their own documents, and a listener goes when its editor does.
+The listener belongs to the editor the module is registered on. Each editor invokes only its own
+listener. Disposing the editor removes that listener.
 
 ## Writes
 
@@ -107,17 +107,17 @@ control, so it returns no `nodeId`.
 
 A refusal carries a `code`:
 
-| `code`        | Meaning                                                                                                               |
-| ------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `invalidArgs` | Fixable by passing something else: a payload past the cap, a tag over 64 characters, an offset outside the paragraph. |
-| `unsupported` | A fact about the document: a lock, a protected form, viewing mode.                                                    |
-| `notFound`    | No document is mounted, or `updateCustomNode` was given an id no node has.                                            |
+| `code`        | Meaning                                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------------------------------- |
+| `invalidArgs` | Caused by invalid arguments: a payload past the cap, a tag over 64 characters, an offset outside the paragraph. |
+| `unsupported` | Blocked by document state: a lock, a protected form, viewing mode.                                              |
+| `notFound`    | No document is mounted, or `updateCustomNode` was given an id no node has.                                      |
 
 A payload the schema rejected also carries `issues`:
 
 | Field     | Type                            | Description                           |
 | --------- | ------------------------------- | ------------------------------------- |
-| `message` | `string`                        | What the schema said.                 |
+| `message` | `string`                        | Validation message from the schema.   |
 | `path`    | `readonly (string \| number)[]` | Route to the field: `['authors', 0]`. |
 | `pointer` | `string`                        | The same path joined: `authors.0`.    |
 
@@ -129,7 +129,7 @@ A payload the schema rejected also carries `issues`:
 editor, in document order. Pass `{ nodes }` to narrow it. It derives from the document each time it
 is called. There is no change event, so re-read after an edit rather than holding the array.
 
-A payload with no `schema` comes back as parsed JSON on a null-prototype object, so
+A payload with no `schema` returns as parsed JSON on a null-prototype object, so
 `hasOwnProperty` and `instanceof Object` do not hold on it.
 
 ### dataOf
@@ -227,7 +227,7 @@ await email.attach(outgoing.bytes);
 ```
 
 List every definition whose nodes might be in the document. **A definition you do not pass is not
-touched**, and an untouched node travels whole.
+touched**, and an unmatched node remains unchanged.
 
 `customNodeXml` and `prepareForExport` run without DOM globals, so a backend can author, store and
 strip custom nodes in Node.
@@ -281,7 +281,7 @@ They are rendered as text, never as markup; do not build URLs or DOM from them w
 A recognized node is an ordinary inline content control. Word renders its text, honors the lock, and
 preserves the tag, the binding and the payload. A document edited in Word and reopened here is
 recognized from the same tag. If a Word user edited the text of an unbound node despite the lock,
-`fromDocx` sees the drift.
+`fromDocx` receives the changed text.
 
 A document opened without your definition registered renders the control's content literally, as
 Word does. Nothing is lost.

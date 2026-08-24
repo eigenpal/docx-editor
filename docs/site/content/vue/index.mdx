@@ -14,8 +14,8 @@ seoTitle: 'DOCX editor for Vue 3'
 npm install @docx-editor.dev/vue @docx-editor.dev/core vue
 ```
 
-`@docx-editor.dev/core` and Vue 3 are peer dependencies. Install both beside the
-adapter. The adapter includes `@docx-editor.dev/i18n`.
+`@docx-editor.dev/core` and Vue 3 are peer dependencies of the adapter. Install
+both with the adapter. The adapter includes `@docx-editor.dev/i18n`.
 
 Add [`@docx-editor.dev/pro`](/docs/2.x/pro) for tracked changes and comments.
 Add [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) to automate the open
@@ -42,7 +42,7 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 </template>
 ```
 
-`<DocxEditor>` is the full packaged editor. It includes the title bar, menu,
+`<DocxEditor>` is the packaged editor. It includes the title bar, menu,
 toolbar, navigation pane, hyperlink popover, context menu, and editable
 document.
 
@@ -95,7 +95,7 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 ```
 
 Keep `DocxEditor.Content` inside `DocxEditor.Viewport`. Place navigation and
-overlay chrome beside the content.
+overlay chrome next to the content in the viewport.
 
 ## Toolbar
 

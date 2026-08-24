@@ -10,7 +10,7 @@ There is one document model and one pipeline:
 bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted pages → serialize
 ```
 
-What you see painted and what an edit mutates are the same tree, so nothing has to be kept in sync.
+What you see painted and what an edit mutates are the same tree, so there is no separate view model to synchronize.
 
 ## The canonical tree
 
@@ -19,27 +19,27 @@ Reading a `.docx` produces one tree per XML part, up to a bounded part count. No
 Two consequences:
 
 - Content the engine does not model is carried, not dropped. A known element in an invalid position demotes to generic rather than erroring.
-- Unknown content never blocks editing. A document full of extensions the engine has never seen still opens, still edits, and still saves.
+- Unknown content never blocks editing. A document full of extensions the engine does not recognize opens, accepts edits, and saves.
 
-Every write is a transaction over the tree. Content edits are addressed by node id and character offset; package-level operations such as creating a header or setting section properties are addressed by section index. That is the only write path. There is no second way to mutate a document, so undo, the editing API, and every command go through the same door.
+Every write is a transaction over the tree. Content edits are addressed by node id and character offset; package-level operations such as creating a header or setting section properties are addressed by section index. That is the only write path. There is no second way to mutate a document, so undo, the editing API, and every command use the same write path.
 
 ## Layout
 
 The layout pass is DOM-free. It takes the tree and a text measurer and returns positioned pages, working in the document's own units (twips, half-points, EMUs) rather than approximating from browser layout.
 
-Because it is not constrained by what `contenteditable` can express, it lays text out the way Word does:
+Because it is not constrained by what `contenteditable` can express, it lays text out according to Word layout rules:
 
-- Pagination is computed, not approximated: lines are measured, blocks split where Word splits them, and tables fragment across page boundaries with the right border treatment at the cut.
+- Pagination is computed, not approximated: lines are measured, blocks split where Word splits them, and tables fragment across page boundaries with Word-compatible border treatment at the split.
 - Paragraph fidelity resolves through the real style cascade: `w:spacing` line rules, first-line and hanging indents, `w:contextualSpacing`, paragraph borders, tab stops and leaders, list markers from `numbering.xml`, and table styles through their `basedOn` chain gated by `w:tblLook`.
-- Headers and footers lay out once per variant and attach per page. Editing one behaves exactly like editing the body.
+- Headers and footers lay out once per variant and attach per page. Editing one uses the same edit path as body content.
 
 The pass is incremental: per-block cache keys and flow checkpoints mean a keystroke re-lays out what changed, and a pass with no changes returns the previous pages by identity.
 
 ## Paint and interaction
 
-The painted pages are `contenteditable`, but the DOM is a **picture**. Browser mutations are prevented and re-expressed as tree operations, so the browser never gets to invent markup inside your document.
+The painted pages are `contenteditable`, but the DOM is a non-authoritative rendering. Browser mutations are prevented and re-expressed as tree operations, so the browser cannot insert markup inside your document.
 
-The editor also paints its own caret, from layout geometry rather than from the DOM, which is why an empty paragraph gets a caret at all. It fails soft: range selection, IME composition, or a position it cannot place all hand the native caret back rather than leaving none.
+The editor also paints its own caret, from layout geometry rather than from the DOM, which is why an empty paragraph gets a caret. On failure it falls back: range selection, IME composition, or a position it cannot place all restore the native caret instead of showing no caret.
 
 Selection maps through paragraph identity and offsets, never through DOM traversal. Page furniture (headers, footers, page numbers) is marked non-editable and excluded from selection.
 
@@ -51,7 +51,7 @@ That is what "structural fidelity" means here: unsupported XML and package paylo
 
 ## Adapters
 
-`@docx-editor.dev/core` contains everything above and no framework code. An adapter supplies DOM and paints the engine's positioned display list; it holds no editing state of its own. `@docx-editor.dev/react` is one such adapter, and it is thin by design. Every control it ships is a consumer of the same public contract your own controls would use.
+`@docx-editor.dev/core` contains everything above and no framework code. An adapter supplies DOM and paints the engine's positioned display list; it holds no editing state of its own. `@docx-editor.dev/react` provides React providers, hooks, and chrome over the engine contract. Every control it includes is a consumer of the same public contract that custom controls use.
 
 ## Next steps
 

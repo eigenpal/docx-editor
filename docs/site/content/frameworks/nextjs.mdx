@@ -5,7 +5,7 @@ category: 'Frameworks'
 seoTitle: 'Next.js DOCX editor setup'
 ---
 
-By the end of this page you have an App Router route that opens a `.docx` from disk, edits it in the browser, and downloads the result as a `.docx`.
+This guide shows an App Router route that opens a `.docx` from disk, edits it in the browser, and downloads the result as a `.docx`.
 
 ## Install
 
@@ -15,7 +15,7 @@ npm install @docx-editor.dev/react @docx-editor.dev/core
 
 ## Mount the editor
 
-Two files. The route stays a thin client shell; the editor itself lives in a separate component loaded with `dynamic()` and `ssr: false`. This is the structure of [`examples/nextjs`](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs).
+Two files. The route stays a client route shell; the editor itself loads from a separate component with `dynamic()` and `ssr: false`. This is the structure of [`examples/nextjs`](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs).
 
 ```tsx
 // app/page.tsx
@@ -115,5 +115,5 @@ bun run dev:nextjs   # http://localhost:3000
 
 - [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
 - [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Next.js DOCX editor guide](/blog/nextjs-docx-editor): the long-form walkthrough
+- [Next.js DOCX editor guide](/blog/nextjs-docx-editor): the detailed walkthrough
 - [Next.js example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs)

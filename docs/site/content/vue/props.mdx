@@ -12,14 +12,14 @@ use. See the [Vue API reference](/docs/2.x/api/vue) for generated signatures.
 
 Use `document` for the document source.
 
-| Prop       | Type                               | Description                                        |
-| ---------- | ---------------------------------- | -------------------------------------------------- |
-| `document` | `DocumentSource`                   | DOCX bytes, `'blank'`, or a `DocumentHandle`.      |
-| `author`   | `string`                           | Author for comments and review commands.           |
-| `locale`   | `string`                           | Locale passed to the editor.                       |
-| `mode`     | `'edit' \| 'view' \| 'suggesting'` | Opening mode. The sugar host defaults to `'edit'`. |
-| `zoom`     | `number`                           | Numeric display scale.                             |
-| `zoomMode` | `ZoomMode \| 'auto'`               | Zoom source. `'auto'` fits the page width.         |
+| Prop       | Type                               | Description                                                     |
+| ---------- | ---------------------------------- | --------------------------------------------------------------- |
+| `document` | `DocumentSource`                   | DOCX bytes, `'blank'`, or a `DocumentHandle`.                   |
+| `author`   | `string`                           | Author for comments and review commands.                        |
+| `locale`   | `string`                           | Locale passed to the editor.                                    |
+| `mode`     | `'edit' \| 'view' \| 'suggesting'` | Opening mode. The packaged `<DocxEditor>` defaults to `'edit'`. |
+| `zoom`     | `number`                           | Numeric display scale.                                          |
+| `zoomMode` | `ZoomMode \| 'auto'`               | Zoom source. `'auto'` fits the page width.                      |
 
 `DocumentSource` accepts `Uint8Array`, `ArrayBuffer`, `'blank'`, or an existing
 `DocumentHandle`. Resolve URLs and paths with
@@ -35,8 +35,8 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 </template>
 ```
 
-The sugar host rebuilds for a new `document` identity. It applies later `zoom`
-and `zoomMode` changes through the editor facade.
+`<DocxEditor>` rebuilds when the `document` identity changes. It applies later
+`zoom` and `zoomMode` changes through the editor facade.
 
 ## Modules
 
@@ -61,8 +61,8 @@ const modules = [reviewModule()];
 </template>
 ```
 
-The review module makes tracked changes and comments actionable. The Vue Pro
-entry also exports custom-node chip and context-menu chrome.
+The review module lets you show and manage tracked changes and comments. The Vue
+Pro entry also exports custom-node chip and context-menu chrome.
 
 ## Chrome and layout
 
@@ -79,19 +79,20 @@ These props control the packaged frame:
 | `t`              | `(key, params?) => string`              | Resolves packaged chrome labels.          |
 | `i18n`           | `Translations`                          | Supplies a locale catalog to this editor. |
 
-Set `chrome` to `false` for the bare document surface. You can then build the
-frame from the [composition primitives](/docs/2.x/vue/composition).
+Set `chrome` to `false` for the document surface without packaged chrome. You can
+then build the frame from the [composition primitives](/docs/2.x/vue/composition).
 
 ## Appearance
 
-Vue calls the appearance prop `colorMode`.
+The appearance prop name is `colorMode`.
 
-| Prop        | Type                            | Default   | Description            |
-| ----------- | ------------------------------- | --------- | ---------------------- |
-| `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Sets the chrome theme. |
+| Prop        | Type                            | Default   | Description                              |
+| ----------- | ------------------------------- | --------- | ---------------------------------------- |
+| `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Sets the chrome and document color mode. |
 
-The document canvas remains faithful to the DOCX file. The setting does not
-change saved or printed output.
+`colorMode` applies a display transform to the document canvas. The setting does
+not change authored document colors or saved output. Printing uses a light page
+regardless of this setting.
 
 ```vue
 <script setup lang="ts">
@@ -188,7 +189,7 @@ The title becomes editable when you listen for `@title-change`.
 
 ## Emits
 
-The sugar host emits these six events:
+`<DocxEditor>` emits these six events:
 
 | Emit            | Payload                  | Description                             |
 | --------------- | ------------------------ | --------------------------------------- |
@@ -216,7 +217,7 @@ saved bytes.
 ```
 
 `DocxEditorRoot` emits `ready`, `change`, and `font-error`. File and title
-events belong to the sugar host.
+events belong to `<DocxEditor>`.
 
 ## Ref methods
 

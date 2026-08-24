@@ -18,7 +18,7 @@ npm install @docx-editor.dev/editor-api
 
 ## On a server
 
-Runs headless: it takes bytes and returns bytes.
+The server runtime is headless. It accepts bytes and returns bytes.
 
 ```ts
 import { readFile, writeFile } from 'node:fs/promises';
@@ -47,7 +47,7 @@ try {
 caller-owned `Uint8Array`. Mutating or transferring one save result cannot change the runtime or a
 later save.
 
-The server runtime is detached from every live editor. To hand its result back to a reader, make
+The server runtime is detached from every live editor. To load the result into a live editor, make
 that replacement explicit:
 
 ```ts
@@ -82,7 +82,7 @@ collection; this accessor never combines separate stories into a document-wide a
 
 ## In the browser
 
-The browser entry takes an editor the host already created (from `@docx-editor.dev/react` or a plain page) and drives it in place. Edits land in the open document with the reader's undo stack intact, so there is no `save()`: the host saves the way it already did.
+The browser entry takes an editor the host already created (from `@docx-editor.dev/react` or a plain page) and drives it in place. Edits apply to the open document with the reader's undo stack intact, so there is no `save()`: the host continues to call its existing save path.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
@@ -123,18 +123,18 @@ await context.sync(); // one transaction; editor Undo restores both threads
 ```
 
 Browser deletion requires the Pro review module and a writable, attached editor. The server runtime
-supports the same object-model calls without a browser module. Creation remains intentionally absent.
+supports the same object-model calls without a browser module. This section covers deletion only.
 
 ## Programming model
 
 - Reading a property you did not `load()` throws. This catches typos before they affect later writes.
-- Navigation-property expansion is not supported yet. A non-empty `LoadQueryOptions.expand` is
+- Navigation-property expansion is not supported. A non-empty `LoadQueryOptions.expand` is
   rejected with `InvalidArgument`; load the navigation object or collection explicitly instead.
 - `sync()` is the only round trip. Everything queued between two syncs is one ordered transaction. If any operation in it is refused, none of them happened.
-- Objects are proxies into a document the runtime owns. They survive `sync()` calls within one
+- Objects are proxies into a document the runtime owns. They remain valid across `sync()` calls within one
   `run`. To carry one into a later `run`, track it and pass it to
-  `runtime.run(object, callback)` for adoption. No proxy survives `dispose()`.
-- `getFirstOrNullObject` and `getLastOrNullObject` answer an object whose `isNullObject` is `true` after the sync, which is the difference between "no such heading" and a crash.
+  `runtime.run(object, callback)` for adoption. No proxy remains valid after `dispose()`.
+- `getFirstOrNullObject` and `getLastOrNullObject` return an object whose `isNullObject` is `true` after the sync, which is the difference between an absent heading and a thrown error.
 
 For content-control writes, load `isBound` with the other properties and skip controls where it is
 true. That boolean is safe preflight metadata, not a write guarantee: `sync()` always checks the
@@ -156,7 +156,7 @@ module registration, editing mode, and document state can change.
 
 Both export the same vocabulary (the lifecycle types, the object model, the error type) so consumer code compiles against either. They differ by one member: `createBrowser`.
 
-## Building an AI feature on this
+## Integrate with an application model
 
 This package ships no model integration, tool catalog or chat UI. The application that owns the
 model defines which operations to expose, how to describe them and how to handle refusals. A tool
@@ -290,7 +290,7 @@ and insert after the phrase.
 
 ## License
 
-This package is not Apache 2.0 like the editor packages. It is licensed under the [EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md), which lets you read, run and modify it internally, free of charge, to evaluate it. Browser comment replies and deletions additionally require the separately installed Pro review module, which carries the same evaluation-only production boundary. Production use (a live or customer-facing environment, live or business-operational data, or either package inside something you offer to others) requires a written commercial agreement, and so does redistribution. Commercial licensing: [licensing@eigenpal.com](mailto:licensing@eigenpal.com).
+This package is not Apache 2.0 like the editor packages. It is licensed under the [EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md), which lets you read, run and modify it internally, free of charge, to evaluate it. Browser comment replies and deletions additionally require the separately installed Pro review module, which carries the same evaluation-only production boundary. Production use (a live or customer-facing environment, live or business-operational data, or either package inside a product you distribute to customers) requires a written commercial agreement, and so does redistribution. Commercial licensing: [licensing@eigenpal.com](mailto:licensing@eigenpal.com).
 
 ## Next steps
 

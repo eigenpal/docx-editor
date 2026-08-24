@@ -40,7 +40,7 @@ The other packages are the same for both adapters:
 # Commercially licensed: free to evaluate, production use needs an agreement
 npm install @docx-editor.dev/pro
 
-# Office.js-compatible editing API, on a server or beside an open editor
+# Office.js-compatible editing API, on a server or with an active editor instance
 # Commercially licensed: same terms
 npm install @docx-editor.dev/editor-api
 
@@ -100,7 +100,7 @@ Your app does not need Tailwind or an icon font.
 
 `document` accepts an `ArrayBuffer`, `Uint8Array`, `DocumentHandle`, or `'blank'`.
 Use `'blank'` for an empty document.
-If you omit `document`, the editor waits for document bytes.
+If you omit `document`, the editor stays idle until you pass document bytes.
 
 Meet these layout requirements in both adapters:
 

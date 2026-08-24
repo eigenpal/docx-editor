@@ -12,8 +12,8 @@ The packaged toolbar uses the hooks and primitives on this page.
 Your controls can use the same command and state APIs.
 
 <Callout>
-  🧊 The [Igloo customization example](https://igloo.docx-editor.dev/) implements these patterns
-  with custom markup. Open it to use the result, or read the
+  The [Igloo customization example](https://igloo.docx-editor.dev/) implements these patterns with
+  custom markup. Open the demo, or read the
   [source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo) and run it with `bun
   run dev:igloo`.
 </Callout>
@@ -36,7 +36,7 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-- `Root` owns the editor instance and provides it through context.
+- `Root` holds the editor instance and provides it through context.
   It does not render a DOM element.
   It accepts document-level props such as `document`, `mode`, `author`,
   `fonts`, `locale`, `modules`, `onReady`, and `onChange`.
@@ -74,7 +74,7 @@ These changes preserve edits, caret position, and undo history.
 
 For exact signatures, see the [React API reference](/docs/2.x/api/react).
 
-## Customization ladder
+## Customization options
 
 Use the first option that meets your requirements:
 
@@ -309,7 +309,7 @@ You can add a host menu or replace the **Help** menu:
 
 Navigation parts are compound statics.
 Add a class to each part instead of targeting internal classes.
-The headings part continues to read the engine outline:
+The headings part continues to use the engine outline:
 
 ```tsx
 <DocxEditor.Navigation className="my-nav" toggle={{ className: 'my-nav__toggle' }}>
@@ -346,7 +346,8 @@ This example replaces the packaged loading content:
 Pass `overlay` to position the loading screen over its nearest positioned
 ancestor.
 The opaque overlay covers the previous document while the next document opens.
-A short delay prevents flashes during fast loads.
+A brief delay hides the overlay on loads that finish quickly, to avoid a visible
+flash.
 `<DocxEditor />` mounts this overlay by default.
 
 ```tsx
@@ -653,11 +654,11 @@ export function Workspace({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-Composition gives you direct control of each part.
+Composition lets you mount each part explicitly.
 Omitted parts do not render an interface.
-The packaged `<DocxEditor>` mounts its default set for you.
+The packaged `<DocxEditor>` mounts the default part set.
 
-## Layout pitfalls
+## Layout constraints
 
 The navigation pane requires a positioning context.
 Place it beside the viewport in a row with `position: relative`.
@@ -685,7 +686,7 @@ Apply the same behavior to custom chrome.
 
 ## Next steps
 
-- [Igloo customization example](https://igloo.docx-editor.dev/) 🧊, and its
+- [Igloo customization example](https://igloo.docx-editor.dev/), and its
   [source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo)
 - [Custom nodes example](https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes)
 - [React hooks](/docs/2.x/react/hooks)

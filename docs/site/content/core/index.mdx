@@ -7,9 +7,9 @@ order: 70
 
 <PackageStats name="@docx-editor.dev/core" />
 
-The engine. It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. It has no framework dependency and no UI.
+This package is the engine. It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. It has no framework dependency and no UI.
 
-Most apps never import it directly: `@docx-editor.dev/react` carries it. Reach for it when you are writing your own adapter, or when you need the contract types to type a function signature.
+Most apps never import it directly: `@docx-editor.dev/react` carries it. Import it when you are writing your own adapter, or when you need the contract types to type a function signature.
 
 ```bash
 npm install @docx-editor.dev/core
@@ -17,16 +17,16 @@ npm install @docx-editor.dev/core
 
 ## Entry points
 
-The root is the entry point for most work: create an editor over bytes, the contract it implements, fonts, and the chrome registry.
+The root is the entry point for typical editor creation and typing: create an editor over bytes, the contract it implements, fonts, and the chrome registry.
 
 ```ts
 import { createDocxEditor, loadFonts, WORD_DEFAULT_FONT } from '@docx-editor.dev/core';
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
 ```
 
-Reach for a subpath when you need the canonical tree, the layout pass, or the paint step directly.
+Import a subpath when you need the canonical tree, the layout pass, or the paint step directly.
 
-| Subpath                   | What's there                                                                                                                |
+| Subpath                   | Contents                                                                                                                    |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `.`                       | Create an editor, the `Editor` contract, fonts, the chrome registry, the document model types.                              |
 | `./editor`                | Everything the root re-exports, plus the paginated surface, ruler geometry, and module resolution.                          |
@@ -34,20 +34,19 @@ Reach for a subpath when you need the canonical tree, the layout pass, or the pa
 | `./contracts/document`    | The document-level edit and query vocabulary.                                                                               |
 | `./contracts/types`       | Document model types.                                                                                                       |
 | `./contracts/modules`     | `EditorModule`, the shape [`@docx-editor.dev/pro`](/docs/2.x/pro) implements.                                               |
-| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with.                                |
+| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` that an attempt returns.                                |
 | `./store`                 | The canonical tree and its transactional store.                                                                             |
 | `./layout`                | The DOM-free layout pass.                                                                                                   |
 | `./output`                | Paint: turning a laid-out document into page DOM, and the selection overlay over it.                                        |
 | `./automation`            | The document object model behind [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api).                                     |
-| `./styles/editor.css`     | The one editor stylesheet. The packaged chrome and your own chrome both use it.                                             |
+| `./styles/editor.css`     | The editor stylesheet. The packaged chrome and your own chrome both use it.                                                 |
 
-**Root or `./editor`?** Import from the root. `./editor` is the same engine with its
-internals attached (the paginated surface, ruler geometry, module resolution), and you want
-those only when you are building an adapter rather than using one.
+Prefer the root import. Use `./editor` only when you build an adapter and need
+surface internals (the paginated surface, ruler geometry, module resolution).
 
 ## The contract
 
-`Editor` is the whole public surface an adapter talks to. Commands go in through `exec`, reads come out through `query` and `snapshot`:
+`Editor` is the whole public surface an adapter uses. Call `exec` for commands. Call `query` and `snapshot` for reads:
 
 ```ts
 import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
@@ -58,23 +57,23 @@ function pageLabel(editor: Editor): string {
 }
 ```
 
-`snapshot()` is version-cached: it returns the same reference until state actually moves, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` (and therefore [`useEditorState`](/docs/2.x/react/hooks)) correct without a deep compare on every tick.
+`snapshot()` is version-cached: it returns the same reference until editor state changes, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` (and therefore [`useEditorState`](/docs/2.x/react/hooks)) correct without a deep compare on every store notification.
 
 ## The pipeline
 
-One path, in one direction:
+The pipeline has one direction:
 
 ```text
 bytes → bounded OPC/XML read → canonical document tree → layout → painted pages → serialize
 ```
 
-The painted pages _are_ the editable surface. There is no shadow document model to keep in sync with what you see.
+The painted pages are the editable surface. There is no shadow document model to keep in sync with what you see.
 
 Fidelity is structural. The canonical tree preserves XML content and package payloads pass through untouched. Content the engine cannot type (an unknown element, or a known one in an invalid position) becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
 
 ## Untrusted input
 
-A `.docx` is a zip of XML that whoever sent it controls end to end. The engine sanitizes at the parse boundary (URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out) so everything downstream receives an already-sanitized projection.
+A `.docx` is a zip of XML that whoever sent it fully controls. The engine sanitizes at the parse boundary (URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out) so everything downstream receives an already-sanitized projection.
 
 Anything you then render from document data (a font name, a hyperlink target, a comment body, a custom node's attributes) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
 

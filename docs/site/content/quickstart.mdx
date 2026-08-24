@@ -1,6 +1,6 @@
 ---
 title: 'Quickstart'
-description: 'Load, edit, and save a .docx in the browser with React or Vue. Copy-paste setup: a file input, the editor component, and a download button, in one file.'
+description: 'Load, edit, and save a .docx in the browser with React or Vue. Minimal setup: a file input, the editor component, and a download button, in one file.'
 category: 'Getting Started'
 ---
 
@@ -12,7 +12,7 @@ This page builds a browser editor that opens a local `.docx` and downloads the e
 
 ### Install
 
-The adapter carries the string catalog and holds the engine as a peer, so install both.
+The adapter includes the string catalog and declares the engine as a peer dependency, so install both.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -31,7 +31,7 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core
 </Framework>
 </FrameworkTabs>
 
-On Next.js, Nuxt, Remix, or other SSR frameworks the editor must render client-side; mounting it during SSR throws `window is not defined`. Use the recipe in [Installation](/docs/2.x/installation). The code below works as-is in client-rendered apps such as Vite.
+On Next.js, Nuxt, Remix, or other SSR frameworks the editor must render client-side; mounting it during SSR throws `window is not defined`. Use the recipe in [Installation](/docs/2.x/installation). The code below works without further configuration in client-rendered apps such as Vite.
 
 </Step>
 
@@ -39,7 +39,7 @@ On Next.js, Nuxt, Remix, or other SSR frameworks the editor must render client-s
 
 ### Load, edit, save
 
-The whole flow in one file. A file input feeds the editor, the editor handles editing (typing, formatting, undo, tables), and a button serializes the current state back to a `.docx` download.
+This example puts load, edit, and save in one file. A file input supplies bytes to the editor, the editor supports editing (typing, formatting, undo, tables), and a button serializes the current state back to a `.docx` download.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -157,12 +157,12 @@ async function download() {
 </Framework>
 </FrameworkTabs>
 
-Four things to know about this code:
+Notes for this example:
 
 - `document` takes a `Uint8Array`, an `ArrayBuffer`, a `DocumentHandle`, or `'blank'` for an empty document. Omitting it means no document at all. The editor shows its loading screen, and every control stays disabled until you supply bytes.
 - `mode` is `'edit'` (default), `'view'`, or `'suggesting'`, and is read at mount. Remount to change it.
-- `save()` on the ref returns `Promise<ArrayBuffer | null>`: a complete `.docx`, or `null` when there is no document. Parsing and serialization both happen in the browser; the document never touches a server.
-- The editor fills its parent, so give it a box with a real height. The stylesheet import is required once per app.
+- `save()` on the ref returns `Promise<ArrayBuffer | null>`: a complete `.docx`, or `null` when there is no document. Parsing and serialization both happen in the browser; the document stays in the browser; no server upload occurs.
+- The editor fills its parent, so give the parent a non-zero CSS height. The stylesheet import is required once per app.
 
 </Step>
 
@@ -190,12 +190,12 @@ const { document: bytes, isLoading } = useDocxSource('/template.docx');
 // <DocxEditor :document="bytes" />
 ```
 
-`useDocxSource()` does the fetch and tracks its state for you.
+`useDocxSource()` fetches the resource and exposes loading state.
 
 </Framework>
 </FrameworkTabs>
 
-To react to the built-in Save action (Cmd+S, or File → Save) instead of adding your own button, handle the save event. It replaces the packaged behavior, so read the bytes off the ref:
+To react to the built-in Save action (Cmd+S, or File → Save) instead of adding your own button, handle the save event. It replaces the packaged behavior, so read the bytes from the ref:
 
 <FrameworkTabs>
 <Framework value="react">
@@ -234,11 +234,11 @@ async function onSave() {
 
 <Step>
 
-### Open a real .docx from your machine
+### Open a local .docx file
 
-Run your dev server, click the file input, and pick a `.docx`: a contract, a CV, or a report with tables and headers. The editor parses it client-side and the download button writes the current state back. Check the result in Microsoft Word. If something renders or saves incorrectly, [file an issue](https://github.com/eigenpal/docx-editor/issues) with the document.
+Run your dev server, click the file input, and pick a `.docx`, for example a document that includes tables and headers. The editor parses it client-side and the download button writes the current state back. Check the result in Microsoft Word. If something renders or saves incorrectly, [file an issue](https://github.com/eigenpal/docx-editor/issues) with the document.
 
-No file handy? Try the [live demo](https://docx-editor.dev/editor) first.
+If you do not have a local file, try the [live demo](https://docx-editor.dev/editor) first.
 
 </Step>
 
@@ -248,5 +248,5 @@ No file handy? Try the [live demo](https://docx-editor.dev/editor) first.
 
 - [Installation](/docs/2.x/installation) for Next.js, Nuxt, Remix, and Astro specifics
 - [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition) to replace the packaged chrome with your own
-- [Word fidelity](/docs/2.x/word-fidelity) if you're evaluating feature support and round-trip behavior
-- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for everything the packaged editor can do
+- [Word fidelity](/docs/2.x/word-fidelity) if you evaluate feature support and round-trip behavior
+- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for the full packaged-editor prop surface

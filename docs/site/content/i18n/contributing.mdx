@@ -1,10 +1,10 @@
 ---
 title: 'Contributing a translation'
-description: 'Add a new editor language to @docx-editor.dev/i18n: scaffold the locale JSON, fill the strings, validate, and open a PR. Partial translations welcome.'
+description: 'Add a new editor language to @docx-editor.dev/i18n: scaffold the locale JSON, fill the strings, validate, and open a PR. Partial translations are accepted.'
 category: 'Reference'
 ---
 
-The editor UI ships in ten languages. Adding an eleventh is a single JSON file
+The editor UI ships in ten languages. To add another language, add one JSON file
 in the [monorepo](https://github.com/eigenpal/docx-editor).
 
 ## How locales work
@@ -27,8 +27,8 @@ bun run i18n:validate     # CI runs this; missing keys fail
 ```
 
 Use a BCP 47 code (`pl`, `pt-BR`, `zh-CN`). Open a PR with the filled JSON.
-Partial translations are fine: anything left `null` renders in English, so a
-locale can land incomplete and improve over time.
+Partial translations are valid: anything left `null` renders in English, so a
+locale can ship incomplete and improve over time.
 
 ## Fixing an existing locale
 

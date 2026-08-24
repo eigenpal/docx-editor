@@ -1,11 +1,11 @@
 ---
 title: 'Zoom and fit to screen'
-description: 'Fit the document to the viewport, drive the zoom lifecycle from your own UI with useZoom, and let the comments pane shrink the page instead of hiding it.'
+description: 'Fit the document to the viewport, control zoom from your UI with useZoom, and let the comments pane shrink the page instead of covering it.'
 category: 'Guides'
 seoTitle: 'Zoom and fit to screen'
 ---
 
-The editor fits the page to its container by default. A window with room for the sheet renders at 100%; a narrower one shrinks the document instead of growing a horizontal scrollbar.
+The editor fits the page to its container by default. A container wide enough for the page renders at 100%. A narrower container shrinks the document instead of creating a horizontal scrollbar.
 
 ## The two modes
 
@@ -15,7 +15,7 @@ Zoom has a value and a mode. The value is the scale the pages paint at; the mode
 | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `'auto'` (default)                  | Fit the page width, between 50% and 100%. Shrinks a page that does not fit, leaves one that does. |
 | `{ type: 'fit', fit: 'pageWidth' }` | Fit the page width in both directions, so a wide window magnifies the page.                       |
-| `{ type: 'fixed' }`                 | Hold whatever `zoom` is set to. This is the pre-fit behavior.                                     |
+| `{ type: 'fixed' }`                 | Hold whatever `zoom` is set to. This keeps a fixed scale (the behavior before fit modes).         |
 
 <FrameworkTabs>
 <Framework value="react">
@@ -41,13 +41,13 @@ Zoom has a value and a mode. The value is the scale the pages paint at; the mode
 
 Passing `zoom` on its own also means fixed, so an app that pinned a scale keeps it.
 
-A fit tracks the container. Resizing the window, opening the comments pane, docking the navigation pane: anything that changes the room beside the page changes the scale, in the engine, with nothing to wire up.
+Fit mode updates when the container size changes. Resizing the window, opening the comments pane, or docking the navigation pane changes the space beside the page. The engine updates the scale without additional host code.
 
-Setting a level ends the fit. That is what you want from a zoom control: a reader who picks 150% has said so, and a resize must not take it back.
+Setting a level ends the fit. A fixed zoom replaces fit mode. Container resize must not override an explicit scale.
 
 ## Driving it yourself
 
-`useZoom` is the whole lifecycle in one call.
+`useZoom` returns zoom state and controls in one hook.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -108,21 +108,21 @@ read them with `.value` only in script code.
 | `setZoom(n)`              | A fixed scale. Leaves any fit.                                                            |
 | `setMode(m)`              | `'auto'`, a fit, or `{ type: 'fixed' }`.                                                  |
 | `auto()`, `fitToWidth()`  | The two fits, by name.                                                                    |
-| `reset()`                 | Back to a plain, untracked 100%.                                                          |
-| `zoomIn()`, `zoomOut()`   | Walk the preset ladder in `levels`.                                                       |
-| `canZoomIn`, `canZoomOut` | Whether there is a rung left in that direction.                                           |
+| `reset()`                 | Reset to fixed 100% zoom.                                                                 |
+| `zoomIn()`, `zoomOut()`   | Move to the next preset in `levels`.                                                      |
+| `canZoomIn`, `canZoomOut` | Whether a higher or lower preset remains.                                                 |
 
-Render the selected state from `mode`, not from `zoom`. A menu that ticks the level matching the percentage will light up "75%" while the editor is tracking the viewport and about to move off it.
+Render the selected state from `mode`, not from `zoom`. A menu that ticks the level matching the percentage marks "75%" as selected while fit mode still owns the scale.
 
 The packaged toolbar's zoom control already does all of this: **Automatic** and **Fit width** sit above the preset levels, and the tick follows the mode rather than the percentage.
 
-It ticks those two modes and the preset levels — the things it can put a reader into. A fit with bounds of your own is not one of them, so the menu shows the resolved percentage with nothing ticked, rather than lighting up a row that would silently replace your bounds when clicked.
+It ticks those two modes and the preset levels — the modes the menu can select. A fit with bounds of your own is not one of them, so the menu shows the resolved percentage with nothing ticked, rather than marking a preset that would replace custom fit bounds on click.
 
 ## Comments, and narrow screens
 
 The comments rail reserves a gutter beside the page. Under a fit that gutter comes out of the document's width, so opening comments shrinks the page rather than pushing it off screen: the two sit side by side and both stay readable.
 
-There is a width below which that stops helping. The rail takes a fixed 316px whether or not the container can spare it, so on a phone with comments open the page would be fitted into a sliver — a document nobody can read, to avoid a scrollbar nobody minds. So `'auto'` has a floor of 50%: below that the page keeps a legible size and the container scrolls sideways, which is the ordinary answer to "this does not fit".
+Below a container width, reserving the rail width no longer keeps the page readable. The rail takes a fixed 316px whether or not the container can spare it. On a phone with comments open, fit would shrink the page below a readable width. So `'auto'` has a floor of 50%: below that the page keeps a legible size and the container scrolls sideways, which matches the usual layout response when content exceeds the container.
 
 Set your own floor if 50% is not where you want it:
 
@@ -145,7 +145,7 @@ Set your own floor if 50% is not where you want it:
 
 ## Without an adapter
 
-Zoom lives in the engine, so every host reaches it the same way:
+Zoom APIs are on the engine. Every host calls the same methods:
 
 ```ts
 editor.setZoomMode('auto');
