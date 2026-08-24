@@ -119,6 +119,19 @@ export const WITH_FURNITURE: Uint8Array = zipSync({
   ),
 });
 
+/** The furniture fixture with one deletion and one insertion inside its footnote. */
+export const WITH_REVISION_FOOTNOTE: Uint8Array = (() => {
+  const files = unzipSync(WITH_FURNITURE);
+  files['word/footnotes.xml'] = strToU8(
+    `<w:footnotes xmlns:w="${W}">` +
+      '<w:footnote w:id="2"><w:p><w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+      '<w:del w:id="1" w:author="Ada"><w:r><w:delText>gone</w:delText></w:r></w:del>' +
+      '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins>' +
+      '</w:p></w:footnote></w:footnotes>'
+  );
+  return zipSync(files);
+})();
+
 /** Footnotes and endnotes covering empty, multi-paragraph, tab, break and untrusted text reads. */
 export const WITH_NOTE_TEXT_CASES: Uint8Array = zipSync({
   '[Content_Types].xml': strToU8(

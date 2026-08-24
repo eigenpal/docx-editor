@@ -19,6 +19,7 @@ import {
   NESTED_TABLE_DOCUMENT,
   TABLE_DOCUMENT,
   WITH_FURNITURE,
+  WITH_REVISION_FOOTNOTE,
   docx,
   p,
   pWithId,
@@ -134,6 +135,24 @@ describe('revision text projections', () => {
     });
 
     expect(text).toBe('keep gone');
+  });
+
+  test('uses the runtime revision view for note text and its body', async () => {
+    const runtime = await createServer(WITH_REVISION_FOOTNOTE, { revisionTextView: 'vanilla' });
+    const text = await runtime.run(async (context) => {
+      const notes = context.document.footnotes;
+      notes.load();
+      await context.sync();
+      const note = notes.items[0]!;
+      note.load('text');
+      const body = note.body;
+      await context.sync();
+      body.load('text');
+      await context.sync();
+      return { note: note.text, body: body.text };
+    });
+
+    expect(text).toEqual({ note: 'keep gone', body: 'keep gone' });
   });
 });
 

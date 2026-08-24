@@ -352,7 +352,11 @@ export type AutomationOperation =
    * Exactly the same projection as reading `getText` from the body returned by `getNoteBody`,
    * without requiring that intermediate handle: paragraphs joined by one `\r` paragraph mark.
    */
-  | { readonly op: 'getNoteText'; readonly note: AutomationHandle }
+  | {
+      readonly op: 'getNoteText';
+      readonly note: AutomationHandle;
+      readonly projection?: AutomationTextProjection;
+    }
   /** Whether a note is a footnote or an endnote. */
   | { readonly op: 'getNoteKind'; readonly note: AutomationHandle }
   /**

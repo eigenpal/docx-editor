@@ -752,10 +752,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse('invalid-offset', 'limit must be a non-negative integer', String(requested));
     // An empty story has nothing to scan. Answering no matches is the truth about it, and it is
     // not the same answer as a refusal — there is no error in searching a document with no text.
-    return query({
-      kind: 'spans',
-      spans: projectedSearchSpans(reads, scope, handles, text, options),
-    });
+    const searched = projectedSearchSpans(reads, scope, handles, text, options);
+    if (!searched.ok)
+      return refuse('invalid-offset', 'projection mapping failed', searched.paragraphId);
+    return query({ kind: 'spans', spans: searched.spans });
   };
 
   const planInsertText = (plan: StoryPlan, at: ResolvedPoint, text: string): PlannedOperation => {
@@ -2036,7 +2036,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!reads)
           return refuse('invalid-handle', 'that note is not in this document', storyKey(story));
         return operation.op === 'getNoteText'
-          ? query({ kind: 'text', text: reads.text() })
+          ? query({ kind: 'text', text: reads.text(operation.projection) })
           : query({ kind: 'handle', handle: handles.body(story) });
       }
 

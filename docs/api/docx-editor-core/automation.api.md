@@ -439,6 +439,7 @@ export type AutomationOperation =
 | {
     readonly op: 'getNoteText';
     readonly note: AutomationHandle;
+    readonly projection?: AutomationTextProjection;
 }
 /** Whether a note is a footnote or an endnote. */
 | {

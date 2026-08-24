@@ -162,7 +162,11 @@ export class NoteItem extends ModelObject implements PromisedItem {
     const selected = this.selection(request, ['text', 'type']);
     if (selected.includes('text')) {
       const note = this.#handle();
-      this.loadTextInto('text', () => ({ op: 'getNoteText', note }));
+      this.loadTextInto('text', () => ({
+        op: 'getNoteText',
+        note,
+        projection: this.revisionTextView(),
+      }));
     }
     if (selected.includes('type')) {
       const label = `${this.path.label}.type`;

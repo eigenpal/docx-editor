@@ -7,6 +7,10 @@ import type { AutomationSpan } from './protocol.ts';
 import type { AutomationStoryReads } from './reads.ts';
 import { spanParagraphIds, type ResolvedSpan } from './spans.ts';
 
+export type ProjectedSearchResult =
+  | { readonly ok: true; readonly spans: readonly AutomationSpan[] }
+  | { readonly ok: false; readonly paragraphId: string };
+
 /** Search one story view and map each visible hit back to one editable model span. */
 export function projectedSearchSpans(
   reads: AutomationStoryReads,
@@ -14,7 +18,7 @@ export function projectedSearchSpans(
   handles: AutomationHandleTable,
   text: string,
   options: AutomationSearchOptions | undefined
-): readonly AutomationSpan[] {
+): ProjectedSearchResult {
   let budget = Math.min(options?.limit ?? SEARCH_MATCH_LIMIT, SEARCH_MATCH_LIMIT);
   const spans: AutomationSpan[] = [];
   const ids = spanParagraphIds(scope, reads);
@@ -31,6 +35,7 @@ export function projectedSearchSpans(
     });
     for (const occurrence of found.matches) {
       const mapped = projected.rawRange(occurrence.start, occurrence.start + occurrence.length);
+      if (!mapped) return { ok: false, paragraphId };
       if (position === 0 && scope && mapped.start < scope.start.offset) continue;
       if (position === last && scope && mapped.end > scope.end.offset) continue;
       const paragraph = handles.paragraph(paragraphId, reads.story);
@@ -41,5 +46,5 @@ export function projectedSearchSpans(
       budget -= 1;
     }
   }
-  return spans;
+  return { ok: true, spans };
 }

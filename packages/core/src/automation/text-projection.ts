@@ -21,7 +21,13 @@ export interface ProjectedParagraphText {
   /** Map one model boundary into the projected UTF-16 offset space. */
   projectedOffset(rawOffset: number): number;
   /** Map a non-empty projected range back to one editable model range. */
-  rawRange(start: number, end: number): { readonly start: number; readonly end: number };
+  rawRange(
+    start: number,
+    end: number
+  ): {
+    readonly start: number;
+    readonly end: number;
+  } | null;
   /** Read a model range through this projection. */
   sliceRaw(start: number, end: number): string;
 }
@@ -98,7 +104,7 @@ function projectionFromPieces(
         (piece) => start >= piece.projectedStart && start < piece.projectedEnd
       );
       const last = pieces.find((piece) => end > piece.projectedStart && end <= piece.projectedEnd);
-      if (!first || !last || start >= end) return { start: 0, end: 0 };
+      if (!first || !last || start >= end) return null;
       return {
         start: first.rawStart + start - first.projectedStart,
         end: last.rawStart + end - last.projectedStart,
