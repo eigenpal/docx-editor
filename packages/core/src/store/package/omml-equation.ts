@@ -3,8 +3,6 @@
 // OMML stays generic in the canonical tree. This module reads that preserved source into a
 // small immutable expression tree and creates fresh generic OMML for supported user input.
 
-import { createCanonicalOoxmlElement } from './canonical-ooxml-element.ts';
-import { readCanonicalChildrenProjection } from './canonical-element-state.ts';
 import { XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
@@ -130,7 +128,7 @@ function frozenRow(children: readonly EquationExpression[]): EquationExpression 
 }
 
 function childrenOf(node: OoxmlElement): readonly OoxmlNode[] {
-  return readCanonicalChildrenProjection(node);
+  return node.children;
 }
 
 interface ProjectionState {
@@ -800,18 +798,16 @@ function mathElement(
   nextId: NextNodeId,
   attributes: readonly OoxmlAttribute[] = []
 ): OoxmlGenericElementNode {
-  return createCanonicalOoxmlElement(
-    {
-      id: nextId(),
-      kind: 'generic',
-      namespaceUri: OFFICE_MATH_NAMESPACE_URI,
-      localName,
-      prefix: 'm',
-      namespaceBindings: [],
-      attributes,
-    },
-    children
-  ) as OoxmlGenericElementNode;
+  return Object.freeze({
+    id: nextId(),
+    kind: 'generic',
+    namespaceUri: OFFICE_MATH_NAMESPACE_URI,
+    localName,
+    prefix: 'm',
+    namespaceBindings: Object.freeze([]),
+    attributes: Object.freeze([...attributes]),
+    children: Object.freeze([...children]),
+  });
 }
 
 function expressionNodes(expression: EquationExpression, nextId: NextNodeId): readonly OoxmlNode[] {
@@ -940,19 +936,12 @@ function ommlEquationFromExpression(
   nextId: NextNodeId
 ): OoxmlGenericElementNode {
   const equation = mathElement('oMath', expressionNodes(expression, nextId), nextId);
-  const withBinding = createCanonicalOoxmlElement(
-    {
-      id: equation.id,
-      kind: 'generic',
-      namespaceUri: equation.namespaceUri,
-      localName: equation.localName,
-      prefix: 'm',
-      namespaceBindings: [Object.freeze({ prefix: 'm', namespaceUri: OFFICE_MATH_NAMESPACE_URI })],
-      attributes: [],
-    },
-    childrenOf(equation)
-  );
-  return withBinding as OoxmlGenericElementNode;
+  return Object.freeze({
+    ...equation,
+    namespaceBindings: Object.freeze([
+      Object.freeze({ prefix: 'm', namespaceUri: OFFICE_MATH_NAMESPACE_URI }),
+    ]),
+  });
 }
 
 /** Parse compact linear math and generate fresh canonical OMML in one bounded operation. */

@@ -166,7 +166,6 @@ export interface PaginatedSurfaceOptions {
    * activation (see the navigation module's single `window.open` gate).
    */
   readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
-  /** A click on an inline Office Math equation, for host editing chrome. */
   readonly onEquationPopover?: (activation: EquationActivation) => void;
   /**
    * Ctrl/Cmd+K — Word's Insert Hyperlink. The engine reports the request; the host's chrome

@@ -1483,6 +1483,7 @@ export interface PaginatedSurfaceOptions {
     readonly measurer?: TextMeasurer;
     // (undocumented)
     readonly onChange?: (state: PaginatedSurfaceState) => void;
+    // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
     readonly onRequestHyperlink?: () => void;
