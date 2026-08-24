@@ -113,6 +113,31 @@ describe('painted pages, semantic interaction', () => {
     expect(surface.state().revision).toBe(0); // navigation is not an edit
   });
 
+  test('plain horizontal arrows collapse a range to the selected edge', () => {
+    const { surface } = mount(paragraph('hello'));
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 1 },
+      head: { paragraphId, offset: 4 },
+    });
+
+    surface.navigate('right');
+    expect(surface.state().selection).toEqual({
+      anchor: { paragraphId, offset: 4 },
+      head: { paragraphId, offset: 4 },
+    });
+
+    surface.setSelection({
+      anchor: { paragraphId, offset: 4 },
+      head: { paragraphId, offset: 1 },
+    });
+    surface.navigate('left');
+    expect(surface.state().selection).toEqual({
+      anchor: { paragraphId, offset: 1 },
+      head: { paragraphId, offset: 1 },
+    });
+  });
+
   test('extending a selection reaches the browser selection as a real range', () => {
     const { surface, container } = mount(paragraph('hello world'));
     putCaret(surface, 0);

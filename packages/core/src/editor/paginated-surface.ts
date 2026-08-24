@@ -4047,6 +4047,20 @@ export function mountPaginatedSurface(
       // Arrow keys move from the caret AFTER the typed text, over the layout
       // that includes it.
       flushTypeBuffer();
+      if (
+        !extend &&
+        (command === 'left' || command === 'right') &&
+        (selection.anchor.paragraphId !== selection.head.paragraphId ||
+          selection.anchor.offset !== selection.head.offset)
+      ) {
+        // A plain horizontal arrow collapses a range to that arrow's edge. Starting a
+        // navigation step at `selection.head` moved one character beyond that edge, or one
+        // character from the wrong edge when the range was selected backwards.
+        const range = orderedRange();
+        desiredX = null;
+        setSelection(collapsedAt(command === 'left' ? range.from : range.to), true);
+        return;
+      }
       let moved = navigateInActiveScope(
         currentLayout,
         selection.head,
