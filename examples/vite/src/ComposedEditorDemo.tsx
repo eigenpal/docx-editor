@@ -618,12 +618,18 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
       className={`docx-editor demo-app${colorMode === 'dark' ? ' dark' : ''}`}
       data-testid="composed-mount"
     >
-      {bytes ? (
+      {loadError ? (
+        // A failed fetch is NOT a loading state: it is terminal, and routing it through
+        // the polite live region would announce it as progress. Its own assertive region.
+        <div className="demo-loading" role="alert">
+          {`Could not load the document: ${loadError.message}`}
+        </div>
+      ) : (
         // Authoring is ambient: comments and tracked changes take their `@w:author` from
         // `author`, the way the Office JS API sources it from context. A real app supplies
         // the signed-in user; a demo supplies a name so replies can be written at all.
         <DocxEditor.Root
-          document={bytes}
+          {...(bytes ? { document: bytes } : {})}
           author="Demo Reviewer"
           // The demo always opens ready to type: without an explicit mode, a document
           // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
@@ -719,17 +725,6 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             ) : null}
           </div>
         </DocxEditor.Root>
-      ) : loadError ? (
-        // A failed fetch is NOT a loading state: it is terminal, and routing it through
-        // the polite live region would announce it as progress. Its own assertive region.
-        <div className="demo-loading" role="alert">
-          {`Could not load the document: ${loadError.message}`}
-        </div>
-      ) : (
-        // The library's loading surface rather than a hand-rolled div: rendered outside
-        // a `Root` it always shows, which is exactly this branch's condition. Its default
-        // loading page uses the active locale and the same paper tokens as the editor.
-        <DocxEditor.Loading className="demo-loading" />
       )}
     </div>
   );
