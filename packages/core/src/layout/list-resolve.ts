@@ -27,6 +27,23 @@ import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 
+/** Fields of {@link ResolvedRunStyle} that change a marker's measured width. */
+function markerMeasureToken(style: ResolvedRunStyle): string {
+  return [
+    style.fontFamily ?? '',
+    style.fontSizePt,
+    style.bold ? 1 : 0,
+    style.italic ? 1 : 0,
+    style.characterSpacingPt,
+    style.horizontalScalePercent,
+    style.verticalAlign,
+    style.hidden ? 1 : 0,
+    style.kerningMinPt,
+    style.caps ? 1 : 0,
+    style.smallCaps ? 1 : 0,
+  ].join(',');
+}
+
 /**
  * A paragraph's list membership fully resolved: definition, level, marker text and geometry.
  *
@@ -45,7 +62,7 @@ export interface ResolvedListItem {
   /** Effective indent after merging level + paragraph indents, in points. */
   readonly indent: NumberingLevelIndent;
   readonly markerStyle: ResolvedRunStyle;
-  /** Fingerprint for layout cache keys (indent + level identity, not ordinal). */
+  /** Fingerprint for layout cache keys (indent, marker text, marker face). */
   readonly cacheToken: string;
 }
 
@@ -411,6 +428,9 @@ export function resolveStoryListItems(
       // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
       // served the previous marker's width to the new one, and the line wrapped a word late.
       markerText,
+      // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
+      // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
+      markerMeasureToken(markerStyle),
     ].join('|');
 
     map.set(paragraph.id, {

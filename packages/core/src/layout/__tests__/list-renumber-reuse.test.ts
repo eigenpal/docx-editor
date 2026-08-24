@@ -1,8 +1,9 @@
 // A list marker is DERIVED — from `numbering.xml` and the counter state, never from the
 // paragraph — so a numbering change leaves every paragraph subtree byte-identical. The
 // break-cache key and the prepared-block memo both carry `listItem.cacheToken`, which holds
-// the marker TEXT (not its length) and the resolved indent. A count-only producer used to
-// hide both: same item count hashed the same, and `ii.` shared a slot with `vi.`.
+// the marker TEXT (not its length), the resolved indent, and the marker FACE. A count-only
+// producer used to hide those: same item count hashed the same, and `ii.` shared a slot
+// with `vi.`.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -212,5 +213,41 @@ describe('a renumbered list is re-placed, not reused', () => {
     expect(incremental).toEqual(cold);
     expect(incremental[0]!.firstLine).not.toBe(warm[0]!.firstLine);
     expect(incremental[1]!.firstLine).not.toBe(warm[1]!.firstLine);
+  });
+
+  test('a marker face size change with the same text reaches the wrap', () => {
+    // `cacheToken` held the marker glyphs and the indent, but `listFirstLineOffset`
+    // measures with the level's `w:rPr`. A `w:sz` change keeps `1.` and the item count
+    // and still moves the first-line width.
+    const words = 'xxxx xxxx xxxx xxxx xxxx';
+    const part = document(words, words);
+    const session = createLayoutSession();
+    const cache = createParagraphLayoutCache();
+    const narrow = {
+      width: 220,
+      height: 400,
+      margin: { top: 20, right: 20, bottom: 20, left: 20 },
+    };
+    const sized = (halfPoints: string) =>
+      `<w:rPr><w:sz w:val="${halfPoints}"/></w:rPr>` +
+      '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>';
+    const linesOf = (halfPoints: string, nextSession?: LayoutSession) => {
+      const layout = layoutList(part, numbering('1', sized(halfPoints)), {
+        session: nextSession,
+        ...(nextSession ? { cache } : {}),
+        geometry: narrow,
+      });
+      return paragraphFragmentsOf(layout.pages[0]!).map((fragment) => ({
+        marker: fragment.marker?.text,
+        firstLine: fragment.lines[0]!.spans.map((span) => span.text).join(''),
+      }));
+    };
+
+    const warm = linesOf('22', session);
+    expect(warm.map((row) => row.marker)).toEqual(['1.', '2.']);
+    const incremental = linesOf('72', session);
+    const cold = linesOf('72');
+    expect(incremental).toEqual(cold);
+    expect(incremental[0]!.firstLine).not.toBe(warm[0]!.firstLine);
   });
 });
