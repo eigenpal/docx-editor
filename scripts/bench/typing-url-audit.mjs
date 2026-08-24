@@ -12,16 +12,22 @@
 
 import { chromium } from '@playwright/test';
 import {
-  caretOffsetFromDom,
+  DEFAULT_GLOBAL_DEADLINE_MS,
+  buildProfileReport,
   evaluateTypingRun,
+  formatStructuredInvalid,
   formatTypingAuditReport,
   installTypingAuditProbeInPage,
-  layoutRevisionOf,
   parseTypingUrlAuditArgs,
   quantile,
+  requireRemainingMs,
+  resolveTargetParagraphId,
   typingUrlAuditHelpText,
+  validateAuditUrl,
+  validateHttpUrlPolicy,
   validateTypingProbeSample,
   waitForPaintedPageCountStable,
+  waitForPerfE2EBridge,
 } from './typing-url-audit-lib.mjs';
 
 const argv = process.argv.slice(2);
@@ -30,30 +36,133 @@ if (argv.includes('--help')) {
   process.exit(0);
 }
 
-const args = parseTypingUrlAuditArgs(argv);
+/** @type {import('./typing-url-audit-lib.mjs').TypingUrlAuditArgs} */
+let args;
+try {
+  args = parseTypingUrlAuditArgs(argv);
+} catch (error) {
+  process.stdout.write(
+    formatStructuredInvalid({
+      valid: false,
+      reasons: [],
+      detail: error instanceof Error ? error.message : String(error),
+    })
+  );
+  process.stdout.write('\n');
+  process.exit(1);
+}
 
-const browser = await chromium.launch({ args: ['--no-sandbox'] });
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-const consoleErrors = [];
+const deadlineAt = Date.now() + (args.globalDeadlineMs ?? DEFAULT_GLOBAL_DEADLINE_MS);
+
+/** @type {{ type: string; text: string }[]} */
+const consoleEvents = [];
+/** @type {string[]} */
 const pageErrors = [];
+/** @type {{ url: string; failure: string }[]} */
+const requestFailures = [];
 
-page.on('console', (message) => {
-  if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 200));
-});
-page.on('pageerror', (error) => {
-  pageErrors.push(String(error).slice(0, 200));
-});
+class AuditFailure extends Error {}
+
+let invalidPrinted = false;
+
+/**
+ * @param {{ detail: string; reasons?: string[] }} input
+ */
+function fail(input) {
+  if (!invalidPrinted) {
+    process.stdout.write(
+      formatStructuredInvalid({
+        valid: false,
+        reasons: input.reasons ?? [],
+        detail: input.detail,
+        consoleErrors: consoleEvents,
+        pageErrors,
+        requestFailures,
+      })
+    );
+    process.stdout.write('\n');
+    invalidPrinted = true;
+  }
+  throw new AuditFailure(input.detail);
+}
+
+/** @type {import('@playwright/test').Browser | null} */
+let browser = null;
 
 try {
-  await page.goto(args.url, { waitUntil: 'networkidle', timeout: 180000 });
-  await waitForPaintedPageCountStable(page);
-  await page.waitForFunction(() => {
-    const pages = document.querySelector('.docx-pages');
-    if (!pages) return false;
-    const raw = pages.getAttribute('data-revision');
-    return raw !== null && Number.isFinite(Number(raw));
+  browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  let rejectFatalPageError = () => {};
+  const fatalPageError = new Promise((_, reject) => {
+    rejectFatalPageError = reject;
   });
-  await page.waitForTimeout(5000);
+
+  page.on('console', (message) => {
+    consoleEvents.push({ type: message.type(), text: message.text() });
+  });
+  page.on('pageerror', (error) => {
+    pageErrors.push(String(error));
+    rejectFatalPageError(error);
+  });
+  page.on('requestfailed', (request) => {
+    requestFailures.push({
+      url: request.url(),
+      failure: request.failure()?.errorText ?? 'request failed',
+    });
+  });
+
+  if (!args.allowRemote) {
+    await page.route('**/*', (route) => {
+      const policy = validateHttpUrlPolicy(route.request().url(), {
+        allowRemote: args.allowRemote,
+      });
+      if (!policy.allowed) {
+        requestFailures.push({
+          url: route.request().url(),
+          failure: 'blocked non-loopback http(s) request',
+        });
+        void route.abort('blockedbyclient');
+        return;
+      }
+      void route.continue();
+    });
+  }
+
+  const gotoTimeout = requireRemainingMs(deadlineAt, {
+    label: 'navigation',
+    globalDeadlineMs: args.globalDeadlineMs,
+  });
+  await Promise.race([
+    page.goto(args.url, { waitUntil: 'networkidle', timeout: gotoTimeout }),
+    fatalPageError,
+  ]);
+
+  const landed = validateHttpUrlPolicy(page.url(), { allowRemote: args.allowRemote });
+  if (!landed.allowed) {
+    fail({
+      detail: `navigation landed on non-loopback URL ${page.url()}`,
+    });
+  }
+  validateAuditUrl(page.url(), { allowRemote: args.allowRemote });
+
+  if (pageErrors.length > 0) {
+    fail({ detail: 'page error during navigation', reasons: pageErrors.map((error) => error) });
+  }
+
+  await waitForPaintedPageCountStable(page, { deadlineAt });
+  await waitForPerfE2EBridge(page, { deadlineAt });
+  await page.waitForFunction(
+    () => {
+      const pages = document.querySelector('.docx-pages');
+      if (!pages) return false;
+      const raw = pages.getAttribute('data-revision');
+      return raw !== null && Number.isFinite(Number(raw));
+    },
+    { timeout: requireRemainingMs(deadlineAt, { label: 'wait for layout revision marker' }) }
+  );
+  await page.waitForTimeout(
+    Math.min(5000, requireRemainingMs(deadlineAt, { label: 'post-load settle' }))
+  );
 
   const opened = await page.evaluate(() => ({
     pages: document.querySelectorAll('[data-page-index]').length,
@@ -71,22 +180,55 @@ try {
 
   await page.evaluate(installTypingAuditProbeInPage);
 
-  const paragraph = page.locator('[data-paragraph-id]').nth(args.paragraphIndex);
-  await paragraph.click();
-  await page.waitForTimeout(1000);
-
-  const targetParagraphId = await page.evaluate((index) => {
-    return (
-      document.querySelectorAll('[data-paragraph-id]')[index]?.getAttribute('data-paragraph-id') ??
-      null
+  let targetParagraphId = null;
+  if (args.paragraphIndex !== null) {
+    targetParagraphId = await page.evaluate((index) => {
+      return (
+        document.querySelectorAll('[data-paragraph-id]')[index]?.getAttribute('data-paragraph-id') ??
+        null
+      );
+    }, args.paragraphIndex);
+  } else {
+    targetParagraphId = await resolveTargetParagraphId(
+      page,
+      args.targetParagraphContentMarker,
+      args.targetParagraphNodeId
     );
-  }, args.paragraphIndex);
+  }
 
-  const lengthOf = () =>
+  if (!targetParagraphId) {
+    fail({
+      detail: 'target paragraph could not be resolved from the manifest marker or index',
+    });
+  }
+
+  const paragraph = page.locator(`[data-paragraph-id="${targetParagraphId}"]`).first();
+  await paragraph.click();
+  await page.waitForTimeout(
+    Math.min(1000, requireRemainingMs(deadlineAt, { label: 'caret settle after click' }))
+  );
+
+  const readModelText = () =>
     page.evaluate((paragraphId) => {
-      if (!paragraphId) return -1;
+      return globalThis.__DOCX_EDITOR_E2E__?.benchmarkParagraphModelText?.(paragraphId) ?? null;
+    }, targetParagraphId);
+
+  const paintedStateOf = () =>
+    page.evaluate((paragraphId) => {
+      if (!paragraphId) return { maxEnd: -1, paintedText: '', paintedOffset: null };
+      const selection = document.getSelection?.();
+      const anchorNode = selection?.anchorNode ?? null;
+      const anchorOffset = selection?.anchorOffset ?? 0;
+      const activeSpan =
+        anchorNode &&
+        (anchorNode.nodeType === Node.TEXT_NODE ? anchorNode.parentElement : anchorNode)?.closest(
+          '[data-paragraph-id]'
+        );
+      const fragment = activeSpan?.closest('.docx-paragraph-fragment');
+      if (!fragment) return { maxEnd: -1, paintedText: '', paintedOffset: null };
+      const paintedText = fragment.textContent ?? '';
       let maxEnd = 0;
-      for (const span of document.querySelectorAll('[data-paragraph-id]')) {
+      for (const span of fragment.querySelectorAll('[data-paragraph-id]')) {
         if (span.getAttribute('data-paragraph-id') !== paragraphId) continue;
         const rawEnd = span.getAttribute('data-end');
         if (rawEnd !== null && /^\d{1,9}$/.test(rawEnd)) {
@@ -97,7 +239,14 @@ try {
         const start = rawStart !== null && /^\d{1,9}$/.test(rawStart) ? Number(rawStart) : 0;
         maxEnd = Math.max(maxEnd, start + (span.textContent?.length ?? 0));
       }
-      return maxEnd;
+      let paintedOffset = null;
+      if (anchorNode && fragment.contains(anchorNode)) {
+        const pre = document.createRange();
+        pre.selectNodeContents(fragment);
+        pre.setEnd(anchorNode, anchorOffset);
+        paintedOffset = pre.toString().length;
+      }
+      return { maxEnd, paintedText, paintedOffset };
     }, targetParagraphId);
 
   const readRevision = () =>
@@ -141,50 +290,79 @@ try {
       return { paragraphId, offset: start + within };
     });
 
-  const before = await lengthOf();
+  const beforePainted = await paintedStateOf();
+  const before = beforePainted.maxEnd;
+  const modelTextBefore = await readModelText();
   const caretOffsetBefore = await readCaret();
-  if (!targetParagraphId) {
-    throw new Error(
-      `paragraph index ${args.paragraphIndex} did not resolve to a painted paragraph id`
-    );
-  }
-
-  const client = await page.context().newCDPSession(page);
-  if (args.profile) {
-    await client.send('Profiler.enable');
-    await client.send('Profiler.setSamplingInterval', { interval: 200 });
-    await client.send('Profiler.start');
-  }
+  const paintedInsertionOffset = beforePainted.paintedOffset ?? caretOffsetBefore?.offset ?? null;
 
   const samples = [];
   const perKeyGrowth = [];
   const perKeyRevisionAdvance = [];
+  /** @type {import('./typing-url-audit-lib.mjs').TypingAuditProbeSample[]} */
+  const probeSamples = [];
+  /** @type {import('playwright-core').Protocol.Profiler.Profile[]} */
+  const profileWindows = [];
+
   for (let index = 0; index < args.keys; index += 1) {
-    const lengthBeforeKey = await lengthOf();
-    await page.keyboard.type('x', { delay: 0 });
+    requireRemainingMs(deadlineAt, {
+      label: `keystroke ${index + 1}`,
+      globalDeadlineMs: args.globalDeadlineMs,
+    });
+    const lengthBeforeKey = (await paintedStateOf()).maxEnd;
+
+    /** @type {import('playwright-core').CDPSession | null} */
+    let profileClient = null;
+    if (args.profile) {
+      profileClient = await page.context().newCDPSession(page);
+      await profileClient.send('Profiler.enable');
+      await profileClient.send('Profiler.setSamplingInterval', { interval: 200 });
+      await profileClient.send('Profiler.start');
+    }
+
+    await Promise.race([page.keyboard.type('x', { delay: 0 }), fatalPageError]);
     await page.waitForFunction(
       (expectedCount) => (globalThis.__typingAuditProbe?.samples?.length ?? 0) >= expectedCount,
       index + 1,
-      { timeout: 30000 }
+      {
+        timeout: requireRemainingMs(deadlineAt, {
+          label: `probe sample ${index + 1}`,
+          globalDeadlineMs: args.globalDeadlineMs,
+        }),
+      }
     );
     const sample = await page.evaluate(
       (sampleIndex) => globalThis.__typingAuditProbe?.samples?.[sampleIndex] ?? null,
       index
     );
+
+    if (args.profile && profileClient) {
+      profileWindows.push((await profileClient.send('Profiler.stop')).profile);
+      await profileClient.detach();
+    }
+
     if (!validateTypingProbeSample(sample)) {
-      throw new Error(`invalid probe sample for keystroke ${index + 1}`);
+      fail({ detail: `invalid probe sample for keystroke ${index + 1}` });
     }
     samples.push(sample.ms);
+    probeSamples.push(sample);
     perKeyRevisionAdvance.push(true);
-    await page.waitForTimeout(args.settleMs);
-    const lengthAfterKey = await lengthOf();
-    perKeyGrowth.push(lengthAfterKey - lengthBeforeKey);
+    await page.waitForTimeout(
+      Math.min(
+        args.settleMs,
+        requireRemainingMs(deadlineAt, {
+          label: `post-keystroke settle ${index + 1}`,
+          globalDeadlineMs: args.globalDeadlineMs,
+        })
+      )
+    );
+    const afterKeyPainted = await paintedStateOf();
+    perKeyGrowth.push(afterKeyPainted.maxEnd - lengthBeforeKey);
   }
 
-  const probeSamples = await page.evaluate(() => globalThis.__typingAuditProbe?.samples ?? []);
-
-  const profile = args.profile ? (await client.send('Profiler.stop')).profile : null;
-  const after = await lengthOf();
+  const afterPainted = await paintedStateOf();
+  const after = afterPainted.maxEnd;
+  const modelTextAfter = await readModelText();
   const caretOffsetAfter = await readCaret();
   const trustedBeforeInputCount = await page.evaluate(
     () => globalThis.__typingAuditProbe?.trustedBeforeInputs ?? 0
@@ -200,15 +378,18 @@ try {
 
   const verdict = evaluateTypingRun({
     pages: opened.pages,
-    minPages: args.minPages,
+    expectedPages: args.minPages ?? opened.pages,
     beforeLength: before,
     afterLength: after,
+    beforeModelLength: modelTextBefore?.length ?? null,
+    afterModelLength: modelTextAfter?.length ?? null,
     keys: args.keys,
     layoutRevisionBefore,
     layoutRevisionAfter,
     caretInPagesLayer,
-    consoleErrors,
+    consoleErrors: consoleEvents,
     pageErrors,
+    requestFailures,
     perKeyGrowth,
     trustedBeforeInputCount,
     perKeyRevisionAdvance,
@@ -216,49 +397,17 @@ try {
     caretOffsetBefore,
     caretOffsetAfter,
     expectedCaretParagraphId: targetParagraphId,
+    modelTextBefore,
+    modelTextAfter,
+    paintedTextBefore: beforePainted.paintedText,
+    paintedTextAfter: afterPainted.paintedText,
+    insertionOffset: caretOffsetBefore?.offset ?? null,
+    paintedInsertionOffset,
   });
 
   const sorted = [...samples].sort((a, b) => a - b);
-  /** @type {string[]} */
-  const profileLines = [];
-  if (verdict.valid && profile) {
-    const nodes = new Map(profile.nodes.map((node) => [node.id, node]));
-    const deltas = profile.timeDeltas ?? [];
-    const selfTime = new Map();
-    for (let index = 0; index < profile.samples.length; index += 1) {
-      const id = profile.samples[index];
-      selfTime.set(id, (selfTime.get(id) ?? 0) + Math.max(deltas[index] ?? 0, 0));
-    }
-    const byFunction = new Map();
-    let idle = 0;
-    for (const [id, micros] of selfTime) {
-      const node = nodes.get(id);
-      if (!node) continue;
-      const frame = node.callFrame;
-      const name = frame.functionName || '(anonymous)';
-      if (name === '(idle)' || name === '(program)') {
-        idle += micros;
-        continue;
-      }
-      const file = (frame.url || '').split('/').pop()?.split('?')[0] ?? '';
-      const key = `${name}|${file}:${frame.lineNumber + 1}`;
-      byFunction.set(key, (byFunction.get(key) ?? 0) + micros);
-    }
-    const ranked = [...byFunction.entries()].sort((a, b) => b[1] - a[1]);
-    const active = ranked.reduce((sum, [, micros]) => sum + micros, 0);
-    profileLines.push(
-      `\nCPU: ${(active / 1000 / args.keys).toFixed(1)} ms/key active, ` +
-        `${(idle / 1000 / args.keys).toFixed(1)} ms/key idle or program`
-    );
-    profileLines.push(`${'ms/key'.padStart(8)}  ${'%'.padStart(5)}  function (file:line)`);
-    for (const [key, micros] of ranked.slice(0, args.top)) {
-      const [name, where] = key.split('|');
-      profileLines.push(
-        `${(micros / 1000 / args.keys).toFixed(2).padStart(8)}  ` +
-          `${((100 * micros) / active).toFixed(1).padStart(5)}  ${name} (${where})`
-      );
-    }
-  }
+  const profileReport =
+    verdict.valid && args.profile ? buildProfileReport(profileWindows, args.keys, args.top) : null;
 
   process.stdout.write(
     formatTypingAuditReport(verdict, args, {
@@ -266,25 +415,46 @@ try {
       opened,
       beforeLength: before,
       afterLength: after,
+      beforeModelLength: modelTextBefore?.length,
+      afterModelLength: modelTextAfter?.length,
       sortedSamples: sorted,
-      consoleErrors,
+      consoleErrors: consoleEvents,
       pageErrors,
-      profileLines,
+      requestFailures,
+      profileLines: profileReport?.lines,
       trustedBeforeInputCount,
       caretOffsetBefore,
       caretOffsetAfter,
+      targetParagraphId,
     })
   );
   process.stdout.write('\n');
 
-  if (!verdict.valid) {
+  if (!verdict.valid || (profileReport && !profileReport.valid)) {
     process.exitCode = 1;
   }
+} catch (error) {
+  if (!(error instanceof AuditFailure)) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (!invalidPrinted) {
+      process.stdout.write(
+        formatStructuredInvalid({
+          valid: false,
+          reasons: [],
+          detail,
+          consoleErrors: consoleEvents,
+          pageErrors,
+          requestFailures,
+        })
+      );
+      process.stdout.write('\n');
+    }
+  }
+  process.exitCode = 1;
 } finally {
-  await browser.close();
+  if (browser) {
+    await browser.close();
+  }
 }
 
-// Keep quantile exported for tests that import this module indirectly.
 void quantile;
-void layoutRevisionOf;
-void caretOffsetFromDom;

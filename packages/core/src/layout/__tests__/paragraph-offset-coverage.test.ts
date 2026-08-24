@@ -31,12 +31,10 @@ import {
 import { piecesOfParagraph } from '../field-projection.ts';
 import { storyBlocks } from '../story-roots.ts';
 
+import { PERFORMANCE_FIXTURE_BASENAMES } from '../../__tests__/performance-fixture-registry.ts';
+
 const FIXTURES = resolve(import.meta.dir, '../../../../../e2e/fixtures');
-const NON_CORPUS_FIXTURES = new Set([
-  // This generated scale fixture repeats the known inline-control offset disagreement.
-  // Its pinned purpose is browser performance, not additional offset-oracle coverage.
-  'typing-perf-521pp.docx',
-]);
+const NON_CORPUS_FIXTURES = PERFORMANCE_FIXTURE_BASENAMES;
 
 interface OffsetDefect {
   readonly fixture: string;
