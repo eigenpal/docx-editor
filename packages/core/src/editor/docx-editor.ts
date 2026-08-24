@@ -194,12 +194,14 @@ import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-s
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
+  EquationChromeHandlers,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
 
 export type {
   DocxEditorConfig,
   DocxEditorInstance,
+  EquationChromeHandlers,
   FontMeasurementState,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
@@ -318,6 +320,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const hyperlinkChromeStack: HyperlinkChromeHandlers[] = [];
   const liveHyperlinkChrome = (): HyperlinkChromeHandlers =>
     hyperlinkChromeStack[hyperlinkChromeStack.length - 1] ?? {};
+  const equationChromeStack: EquationChromeHandlers[] = [];
+  const liveEquationChrome = (): EquationChromeHandlers =>
+    equationChromeStack[equationChromeStack.length - 1] ?? {};
   let destroyed = false;
 
   /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
@@ -557,6 +562,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // host's chrome wired to the surface it replaced.
       onHyperlinkPopover: (activation) => liveHyperlinkChrome().onPopover?.(activation),
       onRequestHyperlink: () => liveHyperlinkChrome().onRequest?.(),
+      onEquationPopover: (activation) => liveEquationChrome().onPopover?.(activation),
       onTrackedChange: () => {
         if (reviewPaneOpen) return;
         reviewPaneOpen = true;
@@ -1747,6 +1753,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // owner has already torn down.
         const at = hyperlinkChromeStack.lastIndexOf(handlers);
         if (at >= 0) hyperlinkChromeStack.splice(at, 1);
+      };
+    },
+
+    setEquationChrome(handlers) {
+      equationChromeStack.push(handlers);
+      return () => {
+        const at = equationChromeStack.lastIndexOf(handlers);
+        if (at >= 0) equationChromeStack.splice(at, 1);
       };
     },
 

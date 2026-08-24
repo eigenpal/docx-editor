@@ -167,6 +167,20 @@ export {
   scrubExport,
 } from './sinks.ts';
 export {
+  DEFAULT_OMML_LIMITS,
+  OFFICE_MATH_NAMESPACE_URI,
+  equationExpressionToLinearMath,
+  linearMathToOmml,
+  parseLinearMath,
+  projectOmmlEquation,
+  type EquationExpression,
+  type LinearMathOmmlResult,
+  type LinearMathParseResult,
+  type LinearMathRejection,
+  type OmmlEquationProjection,
+  type OmmlLimits,
+} from './omml-equation.ts';
+export {
   readOoxmlPackage,
   writeOoxmlPackage,
   withPart,
