@@ -740,8 +740,8 @@ function resolveStoryListItemsStable(
   const lastBlock = blocks[blocks.length - 1];
   const last = memoOwner
     ? lastStoryResolvesBySession.get(memoOwner)
-    : (first ? lastStoryResolvesByAnchor.get(first) : undefined) ??
-      (lastBlock ? lastStoryResolvesByAnchor.get(lastBlock) : undefined);
+    : ((first ? lastStoryResolvesByAnchor.get(first) : undefined) ??
+      (lastBlock ? lastStoryResolvesByAnchor.get(lastBlock) : undefined));
   const evidence = memoOwner ? consumeListResolveChangeEvidence(memoOwner) : undefined;
   if (
     evidence?.preservesNumberedSequence &&
