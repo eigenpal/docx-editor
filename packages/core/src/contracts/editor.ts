@@ -13,14 +13,14 @@
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
-// naming the layout lane, which they are not allowed to import.
+// naming the store lane, which they are not allowed to import.
 import type {
   ReviewCommentItem,
   ReviewCustomItem,
   ReviewItem,
   ReviewRevisionItem,
   ReviewRevisionKind,
-} from '../layout/review-support.ts';
+} from '../store/store/review-items.ts';
 import type { InteractionOutcome } from './interaction';
 // The selection vocabulary the painted surface actually speaks. Type-only, and re-exported
 // below for the same reason the review types are: an adapter is not allowed to import the
@@ -65,14 +65,14 @@ export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 // reason the review and drawing vocabulary is re-exported here rather than left where it is
 // declared — so a type that leaks out through a return value but not through the export list
 // is a member the adapter can call and cannot write down.
+export type { CommentRecord } from '../store/store/comment-reads.ts';
 export type {
-  CommentRecord,
   ReviewCommentItem,
   ReviewCustomItem,
   ReviewPosition,
   ReviewRange,
   ReviewRevisionItem,
-} from '../layout/review-support.ts';
+} from '../store/store/review-items.ts';
 export type { RevisionAddress } from '@docx-editor.dev/core/store';
 export type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 export type {

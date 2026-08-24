@@ -6,7 +6,7 @@ import {
   validateCommentDate,
   validateCommentText,
 } from '../store/store/comment-input-validate.ts';
-import type { ReviewCommentItem } from '../store/store/review-reads.ts';
+import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';

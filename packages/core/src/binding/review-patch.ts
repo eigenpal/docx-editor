@@ -7,16 +7,13 @@
 // the full derivation, which is always correct. A patch that keeps a stale card, or drops
 // a live one, is worse than a slower keystroke.
 
-// `reviewItemKey`/`reviewItemPositionRank` and the ReviewItem vocabulary live in the layout
-// lane — a binding→layout edge the DAG does not allow, pinned in core-lane-imports.test.ts
-// until the review vocabulary moves to a lane both sides may import.
 import {
   reviewItemKey,
   reviewItemPositionRank,
   type ReviewCommentItem,
   type ReviewItem,
   type ReviewRevisionItem,
-} from '../layout/review-support.ts';
+} from '../store/store/review-items.ts';
 import {
   findNode,
   linkRevisionReplies,

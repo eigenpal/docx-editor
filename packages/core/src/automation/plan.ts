@@ -92,7 +92,7 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import { revisionCollectionOps, revisionDecisionTarget } from './revision-operations.ts';
-import type { ReviewCommentItem } from '../store/store/review-reads.ts';
+import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
   planDeleteComment,
   planInsertComment,

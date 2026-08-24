@@ -315,7 +315,6 @@ export default [
       'packages/core/src/editor/paginated-surface-contract.ts',
       'packages/core/src/layout/semantic-table.ts',
       'packages/core/src/store/__tests__/table-resize-ops.test.ts',
-      'packages/core/src/store/store/review-reads.ts',
     ],
     rules: {
       'max-lines': ['error', { max: 1100, skipBlankLines: false, skipComments: false }],

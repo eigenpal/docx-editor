@@ -23,14 +23,12 @@ import {
   threadStateOfPart,
   type CommentThreadState,
 } from '../store/store/comment-reads.ts';
-import {
-  commentBodyText,
-  commentItemsOf,
-  revisionItemsOf,
-  type ReviewCommentItem,
-  type ReviewRange,
-  type ReviewRevisionItem,
-} from '../store/store/review-reads.ts';
+import { commentBodyText, commentItemsOf, revisionItemsOf } from '../store/store/review-reads.ts';
+import type {
+  ReviewCommentItem,
+  ReviewRange,
+  ReviewRevisionItem,
+} from '../store/store/review-items.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
 import type { AutomationStoryId } from './stories.ts';

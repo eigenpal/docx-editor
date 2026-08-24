@@ -108,22 +108,25 @@ export {
   commentInitials,
   commentItemsOf,
   deepParagraphOrderOfPart,
-  firstReviewRange,
   linkRevisionReplies,
   locateSites,
   paragraphOrderOfPart,
-  reviewItemKey,
-  reviewItemRanges,
   revisionItemsOf,
   type LinkableReviewItem,
+} from './review-reads.ts';
+export {
+  firstReviewRange,
+  reviewItemKey,
+  reviewItemRanges,
   type ReviewCommentItem,
+  type ReviewCustomItem,
   type ReviewItem,
   type ReviewModelInput,
   type ReviewPosition,
   type ReviewRange,
   type ReviewRevisionItem,
   type ReviewRevisionKind,
-} from './review-reads.ts';
+} from './review-items.ts';
 export {
   SEARCH_MATCH_LIMIT,
   SEARCH_QUERY_MAX,

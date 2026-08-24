@@ -26,50 +26,20 @@ import {
 } from './comment-reads.ts';
 import { locateSites } from './review-site-locations.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
+// The vocabulary this derivation speaks — the item shapes and their pure helpers — lives in
+// `review-items.ts`, where the binding and layout lanes can reach it too.
+import {
+  reviewItemPositionRank,
+  type ReviewCommentItem,
+  type ReviewItem,
+  type ReviewModelInput,
+  type ReviewPosition,
+  type ReviewRange,
+  type ReviewRevisionItem,
+  type ReviewRevisionKind,
+} from './review-items.ts';
 
 export { locateSites } from './review-site-locations.ts';
-
-/** A position in the model offset space of one story. */
-export interface ReviewPosition {
-  readonly paragraphId: string;
-  readonly offset: number;
-}
-
-/** Where an item is anchored: a range in one story. */
-export interface ReviewRange {
-  readonly partName: string;
-  readonly start: ReviewPosition;
-  readonly end: ReviewPosition;
-}
-
-/**
- * What kind of decision a revision card represents.
- *
- * Wider than the four content wrappers, because a reviewer has to be shown every pending
- * decision, including the ones that decorate no characters. A card the surface cannot show is
- * a change the reviewer never learns about — and `acceptAllRevisions` refuses if ANY revision
- * in the document is one the engine cannot resolve, so an invisible one makes Accept All fail
- * for a reason nothing on screen explains.
- */
-export type ReviewRevisionKind =
-  | 'insert'
-  | 'delete'
-  /**
-   * A deletion and an insertion that are one edit: text typed over a selection.
-   *
-   * Word shows these as a single `Replaced "x" with "y"` card, and resolving one half
-   * without the other is never what the reviewer meant — accepting the deletion alone
-   * leaves the replacement text unproposed, rejecting it alone leaves both.
-   */
-  | 'replace'
-  | 'moveFrom'
-  | 'moveTo'
-  /** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
-  | 'format'
-  /** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
-  | 'paragraphMark'
-  /** A row, cell, section or grid revision. Supported row revisions are resolvable. */
-  | 'structural';
 
 /** `EG_ParaRPrTrackChanges` by element name: the four decisions a paragraph mark can carry. */
 const MARK_DIRECTIONS: Readonly<Record<string, 'insert' | 'delete' | 'moveFrom' | 'moveTo'>> = {
@@ -78,119 +48,6 @@ const MARK_DIRECTIONS: Readonly<Record<string, 'insert' | 'delete' | 'moveFrom' 
   moveFrom: 'moveFrom',
   moveTo: 'moveTo',
 };
-
-/** One tracked change as the store derives it, keyed per decision rather than per site. */
-export interface ReviewRevisionItem {
-  readonly kind: 'revision';
-  /** Stable across renders and unique per DECISION, not per site. */
-  readonly id: string;
-  /** The payload `acceptRevision` / `rejectRevision` take. */
-  readonly address: RevisionAddress;
-  /**
-   * EVERY address this decision covers, `address` first.
-   *
-   * More than one only for a replacement, whose halves a foreign editor may have written
-   * as two independent revisions. Accept and reject walk all of them in one transaction:
-   * resolving one half and leaving the other is a state no reviewer asked for.
-   */
-  readonly addresses: readonly RevisionAddress[];
-  /** The words a replacement removes. Empty for every other kind. */
-  readonly replacedText: string;
-  readonly revisionKind: ReviewRevisionKind;
-  /**
-   * WHICH decision a `paragraphMark` records, absent for every other kind.
-   *
-   * `EG_ParaRPrTrackChanges` is `ins? del? moveFrom? moveTo?`, and the four say opposite
-   * things about the same break: one proposes it, another proposes taking it away. Collapsing
-   * them into the single kind lost that, and a card then described a deleted break as an
-   * inserted one — the reverse of what Accept on that card does.
-   */
-  readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
-  readonly author: string;
-  readonly date?: string;
-  /** Text the revision covers, for the card summary. Empty for changes with no characters. */
-  readonly text: string;
-  /** Every site this decision touches, in document order. */
-  readonly ranges: readonly ReviewRange[];
-  /**
-   * How deeply this change is NESTED inside other changes, 0 for an unenclosed one.
-   *
-   * Revisions nest for real, and OOXML has no other way to say what happened: `w:ins` wrapping
-   * `w:del` is content one reviewer added and another struck. Both stay pending, because each
-   * author has to be answered separately, so both are cards — over one identical range.
-   *
-   * A range therefore cannot say which change a position is "in", and this is what settles it.
-   * Word treats the innermost change as the operative one: the words are struck on the page
-   * because of the deletion, and accepting the change under them performs that deletion. So the
-   * deepest card wins the caret, and the one enclosing it stays listed and reachable.
-   */
-  readonly nesting: number;
-  /**
-   * How many leading `ranges` are the STRUCK half of a replacement.
-   *
-   * A replacement's card is one decision but its ranges are two colours — red over what is
-   * going, green over what takes its place. ABSENT when the halves do not split at a single
-   * point, which is what a file recording both under one revision id can produce; a surface
-   * then has no basis for two colours and should paint one neutral band rather than guess.
-   */
-  readonly replacedRangeCount?: number;
-  /**
-   * True when the engine cannot resolve this kind, so accept and reject must not be offered.
-   *
-   * Derived HERE rather than from a caller-supplied predicate: the refusal list is internal,
-   * and a surface asked to compute it would have to guess. A card that offers a button the
-   * engine will refuse is worse than one that explains why it cannot.
-   */
-  readonly readOnly: boolean;
-  /** The other half of a move, or the other side of a delete/insert replacement. */
-  readonly pairedWith?: string;
-  /**
-   * Comments answering this change, in document order.
-   *
-   * A reply to a tracked change IS a comment: `w:ins` and `w:del` carry `(@w:id, @w:author,
-   * @w:date)` and no body, so `replyToReviewItem` writes the text as a comment over the
-   * revision's own range. Nothing recorded the link, so the reply came back as a separate
-   * card — the reader saw their answer detach from the change it answered. The range is the
-   * link, and it is the same evidence `commentItemsOf` threads coincident comments on.
-   */
-  readonly replyIds: readonly string[];
-}
-
-/** One comment as the store derives it, with its thread links resolved. */
-export interface ReviewCommentItem {
-  readonly kind: 'comment';
-  readonly id: string;
-  readonly comment: CommentRecord;
-  readonly range: ReviewRange | null;
-  readonly resolved: boolean;
-  /** The comment this replies to, absent for a top-level comment. */
-  readonly parentId?: string;
-  /**
-   * The REVISION this comment answers, when it covers exactly that change's characters.
-   *
-   * Separate from {@link parentId} rather than folded into it: the two name different item
-   * kinds, and a surface resolving one id against the comment index would find nothing.
-   */
-  readonly parentRevisionId?: string;
-  /** Replies to this comment, in document order. Empty for a reply or a childless comment. */
-  readonly replyIds: readonly string[];
-  /** True when the file gave this comment no usable range. */
-  readonly orphaned: boolean;
-}
-
-/**
- * One pending decision as the STORE derives it: a tracked change or a comment. Discriminate on
- * `kind`.
- *
- * The layout layer's own `ReviewItem` widens this with the pro custom-node card, which has no
- * store representation.
- */
-export type ReviewItem = ReviewRevisionItem | ReviewCommentItem;
-
-/** The stable key a surface uses for the active item and for a React list. */
-export function reviewItemKey(item: ReviewItem): string {
-  return item.kind === 'comment' ? `comment-${item.id}` : `revision-${item.id}`;
-}
 
 /** Plain text of a comment's body, so a card never re-implements the run walk. */
 export function commentBodyText(comment: CommentRecord): string {
@@ -782,22 +639,6 @@ export function commentItemsOf(
   });
 }
 
-/** What review derivation reads: one story part plus its comment parts. */
-export interface ReviewModelInput {
-  /** The story the ranges live in — the main document, a header, a note. */
-  readonly storyPart: OoxmlPart;
-  /**
-   * Header/footer story parts, in section order. Their revisions and comment anchors join
-   * the queue: a tracked change in a header is a pending decision like any other, and a
-   * queue that only walked the body silently hid it from the rail AND from Accept All.
-   */
-  readonly furnitureParts?: readonly OoxmlPart[] | undefined;
-  /** `word/comments.xml`, absent when the package has none. */
-  readonly commentsPart?: OoxmlPart | undefined;
-  /** `word/commentsExtended.xml`, absent when the package has none. */
-  readonly commentsExtendedPart?: OoxmlPart | undefined;
-}
-
 /**
  * Everything the review surface lists, in document order.
  *
@@ -848,7 +689,7 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
     ...revisions,
     ...commentItemsOf(comments, anchors, threadState),
   ]);
-  return items.sort((a, b) => positionRank(a, order) - positionRank(b, order));
+  return items.sort((a, b) => reviewItemPositionRank(a, order) - reviewItemPositionRank(b, order));
 }
 
 /**
@@ -1066,35 +907,3 @@ const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(8);
 
 /** Paragraph ids of one table subtree, in reading order, per immutable table node. */
 const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
-
-/**
- * Every range a decision touches. One card can cover several, in different paragraphs.
- *
- * Exported because the geometry half in the layout lane asks the same question, and a second
- * copy of "which ranges does this item cover" is how a card comes to be painted over one range
- * and activated by another.
- */
-export function reviewItemRanges(item: ReviewItem): readonly ReviewRange[] {
-  if (item.kind === 'comment') return item.range ? [item.range] : [];
-  return item.ranges;
-}
-
-/** The range an item is anchored at — where its card belongs and how it sorts. */
-export function firstReviewRange(item: ReviewItem): ReviewRange | null {
-  return reviewItemRanges(item)[0] ?? null;
-}
-
-/**
- * A single comparable number for document order.
- *
- * Paragraph index dominates offset, so a revision spanning paragraphs still sorts by where it
- * STARTS. An item with no resolvable range sorts last rather than to position zero, which is
- * where an orphan used to land — tearing an orphaned reply out of its own thread.
- */
-function positionRank(item: ReviewItem, order: ReadonlyMap<string, number>): number {
-  const range = firstReviewRange(item);
-  if (!range) return Number.MAX_SAFE_INTEGER;
-  const paragraph = order.get(range.start.paragraphId);
-  if (paragraph === undefined) return Number.MAX_SAFE_INTEGER;
-  return paragraph * 1_000_000 + Math.min(range.start.offset, 999_999);
-}

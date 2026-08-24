@@ -2384,7 +2384,6 @@ export function reviewItemsAt(items: readonly ReviewItem[], position: ReviewPosi
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
-    // (undocumented)
     readonly customNodePayloads?: ReadonlyMap<string, {
         readonly nodeId: string;
         readonly label: string;

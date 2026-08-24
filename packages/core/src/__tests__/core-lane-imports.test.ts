@@ -31,7 +31,6 @@ const LANES = Object.keys(CORE_LANES) as LaneName[];
  * — coupling that predates the lane move and is compile-time only.
  */
 const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: LaneName }[] = [
-  { file: 'binding/tree-session.ts', to: 'layout' },
   { file: 'contracts/editor.ts', to: 'layout' },
   { file: 'contracts/editor.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'layout' },
@@ -44,14 +43,12 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
  * VALUE edges the DAG does not allow, pinned until their code moves lane.
  *
  * These are live coupling, not just compile-time — each one is a debt with a tracked
- * issue, and the pin ratchets exactly like the type list. Today's single entry:
- * `review-patch.ts` calls `reviewItemKey`/`reviewItemPositionRank`, pure helpers over the
- * `ReviewItem` vocabulary that lives in `layout/review-support.ts`; the fix is moving the
- * review vocabulary to a lane binding may import, which is a refactor of its own.
+ * issue, and the pin ratchets exactly like the type list. Empty today: the last entry
+ * (`review-patch.ts` calling the `ReviewItem` vocabulary in the layout lane) was retired
+ * when the review vocabulary moved to `store/store/review-items.ts`, a lane both binding
+ * and layout may import.
  */
-const GRANDFATHERED_VALUE_EDGES: readonly { readonly file: string; readonly to: LaneName }[] = [
-  { file: 'binding/review-patch.ts', to: 'layout' },
-];
+const GRANDFATHERED_VALUE_EDGES: readonly { readonly file: string; readonly to: LaneName }[] = [];
 
 interface ImportEdge {
   readonly file: string; // relative to src/, posix separators

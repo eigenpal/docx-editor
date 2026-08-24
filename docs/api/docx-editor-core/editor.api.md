@@ -1443,7 +1443,7 @@ export interface PaginatedSurface {
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
     }): void;
-    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind_2[] | null): void;
+    setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     setSectionProperties(update: {
@@ -1632,7 +1632,6 @@ export interface ReviewAuthorInfo {
 export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
-    // (undocumented)
     readonly customNodePayloads?: ReadonlyMap<string, {
         readonly nodeId: string;
         readonly label: string;
