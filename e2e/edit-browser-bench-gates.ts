@@ -37,11 +37,18 @@ export const TRACKED_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = 
  * Pinned per scenario for the 521-page reported reproduction (typing-perf-521pp.docx).
  * Bootstrapped from a local Chromium run; a change means the engine performs different
  * work on the huge document, which is exactly what these exist to catch.
+ *
+ * `fullPasses` counts the passes the OPEN performs; typing must add none. The open's
+ * note-reserve reflow used to force a second full pass because the document-wide reserve
+ * map was folded into every section's context key; the key now folds only the reserve
+ * slots a section's own pass can read, so the reflow's second body pass reuses every
+ * section and only the first pass is full — the same deliberate 2 -> 1 move as the
+ * settle-bench gate.
  */
 export const PINNED_HUGE_EXPECTED_LAYOUT_WORK: Record<string, ExpectedLayoutWork> = {
-  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
-  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
-  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 2 },
+  '521pp-editing-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
+  '521pp-editing-wrap': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
+  '521pp-suggesting-character': { placed: 11, total: 6540, reusedPages: 517, fullPasses: 1 },
 };
 
 /** Pinned for the ~1,000-page stress fixture (synthetic-huge-tracked.docx). */
