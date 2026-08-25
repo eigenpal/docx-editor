@@ -28,6 +28,7 @@ import {
   mountWithImages,
   picture,
   settle,
+  textboxWithClippedPicture,
   textboxWithPicture,
 } from './image-decode-harness.ts';
 
@@ -149,6 +150,37 @@ describe('header/footer picture resources reach the page', () => {
     await settle();
     expect(textboxStoryDrawingKinds(surface.layout().pages[0]!.header)).toEqual(['ready']);
     expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
+    surface.destroy();
+    container.remove();
+  });
+
+  // The regression for #467: the furniture context tokenizes the BASELINE story, and the
+  // text-box height clip drops the picture's fragment from it — while a `withPageContext`
+  // projection can wrap differently and keep the picture. The token must name clipped
+  // resources too, or the settle moves nothing and the unchanged-pass early exit returns
+  // the previous pages by identity.
+  test('a picture the baseline text-box clip drops still invalidates the reused pages', async () => {
+    const { port, release } = deferredDecodePort();
+    const { surface, container } = await mountWithImages(
+      docx({ headerBody: textboxWithClippedPicture(), footerBody: '<w:r><w:t>f</w:t></w:r>' }),
+      port
+    );
+    const clippedTokenOf = (): string => {
+      const header = surface.layout().pages[0]!.header;
+      const box = (header?.anchoredDrawings ?? []).find((drawing) => drawing.textboxStory);
+      return box?.textboxStory?.clippedResourceToken ?? '';
+    };
+    // The clip drops the picture's fragment, so no laid-out record carries it...
+    expect(textboxStoryDrawingKinds(surface.layout().pages[0]!.header)).toEqual([]);
+    // ...but the clipped-resource token still names its pending resource.
+    expect(clippedTokenOf()).toContain('pending:');
+    const before = surface.layout().pages[0]!;
+    release();
+    await settle();
+    // The settle rebuilt the pages: the clipped token moved the furniture context, so the
+    // unchanged-pass early exit could not return `before` by identity.
+    expect(surface.layout().pages[0]!).not.toBe(before);
+    expect(clippedTokenOf()).toContain('ready:');
     surface.destroy();
     container.remove();
   });

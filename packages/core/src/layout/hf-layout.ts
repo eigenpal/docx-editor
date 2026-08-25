@@ -552,6 +552,13 @@ const storyDrawingResourceTokens = new WeakMap<HeaderFooterStoryLayout, string>(
  * Walks with {@link forEachStoryDrawing}, which descends into each anchored drawing's
  * text-box story: a picture inside a `wps:txbx` in a header settles on the same
  * asynchronous clock as a direct one, so its resource has to move this token too.
+ *
+ * CLIPPED drawings ride along (#467). This token is computed from the BASELINE story, and
+ * `layoutTextboxStory` drops fragments below the box's content height — while a
+ * `withPageContext` projection of the same story can wrap differently (PAGE digits) and
+ * paint a drawing the baseline clipped out. Painted plus clipped is the story's full source
+ * set, a superset of what any projection paints, so a settle always moves this token no
+ * matter which projection shows the picture.
  */
 export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): string {
   const cached = storyDrawingResourceTokens.get(story);
@@ -559,6 +566,9 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   const tokens: string[] = [];
   forEachStoryDrawing(story, (drawing) => {
     tokens.push(drawingResourceLayoutToken(drawing.resource));
+    if (drawing.kind === 'anchoredDrawing' && drawing.textboxStory?.clippedResourceToken) {
+      tokens.push(`clip:${drawing.textboxStory.clippedResourceToken}`);
+    }
   });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a
   // plain header is byte-for-byte what it was.

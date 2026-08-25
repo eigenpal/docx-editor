@@ -18,6 +18,8 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { emuToPoints } from './drawing-layout.ts';
+import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
+import { forEachStoryDrawing } from './semantic-record-queries.ts';
 import type { FieldPageContext } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
@@ -71,6 +73,18 @@ export interface TextboxStoryLayout {
   readonly strokeWidthPt: number;
   /** True when layout hit a named bound and returned a truncated / empty story. */
   readonly fallbackReason?: TextboxStoryFallbackReason;
+  /**
+   * Resource identities of the drawings the clip DROPPED, in flow order.
+   *
+   * The furniture invalidation token walks laid-out records, and a dropped fragment leaves
+   * none — while a `withPageContext` projection of the same story can wrap differently
+   * (PAGE digits) and keep the drawing. Without this a picture clipped out of the baseline
+   * but painted by a projection never reaches the session context, so its decode settling
+   * moves nothing and the unchanged-pass early exit reuses the placeholder pages forever
+   * (#467). Absent when the clip dropped no drawings, so the common story keys byte-for-byte
+   * as before.
+   */
+  readonly clippedResourceToken?: string;
 }
 
 export interface TextboxStoryLayoutOptions {
@@ -139,6 +153,9 @@ export function layoutTextboxStory(
 
   const depth = options.depth ?? 0;
   if (depth >= MAX_TEXTBOX_STORY_NESTING) {
+    // No clipped-resource token here: past the ceiling nothing is flowed, so no projection
+    // can paint these drawings either. If nested box rendering ever ships, this return must
+    // name the story's resources too, or the #467 pattern recurs one level down.
     return {
       fragments: [],
       flowHeight: 0,
@@ -173,8 +190,13 @@ export function layoutTextboxStory(
   let fragments = flow.blocks;
   let flowHeight = flow.bottom;
   let fallbackReason: TextboxStoryFallbackReason | undefined;
+  const clippedResourceTokens: string[] = [];
 
   if (fragments.length > MAX_TEXTBOX_STORY_FRAGMENTS) {
+    collectDrawingResourceTokens(
+      fragments.slice(MAX_TEXTBOX_STORY_FRAGMENTS),
+      clippedResourceTokens
+    );
     fragments = fragments.slice(0, MAX_TEXTBOX_STORY_FRAGMENTS);
     const last = fragments[fragments.length - 1];
     flowHeight = last ? last.box.y + last.box.height : 0;
@@ -186,6 +208,10 @@ export function layoutTextboxStory(
   if (flowHeight > contentHeight + 0.001) {
     const kept = fragments.filter((fragment) => fragment.box.y < contentHeight - 0.001);
     if (kept.length < fragments.length) {
+      collectDrawingResourceTokens(
+        fragments.filter((fragment) => fragment.box.y >= contentHeight - 0.001),
+        clippedResourceTokens
+      );
       fragments = kept;
       fallbackReason = fallbackReason ?? 'textbox-height-clip';
     }
@@ -203,5 +229,23 @@ export function layoutTextboxStory(
     contentOffset: { x: insetLeft, y: insetTop + anchorOffset },
     ...chrome,
     ...(fallbackReason ? { fallbackReason } : {}),
+    ...(clippedResourceTokens.length > 0
+      ? { clippedResourceToken: clippedResourceTokens.join('!') }
+      : {}),
   };
+}
+
+/**
+ * Resource tokens of the drawings in clip-dropped fragments.
+ *
+ * The SAME walk the furniture token uses over kept records, so a new drawing channel can
+ * never reach one side of the painted-plus-clipped invariant and not the other.
+ */
+function collectDrawingResourceTokens(
+  blocks: readonly BlockFragmentRecord[],
+  tokens: string[]
+): void {
+  forEachStoryDrawing({ fragments: blocks }, (drawing) => {
+    tokens.push(drawingResourceLayoutToken(drawing.resource));
+  });
 }

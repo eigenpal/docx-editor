@@ -55,8 +55,8 @@ export function inlinePicture(id: number): string {
   );
 }
 
-/** An anchored text box whose story holds one inline picture. */
-export function textboxWithPicture(): string {
+/** An anchored `wps:txbx` text box with the given extent height and story content. */
+function anchoredTextbox(cyEmu: number, storyContent: string): string {
   return (
     '<w:r><w:drawing>' +
     '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" ' +
@@ -64,16 +64,36 @@ export function textboxWithPicture(): string {
     '<wp:simplePos x="0" y="0"/>' +
     '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
     '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
-    '<wp:extent cx="2743200" cy="1828800"/><wp:wrapNone/><wp:docPr id="10" name="box"/>' +
+    `<wp:extent cx="2743200" cy="${cyEmu}"/><wp:wrapNone/><wp:docPr id="10" name="box"/>` +
     `<a:graphic><a:graphicData uri="${WPS_NS}">` +
     '<wps:wsp><wps:cNvSpPr txBox="1"/>' +
-    '<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" cy="1828800"/></a:xfrm>' +
+    `<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="2743200" cy="${cyEmu}"/></a:xfrm>` +
     '<a:prstGeom prst="rect"/></wps:spPr>' +
-    '<wps:txbx><w:txbxContent>' +
-    `<w:p><w:r><w:t>in the box</w:t></w:r>${inlinePicture(11)}</w:p>` +
-    '</w:txbxContent></wps:txbx>' +
+    `<wps:txbx><w:txbxContent>${storyContent}</w:txbxContent></wps:txbx>` +
     '<wps:bodyPr/></wps:wsp>' +
     '</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'
+  );
+}
+
+/** An anchored text box whose story holds one inline picture. */
+export function textboxWithPicture(): string {
+  return anchoredTextbox(
+    1828800,
+    `<w:p><w:r><w:t>in the box</w:t></w:r>${inlinePicture(11)}</w:p>`
+  );
+}
+
+/**
+ * An anchored text box too short for its story, whose picture the height clip drops.
+ *
+ * The extent height (91440 EMU = 7.2pt) equals the default vertical insets, so the content
+ * height is zero and `layoutTextboxStory` drops every fragment — the picture flows, its
+ * decode is scheduled, but no laid-out record carries it (`textbox-height-clip`).
+ */
+export function textboxWithClippedPicture(): string {
+  return anchoredTextbox(
+    91440,
+    `<w:p><w:r><w:t>in the box</w:t></w:r></w:p><w:p>${inlinePicture(11)}</w:p>`
   );
 }
 
