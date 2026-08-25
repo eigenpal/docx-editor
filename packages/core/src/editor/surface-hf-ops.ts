@@ -29,6 +29,7 @@ export function createHeaderFooterOps(deps: {
   deleteSelectionPlan: () => {
     readonly ops: readonly TreeDocOp[];
     readonly collapseTo: { paragraphId: string; offset: number };
+    readonly replaceAt?: { paragraphId: string; offset: number };
   };
   orderedStart: () => { paragraphId: string; offset: number };
   selectionMark: () => { paragraphId: string; start: number; end: number } | null;
@@ -54,11 +55,12 @@ export function createHeaderFooterOps(deps: {
 
     insertPageField(field) {
       if (!deps.isHeaderFooterOpen()) return false;
-      // The plan's `collapseTo`, never the range start: a deletion that takes a block with it
-      // leaves no paragraph at the start to insert into, and one refused op vetoes the whole
-      // transaction — so the field did not appear AND the deletion did not happen.
+      // The plan's `replaceAt`, never the range start: in suggesting mode the struck words
+      // stay and the field belongs after them, and a deletion that takes a block with it
+      // leaves no paragraph at the start to insert into — one refused op vetoes the whole
+      // transaction, so the field did not appear AND the deletion did not happen.
       const plan = deps.deleteSelectionPlan();
-      const start = plan.collapseTo;
+      const start = plan.replaceAt ?? plan.collapseTo;
       deps.commit(
         () =>
           deps.applyOps(

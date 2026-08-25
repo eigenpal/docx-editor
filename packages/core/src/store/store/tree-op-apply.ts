@@ -2603,7 +2603,16 @@ function distributeInline(
 ): OoxmlNode[][] {
   const byPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
 
-  if (child.kind === 'hyperlink') {
+  // A REVISION WRAPPER DISTRIBUTES LIKE A HYPERLINK, the same rule `divideInline` states:
+  // `w:ins` and `w:del` are containers of run content, not run content, so the "not a run,
+  // keep it whole" answer below put an entire tracked insertion into the FIRST piece however
+  // many boundaries ran through it — a multi-line paste in suggesting mode kept its lines in
+  // one paragraph and minted empty tails. Every piece keeps the same author, date and id,
+  // which is how a reader groups them back into one decision.
+  if (
+    child.kind === 'hyperlink' ||
+    (child.kind !== 'textValue' && isContentRevisionKind(child.kind))
+  ) {
     const innerByPiece: OoxmlNode[][] = Array.from({ length: pieceCount }, () => []);
     // Absolute paragraph offsets, seeded from the link's own start — see `divideInline`.
     // At zero, `pieceIndexOf` put every zero-length child of a link in the FIRST piece: a

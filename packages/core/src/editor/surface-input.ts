@@ -6,15 +6,13 @@
 // the little state it cannot own — so React, Vue and a plain page get identical behaviour
 // instead of three hand-written keymaps that drift.
 
-import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { NavigationCommand, SemanticSelection } from '@docx-editor.dev/core/layout';
-import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
+import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
+import type { NavigationCommand } from '@docx-editor.dev/core/layout';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
 import { spanSearchRoots } from './dom-selection.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
 
-type SelectionMark = { paragraphId: string; start: number; end: number };
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
   ArrowRight: 'right',
@@ -478,66 +476,4 @@ export function paragraphReplacePlan(
   }
   if (ops.length === 0) return null;
   return { ops, caret: prefix + inserted.length };
-}
-
-/**
- * Plain-text insert used by clipboard paste and beforeinput insertText: one
- * commit that inserts joined lines then splits at every newline boundary.
- */
-export function createInsertPlainText(deps: {
-  orderedStart: () => { paragraphId: string; offset: number };
-  deleteSelectionOps: () => readonly TreeDocOp[];
-  selectionMark: () => SelectionMark | null;
-  storyScope: () => StoryScope;
-  session: TreeDocxSessionView;
-  commit: (
-    run: () => TreeApplyResult | boolean,
-    selectionAfter?: () => SemanticSelection | null
-  ) => void;
-  applyOps: (ops: readonly TreeDocOp[], mark: SelectionMark | null) => TreeApplyResult;
-  collapsedAt: (pos: { paragraphId: string; offset: number }) => SemanticSelection;
-}): (text: string) => void {
-  return (text: string): void => {
-    const lines = text.replace(/\r\n?/g, '\n').split('\n');
-    const start = deps.orderedStart();
-    const joined = lines.join('');
-    const ops: TreeDocOp[] = [...deps.deleteSelectionOps()];
-    if (joined.length > 0) {
-      ops.push({
-        op: 'insertText',
-        paragraphId: start.paragraphId,
-        offset: start.offset,
-        text: joined,
-      });
-    }
-    const boundaries: number[] = [];
-    let consumed = 0;
-    for (let index = 0; index < lines.length - 1; index += 1) {
-      consumed += lines[index]!.length;
-      boundaries.push(start.offset + consumed);
-    }
-    if (boundaries.length > 0) {
-      ops.push({ op: 'splitParagraphMany', paragraphId: start.paragraphId, offsets: boundaries });
-    }
-    if (ops.length === 0) return;
-
-    const before = new Set(deps.session.paragraphIdsIn(deps.storyScope()));
-    const lastLine = lines[lines.length - 1]!;
-    deps.commit(
-      () => deps.applyOps(ops, deps.selectionMark()),
-      () => {
-        if (boundaries.length === 0) {
-          return deps.collapsedAt({
-            paragraphId: start.paragraphId,
-            offset: start.offset + lastLine.length,
-          });
-        }
-        const minted = deps.session
-          .paragraphIdsIn(deps.storyScope())
-          .filter((id) => !before.has(id));
-        const landing = minted[minted.length - 1];
-        return landing ? deps.collapsedAt({ paragraphId: landing, offset: lastLine.length }) : null;
-      }
-    );
-  };
 }

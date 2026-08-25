@@ -402,9 +402,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   }
 
   return {
+    // The three inline units below REPLACE a selection, so they land at the plan's
+    // `replaceAt`: in suggesting mode a deletion keeps the characters it strikes, and an
+    // insert at the range start sat in FRONT of the struck words instead of after them.
     insertTab() {
       const plan = deleteSelectionPlan();
-      const start = plan.collapseTo;
+      const start = plan.replaceAt ?? plan.collapseTo;
       commit(
         () =>
           applyOps(
@@ -420,7 +423,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     insertLineBreak() {
       const plan = deleteSelectionPlan();
-      const start = plan.collapseTo;
+      const start = plan.replaceAt ?? plan.collapseTo;
       commit(
         () =>
           applyOps(
@@ -436,7 +439,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
 
     insertPageBreak() {
       const plan = deleteSelectionPlan();
-      const start = plan.collapseTo;
+      const start = plan.replaceAt ?? plan.collapseTo;
       commit(
         () =>
           applyOps(

@@ -325,4 +325,90 @@ describe('replacing a selection that spans paragraphs, in suggesting mode', () =
       expect(surface.state().selection.head.offset).toBe('Alphaab'.length);
     });
   });
+
+  test('a MULTI-LINE paste splits inside the tracked insertion, not after it', () => {
+    // `splitParagraphMany` is the op paste emits, and `distributeInline` used to send a
+    // whole `w:ins` wrapper to the first piece — the lines stayed in one paragraph and the
+    // minted tails came out empty.
+    withSurface(plainParagraph('Alpha one') + plainParagraph('Beta two'), (surface) => {
+      selectAcross(surface, 0, 0, 1, 'Beta two'.length);
+      surface.insertPlainText('one\ntwo');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alpha one', 'Beta twoone', 'two']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      // Each piece keeps the same tracked-insertion attribution.
+      expect(xml).toMatch(/<w:ins[^>]*><w:r><w:t[^>]*>one<\/w:t><\/w:r><\/w:ins>/);
+      expect(xml).toMatch(/<w:ins[^>]*><w:r><w:t[^>]*>two<\/w:t><\/w:r><\/w:ins>/);
+      expect(surface.state().selection.head.offset).toBe('two'.length);
+    });
+  });
+
+  test('typing over your OWN pending Enter split merges and lands after the strike', () => {
+    // The join that retracts this author's own paragraph mark REALLY joins, so the last
+    // paragraph of the range leaves the tree — an insert naming it vetoed the whole
+    // transaction and every keystroke did nothing.
+    withSurface(plainParagraph('Alpha Beta'), (surface) => {
+      caretTo(surface, 0, 'Alpha'.length);
+      surface.splitParagraph();
+      selectAcross(surface, 0, 2, 1, 3);
+      typeEach(surface, 'X');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alpha BeXta']);
+      expect(surface.state().selection.head.offset).toBe('Alpha BeX'.length);
+    });
+  });
+
+  test('a range that ENDS inside a pre-existing deletion lands past it, in order', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      selectIn(surface, 0, 0, 'Alpha'.length);
+      surface.deleteBackward();
+      selectIn(surface, 0, 1, 3);
+      typeEach(surface, 'ab');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alphaab one']);
+      expect(surface.state().selection.head.offset).toBe('Alphaab'.length);
+    });
+  });
+
+  test('Enter over a selection breaks AFTER the struck words', () => {
+    withSurface(plainParagraph('Alpha Beta Gamma'), (surface) => {
+      selectIn(surface, 0, 'Alpha '.length, 'Alpha Beta'.length);
+      surface.splitParagraph();
+      expect(surface.state().lastRejection).toBeNull();
+      // The struck word stays with the paragraph it came from; the tail carries the rest.
+      expect(paragraphTexts(surface)).toEqual(['Alpha Beta', ' Gamma']);
+      expect(surface.state().selection.head.offset).toBe(0);
+    });
+  });
+
+  test('a Tab over a selection lands after the struck words', () => {
+    withSurface(plainParagraph('Alpha Beta Gamma'), (surface) => {
+      selectIn(surface, 0, 'Alpha '.length, 'Alpha Beta'.length);
+      surface.insertTab();
+      expect(surface.state().lastRejection).toBeNull();
+      const xml = serializeOoxmlPart(surface.session.part());
+      // The strike then the tab, adjacent. (The tab itself is still written untracked in
+      // suggesting mode — a separate attribution gap; this pins only where it lands.)
+      expect(xml).toMatch(/<w:delText[^>]*>Beta<\/w:delText><\/w:r><\/w:del><w:r><w:tab\/>/);
+      expect(surface.state().selection.head.offset).toBe('Alpha Beta'.length + 1);
+    });
+  });
+
+  test('a range that removes a table still lands after the last struck paragraph', () => {
+    const cell = (text: string) =>
+      `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${plainParagraph(text)}</w:tc>`;
+    const table =
+      '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>' +
+      `<w:tr>${cell('CellA')}${cell('CellB')}</w:tr></w:tbl>`;
+    withSurface(plainParagraph('Alpha one') + table + plainParagraph('Beta two'), (surface) => {
+      const last = surface.session.paragraphIds().length - 1;
+      selectAcross(surface, 0, 0, last, 'Beta two'.length);
+      typeEach(surface, 'New');
+      expect(surface.state().lastRejection).toBeNull();
+      // The fully covered table goes; the last paragraph survives and hosts the replacement.
+      expect(paragraphTexts(surface)).toEqual(['Alpha one', 'Beta twoNew']);
+      expect(surface.state().selection.head.offset).toBe('Beta twoNew'.length);
+    });
+  });
 });

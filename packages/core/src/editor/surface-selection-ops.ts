@@ -126,6 +126,15 @@ export function selectedTextIn(
 export interface RangeDeletionPlan {
   readonly ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0];
   readonly collapseTo: SemanticPosition;
+  /**
+   * Where content REPLACING the range belongs, when it differs from `collapseTo`.
+   *
+   * In suggesting mode a deletion keeps the characters it strikes, so a replacement goes
+   * AFTER them — in the last surviving paragraph of the range, past its struck head. Set by
+   * the surface's plan wrapper, which owns the editing mode; `planRangeDeletion` itself
+   * never sets it. Replacing lanes read `replaceAt ?? collapseTo`.
+   */
+  readonly replaceAt?: SemanticPosition;
 }
 
 type TreeOp = Parameters<TreeDocxSessionView['applyTreeOps']>[0][number];
