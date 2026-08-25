@@ -15,43 +15,26 @@
 // `w:ins`/`w:del` plus tracked insertions in the op vocabulary, where the read must keep
 // answering the full card list.
 //
-// Determinism: fixed seeds and a pure inline PRNG (mulberry32). A failure prints the seed
-// and the accumulated op script, which replays the exact sequence.
+// Determinism and the random-edit machinery live in `random-edit-test-support.ts`,
+// shared with `note-scan-memo-freshness.test.ts`.
 
 import { describe, expect, test } from 'bun:test';
 import {
   deepParagraphOrderOfPart,
-  paragraphTextOf,
-  readOoxmlPart,
   revisionItemsOf,
   TreeDocumentStore,
   usedParaIds,
-  type OoxmlElement,
-  type OoxmlNode,
   type OoxmlPart,
-  type TreeDocOp,
 } from '../index.ts';
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
-
-function loadPart(xml: string): OoxmlPart {
-  const result = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
-  if (!result.ok) throw new Error(result.reason);
-  return result.part;
-}
-
-/** Deterministic PRNG. Same seed, same sequence, every run, every machine. */
-function mulberry32(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import {
+  driveRandomEdits,
+  loadPart,
+  mulberry32,
+  PLAIN_RANDOM_OPS,
+  TRACKED_RANDOM_OPS,
+  W,
+  W14,
+} from './random-edit-test-support.ts';
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 // Every paragraph carries authored identity and the root binds w14, so every applied
@@ -79,105 +62,6 @@ function fixturePart(tracked: boolean): OoxmlPart {
   return loadPart(
     `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>${body}</w:body></w:document>`
   );
-}
-
-// ── Reading the retained tree ──────────────────────────────────────────────────
-
-function* walk(node: OoxmlNode): Generator<OoxmlNode> {
-  yield node;
-  if (node.kind === 'textValue') return;
-  for (const child of node.children ?? []) yield* walk(child);
-}
-
-function paragraphSitesOf(part: OoxmlPart): { id: string; length: number }[] {
-  const sites: { id: string; length: number }[] = [];
-  for (const node of walk(part.root)) {
-    if (node.kind !== 'paragraph') continue;
-    sites.push({ id: node.id, length: paragraphTextOf(part, node.id)?.length ?? 0 });
-  }
-  return sites;
-}
-
-/** Adjacent (first, second) paragraph pairs among the body's direct children. */
-function adjacentBodyParagraphPairs(part: OoxmlPart): [string, string][] {
-  const body = part.root.children.find(
-    (child): child is OoxmlElement => child.kind !== 'textValue' && child.localName === 'body'
-  );
-  const pairs: [string, string][] = [];
-  const children = body?.children ?? [];
-  for (let index = 0; index + 1 < children.length; index += 1) {
-    const first = children[index]!;
-    const second = children[index + 1]!;
-    if (first.kind === 'paragraph' && second.kind === 'paragraph') {
-      pairs.push([first.id, second.id]);
-    }
-  }
-  return pairs;
-}
-
-// ── Op vocabulary ──────────────────────────────────────────────────────────────
-// Generated against the CURRENT tree, so ids and offsets are usually valid; the store may
-// still refuse (a delete crossing tracked content, a join it will not perform). A refusal
-// is logged and skipped, and the applied-op floor below keeps the test from passing by
-// refusing everything.
-
-type OpKind = 'insert-text' | 'delete-text' | 'split' | 'join' | 'tracked-insert';
-
-const PLAIN_OPS: readonly OpKind[] = [
-  'insert-text',
-  'insert-text',
-  'delete-text',
-  'split',
-  'split',
-  'join',
-];
-const TRACKED_OPS: readonly OpKind[] = [...PLAIN_OPS, 'tracked-insert', 'tracked-insert'];
-
-function randomOp(
-  part: OoxmlPart,
-  rand: () => number,
-  step: number,
-  tracked: boolean
-): TreeDocOp | null {
-  const pick = <T>(items: readonly T[]): T => items[Math.floor(rand() * items.length)]!;
-  const sites = paragraphSitesOf(part);
-  if (sites.length === 0) return null;
-  const site = pick(sites);
-  switch (pick(tracked ? TRACKED_OPS : PLAIN_OPS)) {
-    case 'insert-text':
-      return {
-        op: 'insertText',
-        paragraphId: site.id,
-        offset: Math.floor(rand() * (site.length + 1)),
-        text: ` step${step} extra`,
-      };
-    case 'tracked-insert':
-      return {
-        op: 'insertText',
-        paragraphId: site.id,
-        offset: Math.floor(rand() * (site.length + 1)),
-        text: ` step${step} proposal`,
-        revision: { author: 'QA Reviewer', date: '2026-01-03T00:00:00Z' },
-      };
-    case 'delete-text': {
-      if (site.length < 2) return null;
-      const start = Math.floor(rand() * (site.length - 1));
-      const end = start + 1 + Math.floor(rand() * (site.length - start - 1));
-      return { op: 'deleteText', paragraphId: site.id, start, end };
-    }
-    case 'split':
-      return {
-        op: 'splitParagraph',
-        paragraphId: site.id,
-        offset: Math.floor(rand() * (site.length + 1)),
-      };
-    case 'join': {
-      const pairs = adjacentBodyParagraphPairs(part);
-      if (pairs.length === 0) return null;
-      const [firstId, secondId] = pick(pairs);
-      return { op: 'joinParagraphs', firstId, secondId };
-    }
-  }
 }
 
 // ── The oracle ─────────────────────────────────────────────────────────────────
@@ -219,9 +103,7 @@ describe('per-subtree derivation memos stay fresh across random op sequences', (
   for (const tracked of [false, true]) {
     for (const seed of SEEDS) {
       test(`${tracked ? 'tracked' : 'untracked'} fixture, seed ${seed}: ${STEPS} random ops`, () => {
-        const rand = mulberry32(seed);
         const store = new TreeDocumentStore(fixturePart(tracked));
-        const log: unknown[] = [];
 
         // The fixture's authored identity must have parsed, or splits mint nothing and
         // the id half of the oracle measures a constant.
@@ -229,26 +111,12 @@ describe('per-subtree derivation memos stay fresh across random op sequences', (
         if (tracked) expect(revisionItemsOf(store.part).length).toBeGreaterThanOrEqual(2);
         else expect(revisionItemsOf(store.part)).toEqual([]);
 
-        let applied = 0;
-        let splitsApplied = 0;
-        for (let step = 0; step < STEPS; step += 1) {
-          const op = randomOp(store.part, rand, step, tracked);
-          if (op === null) {
-            log.push(['skip', step]);
-            continue;
-          }
-          const result = store.transact((tx) => {
-            tx.apply(op);
-          });
-          if (!result.ok) {
-            log.push(['refused', step, result.reason, op]);
-            continue;
-          }
-          log.push([step, op]);
-          applied += 1;
-          if (op.op === 'splitParagraph') splitsApplied += 1;
-          assertFreshDerivations(store, seed, step, log);
-        }
+        const { applied, splitsApplied } = driveRandomEdits(store, {
+          rand: mulberry32(seed),
+          steps: STEPS,
+          ops: tracked ? TRACKED_RANDOM_OPS : PLAIN_RANDOM_OPS,
+          onApplied: (step, _op, log) => assertFreshDerivations(store, seed, step, log),
+        });
 
         // Anti-vacuity: enough ops applied, and enough splits that fresh paraIds were
         // minted against — and then read back through — the memoized set.
