@@ -176,6 +176,52 @@ describe('square wrap reflow integration (OpenSpec 4.3)', () => {
   });
 });
 
+describe('empty lines never wrap into a side channel', () => {
+  test('paragraph-mark-only lines relocate below a square float they overlap', () => {
+    // A text line shrinks around a square float; an empty line has nothing to shrink, so
+    // Word relocates the whole line below the float. This is the margin-top centred-logo
+    // shape: the anchor paragraph holds only the drawing, two empty paragraphs follow, and
+    // the first text paragraph starts below all of them. LibreOffice keeps the empty lines
+    // beside the float — Word is the fidelity target.
+    const part = load(
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+        '<w:body>' +
+        '<w:p><w:r><w:drawing>' +
+        '<wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" behindDoc="0" locked="0" allowOverlap="1" layoutInCell="1" relativeHeight="1">' +
+        '<wp:simplePos x="0" y="0"/>' +
+        '<wp:positionH relativeFrom="margin"><wp:align>center</wp:align></wp:positionH>' +
+        '<wp:positionV relativeFrom="margin"><wp:align>top</wp:align></wp:positionV>' +
+        '<wp:extent cx="3048000" cy="374162"/>' +
+        '<wp:wrapSquare wrapText="bothSides"/>' +
+        '<wp:docPr id="1" name="logo"/>' +
+        `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+        '<pic:spPr><a:xfrm><a:ext cx="3048000" cy="374162"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
+        '</wp:anchor></w:drawing></w:r></w:p>' +
+        '<w:p/>' +
+        '<w:p/>' +
+        '<w:p><w:r><w:t>text starts below every empty line</w:t></w:r></w:p>' +
+        '</w:body></w:document>'
+    );
+    const ctx = layoutContext(part);
+    const layout = layoutSemanticDocument(part, 1, { measurer, inlineDrawingLayout: ctx });
+    const page = layout.pages[0]!;
+    const drawing = page.anchoredDrawings![0]!;
+    const imageBottom = drawing.y + drawing.height;
+    const fragments = paragraphFragmentsOf(page);
+    expect(fragments).toHaveLength(4);
+    // Every empty line clears the float band entirely, in order.
+    for (const index of [0, 1, 2]) {
+      const line = fragments[index]!.lines[0]!;
+      expect(line.spans).toHaveLength(0);
+      expect(line.box.y).toBeGreaterThanOrEqual(imageBottom - 0.001);
+    }
+    // The text paragraph starts after all three relocated empty lines.
+    const textLine = fragments[3]!.lines[0]!;
+    const lastEmpty = fragments[2]!.lines[0]!;
+    expect(textLine.box.y).toBeGreaterThanOrEqual(lastEmpty.box.y + lastEmpty.box.height - 0.001);
+  });
+});
+
 describe('topAndBottom anchored in the paragraph it displaces', () => {
   test('the picture keeps the paragraph origin and the text clears below it', () => {
     const part = load(
