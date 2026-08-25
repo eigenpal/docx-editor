@@ -173,6 +173,18 @@ export interface SurfaceSelectionSync {
   adoptBeforeInput(): void;
   /** Whether an IME is composing, which suspends repainting. */
   isComposing(): boolean;
+  /**
+   * Record that the browser may park its own selection as the FIX-UP of a prevented input.
+   *
+   * A smart substitution (`insertReplacementText`: macOS double-space period, autocorrect)
+   * moves the native selection over the text the browser wanted to replace, even though the
+   * surface prevented the default and applied the edit in the model. That write has no
+   * gesture behind it and can land before or after the event dispatch, over a paint that is
+   * a commit behind — adopting it highlighted a stale range and moved the caret there. The
+   * next in-pages `selectionchange` without gesture provenance re-asserts the model
+   * selection instead of adopting.
+   */
+  noteBrowserSelectionFixup(): void;
   readonly onSelectionChange: () => void;
   readonly onCompositionStart: () => void;
   readonly onCompositionEnd: (event?: CompositionEvent) => void;
@@ -440,6 +452,55 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     userSelectionGesture = true;
   }
 
+  /**
+   * Whether the next in-pages `selectionchange` may be the browser's own fix-up of a
+   * prevented replacement rather than a user selection. One-shot: spent by the first
+   * `selectionchange` that touches the pages. See `noteBrowserSelectionFixup`.
+   */
+  let browserSelectionFixup = false;
+
+  function mirrorToDom(claim = false): void {
+    // Ahead of the ownership guard: the caret is this engine's own, painted whether or not
+    // the browser's selection lives here.
+    deps.updateCaret();
+    // Only when this surface owns the selection. A render runs on mount and on every commit
+    // — including one from another editor sharing the store — and writing unconditionally
+    // yanked the caret out of whatever the user was actually typing in. A CLAIMED write is
+    // the exception: someone asked for this range on purpose.
+    if (!claim && !ownsSelection()) return;
+    applyingSelection = true;
+    const began = deps.now();
+    const next = deps.domSelection?.() ?? deps.selection();
+    // This write is the new baseline. Matching DOM carets after it are echoes until the
+    // user starts another selection gesture.
+    userSelectionGesture = false;
+    const native = document.getSelection();
+    const preferredPageIndex = preferredSelectionPage(native);
+    const wrote = applySelectionToDom(
+      pagesLayer,
+      next,
+      native,
+      preferredPageIndex !== undefined ? { preferredPageIndex } : undefined
+    );
+    if (wrote) rememberSelectionPage(native);
+    // A REFUSED write is not a baseline. `applySelectionToDom` answers false when either
+    // endpoint has no painted place to land — a caret in a paragraph that painted no spans,
+    // an offset no span covers, a page that is not built — and the browser then keeps
+    // showing the PREVIOUS selection. Recording it anyway told `isStaleMirroredCaret` that
+    // the DOM had been given this value, so the disagreement it exists to catch read as a
+    // fresh gesture, and the stale caret won the next echo. The model is still the newer of
+    // the two here, which is exactly what `modelMoved` says.
+    lastMirroredSelection = wrote ? next : null;
+    if (!wrote) modelMoved = true;
+    deps.recordSelectionMs(deps.now() - began);
+    // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
+    // synchronously. Clearing it here would defeat the guard in every real browser while
+    // still appearing to work under a synchronous test DOM.
+    queueMicrotask(() => {
+      applyingSelection = false;
+    });
+  }
+
   // Native pointer mode binds no engine handlers; touch bypasses them even in engine mode.
   // Capture here so a caret that lands on the last mirrored offset is still a gesture.
   pagesLayer.addEventListener('pointerdown', noteUserSelectionGesture, true);
@@ -502,51 +563,15 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       modelMoved = false;
     },
 
-    mirrorToDom(claim = false) {
-      // Ahead of the ownership guard: the caret is this engine's own, painted whether or not
-      // the browser's selection lives here.
-      deps.updateCaret();
-      // Only when this surface owns the selection. A render runs on mount and on every commit
-      // — including one from another editor sharing the store — and writing unconditionally
-      // yanked the caret out of whatever the user was actually typing in. A CLAIMED write is
-      // the exception: someone asked for this range on purpose.
-      if (!claim && !ownsSelection()) return;
-      applyingSelection = true;
-      const began = deps.now();
-      const next = deps.domSelection?.() ?? deps.selection();
-      // This write is the new baseline. Matching DOM carets after it are echoes until the
-      // user starts another selection gesture.
-      userSelectionGesture = false;
-      const native = document.getSelection();
-      const preferredPageIndex = preferredSelectionPage(native);
-      const wrote = applySelectionToDom(
-        pagesLayer,
-        next,
-        native,
-        preferredPageIndex !== undefined ? { preferredPageIndex } : undefined
-      );
-      if (wrote) rememberSelectionPage(native);
-      // A REFUSED write is not a baseline. `applySelectionToDom` answers false when either
-      // endpoint has no painted place to land — a caret in a paragraph that painted no spans,
-      // an offset no span covers, a page that is not built — and the browser then keeps
-      // showing the PREVIOUS selection. Recording it anyway told `isStaleMirroredCaret` that
-      // the DOM had been given this value, so the disagreement it exists to catch read as a
-      // fresh gesture, and the stale caret won the next echo. The model is still the newer of
-      // the two here, which is exactly what `modelMoved` says.
-      lastMirroredSelection = wrote ? next : null;
-      if (!wrote) modelMoved = true;
-      deps.recordSelectionMs(deps.now() - began);
-      // Cleared on a LATER task, because `selectionchange` is queued rather than dispatched
-      // synchronously. Clearing it here would defeat the guard in every real browser while
-      // still appearing to work under a synchronous test DOM.
-      queueMicrotask(() => {
-        applyingSelection = false;
-      });
-    },
+    mirrorToDom,
 
     adoptBeforeInput: adoptPendingUserSelection,
 
     isComposing: () => composing,
+
+    noteBrowserSelectionFixup() {
+      browserSelectionFixup = true;
+    },
 
     onSelectionChange: (): void => {
       // Ignore the echo of our own write, and anything happening outside the pages. The flag
@@ -558,6 +583,24 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       if (composing) return;
       if (deps.isGesturing?.()) return;
       if (deps.holdsCellSelection?.()) return;
+      // A prevented `insertReplacementText` leaves the browser's own selection parked over
+      // the text IT wanted to replace — a fix-up with no gesture behind it, written over a
+      // paint that can be a commit behind the model. Adopting it highlighted a stale range
+      // and every keystroke after typed there. Re-assert the model's selection instead; a
+      // real gesture spends the flag too but keeps its provenance and wins. An echo that
+      // already MATCHES the model does not spend the one-shot: it is this surface's own
+      // mirror reporting back, and spending on it would leave a park that lands on a later
+      // task unguarded.
+      if (browserSelectionFixup && domSelectionTouchesPages(pagesLayer, document.getSelection())) {
+        const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
+        if (reported === null || !selectionsEqual(reported, deps.selection())) {
+          browserSelectionFixup = false;
+          if (!userSelectionGesture) {
+            mirrorToDom();
+            return;
+          }
+        }
+      }
       // A deferred paint leaves the DOM caret at its PRE-edit offset while the model already
       // holds the post-edit one. A late echo from an earlier mirror must not make that stale
       // DOM caret authoritative again; the pending paint will mirror the newer model value.

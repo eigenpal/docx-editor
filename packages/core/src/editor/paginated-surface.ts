@@ -5480,6 +5480,13 @@ export function mountPaginatedSurface(
   const dispatchBeforeInput = createBeforeInputHandler(surface, {
     isComposing: () => selectionSync.isComposing(),
     insertPlainText,
+    // The browser parked its own selection over the text a substitution replaced. Rewrite
+    // the DOM selection now for a park that already happened, and flag the queued echo for
+    // one that has not.
+    onBrowserSelectionFixup: () => {
+      selectionSync.mirrorToDom();
+      selectionSync.noteBrowserSelectionFixup();
+    },
   });
   const onBeforeInput = (event: InputEvent): void => {
     selectionSync.adoptBeforeInput();

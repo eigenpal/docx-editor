@@ -8,9 +8,12 @@
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { NavigationCommand } from '@docx-editor.dev/core/layout';
+import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { plainTextFromTransfer } from './clipboard-plain-text.ts';
-import { spanSearchRoots } from './dom-selection.ts';
+import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
+import { partOfNodeId } from './surface-scope.ts';
+import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
 
 const NAVIGATION: Record<string, NavigationCommand> = {
@@ -336,6 +339,13 @@ export function createBeforeInputHandler(
   hooks: {
     readonly isComposing: () => boolean;
     readonly insertPlainText: (text: string) => void;
+    /**
+     * An applied `insertReplacementText` was prevented, but the browser still parks its own
+     * selection over the text it meant to replace — before or after this dispatch, over a
+     * paint that can be a commit behind the model. The selection mirror re-asserts the model
+     * selection and treats the queued echo as the browser's, not the user's.
+     */
+    readonly onBrowserSelectionFixup?: () => void;
   }
 ): (event: InputEvent) => void {
   return (event: InputEvent): void => {
@@ -370,7 +380,9 @@ export function createBeforeInputHandler(
       // The replacement text is on the event; applying it is how a correction survives
       // instead of being silently dropped.
       const replacement = event.data ?? dataTransferText(event);
-      if (replacement) surface.type(replacement);
+      if (!replacement) return;
+      applyReplacementText(surface, replacementTarget(event), replacement);
+      hooks.onBrowserSelectionFixup?.();
       return;
     }
     if (event.inputType === 'deleteContentBackward') {
@@ -405,6 +417,101 @@ export function createBeforeInputHandler(
       surface.splitParagraph();
     }
   };
+}
+
+/** The text one static range covers, or null when it cannot be read. */
+function staticRangeText(range: StaticRange): string | null {
+  const { startContainer, endContainer } = range;
+  if (startContainer === endContainer && startContainer.nodeType === Node.TEXT_NODE) {
+    return (startContainer.textContent ?? '').slice(range.startOffset, range.endOffset);
+  }
+  const doc = startContainer.ownerDocument;
+  if (!doc) return null;
+  try {
+    const live = doc.createRange();
+    live.setStart(startContainer, range.startOffset);
+    live.setEnd(endContainer, range.endOffset);
+    return live.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** What one `insertReplacementText` event targeted: its text, and its paragraph if known. */
+interface ReplacementTarget {
+  readonly text: string;
+  /** The `data-paragraph-id` a CONNECTED target sits in; null for a detached (stale) node. */
+  readonly paragraphId: string | null;
+}
+
+/** The target of a replacement event, or null when it names none the model could act on. */
+function replacementTarget(event: InputEvent): ReplacementTarget | null {
+  if (typeof event.getTargetRanges !== 'function') return null;
+  const ranges = event.getTargetRanges();
+  // ONE range only. A real substitution targets one contiguous run of text, and
+  // concatenating several would let 'ab' + 'cd' pass the model match as 'abcd'.
+  if (ranges.length !== 1) return null;
+  const range = ranges[0]!;
+  const text = staticRangeText(range);
+  if (!text) return null;
+  return { text, paragraphId: targetParagraphId(range) };
+}
+
+/** The paragraph a connected target range sits in, or null when it cannot say. */
+function targetParagraphId(range: StaticRange): string | null {
+  const node = range.startContainer;
+  if (!node.isConnected) return null;
+  const element =
+    node.nodeType === Node.ELEMENT_NODE ? (node as Element) : (node.parentElement ?? null);
+  return element?.closest('[data-paragraph-id]')?.getAttribute('data-paragraph-id') ?? null;
+}
+
+/**
+ * Apply a browser text substitution — autocorrect, dictation, macOS double-space period.
+ *
+ * The event's target range says WHAT the browser replaced, but its coordinates address the
+ * painted DOM, which sits a paint behind the model during a typing burst — mapping them would
+ * edit characters the substitution never meant. Its TEXT is matched instead, against the model
+ * characters before the caret once the buffered burst has landed: on agreement the substitution
+ * replaces them (double space becomes "word. ", not "word . "); on anything else the
+ * replacement inserts at the caret, which never edits text the browser did not target. A
+ * connected target that names ANOTHER paragraph is never matched — same characters in the
+ * caret's paragraph would be a coincidence, not the browser's target.
+ */
+function applyReplacementText(
+  surface: PaginatedSurface,
+  target: ReplacementTarget | null,
+  replacement: string
+): void {
+  if (target !== null) {
+    // The model text and caret are read below, so the buffered burst sits ABOVE this read.
+    // The targetless path skips the flush: `type()` head-flushes on its own.
+    surface.flushPendingInput();
+    const state = surface.state();
+    const caret = state.selection.head;
+    const replaced = target.text;
+    if (
+      selectionsEqual(state.selection, collapsedAt(caret)) &&
+      caret.offset >= replaced.length &&
+      (target.paragraphId === null || target.paragraphId === caret.paragraphId) &&
+      // An armed caret format must ride the `type()` below exactly as it rides a plain
+      // keystroke, and the range selection would retire it. The armed case keeps the
+      // caret-insert lane; arming a format and substituting in the SAME keystroke gap
+      // is rare enough that the un-replaced space costs less than the lost format.
+      state.pendingFormat === null
+    ) {
+      // A pure ancestry read: `partOfNodeId`, never the story-store opener.
+      const part = partOfNodeId(surface.session, caret.paragraphId) ?? surface.session.part();
+      const text = paragraphTextOf(part, caret.paragraphId);
+      if (text !== null && text.slice(caret.offset - replaced.length, caret.offset) === replaced) {
+        surface.setSelection({
+          anchor: { paragraphId: caret.paragraphId, offset: caret.offset - replaced.length },
+          head: caret,
+        });
+      }
+    }
+  }
+  surface.type(replacement);
 }
 
 /**
