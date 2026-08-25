@@ -27,15 +27,39 @@ const manifest = JSON.parse(
   devDependencies?: Record<string, string>;
 };
 
+const versionOf = (pkg: string) =>
+  (
+    JSON.parse(
+      readFileSync(join(import.meta.dir, '..', '..', '..', pkg, 'package.json'), 'utf8')
+    ) as { version: string }
+  ).version;
+
+// A tilde range on the peer's current minor: patch drift is allowed, a different minor is
+// not, so an app never pairs this module with an engine or adapter minor it did not ship
+// with. The floor patch may lag within the minor because in-range releases do not rewrite
+// the range.
+const requiresSameMinor = (range: string | undefined, version: string) => {
+  const match = /^~(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(range ?? '');
+  if (!match) return false;
+  const [major, minor, patch] = version.split('.').map(Number);
+  return Number(match[1]) === major && Number(match[2]) === minor && Number(match[3]) <= patch!;
+};
+
 describe('how this package asks for the engine', () => {
   test('the engine is a peer, so the consumer resolves one copy of it', () => {
-    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toBe('^2.6.0');
+    expect(
+      requiresSameMinor(manifest.peerDependencies?.['@docx-editor.dev/core'], versionOf('core'))
+    ).toBe(true);
     expect(manifest.dependencies?.['@docx-editor.dev/core']).toBeUndefined();
   });
 
   test('the adapter is a peer for the same reason', () => {
-    expect(manifest.peerDependencies?.['@docx-editor.dev/react']).toBeDefined();
-    expect(manifest.peerDependencies?.['@docx-editor.dev/vue']).toBeDefined();
+    expect(
+      requiresSameMinor(manifest.peerDependencies?.['@docx-editor.dev/react'], versionOf('react'))
+    ).toBe(true);
+    expect(
+      requiresSameMinor(manifest.peerDependencies?.['@docx-editor.dev/vue'], versionOf('vue'))
+    ).toBe(true);
     expect(manifest.dependencies?.['@docx-editor.dev/react']).toBeUndefined();
     expect(manifest.dependencies?.['@docx-editor.dev/vue']).toBeUndefined();
   });
