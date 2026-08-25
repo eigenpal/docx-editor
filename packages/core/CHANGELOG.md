@@ -1,5 +1,29 @@
 # @docx-editor.dev/core
 
+## 2.9.2
+
+### Patch Changes
+
+- 541e16f: Reduce per-keystroke latency on documents with footnotes or endnotes: mutation-path note-reference scans reuse per-subtree results instead of re-walking the whole package.
+- d459c9b: Refresh header and footer pages when a picture that a text box clips out of the baseline layout finishes decoding, so a page-specific projection of the box no longer keeps a loading placeholder. Fixes #467
+- 88935e6: Smart text substitutions (macOS double-space period, autocorrect) now replace the text they target instead of inserting beside it, and the browser's selection fix-up around them no longer highlights a stale range or moves the caret.
+- 3289402: Repaint a header or footer once a picture inside one of its text boxes finishes decoding, so the picture no longer stays a loading placeholder. Fixes #442
+- af18283: Fix the image selection overlay keeping the drawing's old frame after a resize, move, wrap, or transform. Image ops now commit through the same layout/paint tail as keystrokes, and multi-section layout no longer republishes a previous pass's sheets for a section that changed inside a balancing or re-run pass.
+- e01432d: Drawing selection now follows Word's object-selection rule: a document no longer opens with a drawing selected, typing beside a drawing's anchor no longer selects it, and the selection ring and resize handles align with the image instead of landing outside the page.
+- ba2fd94: Reduce input delay while typing into very large documents: when the browser reports queued input behind an expensive layout pass, a keystroke commits in its own task and layout and paint follow in separate tasks, instead of one blocking flush.
+- d043089: Reduce per-keystroke latency on very large documents: structural edits no longer re-derive whole-document indexes, and page-field projection reuses unchanged pages.
+- a11911c: Fix footnote placement in multi-section documents: a citation on a full page of a later section now reserves space on that page, so the note sits under its citation instead of draining onto the following pages. Fixes #460
+- 067cec6: Reduce per-keystroke scan work and memory use on documents with footnotes or endnotes.
+- 9716e13: PAGE and NUMPAGES footers on reused pages now update when an edit changes the page count in a single-section document. Fixes #441
+- e506262: Speed up typing and document open on large multi-section documents: each keystroke now pays for the edit instead of the document, and documents with footnotes open with one pagination pass instead of two.
+- 0d572e0: Render list markers for numbered paragraphs inside anchored text boxes, in the body and in headers and footers, and refresh reused pages when a numbering change moves a marker inside a box. Fixes #466
+- 950d5c5: Draw a thinner insertion caret with a translucent contrast ring, so the caret no longer shows a hard outline over highlighted or shaded text.
+- bb31f97: Fix tracked replacements over a rectangle of table cells to land in the first cell after its struck content, and allow `proposeReplacement` to span paragraph marks with the same landing rule as typing. Text-carrying proposals (`proposeInsertion`, `proposeReplacement`, and the matching `proposeTextChange` kinds) now refuse empty or newline-containing text instead of committing it. Fixes #459
+- da051fc: Suggesting mode now records page field, hyperlink, and footnote/endnote insertion as tracked changes, and an armed caret format survives an IME replacement. Fixes #463
+- e568148: Fix replacements over a selection in tracked-changes mode: typing, paste, Enter, tab, breaks, and page fields now land after the struck words with the caret following, instead of reversed or in front of the strike. Multi-line paste now splits its paragraphs inside the tracked insertion, and typing over your own pending Enter merges it instead of doing nothing.
+- 263ceb1: Suggesting mode now records inserted tabs, line breaks, and page breaks as tracked insertions, and an armed typing format is no longer dropped when the insert relocates past struck text. Fixes #458
+- @docx-editor.dev/i18n@2.9.2
+
 ## 2.9.1
 
 ### Patch Changes
