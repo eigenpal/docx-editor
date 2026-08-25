@@ -861,8 +861,10 @@ export function collectExclusionZonesByPageMemoized(
   /** Projection epoch of the owning part — the context object keeps identity across it. */
   drawingLayoutEpoch: string | undefined,
   contentWidth: number,
+  // The source-order LOOKUP is derived here from the keyed map, never passed in: a caller-
+  // supplied closure could disagree with the map the memo keys on, and the key could not see
+  // it — warm passes would then serve zones computed under a different drawing order.
   drawingSourceOrder: ReadonlyMap<string, number> | undefined,
-  sourceOrderOf: ((drawingNodeId: string) => number | undefined) | undefined,
   columnLayout?: ExclusionColumnLayout
 ): ReadonlyMap<number, readonly ExclusionZone[]> {
   const columnToken = columnLayoutToken(columnLayout);
@@ -881,7 +883,9 @@ export function collectExclusionZonesByPageMemoized(
     pages,
     drawingLayout,
     contentWidth,
-    sourceOrderOf,
+    drawingSourceOrder
+      ? (drawingNodeId: string) => drawingSourceOrder.get(drawingNodeId)
+      : undefined,
     columnLayout
   );
   exclusionZonesByPageMemos.set(pages, {

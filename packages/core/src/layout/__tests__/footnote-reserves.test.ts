@@ -834,6 +834,15 @@ describe('multi-section reserve locality', () => {
     // The reflow's second body pass re-places only the reserved section, so the open
     // performs exactly one FULL pass. Before the per-section reserve slice it performed two.
     expect(session.stats.fullPasses).toBe(1);
+    // `fullPasses` alone is a weak gate: it increments only when NOTHING is reused, so a
+    // regression that re-places two of three sections would still read 1. Pin the reflow
+    // pass's actual work — it re-placed exactly the reserved section's blocks and took the
+    // other two sections' pages back by reuse.
+    const sections = enumerateDocumentSections(part);
+    expect(sections.length).toBe(3);
+    const sectionZeroBlocks = sections[0]!.blockEndExclusive - sections[0]!.blockStart;
+    expect(session.stats.placed).toBe(sectionZeroBlocks);
+    expect(session.stats.reusedPages).toBe(2);
     // And the second pass really applied the reserve: the citation page keeps room for the
     // note above the page bottom.
     const host = first.pages.find((page) =>

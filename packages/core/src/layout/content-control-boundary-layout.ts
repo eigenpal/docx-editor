@@ -76,22 +76,8 @@ export interface CollectedControlIndex {
 
 const collectedControlIndexes = new WeakMap<OoxmlPart, CollectedControlIndex>();
 
-/**
- * The one retained previous index, content-validated: the index is a pure function of the
- * per-top-level-block control lists, and a keystroke outside any control leaves every one of
- * those lists identical (the edited block's list is the shared empty constant). Rebuilding
- * the sets and the sorted needed-token for a control-heavy document on every fresh part cost
- * more than the walk the per-block memo already saves. One strong slot, bounded.
- */
-let lastCollectedIndexSlot: {
-  readonly lists: readonly (readonly CollectedControl[])[];
-  readonly index: CollectedControlIndex;
-} | null = null;
-
-function sameControlLists(
-  left: readonly (readonly CollectedControl[])[],
-  right: readonly (readonly CollectedControl[])[]
-): boolean {
+/** Same references, same order — the identity comparison every retained memo here uses. */
+export function sameRefs<T>(left: readonly T[], right: readonly T[]): boolean {
   if (left.length !== right.length) return false;
   for (let index = 0; index < left.length; index += 1) {
     if (left[index] !== right[index]) return false;
@@ -99,12 +85,44 @@ function sameControlLists(
   return true;
 }
 
+/**
+ * The retained previous index, content-validated: the index is a pure function of the
+ * per-top-level-block control lists, and a keystroke outside any control leaves every one of
+ * those lists identical (the edited block's list is the shared empty constant). Rebuilding
+ * the sets and the sorted needed-token for a control-heavy document on every fresh part cost
+ * more than the walk the per-block memo already saves.
+ *
+ * Keyed weakly on the story's FIRST block node rather than held in a module slot, so a
+ * closed document's index dies with its tree instead of staying pinned until some other
+ * document lays out, and two live editors do not thrash one slot (the `list-resolve.ts`
+ * anchor idiom). An edit to the first block itself only misses once, never mixes — the
+ * lists are still compared reference-for-reference.
+ */
+const collectedIndexByAnchor = new WeakMap<
+  OoxmlNode,
+  {
+    readonly lists: readonly (readonly CollectedControl[])[];
+    readonly index: CollectedControlIndex;
+  }
+>();
+
+function firstStoryChildOf(part: OoxmlPart): OoxmlNode | null {
+  for (const story of storyRootsOf(part)) {
+    if (story.root.kind === 'textValue') continue;
+    for (const child of story.root.children) {
+      if (child.kind !== 'textValue') return child;
+    }
+  }
+  return null;
+}
+
 export function collectedControlIndexOf(part: OoxmlPart): CollectedControlIndex {
   const cached = collectedControlIndexes.get(part);
   if (cached !== undefined) return cached;
   const lists = collectControlLists(part);
-  const slot = lastCollectedIndexSlot;
-  if (slot && sameControlLists(slot.lists, lists)) {
+  const anchor = firstStoryChildOf(part);
+  const slot = anchor ? collectedIndexByAnchor.get(anchor) : undefined;
+  if (slot && sameRefs(slot.lists, lists)) {
     collectedControlIndexes.set(part, slot.index);
     return slot.index;
   }
@@ -124,7 +142,7 @@ export function collectedControlIndexOf(part: OoxmlPart): CollectedControlIndex 
     neededParagraphIds,
     neededToken: `${[...neededBlockIds].sort().join(',')};${[...neededParagraphIds].sort().join(',')}`,
   };
-  lastCollectedIndexSlot = { lists, index };
+  if (anchor) collectedIndexByAnchor.set(anchor, { lists, index });
   collectedControlIndexes.set(part, index);
   return index;
 }
@@ -640,25 +658,13 @@ function boundaryRecordOf(
   geometry: PlacedGeometryIndex,
   work?: ContentControlBoundaryWork
 ): ContentControlBoundaryRecord {
-  const chrome = controlChromeOf(collected.control);
-  const lock = collected.lockStack[collected.lockStack.length - 1] ?? 'unlocked';
   const fragments =
     collected.level === 'inline' && collected.paragraphId && collected.range
       ? fragmentsForInlineControl(collected.paragraphId, collected.range, geometry, work)
       : fragmentsForBlockControl(collected.blockIds, geometry, work);
-  return {
-    id: collected.control.id,
-    ...(chrome.alias !== undefined ? { alias: chrome.alias } : {}),
-    ...(chrome.tag !== undefined ? { tag: chrome.tag } : {}),
-    controlType: chrome.controlType,
-    lock,
-    effectiveLock: effectiveContentControlLock(collected.lockStack),
-    placeholder: chrome.placeholder,
-    bound: chrome.bound,
-    nestingDepth: collected.nestingDepth,
-    level: collected.level,
-    fragments,
-  };
+  // One source for the chrome fields: a field added to the record has one place to be
+  // forgotten, not two, and the no-geometry path can never drift from this one.
+  return { ...recordWithoutGeometry(collected), fragments };
 }
 
 function sameGeometryFragments(

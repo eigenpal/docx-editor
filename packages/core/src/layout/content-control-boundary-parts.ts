@@ -11,6 +11,7 @@ import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 import {
   collectedControlIndexOf,
+  sameRefs,
   type CollectedControl,
   type CollectedControlIndex,
 } from './content-control-boundary-layout.ts';
@@ -60,35 +61,31 @@ const mergedControlIndexes = new WeakMap<
 >();
 
 /**
- * The one retained previous merge, guarded by the per-part INDEX identities. A keystroke
- * mints a new body part, so the part-keyed memo above misses by design — but the body's own
- * index comes back by identity when its controls are unchanged, and an identical index tuple
- * proves the merge cannot differ. One strong slot, bounded.
+ * The retained previous merge, guarded by the per-part INDEX identities. A keystroke mints a
+ * new body part, so the part-keyed memo above misses by design — but the body's own index
+ * comes back by identity when its controls are unchanged, and an identical index tuple
+ * proves the merge cannot differ. Keyed weakly on the body's index, so a closed document's
+ * merge dies with its index instead of staying pinned in a module slot.
  */
-let lastMergedIndexSlot: {
-  readonly indexes: readonly CollectedControlIndex[];
-  readonly index: CollectedControlIndex;
-} | null = null;
-
-function sameIndexes(
-  left: readonly CollectedControlIndex[],
-  right: readonly CollectedControlIndex[]
-): boolean {
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i += 1) if (left[i] !== right[i]) return false;
-  return true;
-}
+const mergedIndexByBodyIndex = new WeakMap<
+  CollectedControlIndex,
+  {
+    readonly indexes: readonly CollectedControlIndex[];
+    readonly index: CollectedControlIndex;
+  }
+>();
 
 export function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): CollectedControlIndex {
   if (parts.length === 1) return collectedControlIndexOf(parts[0]!);
   // Memoized on the BODY part, guarded by the exact part list. Each part's own index is
   // already memoized, but the merge was not, and one layout pass makes several passes over it.
+  // Part objects are immutable, so identity is the whole comparison.
   const cached = mergedControlIndexes.get(parts[0]!);
-  if (cached && sameParts(cached.parts, parts)) return cached.index;
+  if (cached && sameRefs(cached.parts, parts)) return cached.index;
 
   const indexes = parts.map((storyPart) => collectedControlIndexOf(storyPart));
-  const slot = lastMergedIndexSlot;
-  if (slot && sameIndexes(slot.indexes, indexes)) {
+  const slot = mergedIndexByBodyIndex.get(indexes[0]!);
+  if (slot && sameRefs(slot.indexes, indexes)) {
     mergedControlIndexes.set(parts[0]!, { parts, index: slot.index });
     return slot.index;
   }
@@ -115,14 +112,7 @@ export function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): Col
     neededParagraphIds,
     neededToken,
   };
-  lastMergedIndexSlot = { indexes, index };
+  mergedIndexByBodyIndex.set(indexes[0]!, { indexes, index });
   mergedControlIndexes.set(parts[0]!, { parts, index });
   return index;
-}
-
-/** Same parts, same order. Part objects are immutable, so identity is the whole comparison. */
-function sameParts(left: readonly OoxmlPart[], right: readonly OoxmlPart[]): boolean {
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i += 1) if (left[i] !== right[i]) return false;
-  return true;
 }

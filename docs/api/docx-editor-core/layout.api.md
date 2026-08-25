@@ -1283,7 +1283,7 @@ export interface LayoutSession {
     prepass: unknown;
     // @internal
     previous: SemanticLayout | null;
-    producer: string;
+    producer?: string;
     startLineCounter: number;
     startPageParity: number;
     // (undocumented)

@@ -774,7 +774,6 @@ function layoutBlocksPass(
         options.drawingLayoutEpoch,
         contentWidthForReflow,
         options.drawingSourceOrder,
-        sourceOrderOf,
         exclusionColumnLayout
       );
       result = layoutBlocksWithGeometry(bodies, revision, {
@@ -793,7 +792,6 @@ function layoutBlocksPass(
         options.drawingLayoutEpoch,
         contentWidthForReflow,
         options.drawingSourceOrder,
-        sourceOrderOf,
         exclusionColumnLayout
       );
       if (exclusionMapsEqual(zonesByPage, nextZones)) return result;
@@ -3025,8 +3023,13 @@ function layoutBlocksPass(
     // Re-sliced with the page count THIS pass produced: a pass that grew past the start-time
     // bound read reserve slots the start-time key never folded, and the next comparison must
     // see them. An input-identical replay produces the same count, so its start-time bound
-    // (previous count + 1) rebuilds this exact string.
-    session.context = contextFor(notesReserveContextKey(pageBottomReserves, pages.length + 1));
+    // (previous count + 1) rebuilds this exact string. When the counts agree the start-time
+    // string IS that string — reuse it by identity so the next pass's context check is a
+    // pointer compare, not a rebuild plus memcmp.
+    session.context =
+      pages.length + 1 === reserveKeyBound
+        ? context
+        : contextFor(notesReserveContextKey(pageBottomReserves, pages.length + 1));
     session.producer = producer;
     // Sticky whenever any part of the previous layout was reused: a resumed pass never
     // re-places the prefix and a converged pass never re-places the tail, so their

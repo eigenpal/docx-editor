@@ -90,8 +90,11 @@ export interface LayoutSession {
    * control-heavy document, and embedding it copied that token into every section's context
    * string on every pass. Identity-stable when unchanged, so the comparison is a pointer
    * check.
+   *
+   * Optional so a session literal built before this field existed still type-checks; an
+   * absent producer never matches and forces a conservative full pass.
    */
-  producer: string;
+  producer?: string;
   /**
    * Whether the previous pass read page PARITY: even/odd header variants, or an anchored
    * drawing positioned against an inside/outside frame or alignment.

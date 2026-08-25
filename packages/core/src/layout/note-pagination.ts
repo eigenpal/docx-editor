@@ -2235,18 +2235,25 @@ function collectBodyNoteReferences(part: OoxmlPart): readonly {
 }
 
 /**
- * The one retained previous answer, content-validated. The map is a pure function of the
- * section bounds plus each block's paragraph-id list, and a keystroke changes NEITHER — it
- * replaces one block with a twin carrying the same ids. Rebuilding 10k+ map entries per
- * keystroke cost more than the lookups the map serves, so the previous answer is kept
- * (one strong slot, bounded) and revalidated by identity-diffing the block lists: blocks
- * that changed identity must still contribute the same ids, or the map rebuilds.
+ * The retained previous answer per SESSION, content-validated. The map is a pure function of
+ * the section bounds plus each block's paragraph-id list, and a keystroke changes NEITHER —
+ * it replaces one block with a twin carrying the same ids. Rebuilding 10k+ map entries per
+ * keystroke cost more than the lookups the map serves, so the previous answer is kept and
+ * revalidated by identity-diffing the block lists: blocks that changed identity must still
+ * contribute the same ids, or the map rebuilds.
+ *
+ * Keyed weakly on the caller's session object — NOT a module slot — so a disposed editor's
+ * block list and id map die with its session instead of staying pinned until some other
+ * document lays out, and two live editors do not thrash one slot. A call without a session
+ * has no incremental pass to serve and builds fresh.
  */
-let paragraphSectionIndexMemo: {
+interface ParagraphSectionIndexMemo {
   blocks: readonly OoxmlElement[];
   boundsFingerprint: string;
   map: ReadonlyMap<string, number>;
-} | null = null;
+}
+
+const paragraphSectionIndexMemos = new WeakMap<object, ParagraphSectionIndexMemo>();
 
 function sectionBoundsFingerprint(
   sections: readonly DocumentSection[],
@@ -2271,7 +2278,9 @@ function blockParagraphIdsEqual(next: OoxmlElement, previous: OoxmlElement): boo
 function paragraphSectionIndexOf(
   part: OoxmlPart,
   sections: readonly DocumentSection[],
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  /** The caller's layout session, as the memo's weak key; absent means no reuse. */
+  memoHost?: object
 ): ReadonlyMap<string, number> {
   // IN THE SAME MODE the section bounds were counted in. `blockStart`/`blockEndExclusive`
   // index a mode-filtered block list, and a resolved view has fewer blocks — a paragraph a
@@ -2280,7 +2289,7 @@ function paragraphSectionIndexOf(
   // edited.
   const blocks = storyBlocks(part, displayMode);
   const boundsFingerprint = sectionBoundsFingerprint(sections, displayMode);
-  const memo = paragraphSectionIndexMemo;
+  const memo = memoHost ? paragraphSectionIndexMemos.get(memoHost) : undefined;
   if (
     memo &&
     memo.boundsFingerprint === boundsFingerprint &&
@@ -2317,7 +2326,7 @@ function paragraphSectionIndexOf(
       for (const id of tableParagraphIdsOf(block)) map.set(id, sectionIndex);
     }
   }
-  paragraphSectionIndexMemo = { blocks, boundsFingerprint, map };
+  if (memoHost) paragraphSectionIndexMemos.set(memoHost, { blocks, boundsFingerprint, map });
   return map;
 }
 
@@ -2345,11 +2354,19 @@ function tableParagraphIdsOf(table: OoxmlNode): readonly string[] {
  * The note-reserve slice of one section's layout context key.
  *
  * `pageBound` is EXCLUSIVE and names the highest page slot the pass can read plus one — the
- * pass reads reserves at consecutive local page slots as it opens pages, so every entry at or
- * past the bound is unreadable by it and must stay OUT of the key. Folding the whole
- * document-wide map in (the previous behaviour) meant a reserve on one section's pages
- * changed every other section's context, and the open's second reflow pass re-placed every
- * section instead of only the reserved ones.
+ * pass reads reserves at consecutive PASS-LOCAL page slots as it opens pages
+ * (`pageBottomReserves?.get(pages.length)`), so every entry at or past the bound is
+ * unreadable by it and must stay OUT of the key. Folding the whole document-wide map in
+ * (the previous behaviour) meant a reserve on one section's pages changed every other
+ * section's context, and the open's second reflow pass re-placed every section instead of
+ * only the reserved ones.
+ *
+ * KNOWN MISALIGNMENT, tracked as issue #460: {@link computeFootnoteReserves} keys the map by
+ * DOCUMENT page index while the pass reads pass-local slots, so in a multi-section document
+ * the two spaces disagree for every section after the first. This slice deliberately matches
+ * what the pass READS, not what the computer meant — soundness of the memo requires exactly
+ * that, and fixing the read side is a layout-output change that belongs to #460, not to a
+ * key refactor whose contract is byte-identical output.
  *
  * Entries are sorted by page slot so two content-equal maps render one canonical key
  * regardless of insertion order. `Infinity` folds the whole map (a pass with no prior page
@@ -2459,7 +2476,8 @@ export function layoutSemanticDocumentWithNotes<
     part,
     sections,
     (optionsWithLists as { displayMode?: RevisionDisplayMode }).displayMode ??
-      DEFAULT_REVISION_DISPLAY_MODE
+      DEFAULT_REVISION_DISPLAY_MODE,
+    optionsWithLists.session
   );
   const builtHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
   // The session memo hands back the PREVIOUS pass's hit array and provisional marks by
