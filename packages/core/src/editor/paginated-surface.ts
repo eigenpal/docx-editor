@@ -26,8 +26,9 @@ import {
   type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
-import { retractedLengthOf } from '../store/store/tree-op-retraction.ts';
+import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked.ts';
+import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
   createLayoutScheduler,
@@ -1166,40 +1167,61 @@ export function mountPaginatedSurface(
       options.onChange?.(currentState());
       return false;
     }
+    // Empty text would commit a phantom `w:ins` holding nothing — a tracked change the
+    // review pane must carry with no content to show. A replacement that only removes is
+    // a deletion. A newline is not a paragraph mark: written into `w:t` it renders as
+    // whitespace while claiming to be a break. The facade's support gate refuses the same
+    // SHAPES (docx-editor-support.ts), so the automation `can` and this `exec` agree; the
+    // messages differ only in naming the kind versus the command.
+    if (kind !== 'deletion' && text.length === 0) {
+      lastRejection = `${kind} requires non-empty text`;
+      options.onChange?.(currentState());
+      return false;
+    }
+    if (kind !== 'deletion' && /[\r\n\v\f\u2028\u2029]/.test(text)) {
+      lastRejection = `${kind} requires text without a paragraph mark`;
+      options.onChange?.(currentState());
+      return false;
+    }
     const revision = { author, date: trackedDate() };
     const range = orderedRange();
     const collapsed =
       range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset;
-    if (kind !== 'insertion' && collapsed) {
+    // A rectangle over a single EMPTY cell mirrors a collapsed text range, but it still
+    // covers a cell the user selected — the keyboard replaces over it, so automation must.
+    // REPLACEMENT only: it always carries its insert op. A deletion over an all-empty
+    // rectangle would commit zero ops, so it keeps the refusal `can` gives it.
+    if (kind !== 'insertion' && collapsed && !(kind === 'replacement' && cellSelection)) {
       lastRejection = `${kind} needs a non-collapsed selection`;
       options.onChange?.(currentState());
       return false;
     }
-    if (kind === 'replacement' && range.from.paragraphId !== range.to.paragraphId) {
-      lastRejection = 'tracked replacement across paragraph marks is not supported';
-      options.onChange?.(currentState());
-      return false;
-    }
-
-    const plan =
+    // The deletion is tracked whatever the surface's editing mode is, so the plan computes
+    // `replaceAt` as suggesting would — for THIS author, who may not be the configured one.
+    // An insertion aimed INSIDE an existing deletion relocates past it in the store; the
+    // caret math maps the same way here, or the next proposal lands before this one.
+    const plan: RangeDeletionPlan =
       kind === 'insertion'
-        ? { ops: [] as readonly TreeDocOp[], collapseTo: range.from }
-        : deleteSelectionPlan();
+        ? {
+            ops: [] as readonly TreeDocOp[],
+            collapseTo: positionPastDeletion(currentLayout, range.from),
+          }
+        : deleteSelectionPlan(author);
     const ops = attributeTrackedOps(plan.ops, revision);
     let caret = plan.collapseTo;
     if (kind === 'insertion' || kind === 'replacement') {
-      const insertAt =
-        kind === 'replacement'
-          ? range.to.offset - retractedByInsertionAuthor(range.from, range.to, author)
-          : range.from.offset;
+      // The plan's `replaceAt` owns the landing rule — after the struck words, in the last
+      // surviving paragraph of the range — so the automation object model and the keyboard
+      // agree, spanning selections included.
+      const target = kind === 'replacement' ? (plan.replaceAt ?? plan.collapseTo) : plan.collapseTo;
       ops.push({
         op: 'insertText',
-        paragraphId: plan.collapseTo.paragraphId,
-        offset: insertAt,
+        paragraphId: target.paragraphId,
+        offset: target.offset,
         text,
         revision,
       });
-      caret = { paragraphId: plan.collapseTo.paragraphId, offset: insertAt + text.length };
+      caret = { paragraphId: target.paragraphId, offset: target.offset + text.length };
     }
 
     let committed = false;
@@ -5296,12 +5318,29 @@ export function mountPaginatedSurface(
    * one has no start left to insert at, and an op naming a paragraph the same transaction
    * deleted vetoes the whole transaction.
    */
-  function deleteSelectionPlan(): RangeDeletionPlan {
+  function deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan {
     // Every replacing lane reads `replaceAt` from the plan it already holds, so the landing
     // rule cannot be skipped by a lane that never heard of it — that is how tabs, breaks and
     // the PAGE field each kept landing in FRONT of the words a suggestion strikes.
+    // `trackedAuthor` is the automation lane's: its deletion is tracked whatever the editing
+    // mode is, and under an author who may not be the configured one. Normalized here so
+    // every reader below sees either a non-empty author or undefined, never a blank.
+    const author = trackedAuthor?.trim() || undefined;
     const plan = rangeDeletionPlan();
-    return { ...plan, replaceAt: replacementTarget(plan) };
+    // A GETTER, so delete-only lanes — Backspace, Delete, proposeDeletion — never pay for a
+    // landing they do not read. Replacing lanes read it once, before the ops apply, which is
+    // the only window where the pre-edit layout it consults is the right oracle. The
+    // rectangle is captured NOW, not read at getter time: `commit` nulls `cellSelection` at
+    // its head, so a late read would answer for a selection the plan was not built from.
+    const rectangle = cellSelection;
+    let landing: SemanticPosition | null = null;
+    return {
+      ...plan,
+      get replaceAt(): SemanticPosition {
+        landing ??= replacementTarget(plan, author, rectangle);
+        return landing;
+      },
+    };
   }
 
   function rangeDeletionPlan(): RangeDeletionPlan {
@@ -5350,31 +5389,29 @@ export function mountPaginatedSurface(
   }
 
   /**
-   * How many characters of `[from, to)` a suggesting-mode deletion takes OUT of the
-   * paragraph, rather than striking in place.
-   *
-   * Only ever this author's own pending insertion — everything else stays and keeps its
-   * offsets. Zero outside suggesting, across a paragraph boundary (the paragraphs are not
-   * joined, so nothing shifts within the first one), and with no author configured, which is
-   * the case where nothing is tracked at all.
-   */
-  /**
-   * Where a replacement for `[from, to)` belongs, once suggesting has had its say.
+   * Where a replacement for `[from, to)` belongs, once the tracked strike has had its say.
    *
    * The struck characters STAY, so the new text goes after them — minus whatever of the range
-   * was this author's own pending insertion, which leaves. Identity in editing mode, where
-   * the range simply goes. Every lane that replaces a range has to ask: `type()` was fixed
-   * first, and the paste, the IME readback and the note reference each landed in front of the
-   * words they were replacing until they asked it too.
+   * was the acting author's own pending insertion, which leaves the paragraph entirely.
+   * Identity in editing mode, where the range simply goes. Every lane that replaces a range
+   * has to ask: `type()` was fixed first, and the paste, the IME readback and the note
+   * reference each landed in front of the words they were replacing until they asked it too.
    */
-  function replacementOffset(from: SemanticPosition, to: SemanticPosition): number {
-    if (editingMode !== 'suggest' || from.paragraphId !== to.paragraphId) return from.offset;
+  function replacementOffset(
+    from: SemanticPosition,
+    to: SemanticPosition,
+    trackedAuthor?: string
+  ): number {
+    // `trackedAuthor` marks a deletion that is tracked regardless of the editing mode — the
+    // automation lane's — so the after-the-strike rule applies under that author instead.
+    const tracked = trackedAuthor !== undefined || editingMode === 'suggest';
+    if (!tracked || from.paragraphId !== to.paragraphId) return from.offset;
     // A range end INSIDE a pre-existing deletion aims the insert at the interior of that
     // `w:del`: the store relocates it past the deletion, the caret math does not hear about
     // it, and the next keystroke lands before the previous one. Map past the old deletion
     // FIRST; the retracted characters all sit before it, so the subtraction still holds.
     const past = positionPastDeletion(currentLayout, to);
-    return past.offset - retractedByOwnInsertion(from, past);
+    return past.offset - retractedByInsertionAuthor(from, past, trackedAuthor ?? options.author);
   }
 
   /**
@@ -5393,19 +5430,113 @@ export function mountPaginatedSurface(
    * previous one: a typed replacement came out reversed, parked after the first struck
    * paragraph instead of the last.
    */
-  function replacementTarget(plan: RangeDeletionPlan): SemanticPosition {
+  function replacementTarget(
+    plan: RangeDeletionPlan,
+    trackedAuthor: string | undefined,
+    rectangle: CellSelection | null
+  ): SemanticPosition {
     const start = plan.collapseTo;
-    if (editingMode !== 'suggest' || cellSelection) return start;
+    if (trackedAuthor === undefined && editingMode !== 'suggest') return start;
+    if (rectangle) {
+      // A RECTANGLE strikes every selected cell in place and, as Word does, hands the
+      // replacement to the FIRST cell — after that cell's struck content, like every other
+      // tracked replacement. Nothing merges, so the landing is simply the first cell's last
+      // paragraph, past its struck text. Landing at `collapseTo` (offset 0 of the first
+      // paragraph) aimed the insert at the front edge of the fresh `w:del`, where the store
+      // relocates it past the strike — a relocation the caret math never heard about, so
+      // typed characters came out reversed: the linear-range misplacement all over again.
+      //
+      // The first cell with a paragraph, not blindly `cellIds[0]`: a vertical merge split
+      // across pages can re-open as a placed cell with no blocks at all, and a landing that
+      // silently fell back to `collapseTo` would be the front-of-strike misplacement again.
+      for (const cellId of rectangle.cellIds) {
+        // The cell's OWN paragraphs: the recursive walk drifted the landing into a nested
+        // table whenever one sat past the cell's last direct paragraph. A cell with no
+        // direct paragraph at all (schema-edge) falls back to whatever it does hold.
+        const direct = directParagraphsInCells(currentLayout, [cellId]);
+        const cellParagraphs =
+          direct.length > 0 ? direct : paragraphsInCells(currentLayout, [cellId]);
+        if (cellParagraphs.length === 0) continue;
+        const offsets = new Map<string, number>();
+        const landingOffset = (id: string): number => {
+          let value = offsets.get(id);
+          if (value === undefined) {
+            value = replacementOffset(
+              { paragraphId: id, offset: 0 },
+              { paragraphId: id, offset: textOf(id).length },
+              trackedAuthor
+            );
+            offsets.set(id, value);
+          }
+          return value;
+        };
+        // Whether at least one non-whitespace character SURVIVES the plan's strike: the
+        // LAYOUT text — the same visibility oracle every offset here reads, so an image's
+        // object character and a painted field result count as content — minus the ranges
+        // this author's own pending insertion retracts. Judging the raw text let a
+        // paragraph whose words were all pending insertion win over a worded one, and no
+        // length arithmetic can tell a surviving word from retracted whitespace.
+        const author = (trackedAuthor ?? options.author)?.trim();
+        const survivesWorded = (id: string): boolean => {
+          const text = textOf(id);
+          // No author: nothing retracts, the same bail the retraction helpers take.
+          if (!author) return /\S/.test(text);
+          // A pure ancestry read: `partOfNodeId`, never `partFor`, which would permanently
+          // retain a story store for what is only a lookup.
+          const node = findNode(partOfNodeId(session, id) ?? session.part(), id);
+          if (!node || node.kind !== 'paragraph') return /\S/.test(text);
+          let surviving = '';
+          let cursor = 0;
+          for (const range of retractedRangesOf(node, 0, text.length, author)) {
+            surviving += text.slice(cursor, Math.max(cursor, range.start));
+            cursor = Math.max(cursor, range.end);
+          }
+          surviving += text.slice(cursor);
+          return /\S/.test(surviving);
+        };
+        // ADJACENT to the struck words, so the pane can fold strike and insert into one
+        // card: the last paragraph whose SURVIVING text is more than whitespace. A trailing
+        // empty or spacer paragraph — or one holding only this author's own pending
+        // insertion, which the plan retracts — would strand the replacement a line below
+        // the strike. When no paragraph qualifies, RELAX rather than jump to the blind
+        // last: whitespace-only content still beats an empty paragraph as a neighbour, and
+        // only a cell with nothing surviving at all keeps its last paragraph. The linear
+        // branch below needs none of this: a spanning range proposes its marks away, so
+        // accepting the merge restores adjacency — a rectangle never merges anything.
+        let landing: string | null = null;
+        for (let index = cellParagraphs.length - 1; index >= 0; index -= 1) {
+          const id = cellParagraphs[index]!;
+          if (!survivesWorded(id)) continue;
+          landing = id;
+          break;
+        }
+        if (landing === null) {
+          for (let index = cellParagraphs.length - 1; index >= 0; index -= 1) {
+            const id = cellParagraphs[index]!;
+            if (landingOffset(id) === 0) continue;
+            landing = id;
+            break;
+          }
+        }
+        landing ??= cellParagraphs[cellParagraphs.length - 1]!;
+        return { paragraphId: landing, offset: landingOffset(landing) };
+      }
+      return start;
+    }
     const { from, to } = orderedRange();
     // Collapsed: `collapseTo` already sits past any deletion the caret rested in.
     if (from.paragraphId === to.paragraphId && from.offset === to.offset) return start;
     if (from.paragraphId === to.paragraphId) {
-      return { paragraphId: to.paragraphId, offset: replacementOffset(from, to) };
+      return { paragraphId: to.paragraphId, offset: replacementOffset(from, to, trackedAuthor) };
     }
     // A fully covered table is REMOVED, not struck, so a last paragraph INSIDE one does not
-    // survive the transaction — an insert naming it would veto the whole edit. The range
-    // start is the position `collapseTo` guarantees survives. A removed block elsewhere in
-    // the range leaves the last paragraph standing, so only its own ancestry decides.
+    // survive the transaction — an insert naming it would veto the whole edit. The
+    // replacement then belongs after the struck TAIL of the surviving start paragraph, the
+    // last struck text still standing. Falling back to `collapseTo` itself aimed the insert
+    // at the front edge of that fresh strike, where the store relocates it — the reversed
+    // caret misplacement again, this time only for ranges ending inside a removed block. A
+    // removed block elsewhere in the range leaves the last paragraph standing, so only its
+    // own ancestry decides.
     const removedBlocks = new Set(
       plan.ops.flatMap((op) => (op.op === 'deleteBlock' ? [op.blockId] : []))
     );
@@ -5417,7 +5548,15 @@ export function mountPaginatedSurface(
         node;
         node = parentNodeOf(part, node.id)
       ) {
-        if (removedBlocks.has(node.id)) return start;
+        if (!removedBlocks.has(node.id)) continue;
+        const endOfStart = {
+          paragraphId: start.paragraphId,
+          offset: textOf(start.paragraphId).length,
+        };
+        return {
+          paragraphId: start.paragraphId,
+          offset: replacementOffset(start, endOfStart, trackedAuthor),
+        };
       }
     }
     // A planned join whose mark is this author's OWN pending insertion REALLY joins — the
@@ -5427,7 +5566,7 @@ export function mountPaginatedSurface(
     // as the merged host, and count each folded member's struck length into its offsets.
     // The merged mark is always the SECOND paragraph's (`withSectionMarkOf`), so each
     // member's ORIGINAL mark decides whether the member after it folds in.
-    const author = options.author?.trim();
+    const author = (trackedAuthor ?? options.author)?.trim();
     if (!author) return start;
     const joinedSecondIds = new Set(
       plan.ops.flatMap((op) => (op.op === 'joinParagraphs' ? [op.secondId] : []))
@@ -5461,14 +5600,11 @@ export function mountPaginatedSurface(
           : { paragraphId: id, offset: textOf(id).length };
       if (index === hostIndex) offset += coveredFrom.offset;
       offset +=
-        coveredTo.offset - coveredFrom.offset - retractedByOwnInsertion(coveredFrom, coveredTo);
+        coveredTo.offset -
+        coveredFrom.offset -
+        retractedByInsertionAuthor(coveredFrom, coveredTo, author);
     }
     return { paragraphId: order[hostIndex]!, offset };
-  }
-
-  function retractedByOwnInsertion(from: SemanticPosition, to: SemanticPosition): number {
-    if (editingMode !== 'suggest') return 0;
-    return retractedByInsertionAuthor(from, to, options.author);
   }
 
   function retractedByInsertionAuthor(

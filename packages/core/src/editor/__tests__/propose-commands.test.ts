@@ -89,6 +89,57 @@ describe('explicit tracked-change commands', () => {
     }
   });
 
+  test('proposeInsertion at a caret inside a tracked deletion lands past it, in order', () => {
+    const { editor, dispose } = mounted('Agent');
+    try {
+      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 1 },
+        head: { paragraphId, offset: 3 },
+      });
+      expect(editor.exec({ type: 'proposeDeletion' })).toMatchObject({ ok: true });
+      // The caret rests INSIDE the struck 'bc'. The store relocates each insert past the
+      // deletion; the reported caret must move the same way, or the second proposal lands
+      // before the first and the output comes out reversed.
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset: 2 },
+        head: { paragraphId, offset: 2 },
+      });
+      expect(editor.exec({ type: 'proposeInsertion', text: 'A' })).toMatchObject({ ok: true });
+      expect(editor.exec({ type: 'proposeInsertion', text: 'B' })).toMatchObject({ ok: true });
+      const xml = xmlOf(editor);
+      expect(xml).toContain('<w:delText>bc</w:delText>');
+      expect(xml).toMatch(/<w:t[^>]*>AB<\/w:t>/);
+    } finally {
+      dispose();
+    }
+  });
+
+  test('proposeReplacement spans paragraph marks and lands after the last struck paragraph', () => {
+    const { editor, dispose } = mounted('Agent');
+    try {
+      // 'abcd' then a split: two paragraphs, 'abcd' and 'second'.
+      editor.surface!.insertPlainText('\nsecond');
+      const ids = editor.surface!.session.paragraphIds();
+      editor.surface!.setSelection({
+        anchor: { paragraphId: ids[0]!, offset: 1 },
+        head: { paragraphId: ids[1]!, offset: 3 },
+      });
+      const command = { type: 'proposeReplacement' as const, replaceWith: 'XY' };
+      expect(editor.can(command)).toEqual({ ok: true });
+      expect(editor.exec(command)).toMatchObject({ ok: true, changed: true });
+      const xml = xmlOf(editor);
+      // Both paragraphs keep their struck halves, the mark becomes a merge proposal, and
+      // the replacement is one insertion after the LAST struck head — the keyboard's rule.
+      expect(xml).toContain('<w:delText>bcd</w:delText>');
+      expect(xml).toMatch(
+        /<w:delText[^>]*>sec<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t[^>]*>XY<\/w:t>/
+      );
+    } finally {
+      dispose();
+    }
+  });
+
   test('proposeReplacement retracts the same author’s insertion in edit mode', () => {
     const { editor, dispose } = mounted('Agent');
     try {
@@ -136,6 +187,13 @@ describe('explicit tracked-change commands', () => {
       const multiline = { type: 'proposeInsertion' as const, text: 'one\ntwo' };
       expect(withAuthor.editor.can(multiline)).toMatchObject({ ok: false, code: 'invalidArgs' });
       expect(withAuthor.editor.exec(multiline)).toMatchObject({ ok: false, code: 'invalidArgs' });
+      // Empty text is refused too: it would commit a phantom empty w:ins.
+      const empty = { type: 'proposeReplacement' as const, replaceWith: '' };
+      expect(withAuthor.editor.can(empty)).toMatchObject({ ok: false, code: 'invalidArgs' });
+      expect(withAuthor.editor.exec(empty)).toMatchObject({ ok: false, code: 'invalidArgs' });
+      // The surface backstop mirrors the facade gate for direct callers.
+      expect(withAuthor.editor.surface!.proposeTextChange('replacement', '')).toBe(false);
+      expect(withAuthor.editor.surface!.proposeTextChange('insertion', 'a\nb')).toBe(false);
     } finally {
       withAuthor.dispose();
     }

@@ -13,6 +13,8 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '@docx-editor.dev/core/layout';
 import { readOoxmlPackage } from '@docx-editor.dev/core/store';
+import { cellSelectionBetween } from '../../layout/semantic-cell-selection.ts';
+import type { TableCellAddress } from '../../layout/semantic-hit-test.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -50,6 +52,46 @@ export function putCaret(surface: PaginatedSurface, offset: number, paragraphInd
     anchor: { paragraphId, offset },
     head: { paragraphId, offset },
   });
+}
+
+/**
+ * Select a rectangle of cells on the FIRST table in the layout, by row ordinal and grid
+ * column.
+ *
+ * Every rectangle suite hand-rolled the same fragment lookup, `TableCellAddress`
+ * construction and `cellSelectionBetween` call; a contract change in any of those had to
+ * be fixed once per file. This is the one copy.
+ */
+export function selectCellRectangle(
+  surface: PaginatedSurface,
+  from: { row: number; column: number },
+  to: { row: number; column: number }
+): void {
+  const table = surface
+    .layout()
+    .pages.flatMap((page) => page.fragments)
+    .find((fragment) => fragment.kind === 'table');
+  if (!table || table.kind !== 'table') throw new Error('no table in layout');
+  const address = (row: number, column: number): TableCellAddress => {
+    const rowRecord = table.rows[row]!;
+    const cell = rowRecord.cells.find((candidate) => candidate.gridColumn === column);
+    if (!cell) throw new Error(`no cell at row ${row}, grid column ${column}`);
+    return {
+      tableId: table.tableId,
+      rowId: rowRecord.id,
+      cellId: cell.id,
+      rowIndex: row,
+      gridColumn: cell.gridColumn,
+      gridSpan: cell.gridSpan,
+    };
+  };
+  const rectangle = cellSelectionBetween(
+    surface.layout(),
+    address(from.row, from.column),
+    address(to.row, to.column)
+  );
+  if (!rectangle) throw new Error('cell rectangle failed');
+  surface.setCellSelection(rectangle);
 }
 
 export function mount(body: string): { surface: PaginatedSurface; container: HTMLElement } {

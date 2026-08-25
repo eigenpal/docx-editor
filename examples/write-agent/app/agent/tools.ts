@@ -107,7 +107,12 @@ export const WRITER_TOOLS = {
     inputSchema: z.object({
       paragraphId,
       search: exactPhrase,
-      replaceWith: z.string(),
+      // Matching the engine gate: non-empty, and no paragraph-breaking characters —
+      // an empty replacement is a proposeDeletion, and a newline is not a paragraph mark.
+      replaceWith: z
+        .string()
+        .min(1)
+        .regex(/^[^\r\n\v\f\u2028\u2029]*$/, 'one paragraph of text, no line breaks'),
     }),
   }),
   propose_insertion: tool({
@@ -115,7 +120,10 @@ export const WRITER_TOOLS = {
     inputSchema: z.object({
       paragraphId,
       after: exactPhrase,
-      text: z.string().min(1),
+      text: z
+        .string()
+        .min(1)
+        .regex(/^[^\r\n\v\f\u2028\u2029]*$/, 'one paragraph of text, no line breaks'),
     }),
   }),
   propose_deletion: tool({

@@ -2009,18 +2009,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (!resolved.ok) return resolved;
         const { anchor, head } = resolved.selection;
         const collapsed = anchor.paragraphId === head.paragraphId && anchor.offset === head.offset;
-        if (command.type !== 'proposeInsertion' && collapsed) {
+        // A rectangle over one empty cell mirrors a collapsed range but still covers a cell
+        // the surface replaces over, so `can` agrees — replacement only (a deletion over
+        // empty cells commits nothing), and only when no explicit target overrides it.
+        const rectangleReplacement =
+          command.type === 'proposeReplacement' &&
+          command.target === undefined &&
+          surface!.state().cellSelection !== null;
+        if (command.type !== 'proposeInsertion' && collapsed && !rectangleReplacement) {
           return {
             ok: false,
             code: 'invalidArgs',
             reason: `${command.type} needs a non-collapsed selection`,
-          };
-        }
-        if (command.type === 'proposeReplacement' && anchor.paragraphId !== head.paragraphId) {
-          return {
-            ok: false,
-            code: 'unsupported',
-            reason: 'tracked replacement across paragraph marks is not supported',
           };
         }
       }

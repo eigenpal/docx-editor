@@ -13,8 +13,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import type { PaginatedSurface } from '../paginated-surface.ts';
-import { cellSelectionBetween } from '../../layout/semantic-cell-selection.ts';
-import type { TableCellAddress } from '../../layout/semantic-hit-test.ts';
+import { selectCellRectangle } from './paginated-surface-fixtures.ts';
 import { findNode, paragraphTextOf } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -62,41 +61,6 @@ function mountEditor(body: string): DocxEditorInstance {
   return editor;
 }
 
-function tableOnPage(surface: PaginatedSurface) {
-  for (const page of surface.layout().pages) {
-    for (const fragment of page.fragments) if (fragment.kind === 'table') return fragment;
-  }
-  throw new Error('no table in layout');
-}
-
-function cellAddress(surface: PaginatedSurface, row: number, column: number): TableCellAddress {
-  const table = tableOnPage(surface);
-  const rowRecord = table.rows[row]!;
-  const cell = rowRecord.cells.find((candidate) => candidate.gridColumn === column)!;
-  return {
-    tableId: table.tableId,
-    rowId: rowRecord.id,
-    cellId: cell.id,
-    rowIndex: row,
-    gridColumn: cell.gridColumn,
-    gridSpan: cell.gridSpan,
-  };
-}
-
-function selectRect(
-  surface: PaginatedSurface,
-  from: { row: number; column: number },
-  to: { row: number; column: number }
-): void {
-  const rectangle = cellSelectionBetween(
-    surface.layout(),
-    cellAddress(surface, from.row, from.column),
-    cellAddress(surface, to.row, to.column)
-  );
-  if (!rectangle) throw new Error('cell rectangle failed');
-  surface.setCellSelection(rectangle);
-}
-
 function allText(surface: PaginatedSurface): string[] {
   return surface.session.paragraphIds().map((id) => paragraphTextOf(surface.session.part(), id));
 }
@@ -123,7 +87,7 @@ describe('a paragraph command over a cell rectangle', () => {
     const editor = mountEditor(TABLE_2X2 + p('after'));
     try {
       const surface = editor.surface!;
-      selectRect(surface, { row: 0, column: 0 }, { row: 1, column: 0 });
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 0 });
       expect(surface.state().cellSelection?.cellIds).toHaveLength(2);
       surface.setParagraphProperty('jc', { val: 'center' });
       expect(alignmentOf(surface, 'A1')).toBe('center');
@@ -144,7 +108,7 @@ describe('deleting over a cell rectangle', () => {
     const editor = mountEditor(TABLE_3X2 + p('after'));
     try {
       const surface = editor.surface!;
-      selectRect(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
       expect(surface.state().cellSelection?.cellIds).toHaveLength(4);
       expect(editor.exec({ type: 'deleteRow' }).ok).toBe(true);
       expect(allText(surface)).toEqual(['A3', 'B3', 'after']);
@@ -157,7 +121,7 @@ describe('deleting over a cell rectangle', () => {
     const editor = mountEditor(TABLE_2X3 + p('after'));
     try {
       const surface = editor.surface!;
-      selectRect(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
       expect(surface.state().cellSelection?.cellIds).toHaveLength(4);
       expect(editor.exec({ type: 'deleteColumn' }).ok).toBe(true);
       expect(allText(surface)).toEqual(['C1', 'C2', 'after']);
@@ -172,7 +136,7 @@ describe('deleting over a cell rectangle', () => {
     const editor = mountEditor(TABLE_2X2 + p('after'));
     try {
       const surface = editor.surface!;
-      selectRect(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
       expect(editor.exec({ type: 'deleteRow' }).ok).toBe(true);
       expect(allText(surface)).toEqual(['after']);
     } finally {
@@ -184,9 +148,26 @@ describe('deleting over a cell rectangle', () => {
     const editor = mountEditor(TABLE_2X2 + p('after'));
     try {
       const surface = editor.surface!;
-      selectRect(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
       expect(editor.exec({ type: 'deleteColumn' }).ok).toBe(true);
       expect(allText(surface)).toEqual(['after']);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('a proposed replacement over a single EMPTY cell is accepted, as typing is', () => {
+    // One empty cell mirrors a COLLAPSED text range, but the rectangle still covers a cell
+    // the user selected — `can` and `exec` must both take it, exactly as the keyboard does.
+    const table = `<w:tbl>${GRID2}${tr(tc('<w:p/>') + tc(p('B1')))}${tr(tc(p('A2')) + tc(p('B2')))}</w:tbl>`;
+    const editor = mountEditor(table + p('after'));
+    try {
+      const surface = editor.surface!;
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 0, column: 0 });
+      const command = { type: 'proposeReplacement' as const, replaceWith: 'X' };
+      expect(editor.can(command)).toEqual({ ok: true });
+      expect(editor.exec(command)).toMatchObject({ ok: true, changed: true });
+      expect(allText(surface)).toEqual(['X', 'B1', 'A2', 'B2', 'after']);
     } finally {
       editor.destroy();
     }

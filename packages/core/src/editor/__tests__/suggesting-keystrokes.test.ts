@@ -13,6 +13,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { serializeOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
+import { selectCellRectangle } from './paginated-surface-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -381,6 +382,37 @@ describe('replacing a selection that spans paragraphs, in suggesting mode', () =
     });
   });
 
+  test('a section break over a selection splits AFTER the struck words', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      selectIn(surface, 0, 0, 'Alpha'.length);
+      surface.insertSectionBreak();
+      expect(surface.state().lastRejection).toBeNull();
+      // The struck head stays with the section mark; splitting at the range START cut the
+      // paragraph in FRONT of the struck words instead.
+      expect(paragraphTexts(surface)).toEqual(['Alpha', ' one']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(/<w:delText[^>]*>Alpha<\/w:delText>/);
+    });
+  });
+
+  test('a section break over a selection ending in a table cell still commits', () => {
+    const cellXml = (text: string) =>
+      `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${plainParagraph(text)}</w:tc>`;
+    const table =
+      '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>' +
+      `<w:tr>${cellXml('CellA')}${cellXml('CellB')}</w:tr></w:tbl>`;
+    withSurface(plainParagraph('Alpha one') + table + plainParagraph('after'), (surface) => {
+      // A section mark cannot live in a cell, so the landing falls back to the surviving
+      // range start rather than letting one refused op veto the strike with it.
+      selectAcross(surface, 0, 0, 1, 2);
+      expect(surface.insertSectionBreak()).toBe(true);
+      expect(surface.state().lastRejection).toBeNull();
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(/<w:delText[^>]*>Alpha one<\/w:delText>/);
+    });
+  });
+
   test('a Tab over a selection lands after the struck words, as a proposal', () => {
     withSurface(plainParagraph('Alpha Beta Gamma'), (surface) => {
       selectIn(surface, 0, 'Alpha '.length, 'Alpha Beta'.length);
@@ -454,6 +486,29 @@ describe('replacing a selection that spans paragraphs, in suggesting mode', () =
     });
   });
 
+  test('a range ENDING inside a removed table lands after the struck survivor', () => {
+    const cell = (text: string) =>
+      `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${plainParagraph(text)}</w:tc>`;
+    const table =
+      '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>' +
+      `<w:tr>${cell('CellA')}${cell('CellB')}</w:tr></w:tbl>`;
+    withSurface(plainParagraph('Alpha one') + table + plainParagraph('Beta two'), (surface) => {
+      // Ends at the far edge of the LAST cell paragraph, so the table is fully covered and
+      // goes with the range — the last paragraph of the range does not survive. The
+      // replacement then belongs after the struck tail of the surviving start paragraph,
+      // in typing order.
+      selectAcross(surface, 0, 0, 2, 'CellB'.length);
+      typeEach(surface, 'New');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alpha oneNew', 'Beta two']);
+      expect(surface.state().selection.head).toEqual({
+        paragraphId: surface.session.paragraphIds()[0]!,
+        offset: 'Alpha oneNew'.length,
+      });
+    });
+  });
+
   test('a range that removes a table still lands after the last struck paragraph', () => {
     const cell = (text: string) =>
       `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${plainParagraph(text)}</w:tc>`;
@@ -469,6 +524,273 @@ describe('replacing a selection that spans paragraphs, in suggesting mode', () =
       // The fully covered table goes; the last paragraph survives and hosts the replacement.
       expect(paragraphTexts(surface)).toEqual(['Alpha one', 'Beta twoNew']);
       expect(surface.state().selection.head.offset).toBe('Beta twoNew'.length);
+    });
+  });
+});
+
+describe('typing over a cell rectangle, in suggesting mode', () => {
+  const cell = (content: string) => `<w:tc>${content}</w:tc>`;
+  const GRID2 =
+    '<w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>';
+  const TABLE_2X2 =
+    `<w:tbl>${GRID2}` +
+    `<w:tr>${cell(plainParagraph('Aa'))}${cell(plainParagraph('Bb'))}</w:tr>` +
+    `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+    '</w:tbl>';
+
+  test('the replacement lands in the FIRST cell, after its struck content', () => {
+    withSurface(TABLE_2X2 + plainParagraph('after'), (surface) => {
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      typeEach(surface, 'XY');
+      expect(surface.state().lastRejection).toBeNull();
+      // Every covered cell keeps its struck text; only the first one hosts the replacement.
+      expect(paragraphTexts(surface)).toEqual(['AaXY', 'Bb', 'Cc', 'Dd', 'after']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(
+        /<w:delText[^>]*>Aa<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t[^>]*>XY<\/w:t>/
+      );
+      for (const struck of ['Bb', 'Cc', 'Dd']) {
+        expect(xml).toMatch(new RegExp(`<w:delText[^>]*>${struck}</w:delText>`));
+      }
+      // The caret follows the typing — that is what made the SECOND character land after
+      // the first instead of relocating back in front of it.
+      expect(surface.state().selection.head).toEqual({
+        paragraphId: surface.session.paragraphIds()[0]!,
+        offset: 'AaXY'.length,
+      });
+    });
+  });
+
+  test('a first cell holding two paragraphs lands after the LAST one', () => {
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('One') + plainParagraph('Two'))}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['One', 'TwoX', 'Bb', 'Cc', 'Dd', 'after']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(
+        /<w:delText[^>]*>Two<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t[^>]*>X<\/w:t>/
+      );
+    });
+  });
+
+  test('a trailing EMPTY paragraph in the first cell does not strand the landing', () => {
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('One') + '<w:p/>')}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      // Adjacent to the struck words — landing in the empty paragraph below separated the
+      // replacement from the strike it belongs to.
+      expect(paragraphTexts(surface)).toEqual(['OneX', '', 'Bb', 'Cc', 'Dd', 'after']);
+    });
+  });
+
+  test('a whitespace-only spacer paragraph does not strand the landing either', () => {
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('One') + plainParagraph('   '))}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['OneX', '   ', 'Bb', 'Cc', 'Dd', 'after']);
+    });
+  });
+
+  test('a pending insertion beside a surviving space does not win the landing', () => {
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('Hello') + plainParagraph(' '))}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      // The trailing paragraph holds a pre-existing space plus this author's own pending
+      // 'xyz'. The insertion retracts with the strike, leaving whitespace only — so the
+      // worded 'Hello' hosts the landing, not the paragraph that LOOKS worded before the
+      // plan runs.
+      caretTo(surface, 1, 1);
+      typeEach(surface, 'xyz');
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['HelloX', ' ', 'Bb', 'Cc', 'Dd', 'after']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).not.toMatch(/xyz/);
+    });
+  });
+
+  test('a pending insertion CONTAINING whitespace still leaves its paragraph worded', () => {
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('A') + plainParagraph(' '))}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      // Pending 'b c' retracts whitespace and words alike; the surviving 'A' still makes
+      // the first paragraph the worded landing — length arithmetic could not tell.
+      caretTo(surface, 0, 1);
+      typeEach(surface, 'b c');
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['AX', ' ', 'Bb', 'Cc', 'Dd', 'after']);
+    });
+  });
+
+  test('a cell with ONLY whitespace text still hosts the landing beside it', () => {
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('   ') + '<w:p/>')}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      // With no worded paragraph to prefer, whitespace still beats an empty paragraph as
+      // a neighbour — the trailing empty one would strand X a line below the strike.
+      expect(paragraphTexts(surface)).toEqual(['   X', '', 'Bb', 'Cc', 'Dd', 'after']);
+    });
+  });
+
+  test('a nested table in the first cell does not steal the landing', () => {
+    const nested =
+      '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="1500"/></w:tblGrid>' +
+      `<w:tr><w:tc>${plainParagraph('Inner')}</w:tc></w:tr></w:tbl>`;
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('One') + nested + '<w:p/>')}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      // The landing is the cell's OWN last paragraph with text, never the nested table's.
+      expect(paragraphTexts(surface)).toEqual(['OneX', 'Inner', '', 'Bb', 'Cc', 'Dd', 'after']);
+    });
+  });
+
+  test('a trailing paragraph holding only your OWN pending insertion retracts, not hosts', () => {
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('One') + '<w:p/>')}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    withSurface(table + plainParagraph('after'), (surface) => {
+      caretTo(surface, 1, 0);
+      typeEach(surface, 'Mine');
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      // 'Mine' retracts with the strike, so hosting the landing there would strand X in an
+      // emptied paragraph a line below the struck 'One'.
+      expect(paragraphTexts(surface)).toEqual(['OneX', '', 'Bb', 'Cc', 'Dd', 'after']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).not.toMatch(/Mine/);
+    });
+  });
+
+  test('a paste over the rectangle lands in the same place as typing', () => {
+    withSurface(TABLE_2X2 + plainParagraph('after'), (surface) => {
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      surface.insertPlainText('Zz');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['AaZz', 'Bb', 'Cc', 'Dd', 'after']);
+      expect(surface.state().selection.head).toEqual({
+        paragraphId: surface.session.paragraphIds()[0]!,
+        offset: 'AaZz'.length,
+      });
+    });
+  });
+
+  test('a drawing-only paragraph is a worded landing: X follows the struck image', () => {
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const IMG = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
+    const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+    const PNG_1X1 = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      ),
+      (c) => c.charCodeAt(0)
+    );
+    const drawingParagraph =
+      '<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="228600" cy="114300"/><wp:docPr id="1" name="pic1"/>' +
+      `<a:graphic><a:graphicData uri="${PIC}"><pic:pic>` +
+      '<pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+      '<pic:blipFill><a:blip r:embed="rIdImg"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+      '<pic:spPr><a:xfrm><a:ext cx="228600" cy="114300"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>';
+    const table =
+      `<w:tbl>${GRID2}` +
+      `<w:tr>${cell(plainParagraph('One') + drawingParagraph)}${cell(plainParagraph('Bb'))}</w:tr>` +
+      `<w:tr>${cell(plainParagraph('Cc'))}${cell(plainParagraph('Dd'))}</w:tr>` +
+      '</w:tbl>';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Default Extension="png" ContentType="image/png"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdImg" Type="${IMG}" Target="media/image1.png"/></Relationships>`
+      ),
+      'word/media/image1.png': PNG_1X1,
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
+          `<w:body>${table + plainParagraph('after')}</w:body></w:document>`
+      ),
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, bytes, { author: 'Ada Lovelace' });
+    if (!opened.ok) throw new Error(opened.reason);
+    try {
+      opened.surface.setEditingMode('suggest');
+      selectCellRectangle(opened.surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      opened.surface.type('X');
+      expect(opened.surface.state().lastRejection).toBeNull();
+      // The image occupies one model character, so its paragraph is the last WORDED one:
+      // X belongs after the struck image, never stranded in the paragraph above it.
+      expect(paragraphTexts(opened.surface)).toEqual(['One', 'X', 'Bb', 'Cc', 'Dd', 'after']);
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('this author’s own pending insertion in the first cell retracts', () => {
+    withSurface(TABLE_2X2 + plainParagraph('after'), (surface) => {
+      caretTo(surface, 0, 1);
+      typeEach(surface, 'ZZ');
+      selectCellRectangle(surface, { row: 0, column: 0 }, { row: 1, column: 1 });
+      typeEach(surface, 'QR');
+      expect(surface.state().lastRejection).toBeNull();
+      // The struck halves stay, the author's own insertion leaves, and the replacement
+      // sits after what remains of the first cell's struck content — in typing order.
+      expect(paragraphTexts(surface)).toEqual(['AaQR', 'Bb', 'Cc', 'Dd', 'after']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).not.toMatch(/ZZ/);
     });
   });
 });

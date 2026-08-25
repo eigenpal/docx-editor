@@ -533,7 +533,17 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'proposeInsertion':
     case 'proposeReplacement': {
       const text = command.type === 'proposeInsertion' ? command.text : command.replaceWith;
-      if (typeof text !== 'string' || /[\r\n\v\f\u2028\u2029]/.test(text)) {
+      // Empty text refused too: it would commit a phantom `w:ins` holding nothing, a
+      // tracked change the review pane must carry with no content to show for it. A
+      // replacement that only removes is `proposeDeletion`.
+      if (typeof text !== 'string' || text.length === 0) {
+        return {
+          supported: false,
+          code: 'invalidArgs',
+          reason: `${command.type} requires non-empty text`,
+        };
+      }
+      if (/[\r\n\v\f\u2028\u2029]/.test(text)) {
         return {
           supported: false,
           code: 'invalidArgs',

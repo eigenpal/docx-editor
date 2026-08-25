@@ -284,10 +284,34 @@ export function cellSelectionBetween(
   };
 }
 
+/**
+ * Paragraph ids that are DIRECT children of the cells — nested tables excluded — in
+ * document order, each once.
+ *
+ * The recursive walk answers "what does deleting these cells clear"; this one answers
+ * "which paragraphs are the cell's OWN". A replacement landing computed from the recursive
+ * list drifted into a nested table whenever one sat past the cell's last own paragraph.
+ */
+export function directParagraphsInCells(
+  layout: SemanticLayout,
+  cellIds: readonly string[]
+): readonly string[] {
+  return cellParagraphIds(layout, cellIds, true);
+}
+
 /** Paragraph ids inside a set of cells, in document order, each once. */
 export function paragraphsInCells(
   layout: SemanticLayout,
   cellIds: readonly string[]
+): readonly string[] {
+  return cellParagraphIds(layout, cellIds, false);
+}
+
+/** The one placed-cell walk both readers share; `directOnly` skips nested tables. */
+function cellParagraphIds(
+  layout: SemanticLayout,
+  cellIds: readonly string[],
+  directOnly: boolean
 ): readonly string[] {
   const wanted = new Set(cellIds);
   const found: string[] = [];
@@ -295,7 +319,10 @@ export function paragraphsInCells(
   for (const table of tableIndex(layout).values()) {
     for (const entry of table.placed) {
       if (entry.isHeaderRepeat || !wanted.has(entry.cell.id)) continue;
-      for (const block of entry.cell.blocks) collectParagraphs(block, found, seen);
+      for (const block of entry.cell.blocks) {
+        if (directOnly && block.kind !== 'paragraph') continue;
+        collectParagraphs(block, found, seen);
+      }
     }
   }
   return found;

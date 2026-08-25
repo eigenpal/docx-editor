@@ -52,9 +52,31 @@ export function retractedLengthOf(
   end: number,
   author: string
 ): number {
-  if (end <= start) return 0;
-  const offsets = paragraphOffsetIndex(paragraph);
   let retracted = 0;
+  for (const range of retractedRangesOf(paragraph, start, end, author)) {
+    retracted += range.end - range.start;
+  }
+  return retracted;
+}
+
+/**
+ * The sub-ranges of `[start, end)` a tracked deletion RETRACTS, in the paragraph's own
+ * offset space, in document order.
+ *
+ * The walk {@link retractedLengthOf} sums over, exposed whole: a caller judging what a
+ * strike leaves STANDING — the landing pick for a replacement wants a paragraph whose
+ * surviving text is worded — needs the positions, because no arithmetic over the length
+ * can tell a surviving word from retracted whitespace.
+ */
+export function retractedRangesOf(
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number,
+  author: string
+): readonly { readonly start: number; readonly end: number }[] {
+  if (end <= start) return [];
+  const offsets = paragraphOffsetIndex(paragraph);
+  const ranges: { start: number; end: number }[] = [];
   const walk = (nodes: readonly OoxmlNode[], stack: readonly OoxmlNode[]): void => {
     for (const node of nodes) {
       if (node.kind === 'textValue') continue;
@@ -65,12 +87,12 @@ export function retractedLengthOf(
       if (!span || span.end <= start || span.start >= end) continue;
       if (node.kind === 'run') {
         if (insideDeletion(stack) || insertionAuthor(stack) !== author) continue;
-        retracted += Math.min(end, span.end) - Math.max(start, span.start);
+        ranges.push({ start: Math.max(start, span.start), end: Math.min(end, span.end) });
         continue;
       }
       walk(node.children, [...stack, node]);
     }
   };
   walk(paragraph.children, []);
-  return retracted;
+  return ranges;
 }

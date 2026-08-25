@@ -16,8 +16,7 @@ import { planTableCommand } from '../table-command-plan.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import { readEditableTableTopology } from '../../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue, wmlChildNamed } from '../../store/store/tree-op-table-shared.ts';
-import { cellSelectionBetween } from '../../layout/semantic-cell-selection.ts';
-import type { TableCellAddress } from '../../layout/semantic-hit-test.ts';
+import { selectCellRectangle } from './paginated-surface-fixtures.ts';
 import {
   findTableOccurrence,
   tableColumnOccurrenceTargetFrom,
@@ -207,34 +206,6 @@ function paragraphByText(surface: PaginatedSurface, text: string): string {
     if (paragraphTextOf(surface.session.part(), id) === text) return id;
   }
   throw new Error(`paragraph ${text} not found`);
-}
-
-function cellAddress(surface: PaginatedSurface, row: number, column: number): TableCellAddress {
-  const table = tableOnPage(surface.layout());
-  const rowRec = table.rows[row]!;
-  const cell = rowRec.cells.find((candidate) => candidate.gridColumn === column)!;
-  return {
-    tableId: table.tableId,
-    rowId: rowRec.id,
-    cellId: cell.id,
-    rowIndex: row,
-    gridColumn: cell.gridColumn,
-    gridSpan: cell.gridSpan,
-  };
-}
-
-function selectCellRectangle(
-  surface: PaginatedSurface,
-  from: { row: number; column: number },
-  to: { row: number; column: number }
-): void {
-  const rect = cellSelectionBetween(
-    surface.layout(),
-    cellAddress(surface, from.row, from.column),
-    cellAddress(surface, to.row, to.column)
-  );
-  if (!rect) throw new Error('cell rectangle failed');
-  surface.setCellSelection(rect);
 }
 
 async function revealInsertRowAt(

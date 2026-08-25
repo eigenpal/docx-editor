@@ -26,8 +26,7 @@ import {
   applyThemeTint,
   applyThemeShade,
 } from '../color-value-lower.ts';
-import { cellSelectionBetween } from '../../layout/semantic-cell-selection.ts';
-import type { TableCellAddress } from '../../layout/semantic-hit-test.ts';
+import { selectCellRectangle } from './paginated-surface-fixtures.ts';
 import {
   tableColumnDividerResizeTargetOf,
   tableRightEdgeResizeTargetOf,
@@ -180,38 +179,6 @@ function tableFragment(surface: NonNullable<DocxEditorInstance['surface']>) {
     if (block?.kind === 'table') return block;
   }
   throw new Error('no table in layout');
-}
-
-function cellAddress(
-  surface: NonNullable<DocxEditorInstance['surface']>,
-  row: number,
-  column: number
-): TableCellAddress {
-  const table = tableFragment(surface);
-  const rowRec = table.rows[row]!;
-  const cell = rowRec.cells.find((c) => c.gridColumn === column)!;
-  return {
-    tableId: table.tableId,
-    rowId: rowRec.id,
-    cellId: cell.id,
-    rowIndex: row,
-    gridColumn: cell.gridColumn,
-    gridSpan: cell.gridSpan,
-  };
-}
-
-function selectCellRectangle(
-  surface: NonNullable<DocxEditorInstance['surface']>,
-  from: { row: number; column: number },
-  to: { row: number; column: number }
-): void {
-  const rect = cellSelectionBetween(
-    surface.layout(),
-    cellAddress(surface, from.row, from.column),
-    cellAddress(surface, to.row, to.column)
-  );
-  if (!rect) throw new Error('cell rectangle failed');
-  surface.setCellSelection(rect);
 }
 
 function assertCanExecParity(

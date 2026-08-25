@@ -17,6 +17,7 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
+import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
 import { paragraphTabStopsOf } from './surface-formatting.ts';
@@ -815,7 +816,15 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // Section breaks are body-only; refuse while a furniture scope is open.
       if (deps.storyScope().kind !== 'body') return false;
       const plan = deleteSelectionPlan();
-      const start = plan.collapseTo;
+      // The plan's `replaceAt`, like the tab and break lanes: in suggesting mode the struck
+      // words stay, and a split at the range START cut the paragraph in FRONT of them — the
+      // break and the strike read as two unrelated edits. EXCEPT when the landing sits in a
+      // table cell: a section mark cannot be minted there (the store refuses it, and one
+      // refused op vetoes the strike with it), so the break falls back to `collapseTo`.
+      // That only saves the gesture when the range STARTS outside the table — a selection
+      // wholly inside one is still refused by the store, as it always was.
+      const landing = plan.replaceAt ?? plan.collapseTo;
+      const start = isTableNested(session.part(), landing.paragraphId) ? plan.collapseTo : landing;
       const before = new Set(session.paragraphIds());
       let committed = false;
       commit(

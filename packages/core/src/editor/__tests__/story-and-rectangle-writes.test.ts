@@ -16,12 +16,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
-import { docx as bodyDocx } from './paginated-surface-fixtures.ts';
-import { cellSelectionBetween } from '../../layout/semantic-cell-selection.ts';
+import { docx as bodyDocx, selectCellRectangle } from './paginated-surface-fixtures.ts';
 import { paragraphIndentOf } from '../surface-formatting.ts';
 import { paragraphTextOf } from '../../store/store/tree-op-apply.ts';
 import { findNode } from '@docx-editor.dev/core/store';
-import type { TableCellAddress } from '@docx-editor.dev/core/layout';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -160,25 +158,7 @@ describe('a cell rectangle is not the range it stands in for', () => {
   }
 
   function selectColumn(surface: PaginatedSurface, column: number): void {
-    const table = surface
-      .layout()
-      .pages.flatMap((page) => page.fragments.filter((fragment) => fragment.kind === 'table'))[0];
-    if (!table || table.kind !== 'table') throw new Error('no table in layout');
-    const address = (rowIndex: number): TableCellAddress => {
-      const row = table.rows[rowIndex]!;
-      const cell = row.cells.find((candidate) => candidate.gridColumn === column)!;
-      return {
-        tableId: table.tableId,
-        rowId: row.id,
-        cellId: cell.id,
-        rowIndex,
-        gridColumn: cell.gridColumn,
-        gridSpan: cell.gridSpan,
-      };
-    };
-    const rectangle = cellSelectionBetween(surface.layout(), address(0), address(1));
-    if (!rectangle) throw new Error('cell rectangle failed');
-    surface.setCellSelection(rectangle);
+    selectCellRectangle(surface, { row: 0, column }, { row: 1, column });
   }
 
   const textOf = (surface: PaginatedSurface, id: string) =>
