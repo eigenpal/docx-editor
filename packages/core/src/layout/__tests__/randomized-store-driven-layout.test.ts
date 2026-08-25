@@ -49,8 +49,10 @@ import {
   layoutSemanticDocument,
   type LayoutSession,
   type NumberingIndex,
+  type PageFurniture,
   type SemanticLayout,
 } from '../index.ts';
+import { layoutHeaderFooterStory } from '../hf-layout.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -99,6 +101,52 @@ const TABLE =
   `<w:tc><w:p><w:r><w:t>cell b</w:t></w:r></w:p></w:tc></w:tr>` +
   `<w:tr><w:tc><w:p><w:r><w:t>cell c</w:t></w:r></w:p></w:tc>` +
   `<w:tc><w:p><w:r><w:t>cell d</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+
+// A STATIC default header carrying PAGE and NUMPAGES rides every page of both sections. The
+// random edits never target it — it exists so the per-page field finalize (and its memo on
+// reused page records) sits inside the differential: page-count moves must re-project the
+// header on every reused sheet, and `publishedShapeOf` serializes the furniture too.
+const HEADER_PART_XML = (() => {
+  const field = (instr: string) =>
+    `<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>${instr}</w:instrText>` +
+    `<w:fldChar w:fldCharType="separate"/><w:t>0</w:t><w:fldChar w:fldCharType="end"/></w:r>`;
+  return (
+    `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t xml:space="preserve">Page </w:t></w:r>${field('PAGE')}` +
+    `<w:r><w:t xml:space="preserve"> of </w:t></w:r>${field('NUMPAGES')}</w:p></w:hdr>`
+  );
+})();
+
+/** Section content width in points: 6000 − 200 − 200 twips. */
+const HEADER_CONTENT_WIDTH = 280;
+
+/**
+ * Fresh furniture from a header part. The incremental pass retains ONE furniture object (as a
+ * live session would); each clean pass builds its own from a `structuredClone` of the same part
+ * — same ids and content, all-new objects — so no story-keyed cache can be shared either.
+ */
+function headerFurnitureOf(headerPart: OoxmlPart): PageFurniture {
+  return {
+    titlePage: false,
+    evenAndOddHeaders: false,
+    headers: new Map([
+      ['default', layoutHeaderFooterStory(headerPart, HEADER_CONTENT_WIDTH, measurer, 'test')],
+    ]),
+    footers: new Map(),
+  };
+}
+
+/** The projected header text of one page, for the anti-vacuity check below. */
+function headerTextOf(layout: SemanticLayout, pageIndex: number): string {
+  const story = layout.pages[pageIndex]?.header;
+  if (!story) return '';
+  return story.fragments
+    .flatMap((fragment) =>
+      fragment.kind === 'paragraph'
+        ? fragment.lines.flatMap((line) => line.spans.map((span) => span.text))
+        : []
+    )
+    .join('');
+}
 
 function initialDocumentPart(): OoxmlPart {
   const words = 'word '.repeat(8);
@@ -318,10 +366,18 @@ const STEPS = 30;
 
 const NUMBERING = numberingIndexForTest();
 
-const lay = (part: OoxmlPart, revision: number, session?: LayoutSession): SemanticLayout =>
+const lay = (
+  part: OoxmlPart,
+  revision: number,
+  furniture: PageFurniture,
+  session?: LayoutSession
+): SemanticLayout =>
   layoutSemanticDocument(part, revision, {
     measurer,
     numberingIndex: NUMBERING,
+    // Both sections wear the same default header; the section count is pinned at two (the
+    // section carrier is never joined or deleted), so the array stays index-aligned.
+    sectionFurniture: [furniture, furniture],
     ...(session ? { session } : {}),
   });
 
@@ -333,9 +389,17 @@ describe('store-driven incremental layout equals from-scratch layout on random o
       const session = createLayoutSession();
       const log: unknown[] = [];
 
+      const headerPart = loadPart(HEADER_PART_XML, '/word/header1.xml');
+      const retainedFurniture = headerFurnitureOf(headerPart);
+
       let revision = 1;
-      const first = lay(store.part, revision, session);
+      const first = lay(store.part, revision, retainedFurniture, session);
       expect(first.pages.length).toBeGreaterThan(1);
+      // The header really carries live page fields, or the finalize memo is invisible here.
+      expect(headerTextOf(first, 0)).toBe(`Page 1 of ${first.pages.length}`);
+      expect(headerTextOf(first, first.pages.length - 1)).toBe(
+        `Page ${first.pages.length} of ${first.pages.length}`
+      );
       // The observation contract: the prepass shape must be visible from step 0, or every
       // identity floor below would be measuring nothing.
       let previousPrepasses = sectionSessionsOf(session).map((s) => s.prepass);
@@ -364,7 +428,7 @@ describe('store-driven incremental layout equals from-scratch layout on random o
         applied += 1;
         revision += 1;
 
-        const incremental = publishedShapeOf(lay(store.part, revision, session));
+        const incremental = publishedShapeOf(lay(store.part, revision, retainedFurniture, session));
         if (session.stats.reusedPages > 0) reusedSteps += 1;
         if (session.stats.placed < session.stats.total) partialSteps += 1;
 
@@ -388,8 +452,12 @@ describe('store-driven incremental layout equals from-scratch layout on random o
         previousEntries = new Set(entries);
 
         // The clean pass: same ids, same content, all-new node objects — nothing
-        // identity-keyed can be shared with the incremental pass.
-        const fresh = publishedShapeOf(lay(structuredClone(store.part), revision));
+        // identity-keyed can be shared with the incremental pass. Furniture too: a fresh
+        // story from a cloned header part, so the finalize memo (keyed on the incremental
+        // pass's page records) cannot answer for any clean page.
+        const fresh = publishedShapeOf(
+          lay(structuredClone(store.part), revision, headerFurnitureOf(structuredClone(headerPart)))
+        );
         if (incremental !== fresh) {
           throw new Error(
             `Store-driven incremental layout diverged from a clean pass.\n` +

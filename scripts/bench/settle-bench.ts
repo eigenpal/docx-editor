@@ -15,6 +15,7 @@
 //   bun scripts/bench/settle-bench.ts [fixture] [--keystrokes 25] [--warmup 3] [--json]
 //   bun scripts/bench/settle-bench.ts --json > /tmp/settle-before.json
 //   bun scripts/bench/settle-bench.ts --compare /tmp/settle-before.json
+//   bun scripts/bench/settle-bench.ts --key enter   # structural keystrokes (splitParagraph)
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -33,6 +34,8 @@ interface Args {
   warmup: number;
   json: boolean;
   compare?: string;
+  /** 'enter' sends a structural keystroke (splitParagraph) instead of typing 'x'. */
+  key: 'x' | 'enter';
 }
 
 interface TimingSummary {
@@ -67,6 +70,7 @@ function parseArgs(argv: string[]): Args {
     keystrokes: 25,
     warmup: 3,
     json: false,
+    key: 'x',
   };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]!;
@@ -74,6 +78,11 @@ function parseArgs(argv: string[]): Args {
     else if (value === '--keystrokes') args.keystrokes = Number(argv[++index]);
     else if (value === '--warmup') args.warmup = Number(argv[++index]);
     else if (value === '--compare') args.compare = argv[++index]!;
+    else if (value === '--key') {
+      const key = argv[++index];
+      if (key !== 'x' && key !== 'enter') throw new Error(`--key must be 'x' or 'enter', got ${key}`);
+      args.key = key;
+    }
     else if (!value.startsWith('--')) args.fixture = resolve(value);
     else throw new Error(`unknown option ${value}`);
   }
@@ -159,8 +168,14 @@ async function run(args: Args): Promise<SettleReport> {
     });
     await settle(surface);
 
+    const press = (): void => {
+      // The same call the surface keymap makes for an unmodified Enter.
+      if (args.key === 'enter') surface.splitParagraph();
+      else surface.type('x');
+    };
+
     for (let index = 0; index < args.warmup; index += 1) {
-      surface.type('w');
+      press();
       await settle(surface);
     }
 
@@ -169,7 +184,7 @@ async function run(args: Args): Promise<SettleReport> {
     const paintMs: number[] = [];
     for (let index = 0; index < args.keystrokes; index += 1) {
       const typedAt = performance.now();
-      surface.type('x');
+      press();
       const settledAt = await settle(surface);
       settleMs.push(settledAt - typedAt);
       const perf = surface.state().perf;

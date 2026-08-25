@@ -293,6 +293,20 @@ export function substituteBodyPageFields(
 }
 
 /**
+ * Finalized projection of one page under one total page count, memoized on the immutable
+ * page record.
+ *
+ * The whole per-page finalize is a pure function of the page record and `pageCount`: the
+ * field context reads `pageFieldSource` and `index` off the record, and the story
+ * projectors are deterministic closures the story layout minted. Without this memo an
+ * incremental pass that reused 555 of 561 pages by identity still re-projected all 561 —
+ * including a header/footer story RE-LAYOUT for every sheet whose furniture carries a PAGE
+ * field — and then threw 555 of those fresh records away when the previous finalized
+ * identities were restored. Same idiom as `publishedPageMemos` in `multi-section-layout.ts`.
+ */
+const finalizedPageMemos = new WeakMap<PageRecord, { pageCount: number; result: PageRecord }>();
+
+/**
  * Project allowlisted PAGE/NUMPAGES/SECTIONPAGES once the document page count is known.
  *
  * Header/footer furniture substitutes through each story's transient projector. Body flow (and
@@ -307,6 +321,11 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
 
   let changed = false;
   const pages = layout.pages.map((page) => {
+    const memo = finalizedPageMemos.get(page);
+    if (memo && memo.pageCount === pageCount) {
+      if (memo.result !== page) changed = true;
+      return memo.result;
+    }
     const source = page.pageFieldSource;
     const context: FieldPageContext = {
       pageNumber: source?.pageNumber ?? page.index + 1,
@@ -335,15 +354,18 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
         ? page.fragments
         : substituteBodyPageFields(page.fragments, context);
     if (header === page.header && footer === page.footer && fragments === page.fragments) {
+      finalizedPageMemos.set(page, { pageCount, result: page });
       return page;
     }
     if (fragments !== page.fragments) changed = true;
-    return {
+    const result: PageRecord = {
       ...page,
       ...(header !== undefined ? { header } : {}),
       ...(footer !== undefined ? { footer } : {}),
       ...(fragments !== page.fragments ? { fragments } : {}),
     };
+    finalizedPageMemos.set(page, { pageCount, result });
+    return result;
   });
 
   return changed ? { revision: layout.revision, pages } : layout;
