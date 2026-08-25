@@ -22,6 +22,7 @@ import {
   quantile,
   requireRemainingMs,
   resolveTargetParagraphId,
+  summarizeResponsiveness,
   typingUrlAuditHelpText,
   validateAuditUrl,
   validateHttpUrlPolicy,
@@ -184,8 +185,9 @@ try {
   if (args.paragraphIndex !== null) {
     targetParagraphId = await page.evaluate((index) => {
       return (
-        document.querySelectorAll('[data-paragraph-id]')[index]?.getAttribute('data-paragraph-id') ??
-        null
+        document
+          .querySelectorAll('[data-paragraph-id]')
+          [index]?.getAttribute('data-paragraph-id') ?? null
       );
     }, args.paragraphIndex);
   } else {
@@ -304,6 +306,10 @@ try {
   /** @type {import('playwright-core').Protocol.Profiler.Profile[]} */
   const profileWindows = [];
 
+  // The buffered responsiveness observers also capture the document open; everything
+  // before this stamp is load work, not typing.
+  const typingStartedAtMs = await page.evaluate(() => performance.now());
+
   for (let index = 0; index < args.keys; index += 1) {
     requireRemainingMs(deadlineAt, {
       label: `keystroke ${index + 1}`,
@@ -367,6 +373,16 @@ try {
   const trustedBeforeInputCount = await page.evaluate(
     () => globalThis.__typingAuditProbe?.trustedBeforeInputs ?? 0
   );
+  const responsivenessRaw = await page.evaluate(() => ({
+    slowInputEvents: globalThis.__typingAuditProbe?.slowInputEvents ?? [],
+    longTasks: globalThis.__typingAuditProbe?.longTasks ?? [],
+  }));
+  const responsiveness = summarizeResponsiveness(
+    responsivenessRaw.slowInputEvents.filter((event) => event.startTimeMs >= typingStartedAtMs),
+    responsivenessRaw.longTasks
+      .filter((task) => task.startTimeMs >= typingStartedAtMs)
+      .map((task) => task.durationMs)
+  );
 
   const caretInPagesLayer = await page.evaluate(() => {
     const pages = document.querySelector('.docx-pages');
@@ -422,6 +438,7 @@ try {
       pageErrors,
       requestFailures,
       profileLines: profileReport?.lines,
+      responsiveness,
       trustedBeforeInputCount,
       caretOffsetBefore,
       caretOffsetAfter,

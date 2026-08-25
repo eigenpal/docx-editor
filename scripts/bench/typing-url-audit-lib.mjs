@@ -52,7 +52,9 @@ export function requireRemainingMs(deadlineAt, { label = 'operation', globalDead
   const remaining = deadlineAt - Date.now();
   if (remaining <= 0) {
     const suffix =
-      globalDeadlineMs !== undefined ? `global deadline of ${globalDeadlineMs}ms exceeded` : 'global deadline exceeded';
+      globalDeadlineMs !== undefined
+        ? `global deadline of ${globalDeadlineMs}ms exceeded`
+        : 'global deadline exceeded';
     throw new Error(`${label}: ${suffix}`);
   }
   return Math.max(1, remaining);
@@ -277,6 +279,42 @@ export function hasConsoleErrors(consoleEvents) {
 }
 
 /**
+ * Aggregate the responsiveness probe: slow Event Timing entries (the API only reports
+ * interactions past its 16 ms floor, so every entry here already crossed one frame) and
+ * long tasks. Null when neither observer captured anything — either genuinely responsive
+ * or the APIs are unsupported, and the report omits the section rather than printing zeros
+ * it cannot distinguish.
+ *
+ * Callers filter both lists to the typing window first (`startTimeMs` on each entry):
+ * buffered observers also capture the document open, whose long task would otherwise
+ * dominate every typing report.
+ *
+ * @param {readonly { name: string; inputDelayMs: number; durationMs: number }[]} slowInputEvents
+ * @param {readonly number[]} longTaskDurations
+ * @returns {{ slowInputCount: number; worstInputDelayMs: number; worstEventDurationMs: number; longTaskCount: number; worstLongTaskMs: number } | null}
+ */
+export function summarizeResponsiveness(slowInputEvents, longTaskDurations) {
+  if (slowInputEvents.length === 0 && longTaskDurations.length === 0) return null;
+  let worstInputDelayMs = 0;
+  let worstEventDurationMs = 0;
+  for (const event of slowInputEvents) {
+    if (event.inputDelayMs > worstInputDelayMs) worstInputDelayMs = event.inputDelayMs;
+    if (event.durationMs > worstEventDurationMs) worstEventDurationMs = event.durationMs;
+  }
+  let worstLongTaskMs = 0;
+  for (const duration of longTaskDurations) {
+    if (duration > worstLongTaskMs) worstLongTaskMs = duration;
+  }
+  return {
+    slowInputCount: slowInputEvents.length,
+    worstInputDelayMs,
+    worstEventDurationMs,
+    longTaskCount: longTaskDurations.length,
+    worstLongTaskMs,
+  };
+}
+
+/**
  * @param {readonly { type: string; text: string }[]} consoleEvents
  * @param {readonly string[]} pageErrors
  */
@@ -321,9 +359,48 @@ export function validateTypingProbeSamples(samples, keys) {
  * after a layout revision mutation finishes it.
  */
 export function installTypingAuditProbeInPage() {
-  /** @type {{ trustedBeforeInputs: number; pendingSample: TypingAuditPendingSample | null; samples: TypingAuditProbeSample[] }} */
-  const probe = { trustedBeforeInputs: 0, pendingSample: null, samples: [] };
+  /** @type {{ trustedBeforeInputs: number; pendingSample: TypingAuditPendingSample | null; samples: TypingAuditProbeSample[]; slowInputEvents: { name: string; inputDelayMs: number; durationMs: number; startTimeMs: number }[]; longTasks: { durationMs: number; startTimeMs: number }[] }} */
+  const probe = {
+    trustedBeforeInputs: 0,
+    pendingSample: null,
+    samples: [],
+    slowInputEvents: [],
+    longTasks: [],
+  };
   globalThis.__typingAuditProbe = probe;
+
+  // Event Timing only reports interactions whose total duration crosses the threshold
+  // (16 ms is the API floor), so these are the SLOW events by construction: an empty list
+  // means no interaction crossed one frame. `inputDelayMs` is processingStart - startTime —
+  // the time the event waited for the main thread, the browser-truth queueing signal.
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        const timed =
+          /** @type {{ name: string; startTime: number; duration: number; processingStart?: number }} */ (
+            entry
+          );
+        if (typeof timed.processingStart !== 'number') continue;
+        probe.slowInputEvents.push({
+          name: timed.name,
+          inputDelayMs: timed.processingStart - timed.startTime,
+          durationMs: timed.duration,
+          startTimeMs: timed.startTime,
+        });
+      }
+    }).observe({ type: 'event', durationThreshold: 16, buffered: true });
+  } catch {
+    // Event Timing is unsupported here; the report simply omits the section.
+  }
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        probe.longTasks.push({ durationMs: entry.duration, startTimeMs: entry.startTime });
+      }
+    }).observe({ type: 'longtask', buffered: true });
+  } catch {
+    // Long Tasks is unsupported here; the report simply omits the section.
+  }
 
   const readRevision = () => {
     const pages = document.querySelector('.docx-pages');
@@ -600,20 +677,16 @@ export function evaluateTypingRun(input) {
     typeof input.modelTextAfter === 'string' &&
     modelGrowth === input.keys;
   const perKeyGrowthEvidence =
-    input.perKeyGrowth?.length === input.keys &&
-    input.perKeyGrowth.every((growth) => growth === 1);
+    input.perKeyGrowth?.length === input.keys && input.perKeyGrowth.every((growth) => growth === 1);
   const paintedTextEvidence =
     typeof input.paintedTextBefore === 'string' &&
     typeof input.paintedTextAfter === 'string' &&
     paintedInsertionOffset !== null &&
-    input.paintedTextAfter.slice(
-      paintedInsertionOffset,
-      paintedInsertionOffset + input.keys
-    ) === 'x'.repeat(input.keys) &&
+    input.paintedTextAfter.slice(paintedInsertionOffset, paintedInsertionOffset + input.keys) ===
+      'x'.repeat(input.keys) &&
     input.paintedTextAfter.length === input.paintedTextBefore.length + input.keys;
   const trustedInputEvidence =
-    input.trustedBeforeInputCount !== undefined &&
-    input.trustedBeforeInputCount === input.keys;
+    input.trustedBeforeInputCount !== undefined && input.trustedBeforeInputCount === input.keys;
   const perKeyRevisionEvidence =
     input.perKeyRevisionAdvance?.length === input.keys &&
     input.perKeyRevisionAdvance.every(Boolean);
@@ -691,6 +764,7 @@ export function evaluateTypingRun(input) {
  *   pageErrors: readonly string[];
  *   requestFailures?: readonly { url: string; failure: string }[];
  *   profileLines?: readonly string[];
+ *   responsiveness?: { slowInputCount: number; worstInputDelayMs: number; worstEventDurationMs: number; longTaskCount: number; worstLongTaskMs: number } | null;
  *   trustedBeforeInputCount?: number;
  *   caretOffsetBefore?: { paragraphId: string; offset: number } | null;
  *   caretOffsetAfter?: { paragraphId: string; offset: number } | null;
@@ -734,9 +808,7 @@ export function formatTypingAuditReport(verdict, args, report) {
     `edited paragraph painted length ${report.beforeLength} -> ${report.afterLength} (${verdict.paragraphGrowth} of ${args.keys} keys landed)`
   );
   if (report.beforeModelLength !== undefined && report.afterModelLength !== undefined) {
-    lines.push(
-      `canonical model length ${report.beforeModelLength} -> ${report.afterModelLength}`
-    );
+    lines.push(`canonical model length ${report.beforeModelLength} -> ${report.afterModelLength}`);
   }
   if (report.trustedBeforeInputCount !== undefined) {
     lines.push(`trusted beforeinput events: ${report.trustedBeforeInputCount} of ${args.keys}`);
@@ -752,7 +824,18 @@ export function formatTypingAuditReport(verdict, args, report) {
       `min ${report.sortedSamples[0].toFixed(1)} ms   ` +
       `max ${report.sortedSamples[report.sortedSamples.length - 1].toFixed(1)} ms`
   );
-  lines.push('budget: 16.7 ms median, 33.4 ms p95 (latency mode only; profile output is not budgeted)');
+  if (report.responsiveness) {
+    const r = report.responsiveness;
+    lines.push(
+      `slow input events (>=16 ms duration): ${r.slowInputCount}, worst input delay ${r.worstInputDelayMs.toFixed(1)} ms, worst duration ${r.worstEventDurationMs.toFixed(1)} ms`
+    );
+    lines.push(`long tasks: ${r.longTaskCount}, worst ${r.worstLongTaskMs.toFixed(1)} ms`);
+  } else if (report.responsiveness === null) {
+    lines.push('no input event crossed 16 ms and no long task was observed');
+  }
+  lines.push(
+    'budget: 16.7 ms median, 33.4 ms p95 (latency mode only; profile output is not budgeted)'
+  );
   if (report.profileLines?.length) {
     lines.push(...report.profileLines);
   }
@@ -962,7 +1045,9 @@ export function formatProfileLines(profile, keys, top) {
   const active = ranked.reduce((sum, [, micros]) => sum + micros, 0);
   /** @type {string[]} */
   const lines = [];
-  lines.push(`\nCPU profile (input-to-sample windows only): ${(active / 1000 / keys).toFixed(1)} ms/key active`);
+  lines.push(
+    `\nCPU profile (input-to-sample windows only): ${(active / 1000 / keys).toFixed(1)} ms/key active`
+  );
   lines.push(`${'ms/key'.padStart(8)}  ${'%'.padStart(5)}  function (file:line)`);
   for (const [key, micros] of ranked.slice(0, top)) {
     const [name, where] = key.split('|');

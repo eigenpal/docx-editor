@@ -19,6 +19,7 @@ import {
   parseTypingUrlAuditArgs,
   quantile,
   requireRemainingMs,
+  summarizeResponsiveness,
   validateAuditUrl,
   validateHttpUrlPolicy,
   validateProfileWindow,
@@ -44,9 +45,9 @@ describe('parseTypingUrlAuditArgs', () => {
   });
 
   test('rejects non-loopback URLs unless --allow-remote is set', () => {
-    expect(() =>
-      validateAuditUrl('https://example.com/?fixture=typing-perf-521pp.docx')
-    ).toThrow('loopback');
+    expect(() => validateAuditUrl('https://example.com/?fixture=typing-perf-521pp.docx')).toThrow(
+      'loopback'
+    );
     expect(
       validateAuditUrl('https://example.com/?fixture=typing-perf-521pp.docx', {
         allowRemote: true,
@@ -56,7 +57,9 @@ describe('parseTypingUrlAuditArgs', () => {
   });
 
   test('rejects non-finite numeric flags before browser launch', () => {
-    expect(() => parseTypingUrlAuditArgs(['--keys', 'NaN'])).toThrow('--keys must be a finite number');
+    expect(() => parseTypingUrlAuditArgs(['--keys', 'NaN'])).toThrow(
+      '--keys must be a finite number'
+    );
     expect(() => parseTypingUrlAuditArgs(['--min-pages', 'Infinity'])).toThrow(
       '--min-pages must be a finite number'
     );
@@ -285,13 +288,28 @@ describe('evaluateTypingRun', () => {
 
   test('validates probe timing samples', () => {
     expect(
-      validateTypingProbeSample({ ms: 12.5, revisionBefore: 3, revisionAfter: 4, validationRecordedAtMs: null })
+      validateTypingProbeSample({
+        ms: 12.5,
+        revisionBefore: 3,
+        revisionAfter: 4,
+        validationRecordedAtMs: null,
+      })
     ).toBe(true);
     expect(
-      validateTypingProbeSample({ ms: -1, revisionBefore: 3, revisionAfter: 4, validationRecordedAtMs: null })
+      validateTypingProbeSample({
+        ms: -1,
+        revisionBefore: 3,
+        revisionAfter: 4,
+        validationRecordedAtMs: null,
+      })
     ).toBe(false);
     expect(
-      validateTypingProbeSample({ ms: 12.5, revisionBefore: 4, revisionAfter: 4, validationRecordedAtMs: null })
+      validateTypingProbeSample({
+        ms: 12.5,
+        revisionBefore: 4,
+        revisionAfter: 4,
+        validationRecordedAtMs: null,
+      })
     ).toBe(false);
     expect(
       validateTypingProbeSamples(
@@ -331,6 +349,71 @@ describe('formatTypingAuditReport', () => {
     expect(text).toContain('INVALID');
     expect(text).not.toContain('2nd animation frame');
   });
+
+  test('prints the responsiveness section when the probe observed slow events', () => {
+    const verdict = { valid: true, reasons: [], paragraphGrowth: 2 };
+    const base = {
+      url: 'http://localhost:5173/',
+      opened: { pages: 521, paragraphs: 12820 },
+      beforeLength: 10,
+      afterLength: 12,
+      sortedSamples: [10, 20],
+      consoleErrors: [],
+      pageErrors: [],
+    };
+    const withEvents = formatTypingAuditReport(verdict, parseTypingUrlAuditArgs([]), {
+      ...base,
+      responsiveness: {
+        slowInputCount: 3,
+        worstInputDelayMs: 86.4,
+        worstEventDurationMs: 117.2,
+        longTaskCount: 2,
+        worstLongTaskMs: 211.9,
+      },
+    });
+    expect(withEvents).toContain('slow input events (>=16 ms duration): 3');
+    expect(withEvents).toContain('worst input delay 86.4 ms');
+    expect(withEvents).toContain('long tasks: 2, worst 211.9 ms');
+
+    const quiet = formatTypingAuditReport(verdict, parseTypingUrlAuditArgs([]), {
+      ...base,
+      responsiveness: null,
+    });
+    expect(quiet).toContain('no input event crossed 16 ms');
+
+    const absent = formatTypingAuditReport(verdict, parseTypingUrlAuditArgs([]), base);
+    expect(absent).not.toContain('slow input events');
+    expect(absent).not.toContain('no input event crossed');
+  });
+});
+
+describe('summarizeResponsiveness', () => {
+  test('null when neither observer captured anything', () => {
+    expect(summarizeResponsiveness([], [])).toBeNull();
+  });
+
+  test('aggregates counts and worst values across both observers', () => {
+    const summary = summarizeResponsiveness(
+      [
+        { name: 'keydown', inputDelayMs: 4.2, durationMs: 24 },
+        { name: 'keypress', inputDelayMs: 86.4, durationMs: 117.2 },
+      ],
+      [55.5, 211.9]
+    );
+    expect(summary).toEqual({
+      slowInputCount: 2,
+      worstInputDelayMs: 86.4,
+      worstEventDurationMs: 117.2,
+      longTaskCount: 2,
+      worstLongTaskMs: 211.9,
+    });
+  });
+
+  test('long tasks alone still produce a summary', () => {
+    const summary = summarizeResponsiveness([], [30]);
+    expect(summary?.slowInputCount).toBe(0);
+    expect(summary?.worstLongTaskMs).toBe(30);
+  });
 });
 
 describe('formatStructuredInvalid', () => {
@@ -339,7 +422,9 @@ describe('formatStructuredInvalid', () => {
       valid: false,
       reasons: ['opened 1 pages, expected exactly 521'],
       detail: 'navigation failed',
-      consoleErrors: [{ type: 'error', text: 'very long console payload that must not be truncated' }],
+      consoleErrors: [
+        { type: 'error', text: 'very long console payload that must not be truncated' },
+      ],
       pageErrors: ['ReferenceError: full page stack must remain intact'],
     });
     expect(text).toContain('very long console payload that must not be truncated');
@@ -359,12 +444,12 @@ describe('requireRemainingMs', () => {
 
 describe('validateHttpUrlPolicy', () => {
   test('blocks non-loopback http(s) unless allowRemote is set', () => {
-    expect(
-      validateHttpUrlPolicy('https://example.com/doc', { allowRemote: false }).allowed
-    ).toBe(false);
-    expect(
-      validateHttpUrlPolicy('https://example.com/doc', { allowRemote: true }).allowed
-    ).toBe(true);
+    expect(validateHttpUrlPolicy('https://example.com/doc', { allowRemote: false }).allowed).toBe(
+      false
+    );
+    expect(validateHttpUrlPolicy('https://example.com/doc', { allowRemote: true }).allowed).toBe(
+      true
+    );
     expect(validateHttpUrlPolicy('ws://localhost/socket').allowed).toBe(true);
   });
 });
