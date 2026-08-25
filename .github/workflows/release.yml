@@ -224,12 +224,12 @@ jobs:
         id: changesets
         uses: changesets/action@v2.1.0
         with:
-          version: bun run version-packages
-          publish: bunx changeset publish
-          title: 'chore: release'
-          commit: 'chore: release'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version-script: bun run version-packages
+          publish-script: bunx changeset publish
+          pr-title: 'chore: release'
+          commit-message: 'chore: release'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
 
       # changesets/action creates per-package tags (e.g. `@docx-editor.dev/react@1.0.1`);
@@ -241,7 +241,7 @@ jobs:
       - name: Create umbrella version tag (vX.Y.Z)
         if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
         env:
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
         run: |
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
           git tag -a "v$version" -m "Release v$version"
@@ -275,7 +275,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.pal-token.outputs.token }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
         run: |
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
           # `|| true`: the default shell is `bash -eo pipefail`, so a grep
@@ -305,7 +305,7 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.pal-token.outputs.token }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
         run: |
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
           gh api "repos/${{ github.repository_owner }}/docx-editor.dev/dispatches" \
@@ -316,12 +316,12 @@ jobs:
         if: ${{ steps.changesets.outputs.published == 'true' && env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # publishedPackages is JSON like:
+          # published-packages is JSON like:
           # [{"name":"@docx-editor.dev/react","version":"1.0.0"}, ...]
           version=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version')
           packages_md=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[] | "• <https://www.npmjs.com/package/\(.name)/v/\(.version)|\(.name)@\(.version)>"')
