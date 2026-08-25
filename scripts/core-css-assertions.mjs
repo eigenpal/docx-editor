@@ -29,8 +29,8 @@ const SCOPE = '.docx-editor';
  * `.ProseMirror-yjs-cursor` is y-prosemirror's, so a host running its own
  * ProseMirror editor got our rules on its elements.
  *
- * `.layout-` and `.paged-editor` we do mint, but the names are generic enough
- * that a host could mint them too (`.layout-page-header`, `.layout-page-content`).
+ * `.layout-` we do mint, but the names are generic enough that a host could
+ * mint them too (`.layout-page`, `.layout-paragraph`).
  * The old rationale — that they match painted document elements rather than
  * chrome, so the scope class "would be wrong" — does not hold: painted elements
  * are always inside the viewport, which always carries the scope class. They are
