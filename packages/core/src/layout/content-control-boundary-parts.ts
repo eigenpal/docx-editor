@@ -59,23 +59,44 @@ const mergedControlIndexes = new WeakMap<
   { readonly parts: readonly OoxmlPart[]; readonly index: CollectedControlIndex }
 >();
 
+/**
+ * The one retained previous merge, guarded by the per-part INDEX identities. A keystroke
+ * mints a new body part, so the part-keyed memo above misses by design — but the body's own
+ * index comes back by identity when its controls are unchanged, and an identical index tuple
+ * proves the merge cannot differ. One strong slot, bounded.
+ */
+let lastMergedIndexSlot: {
+  readonly indexes: readonly CollectedControlIndex[];
+  readonly index: CollectedControlIndex;
+} | null = null;
+
+function sameIndexes(
+  left: readonly CollectedControlIndex[],
+  right: readonly CollectedControlIndex[]
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) if (left[i] !== right[i]) return false;
+  return true;
+}
+
 export function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): CollectedControlIndex {
   if (parts.length === 1) return collectedControlIndexOf(parts[0]!);
   // Memoized on the BODY part, guarded by the exact part list. Each part's own index is
   // already memoized, but the merge was not, and one layout pass makes several passes over it.
-  //
-  // Not a per-keystroke saving: an edit mints a new body part, so the key misses by design and
-  // the merge runs again at the new revision. What this removes is the repeat within one
-  // revision, which is where a control-heavy template paid the set unions and the
-  // `sort().join()` more than once for the same answer.
   const cached = mergedControlIndexes.get(parts[0]!);
   if (cached && sameParts(cached.parts, parts)) return cached.index;
+
+  const indexes = parts.map((storyPart) => collectedControlIndexOf(storyPart));
+  const slot = lastMergedIndexSlot;
+  if (slot && sameIndexes(slot.indexes, indexes)) {
+    mergedControlIndexes.set(parts[0]!, { parts, index: slot.index });
+    return slot.index;
+  }
 
   const controls: CollectedControl[] = [];
   const neededBlockIds = new Set<string>();
   const neededParagraphIds = new Set<string>();
-  for (const storyPart of parts) {
-    const index = collectedControlIndexOf(storyPart);
+  for (const index of indexes) {
     // A LOOP, not a spread: the control count comes from a file, and spreading an unbounded
     // array into `push` throws `RangeError` once it is large enough.
     for (const control of index.controls) controls.push(control);
@@ -94,6 +115,7 @@ export function collectedControlIndexOverParts(parts: readonly OoxmlPart[]): Col
     neededParagraphIds,
     neededToken,
   };
+  lastMergedIndexSlot = { indexes, index };
   mergedControlIndexes.set(parts[0]!, { parts, index });
   return index;
 }
