@@ -123,8 +123,9 @@ describe('what the package depends on', () => {
     // `npm publish` untouched, so it would reach the tarball and fail the consumer's
     // install. `scripts/__tests__/published-manifests.test.ts` holds the rule for every
     // package; this asserts the range still points at the engine. Why the engine is a PEER
-    // rather than a regular dependency is `package-dependencies.test.ts`, next to this file.
-    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toMatch(/^\^\d+\.\d+\.\d+/);
+    // rather than a regular dependency — and why the range is a same-minor tilde — is
+    // `package-dependencies.test.ts`, next to this file.
+    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toMatch(/^~\d+\.\d+\.\d+/);
   });
 
   test('the engine is the only peer dependency, and it is required', () => {
