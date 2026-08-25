@@ -168,6 +168,23 @@ export interface RevisionAttributionInput {
 }
 
 /**
+ * Whether an attribution cannot serialize, spelled ONCE for every validator.
+ *
+ * `CT_TrackChange` makes `@w:author` required, so an absent or whitespace-only author is a
+ * proposal no reader can attribute or resolve. Callers whose op makes the attribution
+ * OPTIONAL pass `op.revision` and skip the check when it is undefined; callers that require
+ * one refuse undefined themselves. The guard used to be copy-pasted per op, and the copies
+ * drifted: table rows refused a whitespace-only author while text inserts accepted it.
+ */
+export function invalidRevisionAttribution(revision: RevisionAttributionInput): boolean {
+  return (
+    typeof revision.author !== 'string' ||
+    revision.author.trim().length === 0 ||
+    (revision.date !== undefined && typeof revision.date !== 'string')
+  );
+}
+
+/**
  * Every mutation the store accepts, as one JSON-safe discriminated union.
  *
  * The ONLY write path into a document. Each op addresses nodes by id plus UTF-16 offset, which is
@@ -347,6 +364,14 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly offset: number;
       readonly field: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y';
+      /**
+       * Write this as a TRACKED insertion, on the same terms as `insertText`.
+       *
+       * The whole field — every `w:fldChar`, the instruction, the `PAGE_X_OF_Y` literal —
+       * goes into ONE `w:ins`, because the field is one proposal: rejecting it must take
+       * the complete atom back, never leave a `begin` standing without its `end`.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**
@@ -799,6 +824,13 @@ export type TreeDocOp =
       readonly noteKind: 'footnote' | 'endnote';
       readonly paragraphId: string;
       readonly offset: number;
+      /**
+       * Write the citing REFERENCE as a tracked insertion (`w:ins` around the reference
+       * run), on the same terms as `insertText`. The note body itself is not revision
+       * markup: rejecting the reference removes it, and the body cascade sweeps the
+       * orphaned note exactly as an untracked reference deletion does.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**

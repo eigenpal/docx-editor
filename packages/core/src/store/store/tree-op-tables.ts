@@ -54,11 +54,12 @@ import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { readEditableTableTopology, type EditableTableTopology } from './tree-op-table-topology.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
-import type {
-  RevisionAttributionInput,
-  TreeOpEffect,
-  TreeOpRejection,
-  TreeOpResult,
+import {
+  invalidRevisionAttribution,
+  type RevisionAttributionInput,
+  type TreeOpEffect,
+  type TreeOpRejection,
+  type TreeOpResult,
 } from './tree-op-types.ts';
 
 const TR_PR_STRIP = new Set(['ins', 'del', 'trPrChange']);
@@ -692,12 +693,7 @@ export function validateTableRowOp(
   op: TableRowDocOp,
   limits: TableTopologyLimits = DEFAULT_TABLE_TOPOLOGY_LIMITS
 ): TreeOpRejection | null {
-  if (
-    op.revision !== undefined &&
-    (typeof op.revision.author !== 'string' ||
-      op.revision.author.trim().length === 0 ||
-      (op.revision.date !== undefined && typeof op.revision.date !== 'string'))
-  ) {
+  if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
     return 'invalid-property-value';
   }
   const resolved = resolveTableTopologyLimits(limits);

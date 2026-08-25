@@ -13,8 +13,13 @@
 import { relationshipTargetIn, storyParagraphs, storyRootsOf } from '@docx-editor.dev/core/store';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import {
+  hardBreakText,
   hyperlinkTargetOf,
+  isContentRevisionKind,
+  isInstrText,
+  paragraphOffsetIndex,
   type OoxmlNode,
+  type OoxmlParagraphNode,
   type OoxmlPart,
   type StoryScope,
   type TreeDocOp,
@@ -63,38 +68,35 @@ function elementChildren(node: OoxmlNode): readonly OoxmlNode[] {
   return node.kind === 'textValue' ? [] : node.children;
 }
 
-/** Every run under a node, at any depth — a `w:r`, or runs inside a link or inline control. */
-function runsUnder(node: OoxmlNode, depth = 0): OoxmlNode[] {
-  if (node.kind === 'run') return [node];
-  if (node.kind === 'hyperlink') {
-    return node.children.flatMap((child) => runsUnder(child, depth));
-  }
-  if (isContentControl(node)) {
-    if (depth >= MAX_SDT_NESTING) return [];
-    return elementChildren(node)
-      .filter((child) => isContentControlContent(child))
-      .flatMap((content) =>
-        elementChildren(content).flatMap((child) => runsUnder(child, depth + 1))
-      );
-  }
-  return [];
+/** The kinds whose nesting is file-controlled, and therefore depth-capped. */
+function isDepthCountedContainer(node: OoxmlNode): boolean {
+  return node.kind === 'hyperlink' || isContentControl(node) || isContentRevisionKind(node.kind);
 }
 
-function inlineLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
-  if (isContentControl(node)) {
-    let total = 0;
-    for (const child of elementChildren(node)) {
-      if (!isContentControlContent(child)) continue;
-      for (const inner of elementChildren(child)) total += inlineLength(inner);
-    }
-    return total;
-  }
-  let total = 0;
-  for (const child of elementChildren(node)) total += inlineLength(child);
-  return total;
+/**
+ * The LIVE display text under a link: what survives once pending deletions resolve.
+ *
+ * A raw offset slice spans struck runs too, so retargeting a link in suggesting mode made
+ * the popover prefill with the struck old text glued to its replacement. Instruction text
+ * is code, not content, on the same terms `review-reads` states — `isInstrText` covers the
+ * typed kind, the parse-demoted generic, and `w:delInstrText`.
+ */
+function liveTextUnder(node: OoxmlNode, depth = 0): string {
+  if (node.kind === 'textValue') return node.value;
+  if (depth >= MAX_SDT_NESTING) return '';
+  if (node.kind === 'deletedText' || isContentRevisionDeletion(node.kind)) return '';
+  if (isInstrText(node) || node.kind === 'runProperties') return '';
+  if (node.kind === 'tab') return '\t';
+  if (node.kind === 'hardBreak') return hardBreakText(node);
+  const next = isDepthCountedContainer(node) ? depth + 1 : depth;
+  let text = '';
+  for (const child of node.children) text += liveTextUnder(child, next);
+  return text;
+}
+
+/** The two content revision kinds whose content is on its way OUT. */
+function isContentRevisionDeletion(kind: string): boolean {
+  return kind === 'revisionDelete' || kind === 'revisionMoveFrom';
 }
 
 /** Walk inline children in order, recursing through links and typed inline controls. */
@@ -103,13 +105,19 @@ function walkInlineChildren(
   depth: number,
   visit: (child: OoxmlNode) => void
 ): void {
+  if (depth >= MAX_SDT_NESTING) return;
   for (const child of children) {
     if (child.kind === 'hyperlink') {
       visit(child);
       continue;
     }
+    // Transparent, so a link a tracked edit wraps is still found and reported in order.
+    // Depth-counted like every descent here: wrapper nesting is file-derived.
+    if (isContentRevisionKind(child.kind)) {
+      walkInlineChildren(elementChildren(child), depth + 1, visit);
+      continue;
+    }
     if (isContentControl(child)) {
-      if (depth >= MAX_SDT_NESTING) continue;
       for (const inner of elementChildren(child)) {
         if (!isContentControlContent(inner)) continue;
         walkInlineChildren(elementChildren(inner), depth + 1, visit);
@@ -123,35 +131,40 @@ function walkInlineChildren(
 /**
  * Every typed hyperlink in one paragraph, with the offsets it covers.
  *
- * Walks the paragraph's inline children in order, accumulating the same offsets `segmentsOf`
- * produces, so a range reported here is a range the ops accept.
+ * Offsets come from `segmentsOf` — THE offset authority — never from a private length walk.
+ * The lane used to keep its own accumulator, and it disagreed with the model on exactly the
+ * shapes suggesting mode writes: a complex field counted its instruction characters instead
+ * of one atom unit, so every link after a tracked page field read back misplaced, and the
+ * popover opened on the wrong words.
  */
 export function hyperlinksInParagraph(
   part: OoxmlPart,
   paragraphId: string,
-  resolve: (relationshipId: string) => { target: string; external: boolean } | null,
-  textOf: (paragraphId: string) => string
+  resolve: (relationshipId: string) => { target: string; external: boolean } | null
 ): SurfaceHyperlink[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
-  const text = textOf(paragraphId);
+  // Memoized on paragraph identity, with a span per node — links included — so this read
+  // costs one lookup per child instead of a subtree scan against every segment.
+  const offsets = paragraphOffsetIndex(paragraph as OoxmlParagraphNode);
   const found: SurfaceHyperlink[] = [];
-  let offset = 0;
+  // The walk position so far: it is only read for a link whose content owns no offsets.
+  let cursor = 0;
   walkInlineChildren(paragraph.children, 0, (child) => {
-    if (child.kind === 'run') {
-      offset += inlineLength(child);
-      return;
-    }
+    const span = offsets.spanOf(child);
+    if (span) cursor = Math.max(cursor, span.end);
     if (child.kind !== 'hyperlink') return;
-    const start = offset;
-    for (const run of runsUnder(child)) offset += inlineLength(run);
+    // An authored EMPTY link still needs an address, or the popover cannot open on it and
+    // `removeHyperlink` cannot take it out: it reports zero-length at the walk position.
+    const start = span ? span.start : cursor;
+    const end = span ? span.end : cursor;
     const target = hyperlinkTargetOf(child, resolve);
     found.push({
       id: child.id,
       paragraphId,
       start,
-      end: offset,
-      text: text.slice(start, offset),
+      end,
+      text: liveTextUnder(child),
       kind: target.kind,
       href: target.href,
       authored: target.authored,
@@ -246,6 +259,28 @@ export interface HyperlinkOpsDeps {
   readonly refusesWrite: () => boolean;
   /** Active story for reads/writes — body, header/footer, or notes part. */
   storyScope(): StoryScope;
+  /**
+   * Where a replacement for `[start, end)` of one paragraph lands in SUGGESTING mode, or
+   * null outside it.
+   *
+   * Non-null switches link creation over a selection to a tracked replace: the covered
+   * words are struck in place, a fresh copy of the display text is inserted after them as
+   * this author's proposal, and the `w:hyperlink` wraps only that copy. A plain wrap wrote
+   * an unattributed edit — a link Accept/Reject could not act on — into a document whose
+   * author believed everything they did was a proposal.
+   */
+  readonly suggestReplacementOffset?: (
+    paragraphId: string,
+    start: number,
+    end: number
+  ) => number | null;
+  /**
+   * Where an insertion aimed at `offset` actually lands, in EVERY mode: past the deletion
+   * the caret rests in. Both insert appliers relocate beside a `w:del` rather than into
+   * it, so a link wrap built on the raw caret offset sliced the deletion its display text
+   * had landed beyond.
+   */
+  readonly insertionLanding?: (paragraphId: string, offset: number) => number;
   readonly selection: () => SemanticSelection;
   readonly orderedRange: () => { from: SemanticPosition; to: SemanticPosition };
   readonly selectionMark: () => { paragraphId: string; start: number; end: number } | null;
@@ -308,7 +343,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
   const linksIn = (paragraphId: string): SurfaceHyperlink[] => {
     const part = storyPart();
     if (!part) return [];
-    return hyperlinksInParagraph(part, paragraphId, resolve, deps.textOf);
+    return hyperlinksInParagraph(part, paragraphId, resolve);
   };
 
   const linkAtCaret = (): SurfaceHyperlink | null =>
@@ -341,7 +376,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       for (const story of storyRootsOf(part)) {
         for (const paragraph of storyParagraphs(story.root)) {
           const paragraphId = paragraph.id;
-          const found = hyperlinksInParagraph(part, paragraphId, resolveHere, deps.textOf).find(
+          const found = hyperlinksInParagraph(part, paragraphId, resolveHere).find(
             (link) => link.id === linkId
           );
           if (found) return found;
@@ -394,18 +429,92 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       // Ctrl+K on an existing link, and replacing the element would throw away its authored
       // `w:history` / `w:tgtFrame` and its identity.
       if (existing && (collapsed || withinLink(existing, range))) {
-        const ops: TreeDocOp[] = [{ op: 'setHyperlinkTarget', linkId: existing.id, ...target }];
+        const ops: TreeDocOp[] = [];
         // Replacing the display text is a delete plus an insert over the link's own range;
         // both land inside the link because the range is strictly inside it.
         if (input.text !== undefined && input.text !== existing.text) {
-          const replaced = replaceTextOps(
+          if (input.text.length === 0) return false;
+          const landing = deps.suggestReplacementOffset?.(
             existing.paragraphId,
             existing.start,
-            existing.end,
-            input.text
+            existing.end
           );
-          if (!replaced) return false;
-          ops.push(...replaced);
+          // The interior aim must not split a surrogate pair: a link whose display text
+          // begins with an astral character made `start + 1` an illegal offset, the store
+          // refused the transaction, and the rename silently did nothing.
+          const head = deps.textOf(existing.paragraphId).slice(existing.start, existing.start + 2);
+          const interiorAim =
+            existing.start +
+            (head.length === 2 &&
+            head.charCodeAt(0) >= 0xd800 &&
+            head.charCodeAt(0) <= 0xdbff &&
+            head.charCodeAt(1) >= 0xdc00 &&
+            head.charCodeAt(1) <= 0xdfff
+              ? 2
+              : 1);
+          if (
+            landing !== null &&
+            landing !== undefined &&
+            landing > existing.start &&
+            interiorAim < existing.end
+          ) {
+            // SUGGESTING strikes first and lands the replacement after the struck words,
+            // INSIDE the link. The insert aims at an INTERIOR offset of the struck text:
+            // the store's interior rule places it after the deletion inside the container
+            // that holds it, deterministically. Aiming at the link's end boundary relied
+            // on adjacent-deletion adoption, and a pre-existing strike abutting the link's
+            // closing edge joined that adoption, put the copy past the link, and accepting
+            // swept the emptied link — the renamed text came out silently unlinked.
+            ops.push(
+              { op: 'setHyperlinkTarget', linkId: existing.id, ...target },
+              {
+                op: 'deleteText',
+                paragraphId: existing.paragraphId,
+                start: existing.start,
+                end: existing.end,
+              },
+              {
+                op: 'insertText',
+                paragraphId: existing.paragraphId,
+                offset: interiorAim,
+                text: input.text,
+              }
+            );
+          } else if (landing !== null && landing !== undefined) {
+            // No interior offset to aim at: the whole display text is this author's own
+            // pending insertion (the strike retracts it physically and the emptied link is
+            // swept mid-transaction — nothing left to retarget), or it is a single unit.
+            // A copy left bare comes out unlinked once the strikes are accepted — so
+            // propose a FRESH link over the copy, and still retarget the old one in case
+            // a zero-length marker keeps it alive.
+            const styleId = hyperlinkStyleId(deps.session);
+            ops.push(
+              { op: 'setHyperlinkTarget', linkId: existing.id, ...target },
+              ...suggestReplaceOps(existing, landing, input.text),
+              {
+                op: 'insertHyperlink',
+                paragraphId: existing.paragraphId,
+                start: landing,
+                end: landing + input.text.length,
+                ...target,
+                ...(styleId ? { styleId } : {}),
+              }
+            );
+          } else {
+            const replaced = replaceTextOps(
+              existing.paragraphId,
+              existing.start,
+              existing.end,
+              input.text
+            );
+            if (!replaced) return false;
+            ops.push({ op: 'setHyperlinkTarget', linkId: existing.id, ...target }, ...replaced);
+          }
+        } else {
+          // A target-only retarget stays untracked in every mode: OOXML has no revision
+          // element for a hyperlink's target, and Word applies the same edit directly even
+          // with tracking on. The display text is what review can carry.
+          ops.push({ op: 'setHyperlinkTarget', linkId: existing.id, ...target });
         }
         let committed = false;
         deps.commit(
@@ -426,22 +535,44 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       const paragraphId = range.from.paragraphId;
       if (range.to.paragraphId !== paragraphId) return false; // a link cannot span paragraphs
       const ops: TreeDocOp[] = [];
-      const start = range.from.offset;
+      let start = range.from.offset;
       let end = range.to.offset;
 
       if (collapsed) {
         const display = input.text ?? input.url ?? input.anchor ?? '';
         if (display.length === 0) return false;
+        // A caret resting in struck words relocates past the deletion before it inserts —
+        // the rule BOTH insert appliers follow, tracked and untracked — so the wrap must
+        // cover the SAME landing. Raw offsets committed a link that sliced the deletion
+        // the display text had actually landed beyond.
+        start = deps.insertionLanding?.(paragraphId, start) ?? start;
         ops.push({ op: 'insertText', paragraphId, offset: start, text: display });
         end = start + display.length;
-      } else if (
-        input.text !== undefined &&
-        input.text !== deps.textOf(paragraphId).slice(start, end)
-      ) {
-        const replaced = replaceTextOps(paragraphId, start, end, input.text);
-        if (!replaced) return false;
-        ops.push(...replaced);
-        end = start + input.text.length;
+      } else {
+        const landing = deps.suggestReplacementOffset?.(paragraphId, start, end);
+        if (landing !== null && landing !== undefined) {
+          // SUGGESTING proposes the link as a replacement, because a bare wrap of somebody
+          // else's words is an edit no review card can carry. The selection is struck in
+          // place (it stays, as every suggested deletion does), a copy of the display text
+          // lands after it as this author's tracked insertion — Word's struck-then-
+          // replacement reading order — and the `w:hyperlink` wraps only that copy.
+          // Rejecting the pair restores the original words and sweeps the emptied link.
+          // The attribution itself rides in on the surface's op interception, the same
+          // lane every keystroke takes.
+          const display = input.text ?? deps.textOf(paragraphId).slice(start, end);
+          if (display.length === 0) return false;
+          ops.push(...suggestReplaceOps({ paragraphId, start, end }, landing, display));
+          start = landing;
+          end = landing + display.length;
+        } else if (
+          input.text !== undefined &&
+          input.text !== deps.textOf(paragraphId).slice(start, end)
+        ) {
+          const replaced = replaceTextOps(paragraphId, start, end, input.text);
+          if (!replaced) return false;
+          ops.push(...replaced);
+          end = start + input.text.length;
+        }
       }
       if (end <= start) return false;
       // Word marks a new link's text with the `Hyperlink` CHARACTER STYLE, and without it
@@ -528,6 +659,25 @@ function withinLink(
     range.from.offset >= link.start &&
     range.to.offset <= link.end
   );
+}
+
+/**
+ * The suggesting-mode lowering of "replace `[start, end)` with `text`", spelled ONCE.
+ *
+ * Strike first — the struck words stay in place, as every suggested deletion does — then
+ * land the copy at the landing `suggestReplacementOffset` computed, where the tracked-insert
+ * core adopts the fresh deletion and follows it into the link that holds it. The reverse
+ * order put the copy at the range start, which the core places beside a link's boundary.
+ */
+function suggestReplaceOps(
+  at: { readonly paragraphId: string; readonly start: number; readonly end: number },
+  landing: number,
+  text: string
+): TreeDocOp[] {
+  return [
+    { op: 'deleteText', paragraphId: at.paragraphId, start: at.start, end: at.end },
+    { op: 'insertText', paragraphId: at.paragraphId, offset: landing, text },
+  ];
 }
 
 /**

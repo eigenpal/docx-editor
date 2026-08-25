@@ -270,6 +270,13 @@ export function validContentControlContentChildren(children: readonly OoxmlNode[
       // content control — legal markup the schema has always allowed.
       child.kind === 'commentRangeStart' ||
       child.kind === 'commentRangeEnd' ||
+      // Revision wrappers belong to `EG_RunLevelElts`, another member of the same content
+      // groups. Refusing them made a tracked strike of a control's text — markup Word
+      // writes with tracking on — invalidate the whole part.
+      child.kind === 'revisionInsert' ||
+      child.kind === 'revisionDelete' ||
+      child.kind === 'revisionMoveFrom' ||
+      child.kind === 'revisionMoveTo' ||
       child.kind === 'generic'
   );
 }

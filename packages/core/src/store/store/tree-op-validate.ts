@@ -69,6 +69,7 @@ import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
   ACCEPTED_RUN_PROPERTIES,
   TREE_DOC_OP_KINDS,
+  invalidRevisionAttribution,
   type OoxmlProperty,
   type TreeDocOp,
   type TreeOpRejection,
@@ -548,7 +549,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return null;
     }
     case 'proposeParagraphMerge': {
-      if (typeof op.revision?.author !== 'string' || op.revision.author.length === 0) {
+      if (op.revision === undefined || invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
       return null;
@@ -556,7 +557,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     case 'setParagraphMarkRevision': {
       if (op.kind !== 'ins' && op.kind !== 'del') return 'invalid-range';
       // `CT_TrackChange` makes `@w:author` required, so a mark with none is invalid XML.
-      if (typeof op.revision?.author !== 'string' || op.revision.author.length === 0) {
+      if (op.revision === undefined || invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
       return null;
@@ -644,10 +645,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       }
       // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
       // would serialize a proposal no reader can attribute or resolve.
-      if (
-        op.revision !== undefined &&
-        (typeof op.revision.author !== 'string' || op.revision.author.length === 0)
-      ) {
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
@@ -665,6 +663,11 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         op.field !== 'PAGE_X_OF_Y'
       ) {
         return 'invalidArgs';
+      }
+      // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
+      // would serialize a proposal no reader can attribute or resolve.
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
+        return 'invalid-property-value';
       }
       return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }

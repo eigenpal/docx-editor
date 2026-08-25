@@ -34,10 +34,13 @@ import {
   applyDeleteTracked,
   applyInsertTracked,
   applyInsertTrackedElement,
+  applyInsertTrackedElements,
+} from './tree-op-tracked.ts';
+import {
   applyParagraphMarkRevision,
   applyProposeParagraphMerge,
   retractsOwnParagraphMark,
-} from './tree-op-tracked.ts';
+} from './tree-op-tracked-marks.ts';
 import {
   isValidParaId,
   mintParaId,
@@ -90,7 +93,7 @@ import {
   applySetSectionMark,
   applySetSectionProperties,
 } from './tree-op-section.ts';
-import { pageFieldContentBuilders } from './tree-op-fields.ts';
+import { pageFieldContentBuilders, pageFieldModelLength } from './tree-op-fields.ts';
 import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
 import {
   applyRemoveContentControl as applyAutomationRemoveContentControl,
@@ -418,14 +421,24 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         options,
         nextId
       );
-    case 'insertPageField':
-      return applyInsertContent(
-        part,
-        paragraph,
-        op.offset,
-        pageFieldContentBuilders(op.field),
-        options
-      );
+    case 'insertPageField': {
+      // ONE builder list per field, shared by the tracked and untracked arms — the same
+      // rule the tab/break ops state, so suggesting mode cannot insert a different field
+      // shape than edit mode for the same command.
+      const builders = pageFieldContentBuilders(op.field);
+      if (op.revision) {
+        return applyInsertTrackedElements(
+          part,
+          paragraph,
+          op.offset,
+          (mint) => builders.map((build) => build(mint)),
+          pageFieldModelLength(op.field),
+          op.revision,
+          options
+        );
+      }
+      return applyInsertContent(part, paragraph, op.offset, builders, options);
+    }
     case 'deleteText':
       if (op.revision) {
         return applyDeleteTracked(part, paragraph, op.start, op.end, op.revision, options);
@@ -1338,7 +1351,14 @@ function hyperlinkElement(
  * the run's formatting entirely.
  */
 function withCharacterStyle(node: OoxmlNode, styleId: string, nextId: () => string): OoxmlNode {
-  if (node.kind === 'hyperlink') {
+  // A revision wrapper is not a run: the style goes on the runs INSIDE it. Marking the
+  // wrapper itself minted a `w:rPr` child on `w:ins` — a shape `CT_RunTrackChange` has no
+  // room for — the moment a link was applied over tracked display text, which is every
+  // link created in suggesting mode.
+  if (
+    node.kind !== 'textValue' &&
+    (node.kind === 'hyperlink' || isContentRevisionKind(node.kind))
+  ) {
     return withChildren(
       node,
       node.children.map((child) => withCharacterStyle(child, styleId, nextId)),

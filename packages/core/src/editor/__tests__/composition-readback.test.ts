@@ -30,6 +30,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -389,6 +390,67 @@ describe('#383 a composition begun over a range spanning two paragraphs', () => 
       repaintParagraphAs(container, id, `${COMPOSED} beta`);
       pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
       expect(surface.session.bodyText()).toBe(`${COMPOSED} beta`);
+    });
+  });
+});
+
+// AN ARMED FORMAT SURVIVES A COMPOSED REPLACEMENT (#463).
+//
+// The IME readback lands a replacement at `replacementOffset(from, to)`, which relocates
+// past struck words and subtracts this author's own retracted insertion. The armed caret
+// format used to relocate by `positionPastDeletion` alone, so whenever the composition
+// REPLACED anything — which is how reconversion and kana-to-kanji commits arrive — the two
+// positions disagreed by construction and the armed format silently dropped.
+describe('#463 an armed format rides a composed replacement', () => {
+  function withAuthoredSurface(
+    bytes: Uint8Array,
+    mode: 'edit' | 'suggest',
+    run: (surface: PaginatedSurface, container: HTMLElement) => void
+  ): void {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(container, bytes, { scale: 1, author: 'Ada Lovelace' });
+    if (!opened.ok) throw new Error(opened.reason);
+    try {
+      opened.surface.setEditingMode(mode);
+      run(opened.surface, container);
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+      document.getSelection()?.removeAllRanges();
+    }
+  }
+
+  test('in edit mode, bold armed at the caret styles the composed replacement', () => {
+    withAuthoredSurface(docx(p('abc')), 'edit', (surface, container) => {
+      const id = surface.session.paragraphIds()[0]!;
+      caretAt(surface, id, 3);
+      surface.toggleRunProperty('b');
+      compose(container, (scope) => repaintParagraphAs(scope, id, 'X'));
+      expect(surface.state().lastRejection).toBeNull();
+      expect(surface.session.bodyText()).toBe('X');
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(/<w:r><w:rPr><w:b\/><\/w:rPr><w:t[^>]*>X<\/w:t><\/w:r>/);
+    });
+  });
+
+  test('in suggesting mode, replacing your OWN pending text keeps the armed format', () => {
+    withAuthoredSurface(docx('<w:p/>'), 'suggest', (surface, container) => {
+      const id = surface.session.paragraphIds()[0]!;
+      caretAt(surface, id, 0);
+      surface.type('abc');
+      // Land the buffered burst so the composition diffs against the committed model.
+      surface.layout();
+      surface.toggleRunProperty('b');
+      compose(container, (scope) => repaintParagraphAs(scope, id, 'X'));
+      expect(surface.state().lastRejection).toBeNull();
+      // The author's own pending insertion retracted; the composed text replaced it.
+      expect(surface.session.bodyText()).toBe('X');
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(
+        /<w:ins[^>]*><w:r><w:rPr><w:b\/><\/w:rPr><w:t[^>]*>X<\/w:t><\/w:r><\/w:ins>/
+      );
+      expect(xml).not.toContain('abc');
     });
   });
 });

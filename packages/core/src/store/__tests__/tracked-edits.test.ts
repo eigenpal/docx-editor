@@ -798,3 +798,178 @@ describe('an atomic field survives a tracked edit whole', () => {
     expect(serialized).toContain('w:instr=" PAGE "');
   });
 });
+
+// A TRACKED PAGE FIELD IS ONE PROPOSAL. The whole atom — begin, instruction, separator,
+// end — goes into a single `w:ins`, so rejecting it takes the complete field back rather
+// than leaving a `begin` no reader can resolve. Untracked, `insertPageField` wrote an
+// unattributed field in suggesting mode: an edit the review pane could not act on.
+describe('a tracked page field', () => {
+  test('the complete atom lands inside one w:ins', () => {
+    const before = part('<w:p><w:r><w:t>Page </w:t></w:r></w:p>');
+    const after = apply(before, {
+      op: 'insertPageField',
+      paragraphId: paragraphId(before),
+      offset: 5,
+      field: 'PAGE',
+      revision: ADA,
+    });
+    const out = xml(after);
+    expect(out).toMatch(/<w:ins[^>]*w:author="Ada Lovelace"[^>]*>/);
+    expect(out.match(/<w:ins /g)).toHaveLength(1);
+    // Every field node is inside the wrapper: nothing of the atom precedes it or escapes it.
+    const wrapper = out.slice(out.indexOf('<w:ins '), out.indexOf('</w:ins>'));
+    expect(wrapper).toContain('w:fldCharType="begin"');
+    expect(wrapper).toContain(' PAGE ');
+    expect(wrapper).toContain('w:fldCharType="separate"');
+    expect(wrapper).toContain('w:fldCharType="end"');
+  });
+
+  test('PAGE_X_OF_Y keeps both fields and the literal in the same proposal', () => {
+    const before = part('<w:p><w:r><w:t>footer</w:t></w:r></w:p>');
+    const after = apply(before, {
+      op: 'insertPageField',
+      paragraphId: paragraphId(before),
+      offset: 6,
+      field: 'PAGE_X_OF_Y',
+      revision: ADA,
+    });
+    const out = xml(after);
+    expect(out.match(/<w:ins /g)).toHaveLength(1);
+    const wrapper = out.slice(out.indexOf('<w:ins '), out.indexOf('</w:ins>'));
+    expect(wrapper).toContain(' PAGE ');
+    expect(wrapper).toContain(' NUMPAGES ');
+    expect(wrapper).toContain('> of <');
+  });
+
+  test('rejecting the proposal removes the whole atom; accepting unwraps it', () => {
+    const before = part('<w:p><w:r><w:t>Page </w:t></w:r></w:p>');
+    const proposed = apply(before, {
+      op: 'insertPageField',
+      paragraphId: paragraphId(before),
+      offset: 5,
+      field: 'PAGE',
+      revision: ADA,
+    });
+    const rejected = xml(apply(proposed, { op: 'rejectAllRevisions' }));
+    expect(rejected).not.toContain('fldChar');
+    // `<w:ins ` with the space: `<w:instrText` begins with the same characters.
+    expect(rejected).not.toContain('<w:ins ');
+    const accepted = xml(apply(proposed, { op: 'acceptAllRevisions' }));
+    expect(accepted).toContain('w:fldCharType="begin"');
+    expect(accepted).toContain('w:fldCharType="end"');
+    expect(accepted).not.toContain('<w:ins ');
+  });
+
+  test('a replacement beside a deletion INSIDE another author’s w:ins stays outside it', () => {
+    // The replacement follows its deletion into a HYPERLINK, never into somebody else's
+    // proposal: appended inside their `w:ins`, rejecting their revision deleted this
+    // author's replacement with it.
+    const before = part(
+      '<w:p><w:ins w:id="1" w:author="Grace Hopper" w:date="2026-01-02T03:04:05Z">' +
+        '<w:r><w:t>hello</w:t></w:r></w:ins></w:p>'
+    );
+    const struck = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 2,
+      end: 5,
+      revision: ADA,
+    });
+    const replaced = apply(struck, {
+      op: 'insertText',
+      paragraphId: paragraphId(struck),
+      offset: 5,
+      text: 'XYZ',
+      revision: ADA,
+    });
+    const rejected = apply(replaced, {
+      op: 'rejectRevision',
+      revision: { id: '1', author: 'Grace Hopper', date: '2026-01-02T03:04:05Z' },
+    });
+    // Grace's insertion goes; Ada's replacement survives it.
+    const out = xml(rejected);
+    expect(out).toContain('XYZ');
+    expect(out).not.toContain('hello');
+  });
+
+  test('a replacement whose strike spills OUTSIDE the link lands outside it too', () => {
+    // The replacement stands in for the whole struck range, most of which was never
+    // linked. Following the deletion into the link turned "word link" replaced by "New"
+    // into linked text nobody asked for.
+    const before = part(
+      '<w:p><w:r><w:t xml:space="preserve">word </w:t></w:r>' +
+        '<w:hyperlink w:anchor="x"><w:r><w:t>link</w:t></w:r></w:hyperlink>' +
+        '<w:r><w:t xml:space="preserve"> tail</w:t></w:r></w:p>'
+    );
+    const struck = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 0,
+      end: 9,
+      revision: ADA,
+    });
+    const replaced = apply(struck, {
+      op: 'insertText',
+      paragraphId: paragraphId(struck),
+      offset: 9,
+      text: 'New',
+      revision: ADA,
+    });
+    const out = xml(replaced);
+    expect(out).toMatch(/<\/w:hyperlink><w:ins[^>]*><w:r><w:t[^>]*>New<\/w:t>/);
+  });
+
+  test('a tracked strike reaches INSIDE an inline content control', () => {
+    // `w:sdtContent` takes `EG_PContent`, `w:del` included. Passing the control through
+    // whole made a suggested deletion over its text a silent no-op: the transaction
+    // committed and nothing was struck.
+    const before = part(
+      '<w:p><w:sdt><w:sdtPr><w:tag w:val="t1"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>inside</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const struck = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 0,
+      end: 6,
+      revision: ADA,
+    });
+    const out = xml(struck);
+    expect(out).toMatch(
+      /<w:sdtContent><w:del[^>]*><w:r><w:delText[^>]*>inside<\/w:delText><\/w:r><\/w:del><\/w:sdtContent>/
+    );
+  });
+
+  test('retracting a control’s only pending content keeps the w:sdtContent element', () => {
+    // A control is document structure, not a revision wrapper: dropping its emptied
+    // content element left a `w:sdt` husk with properties and nowhere to type back into.
+    const before = part(
+      '<w:p><w:sdt><w:sdtPr><w:tag w:val="t1"/></w:sdtPr><w:sdtContent>' +
+        '<w:ins w:id="9" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+        '<w:r><w:t>mine</w:t></w:r></w:ins></w:sdtContent></w:sdt></w:p>'
+    );
+    const after = apply(before, {
+      op: 'deleteText',
+      paragraphId: paragraphId(before),
+      start: 0,
+      end: 4,
+      revision: ADA,
+    });
+    const out = xml(after);
+    expect(out).toContain('<w:sdtContent/>');
+    expect(out).not.toContain('mine');
+  });
+
+  test('an empty attributed author is refused, as every tracked insert is', () => {
+    const before = part('<w:p><w:r><w:t>Page </w:t></w:r></w:p>');
+    const result = applyTreeOp(before, {
+      op: 'insertPageField',
+      paragraphId: paragraphId(before),
+      offset: 5,
+      field: 'PAGE',
+      revision: { author: '' },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('invalid-property-value');
+  });
+});

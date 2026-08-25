@@ -2130,6 +2130,7 @@ export type NoteLifecycleOp = {
     readonly offset: number;
     readonly op: 'insertNote';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly noteId: number;
     readonly noteKind: NoteKind;
@@ -2165,7 +2166,7 @@ export interface NoteLifecycleOptions {
 }
 
 // @public
-export type NoteLifecycleRejection = 'invalidArgs' | 'tree-invariant';
+export type NoteLifecycleRejection = 'invalidArgs' | 'invalid-property-value' | 'tree-invariant';
 
 // @public
 export type NoteLifecycleResult = {
@@ -4002,6 +4003,7 @@ export type TreeDocOp = {
     readonly offset: number;
     readonly op: 'insertPageField';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly level: number;
     readonly op: 'setListLevel';
@@ -4212,6 +4214,7 @@ export type TreeDocOp = {
     readonly offset: number;
     readonly op: 'insertNote';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly noteId: number;
     readonly noteKind: 'footnote' | 'endnote';

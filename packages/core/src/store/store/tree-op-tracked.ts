@@ -33,11 +33,7 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import {
-  createNodeIdAllocator,
-  parentNodeOf as parentOf,
-  replaceChildren,
-} from '../package/ooxml-edit.ts';
+import { createNodeIdAllocator, replaceChildren } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
@@ -55,7 +51,7 @@ function attr(localName: string, value: string) {
   };
 }
 
-function build(
+export function build(
   id: string,
   kind: OoxmlElement['kind'],
   localName: string,
@@ -74,7 +70,8 @@ function build(
   } as OoxmlElement;
 }
 
-function revisionAttributes(id: string, revision: RevisionAttributionInput) {
+/** The `CT_TrackChange` attribute triple, spelled once for every wrapper a tracked edit writes. */
+export function revisionAttributes(id: string, revision: RevisionAttributionInput) {
   return [
     attr('id', id),
     attr('author', revision.author),
@@ -120,7 +117,10 @@ function copy(mint: () => string, node: OoxmlNode): OoxmlNode {
  * minute apart are still one thought, two edits a month apart are not one revision. Two
  * dateless wrappers join — a file written with date stamping off has nothing else to go on.
  */
-function sameEditingMoment(existing: string | undefined, current: string | undefined): boolean {
+export function sameEditingMoment(
+  existing: string | undefined,
+  current: string | undefined
+): boolean {
   if (existing === undefined || current === undefined) return existing === current;
   const from = Date.parse(existing);
   const to = Date.parse(current);
@@ -146,6 +146,14 @@ function deletionId(node: OoxmlNode): string | null {
       (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'id'
     )?.value ?? null
   );
+}
+
+/** How many deletion wrappers with this `@w:id` live under the node, itself included. */
+function deletionWrappersWithId(node: OoxmlNode, id: string): number {
+  if (node.kind === 'textValue') return 0;
+  let count = deletionId(node) === id ? 1 : 0;
+  for (const child of node.children) count += deletionWrappersWithId(child, id);
+  return count;
 }
 
 interface Cursor {
@@ -202,7 +210,7 @@ function holdsAtomBegin(node: OoxmlNode, atoms: AtomNodes): boolean {
 }
 
 /**
- * What a tracked insertion places: run text, or one run-level element (a tab or a break).
+ * What a tracked insertion places: run text, run-level elements, or one complete run.
  *
  * `length` is the payload's size in MODEL units, on `segmentsOf`'s terms — `text.length`
  * for characters, one for a tab or a break — so the extend-own-insertion path can step the
@@ -210,7 +218,18 @@ function holdsAtomBegin(node: OoxmlNode, atoms: AtomNodes): boolean {
  */
 interface TrackedInsertionPayload {
   readonly length: number;
-  readonly nodes: (mint: () => string) => readonly OoxmlNode[];
+  /**
+   * Run CHILDREN — text, a tab, a field's nodes — that inherit the host run's `w:rPr`:
+   * placed in one run under the wrapper, or spliced into the author's own run when
+   * extending. Null for a payload that is a complete run of its own.
+   */
+  readonly nodes: ((mint: () => string) => readonly OoxmlNode[]) | null;
+  /**
+   * A complete run carrying its OWN `w:rPr` — a note citation, whose reference style must
+   * not be replaced by the formatting at the caret. Placed as a sibling run: alone under
+   * the wrapper, or beside the split halves when extending the author's own `w:ins`.
+   */
+  readonly run?: (mint: () => string) => OoxmlNode;
 }
 
 /**
@@ -254,11 +273,67 @@ export function applyInsertTrackedElement(
   revision: RevisionAttributionInput,
   options?: { readonly deferValidation?: boolean }
 ): TreeOpResult {
+  return applyInsertTrackedElements(
+    part,
+    paragraph,
+    offset,
+    (mint) => [element(mint)],
+    1,
+    revision,
+    options
+  );
+}
+
+/**
+ * Insert a MULTI-NODE run payload — a complete complex field — as ONE tracked insertion.
+ *
+ * The nodes share one run inside one `w:ins`, exactly the grouping the untracked
+ * `insertPageField` writes, so the whole atom is one proposal: rejecting it takes the
+ * `begin`, instruction, separator and `end` back together, never leaving a field no reader
+ * can resolve. `length` is the payload's size in MODEL units on `segmentsOf`'s terms — one
+ * per field atom plus any literal text between them.
+ */
+export function applyInsertTrackedElements(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  elements: (mint: () => string) => readonly OoxmlNode[],
+  length: number,
+  revision: RevisionAttributionInput,
+  options?: { readonly deferValidation?: boolean }
+): TreeOpResult {
   return applyTrackedInsertion(
     part,
     paragraph,
     offset,
-    { length: 1, nodes: (mint) => [element(mint)] },
+    { length, nodes: elements },
+    revision,
+    options
+  );
+}
+
+/**
+ * Insert one COMPLETE run — a note citation — at `offset` as a tracked insertion.
+ *
+ * The run arrives with its own `w:rPr` (the reference style) and keeps it: it is placed as
+ * a sibling run under the wrapper, never spliced into a run whose formatting would restyle
+ * it. Everything else — adjacent-deletion adoption, extending the author's own `w:ins`,
+ * relocation past struck words — is the same placement typed text follows, which is what
+ * lets a citation inserted over a selection resolve as ONE reviewable replacement.
+ */
+export function applyInsertTrackedRun(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  run: (mint: () => string) => OoxmlNode,
+  revision: RevisionAttributionInput,
+  options?: { readonly deferValidation?: boolean }
+): TreeOpResult {
+  return applyTrackedInsertion(
+    part,
+    paragraph,
+    offset,
+    { length: 1, nodes: null, run },
     revision,
     options
   );
@@ -307,10 +382,26 @@ function applyTrackedInsertion(
   // adjacent deletion's id — every replace-typing keystroke — would pay that walk for nothing.
   const insertionId = replaced?.id ?? nextRevisionId(part)();
 
+  // Counted lazily and ONCE: the paragraph-wide count only matters when a container holds
+  // part of the adopted deletion, and it cannot change during the rebuild.
+  let replacedWrapperTotal: number | null = null;
+  const wrappersWithReplacedId = (): number => {
+    if (replaced === null) return 0;
+    replacedWrapperTotal ??= paragraph.children.reduce(
+      (count, child) => count + deletionWrappersWithId(child, replaced.id),
+      0
+    );
+    return replacedWrapperTotal;
+  };
+
   const wrap = (properties: readonly OoxmlNode[]): OoxmlNode =>
-    build(mint(), 'revisionInsert', 'ins', revisionAttributes(insertionId, attribution), [
-      runOf(mint, [...properties, ...payload.nodes(mint)]),
-    ]);
+    build(
+      mint(),
+      'revisionInsert',
+      'ins',
+      revisionAttributes(insertionId, attribution),
+      payload.nodes ? [runOf(mint, [...properties, ...payload.nodes(mint)])] : [payload.run!(mint)]
+    );
 
   const rebuild = (nodes: readonly OoxmlNode[], stack: readonly OoxmlNode[]): OoxmlNode[] => {
     const out: OoxmlNode[] = [];
@@ -327,6 +418,14 @@ function applyTrackedInsertion(
       // made, a list item, a styled blank line — was rejected, so suggesting mode looked
       // dead from the moment the caret landed in a new paragraph.
       if (node.kind !== 'textValue' && node.kind === 'paragraphProperties') {
+        out.push(node);
+        continue;
+      }
+      // A content control's property containers are the same shape: `CT_SdtRun` requires
+      // `w:sdtPr`/`w:sdtEndPr` ahead of `w:sdtContent`, they measure nothing, and the
+      // boundary rule below would otherwise put an insertion aimed at the control's first
+      // character in FRONT of them.
+      if (node.kind === 'contentControlProperties' || node.kind === 'contentControlEndProperties') {
         out.push(node);
         continue;
       }
@@ -359,6 +458,8 @@ function applyTrackedInsertion(
       const container =
         node.kind !== 'textValue' &&
         (node.kind === 'hyperlink' ||
+          node.kind === 'contentControl' ||
+          node.kind === 'contentControlContent' ||
           node.kind === 'revisionInsert' ||
           node.kind === 'revisionMoveTo');
       // Same MOMENT as well as the same author — the deletion path already gates on this.
@@ -368,11 +469,44 @@ function applyTrackedInsertion(
         container &&
         insertionAuthor([node]) === revision.author &&
         sameEditingMoment(revisionDateOf(node), revision.date);
+      // THE REPLACEMENT FOLLOWS THE DELETION IT REPLACES — into a link or a control, and
+      // only when the WHOLE deletion lives there. Replacing a link's display text strikes
+      // runs INSIDE the `w:hyperlink`, and the insertion adopting that deletion aims at
+      // the link's boundary: placed beside the link, accepting the pair emptied the link,
+      // the sweep removed it, and the accepted text came out silently unlinked. Two rules
+      // narrow it:
+      //   - a revision wrapper is NOT followed into: the same deletion can sit inside
+      //     another author's `w:ins`, and appending there would put this author's words
+      //     inside their proposal, where rejecting theirs deletes these;
+      //   - a deletion that also has pieces OUTSIDE the container is not followed either —
+      //     a replacement for "plain words plus the link's text" stands in for the whole
+      //     range, most of which was never linked.
+      // Checked lazily — the subtree scans run only for an in-bounds container while an
+      // adopted deletion exists at all.
+      const followable =
+        container &&
+        (node.kind === 'hyperlink' ||
+          node.kind === 'contentControl' ||
+          node.kind === 'contentControlContent');
+      const wrappersInside =
+        followable && replaced !== null && offset >= start && offset <= end
+          ? deletionWrappersWithId(node, replaced.id)
+          : 0;
+      const holdsReplaced = wrappersInside > 0 && wrappersInside === wrappersWithReplacedId();
       if (
         container &&
-        ((offset > start && offset < end) || (ownInsertion && offset >= start && offset <= end))
+        ((offset > start && offset < end) ||
+          ((ownInsertion || holdsReplaced) && offset >= start && offset <= end))
       ) {
-        out.push({ ...node, children: rebuild(node.children, [...stack, node]) } as OoxmlNode);
+        const rebuilt = rebuild(node.children, [...stack, node]);
+        // The adopted deletion ends exactly where the container does, so the inner walk
+        // comes back unplaced. The replacement still belongs beside the struck words,
+        // INSIDE the container that holds them.
+        if (!placed && holdsReplaced && offset === cursor.offset) {
+          rebuilt.push(wrap([]));
+          placed = true;
+        }
+        out.push({ ...node, children: rebuilt } as OoxmlNode);
         continue;
       }
 
@@ -435,7 +569,7 @@ function applyTrackedInsertion(
         // Inside our OWN pending insertion: extend it. A second `w:ins` nested in the first
         // says two people proposed the same words, which is not what happened.
         if (own === revision.author) {
-          out.push(splitRunAndInsert(mint, offsets, node, offset - start, payload.nodes(mint)));
+          out.push(...splitRunAndInsert(mint, offsets, node, offset - start, payload));
           placed = true;
           cursor.offset = end + payload.length;
           continue;
@@ -510,18 +644,28 @@ function splitRunAndInsert(
   offsets: ParagraphOffsetIndex,
   run: OoxmlNode,
   local: number,
-  nodes: readonly OoxmlNode[]
-): OoxmlNode {
+  payload: TrackedInsertionPayload
+): OoxmlNode[] {
   const [head, tail] = splitRun(mint, offsets, run, local);
-  const content = [
-    ...childrenOf(head).filter((child) => !isRunProperties(child)),
-    ...nodes,
-    ...childrenOf(tail).filter((child) => !isRunProperties(child)),
+  if (payload.nodes) {
+    const content = [
+      ...childrenOf(head).filter((child) => !isRunProperties(child)),
+      ...payload.nodes(mint),
+      ...childrenOf(tail).filter((child) => !isRunProperties(child)),
+    ];
+    const properties = childrenOf(run)
+      .filter(isRunProperties)
+      .map((child) => copy(mint, child));
+    return [runOf(mint, [...properties, ...coalesced(mint, content)])];
+  }
+  // A whole-run payload keeps its OWN `w:rPr`, so it goes between the halves as a sibling
+  // run inside the same wrapper — spliced into the host run, the citation would take on
+  // whatever formatting the caret sits in and lose its reference style.
+  return [
+    ...(contentOf(head).length > 0 ? [head] : []),
+    payload.run!(mint),
+    ...(contentOf(tail).length > 0 ? [tail] : []),
   ];
-  const properties = childrenOf(run)
-    .filter(isRunProperties)
-    .map((child) => copy(mint, child));
-  return runOf(mint, [...properties, ...coalesced(mint, content)]);
 }
 
 /**
@@ -554,7 +698,7 @@ function coalesced(mint: () => string, nodes: readonly OoxmlNode[]): OoxmlNode[]
 }
 
 /** A node's children, or none for a text value — the union's only childless member. */
-function childrenOf(node: OoxmlNode): readonly OoxmlNode[] {
+export function childrenOf(node: OoxmlNode): readonly OoxmlNode[] {
   return node.kind === 'textValue' ? [] : node.children;
 }
 
@@ -648,15 +792,27 @@ export function applyDeleteTracked(
       if (
         node.kind !== 'textValue' &&
         (node.kind === 'hyperlink' ||
+          // A content control is a run container too (`w:sdtContent` takes `EG_PContent`,
+          // `w:del` included). Passing it through whole made a suggested deletion over its
+          // text a silent NO-OP: the transaction committed, nothing was struck, and the
+          // reviewer's replacement landed beside words that were never proposed away.
+          node.kind === 'contentControl' ||
+          node.kind === 'contentControlContent' ||
           node.kind === 'revisionInsert' ||
           node.kind === 'revisionDelete' ||
           node.kind === 'revisionMoveFrom' ||
           node.kind === 'revisionMoveTo')
       ) {
         const rebuilt = rebuild(node.children, [...stack, node]);
-        // A wrapper emptied by the removal of our own insertion goes with it; one that still
-        // holds content stays, because it is still saying something about that content.
-        if (rebuilt.length > 0) out.push({ ...node, children: rebuilt } as OoxmlNode);
+        // A wrapper emptied by the removal of our own insertion goes with it; one that
+        // still holds content stays, because it is still saying something about that
+        // content. A CONTROL is not a wrapper: it is document structure the user placed,
+        // so it keeps its (possibly emptied) `w:sdtContent` — dropping it left a `w:sdt`
+        // husk with properties and no content element, a shape Word never writes.
+        const structural = node.kind === 'contentControl' || node.kind === 'contentControlContent';
+        if (rebuilt.length > 0 || structural) {
+          out.push({ ...node, children: rebuilt } as OoxmlNode);
+        }
         continue;
       }
 
@@ -912,207 +1068,11 @@ function toDeleted(mint: () => string, run: OoxmlNode): OoxmlNode {
   return { ...run, id: mint(), children } as OoxmlNode;
 }
 
-/**
- * Stamp a paragraph's own MARK as inserted or deleted.
- *
- * `w:pPr/w:rPr/w:ins|w:del` (§17.13.5, `EG_ParaRPrTrackChanges`) is how Word records a split
- * or a merge: the mark is the pilcrow, and the pilcrow is what the edit added or removed.
- * There is no text to strike, which is why this is the only tracked edit with no run in it.
- *
- * SPLIT stamps `w:ins` on the FIRST paragraph — its mark is the one that did not exist
- * before. MERGE stamps `w:del` on the first as well: the mark being proposed for removal is
- * the one between the two paragraphs, which belongs to the first. Rejecting the insert and
- * accepting the delete both run the paragraph into the one after it, which is why
- * `resolveRevisions` treats them the same way.
- *
- * An existing mark of the SAME kind and author is joined rather than replaced, so a run of
- * Enters is one decision and one Accept.
- */
-export function applyParagraphMarkRevision(
-  part: OoxmlPart,
-  paragraph: OoxmlParagraphNode,
-  kind: 'ins' | 'del',
-  revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
-): TreeOpResult {
-  const mint = createNodeIdAllocator(part);
-  const effect: TreeOpEffect = {
-    dirty: [paragraph.id],
-    created: [],
-    deleted: [],
-    dependencyKeys: TEXT_DEPS,
-    impact: 'flow-structural',
-  };
-
-  const existing = paragraphMarkRevisionOf(paragraph, kind);
-  if (existing && existing.author === revision.author) {
-    // Already proposed by this author. A second Enter at the same mark is not a second
-    // decision, and stamping again would mint an id nothing else refers to.
-    return fromEdit({ ok: true, part }, effect);
-  }
-
-  const id = adjacentParagraphMarkId(part, paragraph, kind, revision) ?? nextRevisionId(part)();
-  const mark = build(mint(), 'generic', kind, revisionAttributes(id, revision), []);
-
-  const properties = childrenOf(paragraph).find((child) => child.kind === 'paragraphProperties');
-  const rest = childrenOf(paragraph).filter((child) => child.kind !== 'paragraphProperties');
-
-  // `w:rPr` sits near the END of `CT_PPr` — after the base properties (`w:jc`, `w:spacing`,
-  // `w:numPr`, …) and before `w:sectPr`/`w:pPrChange`, which are the only two that may
-  // follow it. Placing it first looked tidier and produced a `w:pPr` the tree invariants
-  // reject, which is the invariant reading the schema correctly.
-  const previousRPr = properties
-    ? childrenOf(properties).find((child) => isWmlNamed(child, 'rPr'))
-    : undefined;
-  // Only the SAME-KIND mark is replaced. `EG_ParaRPrTrackChanges` is `ins? del? moveFrom?
-  // moveTo?` — both an insert and a delete may sit here, and that pair is exactly what Word
-  // writes when B proposes removing a mark A proposed adding. Stripping every revision took
-  // A's out of the file, so rejecting B's deletion made A's break permanent and A's card
-  // vanished from every reviewer's pane.
-  const rPrRest = previousRPr
-    ? childrenOf(previousRPr).filter((child) => !isMarkRevisionOfKind(child, kind))
-    : [];
-  const siblingMark = rPrRest.filter(isMarkRevision);
-  const otherProperties = rPrRest.filter((child) => !isMarkRevision(child));
-  // `ins` before `del`, per the group's own order.
-  const marks = kind === 'ins' ? [mark, ...siblingMark] : [...siblingMark, mark];
-  const rPr = build(mint(), 'runProperties', 'rPr', [], [...marks, ...otherProperties]);
-  const pPrRest = properties
-    ? childrenOf(properties).filter((child) => !isWmlNamed(child, 'rPr'))
-    : [];
-  // `CT_PPr` puts `w:rPr` AFTER the base properties — only `w:sectPr` and `w:pPrChange` may
-  // follow it — so an existing `w:jc` stays in front. Placing `w:rPr` first looked tidier and
-  // produced a `w:pPr` the tree invariants reject, which is the invariant reading the schema
-  // correctly. A FRESH id, because the rebuilt container is a new node.
-  const trailing = pPrRest.filter(isTrailingParagraphProperty);
-  const leading = pPrRest.filter((child) => !isTrailingParagraphProperty(child));
-  const pPr = build(mint(), 'paragraphProperties', 'pPr', properties ? properties.attributes : [], [
-    ...leading,
-    rPr,
-    ...trailing,
-  ]);
-
-  return fromEdit(replaceChildren(part, paragraph.id, [pPr, ...rest], options), effect);
-}
-
-/**
- * Propose merging `paragraph` into the paragraph before it.
- *
- * The mark that would go is its PREDECESSOR's, and only the tree knows which paragraph that
- * is: addressing the merge by the first paragraph made a multi-paragraph delete stamp one
- * paragraph N times and leave the rest untouched, so accepting produced an empty paragraph
- * for every one selected.
- */
-export function applyProposeParagraphMerge(
-  part: OoxmlPart,
-  paragraph: OoxmlParagraphNode,
-  revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
-): TreeOpResult {
-  const parent = parentOf(part, paragraph.id);
-  if (!parent) return { ok: false, reason: 'tree-invariant' };
-  const siblings = parent.children;
-  const at = siblings.findIndex((child) => child.id === paragraph.id);
-  const previous = at > 0 ? siblings[at - 1] : undefined;
-  // A paragraph with nothing before it IN THE SAME CONTAINER has no mark to propose away.
-  // Marking across a container boundary wrote a `w:del` on the last paragraph of a `w:tc` —
-  // markup Word repairs, and which Accept then silently dropped, because there is no
-  // following paragraph to merge into.
-  if (!previous || previous.kind !== 'paragraph') {
-    return { ok: false, reason: 'not-adjacent-siblings' };
-  }
-  return applyParagraphMarkRevision(part, previous, 'del', revision, options);
-}
-
-/**
- * Whether this paragraph's mark is an insertion THIS author proposed.
- *
- * Proposing to delete a mark you proposed adding is just taking the proposal back, so the
- * caller performs a real join instead of writing a `w:del`. Re-labelling it left a paragraph
- * break that Reject then made permanent — the opposite of what the user asked for. The
- * module states this rule for text; the mark path did not have it.
- */
-export function retractsOwnParagraphMark(paragraph: OoxmlParagraphNode, author: string): boolean {
-  const own = paragraphMarkRevisionOf(paragraph, 'ins');
-  return own !== undefined && own.author === author;
-}
-
-/** The revision of one KIND on a paragraph's own mark, or undefined. */
-function paragraphMarkRevisionOf(
-  paragraph: OoxmlParagraphNode,
-  kind: 'ins' | 'del'
-): { readonly localName: string; readonly author: string } | undefined {
-  const properties = childrenOf(paragraph).find((child) => child.kind === 'paragraphProperties');
-  const rPr = properties
-    ? childrenOf(properties).find((child) => isWmlNamed(child, 'rPr'))
-    : undefined;
-  const mark = rPr ? childrenOf(rPr).find((child) => isMarkRevisionOfKind(child, kind)) : undefined;
-  if (!mark || mark.kind === 'textValue') return undefined;
-  const author = mark.attributes.find(
-    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'author'
-  );
-  return { localName: mark.localName, author: author?.value ?? '' };
-}
-
-/** The only two `CT_PPr` children that may follow `w:rPr`. */
-function isTrailingParagraphProperty(node: OoxmlNode): boolean {
-  return isWmlNamed(node, 'sectPr') || isWmlNamed(node, 'pPrChange');
-}
-
-function isMarkRevisionOfKind(node: OoxmlNode, kind: 'ins' | 'del'): boolean {
-  return node.kind !== 'textValue' && isWmlNamed(node, kind);
-}
-
-function isMarkRevision(node: OoxmlNode): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.namespaceUri === WML_NAMESPACE_URI &&
-    (node.localName === 'ins' || node.localName === 'del')
-  );
-}
-
-function isWmlNamed(node: OoxmlNode, localName: string): boolean {
+/** Shared with `tree-op-tracked-marks.ts`, which writes the paragraph-mark wrappers. */
+export function isWmlNamed(node: OoxmlNode, localName: string): boolean {
   return (
     node.kind !== 'textValue' &&
     node.namespaceUri === WML_NAMESPACE_URI &&
     node.localName === localName
   );
-}
-
-/**
- * The id of a same-kind, same-author, same-moment paragraph mark on a NEIGHBOURING paragraph.
- *
- * A run of Enters, or a run of Backspaces at a paragraph start, is one editing gesture — Word
- * groups it under one revision and offers one Accept. Without this each press minted its own,
- * and the pane filled with a card per keystroke.
- */
-function adjacentParagraphMarkId(
-  part: OoxmlPart,
-  paragraph: OoxmlParagraphNode,
-  kind: 'ins' | 'del',
-  revision: RevisionAttributionInput
-): string | null {
-  const parent = parentOf(part, paragraph.id);
-  if (!parent) return null;
-  const siblings = parent.children;
-  const at = siblings.findIndex((child) => child.id === paragraph.id);
-  for (const neighbour of [siblings[at - 1], siblings[at + 1]]) {
-    if (!neighbour || neighbour.kind !== 'paragraph') continue;
-    const properties = childrenOf(neighbour).find((child) => child.kind === 'paragraphProperties');
-    const rPr = properties
-      ? childrenOf(properties).find((child) => isWmlNamed(child, 'rPr'))
-      : undefined;
-    const mark = rPr ? childrenOf(rPr).find(isMarkRevision) : undefined;
-    if (!mark || mark.kind === 'textValue' || mark.localName !== kind) continue;
-    const read = (localName: string): string | undefined =>
-      mark.attributes.find(
-        (attribute) =>
-          attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
-      )?.value;
-    if (read('author') !== revision.author) continue;
-    if (!sameEditingMoment(read('date'), revision.date)) continue;
-    const id = read('id');
-    if (id !== undefined) return id;
-  }
-  return null;
 }

@@ -47,55 +47,6 @@ const RED = { localName: 'color', attributes: { val: 'FF0000' } } as const;
 const ranges = (part: OoxmlPart, start: number, end: number): string[] =>
   runPropertyEdits(part, PARAGRAPH, start, end, RED).map((edit) => `${edit.start}..${edit.end}`);
 
-/** Paragraph text using the same inline-length rules as the hyperlink lane. */
-function paragraphText(part: OoxmlPart, paragraphId: string): string {
-  const paragraph = findParagraph(part, paragraphId);
-  if (!paragraph) return '';
-  let text = '';
-  const append = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') {
-      text += node.value;
-      return;
-    }
-    if (node.kind === 'tab') {
-      text += '\t';
-      return;
-    }
-    if (node.kind === 'hardBreak') {
-      text += '\n';
-      return;
-    }
-    if (node.kind === 'runProperties' || node.kind === 'generic') return;
-    if ((node as { kind: string }).kind === 'contentControl') {
-      for (const child of node.children) {
-        if ((child as { kind: string }).kind !== 'contentControlContent') continue;
-        for (const inner of child.children) append(inner);
-      }
-      return;
-    }
-    if (node.kind === 'hyperlink') {
-      for (const inner of node.children) append(inner);
-      return;
-    }
-    for (const child of node.children) append(child);
-  };
-  for (const child of paragraph.children) append(child);
-  return text;
-}
-
-function findParagraph(part: OoxmlPart, paragraphId: string): OoxmlNode | null {
-  const walk = (node: OoxmlNode): OoxmlNode | null => {
-    if (node.kind === 'textValue') return node.id === paragraphId ? node : null;
-    if (node.id === paragraphId) return node;
-    for (const child of node.children) {
-      const found = walk(child);
-      if (found) return found;
-    }
-    return null;
-  };
-  return walk(part.root);
-}
-
 const noopResolve = () => null;
 
 describe('formatting through typed inline content controls', () => {
@@ -169,8 +120,7 @@ describe('hyperlinks composed with typed inline content controls', () => {
         '<w:r><w:t>.</w:t></w:r>' +
         '</w:p>'
     );
-    const text = paragraphText(linkInControl, PARAGRAPH);
-    const links = hyperlinksInParagraph(linkInControl, PARAGRAPH, noopResolve, () => text);
+    const links = hyperlinksInParagraph(linkInControl, PARAGRAPH, noopResolve);
     expect(links).toHaveLength(1);
     expect(links[0]!.start).toBe(4);
     expect(links[0]!.end).toBe(8);
@@ -203,8 +153,7 @@ describe('hyperlinks composed with typed inline content controls', () => {
         '</w:sdtContent></w:sdt>' +
         '</w:p>'
     );
-    const text = paragraphText(mixed, PARAGRAPH);
-    const links = hyperlinksInParagraph(mixed, PARAGRAPH, noopResolve, () => text);
+    const links = hyperlinksInParagraph(mixed, PARAGRAPH, noopResolve);
     expect(ranges(mixed, 0, 6)).toEqual(['0..3', '3..6']);
     expect(links).toHaveLength(1);
     expect(links[0]!.start).toBe(3);

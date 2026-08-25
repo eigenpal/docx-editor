@@ -66,6 +66,9 @@ function textElement(nextId: () => string, text: string): OoxmlNode {
   } as unknown as OoxmlNode;
 }
 
+/** The literal between the two fields of the PAGE_X_OF_Y composition. */
+const PAGE_X_OF_Y_SEPARATOR = ' of ';
+
 /** Run-child builders for one allowlisted page field (or PAGE X OF Y composition). */
 export function pageFieldContentBuilders(
   field: PageFieldKind
@@ -79,7 +82,21 @@ export function pageFieldContentBuilders(
     ] as const;
 
   if (field === 'PAGE_X_OF_Y') {
-    return [...complex('PAGE'), (mint) => textElement(mint, ' of '), ...complex('NUMPAGES')];
+    return [
+      ...complex('PAGE'),
+      (mint) => textElement(mint, PAGE_X_OF_Y_SEPARATOR),
+      ...complex('NUMPAGES'),
+    ];
   }
   return [...complex(field)];
+}
+
+/**
+ * The field's size in MODEL units, on `segmentsOf`'s terms.
+ *
+ * A complex field is one addressable unit at its `begin`; the instruction, separator and
+ * `end` measure nothing. Only the PAGE_X_OF_Y literal adds characters of its own.
+ */
+export function pageFieldModelLength(field: PageFieldKind): number {
+  return field === 'PAGE_X_OF_Y' ? 1 + PAGE_X_OF_Y_SEPARATOR.length + 1 : 1;
 }

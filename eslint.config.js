@@ -315,6 +315,7 @@ export default [
       'packages/core/src/editor/paginated-surface-contract.ts',
       'packages/core/src/layout/semantic-table.ts',
       'packages/core/src/store/__tests__/table-resize-ops.test.ts',
+      'packages/core/src/store/store/tree-op-tracked.ts',
     ],
     rules: {
       'max-lines': ['error', { max: 1100, skipBlankLines: false, skipComments: false }],
@@ -325,7 +326,6 @@ export default [
     files: [
       'packages/core/src/editor/surface-pointer.ts',
       'packages/core/src/store/package/ooxml-drawing-rules.ts',
-      'packages/core/src/store/store/tree-op-tracked.ts',
       'packages/react/src/editor/menu/parts.tsx',
     ],
     rules: {

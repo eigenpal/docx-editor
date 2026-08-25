@@ -27,7 +27,7 @@ import {
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
-import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked.ts';
+import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
@@ -556,7 +556,9 @@ export function mountPaginatedSurface(
   function consumePendingFormatOps(
     paragraphId: string,
     offset: number,
-    length: number
+    length: number,
+    /** The range the insert REPLACES, when the caller's insert stands in for one. */
+    replacing?: { readonly start: number; readonly end: number }
   ): TreeDocOp[] {
     const armed = armedAtCaret();
     if (!armed || length === 0) return [];
@@ -566,7 +568,26 @@ export function mountPaginatedSurface(
     // armed ops silently vanish: bold armed inside a `w:del`, then a character typed there,
     // landed correctly and unbold. Identity everywhere else, so the exact-position check
     // still guards a consumer that aims somewhere the caret never was.
-    const at = positionPastDeletion(currentLayout, pendingFormats!.position);
+    //
+    // A REPLACEMENT relocates further: `replacementOffset` also subtracts this author's own
+    // retracted insertion, so an anchor sitting anywhere in the replaced range must map
+    // through the SAME rule the caller's landing came from. The IME readback composes over
+    // the caret's own pending text — the anchor sat at the range end, the landing did not,
+    // and the armed format silently dropped on every composed replacement.
+    const anchor = pendingFormats!.position;
+    const at =
+      replacing &&
+      anchor.paragraphId === paragraphId &&
+      anchor.offset >= replacing.start &&
+      anchor.offset <= replacing.end
+        ? {
+            paragraphId,
+            offset: replacementOffset(
+              { paragraphId, offset: replacing.start },
+              { paragraphId, offset: replacing.end }
+            ),
+          }
+        : positionPastDeletion(currentLayout, anchor);
     if (at.paragraphId !== paragraphId || at.offset !== offset) return [];
     return [
       {
@@ -893,6 +914,16 @@ export function mountPaginatedSurface(
     // document open for reading left its target declared in `.rels`.
     refusesWrite: () => writeRefusal(true) !== null,
     storyScope,
+    // Non-null exactly when suggesting: the link lane then replaces the selection with
+    // tracked ops and wraps the fresh insertion, instead of writing an unattributed wrap.
+    // The landing is the SAME rule every replacing lane reads — past the struck words,
+    // minus this author's own retracted insertion.
+    suggestReplacementOffset: (paragraphId, start, end) =>
+      editingMode === 'suggest'
+        ? replacementOffset({ paragraphId, offset: start }, { paragraphId, offset: end })
+        : null,
+    insertionLanding: (paragraphId, offset) =>
+      positionPastDeletion(currentLayout, { paragraphId, offset }).offset,
     selection: () => selection,
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
@@ -2722,6 +2753,16 @@ export function mountPaginatedSurface(
     if (editingMode === 'suggest' && !options.author?.trim() && edits) {
       return 'suggesting needs an author before it can propose a change';
     }
+    // Deleting a note is a package-level removal with no tracked form: the reference and
+    // the body go outright, with no `w:del` and no card, while every insertion around it
+    // is a proposal. Striking the reference (Backspace over it) IS the tracked deletion —
+    // the body follows when the strike is accepted — so the outright lane is refused
+    // rather than left as a silent destructive edit in suggesting mode. Note CONVERSION
+    // and note properties stay direct on purpose: they destroy nothing, OOXML has no
+    // revision markup for them, and Word applies them the same way with tracking on.
+    if (editingMode === 'suggest' && ops.some((op) => op.op === 'deleteNote')) {
+      return 'suggesting cannot delete a note outright; strike its reference to propose the deletion';
+    }
     return null;
   }
 
@@ -2760,7 +2801,14 @@ export function mountPaginatedSurface(
    * Tabs and breaks are members because they are insertions too: passed through
    * unattributed, they serialized as a plain run beside the strike — an edit the review
    * pane could neither accept nor reject, in a document whose author believed everything
-   * they did was a proposal.
+   * they did was a proposal. A page field and a note citation are members for the same
+   * reason: the field's runs go into ONE `w:ins`, and the note's reference run is wrapped
+   * while its body stays plain (rejecting the reference sweeps the body).
+   *
+   * `insertHyperlink` is deliberately NOT a member. The wrap carries no content of its
+   * own; in suggesting mode the link lane replaces the selection with tracked ops first,
+   * so the `w:hyperlink` only ever wraps this author's own `w:ins` — which is the
+   * reviewable unit.
    */
   type RevisionCapableOp = Extract<
     TreeDocOp,
@@ -2771,6 +2819,8 @@ export function mountPaginatedSurface(
         | 'insertTab'
         | 'insertHardBreak'
         | 'insertPageBreak'
+        | 'insertPageField'
+        | 'insertNote'
         | 'insertTableRow'
         | 'deleteTableRow';
     }
@@ -2781,6 +2831,8 @@ export function mountPaginatedSurface(
     'insertTab',
     'insertHardBreak',
     'insertPageBreak',
+    'insertPageField',
+    'insertNote',
     'insertTableRow',
     'deleteTableRow',
   ]);
@@ -3140,8 +3192,8 @@ export function mountPaginatedSurface(
       syncActiveFieldShading(pagesLayer, collapsedCaretPosition());
     },
     textOf: (paragraphId) => textOf(paragraphId),
-    pendingFormatOps: (paragraphId, offset, length) =>
-      consumePendingFormatOps(paragraphId, offset, length),
+    pendingFormatOps: (paragraphId, offset, length, replacing) =>
+      consumePendingFormatOps(paragraphId, offset, length, replacing),
     selectionMark: () => selectionMark(),
     now,
     recordSelectionMs: (ms) => {

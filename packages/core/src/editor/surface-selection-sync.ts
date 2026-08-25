@@ -75,8 +75,18 @@ export interface SurfaceSelectionSyncDeps {
    * readback is about to insert at `offset`, or `[]` when nothing is armed there. Word
    * applies the typing format to composed text exactly like typed text, and this is the
    * only insertion lane that does not go through `type()`.
+   *
+   * `replacing` is the range the insert stands in for, when the diff found one. The armed
+   * anchor relocates through the same landing rule as `replacementOffset`, so a
+   * composition that replaces the author's own pending text keeps the armed format
+   * instead of silently dropping it.
    */
-  pendingFormatOps?(paragraphId: string, offset: number, length: number): TreeDocOp[];
+  pendingFormatOps?(
+    paragraphId: string,
+    offset: number,
+    length: number,
+    replacing?: { readonly start: number; readonly end: number }
+  ): TreeDocOp[];
   selectionMark(): { paragraphId: string; start: number; end: number } | null;
   /** The surface's clock, so every phase timer reads the same one. */
   now(): number;
@@ -375,7 +385,12 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
         ? plan.ops.map((op) => (op === insert ? { ...insert, offset: landing } : op))
         : plan.ops;
     const formatOps = insert
-      ? (deps.pendingFormatOps?.(paragraphId, landing ?? insert.offset, insert.text.length) ?? [])
+      ? (deps.pendingFormatOps?.(
+          paragraphId,
+          landing ?? insert.offset,
+          insert.text.length,
+          remove ? { start: remove.start, end: remove.end } : undefined
+        ) ?? [])
       : [];
     const scope = deps.storyScope();
     deps.commit(() => {

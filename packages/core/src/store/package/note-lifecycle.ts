@@ -30,9 +30,7 @@ import { withPart } from './ooxml-package.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import {
   allocateNoteId,
-  atomicNoteSpansOf,
   findNoteById,
-  isNoteAtomNode,
   noteIdOf,
   noteKindOf,
   noteRefKindOf,
@@ -64,8 +62,12 @@ import {
   type NoteReferenceScanBudget,
 } from './note-references.ts';
 import { isValidXmlText } from './sinks.ts';
-import { atomicFieldSpansOf, isFldSimple } from './field-nodes.ts';
-import { isContentControl, walkParagraphInline } from './content-control-walk.ts';
+import { applyInsertTrackedRun } from '../store/tree-op-tracked.ts';
+import { paragraphOffsetIndex } from '../store/tree-op-segments.ts';
+import {
+  invalidRevisionAttribution,
+  type RevisionAttributionInput,
+} from '../store/tree-op-types.ts';
 
 const W = WML_NAMESPACE_URI;
 const FOOTNOTES_REL =
@@ -163,6 +165,13 @@ export type NoteLifecycleOp =
       readonly noteKind: NoteKind;
       readonly paragraphId: string;
       readonly offset: number;
+      /**
+       * Write the citing reference as a TRACKED insertion: the reference run goes inside a
+       * `w:ins` carrying this attribution. The note body stays plain — rejecting the
+       * reference removes it, and the orphaned body is swept by the same cascade an
+       * untracked reference deletion triggers.
+       */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       readonly op: 'deleteNote';
@@ -201,7 +210,7 @@ export type NoteLifecycleOp =
     };
 
 /** Why a note lifecycle op was refused. */
-export type NoteLifecycleRejection = 'invalidArgs' | 'tree-invariant';
+export type NoteLifecycleRejection = 'invalidArgs' | 'invalid-property-value' | 'tree-invariant';
 
 /**
  * A new package, or a typed rejection.
@@ -303,6 +312,13 @@ function applyInsertNote(
     return fail('invalidArgs', 'paragraphId');
   }
   if (!Number.isInteger(op.offset) || op.offset < 0) return fail('invalidArgs', 'offset');
+  // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
+  // would serialize a proposal no reader can attribute or resolve. The SAME predicate and
+  // code every other tracked insert answers with, so a caller branching on the reason
+  // sees one fault.
+  if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
+    return fail('invalid-property-value', 'revision-author');
+  }
 
   const located = locateInsertParagraph(pkg, op.paragraphId);
   if (!located.ok) return fail('invalidArgs', located.detail);
@@ -352,13 +368,38 @@ function applyInsertNote(
 
   const refLocal = op.noteKind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
   const styleVal = op.noteKind === 'footnote' ? 'FootnoteReference' : 'EndnoteReference';
-  const storyNextId = createNodeIdAllocator(storyPart);
-  const refRun = noteReferenceRun(storyNextId, refLocal, noteId, styleVal);
-  const inserted = insertNodesAtOffset(storyPart, storyParagraph as OoxmlParagraphNode, op.offset, [
-    refRun,
-  ]);
-  if (!inserted) return fail('tree-invariant', 'reference-insert');
-  next = withPart(next, inserted);
+  // Suggesting proposes the CITATION: the reference run goes through the tracked-insert
+  // core, which owns every placement rule typed text follows — the `w:ins` wrapper,
+  // extending the author's own pending insertion, adopting the adjacent deletion of a
+  // replaced selection, relocating past struck words. The note body stays plain —
+  // rejecting the reference sweeps the orphaned body through the same cascade an
+  // untracked reference deletion takes.
+  if (op.revision) {
+    const tracked = applyInsertTrackedRun(
+      storyPart,
+      storyParagraph as OoxmlParagraphNode,
+      op.offset,
+      (mint) => noteReferenceRun(mint, refLocal, noteId, styleVal),
+      op.revision
+    );
+    if (!tracked.ok || !tracked.part) {
+      // Keep the core's typed reason in the detail — an offset refusal reported as a bare
+      // tree-invariant hides the actionable cause from the surface and automation hosts.
+      return fail('tree-invariant', (!tracked.ok && tracked.reason) || 'reference-insert');
+    }
+    next = withPart(next, tracked.part);
+  } else {
+    const storyNextId = createNodeIdAllocator(storyPart);
+    const refRun = noteReferenceRun(storyNextId, refLocal, noteId, styleVal);
+    const inserted = insertNodesAtOffset(
+      storyPart,
+      storyParagraph as OoxmlParagraphNode,
+      op.offset,
+      [refRun]
+    );
+    if (!inserted) return fail('tree-invariant', 'reference-insert');
+    next = withPart(next, inserted);
+  }
 
   return {
     ok: true,
@@ -840,72 +881,16 @@ function findParagraphInSubtree(
   return null;
 }
 
-/** Local UTF-16 length — mirrors store `segmentsOf` without importing the store package. */
+/**
+ * UTF-16 length in the SHARED offset model, from the MEMOIZED index.
+ *
+ * This module used to keep a private mirror of `segmentsOf`, and the mirror disagreed with
+ * the authority on the shapes suggesting mode writes: it counted a revision wrapper's runs
+ * as nothing, so a citation aimed at a caret after tracked content validated against a
+ * shorter paragraph and landed characters to the left of where the reader put it.
+ */
 function paragraphLength(paragraph: OoxmlParagraphNode): number {
-  return modelSegments(paragraph).reduce((max, segment) => Math.max(max, segment.end), 0);
-}
-
-interface ModelSegment {
-  readonly runId: string;
-  readonly node: OoxmlNode;
-  readonly start: number;
-  readonly end: number;
-}
-
-function modelSegments(paragraph: OoxmlParagraphNode): ModelSegment[] {
-  const segments: ModelSegment[] = [];
-  let offset = 0;
-  const fieldAtoms = atomicFieldSpansOf(paragraph);
-  const noteAtoms = atomicNoteSpansOf(paragraph);
-  const fieldById = new Map(fieldAtoms.map((span) => [span.node.id, span]));
-  const noteById = new Map(noteAtoms.map((span) => [span.node.id, span]));
-  const covered = new Set<string>();
-  for (const span of fieldAtoms) for (const id of span.removeNodeIds) covered.add(id);
-
-  const emit = (runId: string, node: OoxmlNode): void => {
-    segments.push({ runId, node, start: offset, end: offset + 1 });
-    offset += 1;
-  };
-
-  const visit = (node: OoxmlNode, runId: string): void => {
-    const field = fieldById.get(node.id);
-    if (field && field.kind === 'complex') {
-      emit(runId, node);
-      return;
-    }
-    if (covered.has(node.id)) return;
-    if (noteById.has(node.id) || isNoteAtomNode(node)) {
-      emit(runId, node);
-      return;
-    }
-    if (node.kind === 'textValue') {
-      segments.push({ runId, node, start: offset, end: offset + node.value.length });
-      offset += node.value.length;
-      return;
-    }
-    if (node.kind === 'tab' || node.kind === 'hardBreak') {
-      emit(runId, node);
-      return;
-    }
-    // Generic / misplaced run-inner control husks contribute no atoms.
-    if (node.kind === 'runProperties' || node.kind === 'generic' || isContentControl(node)) return;
-    if (node.kind === 'text') {
-      for (const child of node.children) visit(child, runId);
-      return;
-    }
-    for (const child of node.children) visit(child, runId);
-  };
-
-  walkParagraphInline(paragraph.children, 0, (child) => {
-    if (isFldSimple(child)) {
-      const field = fieldById.get(child.id);
-      if (field) emit('', child);
-      return;
-    }
-    if (child.kind !== 'run') return;
-    for (const grand of child.children) visit(grand, child.id);
-  });
-  return segments;
+  return paragraphOffsetIndex(paragraph).length;
 }
 
 function noteReferenceRun(
@@ -974,6 +959,27 @@ function noteReferenceRun(
   } as unknown as OoxmlNode;
 }
 
+/** Index of the paragraph child whose subtree holds `nodeId`, or -1. */
+function topChildIndexOf(paragraph: OoxmlParagraphNode, nodeId: string): number {
+  const holds = (node: OoxmlNode): boolean => {
+    if (node.id === nodeId) return true;
+    if (node.kind === 'textValue') return false;
+    return node.children.some(holds);
+  };
+  return paragraph.children.findIndex((child) => holds(child));
+}
+
+/** The node whose DIRECT child is `nodeId`, anywhere under `root`, or null. */
+function parentHolding(root: OoxmlNode, nodeId: string): OoxmlNode | null {
+  if (root.kind === 'textValue') return null;
+  for (const child of root.children) {
+    if (child.id === nodeId) return root;
+    const found = parentHolding(child, nodeId);
+    if (found) return found;
+  }
+  return null;
+}
+
 function insertNodesAtOffset(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
@@ -981,9 +987,13 @@ function insertNodesAtOffset(
   nodes: readonly OoxmlNode[]
 ): OoxmlPart | null {
   // Note references are authored as whole runs — always insert at paragraph child level.
-  const segments = modelSegments(paragraph);
+  // Offsets come from the memoized paragraph offset index — the SAME authority the caret
+  // uses — so a caret placed after tracked content addresses the position this write
+  // resolves, and the validation walk above is not repeated.
+  const offsets = paragraphOffsetIndex(paragraph);
+  const segments = offsets.segments;
   const nextId = createNodeIdAllocator(part);
-  const length = segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+  const length = offsets.length;
 
   // Inside a text value: split the owning run, then place the note run between the halves.
   for (const segment of segments) {
@@ -995,6 +1005,9 @@ function insertNodesAtOffset(
     if (!textParent) return null;
     const run = findNode(part, segment.runId);
     if (!run || run.kind !== 'run') return null;
+    // A run nested inside a link or a revision wrapper cannot host the split — a citation
+    // spliced into somebody's `w:ins` would join their proposal. Refuse; the caller
+    // degrades to a rejection, never to a silently misplaced reference.
     const runIndex = paragraph.children.findIndex((child) => child.id === run.id);
     if (runIndex < 0) return null;
 
@@ -1035,19 +1048,55 @@ function insertNodesAtOffset(
     return inserted.ok ? inserted.part : null;
   }
 
-  // Boundary between segments: insert before the run that owns the boundary start.
+  // Boundary between segments: insert before the child holding the segment that starts
+  // here. A boundary whose run lives INSIDE a link or wrapper resolves to its TOP-LEVEL
+  // ancestor: at the container's leading edge "before the container" and "at the offset"
+  // are the same place, and an interior boundary one level down joins the container's own
+  // content — a citation mid-link belongs in the link, where the caret is. Deeper nesting
+  // is refused rather than misplaced. Matching direct children only was worse still — the
+  // boundary fell to the append fallback, at the paragraph's end.
   const boundary = segments.find((segment) => segment.start === offset);
-  if (boundary?.runId) {
-    const index = paragraph.children.findIndex((child) => child.id === boundary.runId);
-    if (index >= 0) {
-      const inserted = insertChildren(part, paragraph.id, index, nodes);
+  if (boundary) {
+    const anchorId = boundary.runId || boundary.node.id;
+    const direct = paragraph.children.findIndex((child) => child.id === anchorId);
+    if (direct >= 0) {
+      const inserted = insertChildren(part, paragraph.id, direct, nodes);
       return inserted.ok ? inserted.part : null;
     }
-  }
-  if (boundary && !boundary.runId) {
-    const index = paragraph.children.findIndex((child) => child.id === boundary.node.id);
-    const inserted = insertChildren(part, paragraph.id, Math.max(0, index), nodes);
-    return inserted.ok ? inserted.part : null;
+    const index = topChildIndexOf(paragraph, anchorId);
+    if (index >= 0) {
+      const top = paragraph.children[index]!;
+      const under = new Set<string>();
+      const collect = (node: OoxmlNode): void => {
+        under.add(node.id);
+        if (node.kind === 'textValue') return;
+        for (const child of node.children) collect(child);
+      };
+      collect(top);
+      const containerStart = segments.reduce(
+        (min, segment) =>
+          under.has(segment.runId) || under.has(segment.node.id)
+            ? Math.min(min, segment.start)
+            : min,
+        Number.POSITIVE_INFINITY
+      );
+      if (containerStart === offset) {
+        const inserted = insertChildren(part, paragraph.id, index, nodes);
+        return inserted.ok ? inserted.part : null;
+      }
+      // An interior boundary joins the DIRECT parent's content at the caret, whatever the
+      // nesting — a citation mid-link belongs in the link. ONLY neutral containers accept
+      // it: spliced into a revision wrapper, the citation would join somebody's proposal
+      // (or their deletion), and rejecting their revision would take the citation and its
+      // note body with it. Everything else refuses rather than misplaces.
+      const parent = parentHolding(top, anchorId);
+      if (parent && (parent.kind === 'hyperlink' || parent.kind === 'contentControlContent')) {
+        const at = parent.children.findIndex((child) => child.id === anchorId);
+        const inserted = insertChildren(part, parent.id, Math.max(0, at), nodes);
+        return inserted.ok ? inserted.part : null;
+      }
+      return null;
+    }
   }
 
   const inserted = insertChildren(part, paragraph.id, paragraph.children.length, nodes);

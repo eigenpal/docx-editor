@@ -16,6 +16,7 @@
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { hardBreakText } from '../package/hard-break.ts';
+import { isInstrText } from '../package/field-nodes.ts';
 import { collectRevisionSites } from './tree-op-revisions.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import {
@@ -93,6 +94,11 @@ function textUnder(node: OoxmlNode): string {
   // model counts for them.
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
+  // A field's instruction is CODE, not content: it measures nothing in the offset model,
+  // and a tracked page field would otherwise present its ` PAGE ` source as inserted
+  // words. `isInstrText` covers all three spellings — the typed kind, the parse-demoted
+  // generic, and `w:delInstrText`, which a struck field's card would otherwise read out.
+  if (isInstrText(node)) return '';
   let text = '';
   for (const child of node.children) text += textUnder(child);
   return text;
