@@ -496,6 +496,19 @@ function createPartDrawingContextSlot(options: {
   };
 }
 
+/**
+ * Monotonic PROCESS-WIDE slot mint, folded into `cacheTokenForPart`: a slot's own epoch
+ * counters restart at zero when a reset recreates it, so `part|0|0|N` would recur and an
+ * epoch-keyed consumer (the section prepass memo, {@link tableDrawingTokenCache}) could
+ * validate against a stale token. A fresh mint per created slot makes every recreation
+ * observably different, which fails safe — one extra rebuild, never a stale reuse.
+ *
+ * Process-wide, not per-bundle: {@link tableDrawingTokenCache} is module-level, so two
+ * bundles that see the same node objects must never emit the same epoch string for
+ * different resource states.
+ */
+let slotMintCounter = 0;
+
 export function createInlineDrawingLayoutBundle(
   options: CreateInlineDrawingLayoutBundleOptions
 ): InlineDrawingLayoutBundle {
@@ -508,12 +521,6 @@ export function createInlineDrawingLayoutBundle(
     });
   const slots = new Map<string, PartDrawingContextSlot>();
   const partByName = new Map<string, OoxmlPart>();
-  // Monotonic per-bundle slot mint, folded into `cacheTokenForPart`: a slot's own epoch
-  // counters restart at zero when a reset recreates it, so `part|0|0|N` would recur and an
-  // epoch-keyed consumer (the section prepass memo) could validate against a stale token.
-  // A fresh mint per created slot makes every recreation observably different, which fails
-  // safe — one extra rebuild, never a stale reuse.
-  let slotMints = 0;
   const slotMintBySlot = new WeakMap<PartDrawingContextSlot, number>();
   const handlesByKey = new Map<string, ValidatedImageBytesHandle>();
   const releaseTokensByKey = new Map<string, ValidatedImageBytesReleaseToken>();
@@ -561,8 +568,8 @@ export function createInlineDrawingLayoutBundle(
       forgetReadyHandle,
     });
     slots.set(ownerPartName, slot);
-    slotMints += 1;
-    slotMintBySlot.set(slot, slotMints);
+    slotMintCounter += 1;
+    slotMintBySlot.set(slot, slotMintCounter);
     return slot;
   };
 

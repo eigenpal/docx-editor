@@ -80,10 +80,10 @@ function parseArgs(argv: string[]): Args {
     else if (value === '--compare') args.compare = argv[++index]!;
     else if (value === '--key') {
       const key = argv[++index];
-      if (key !== 'x' && key !== 'enter') throw new Error(`--key must be 'x' or 'enter', got ${key}`);
+      if (key !== 'x' && key !== 'enter')
+        throw new Error(`--key must be 'x' or 'enter', got ${key}`);
       args.key = key;
-    }
-    else if (!value.startsWith('--')) args.fixture = resolve(value);
+    } else if (!value.startsWith('--')) args.fixture = resolve(value);
     else throw new Error(`unknown option ${value}`);
   }
   if (!Number.isInteger(args.keystrokes) || args.keystrokes < 1) {

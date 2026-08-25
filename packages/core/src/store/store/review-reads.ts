@@ -913,16 +913,23 @@ const EMPTY_DEEP_PARAGRAPH_IDS: readonly string[] = Object.freeze([]);
  *
  * The deep order re-derives per fresh root, and a structural keystroke re-walked every
  * node of the document — every run of every paragraph — to relist ids that did not move.
- * Composing from per-subtree memos re-walks only the rebuilt spine. Like the revision
- * site walk's memo, depth restarts at the subtree a cache entry is keyed on, so the cap
- * bounds hostile nesting per subtree rather than from the root.
+ * Composing from per-subtree memos re-walks only the rebuilt spine.
+ *
+ * The entry remembers the depth it was computed at, because the 64-level cap makes the
+ * list depth-dependent: an op can republish a shared subtree at a different depth (an
+ * unwrap rebuilds only the spine ABOVE it), and serving a list computed under the old
+ * cap would diverge from a cold walk on hostile >64-deep nesting. A depth mismatch just
+ * recomputes, so the memo stays exactly the cold walk's answer.
  */
-const subtreeDeepParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
+const subtreeDeepParagraphIdsCache = new WeakMap<
+  OoxmlNode,
+  { readonly depth: number; readonly ids: readonly string[] }
+>();
 
 function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly string[] {
   if (node.kind === 'textValue' || depth > 64) return EMPTY_DEEP_PARAGRAPH_IDS;
   const cached = subtreeDeepParagraphIdsCache.get(node);
-  if (cached) return cached;
+  if (cached && cached.depth === depth) return cached.ids;
   let found: string[] | null = null;
   if (node.kind === 'paragraph') (found ??= []).push(node.id);
   for (const child of node.children) {
@@ -932,7 +939,7 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
     for (const id of ids) found.push(id);
   }
   const result: readonly string[] = found ?? EMPTY_DEEP_PARAGRAPH_IDS;
-  subtreeDeepParagraphIdsCache.set(node, result);
+  subtreeDeepParagraphIdsCache.set(node, { depth, ids: result });
   return result;
 }
 

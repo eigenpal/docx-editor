@@ -353,6 +353,10 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
       page.hasBodyPageFields === false
         ? page.fragments
         : substituteBodyPageFields(page.fragments, context);
+    // Reachable only for pages with NO live projector and NO body substitution: `project`
+    // always mints a fresh record for a projector-bearing story (the rest-spread above), so
+    // this identity entry can never publish — or memoize as final — a record that still
+    // carries a `pageFieldProjector`.
     if (header === page.header && footer === page.footer && fragments === page.fragments) {
       finalizedPageMemos.set(page, { pageCount, result: page });
       return page;
