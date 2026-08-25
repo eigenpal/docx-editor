@@ -6,86 +6,90 @@ order: 1
 seoTitle: 'Documentation and API reference'
 ---
 
-`docx-editor` is an open-source, what-you-see-is-what-you-get (WYSIWYG) DOCX editor for React and Vue 3. It parses Office Open XML (OOXML) and renders paginated document pages. It then serializes the document state to a `.docx` file. Standard browser editing does not require an upload service or conversion backend.
+`docx-editor` is a what-you-see-is-what-you-get (WYSIWYG) DOCX editor for React
+and Vue 3.
 
-During save, semantic round-trip processing preserves untouched content, unsupported OOXML elements, and package payloads.
+It parses Office Open XML (OOXML), renders paginated pages, and saves the edited
+state as a DOCX file. Browser editing needs no upload or conversion service.
 
 <Cards>
   <Card title="Install the editor" href="/docs/2.x/quickstart">
-    Install an adapter, import the stylesheet, load a `.docx` file, and save the edited document.
+    Install an adapter, load a DOCX file, and save the result.
   </Card>
   <Card title="Compose an editor interface" href="/docs/2.x/react/composition">
-    Use unstyled primitives and hooks to compose an interface through the public API.
+    Build an interface with public components and hooks.
   </Card>
   <Card title="Review document fidelity" href="/docs/2.x/word-fidelity">
-    Review feature support, round-trip behavior, the security model, API stability, and known
-    limits.
+    Check feature support, round-trip behavior, security, and limits.
   </Card>
 </Cards>
 
 ## Packages
 
-| Package                                               | Purpose                                                                                                           |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [`@docx-editor.dev/react`](/docs/2.x/react)           | React adapter with the `<DocxEditor>` component, `DocxEditor.Root`, and composition hooks.                        |
-| [`@docx-editor.dev/core`](/docs/2.x/core)             | Framework-independent engine for OOXML read/write, document storage, layout, painting, and the `Editor` contract. |
-| [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Office.js-compatible batching API for server-side documents and active browser editors.                           |
-| [`@docx-editor.dev/pro`](/docs/2.x/pro)               | Modules for tracked changes, comments, and custom nodes.                                                          |
-| [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Locale data for `en`, `de`, `fr`, `he`, `hi`, `id`, `pl`, `pt-BR`, `tr`, and `zh-CN`.                             |
-| [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts)    | Metric-compatible substitutes for Word default fonts when a document does not embed those fonts.                  |
+| Package                                               | Purpose                                                                        | License                             |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------- |
+| [`@docx-editor.dev/react`](/docs/2.x/react)           | React adapter and composition hooks                                            | Apache 2.0                          |
+| [`@docx-editor.dev/vue`](/docs/2.x/vue)               | Vue 3 adapter and composables                                                  | Apache 2.0                          |
+| [`@docx-editor.dev/core`](/docs/2.x/core)             | Framework-independent OOXML, document, layout, paint, and editor engine        | Apache 2.0                          |
+| [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) | Browser and server automation through a documented Office.js-compatible subset | EigenPal Pro Evaluation License 1.0 |
+| [`@docx-editor.dev/pro`](/docs/2.x/pro)               | Tracked changes, comments, and custom nodes                                    | EigenPal Pro Evaluation License 1.0 |
+| [`@docx-editor.dev/i18n`](/docs/2.x/i18n)             | Shared interface translations                                                  | Apache 2.0                          |
+| [`@docx-editor.dev/fonts`](/docs/2.x/guides/fonts)    | Metric-compatible substitutes for common Word fonts                            | Apache-2.0 AND OFL-1.1              |
 
-All packages use a fixed version group and release together. Most packages use the Apache 2.0 license.
-
-`@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` use the EigenPal Pro Evaluation License 1.0. Internal, non-production evaluation is free. Production use requires a commercial agreement with [EigenPal](mailto:licensing@eigenpal.com).
+All packages use one fixed version group. Internal, non-production evaluation of
+Pro packages is free. Production use requires a
+[separate written commercial agreement signed by EigenPal, Inc.](mailto:licensing@eigenpal.com).
 
 ## Select packages
 
-**React applications.** Install the React adapter and the core engine. The React package includes the string catalog.
+| Goal                                                                   | Packages                                                       |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------- |
+| React editor                                                           | `@docx-editor.dev/react` and `@docx-editor.dev/core`           |
+| Vue editor                                                             | `@docx-editor.dev/vue` and `@docx-editor.dev/core`             |
+| Tracked changes, comments, or custom nodes                             | Add `@docx-editor.dev/pro`                                     |
+| Server-side editing through the documented Office.js-compatible subset | `@docx-editor.dev/editor-api` and `@docx-editor.dev/core`      |
+| Browser automation through the same subset                             | Add `@docx-editor.dev/editor-api` and use its `/browser` entry |
+
+Install the React editor:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-**Tracked changes, comments, or custom nodes.** Install `-pro` and register its modules.
+For Vue, replace `@docx-editor.dev/react` with `@docx-editor.dev/vue`.
 
-```bash
-npm install @docx-editor.dev/react @docx-editor.dev/core @docx-editor.dev/pro
-```
+## Document capabilities
 
-**Server-side editing without a user interface.** `-editor-api` opens DOCX data, applies edits through its object model, and saves the result.
+| Area        | Examples                                                                |
+| ----------- | ----------------------------------------------------------------------- |
+| Text        | Formatting, fonts, theme colors, paragraph styles, and character styles |
+| Structure   | Tables, lists, numbering, footnotes, endnotes, and content controls     |
+| Page layout | Sections, columns, headers, footers, margins, and pagination            |
+| Content     | Images, hyperlinks, bookmarks, and fields                               |
+| Review      | Tracked changes and comments with `@docx-editor.dev/pro`                |
 
-```bash
-npm install @docx-editor.dev/editor-api @docx-editor.dev/core
-```
+Support differs by feature and operation. See
+[Word fidelity](/docs/2.x/word-fidelity) for editing, rendering, and round-trip
+status. Use the [live demo](https://docx-editor.dev/editor) to test a document.
 
-**Browser automation for an active editor.** Install `-editor-api` with `-react` and use the `/browser` entry. This entry controls the editor instance that the adapter created.
+## Round-trip behavior
 
-## Supported document features
+Saving preserves untouched package content and unsupported OOXML.
 
-The editor reads, renders, edits, and writes these Word features:
+| Content                                | Behavior                                  |
+| -------------------------------------- | ----------------------------------------- |
+| Modeled document structures            | Uses typed nodes for layout and editing.  |
+| Unsupported or misplaced XML           | Keeps generic nodes in the document tree. |
+| Media, fonts, macros, and VBA projects | Copies package payloads through save.     |
+| Custom XML and add-in markup           | Preserves structural content.             |
 
-- Text formatting, fonts, theme colors, paragraph and character styles
-- Tables (merged cells, page-spanning rows, repeated header rows), lists and numbering
-- Headers, footers, sections, columns, page layout
-- Images (inline and anchored), hyperlinks, bookmarks, fields
-- Footnotes, endnotes, content controls
-- Tracked changes and comments, with [`@docx-editor.dev/pro`](/docs/2.x/pro)
-
-See [Word fidelity](/docs/2.x/word-fidelity) for feature coverage and known limits. Use the [live demo](https://docx-editor.dev/editor) to test a document.
-
-## Lossless round-trip
-
-Saving after an edit preserves package content that the edit did not modify. Preserved content includes custom XML, embedded fonts, macros, media, VBA projects, Smart Tags, and unsupported add-in markup.
-
-During parsing, the canonical tree creates typed nodes only for structures that layout requires. It represents all other elements as generic nodes. During save, the serializer preserves tree structure and copies package payloads without modification. Package payloads include media, fonts, and VBA binaries.
-
-The parser also represents unsupported or structurally invalid elements as generic nodes. This representation preserves unrecognized markup without preventing document editing.
-
-Continuous integration (CI) validates this behavior with a corpus of documents. One comparison uses a canonical fingerprint to validate tree structure. Another comparison uses a semantic digest after save and reopen. CI fails if either comparison detects content loss.
+For the preservation contract and test method, see
+[Word fidelity](/docs/2.x/word-fidelity). For engine details, see
+[Architecture](/docs/2.x/core/architecture).
 
 ## Next steps
 
-- [Quickstart](/docs/2.x/quickstart): load, edit, and save a `.docx`
-- [Installation](/docs/2.x/installation): Next.js, Vite, Remix, Astro
-- [Composition](/docs/2.x/react/composition): compose an editor interface with primitives and hooks
-- [Word fidelity](/docs/2.x/word-fidelity): feature support and round-trip behavior
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a DOCX file.
+- [Installation](/docs/2.x/installation): Configure supported frameworks.
+- [React composition](/docs/2.x/react/composition): Build a React interface.
+- [Vue composition](/docs/2.x/vue/composition): Build a Vue interface.

@@ -1,35 +1,33 @@
 ---
 title: 'Fonts and measurement'
-description: 'How the editor resolves fonts for Word-accurate line wrap and pagination: embedded DOCX fonts, metric-compatible substitutes, and app-supplied font URLs.'
+description: 'Resolve fonts for Word-accurate line wrapping and pagination with embedded fonts, metric-compatible substitutes, or app-supplied files.'
 category: 'Guides'
 seoTitle: 'Fonts and text measurement'
 ---
 
-The editor measures text with a real shaping engine (HarfBuzz) whenever it has font
-bytes to measure with. With no fonts, the editor still opens: layout falls back to a
-fixed-width estimate, but wrap and page-break points are then approximations rather
-than Word's. This guide covers the three ways fonts reach the editor, the two ways of
-timing them, and how they combine.
+The editor uses HarfBuzz when it has usable font bytes. Without them, it uses a
+fixed-width estimate.
 
-## Font sources
+The document still opens with fixed measurement. Line wraps and page breaks can
+differ from Word.
 
-**1. Fonts embedded in the document, automatic.** A `.docx` can carry the faces it was
-written in. When it does, the editor extracts them on load and measures with them. No
-configuration, no assets, no network: a document that brings its own fonts is
-Word-accurate without extra font configuration, in metrics and in pixels. The editor also registers the
-embedded bytes with the browser so the painted pages show the real glyphs, not a platform
-substitute.
+## Choose a font source
 
-Those faces register under an internal alias, never under the family name the document
-declares. A `.docx` controls its own font names, and the browser's font registry is
-page-wide, so registering a document's `Segoe UI` would repaint your application's own
-buttons and dialogs with glyphs from that file.
+| Source                     | Network on document open         | Measurement                        | Painted glyphs                          |
+| -------------------------- | -------------------------------- | ---------------------------------- | --------------------------------------- |
+| Fonts embedded in the DOCX | No                               | Uses the embedded bytes            | Registers an isolated browser alias     |
+| `@docx-editor.dev/fonts`   | Only when your code loads assets | Uses metric-compatible substitutes | Optional browser registration           |
+| `loadFonts` with your URLs | Only when your code calls it     | Uses admitted files                | Register faces separately when required |
+| Resolver function          | Depends on your resolver         | Uses matched files                 | Depends on returned sources             |
+| No usable source           | No                               | Fixed-width estimate               | Browser fallback                        |
 
-**2. Metric-compatible substitutes via `loadDefaultFonts`.** Most documents use Word's default
-fonts (Calibri, Cambria, Times New Roman, Arial, Courier New), which are proprietary
-and cannot be bundled. The optional `@docx-editor.dev/fonts` package provides open-licensed
-faces built to match their metrics: identical advance widths, so lines wrap where Word
-wraps them:
+Embedded fonts load automatically. The editor registers them under internal
+aliases. A document cannot replace a page-wide font family used by your
+application.
+
+## Load Word-compatible defaults
+
+The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes.
 
 | Word font       | Substitute       | License |
 | --------------- | ---------------- | ------- |
@@ -39,105 +37,41 @@ wraps them:
 | Arial           | Liberation Sans  | SIL OFL |
 | Courier New     | Liberation Mono  | SIL OFL |
 
-<FrameworkTabs>
-<Framework value="react">
+These fonts match advance widths. Rare kerning differences can still change an
+edge case. Supply licensed font bytes when pixels must match the original face.
 
-```tsx
-import { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-import { loadDefaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
-import type { FontConfigurationFragment } from '@docx-editor.dev/react';
-
-function Editor({ bytes }: { bytes: Uint8Array }) {
-  // `settled` gates the FIRST mount. `fonts` is sampled at mount and an identity change
-  // remounts, so mounting before fonts resolve costs a visible remount, and a remount
-  // resets the undo stack and the caret. Waiting once avoids both.
-  const [fonts, setFonts] = useState<{
-    settled: boolean;
-    value?: FontConfigurationFragment;
-  }>({ settled: false });
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const fragment = await loadDefaultFonts(); // or { families: ['Calibri'] }
-        // Optional: also register the substitutes with the browser under the Word family
-        // names, so painted glyphs match the metrics layout measured with.
-        void installDefaultFontFaces();
-        if (!cancelled) setFonts({ settled: true, value: fragment });
-      } catch {
-        // A load failure settles with no fonts: the editor opens on the fixed measurer,
-        // which is the documented degradation.
-        if (!cancelled) setFonts({ settled: true });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!fonts.settled) return null;
-  return <DocxEditor.Root document={bytes} fonts={fonts.value} />;
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { onMounted, shallowRef } from 'vue';
-import { DocxEditorRoot, type FontConfigurationFragment } from '@docx-editor.dev/vue';
-import { loadDefaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
-
-defineProps<{ bytes: Uint8Array }>();
-
-// `settled` gates the FIRST mount. `fonts` is sampled at mount and an identity change
-// rebuilds the editor, so mounting before fonts resolve costs a visible rebuild, and a
-// rebuild resets the undo stack and the caret. Waiting once avoids both.
-const settled = shallowRef(false);
-const fonts = shallowRef<FontConfigurationFragment>();
-
-onMounted(async () => {
-  try {
-    fonts.value = await loadDefaultFonts(); // or { families: ['Calibri'] }
-    // Optional: also register the substitutes with the browser under the Word family
-    // names, so painted glyphs match the metrics layout measured with.
-    void installDefaultFontFaces();
-  } catch {
-    // A load failure settles with no fonts: the editor opens on the fixed measurer,
-    // which is the documented degradation.
-  } finally {
-    settled.value = true;
-  }
-});
-</script>
-
-<template>
-  <DocxEditorRoot v-if="settled" :document="bytes" :fonts="fonts" />
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Font binaries load lazily as separate assets, only for the families you ask for.
-Importing the package fetches nothing.
-
-**3. Your own fonts, explicit URLs.** For brand fonts or licensed copies of the real
-faces, `loadFonts` fetches URLs you specify and caches them locally. When you pin a
-`sha256:` hash it rejects the bytes when the hash does not match. Pin it for any URL not under your sole
-control:
+Load fonts before the first editor mount. This avoids a visible remount and
+keeps the initial caret and undo history.
 
 ```ts
-// Also re-exported by both adapters: '@docx-editor.dev/react' and
-// '@docx-editor.dev/vue'.
-import { loadFonts, composeFontConfiguration } from '@docx-editor.dev/core/editor';
+import { defaultFonts } from '@docx-editor.dev/fonts';
+
+const fonts = await defaultFonts();
+```
+
+Pass `fonts` to `DocxEditor.Root` or `DocxEditorRoot`. You can limit the load:
+
+```ts
+const fonts = await defaultFonts({ families: ['Calibri'] });
+```
+
+Font binaries load as separate assets. Importing the package fetches nothing.
+
+## Load your own fonts
+
+Use `loadFonts` for brand fonts or licensed Word fonts.
+
+```ts
+import { composeFontConfiguration, loadFonts } from '@docx-editor.dev/core/editor';
 
 const brand = await loadFonts({
   sources: [
-    { url: '/fonts/AcmeSans-Regular.ttf', family: 'Acme Sans', weight: 400, style: 'normal' },
+    {
+      url: '/fonts/AcmeSans-Regular.ttf',
+      family: 'Acme Sans',
+      weight: 400,
+      style: 'normal',
+    },
     {
       url: '/fonts/AcmeSans-Bold.ttf',
       family: 'Acme Sans',
@@ -147,55 +81,59 @@ const brand = await loadFonts({
     },
   ],
 });
+
 const fonts = composeFontConfiguration(brand, await loadDefaultFonts());
 ```
 
-`loadFonts` never rejects for a single bad source: it returns the admitted sources plus
-a typed `failures` list, so the editor can open with partial coverage.
+| `loadFonts` behavior | Result                                                                 |
+| -------------------- | ---------------------------------------------------------------------- |
+| One source fails     | Returns admitted sources and a typed `failures` list.                  |
+| Hash matches         | Admits the source.                                                     |
+| Hash differs         | Rejects that source with `hashMismatch`.                               |
+| Hash omitted         | Computes one for the returned source.                                  |
+| Same request repeats | Uses the Cache API when available. Otherwise, each call fetches again. |
 
-You do not need to supply a hash. Pins are optional: omit `hash` for URLs on
-your own origin and `loadFonts` computes one. When you do want to pin a
-third-party URL, run it once without a pin and read the values back off the result:
+Pin every URL that you do not control. To create pins, load once without a hash
+and store the returned source hashes.
 
 ```ts
 const result = await loadFonts({ sources });
 console.log(result.sources.map((source) => `${source.id}: ${source.hash}`));
 ```
 
-Paste those into your source list (or generate the list at build time, which is how
-`@docx-editor.dev/fonts` bakes the hashes for its own assets).
-
-If you already have font bytes from a file input, IndexedDB, or a bundler import, `createFontSource`
-turns them into a source directly, with the hash computed. It returns a typed
-failure rather than throwing when the descriptor or the bytes are unusable:
+Use `createFontSource` when you already have bytes from a file input, IndexedDB,
+or a bundler.
 
 ```ts
-import { createFontSource, composeFontConfiguration } from '@docx-editor.dev/core/editor';
+const made = createFontSource(bytes, {
+  family: 'Acme Sans',
+  weight: 400,
+  style: 'normal',
+});
 
-const made = createFontSource(bytes, { family: 'Acme Sans', weight: 400, style: 'normal' });
 if ('source' in made) {
   const fonts = composeFontConfiguration({ sources: [made.source] });
 } else {
-  report(made.failure.reason); // 'malformed', 'overLimit', 'invalidRequest', …
+  report(made.failure.reason);
 }
 ```
 
-## Loading upfront or on demand
+This function returns a typed failure instead of throwing for invalid
+descriptors or bytes.
 
-Every path above resolves fonts before a document opens. You pick the faces, load the
-bytes, and hand the editor a value. Keep this as your default: it is the only path that
-makes no network request on open.
+## Load fonts on demand
 
-`fonts` also accepts a function. The editor calls it once per load, after parsing the
-file, with the families that file declares. A document then loads only the faces it uses,
-and one that names nothing you cover loads nothing:
+The `fonts` prop also accepts a resolver. The editor calls it once per document
+load after parsing. It receives the family names declared by that document.
+
+Use `useFonts` to keep the resolver identity stable across renders.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
   const fonts = useFonts(googleFonts());
@@ -208,11 +146,10 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 
 ```vue
 <script setup lang="ts">
-import { DocxEditorRoot, useFonts } from '@docx-editor.dev/vue';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { DocxEditorRoot, useFonts } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
-
 const fonts = useFonts(googleFonts());
 </script>
 
@@ -224,183 +161,83 @@ const fonts = useFonts(googleFonts());
 </Framework>
 </FrameworkTabs>
 
-`googleFonts()` serves those families from a generated catalog. Every face is pinned to
-one `google/fonts` commit and carries a baked `sha256:` that the editor re-derives before
-it admits the bytes. Use `allow` to narrow what it may ever fetch, and `substitute` to map
-your own document family names onto catalog ones:
+`googleFonts()` uses a generated catalog. Each face is pinned to one
+`google/fonts` commit and includes a checked `sha256:` value.
 
 ```ts
-googleFonts({ allow: ['Tinos', 'Carlito'], substitute: { Georgia: 'Tinos' } });
-```
-
-Write your own resolver when the bytes are yours. It takes the declared families and
-returns the same fragment shape as everything else:
-
-```ts
-// A Map, not an object: the families are file-derived, and `'constructor' in {}` is true.
-const myBrandFaces = new Map([['Acme Sans', '/fonts/AcmeSans-Regular.ttf']]);
-
-const fonts = useFonts(async ({ families, defaultFamily }) => {
-  const wanted = [defaultFamily, ...families].filter((family) => myBrandFaces.has(family));
-  return { sources: await loadMyFaces(wanted) };
+googleFonts({
+  allow: ['Tinos', 'Carlito'],
+  substitute: { Georgia: 'Tinos' },
 });
 ```
 
-<Callout type="warn">
-  A resolver that fetches makes opening a document perform network requests, which the editor never
-  does on its own. The families come from the file, so treat them as lookup keys against a set you
-  shipped, and never build a URL out of one. Whoever serves the fonts also learns which families a
-  document uses. Stay on the upfront path if that matters. The editor caps how many families it
-  hands a resolver, and `googleFonts()` matches names only against its closed catalog.
-</Callout>
+| Resolver constraint        | Required behavior                                                     |
+| -------------------------- | --------------------------------------------------------------------- |
+| File-supplied family names | Match them against a closed `Map` or catalog.                         |
+| URL construction           | Never build a URL from a document family name.                        |
+| Privacy                    | A remote font host can learn which families the document uses.        |
+| Updates                    | Load another document or remount to apply changed resolver arguments. |
+| Composition                | `useFonts(googleFonts(), brandFragment)` combines sources.            |
 
-`useFonts` exists because the editor root rebuilds its instance when `fonts` changes
-identity. An inline resolver is a new function on every render, which rebuilds the
-editor on every render. `useFonts` returns one resolver for the component's life. It also merges
-origins, so on-demand and upfront faces compose:
+An inline resolver creates a new function on each render. That identity change
+can rebuild the editor. `useFonts` keeps one resolver for the component life.
 
-```ts
-const fonts = useFonts(googleFonts(), brandFragment);
-```
+The editor caps the family list passed to a resolver. `googleFonts()` matches
+only its closed catalog.
 
-Because the resolver keeps its identity, the editor re-reads its arguments per load rather
-than per render. Changing them mid-document resolves nothing new. Load a document or
-remount for new fonts to take effect.
+## Source precedence
 
-## How sources combine
+`composeFontConfiguration(base, ...fragments)` creates one immutable
+configuration.
 
-`composeFontConfiguration(base, ...fragments)` merges any number of fragments into the
-one immutable configuration the editor samples per mount. Precedence is simple:
+| Priority | Rule                                                                               |
+| -------- | ---------------------------------------------------------------------------------- |
+| 1        | An explicit source beats an embedded face with the same family, weight, and style. |
+| 2        | An embedded face beats a substitution.                                             |
+| 3        | The first fragment wins between equal sources.                                     |
+| 4        | Duplicate faces are removed.                                                       |
 
-1. **Explicit sources win.** A face you supply beats an embedded face with the same
-   family, weight, and style.
-2. **Embedded faces beat substitutions.** A document that embeds Calibri uses those
-   bytes; the Calibri→Carlito mapping applies only when no direct source exists.
-3. **First fragment wins** among equals, and duplicate faces are deduplicated rather
-   than erroring.
+## Handle failures
 
-## Fallback behavior
+Fonts never block a document from opening. Each failed face falls back
+independently.
 
-Fonts never block a document from opening. The document mounts immediately on the
-fixed measurer and swaps to shaped measurement in a single re-mount when fonts resolve.
-Edits made before fonts resolve survive that remount, but the undo stack and caret
-position do not, which is why the upfront sample above waits for fonts before the first
-mount. A resolver skips that step. It runs after the document is parsed, so you have
-nothing to gate the first mount on.
-Every failure (a corrupt embedded face, a 404, a hash mismatch) degrades exactly one
-face, reports a typed `EditorFontError` through `onFontError`, and leaves the rest
-measuring accurately.
+| Failure path       | Notification         |
+| ------------------ | -------------------- |
+| React root         | `onFontError`        |
+| Vue root           | `@font-error`        |
+| `createDocxEditor` | `onFontError` option |
 
-## Observing font state
+Each `EditorFontError` has a typed `code`. Known codes include `missing`,
+`malformed`, `overLimit`, `hashMismatch`, and `wasmUnavailable`.
 
-Font errors reach you as `onFontError` on the React root, as the `@font-error` emit on
-the Vue root, and as an option on `createDocxEditor`. Each error carries a typed `code`
-(`missing`, `malformed`, `overLimit`, `hashMismatch`, …) and, where known, the face
-`request` it concerns. To check whether measurement uses shaped fonts, read
-`fontMeasurement()` on the editor instance:
+Read `editor.fontMeasurement()` to inspect measurement:
 
-<FrameworkTabs>
-<Framework value="react">
+| Field       | Meaning                                     |
+| ----------- | ------------------------------------------- |
+| `measurer`  | `'shaped'` or `'fixed'`                     |
+| `resolving` | `true` while font resolution is in progress |
+| `producer`  | Optional source identifier                  |
 
-```tsx
-<DocxEditor.Root
-  document={bytes}
-  fonts={fragment}
-  onFontError={(error) => report(error.code, error.diagnostic ?? error.message)}
-/>;
+`{ measurer: 'fixed', resolving: false }` means no usable font source remains.
 
-// Inside the tree:
-const editor = useDocxEditor();
-editor?.fontMeasurement();
-// → { measurer: 'shaped' | 'fixed', resolving: boolean, producer?: string }
-```
+## Serve the HarfBuzz WASM asset
 
-</Framework>
-<Framework value="vue">
+Webpack, Turbopack, and Vite emit the bundled WebAssembly asset automatically.
+Some esbuild, Bun, and library builds do not emit
+`new URL(..., import.meta.url)` assets.
 
-```vue
-<script setup lang="ts">
-import { DocxEditorRoot } from '@docx-editor.dev/vue';
+Without `harfbuzz.wasm`, the editor reports `wasmUnavailable` and uses fixed
+measurement. Rendering continues, but line and page breaks can differ from
+Word.
 
-function reportFontError(error: { code: string; diagnostic?: string; message: string }) {
-  report(error.code, error.diagnostic ?? error.message);
-}
-</script>
+For affected builds:
 
-<template>
-  <DocxEditorRoot :document="bytes" :fonts="fragment" @font-error="reportFontError">
-    <!-- Viewport, content, and any component that reads the editor. -->
-  </DocxEditorRoot>
-</template>
-```
-
-```ts
-// In a DESCENDANT of DocxEditorRoot: useDocxEditor() reads the root's provide,
-// and the editor is null until the content mounts, so wrap the read in a
-// computed rather than calling it once during setup.
-const editor = useDocxEditor();
-const measurement = computed(() => editor.value?.fontMeasurement());
-// → { measurer: 'shaped' | 'fixed', resolving: boolean, producer?: string }
-```
-
-</Framework>
-</FrameworkTabs>
-
-`{ measurer: 'fixed', resolving: false }` is the steady state for a document with no
-usable font source; `resolving: true` means shaped resolution is still in flight.
-
-## Serving the shaper's WASM yourself
-
-The text shaper is a WASM binary included in `@docx-editor.dev/core` and
-loads lazily when fonts resolve. Webpack, Turbopack, and Vite emit it as an
-asset automatically, so those bundlers need no extra setup for this asset.
-
-Some bundlers do not emit `new URL(..., import.meta.url)` assets. esbuild and Bun
-are the common ones, and so is any build that inlines dynamic imports, such as a
-library bundle. Those builds succeed and then fail at runtime, reaching
-`onFontError` as an `EditorFontError` with code `wasmUnavailable`:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-<DocxEditor
-  onFontError={(error) => {
-    if (error.code === 'wasmUnavailable') showSetupError(error.diagnostic);
-  }}
-/>
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<DocxEditor
-  @font-error="(error) => error.code === 'wasmUnavailable' && showSetupError(error.diagnostic)"
-/>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Without that binary the editor keeps rendering, but it measures text with
-fallback metrics, so line breaks and page breaks no longer match Word. The
-engine also logs the failure once, so you see it even with no handler attached.
-
-To fix it, copy `harfbuzz.wasm` into your served assets and point the shaper at
-it before you create an editor:
-
-```ts
-import { setHarfBuzzWasmUrl } from '@docx-editor.dev/core/layout';
-
-setHarfBuzzWasmUrl('/static/harfbuzz.wasm');
-```
-
-Copy it as a build step. Resolving the package subpath works under Yarn
-Plug'n'Play too, where there's no `node_modules` directory to read from:
+1. Copy `harfbuzz.wasm` from the installed core package into your served assets.
+2. Call `setHarfBuzzWasmUrl` before you create the first editor.
+3. Repeat the copy after each package upgrade.
 
 ```js
-// scripts/copy-shaper.mjs — run before your bundler
 import { copyFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -410,40 +247,30 @@ await copyFile(
 );
 ```
 
-Re-run that step on every upgrade. The shaper rejects a binary from a different
-version, so a stale copy fails the same way a missing one does.
+```ts
+import { setHarfBuzzWasmUrl } from '@docx-editor.dev/core/layout';
 
-Call `setHarfBuzzWasmUrl` before the first editor. The shaper reads the location
-once and caches it, so a later call warns and does nothing: move the call and
-reload the page. A Web Worker gets its own module instance, so a worker that
-runs layout needs its own call.
+setHarfBuzzWasmUrl('/static/harfbuzz.wasm');
+```
 
-Pass a URL your application controls. The file is fetched and instantiated as
-WebAssembly, so never build it from user input, a query parameter, or remote
-configuration. Serving it from another origin needs that origin in your
-`connect-src` directive, and WebAssembly needs `wasm-unsafe-eval` in `script-src`
-either way.
+The shaper reads this URL once per module instance. A later call warns and does
+nothing. A Web Worker has a separate module instance and needs its own call.
 
-Serve the copy from the installed package version. The shaper compares the
-HarfBuzz library version it loads against the one it was built for, and rejects a
-mismatch instead of measuring text with unverified metrics.
+Use a URL that your application controls. Do not build it from user input or
+remote configuration.
 
-Because the shaper is bundled into the package, an npm `overrides` entry for
-`harfbuzzjs` does not change the code that runs. Upgrade `@docx-editor.dev/core`
-instead.
+Cross-origin hosting needs that origin in `connect-src`. WebAssembly needs
+`wasm-unsafe-eval` in `script-src`.
 
-## Caveats
+The shaper rejects a missing, stale, or version-mismatched binary. An npm
+`overrides` entry for `harfbuzzjs` does not change bundled shaper code. Upgrade
+`@docx-editor.dev/core` instead.
 
-- **Metric-compatible is not identical.** Advance widths match, so wrap points match;
-  rare kerning-pair differences can still move an edge case. Documents that must
-  render the true faces should supply licensed bytes via `loadFonts`.
-- **The editor never fetches fonts on its own.** `loadFonts`, `loadDefaultFonts` and any
-  resolver you pass run because your code asked for them. Embedded fonts come from inside
-  the file. Opening a document makes no network request unless you passed a resolver that
-  fetches, which is the one case where a font request happens on open.
+For engine implementation details, see
+[Architecture](/docs/2.x/core/architecture).
 
 ## Next steps
 
-- [React props: Fonts](/docs/2.x/react/props#fonts) and [Vue props: Fonts](/docs/2.x/vue/props#fonts): `fonts` and font error reporting
-- [Word fidelity](/docs/2.x/word-fidelity): how measurement affects pagination
-- [Custom styles](/docs/2.x/guides/custom-styles): styles, themes, and the font picker
+- [React font props](/docs/2.x/react/props#fonts): Configure React roots.
+- [Vue font props](/docs/2.x/vue/props#fonts): Configure Vue roots.
+- [Word fidelity](/docs/2.x/word-fidelity): Review pagination support.
