@@ -406,13 +406,6 @@ export function buildPageRefIndex(allRefs: readonly PageRefHit[]): PageRefIndex 
 }
 
 /**
- * Collect note references that appear in laid-out body fragments on a page.
- * Matches {@link ParagraphFragmentRecord.range} ownership (half-open + boundary affinity).
- *
- * Pass {@link buildPageRefIndex} result as `refIndex` for O(fragments + matching refs)
- * instead of scanning every document ref against every page fragment.
- */
-/**
  * Per-page answers, memoized on the page's fragments array: a page an incremental pass
  * carried over keeps its fragments by identity, and one settle walks every page THREE times
  * (mark sites, reserve compute, attach). Keyed on the index too — a changed hit set publishes
@@ -423,6 +416,13 @@ const pageRefFilterMemos = new WeakMap<
   { readonly refIndex: PageRefIndex; readonly result: readonly PageRefHit[] }
 >();
 
+/**
+ * Collect note references that appear in laid-out body fragments on a page.
+ * Matches {@link ParagraphFragmentRecord.range} ownership (half-open + boundary affinity).
+ *
+ * Pass {@link buildPageRefIndex} result as `refIndex` for O(fragments + matching refs)
+ * instead of scanning every document ref against every page fragment.
+ */
 export function filterRefsOnPage(
   page: PageRecord,
   allRefs: readonly PageRefHit[],

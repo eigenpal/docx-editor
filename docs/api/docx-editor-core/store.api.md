@@ -3478,9 +3478,9 @@ export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
     readonly customNodePayloads?: ReadonlyMap<string, {
-        readonly nodeId: string;
-        readonly label: string;
         readonly data: string;
+        readonly label: string;
+        readonly nodeId: string;
     }> | undefined;
     readonly customNodes?: readonly unknown[] | undefined;
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
