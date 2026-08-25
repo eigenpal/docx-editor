@@ -7,7 +7,7 @@
 // layout-owned note records. Endnotes reserve nothing on reference pages — they collect at
 // sectEnd / docEnd. Hostile counts and oscillation fail closed with named reasons.
 
-import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { fragmentOwnsPosition, fragmentParagraphs } from './line-segments.ts';
 import { collectNoteReferences } from '../store/package/note-references.ts';
 import type { DocumentSection } from './section-properties.ts';
@@ -384,14 +384,24 @@ function paragraphFragmentsOfBlocks(
 /** Paragraph-id → refs index for linear {@link filterRefsOnPage} over a layout pass. */
 export type PageRefIndex = ReadonlyMap<string, readonly PageRefHit[]>;
 
+/**
+ * Memoized on the hit array's identity: the session memo hands the previous pass's hit array
+ * back by identity when its content is unchanged, so the reserve compute and the attach pass
+ * of every keystroke rebuilt an identical index.
+ */
+const pageRefIndexMemos = new WeakMap<readonly PageRefHit[], PageRefIndex>();
+
 /** Build a reusable paragraph-id index (document order preserved per paragraph). */
 export function buildPageRefIndex(allRefs: readonly PageRefHit[]): PageRefIndex {
+  const cached = pageRefIndexMemos.get(allRefs);
+  if (cached) return cached;
   const map = new Map<string, PageRefHit[]>();
   for (const ref of allRefs) {
     const list = map.get(ref.paragraphId);
     if (list) list.push(ref);
     else map.set(ref.paragraphId, [ref]);
   }
+  pageRefIndexMemos.set(allRefs, map);
   return map;
 }
 
@@ -402,6 +412,17 @@ export function buildPageRefIndex(allRefs: readonly PageRefHit[]): PageRefIndex 
  * Pass {@link buildPageRefIndex} result as `refIndex` for O(fragments + matching refs)
  * instead of scanning every document ref against every page fragment.
  */
+/**
+ * Per-page answers, memoized on the page's fragments array: a page an incremental pass
+ * carried over keeps its fragments by identity, and one settle walks every page THREE times
+ * (mark sites, reserve compute, attach). Keyed on the index too — a changed hit set publishes
+ * a new index object, which invalidates every entry at once.
+ */
+const pageRefFilterMemos = new WeakMap<
+  readonly BlockFragmentRecord[],
+  { readonly refIndex: PageRefIndex; readonly result: readonly PageRefHit[] }
+>();
+
 export function filterRefsOnPage(
   page: PageRecord,
   allRefs: readonly PageRefHit[],
@@ -413,6 +434,8 @@ export function filterRefsOnPage(
       fragments.some((fragment) => fragmentOwnsPosition(fragment, ref.paragraphId, ref.atomOffset))
     );
   }
+  const cached = pageRefFilterMemos.get(page.fragments);
+  if (cached && cached.refIndex === refIndex) return cached.result;
   const out: PageRefHit[] = [];
   const claimed = new Set<PageRefHit>();
   for (const fragment of fragments) {
@@ -430,6 +453,7 @@ export function filterRefsOnPage(
       }
     }
   }
+  pageRefFilterMemos.set(page.fragments, { refIndex, result: out });
   return out;
 }
 
@@ -2210,19 +2234,75 @@ function collectBodyNoteReferences(part: OoxmlPart): readonly {
   }));
 }
 
+/**
+ * The one retained previous answer, content-validated. The map is a pure function of the
+ * section bounds plus each block's paragraph-id list, and a keystroke changes NEITHER — it
+ * replaces one block with a twin carrying the same ids. Rebuilding 10k+ map entries per
+ * keystroke cost more than the lookups the map serves, so the previous answer is kept
+ * (one strong slot, bounded) and revalidated by identity-diffing the block lists: blocks
+ * that changed identity must still contribute the same ids, or the map rebuilds.
+ */
+let paragraphSectionIndexMemo: {
+  blocks: readonly OoxmlElement[];
+  boundsFingerprint: string;
+  map: ReadonlyMap<string, number>;
+} | null = null;
+
+function sectionBoundsFingerprint(
+  sections: readonly DocumentSection[],
+  displayMode: RevisionDisplayMode
+): string {
+  return `${displayMode};${sections.map((section) => `${section.blockStart}-${section.blockEndExclusive}`).join(',')}`;
+}
+
+function blockParagraphIdsEqual(next: OoxmlElement, previous: OoxmlElement): boolean {
+  if (next.kind !== previous.kind) return false;
+  if (next.kind === 'paragraph') return next.id === previous.id;
+  const nextIds = tableParagraphIdsOf(next);
+  const previousIds = tableParagraphIdsOf(previous);
+  if (nextIds.length !== previousIds.length) return false;
+  for (let index = 0; index < nextIds.length; index += 1) {
+    if (nextIds[index] !== previousIds[index]) return false;
+  }
+  return true;
+}
+
 /** Map paragraph id → section index for note numbering / position resolution. */
 function paragraphSectionIndexOf(
   part: OoxmlPart,
   sections: readonly DocumentSection[],
   displayMode: RevisionDisplayMode
 ): ReadonlyMap<string, number> {
-  const map = new Map<string, number>();
   // IN THE SAME MODE the section bounds were counted in. `blockStart`/`blockEndExclusive`
   // index a mode-filtered block list, and a resolved view has fewer blocks — a paragraph a
   // tracked mark merged away is gone from it. Indexing an All Markup list with those bounds
   // put paragraphs in the wrong section, which renumbers a footnote in a section nobody
   // edited.
   const blocks = storyBlocks(part, displayMode);
+  const boundsFingerprint = sectionBoundsFingerprint(sections, displayMode);
+  const memo = paragraphSectionIndexMemo;
+  if (
+    memo &&
+    memo.boundsFingerprint === boundsFingerprint &&
+    memo.blocks.length === blocks.length
+  ) {
+    let reusable = true;
+    for (let index = 0; index < blocks.length; index += 1) {
+      const block = blocks[index]!;
+      const previous = memo.blocks[index]!;
+      if (block === previous) continue;
+      if (!blockParagraphIdsEqual(block, previous)) {
+        reusable = false;
+        break;
+      }
+    }
+    if (reusable) {
+      // Re-anchor on the fresh list so the next keystroke diffs against it, not a stale one.
+      memo.blocks = blocks;
+      return memo.map;
+    }
+  }
+  const map = new Map<string, number>();
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
     for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
@@ -2237,6 +2317,7 @@ function paragraphSectionIndexOf(
       for (const id of tableParagraphIdsOf(block)) map.set(id, sectionIndex);
     }
   }
+  paragraphSectionIndexMemo = { blocks, boundsFingerprint, map };
   return map;
 }
 
