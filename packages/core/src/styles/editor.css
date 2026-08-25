@@ -1162,6 +1162,11 @@ a.docx-hyperlink:focus-visible {
   cursor: default;
 }
 
+/* Text boxes carry rendered text, so they keep the I-beam the arrow above would cover. */
+.docx-drawing-textbox {
+  cursor: text;
+}
+
 .docx-drawing-layer {
   position: absolute;
   inset: 0;
