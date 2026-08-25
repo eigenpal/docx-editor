@@ -65,8 +65,10 @@ interface TaskGapSummary {
 interface BurstReport {
   keys: number;
   totalMs: number;
-  /** Published layout revisions observed during the burst — how often the buffer flushed. */
+  /** Commit-revision advances during the burst — how often the buffer flushed. */
   flushes: number;
+  /** How often the surface consulted the stubbed isInputPending; zero fails the run. */
+  pressureChecks: number;
   taskGap: TaskGapSummary;
 }
 
@@ -131,6 +133,14 @@ function parseArgs(argv: string[]): Args {
 }
 
 /**
+ * Gaps below this are heartbeat cadence, not occupancy: the settle loops add ~25 idle
+ * sub-millisecond ticks per keystroke, which would put every real stall above the 95th
+ * percentile and make `p95Ms` a number about the timer queue. Only occupancy gaps are
+ * recorded, so the summary quantifies stalls — and an empty list means none happened.
+ */
+const OCCUPANCY_GAP_FLOOR_MS = 5;
+
+/**
  * A setTimeout(0) heartbeat: the gap between consecutive fires is how long the main thread
  * stayed occupied — the time a keystroke arriving in that window would have waited. The
  * settle loop pumps the same timer queue, so the heartbeat interleaves with it and a long
@@ -144,7 +154,8 @@ function startTaskGapSampler(): { stop: () => void; gaps: number[] } {
   const beat = (): void => {
     if (stopped) return;
     const nowMs = performance.now();
-    gaps.push(nowMs - last);
+    const gap = nowMs - last;
+    if (gap >= OCCUPANCY_GAP_FLOOR_MS) gaps.push(gap);
     last = nowMs;
     handle = setTimeout(beat, 0);
   };
@@ -167,49 +178,79 @@ function taskGapSummary(gaps: readonly number[]): TaskGapSummary {
 
 const tick = (): Promise<void> => new Promise((done) => setTimeout(done, 0));
 
+/** Keys enqueued per macrotask during a burst. The type-flush timer and this loop's own
+ * tick share the timer queue, and the flush timer is armed first — one key per task would
+ * therefore flush every key alone and never exercise the multi-character buffer. Several
+ * keys per task is also what hardware key repeat produces when a flush holds the thread. */
+const BURST_KEYS_PER_TASK = 3;
+
 /**
- * Buffered typing under asserted input pressure: `enqueueType` one character per task while
- * a stubbed `navigator.scheduling.isInputPending` answers true, release the pressure, then
- * settle. This is the scenario where the surface's pressure-aware lanes (deferred paint,
- * and any future flush split) actually engage under happy-dom.
+ * Buffered typing under asserted input pressure: `enqueueType` several characters per task
+ * while a stubbed `navigator.scheduling.isInputPending` answers true, release the pressure,
+ * then settle. This is the scenario where the surface's pressure-aware lanes (deferred
+ * paint, and any future flush split) actually engage under happy-dom.
  */
 async function runBurst(surface: PaginatedSurface, keys: number): Promise<BurstReport> {
   let pressure = true;
+  let pressureChecks = 0;
   const nav = globalThis.navigator as Navigator & {
     scheduling?: { isInputPending?: (options?: { includeContinuous?: boolean }) => boolean };
   };
   const hadScheduling = Object.prototype.hasOwnProperty.call(nav, 'scheduling');
   const previous = nav.scheduling;
   Object.defineProperty(nav, 'scheduling', {
-    value: { isInputPending: () => pressure },
+    value: {
+      isInputPending: () => {
+        pressureChecks += 1;
+        return pressure;
+      },
+    },
     configurable: true,
   });
 
+  const sampler = startTaskGapSampler();
   try {
-    const sampler = startTaskGapSampler();
+    // The revision is the commit clock (one flush commits once), so counting by DELTA
+    // catches two flushes landing between two observations. Deferred paint never moves it,
+    // which is why the settle tail below also watches the published paint timing.
     let revision = surface.state().revision;
     let flushes = 0;
+    let enqueued = 0;
     const startedAt = performance.now();
-    for (let index = 0; index < keys; index += 1) {
-      surface.enqueueType('x');
+    while (enqueued < keys) {
+      const chunk = Math.min(BURST_KEYS_PER_TASK, keys - enqueued);
+      for (let key = 0; key < chunk; key += 1) surface.enqueueType('x');
+      enqueued += chunk;
       await tick();
       const next = surface.state().revision;
-      if (next !== revision) {
+      if (next > revision) {
+        flushes += next - revision;
         revision = next;
-        flushes += 1;
       }
     }
     pressure = false;
-    // Settle inline so every flush (revision move) in the tail is counted, not just one.
+    // Settle inline, watching BOTH clocks: the commit revision (flush count) and the
+    // published paint timing — under pressure the render defers to a later task that never
+    // moves the revision, and totalMs must include that deferred paint.
+    let lastPaintMs = surface.state().perf.paintMs;
     let quietTicks = 0;
     let lastChangeAt = performance.now();
     while (quietTicks < 25) {
       if (performance.now() - startedAt > 120_000) throw new Error('burst settle timeout');
       await tick();
-      const next = surface.state().revision;
-      if (next !== revision) {
+      const state = surface.state();
+      const next = state.revision;
+      let moved = false;
+      if (next > revision) {
+        flushes += next - revision;
         revision = next;
-        flushes += 1;
+        moved = true;
+      }
+      if (state.perf.paintMs !== lastPaintMs) {
+        lastPaintMs = state.perf.paintMs;
+        moved = true;
+      }
+      if (moved) {
         lastChangeAt = performance.now();
         quietTicks = 0;
       } else {
@@ -217,14 +258,20 @@ async function runBurst(surface: PaginatedSurface, keys: number): Promise<BurstR
       }
     }
     const settledAt = lastChangeAt;
-    sampler.stop();
+    if (pressureChecks === 0) {
+      throw new Error(
+        'the isInputPending stub was never consulted; the pressure lanes did not engage'
+      );
+    }
     return {
       keys,
       totalMs: settledAt - startedAt,
       flushes,
+      pressureChecks,
       taskGap: taskGapSummary(sampler.gaps),
     };
   } finally {
+    sampler.stop();
     if (hadScheduling) {
       Object.defineProperty(nav, 'scheduling', { value: previous, configurable: true });
     } else {
@@ -330,9 +377,11 @@ async function run(args: Args): Promise<SettleReport> {
     }
     sampler.stop();
 
-    const burst = args.burst > 0 ? await runBurst(surface, args.burst) : undefined;
-
+    // Snapshot BEFORE the burst: `work` and `pages` are the measured keystrokes' evidence,
+    // and a burst-run baseline must stay comparable to a burst-free one.
     const state = surface.state();
+
+    const burst = args.burst > 0 ? await runBurst(surface, args.burst) : undefined;
     return {
       schema: 1,
       fixture: args.fixture,
@@ -380,7 +429,8 @@ function printHuman(report: SettleReport): void {
   if (report.burst) {
     console.log(
       `  burst ${report.burst.keys} keys in ${report.burst.totalMs.toFixed(1)} ms, ` +
-        `${report.burst.flushes} flushes, task gap p95 ${report.burst.taskGap.p95Ms.toFixed(1)} ms, ` +
+        `${report.burst.flushes} flushes, ${report.burst.pressureChecks} pressure checks, ` +
+        `task gap p95 ${report.burst.taskGap.p95Ms.toFixed(1)} ms, ` +
         `max ${report.burst.taskGap.maxMs.toFixed(1)} ms`
     );
   }

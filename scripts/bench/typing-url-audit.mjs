@@ -376,13 +376,24 @@ try {
   const responsivenessRaw = await page.evaluate(() => ({
     slowInputEvents: globalThis.__typingAuditProbe?.slowInputEvents ?? [],
     longTasks: globalThis.__typingAuditProbe?.longTasks ?? [],
+    observerSupport: globalThis.__typingAuditProbe?.observerSupport ?? {
+      eventTiming: false,
+      longTask: false,
+    },
   }));
-  const responsiveness = summarizeResponsiveness(
-    responsivenessRaw.slowInputEvents.filter((event) => event.startTimeMs >= typingStartedAtMs),
-    responsivenessRaw.longTasks
-      .filter((task) => task.startTimeMs >= typingStartedAtMs)
-      .map((task) => task.durationMs)
-  );
+  // Empty lists are an all-clear only when an observer actually installed; with neither
+  // API supported the section is omitted rather than claiming the run was jank-free.
+  const responsiveness =
+    responsivenessRaw.observerSupport.eventTiming || responsivenessRaw.observerSupport.longTask
+      ? summarizeResponsiveness(
+          responsivenessRaw.slowInputEvents.filter(
+            (event) => event.startTimeMs >= typingStartedAtMs
+          ),
+          responsivenessRaw.longTasks
+            .filter((task) => task.startTimeMs >= typingStartedAtMs)
+            .map((task) => task.durationMs)
+        )
+      : undefined;
 
   const caretInPagesLayer = await page.evaluate(() => {
     const pages = document.querySelector('.docx-pages');

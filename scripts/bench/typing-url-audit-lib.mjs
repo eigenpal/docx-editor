@@ -281,13 +281,14 @@ export function hasConsoleErrors(consoleEvents) {
 /**
  * Aggregate the responsiveness probe: slow Event Timing entries (the API only reports
  * interactions past its 16 ms floor, so every entry here already crossed one frame) and
- * long tasks. Null when neither observer captured anything — either genuinely responsive
- * or the APIs are unsupported, and the report omits the section rather than printing zeros
- * it cannot distinguish.
+ * long tasks. Null when neither list has an entry, which the report prints as the
+ * all-clear line.
  *
  * Callers filter both lists to the typing window first (`startTimeMs` on each entry):
  * buffered observers also capture the document open, whose long task would otherwise
- * dominate every typing report.
+ * dominate every typing report. Callers must also gate on the probe's `observerSupport`
+ * flags and pass nothing through when neither observer installed — an empty list is an
+ * all-clear only when its API was actually watching.
  *
  * @param {readonly { name: string; inputDelayMs: number; durationMs: number }[]} slowInputEvents
  * @param {readonly number[]} longTaskDurations
@@ -359,13 +360,16 @@ export function validateTypingProbeSamples(samples, keys) {
  * after a layout revision mutation finishes it.
  */
 export function installTypingAuditProbeInPage() {
-  /** @type {{ trustedBeforeInputs: number; pendingSample: TypingAuditPendingSample | null; samples: TypingAuditProbeSample[]; slowInputEvents: { name: string; inputDelayMs: number; durationMs: number; startTimeMs: number }[]; longTasks: { durationMs: number; startTimeMs: number }[] }} */
+  /** @type {{ trustedBeforeInputs: number; pendingSample: TypingAuditPendingSample | null; samples: TypingAuditProbeSample[]; slowInputEvents: { name: string; inputDelayMs: number; durationMs: number; startTimeMs: number }[]; longTasks: { durationMs: number; startTimeMs: number }[]; observerSupport: { eventTiming: boolean; longTask: boolean } }} */
   const probe = {
     trustedBeforeInputs: 0,
     pendingSample: null,
     samples: [],
     slowInputEvents: [],
     longTasks: [],
+    // Distinguishes "quiet run" from "the API is unsupported here": an empty list is an
+    // all-clear ONLY when its observer actually installed.
+    observerSupport: { eventTiming: false, longTask: false },
   };
   globalThis.__typingAuditProbe = probe;
 
@@ -389,8 +393,9 @@ export function installTypingAuditProbeInPage() {
         });
       }
     }).observe({ type: 'event', durationThreshold: 16, buffered: true });
+    probe.observerSupport.eventTiming = true;
   } catch {
-    // Event Timing is unsupported here; the report simply omits the section.
+    // Event Timing is unsupported here; the report omits the section instead of claiming quiet.
   }
   try {
     new PerformanceObserver((list) => {
@@ -398,8 +403,9 @@ export function installTypingAuditProbeInPage() {
         probe.longTasks.push({ durationMs: entry.duration, startTimeMs: entry.startTime });
       }
     }).observe({ type: 'longtask', buffered: true });
+    probe.observerSupport.longTask = true;
   } catch {
-    // Long Tasks is unsupported here; the report simply omits the section.
+    // Long Tasks is unsupported here; the report omits the section instead of claiming quiet.
   }
 
   const readRevision = () => {
