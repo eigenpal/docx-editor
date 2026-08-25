@@ -449,11 +449,9 @@
 .docx-editor.dark .docx-page-content {
   /* contrast(0.92) softens the pure black/white extremes a plain invert
     * produces, landing on Word's gentler off-white text / dark-grey fills
-    * rather than #fff on #000. */
+    * rather than #fff on #000. The page FRAME sits outside this filter, so
+    * its own shadow needs no counter-treatment. */
   filter: invert(1) hue-rotate(180deg) contrast(0.92);
-  /* Replace the painter's drop shadow (the filter would turn it into a weird
-    * light glow) with a 1px ring. Pre-invert dark → post-invert a subtle light
-    * border, matching Word's framed dark page. */
 }
 .docx-editor.dark .docx-page-content img,
 .docx-editor.dark .docx-page-content svg,
