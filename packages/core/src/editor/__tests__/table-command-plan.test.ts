@@ -267,6 +267,40 @@ describe('table command planner and editor parity', () => {
     expect(editor.exec(cmd)).toEqual(can);
   });
 
+  test('caret in plain body text answers null table context, and flips with the caret', () => {
+    // The snapshot derive gates `tableContextAt` on the store's parent index: a caret whose
+    // paragraph provably has no tableCell ancestor must answer null WITHOUT building the
+    // layout's table index — and the gate must not change any answer. The document contains
+    // a table so the null is the gate's, not an empty document's.
+    const editor = mount(p('plain lead') + TABLE_2X2);
+    const surface = editor.surface!;
+    caret(surface, paragraphByText('plain lead', surface));
+    expect(editor.getSelectedTable()).toBeNull();
+    expect(editor.query({ type: 'tableContext' })).toBeNull();
+    expect(editor.snapshot().table).toBeNull();
+
+    // Into a cell: the full path answers with the exact table.
+    caret(surface, paragraphByText('B1', surface));
+    expect(editor.getSelectedTable()).toEqual({
+      blockId: expect.any(String),
+      rowCount: 2,
+      columnCount: 2,
+      cell: { row: 0, column: 1 },
+    });
+    expect(editor.query({ type: 'tableContext' })).toEqual({
+      rows: 2,
+      columns: 2,
+      rowIndex: 0,
+      columnIndex: 1,
+    });
+
+    // Back out: the gate answers null again for the same snapshot surface.
+    caret(surface, paragraphByText('plain lead', surface));
+    expect(editor.getSelectedTable()).toBeNull();
+    expect(editor.query({ type: 'tableContext' })).toBeNull();
+    expect(editor.snapshot().table).toBeNull();
+  });
+
   test('getSelectedTable and tableContext query return real values in a cell', () => {
     const editor = mount(TABLE_2X2);
     const surface = editor.surface!;

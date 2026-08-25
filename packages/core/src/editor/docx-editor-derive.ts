@@ -32,7 +32,7 @@ import {
   type TableCommandPlan,
   type TableCommandPlannerInput,
 } from './table-command-plan.ts';
-import { paragraphTextOf } from '@docx-editor.dev/core/store';
+import { findNode, paragraphTextOf, parentNodeOf } from '@docx-editor.dev/core/store';
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -484,6 +484,32 @@ export function gateCommand(
   return { ok: true };
 }
 
+/**
+ * Whether the caret's paragraph can possibly sit in a table — answered from the tree's
+ * O(1) node index, so the snapshot derive does not build the layout's whole table index
+ * (a walk over every placed cell of every page) just to learn the caret is in plain body
+ * text. Answers TRUE on any doubt — an unknown part, an unknown node, a demoted generic
+ * cell — so the full `tableContextAt` path keeps the final word.
+ */
+function caretMaybeInTableCell(surface: PaginatedSurface, paragraphId: string): boolean {
+  const part = surface.session.part();
+  // Only the body story's ids resolve against the body part; a header, footer or note
+  // paragraph falls through to the full path.
+  if (!paragraphId.startsWith(`${part.name}#`)) return true;
+  if (!findNode(part, paragraphId)) return true;
+  let current = parentNodeOf(part, paragraphId);
+  let hops = 0;
+  while (current) {
+    if (current.kind === 'tableCell') return true;
+    // A demoted table's cell is a generic `w:tc`; the layout will not index it as a
+    // table, but stay conservative and let the full path answer.
+    if (current.kind === 'generic' && current.localName === 'tc') return true;
+    if ((hops += 1) > 64) return true;
+    current = parentNodeOf(part, current.id);
+  }
+  return false;
+}
+
 export function selectedTableOf(surface: PaginatedSurface | null): {
   readonly blockId: string;
   readonly rowCount: number;
@@ -493,6 +519,7 @@ export function selectedTableOf(surface: PaginatedSurface | null): {
   if (!surface) return null;
   const state = surface.state();
   const cells = state.cellSelection;
+  if (!cells && !caretMaybeInTableCell(surface, state.selection.head.paragraphId)) return null;
   const context = tableContextAt(surface.layout(), state.selection.head.paragraphId);
   if (!context) return null;
   return {
@@ -519,6 +546,7 @@ export function tableContextOf(surface: PaginatedSurface | null): TableContext |
   const cells = state.cellSelection;
   // `selection` is a rectangle's own text range when one is live, so its head is inside the
   // table either way and one lookup serves both.
+  if (!cells && !caretMaybeInTableCell(surface, state.selection.head.paragraphId)) return null;
   const context = tableContextAt(surface.layout(), state.selection.head.paragraphId);
   if (!context) return null;
   return {

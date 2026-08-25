@@ -130,7 +130,7 @@ import {
   MAX_DRAWING_EXCLUSION_REFLOW_PASSES,
 } from './drawing-exclusion.ts';
 import { drawingModelOffsetsInParagraph } from './drawing-layout.ts';
-import { drawingTokenForTableBlock } from './inline-drawing-source.ts';
+import { drawingTokenForTableBlockMemo } from './inline-drawing-source.ts';
 import { projectDrawingsInPart } from '../store/package/drawing-projection.ts';
 import {
   emptyTocPlaceholderParagraphIds,
@@ -987,7 +987,11 @@ function layoutBlocksPass(
       block.kind === 'paragraph'
         ? (options.drawingTokenForParagraph?.(block) ?? options.drawingLayoutToken ?? '')
         : block.kind === 'table' && options.drawingTokenForParagraph
-          ? drawingTokenForTableBlock(block, options.drawingTokenForParagraph)
+          ? drawingTokenForTableBlockMemo(
+              block,
+              options.drawingLayoutEpoch,
+              options.drawingTokenForParagraph
+            )
           : '';
     // A TABLE'S LIST STATE IS ITS CELLS'. `listItems` is keyed by PARAGRAPH, and a numbered
     // list that continues inside a table cell has its markers there — so reading the table's

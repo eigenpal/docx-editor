@@ -675,6 +675,36 @@ export function paragraphDrawingLayoutTokenFromContext(
     .join(';');
 }
 
+/**
+ * `drawingTokenForTableBlock` memoized per (immutable table node, drawing epoch).
+ *
+ * The table token exists to VALIDATE the prepass memo, so it is recomputed before every
+ * memo hit — which walked every row and cell of every table on every layout pass. The
+ * token is a pure function of the table subtree (node identity) and the part's drawing
+ * projection/resource state, and `drawingLayoutEpoch` already stands in for the latter
+ * (it moves whenever any projection or resource in the part does). No epoch means the
+ * caller cannot see resource moves, so the recompute path is kept — the same rule the
+ * section prepass memo follows.
+ */
+export function drawingTokenForTableBlockMemo(
+  table: OoxmlNode,
+  epoch: string | undefined,
+  drawingTokenForParagraph: (paragraph: OoxmlNode) => string
+): string {
+  if (epoch === undefined) return drawingTokenForTableBlock(table, drawingTokenForParagraph);
+  const cached = tableDrawingTokenCache.get(table);
+  if (cached && cached.epoch === epoch) return cached.token;
+  const token = drawingTokenForTableBlock(table, drawingTokenForParagraph);
+  tableDrawingTokenCache.set(table, { epoch, token });
+  return token;
+}
+
+/** Aggregated drawing token per immutable table node, valid for one drawing epoch. */
+const tableDrawingTokenCache = new WeakMap<
+  OoxmlNode,
+  { readonly epoch: string; readonly token: string }
+>();
+
 /** Aggregate per-paragraph drawing tokens for a table subtree (cache + incremental keys). */
 export function drawingTokenForTableBlock(
   table: OoxmlNode,
