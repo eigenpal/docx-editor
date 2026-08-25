@@ -12,9 +12,9 @@
 // 1. Full budget: hits AND the final `budget.visited` / `budget.truncated` must be
 //    byte-identical to the cold walk — downstream parts sharing one budget must truncate
 //    at exactly the same point.
-// 2. A budget small enough to truncate mid-tree: the terminal accounting must match the
-//    cold walk. Hits under truncation are immaterial (callers treat `truncated` as
-//    atomic failure), so they are not compared.
+// 2. A budget small enough to truncate mid-tree: hits and accounting must STILL match
+//    the cold walk byte-for-byte, because an overrunning memo falls through to the
+//    plain descent (pre-truncation prefixes feed diagnoseNoteReferences).
 // 3. The budget-free memoized path, so the two memo systems cannot drift apart.
 //
 // Determinism: fixed seeds and a pure inline PRNG (mulberry32). A failure prints the
@@ -34,6 +34,7 @@ import {
   createNoteReferenceScanBudget,
   readOoxmlPart,
 } from '../package/index.ts';
+import { budgetedNoteScanMemoStats } from '../package/note-references.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -209,14 +210,18 @@ function assertBudgetedScanFresh(
     fail('budget-free hits', seed, step, `memoized: ${plainJson}\nfresh: ${plainColdJson}`, log);
   }
 
-  // A budget that truncates mid-tree: warm memos (populated by the scan above) may
-  // bulk-charge past the stop point, but the terminal accounting must match the cold
-  // walk. Hits under truncation are immaterial: callers treat it as atomic failure.
+  // A budget that truncates mid-tree: a warm memo whose bulk charge would overrun the
+  // remaining budget must fall through to the plain descent, so hits AND accounting
+  // stay byte-identical to the cold walk — pre-truncation hit prefixes (which
+  // diagnoseNoteReferences reports) survive warm memos.
   const cap = Math.max(1, Math.floor(coldBudget.visited / 2));
   const memoSmall = createNoteReferenceScanBudget(cap);
-  collectNoteReferences(part, { budget: memoSmall, maxHits: Number.POSITIVE_INFINITY });
+  const memoSmallHits = collectNoteReferences(part, {
+    budget: memoSmall,
+    maxHits: Number.POSITIVE_INFINITY,
+  });
   const coldSmall = createNoteReferenceScanBudget(cap);
-  collectNoteReferences(structuredClone(part), {
+  const coldSmallHits = collectNoteReferences(structuredClone(part), {
     budget: coldSmall,
     maxHits: Number.POSITIVE_INFINITY,
   });
@@ -227,6 +232,17 @@ function assertBudgetedScanFresh(
       step,
       `cap: ${cap}\nmemoized: visited ${memoSmall.visited}, truncated ${memoSmall.truncated}\n` +
         `fresh: visited ${coldSmall.visited}, truncated ${coldSmall.truncated}`,
+      log
+    );
+  }
+  const memoSmallJson = JSON.stringify(memoSmallHits);
+  const coldSmallJson = JSON.stringify(coldSmallHits);
+  if (memoSmallJson !== coldSmallJson) {
+    fail(
+      'truncated hit prefix',
+      seed,
+      step,
+      `cap: ${cap}\nmemoized: ${memoSmallJson}\nfresh: ${coldSmallJson}`,
       log
     );
   }
@@ -249,6 +265,7 @@ describe('budgeted note-reference scan memos stay fresh across random op sequenc
 
       let applied = 0;
       let splitsApplied = 0;
+      const reusesBefore = budgetedNoteScanMemoStats.reuses;
       for (let step = 0; step < STEPS; step += 1) {
         const op = randomOp(store.part, rand, step);
         if (op === null) {
@@ -269,9 +286,12 @@ describe('budgeted note-reference scan memos stay fresh across random op sequenc
       }
 
       // Anti-vacuity: enough ops applied, and enough splits that fresh spines were
-      // rescanned against — and read back through — the memoized subtrees.
+      // rescanned against — and read back through — the memoized subtrees. The reuse
+      // floor proves memos actually served (equivalence alone would also pass for a
+      // memo that never hits, which delivers correctness but none of the latency win).
       expect(applied).toBeGreaterThanOrEqual(12);
       expect(splitsApplied).toBeGreaterThanOrEqual(2);
+      expect(budgetedNoteScanMemoStats.reuses - reusesBefore).toBeGreaterThanOrEqual(applied);
     });
   }
 });
@@ -287,10 +307,9 @@ describe('memo reuse under a finite maxHits clip', () => {
     });
     expect(all.length).toBeGreaterThanOrEqual(6);
 
-    // Diagnostics-style clip over the warmed tree. Memo hits append in document order,
-    // so the clipped prefix is identical to the cold walk; only the visited count may
-    // run ahead (bulk-charged subtrees), which diagnose already reports as truncated
-    // coverage via the full hit buffer.
+    // Diagnostics-style clip over the warmed tree. A memo whose hits would reach the
+    // clip must fall through to the plain descent, so hits, visited and truncated all
+    // stay byte-identical to the cold walk even where the clip binds mid-subtree.
     const maxHits = 2;
     const memoBudget = createNoteReferenceScanBudget(FULL_BUDGET);
     const memoClipped = collectNoteReferences(store.part, { budget: memoBudget, maxHits });
@@ -301,6 +320,7 @@ describe('memo reuse under a finite maxHits clip', () => {
     });
     expect(memoClipped).toHaveLength(maxHits);
     expect(JSON.stringify(memoClipped)).toBe(JSON.stringify(coldClipped));
+    expect(memoBudget.visited).toBe(coldBudget.visited);
     expect(memoBudget.truncated).toBe(false);
     expect(coldBudget.truncated).toBe(false);
   });

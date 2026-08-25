@@ -224,18 +224,23 @@ function collectParagraphNoteReferences(
  * The budget-free scan uses it (layout runs one per published pass over a part whose
  * paragraphs are all shared but the edited one); budgeted scans use
  * {@link budgetedNoteScanMemos} instead, which also records exact visited accounting.
+ * Hits carry a baked-in `partName`, so the entry records the name it was computed under
+ * and a paragraph reached under a second part name recomputes.
  */
-const paragraphNoteHitMemos = new WeakMap<OoxmlNode, readonly NoteReferenceHit[]>();
+const paragraphNoteHitMemos = new WeakMap<
+  OoxmlNode,
+  { readonly partName: string; readonly hits: readonly NoteReferenceHit[] }
+>();
 
 function paragraphNoteHitsOf(
   paragraph: OoxmlParagraphNode,
   partName: string
 ): readonly NoteReferenceHit[] {
   const cached = paragraphNoteHitMemos.get(paragraph);
-  if (cached) return cached;
+  if (cached && cached.partName === partName) return cached.hits;
   const hits: NoteReferenceHit[] = [];
   collectParagraphNoteReferences(paragraph, hits, undefined, MAX_NOTE_REFERENCE_SCAN, partName);
-  paragraphNoteHitMemos.set(paragraph, hits);
+  paragraphNoteHitMemos.set(paragraph, { partName, hits });
   return hits;
 }
 
@@ -246,8 +251,16 @@ const NO_NOTE_HITS: readonly NoteReferenceHit[] = Object.freeze([]);
  *
  * A text edit replaces one paragraph and its ancestors. Unchanged sibling containers keep
  * their identity, so their complete answer remains reusable across part revisions.
+ *
+ * The entry records the depth and part name it was computed under, like
+ * {@link budgetedNoteScanMemos}: the 64-level cap makes the answer depth-dependent (a
+ * subtree first reached past the cap caches empty), and hits carry a baked-in
+ * `partName`. A mismatch on either recomputes instead of replaying the stale answer.
  */
-const containerNoteHitMemos = new WeakMap<OoxmlNode, readonly NoteReferenceHit[]>();
+const containerNoteHitMemos = new WeakMap<
+  OoxmlNode,
+  { readonly depth: number; readonly partName: string; readonly hits: readonly NoteReferenceHit[] }
+>();
 
 function subtreeNoteHitsOf(
   node: OoxmlNode,
@@ -257,7 +270,7 @@ function subtreeNoteHitsOf(
   if (node.kind === 'textValue' || depth > 64) return NO_NOTE_HITS;
   if (node.kind === 'paragraph') return paragraphNoteHitsOf(node, partName);
   const cached = containerNoteHitMemos.get(node);
-  if (cached) return cached;
+  if (cached && cached.depth === depth && cached.partName === partName) return cached.hits;
 
   let hits: NoteReferenceHit[] | null = null;
   for (const child of node.children) {
@@ -269,7 +282,7 @@ function subtreeNoteHitsOf(
     hits.push(...childHits.slice(0, remaining));
   }
   const result: readonly NoteReferenceHit[] = hits ? Object.freeze(hits) : NO_NOTE_HITS;
-  containerNoteHitMemos.set(node, result);
+  containerNoteHitMemos.set(node, { depth, partName, hits: result });
   return result;
 }
 
@@ -280,33 +293,42 @@ function subtreeNoteHitsOf(
  *
  * Mutation paths always carry a budget, and before this memo they re-walked the whole
  * package on every transaction. A budgeted walk that reaches a memoized subtree
- * bulk-charges the cached count and reuses the hits without descending, so on every
- * non-truncated scan the shared budget's `visited` stays byte-identical to the
- * unmemoized walk — downstream parts sharing the budget behave identically.
+ * bulk-charges the cached count and reuses the hits without descending — but only when
+ * the cached count fits the remaining budget AND appending the cached hits stays under
+ * `maxHits`. Otherwise the walk falls through to the plain descent, which stops at
+ * exactly the node the unmemoized walk would stop at. Every budgeted scan is therefore
+ * byte-identical to the unmemoized walk — hits, `visited` and `truncated` alike — warm
+ * or cold, truncated or not, so downstream parts sharing one budget behave identically
+ * and pre-truncation hit prefixes (which `diagnoseNoteReferences` reports) survive.
  *
- * Divergences are confined to outcomes callers already treat as failed coverage:
- * - When a bulk charge overruns the remaining budget the walk lands on the plain walk's
- *   terminal state (`visited === maxVisited`, `truncated === true`) without descending.
- *   Callers treat `budget.truncated` as atomic failure (see header), so the exact
- *   stop-point prefix of hits is immaterial.
- * - A finite `maxHits` clip stops the plain walk from charging nodes past the clip,
- *   while a memo reuse has already bulk-charged its whole subtree, so `visited` can run
- *   ahead under a clip. The clipped hit prefix itself is identical (memo hits append in
- *   document order). `diagnoseNoteReferences` — the only finite-`maxHits` budgeted
- *   caller — reports a full hit buffer as truncated coverage either way.
- *
- * The entry records the depth it was computed at, because the 64-level cap makes results
- * depth-dependent: a shared subtree republished at a different depth recomputes instead
- * of serving an answer computed under the old cap (same fix as
- * `subtreeDeepParagraphIdsCache` in `review-reads.ts`).
+ * The entry records the depth and part name it was computed under. The 64-level cap
+ * makes results depth-dependent, so a shared subtree republished at a different depth
+ * recomputes instead of serving an answer computed under the old cap (same fix as
+ * `subtreeDeepParagraphIdsCache` in `review-reads.ts`). The part name makes the
+ * one-part-per-node assumption self-enforcing: hits carry a baked-in `partName`, so a
+ * node reached under a second part name must recompute rather than replay the first
+ * part's hits.
  */
 interface BudgetedNoteScanEntry {
   readonly hits: readonly NoteReferenceHit[];
   readonly visited: number;
   readonly depth: number;
+  readonly partName: string;
 }
 
 const budgetedNoteScanMemos = new WeakMap<OoxmlNode, BudgetedNoteScanEntry>();
+
+/**
+ * Non-paragraph subtrees below this plain-walk cost carry no memo entry unless they hold
+ * a hit. Their nearest memoized ancestor answers for them on an unchanged spine, and a
+ * rebuilt spine re-walks them for less than an entry is worth — this keeps the memo from
+ * retaining one entry per element of every non-story part. Paragraphs always get an
+ * entry: they are the reuse unit when an edit rebuilds the story spine above them.
+ */
+const MEMO_MIN_SUBTREE_VISITED = 64;
+
+/** Test-only observability: bulk memo reuses. Asserted by the freshness differential. */
+export const budgetedNoteScanMemoStats = { reuses: 0 };
 
 /**
  * Walk a part for addressable typed note references. Bounded by visited nodes; skips deep
@@ -332,45 +354,56 @@ export function collectNoteReferences(
   }
   const hits: NoteReferenceHit[] = [];
 
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (hits.length >= maxHits || (budget && budget.truncated)) return;
-    if (depth > 64) {
-      if (budget) budget.truncated = true;
-      return;
-    }
-
-    if (budget) {
-      const cached = budgetedNoteScanMemos.get(node);
-      if (cached !== undefined && cached.depth === depth) {
-        if (cached.visited > budget.maxVisited - budget.visited) {
-          // The plain walk runs out of budget inside this subtree; land on the same
-          // terminal state without descending.
-          budget.visited = budget.maxVisited;
-          budget.truncated = true;
-          return;
-        }
-        budget.visited += cached.visited;
-        for (const hit of cached.hits) {
-          if (hits.length >= maxHits) return;
-          hits.push(hit);
-        }
-        return;
-      }
-    }
-
-    const startVisited = budget ? budget.visited : 0;
-    const startHits = hits.length;
-    if (!charge(budget)) return;
-    if (node.kind === 'textValue') return;
-
-    if (node.kind === 'paragraph') {
-      if (budget === undefined) {
+  if (budget === undefined) {
+    // No accounting to keep exact: per-paragraph memos only (maxHits above the cap the
+    // subtree memo path at the top of this function serves).
+    const walkUnbudgeted = (node: OoxmlNode, depth: number): void => {
+      if (hits.length >= maxHits || depth > 64 || node.kind === 'textValue') return;
+      if (node.kind === 'paragraph') {
         for (const hit of paragraphNoteHitsOf(node, part.name)) {
           if (hits.length >= maxHits) return;
           hits.push(hit);
         }
         return;
       }
+      for (const child of node.children) walkUnbudgeted(child, depth + 1);
+    };
+    walkUnbudgeted(part.root, 0);
+    return hits;
+  }
+
+  const walk = (node: OoxmlNode, depth: number): void => {
+    if (hits.length >= maxHits || budget.truncated) return;
+    if (depth > 64) {
+      budget.truncated = true;
+      return;
+    }
+
+    // Bulk reuse only when the outcome is provably the plain walk's: the cached charge
+    // fits the remaining budget and the cached hits stay strictly under maxHits (at the
+    // clip the plain walk stops charging mid-subtree, which the bulk charge cannot
+    // reproduce). Anything else falls through to the plain descent below, which stops
+    // at exactly the node the unmemoized walk stops at.
+    const cached = budgetedNoteScanMemos.get(node);
+    if (
+      cached !== undefined &&
+      cached.depth === depth &&
+      cached.partName === part.name &&
+      cached.visited <= budget.maxVisited - budget.visited &&
+      hits.length + cached.hits.length < maxHits
+    ) {
+      budget.visited += cached.visited;
+      for (const hit of cached.hits) hits.push(hit);
+      budgetedNoteScanMemoStats.reuses += 1;
+      return;
+    }
+
+    const startVisited = budget.visited;
+    const startHits = hits.length;
+    if (!charge(budget)) return;
+    if (node.kind === 'textValue') return;
+
+    if (node.kind === 'paragraph') {
       collectParagraphNoteReferences(node, hits, budget, maxHits, part.name);
     } else {
       for (const child of node.children) walk(child, depth + 1);
@@ -378,14 +411,19 @@ export function collectNoteReferences(
 
     // Memoize only subtrees the walk covered completely: a budget truncation or a
     // maxHits clip inside the subtree leaves nodes uncharged and hits unrecorded, and
-    // caching that partial answer would replay it as a complete one.
-    if (budget && !budget.truncated && hits.length < maxHits) {
-      budgetedNoteScanMemos.set(node, {
-        hits: hits.length > startHits ? Object.freeze(hits.slice(startHits)) : NO_NOTE_HITS,
-        visited: budget.visited - startVisited,
-        depth,
-      });
-    }
+    // caching that partial answer would replay it as a complete one. (`>= maxHits` is
+    // ambiguous — the clip may have bound on the subtree's last hit — so it never
+    // caches.)
+    if (budget.truncated || hits.length >= maxHits) return;
+    const visited = budget.visited - startVisited;
+    const gotHits = hits.length > startHits;
+    if (node.kind !== 'paragraph' && !gotHits && visited < MEMO_MIN_SUBTREE_VISITED) return;
+    budgetedNoteScanMemos.set(node, {
+      hits: gotHits ? Object.freeze(hits.slice(startHits)) : NO_NOTE_HITS,
+      visited,
+      depth,
+      partName: part.name,
+    });
   };
 
   walk(part.root, 0);
