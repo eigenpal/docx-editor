@@ -17,7 +17,12 @@ import {
   type PageFurniture,
   type SemanticLayout,
 } from '../index.ts';
-import { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from '../hf-layout.ts';
+import {
+  layoutHeaderFooterStory,
+  storyListMarkerToken,
+  type HeaderFooterStoryLayout,
+} from '../hf-layout.ts';
+import { buildNumberingIndex } from '../numbering-index.ts';
 import {
   layoutTextboxStory,
   MAX_TEXTBOX_STORY_NESTING,
@@ -26,6 +31,7 @@ import {
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
 import {
   readOoxmlPackage,
+  readOoxmlPart,
   resolveHeaderFooterPartsBySection,
   type OoxmlPackage,
   type OoxmlPart,
@@ -143,7 +149,11 @@ function drawingLayoutFor(part: OoxmlPart): InlineDrawingLayoutContext {
   };
 }
 
-function layoutFooterStory(part: OoxmlPart, geometry: ReturnType<typeof geometryOfSection>) {
+function layoutFooterStory(
+  part: OoxmlPart,
+  geometry: ReturnType<typeof geometryOfSection>,
+  numberingIndex?: ReturnType<typeof buildNumberingIndex>
+) {
   const width = geometry.width - geometry.margin.left - geometry.margin.right;
   return layoutHeaderFooterStory(
     part,
@@ -167,7 +177,9 @@ function layoutFooterStory(part: OoxmlPart, geometry: ReturnType<typeof geometry
       marginRight: geometry.margin.right,
       marginTop: geometry.margin.top,
       marginBottom: geometry.margin.bottom,
-    }
+    },
+    undefined,
+    numberingIndex ? { numberingIndex } : undefined
   );
 }
 
@@ -529,5 +541,169 @@ describe('incremental relayout with footer textboxes', () => {
     const first = lay(1);
     const second = lay(2);
     expect(shapeOf(second)).toBe(shapeOf(first));
+  });
+});
+
+describe('list markers inside textbox stories', () => {
+  const numberingIndexFor = (lvlText: string) => {
+    const num = readOoxmlPart(
+      `<w:numbering xmlns:w="${W}">` +
+        '<w:abstractNum w:abstractNumId="7">' +
+        '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>' +
+        `<w:lvlText w:val="${lvlText}"/><w:lvlJc w:val="left"/>` +
+        '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr></w:lvl>' +
+        '</w:abstractNum>' +
+        '<w:num w:numId="7"><w:abstractNumId w:val="7"/></w:num>' +
+        '</w:numbering>',
+      { name: '/word/numbering.xml', contentType: 'app/xml' }
+    );
+    if (!num.ok) throw new Error(num.reason);
+    return buildNumberingIndex(num.part.root);
+  };
+
+  const numberedParagraph = (text: string) =>
+    '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="7"/></w:numPr></w:pPr>' +
+    `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+  function markerTexts(story: TextboxStoryLayout): string[] {
+    return story.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' && fragment.marker ? [fragment.marker.text] : []
+    );
+  }
+
+  function footerStoryWithNumbering(lvlText: string): HeaderFooterStoryLayout {
+    const bytes = footerTextboxDoc(
+      textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta')),
+      5
+    );
+    const pkg = openPackage(bytes);
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const geometry = geometryOfSection(enumerateDocumentSections(main)[0]!.properties);
+    const footerPart = [...resolveHeaderFooterPartsBySection(pkg)[0]!.footers.values()][0]!;
+    return layoutFooterStory(footerPart, geometry, numberingIndexFor(lvlText));
+  }
+
+  test('a numbered paragraph inside a footer text box paints a marker (fixes #466)', () => {
+    const story = footerStoryWithNumbering('%1.');
+    expect(markerTexts(storyOfRecord(story))).toEqual(['1.', '2.']);
+  });
+
+  test('storyListMarkerToken descends into the text-box story', () => {
+    const decimal = footerStoryWithNumbering('%1.');
+    const wrapped = footerStoryWithNumbering('(%1)');
+    const token = storyListMarkerToken(decimal);
+    expect(token).toContain('1.');
+    expect(token).toContain('2.');
+    expect(storyListMarkerToken(wrapped)).not.toBe(token);
+  });
+
+  const NS = `xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"`;
+
+  function bodyTextboxPart(): OoxmlPart {
+    const doc = readOoxmlPart(
+      `<w:document ${NS}><w:body>` +
+        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
+        '<w:p><w:r><w:t>after the box</w:t></w:r></w:p>' +
+        '</w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!doc.ok) throw new Error(doc.reason);
+    return doc.part;
+  }
+
+  test('a numbered paragraph inside a body text box paints a marker (fixes #466)', () => {
+    const part = bodyTextboxPart();
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'test',
+      inlineDrawingLayout: drawingLayoutFor(part),
+      numberingIndex: numberingIndexFor('%1.'),
+    });
+    const record = layout.pages[0]!.anchoredDrawings?.[0];
+    if (!record?.textboxStory) throw new Error('no textbox story on record');
+    expect(markerTexts(record.textboxStory)).toEqual(['1.', '2.']);
+  });
+
+  test('a numbering change reaches a body text box through the flow keys', () => {
+    const part = bodyTextboxPart();
+    const session = createLayoutSession();
+    const drawingLayout = drawingLayoutFor(part);
+    const lay = (revision: number, lvlText: string): SemanticLayout =>
+      layoutSemanticDocument(part, revision, {
+        measurer,
+        producer: 'test',
+        inlineDrawingLayout: drawingLayout,
+        numberingIndex: numberingIndexFor(lvlText),
+        session,
+      });
+    const boxMarkers = (layout: SemanticLayout): string[] => {
+      const record = layout.pages[0]!.anchoredDrawings?.[0];
+      if (!record?.textboxStory) throw new Error('no textbox story on record');
+      return markerTexts(record.textboxStory);
+    };
+    expect(boxMarkers(lay(1, '%1.'))).toEqual(['1.', '2.']);
+    // The host paragraph carries no numbering of its own, so without the hosted-story token
+    // in its flow key the previous pages are reused by identity and keep the old markers.
+    expect(boxMarkers(lay(2, '(%1)'))).toEqual(['(1)', '(2)']);
+  });
+
+  test('a numbering change reaches a text box hosted in a table cell', () => {
+    const doc = readOoxmlPart(
+      `<w:document ${NS}><w:body>` +
+        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="9000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:tcPr><w:tcW w:w="9000" w:type="dxa"/></w:tcPr>' +
+        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
+        '</w:tc></w:tr></w:tbl>' +
+        '<w:p><w:r><w:t>after the table</w:t></w:r></w:p>' +
+        '</w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!doc.ok) throw new Error(doc.reason);
+    const session = createLayoutSession();
+    const drawingLayout = drawingLayoutFor(doc.part);
+    const boxMarkers = (revision: number, lvlText: string): string[] => {
+      const layout = layoutSemanticDocument(doc.part, revision, {
+        measurer,
+        producer: 'test',
+        inlineDrawingLayout: drawingLayout,
+        numberingIndex: numberingIndexFor(lvlText),
+        session,
+      });
+      const record = layout.pages[0]!.anchoredDrawings?.[0];
+      if (!record?.textboxStory) throw new Error('no textbox story on record');
+      return markerTexts(record.textboxStory);
+    };
+    expect(boxMarkers(1, '%1.')).toEqual(['1.', '2.']);
+    // The TABLE block's flow key must move too: its cell paragraphs carry no numbering of
+    // their own, so only the hosted-story token distinguishes the two numbering states.
+    expect(boxMarkers(2, '(%1)')).toEqual(['(1)', '(2)']);
+  });
+
+  test('a text-box list restarts at w:start, independent of the host story', () => {
+    const doc = readOoxmlPart(
+      `<w:document ${NS}><w:body>` +
+        numberedParagraph('host one') +
+        numberedParagraph('host two') +
+        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
+        '</w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!doc.ok) throw new Error(doc.reason);
+    const layout = layoutSemanticDocument(doc.part, 1, {
+      measurer,
+      producer: 'test',
+      inlineDrawingLayout: drawingLayoutFor(doc.part),
+      numberingIndex: numberingIndexFor('%1.'),
+    });
+    const bodyMarkers = layout.pages[0]!.fragments.flatMap((fragment) =>
+      fragment.kind === 'paragraph' && fragment.marker ? [fragment.marker.text] : []
+    );
+    // The host story numbers on its own counters; the box is its own story root and
+    // restarts at w:start with the same numId, like a header's or a note's list does.
+    expect(bodyMarkers).toEqual(['1.', '2.']);
+    const record = layout.pages[0]!.anchoredDrawings?.[0];
+    if (!record?.textboxStory) throw new Error('no textbox story on record');
+    expect(markerTexts(record.textboxStory)).toEqual(['1.', '2.']);
   });
 });

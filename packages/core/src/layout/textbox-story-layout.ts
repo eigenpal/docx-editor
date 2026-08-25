@@ -15,11 +15,17 @@
 // convergence counter never moves because a textbox changed. All bounds are explicit:
 // nesting depth, fragment count, and the extent clip all fail closed with reasons.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingProjection } from '../store/package/drawing-projection.ts';
 import { emuToPoints } from './drawing-layout.ts';
 import type { FieldPageContext } from './field-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
+import {
+  resolveStoryListItems,
+  withNumberingStyleLinks,
+  type ResolvedListItem,
+} from './list-resolve.ts';
+import type { NumberingIndex } from './numbering-index.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import type { RevisionDisplayMode } from './revision-projection.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
@@ -87,6 +93,15 @@ export interface TextboxStoryLayoutOptions {
   /** Story nesting depth; a textbox laid out from inside another textbox passes depth + 1. */
   readonly depth?: number;
   /**
+   * `numbering.xml`, so a `w:numPr` paragraph in the box resolves a marker.
+   *
+   * Absent, the story lays out as before: no marker record, and no numbering indent merged
+   * into the paragraph's own. Counters are PER BOX ({@link textboxStoryListItems}) — a text
+   * box is its own story root, like a note, so its lists restart at `w:start` rather than
+   * continuing the host story's.
+   */
+  readonly numberingIndex?: NumberingIndex;
+  /**
    * Inline drawing context for the part the text box lives in.
    *
    * A picture inside `w:txbxContent` is an ordinary inline drawing of the HOST part — same
@@ -104,6 +119,193 @@ export interface TextboxStoryLayoutOptions {
 /** Stable line-id namespace for one textbox story. */
 export function textboxLineIdPrefix(drawingNodeId: string): string {
   return `txbx-${drawingNodeId}`;
+}
+
+interface TextboxStoryListResolve {
+  readonly rawIndex: NumberingIndex;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly displayMode: RevisionDisplayMode;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+}
+
+/**
+ * Memoized per immutable `w:txbxContent` node, validated against the RAW inputs by identity.
+ * Sound because any edit inside the box republishes the content node; a numbering or cascade
+ * change keeps the node and misses on the input compare instead.
+ */
+const textboxStoryListResolves = new WeakMap<OoxmlNode, TextboxStoryListResolve>();
+
+/**
+ * Resolve every list paragraph of one text-box story, keyed by paragraph node id.
+ *
+ * Counters are created fresh per box — a text box is its own story root laid out
+ * independently of its host (the {@link textboxStoryBlocks} rule), so its lists restart at
+ * `w:start` the way a header's or a note's do, rather than continuing the host story's.
+ * Returns undefined when numbering is absent or the box holds no list paragraphs.
+ */
+export function textboxStoryListItems(
+  content: OoxmlNode,
+  numberingIndex: NumberingIndex | undefined,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode: RevisionDisplayMode = 'all-markup'
+): ReadonlyMap<string, ResolvedListItem> | undefined {
+  if (!numberingIndex || numberingIndex.nums.size === 0) return undefined;
+  const memo = textboxStoryListResolves.get(content);
+  if (
+    memo &&
+    memo.rawIndex === numberingIndex &&
+    memo.styleCascade === styleCascade &&
+    memo.displayMode === displayMode
+  ) {
+    return memo.listItems;
+  }
+  const linked = withNumberingStyleLinks(numberingIndex, styleCascade);
+  const blocks = textboxStoryBlocks(content, displayMode);
+  const resolved = resolveStoryListItems(blocks, linked, styleCascade);
+  const listItems = resolved.size > 0 ? resolved : undefined;
+  textboxStoryListResolves.set(content, {
+    rawIndex: numberingIndex,
+    styleCascade,
+    displayMode,
+    listItems,
+  });
+  return listItems;
+}
+
+/** Hard ceiling on nodes visited when discovering `w:txbxContent` under one block. */
+const MAX_HOSTED_STORY_SCAN_NODES = 20_000;
+
+interface HostedContentsScan {
+  readonly contents: readonly OoxmlNode[];
+  /** True when the budget stopped the walk before the whole subtree was seen. */
+  readonly truncated: boolean;
+}
+
+const NO_HOSTED_CONTENTS: HostedContentsScan = Object.freeze({
+  contents: Object.freeze([]),
+  truncated: false,
+});
+
+/**
+ * The `w:txbxContent` nodes a block hosts — a TREE fact, memoized per immutable block node.
+ *
+ * Found by name rather than through drawing projections, so an `mc:Fallback` twin of a live
+ * box is included too; its list state mirrors the live copy's, which only widens the token
+ * below, never wrongs it. No descent INTO a found content: a box inside a box does not lay
+ * out (nested stories degrade to the placeholder path), so its list state paints nothing.
+ */
+const hostedTextboxContentsByBlock = new WeakMap<OoxmlNode, HostedContentsScan>();
+
+function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
+  const cached = hostedTextboxContentsByBlock.get(block);
+  if (cached) return cached;
+  const found: OoxmlNode[] = [];
+  let visited = 0;
+  let truncated = false;
+  const stack: OoxmlNode[] = [block];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    visited += 1;
+    // Defensive, like every other file-derived walk — but a stopped scan can MISS a box, and
+    // an unseen box's list state must fail OPEN, not stale. The truncation flag is recorded
+    // so the token below stops naming individual items and keys on the numbering index
+    // itself: every numbering edit then re-lays the block, which wastes work on a hostile
+    // file but never reuses a page showing an old marker.
+    if (visited > MAX_HOSTED_STORY_SCAN_NODES) {
+      truncated = true;
+      break;
+    }
+    if (node.kind !== 'textValue' && node.localName === 'txbxContent') {
+      found.push(node);
+      continue;
+    }
+    if (!('children' in node)) continue;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push(node.children[index]!);
+    }
+  }
+  const scan: HostedContentsScan =
+    found.length > 0 || truncated
+      ? Object.freeze({ contents: Object.freeze(found), truncated })
+      : NO_HOSTED_CONTENTS;
+  hostedTextboxContentsByBlock.set(block, scan);
+  return scan;
+}
+
+/**
+ * Stable per-object identity of a numbering index, for the truncated-scan token arm.
+ *
+ * A truncated scan cannot name the items it missed, so its token names the INDEX instead:
+ * any `numbering.xml` edit yields a new index object, a new id, and a changed key. Ids only
+ * grow with distinct index objects ever tokenized this way — a handful per document life.
+ */
+let nextNumberingIndexTokenId = 1;
+const numberingIndexTokenIds = new WeakMap<NumberingIndex, number>();
+
+function numberingIndexTokenId(index: NumberingIndex): number {
+  let id = numberingIndexTokenIds.get(index);
+  if (id === undefined) {
+    id = nextNumberingIndexTokenId;
+    nextNumberingIndexTokenId += 1;
+    numberingIndexTokenIds.set(index, id);
+  }
+  return id;
+}
+
+interface HostedListTokenMemo {
+  readonly rawIndex: NumberingIndex;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly displayMode: RevisionDisplayMode;
+  readonly token: string;
+}
+
+const hostedListTokensByBlock = new WeakMap<OoxmlNode, HostedListTokenMemo>();
+
+/**
+ * Marker identity of every list item the text-box stories UNDER one block paint.
+ *
+ * The list sibling of the hosted-story arm of `drawingTokenForParagraph`, for the same
+ * reason: a box's markers come from `numbering.xml`, a DIFFERENT part from the one the host
+ * paragraph lives in, so a numbering edit moves neither the paragraph node nor its drawing
+ * token — and a flow key without this reuses pages showing the old number inside the box.
+ * Empty for the overwhelmingly common block with no text box, at the cost of one memoized
+ * subtree scan per immutable block node.
+ */
+export function hostedTextboxListToken(
+  block: OoxmlNode,
+  numberingIndex: NumberingIndex | undefined,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode: RevisionDisplayMode = 'all-markup'
+): string {
+  if (!numberingIndex || numberingIndex.nums.size === 0) return '';
+  const scan = hostedTextboxContents(block);
+  if (scan.contents.length === 0 && !scan.truncated) return '';
+  const memo = hostedListTokensByBlock.get(block);
+  if (
+    memo &&
+    memo.rawIndex === numberingIndex &&
+    memo.styleCascade === styleCascade &&
+    memo.displayMode === displayMode
+  ) {
+    return memo.token;
+  }
+  const parts: string[] = [];
+  for (const content of scan.contents) {
+    const items = textboxStoryListItems(content, numberingIndex, styleCascade, displayMode);
+    if (!items) continue;
+    for (const [paragraphId, item] of items) parts.push(`${paragraphId}=${item.cacheToken}`);
+  }
+  // A truncated scan may have MISSED a box, so it cannot vouch for "no list state": key on
+  // the index identity instead, which fails open — every numbering edit moves the key.
+  if (scan.truncated) parts.push(`truncated:${numberingIndexTokenId(numberingIndex)}`);
+  const token = parts.length === 0 ? '' : `|txbxlist:${parts.join(',')}`;
+  hostedListTokensByBlock.set(block, {
+    rawIndex: numberingIndex,
+    styleCascade,
+    displayMode,
+    token,
+  });
+  return token;
 }
 
 /**
@@ -149,6 +351,12 @@ export function layoutTextboxStory(
   }
 
   const blocks: readonly OoxmlElement[] = textboxStoryBlocks(story.content, options.displayMode);
+  const listItems = textboxStoryListItems(
+    story.content,
+    options.numberingIndex,
+    options.styleCascade,
+    options.displayMode
+  );
   const prefix = textboxLineIdPrefix(projection.drawingNodeId);
   let lineCounter = 0;
 
@@ -158,6 +366,7 @@ export function layoutTextboxStory(
     producer: `${options.producer}|txbx:${projection.drawingNodeId}`,
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
+    ...(listItems ? { listItems } : {}),
     ...(options.pageContext ? { pageContext: options.pageContext } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.defaultTabStopPt !== undefined

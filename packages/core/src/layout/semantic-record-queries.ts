@@ -143,6 +143,31 @@ export function forEachStoryDrawing(
   visitStory(story, 0);
 }
 
+/**
+ * Visit every paragraph fragment one story paints — its own (table interiors flattened,
+ * header repeats included) and the fragments inside each anchored drawing's text-box story,
+ * recursively.
+ *
+ * The fragment sibling of {@link forEachStoryDrawing}, sharing its depth bound, for
+ * consumers that read per-paragraph published fields (list markers) rather than drawings.
+ * The furniture list-marker token walks with this; a fragment it misses leaves a reused
+ * page showing a stale marker.
+ */
+export function forEachStoryParagraphFragment(
+  story: StoryDrawingHost,
+  visit: (fragment: ParagraphFragmentRecord) => void
+): void {
+  const visitStory = (inner: StoryDrawingHost, depth: number): void => {
+    if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
+    for (const drawing of inner.anchoredDrawings ?? []) {
+      // A text box is a story of its own, nested in the drawing that anchors it.
+      if (drawing.textboxStory) visitStory(drawing.textboxStory, depth + 1);
+    }
+    for (const fragment of paragraphFragmentsOfBlocks(inner.fragments, true)) visit(fragment);
+  };
+  visitStory(story, 0);
+}
+
 /** Every fragment belonging to one paragraph, in order, across page boundaries. */
 export function fragmentsOfParagraph(
   layout: SemanticLayout,

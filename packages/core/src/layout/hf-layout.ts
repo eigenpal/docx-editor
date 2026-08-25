@@ -42,7 +42,7 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
-import { forEachStoryDrawing } from './semantic-record-queries.ts';
+import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { layoutTextboxStory } from './textbox-story-layout.ts';
@@ -170,7 +170,8 @@ function createBoundedContextCache(maxEntries: number): {
  */
 export interface HeaderFooterStoryInputs {
   /**
-   * `numbering.xml`, so a `w:numPr` paragraph in this story resolves a marker.
+   * `numbering.xml`, so a `w:numPr` paragraph in this story resolves a marker — directly or
+   * inside an anchored text box, which lays out with its own per-box counters.
    *
    * Absent, the story lays out exactly as before: no marker record, and no numbering indent
    * merged into the paragraph's own.
@@ -331,6 +332,7 @@ export function layoutHeaderFooterStory(
               ...(documentProperties ? { documentProperties } : {}),
               inlineDrawingLayout,
               ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
+              ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
             }),
           collectAnchoredDrawings: (drawings) => {
             pendingAnchoredDrawings.push(...drawings);
@@ -505,27 +507,22 @@ const storyListMarkerTokens = new WeakMap<HeaderFooterStoryLayout, string>();
  * pages showing the old header marker and the one rebuilt page showing the new one — two
  * different numbers for the same header in one section.
  *
- * Unlike {@link storyDrawingResourceToken} this walk stops at the story's own fragments: a
- * text-box story never resolves list items today (`layoutTextboxStory` receives no
- * `listItems`, so a `w:numPr` paragraph in a box carries no marker record). If text-box
- * stories ever grow markers, this token must descend with them or a `numbering.xml` edit
- * leaves a reused page showing the old number inside the box.
+ * Walks with {@link forEachStoryParagraphFragment}, which descends into each anchored
+ * drawing's text-box story exactly like {@link storyDrawingResourceToken}'s walk does: a
+ * `w:numPr` paragraph inside a `wps:txbx` carries a marker record too, and a `numbering.xml`
+ * edit moves neither `contentKey` nor `flowHeight`, so without the descent a reused page
+ * kept showing the old number inside the box.
  */
 export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
   const cached = storyListMarkerTokens.get(story);
   if (cached !== undefined) return cached;
   const tokens: string[] = [];
-  const visitBlock = (block: BlockFragmentRecord): void => {
-    if (block.kind === 'table') {
-      for (const row of block.rows) {
-        for (const cell of row.cells) for (const inner of cell.blocks) visitBlock(inner);
-      }
-      return;
+  forEachStoryParagraphFragment(story, (fragment) => {
+    const marker = fragment.marker;
+    if (marker) {
+      tokens.push(`${fragment.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
     }
-    const marker = block.marker;
-    if (marker) tokens.push(`${block.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
-  };
-  for (const block of story.fragments) visitBlock(block);
+  });
   const token = tokens.length === 0 ? '' : `|list:${tokens.join(',')}`;
   storyListMarkerTokens.set(story, token);
   return token;

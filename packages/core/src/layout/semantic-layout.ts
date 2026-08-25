@@ -190,7 +190,7 @@ import {
 } from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
-import { layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedTextboxListToken, layoutTextboxStory } from './textbox-story-layout.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
@@ -1031,10 +1031,19 @@ function layoutBlocksPass(
     // own id gave an empty token, and a renumbering that left the table's flow key untouched
     // reused the cell markers verbatim. The drawing token aggregates the same way, for the
     // same reason.
+    // The list state of any text-box story this block hosts, for the same reason the drawing
+    // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
+    // numbering edit moves nothing else in this block's key.
+    const hostedListToken = hostedTextboxListToken(
+      block,
+      options.numberingIndex,
+      styleCascade,
+      displayMode
+    );
     const listToken =
-      block.kind === 'table'
+      (block.kind === 'table'
         ? listTokenForTableBlock(block, listItems)
-        : (listItems?.get(block.id)?.cacheToken ?? '');
+        : (listItems?.get(block.id)?.cacheToken ?? '')) + hostedListToken;
     const memo = preparedBlocks.get(block);
     if (
       memo &&
@@ -1053,7 +1062,9 @@ function layoutBlocksPass(
         table: block,
         key: paragraphLayoutKey({
           paragraph: block,
-          properties: [],
+          properties: hostedListToken
+            ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
+            : [],
           width: availableWidth,
           producer,
           ...(paragraphDrawingToken ? { drawingToken: paragraphDrawingToken } : {}),
@@ -1127,6 +1138,9 @@ function layoutBlocksPass(
             { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
             ...(listItem
               ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }]
+              : []),
+            ...(hostedListToken
+              ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
               : []),
           ],
           width: available,
@@ -1651,6 +1665,7 @@ function layoutBlocksPass(
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
       ...(displayMode ? { displayMode } : {}),
       ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+      ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
       inlineDrawingLayout: options.inlineDrawingLayout,
       drawingTokenForParagraph: options.drawingTokenForParagraph,
     });

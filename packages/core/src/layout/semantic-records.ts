@@ -863,6 +863,7 @@ export {
   contentControlsOfLayout,
   effectiveContentControlLock,
   forEachStoryDrawing,
+  forEachStoryParagraphFragment,
   fragmentsOfParagraph,
   lineAtPosition,
   linesOf,
