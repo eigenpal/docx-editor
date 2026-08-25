@@ -53,6 +53,9 @@ const listItem = (text: string) =>
 const styledParagraph = (text: string) =>
   `<w:p><w:pPr><w:ind w:left="720"/></w:pPr><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
 
+const plainParagraph = (text: string) =>
+  `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
+
 function withSurface(body: string, run: (surface: PaginatedSurface) => void): void {
   const container = document.createElement('div');
   document.body.append(container);
@@ -104,6 +107,20 @@ function selectIn(surface: PaginatedSurface, index: number, start: number, end: 
   surface.setSelection({
     anchor: { paragraphId, offset: start },
     head: { paragraphId, offset: end },
+  });
+}
+
+function selectAcross(
+  surface: PaginatedSurface,
+  fromIndex: number,
+  fromOffset: number,
+  toIndex: number,
+  toOffset: number
+): void {
+  const ids = surface.session.paragraphIds();
+  surface.setSelection({
+    anchor: { paragraphId: ids[fromIndex]!, offset: fromOffset },
+    head: { paragraphId: ids[toIndex]!, offset: toOffset },
   });
 }
 
@@ -232,5 +249,80 @@ describe('Enter then Backspace, in suggesting mode', () => {
         expect(xml).toMatch(/<w:del[^>]*w:author="Ada Lovelace"/);
       }
     );
+  });
+});
+
+// REPLACING A SELECTION THAT SPANS PARAGRAPH MARKS.
+//
+// A suggesting-mode deletion keeps the characters it strikes, and the marks between the
+// paragraphs become merge proposals — every paragraph survives. So the replacement belongs
+// after the struck head of the LAST paragraph. Landing it at the range start instead put it
+// on the front edge of the fresh `w:del`, where the store relocates it past the deletion;
+// the caret math never heard about the relocation, so the caret came to rest INSIDE the
+// struck words, and each next keystroke relocated to the same spot — BEFORE the one already
+// typed. A typed replacement came out reversed, parked after the first struck paragraph.
+describe('replacing a selection that spans paragraphs, in suggesting mode', () => {
+  test('the replacement lands after the LAST struck paragraph, in typing order', () => {
+    withSurface(
+      plainParagraph('Alpha one') + plainParagraph('Beta two') + plainParagraph('Gamma three'),
+      (surface) => {
+        selectAcross(surface, 0, 0, 2, 'Gamma three'.length);
+        typeEach(surface, 'New');
+        expect(surface.state().lastRejection).toBeNull();
+        expect(paragraphTexts(surface)).toEqual(['Alpha one', 'Beta two', 'Gamma threeNew']);
+        const xml = serializeOoxmlPart(surface.session.part());
+        // The struck original stays, and the replacement is ONE ordered insertion after it.
+        expect(xml).toMatch(
+          /<w:delText[^>]*>Gamma three<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t[^>]*>New<\/w:t>/
+        );
+        // The caret follows the typing, so the NEXT character extends the replacement
+        // rather than landing in front of it.
+        expect(surface.state().selection.head).toEqual({
+          paragraphId: surface.session.paragraphIds()[2]!,
+          offset: 'Gamma threeNew'.length,
+        });
+      }
+    );
+  });
+
+  test('a paste over the selection lands in the same place', () => {
+    withSurface(plainParagraph('Alpha one') + plainParagraph('Beta two'), (surface) => {
+      selectAcross(surface, 0, 0, 1, 'Beta two'.length);
+      surface.insertPlainText('Replacement');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alpha one', 'Beta twoReplacement']);
+      expect(surface.state().selection.head).toEqual({
+        paragraphId: surface.session.paragraphIds()[1]!,
+        offset: 'Beta twoReplacement'.length,
+      });
+    });
+  });
+
+  test('this author’s own insertion at the head of the last paragraph retracts', () => {
+    withSurface(plainParagraph('Alpha') + plainParagraph('Beta'), (surface) => {
+      caretTo(surface, 1, 0);
+      typeEach(surface, 'XY');
+      // The range covers "pha", the pending "XY" and the struck-to-be "Be": the struck
+      // halves stay, the author's own insertion leaves, and the replacement sits after
+      // what remains of the last paragraph's struck head.
+      selectAcross(surface, 0, 2, 1, 4);
+      surface.type('Z');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alpha', 'BeZta']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).not.toMatch(/XY/);
+    });
+  });
+
+  test('typing with the caret resting INSIDE struck words lands past the deletion', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      selectIn(surface, 0, 0, 'Alpha'.length);
+      surface.deleteBackward();
+      caretTo(surface, 0, 2);
+      typeEach(surface, 'ab');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alphaab one']);
+      expect(surface.state().selection.head.offset).toBe('Alphaab'.length);
+    });
   });
 });
