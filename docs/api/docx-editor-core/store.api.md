@@ -348,7 +348,7 @@ export function collectFlowBlocks(children: readonly OoxmlNode[], depth?: number
 // @public
 export function collectNodeIds(part: OoxmlPart): Set<string>;
 
-// @public (undocumented)
+// @public
 export function collectNoteReferences(part: OoxmlPart, options?: {
     readonly budget?: NoteReferenceScanBudget;
     readonly maxHits?: number;
