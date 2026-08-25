@@ -255,6 +255,7 @@ function adoptMultiSectionResult(
   session.keys = [];
   session.checkpoints = [];
   session.context = '';
+  session.producer = '';
 }
 
 /**

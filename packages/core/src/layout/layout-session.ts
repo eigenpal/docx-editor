@@ -82,8 +82,16 @@ export interface LayoutSession {
   previous: SemanticLayout | null;
   checkpoints: FlowCheckpoint[];
   keys: string[];
-  /** Geometry and producer of the previous pass; a change to either forces a full pass. */
+  /** Geometry and flow context of the previous pass; a change forces a full pass. */
   context: string;
+  /**
+   * Producer of the previous pass, compared beside {@link context} rather than embedded in
+   * it: the producer carries the content-control token, which runs to kilobytes on a
+   * control-heavy document, and embedding it copied that token into every section's context
+   * string on every pass. Identity-stable when unchanged, so the comparison is a pointer
+   * check.
+   */
+  producer: string;
   /**
    * Whether the previous pass read page PARITY: even/odd header variants, or an anchored
    * drawing positioned against an inside/outside frame or alignment.
@@ -161,6 +169,7 @@ export function createLayoutSession(): LayoutSession {
     checkpoints: [],
     keys: [],
     context: '',
+    producer: '',
     parityDependent: false,
     startPageParity: 0,
     prepass: null,

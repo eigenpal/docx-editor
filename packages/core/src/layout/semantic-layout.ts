@@ -115,6 +115,7 @@ import {
 } from './drawing-layout.ts';
 import {
   collectExclusionZonesByPage,
+  collectExclusionZonesByPageMemoized,
   DrawingExclusionConvergenceError,
   exclusionLayoutToken,
   exclusionMapsEqual,
@@ -157,7 +158,7 @@ import {
   layoutSemanticDocumentWithNotes,
   notesReserveContextKey,
 } from './note-pagination.ts';
-import { noteMarksCacheToken } from './note-projection.ts';
+import { passProducerOf, producerWithControlContext } from './pass-producer.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   type BlockFragmentRecord,
@@ -574,7 +575,7 @@ export function layoutSemanticDocument(
   const controlToken = contentControlContextToken(part);
   const optionsWithControlContext: SemanticLayoutOptions = {
     ...options,
-    producer: `${options.producer ?? 'unversioned-measurer'}|cc:${controlToken}`,
+    producer: producerWithControlContext(options.producer, controlToken),
     tocFieldChromeParagraphIds:
       options.tocFieldChromeParagraphIds ?? tocFieldChromeParagraphIds(part),
     emptyTocPlaceholderParagraphIds:
@@ -767,10 +768,12 @@ function layoutBlocksPass(
     const seenZoneTokens = new Set<string>();
     const previousPages = options.session?.previous?.pages;
     if (previousPages) {
-      zonesByPage = collectExclusionZonesByPage(
+      zonesByPage = collectExclusionZonesByPageMemoized(
         previousPages,
         options.inlineDrawingLayout,
+        options.drawingLayoutEpoch,
         contentWidthForReflow,
+        options.drawingSourceOrder,
         sourceOrderOf,
         exclusionColumnLayout
       );
@@ -779,10 +782,17 @@ function layoutBlocksPass(
         drawingExclusionPass: 0,
         drawingExclusionZonesByPage: zonesByPage,
       });
-      const nextZones = collectExclusionZonesByPage(
+      // A pass that hands the previous pages back BY IDENTITY was laid under `zonesByPage`
+      // and re-collecting from the same page records under the same inputs reproduces the
+      // same zones — the equality below is true by construction. Every no-change section of
+      // a multi-section document takes this path on every keystroke.
+      if (result.pages === previousPages) return result;
+      const nextZones = collectExclusionZonesByPageMemoized(
         result.pages,
         options.inlineDrawingLayout,
+        options.drawingLayoutEpoch,
         contentWidthForReflow,
+        options.drawingSourceOrder,
         sourceOrderOf,
         exclusionColumnLayout
       );
@@ -890,22 +900,23 @@ function layoutBlocksPass(
   };
   /** `''` for a part with no TOC, which skips the per-block verdict scan entirely. */
   const tocToken = tocIdsToken(tocIds);
-  const producer =
-    (options.producer ?? 'unversioned-measurer') +
-    (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
-    // In `producer`, not beside it in the section context: a note mark is measured INTO the
-    // broken lines, so the break cache holds the citation's width under a key built from
-    // this. Keying only the section left a warm cache serving `1`-wide slots to roman marks.
-    (options.noteMarks ? `|nm:${noteMarksCacheToken(options.noteMarks)}` : '') +
-    // NOT THE NUMBER OF LIST ITEMS. `producer` is in the session context, in every paragraph's
-    // break-cache key and in the prepared-block memo, so folding a COUNT in meant one Enter in
-    // a list re-measured every paragraph in the document and rebuilt every page — while two
-    // different numbering states with the same count still hashed the same. What a numbering
-    // change actually affects is each list paragraph, and each one carries its own
-    // `listItem.cacheToken` in its key and in the memo above.
-
-    (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
-    (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
+  // In `producer`, not beside it in the section context: a note mark is measured INTO the
+  // broken lines, so the break cache holds the citation's width under a key built from
+  // this. Keying only the section left a warm cache serving `1`-wide slots to roman marks.
+  //
+  // NOT THE NUMBER OF LIST ITEMS. `producer` is in the session context, in every paragraph's
+  // break-cache key and in the prepared-block memo, so folding a COUNT in meant one Enter in
+  // a list re-measured every paragraph in the document and rebuilt every page — while two
+  // different numbering states with the same count still hashed the same. What a numbering
+  // change actually affects is each list paragraph, and each one carries its own
+  // `listItem.cacheToken` in its key and in the memo above.
+  const producer = passProducerOf(
+    options.producer,
+    styleCascade,
+    options.noteMarks,
+    defaultTabStopPt,
+    displayMode
+  );
 
   // Prepass and incremental keys use the first region. Placement re-prepares a block when it
   // enters an unequal-width later column; multi-column passes conservatively skip resume.
@@ -956,8 +967,12 @@ function layoutBlocksPass(
   // is deliberately NOT here — numbers re-project at finalize and shells renumber at remap;
   // keying on it re-laid every section below an Enter that added one page. The one real
   // dependence, page PARITY, is checked by `comparable` through the session parity fields.
+  //
+  // The producer is compared BESIDE the context (`session.producer`), not embedded in it:
+  // it carries the control token, which runs to kilobytes on a control-heavy document, and
+  // embedding it copied that token into every section's context string on every pass.
   const contextFor = (notesReserveKey: string): string =>
-    `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
+    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
   const context = contextFor(notesReserveContextKey(pageBottomReserves, reserveKeyBound));
   const startPageParity = pageIndexStart & 1;
   /** Set when this pass places an anchored drawing whose geometry reads page parity. */
@@ -1232,6 +1247,7 @@ function layoutBlocksPass(
     previous !== null &&
     session !== undefined &&
     session.context === context &&
+    session.producer === producer &&
     (!session.parityDependent || session.startPageParity === startPageParity);
   const resumable = columns.count === 1 && comparable;
 
@@ -3011,6 +3027,7 @@ function layoutBlocksPass(
     // see them. An input-identical replay produces the same count, so its start-time bound
     // (previous count + 1) rebuilds this exact string.
     session.context = contextFor(notesReserveContextKey(pageBottomReserves, pages.length + 1));
+    session.producer = producer;
     // Sticky whenever any part of the previous layout was reused: a resumed pass never
     // re-places the prefix and a converged pass never re-places the tail, so their
     // parity-reading anchors could not fire `onPageParityRead` this pass. Only a pass that
