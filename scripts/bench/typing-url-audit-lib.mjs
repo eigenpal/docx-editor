@@ -290,7 +290,7 @@ export function hasConsoleErrors(consoleEvents) {
  * flags and pass nothing through when neither observer installed — an empty list is an
  * all-clear only when its API was actually watching.
  *
- * @param {readonly { name: string; inputDelayMs: number; durationMs: number }[]} slowInputEvents
+ * @param {readonly { inputDelayMs: number; durationMs: number }[]} slowInputEvents
  * @param {readonly number[]} longTaskDurations
  * @returns {{ slowInputCount: number; worstInputDelayMs: number; worstEventDurationMs: number; longTaskCount: number; worstLongTaskMs: number } | null}
  */
@@ -360,7 +360,11 @@ export function validateTypingProbeSamples(samples, keys) {
  * after a layout revision mutation finishes it.
  */
 export function installTypingAuditProbeInPage() {
-  /** @type {{ trustedBeforeInputs: number; pendingSample: TypingAuditPendingSample | null; samples: TypingAuditProbeSample[]; slowInputEvents: { name: string; inputDelayMs: number; durationMs: number; startTimeMs: number }[]; longTasks: { durationMs: number; startTimeMs: number }[]; observerSupport: { eventTiming: boolean; longTask: boolean } }} */
+  // Bounds the per-run CDP transfer: entries past the cap add nothing the summary reads
+  // (counts saturate, worst values are almost surely already inside), and an unbounded
+  // array on a long janky run serializes thousands of objects to reduce them to 5 numbers.
+  const MAX_PROBE_ENTRIES = 5000;
+  /** @type {{ trustedBeforeInputs: number; pendingSample: TypingAuditPendingSample | null; samples: TypingAuditProbeSample[]; slowInputEvents: { inputDelayMs: number; durationMs: number; startTimeMs: number }[]; longTasks: { durationMs: number; startTimeMs: number }[]; observerSupport: { eventTiming: boolean; longTask: boolean } }} */
   const probe = {
     trustedBeforeInputs: 0,
     pendingSample: null,
@@ -385,8 +389,8 @@ export function installTypingAuditProbeInPage() {
             entry
           );
         if (typeof timed.processingStart !== 'number') continue;
+        if (probe.slowInputEvents.length >= MAX_PROBE_ENTRIES) continue;
         probe.slowInputEvents.push({
-          name: timed.name,
           inputDelayMs: timed.processingStart - timed.startTime,
           durationMs: timed.duration,
           startTimeMs: timed.startTime,
@@ -400,6 +404,7 @@ export function installTypingAuditProbeInPage() {
   try {
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
+        if (probe.longTasks.length >= MAX_PROBE_ENTRIES) break;
         probe.longTasks.push({ durationMs: entry.duration, startTimeMs: entry.startTime });
       }
     }).observe({ type: 'longtask', buffered: true });

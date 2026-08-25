@@ -395,8 +395,8 @@ describe('summarizeResponsiveness', () => {
   test('aggregates counts and worst values across both observers', () => {
     const summary = summarizeResponsiveness(
       [
-        { name: 'keydown', inputDelayMs: 4.2, durationMs: 24 },
-        { name: 'keypress', inputDelayMs: 86.4, durationMs: 117.2 },
+        { inputDelayMs: 4.2, durationMs: 24 },
+        { inputDelayMs: 86.4, durationMs: 117.2 },
       ],
       [55.5, 211.9]
     );

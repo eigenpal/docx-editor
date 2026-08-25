@@ -229,35 +229,14 @@ async function runBurst(surface: PaginatedSurface, keys: number): Promise<BurstR
       }
     }
     pressure = false;
-    // Settle inline, watching BOTH clocks: the commit revision (flush count) and the
-    // published paint timing — under pressure the render defers to a later task that never
-    // moves the revision, and totalMs must include that deferred paint.
-    let lastPaintMs = surface.state().perf.paintMs;
-    let quietTicks = 0;
-    let lastChangeAt = performance.now();
-    while (quietTicks < 25) {
-      if (performance.now() - startedAt > 120_000) throw new Error('burst settle timeout');
-      await tick();
-      const state = surface.state();
-      const next = state.revision;
-      let moved = false;
-      if (next > revision) {
-        flushes += next - revision;
-        revision = next;
-        moved = true;
-      }
-      if (state.perf.paintMs !== lastPaintMs) {
-        lastPaintMs = state.perf.paintMs;
-        moved = true;
-      }
-      if (moved) {
-        lastChangeAt = performance.now();
-        quietTicks = 0;
-      } else {
-        quietTicks += 1;
-      }
-    }
-    const settledAt = lastChangeAt;
+    // The shared settle, watching the paint clock too: under pressure the render defers to
+    // a task that never moves the commit revision, and totalMs must include that paint.
+    const settledAt = await settle(surface, {
+      watchPaint: true,
+      onRevisionAdvance: (delta) => {
+        flushes += delta;
+      },
+    });
     if (pressureChecks === 0) {
       throw new Error(
         'the isInputPending stub was never consulted; the pressure lanes did not engage'
@@ -280,22 +259,46 @@ async function runBurst(surface: PaginatedSurface, keys: number): Promise<BurstR
   }
 }
 
+interface SettleOptions {
+  quiet?: number;
+  maxMs?: number;
+  /** Count each commit-revision advance; the delta catches commits between observations. */
+  onRevisionAdvance?: (delta: number) => void;
+  /** Also treat a published paint (perf.paintMs move) as a change: under input pressure the
+   * render defers to a task that never bumps the commit revision, and a caller timing the
+   * whole pipeline must include it. */
+  watchPaint?: boolean;
+}
+
 /**
  * Wait until the surface state stops changing for `quiet` consecutive macrotasks, and
  * return the timestamp of the LAST observed change — the moment the keystroke settled.
  * The quiet tail itself is idle waiting, not latency, so it is excluded from the sample.
+ * Every settle in a report goes through this ONE definition of "stopped changing".
  */
-async function settle(surface: PaginatedSurface, quiet = 25, maxMs = 120_000): Promise<number> {
+async function settle(surface: PaginatedSurface, options: SettleOptions = {}): Promise<number> {
+  const quiet = options.quiet ?? 25;
+  const maxMs = options.maxMs ?? 120_000;
   const start = performance.now();
   let lastRevision = surface.state().revision;
+  let lastPaintMs = surface.state().perf.paintMs;
   let lastChangeAt = performance.now();
   let quietTicks = 0;
   while (quietTicks < quiet) {
     if (performance.now() - start > maxMs) throw new Error('settle timeout');
     await tick();
-    const revision = surface.state().revision;
-    if (revision !== lastRevision) {
-      lastRevision = revision;
+    const state = surface.state();
+    let moved = false;
+    if (state.revision !== lastRevision) {
+      if (state.revision > lastRevision) options.onRevisionAdvance?.(state.revision - lastRevision);
+      lastRevision = state.revision;
+      moved = true;
+    }
+    if (options.watchPaint && state.perf.paintMs !== lastPaintMs) {
+      lastPaintMs = state.perf.paintMs;
+      moved = true;
+    }
+    if (moved) {
       lastChangeAt = performance.now();
       quietTicks = 0;
     } else {
@@ -366,16 +369,20 @@ async function run(args: Args): Promise<SettleReport> {
     const layoutMs: number[] = [];
     const paintMs: number[] = [];
     const sampler = startTaskGapSampler();
-    for (let index = 0; index < args.keystrokes; index += 1) {
-      const typedAt = performance.now();
-      press();
-      const settledAt = await settle(surface);
-      settleMs.push(settledAt - typedAt);
-      const perf = surface.state().perf;
-      layoutMs.push(perf.layoutMs);
-      paintMs.push(perf.paintMs);
+    try {
+      for (let index = 0; index < args.keystrokes; index += 1) {
+        const typedAt = performance.now();
+        press();
+        const settledAt = await settle(surface);
+        settleMs.push(settledAt - typedAt);
+        const perf = surface.state().perf;
+        layoutMs.push(perf.layoutMs);
+        paintMs.push(perf.paintMs);
+      }
+    } finally {
+      // A settle timeout must not leave the self-rescheduling heartbeat firing during unwind.
+      sampler.stop();
     }
-    sampler.stop();
 
     // Snapshot BEFORE the burst: `work` and `pages` are the measured keystrokes' evidence,
     // and a burst-run baseline must stay comparable to a burst-free one.
@@ -445,15 +452,32 @@ function printComparison(baseline: SettleReport, current: SettleReport): void {
   if (baseline.fixtureSha256 !== current.fixtureSha256) {
     throw new Error('the baseline was taken from different document bytes; refusing to compare');
   }
+  // Optional-field presence handles additive growth WITHIN a schema; a schema move means a
+  // field was renamed or re-scoped, and diffing across it would print numbers from
+  // mismatched shapes.
+  if (baseline.schema !== current.schema) {
+    throw new Error(
+      `the baseline is schema ${baseline.schema} and this run is schema ${current.schema}; refusing to compare`
+    );
+  }
   const delta = (before: number, after: number): string =>
     `${(((after - before) / before) * 100).toFixed(1)}%`;
   console.log('comparison (negative is faster):');
   console.log(`  settle ${delta(baseline.settle.medianMs, current.settle.medianMs)}`);
   console.log(`  layout ${delta(baseline.layout.medianMs, current.layout.medianMs)}`);
   console.log(`  paint  ${delta(baseline.paint.medianMs, current.paint.medianMs)}`);
-  // Baselines taken before the sampler existed have no taskGap; compare only when both do.
-  if (baseline.taskGap && current.taskGap && baseline.taskGap.p95Ms > 0) {
-    console.log(`  task gap p95 ${delta(baseline.taskGap.p95Ms, current.taskGap.p95Ms)}`);
+  if (baseline.taskGap && current.taskGap) {
+    // A zero baseline p95 means no occupancy stall crossed the floor there; a percentage
+    // against zero is meaningless, so print the absolute values instead of a ratio.
+    if (baseline.taskGap.p95Ms > 0) {
+      console.log(`  task gap p95 ${delta(baseline.taskGap.p95Ms, current.taskGap.p95Ms)}`);
+    } else {
+      console.log(
+        `  task gap p95 ${baseline.taskGap.p95Ms.toFixed(1)} -> ${current.taskGap.p95Ms.toFixed(1)} ms (baseline had no stalls; no ratio)`
+      );
+    }
+  } else {
+    console.log('  task gap    (baseline predates the sampler; no comparison)');
   }
   const before = baseline.work;
   const after = current.work;
