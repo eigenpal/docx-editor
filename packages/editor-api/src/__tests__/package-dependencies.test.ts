@@ -58,11 +58,17 @@ describe('how this package asks for the engine', () => {
     expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
   });
 
-  test('the engine peer is an EXACT pin on the version it ships with', () => {
-    // The `./browser` entry attaches to internals of the host's engine, not just its public
-    // contract, so a range here would admit an engine this exact build was never tested
-    // against. The fixed release group publishes both packages at the same version, and an
-    // exact pin is out of range on every bump, so `changeset version` moves it in lockstep.
-    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toBe(core.version);
+  test('the engine peer requires the minor it ships with', () => {
+    // A tilde range on the engine's current minor: patch drift is allowed, a different minor
+    // is not, so the automation host never attaches to an engine minor it did not ship with.
+    // The floor patch may lag within the minor because in-range releases do not rewrite the
+    // range.
+    const range = manifest.peerDependencies?.['@docx-editor.dev/core'];
+    const match = /^~(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(range ?? '');
+    expect(match).not.toBeNull();
+    const [major, minor, patch] = core.version.split('.').map(Number);
+    expect(Number(match![1])).toBe(major!);
+    expect(Number(match![2])).toBe(minor!);
+    expect(Number(match![3])).toBeLessThanOrEqual(patch!);
   });
 });

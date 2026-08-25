@@ -322,7 +322,7 @@
         "license-check-and-add": "^4.0.5",
       },
       "peerDependencies": {
-        "@docx-editor.dev/core": "2.9.1",
+        "@docx-editor.dev/core": "~2.9.1",
       },
     },
     "packages/fonts": {
