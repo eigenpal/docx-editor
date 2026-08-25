@@ -1,5 +1,14 @@
 # @docx-editor.dev/pro
 
+## 2.9.1
+
+### Patch Changes
+
+- Updated dependencies [36ea49a]
+  - @docx-editor.dev/core@2.9.1
+  - @docx-editor.dev/react@2.9.1
+  - @docx-editor.dev/vue@2.9.1
+
 ## 2.9.0
 
 ## 2.8.0

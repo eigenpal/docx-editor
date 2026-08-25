@@ -1,5 +1,12 @@
 # @docx-editor.dev/core
 
+## 2.9.1
+
+### Patch Changes
+
+- 36ea49a: Show selected paragraph marks and empty lines with a small selection block.
+- @docx-editor.dev/i18n@2.9.1
+
 ## 2.9.0
 
 ### Minor Changes
