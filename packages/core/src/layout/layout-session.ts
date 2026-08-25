@@ -58,6 +58,18 @@ export interface SectionStackSpan {
   readonly sheetY: number;
   /** Remapped pages (projectors intact) from the last pass for this section. */
   readonly remappedPages: readonly PageRecord[];
+  /**
+   * The section-local pages this span's pass returned — identity evidence for reuse. (On a
+   * continuous section the host tail merges instead of remapping, so `remappedPages` covers
+   * only the overflow sheets while this list still holds every returned page.)
+   *
+   * A section can lay out more than once inside one document pass (a reserve re-run, a
+   * balancing probe), and the last run then reports "nothing placed" against its OWN session
+   * even though an earlier run this pass rebuilt the pages. Counts and stats cannot tell
+   * those apart; only these object identities can say the span still describes the pages the
+   * section just returned.
+   */
+  readonly sourcePages: readonly PageRecord[];
 }
 
 /** Orchestrator state for multi-section incremental layout. */

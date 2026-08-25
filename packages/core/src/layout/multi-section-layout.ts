@@ -379,6 +379,7 @@ export function layoutMultiSectionDocument(
         pageCount: 0,
         sheetY: startSheetY,
         remappedPages: [],
+        sourcePages: [],
       });
       continue;
     }
@@ -444,7 +445,14 @@ export function layoutMultiSectionDocument(
       sectionSession.stats.placed === 0 &&
       sectionSession.stats.reusedPages === laid.pages.length &&
       prevSpan !== undefined &&
-      prevSpan.pageCount === laid.pages.length;
+      prevSpan.pageCount === laid.pages.length &&
+      // IDENTITY, not counts: the section may have laid out more than once inside this
+      // document pass (a reserve re-run, a balancing probe), and the final run then reports
+      // "nothing placed" against its own session even though an earlier run this pass
+      // rebuilt the pages. Reusing the previous pass's sheets on stats alone republished a
+      // resize's pre-edit geometry — the image repainted, the frame the span carried did not.
+      prevSpan.sourcePages.length === laid.pages.length &&
+      prevSpan.sourcePages.every((page, index) => page === laid.pages[index]);
 
     const stackUnchanged =
       prevSpan !== undefined &&
@@ -539,6 +547,7 @@ export function layoutMultiSectionDocument(
       pageCount: remapped.length,
       sheetY: startSheetY,
       remappedPages: remapped,
+      sourcePages: laid.pages,
     });
   }
 
