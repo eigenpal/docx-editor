@@ -58,16 +58,11 @@ describe('how this package asks for the engine', () => {
     expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
   });
 
-  test('the declared range admits the workspace engine it is built against', () => {
-    // A caret range that fell behind the engine's major would make installs resolve a
-    // SECOND, older engine next to the host's — the exact two-copies failure above.
-    const range = manifest.peerDependencies!['@docx-editor.dev/core']!;
-    // The optional suffix admits changesets pre-release mode (^3.0.0-next.0).
-    const match = /^\^(\d+)\.(\d+)\.\d+(?:-[0-9A-Za-z.-]+)?$/.exec(range);
-    expect(match).not.toBeNull();
-    const [rangeMajor, rangeMinor] = [Number(match![1]), Number(match![2])];
-    const [coreMajor, coreMinor] = core.version.split('.').map(Number);
-    expect(rangeMajor).toBe(coreMajor);
-    expect(rangeMinor).toBeLessThanOrEqual(coreMinor!);
+  test('the engine peer is an EXACT pin on the version it ships with', () => {
+    // The `./browser` entry attaches to internals of the host's engine, not just its public
+    // contract, so a range here would admit an engine this exact build was never tested
+    // against. The fixed release group publishes both packages at the same version, and an
+    // exact pin is out of range on every bump, so `changeset version` moves it in lockstep.
+    expect(manifest.peerDependencies?.['@docx-editor.dev/core']).toBe(core.version);
   });
 });
