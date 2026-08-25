@@ -52,16 +52,28 @@ export function contentControlContextToken(part: OoxmlPart): string {
 }
 
 const contentControlContextTokens = new WeakMap<OoxmlPart, string>();
-const contentControlSubtreeTokens = new WeakMap<OoxmlElement, string>();
+/**
+ * Subtree tokens memoized per immutable node, remembering the DEPTH they were computed at:
+ * the walk clips content controls at {@link MAX_SDT_NESTING}, so a subtree's token is a pure
+ * function of the node only at a fixed nesting depth. Typing keeps every unchanged subtree at
+ * its old depth, which is the case the memo exists for.
+ */
+const contentControlSubtreeTokens = new WeakMap<
+  OoxmlElement,
+  { readonly depth: number; readonly token: string }
+>();
 
 function computeContentControlContextToken(part: OoxmlPart): string {
   const tokenOf = (node: OoxmlNode, depth: number): string => {
     if (node.kind === 'textValue') return '';
-    // Paragraph/table nodes are immutable and structurally shared across text edits. Cache
-    // their complete depth-zero result so a new part revision does not re-walk every run.
-    if (depth === 0 && (node.kind === 'paragraph' || node.kind === 'table')) {
+    // Paragraph, table and control wrappers are immutable and structurally shared across
+    // text edits. Caching only at depth zero left every paragraph INSIDE a block control
+    // (a TOC wrapped in `w:sdt` is the common shape) re-walked per part revision.
+    const memoizable =
+      node.kind === 'paragraph' || node.kind === 'table' || isContentControl(node);
+    if (memoizable) {
       const cached = contentControlSubtreeTokens.get(node);
-      if (cached !== undefined) return cached;
+      if (cached !== undefined && cached.depth === depth) return cached.token;
     }
     let token: string;
     if (isContentControl(node)) {
@@ -86,8 +98,8 @@ function computeContentControlContextToken(part: OoxmlPart): string {
         .filter((entry) => entry.length > 0)
         .join('|');
     }
-    if (depth === 0 && (node.kind === 'paragraph' || node.kind === 'table')) {
-      contentControlSubtreeTokens.set(node, token);
+    if (memoizable) {
+      contentControlSubtreeTokens.set(node as OoxmlElement, { depth, token });
     }
     return token;
   };
