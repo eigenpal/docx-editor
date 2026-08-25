@@ -35,6 +35,7 @@ import {
   alignSpans,
   alignDrawings,
   breakParagraph,
+  pendingLineFlowExtentAtPlacement,
   type Alignment,
   type PendingLine,
 } from './paragraph-flow.ts';
@@ -123,8 +124,6 @@ import {
   shiftAnchoredDrawingY,
   sortDrawingsForPaint,
   synthesizeParagraphTopAndBottomZones,
-  pendingLineFlowExtentAtPlacement,
-  sideWrapSkipBeforeEmptyLine,
   topAndBottomSkipBeforeLine,
   withAnchoredDrawingLayoutFallback,
   type ExclusionZone,
@@ -1873,11 +1872,7 @@ function layoutBlocksPass(
     pendingLine: PendingLine,
     appliedSkipByLineIndex: ReadonlyMap<number, number>
   ): number => {
-    // An empty line never wraps into a side channel, so the anchor-line exemptions below do
-    // not apply to it: the anchor paragraph's own paragraph-mark-only line relocates below
-    // its square float exactly like any other empty line.
-    const emptyLine = pendingLine.spans.length === 0 && pendingLine.drawings.length === 0;
-    if (options.inlineDrawingLayout && !emptyLine) {
+    if (options.inlineDrawingLayout) {
       const anchorStarts = [...drawingModelOffsetsInParagraph(entry.paragraph).values()];
       if (anchorStarts.length > 0) {
         const firstAnchor = Math.min(...anchorStarts);
@@ -1899,11 +1894,8 @@ function layoutBlocksPass(
       fragmentParagraphStartY,
       appliedSkipByLineIndex
     );
-    let live =
+    const live =
       zones.length > 0 ? topAndBottomSkipBeforeLine(cursorY, pendingLine.height, zones) : 0;
-    if (emptyLine && zones.length > 0) {
-      live += sideWrapSkipBeforeEmptyLine(cursorY + live, pendingLine.height, zones);
-    }
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
     return live > 0.001 ? live : breakSkip;
   };

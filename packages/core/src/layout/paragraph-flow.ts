@@ -67,7 +67,6 @@ import {
 import {
   mergeAvailableIntervalsAtY,
   remainingWidthAtX,
-  sideWrapSkipBeforeEmptyLine,
   snapXToAvailableInterval,
   synthesizeParagraphTopAndBottomZones,
   synthesizeParagraphWrapExclusionZones,
@@ -405,6 +404,28 @@ export interface PendingLine {
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a topAndBottom exclusion band. */
   exclusionSkipBefore?: number;
+}
+
+/** Vertical extent of a pending line for flow/pagination budget checks (skip + box + optional tail). */
+export function pendingLineFlowExtent(
+  line: Pick<PendingLine, 'height' | 'trailingSpacing' | 'exclusionSkipBefore'>,
+  tail = 0
+): number {
+  return (line.exclusionSkipBefore ?? 0) + Math.max(0, line.height - line.trailingSpacing) + tail;
+}
+
+/** Recompute topAndBottom skip at placement time from live page zones and absolute line top. */
+export function pendingLineFlowExtentAtPlacement(
+  lineTopY: number,
+  line: Pick<PendingLine, 'height' | 'trailingSpacing' | 'exclusionSkipBefore'>,
+  zones: readonly ExclusionZone[],
+  tail = 0
+): number {
+  const skip =
+    zones.length > 0
+      ? topAndBottomSkipBeforeLine(lineTopY, line.height, zones)
+      : (line.exclusionSkipBefore ?? 0);
+  return skip + Math.max(0, line.height - line.trailingSpacing) + tail;
 }
 
 /**
@@ -1238,13 +1259,6 @@ export function breakParagraph(
       const skip = topAndBottomSkipBeforeLine(currentLineTopY(), line.height, zones);
       if (skip > 0.001) line.exclusionSkipBefore = skip;
       else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
-      // An empty line never shrinks into a wrap channel: a square/tight/through float that
-      // overlaps its box relocates the whole line below — see sideWrapSkipBeforeEmptyLine.
-      if (line.spans.length === 0 && line.drawings.length === 0) {
-        const base = line.exclusionSkipBefore ?? 0;
-        const sideSkip = sideWrapSkipBeforeEmptyLine(currentLineTopY() + base, line.height, zones);
-        if (sideSkip > 0.001) line.exclusionSkipBefore = base + sideSkip;
-      }
     };
     finalizeTopAndBottomClearance();
     markWrapAdvances();
