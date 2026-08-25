@@ -74,7 +74,16 @@ export function createImageOps(deps: {
       if (deps.editingMode() === 'view') return refuseViewing();
       if (deps.editingMode() === 'suggest') return refuseSuggestingPropertyEdit();
       const mark = deps.selectionMark();
-      return deps.applyOps(ops, mark, mark);
+      // Through `commit`, not `applyOps` alone: the commit tail is what publishes layout and
+      // paint synchronously. Applied bare, the resize reached the screen through the
+      // scheduler's timer task — after the host's `change` handlers had already read the
+      // superseded geometry — so the selection overlay kept the drawing's old frame.
+      let result: TreeApplyResult = { committed: false, rejected: true, opCount: 0 };
+      deps.commit(() => {
+        result = deps.applyOps(ops, mark, mark);
+        return result;
+      });
+      return result;
     },
 
     applyImageProperties(input) {

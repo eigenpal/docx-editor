@@ -228,9 +228,14 @@ export function ImageSelectionOverlay({
       pointerId: number
     ) => {
       if (!editor?.surface) return;
+      // The flushing read FIRST: a pass still parked on the scheduler's timer would
+      // otherwise publish mid-drag and fail the commit's staleness check for nothing, so
+      // the session is stamped against the flushed layout. Preconditions are captured
+      // after it, so a flush that lands buffered input cannot stamp a selection the
+      // flush is about to move.
+      const layout = editor.surface.layout();
       const pre = captureImageMutationPreconditions(editor);
       if (!pre) return;
-      const layout = editor.surface.publishedLayout();
       pointerStartRef.current = Object.freeze({ x: clientX, y: clientY });
       captureTargetRef.current = captureTarget;
       (captureTarget as HTMLElement & { _lastPointerId?: number })._lastPointerId = pointerId;

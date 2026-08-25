@@ -2673,9 +2673,9 @@ export function mountPaginatedSurface(
     scope: StoryScope = storyScope(),
     checkSelection = true
   ): ReturnType<TreeDocxSession['applyTreeOps']> {
-    // Direct op lanes (image ops, automation) bypass `commit`; buffered typing
-    // still lands first so their ops address the post-burst document. No-op on
-    // the commit path, whose head-flush already ran.
+    // Every live lane reaches here inside `commit`, whose head-flush already ran, so this
+    // is a defensive no-op — kept so a future direct caller still lands buffered typing
+    // before its ops address the document.
     flushTypeBuffer();
     const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };

@@ -1095,7 +1095,10 @@ export function selectedDrawingOverlayTargetOf(
   const record = resolveSelectedDrawingRecord(surface);
   if (!record) return null;
   if (record.accessibility.hidden) return null;
-  const layout = surface.publishedLayout();
+  // `layout()`, not `publishedLayout()`: the caller is about to act on this geometry — place
+  // handles, stamp a drag session — so a pass still parked on the scheduler's timer must land
+  // first. Nothing pending makes this a plain read.
+  const layout = surface.layout();
   const frame = findDrawingOverlayFrameInLayout(layout, record.drawingNodeId);
   if (!frame) return null;
   const projection = projectDrawingForRecord(surface, record);

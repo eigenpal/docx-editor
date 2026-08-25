@@ -16,6 +16,7 @@ import { resolveImageResourceLimits } from '../../store/runtime/limits.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import type { OoxmlDrawingNode, OoxmlElement } from '../../store/package/ooxml-tree.ts';
 import { createInlineDrawingLayoutBundle } from '../../layout/inline-drawing-source.ts';
+import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
 
@@ -434,6 +435,38 @@ describe('docx-editor image commands', () => {
     editor.exec({ type: 'undo' });
     selectInlineDrawing(editor);
     expect(editor.snapshot().image?.id).toBe(id);
+  });
+
+  test('resize publishes layout and overlay geometry synchronously', async () => {
+    // The resize lane used to apply its ops without the commit tail, so layout reached the
+    // screen through the scheduler's timer task — after a host's `change` handlers had read
+    // geometry — and the selection overlay kept the drawing's old frame.
+    const editor = mountEditor(inlinePictureDocument());
+    selectInlineDrawing(editor);
+    await settleDrawingResources(editor);
+    const before = selectedDrawingOverlayTargetOf(editor.surface);
+    expect(before).not.toBeNull();
+    expect(before!.width).toBeCloseTo(72, 5);
+
+    const result = editor.exec({
+      type: 'setImageProperties',
+      widthEmu: 457_200,
+      heightEmu: 457_200,
+    });
+    expect(result).toEqual({ ok: true, changed: true });
+
+    // No timer flush between the exec and these reads: the commit itself must publish.
+    const frame = findDrawingOverlayFrameInLayout(editor.surface!.publishedLayout(), before!.id);
+    expect(frame).not.toBeNull();
+    expect(frame!.width).toBeCloseTo(36, 5);
+    expect(frame!.height).toBeCloseTo(36, 5);
+
+    const target = selectedDrawingOverlayTargetOf(editor.surface);
+    expect(target).not.toBeNull();
+    expect(target!.widthEmu).toBe(457_200);
+    expect(target!.heightEmu).toBe(457_200);
+    expect(target!.width).toBeCloseTo(36, 5);
+    expect(target!.height).toBeCloseTo(36, 5);
   });
 
   test('refuses image commands without a selected picture', () => {
