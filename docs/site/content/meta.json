@@ -11,6 +11,7 @@
     "frameworks/nuxt",
     "word-fidelity",
     "examples",
+    "build-a-docx-agent",
     "---React---",
     "react/index",
     "react/composition",
