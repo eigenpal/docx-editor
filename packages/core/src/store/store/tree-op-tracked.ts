@@ -39,6 +39,7 @@ import {
   replaceChildren,
 } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
+import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
 import { insertionAuthor, insideDeletion } from './tree-op-retraction.ts';
@@ -73,101 +74,6 @@ function build(
   } as OoxmlElement;
 }
 
-/**
- * The next free `@w:id` for a revision in this part.
- *
- * `ST_DecimalNumber`, and only ever compared for equality — Word writes them densely from
- * zero and nothing reads them as an order. Taking one past the highest in use keeps a new
- * revision from joining an existing one by accident, which is what an id collision means.
- */
-export function nextRevisionId(part: OoxmlPart): () => string {
-  let highest = -1;
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    // REVISION ids only. `@w:id` is also carried by bookmarks, comments and permissions,
-    // and those are separate id spaces — a `w:bookmarkStart` id is attacker-controlled and
-    // unbounded (`ST_DecimalNumber` is xsd:integer), so scanning them all let a 23-digit
-    // bookmark id produce `w:id="1e+22"`: not an integer, and a file Word calls unreadable.
-    if (REVISION_ID_BEARING.has(node.localName) && node.namespaceUri === WML_NAMESPACE_URI) {
-      for (const attribute of node.attributes) {
-        if (attribute.namespaceUri !== WML_NAMESPACE_URI || attribute.localName !== 'id') continue;
-        // Strictly parsed and clamped: Word reads a revision id as a 32-bit signed integer,
-        // so a larger value is not something to count past — it is something to ignore.
-        if (!/^\d{1,10}$/.test(attribute.value)) continue;
-        const value = Number(attribute.value);
-        if (value <= MAX_REVISION_ID && value > highest) highest = value;
-      }
-    }
-    for (const child of node.children) visit(child);
-  };
-  visit(part.root);
-  let next = highest + 1;
-  return () => {
-    // Past the ceiling there is no "one higher" left, and clamping to it would hand back an
-    // id the file already uses — turning every edit the user makes into a member of somebody
-    // else's revision, which a crafted `@w:id` could force deliberately. Wrap and take the
-    // lowest id nobody is using instead.
-    if (next > MAX_REVISION_ID) {
-      const used = usedRevisionIds(part);
-      for (let candidate = 0; candidate <= MAX_REVISION_ID; candidate += 1) {
-        if (!used.has(String(candidate))) return String(candidate);
-      }
-      // Two billion revisions in one part is not a document; refuse to invent a collision.
-      throw new TypeError('no free revision id');
-    }
-    return String(next++);
-  };
-}
-
-/** Every revision id in use, for the wrap-around case. */
-function usedRevisionIds(part: OoxmlPart): Set<string> {
-  const used = new Set<string>();
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (REVISION_ID_BEARING.has(node.localName) && node.namespaceUri === WML_NAMESPACE_URI) {
-      for (const attribute of node.attributes) {
-        if (attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'id') {
-          used.add(attribute.value);
-        }
-      }
-    }
-    for (const child of node.children) visit(child);
-  };
-  visit(part.root);
-  return used;
-}
-
-/**
- * The elements whose `@w:id` is a REVISION id. Every other `@w:id` is a different space.
- *
- * Matched on LOCAL NAME, not on the typed kind: only the four content wrappers get a kind of
- * their own, and `w:cellIns`, `w:trPr/w:ins`, `w:rPrChange` and the rest read as `generic`.
- * Keying on kind missed them, so a document whose only revisions were a tracked row
- * insertion minted an id already in use — and the new edit then shared an address with a
- * structural revision the engine refuses, which marked the user's own insertion read-only.
- */
-const REVISION_ID_BEARING: ReadonlySet<string> = new Set([
-  'ins',
-  'del',
-  'moveFrom',
-  'moveTo',
-  'cellIns',
-  'cellDel',
-  'cellMerge',
-  'rPrChange',
-  'pPrChange',
-  'tblPrChange',
-  'tblPrExChange',
-  'tcPrChange',
-  'trPrChange',
-  'sectPrChange',
-  'tblGridChange',
-  'numberingChange',
-]);
-
-/** `ST_DecimalNumber` is unbounded; Word's reader is not. */
-const MAX_REVISION_ID = 2147483647;
-
 function revisionAttributes(id: string, revision: RevisionAttributionInput) {
   return [
     attr('id', id),
@@ -188,14 +94,9 @@ function textNode(mint: () => string, value: string, deleted: boolean): OoxmlNod
   );
 }
 
-/** A run carrying `properties` (its `w:rPr`, kept) and one text node. */
-function runWith(
-  mint: () => string,
-  properties: readonly OoxmlNode[],
-  value: string,
-  deleted: boolean
-): OoxmlNode {
-  return build(mint(), 'run', 'r', [], [...properties, textNode(mint, value, deleted)]);
+/** A `w:r` over its children — the ONE spelling of the run shape this module writes. */
+function runOf(mint: () => string, children: readonly OoxmlNode[]): OoxmlNode {
+  return build(mint(), 'run', 'r', [], children);
 }
 
 function isRunProperties(node: OoxmlNode): boolean {
@@ -301,6 +202,18 @@ function holdsAtomBegin(node: OoxmlNode, atoms: AtomNodes): boolean {
 }
 
 /**
+ * What a tracked insertion places: run text, or one run-level element (a tab or a break).
+ *
+ * `length` is the payload's size in MODEL units, on `segmentsOf`'s terms — `text.length`
+ * for characters, one for a tab or a break — so the extend-own-insertion path can step the
+ * cursor past what it just placed without re-measuring the rebuilt run.
+ */
+interface TrackedInsertionPayload {
+  readonly length: number;
+  readonly nodes: (mint: () => string) => readonly OoxmlNode[];
+}
+
+/**
  * Insert `text` at `offset` as a tracked insertion.
  *
  * Returns the paragraph's new children, or null when the offset was never reached — which
@@ -315,8 +228,51 @@ export function applyInsertTracked(
   revision: RevisionAttributionInput,
   options?: { readonly deferValidation?: boolean }
 ): TreeOpResult {
+  return applyTrackedInsertion(
+    part,
+    paragraph,
+    offset,
+    { length: text.length, nodes: (mint) => [textNode(mint, text, false)] },
+    revision,
+    options
+  );
+}
+
+/**
+ * Insert ONE run-level element — a tab or a break — at `offset` as a tracked insertion.
+ *
+ * The element builder comes from the caller because the element vocabulary lives with the
+ * untracked appliers; this module owns only the wrapper and the placement rules, which are
+ * the same ones typed text follows. A tab or break inserted in suggesting mode used to pass
+ * through unwrapped, so the file recorded an unattributed edit Accept/Reject could not act on.
+ */
+export function applyInsertTrackedElement(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  element: (mint: () => string) => OoxmlNode,
+  revision: RevisionAttributionInput,
+  options?: { readonly deferValidation?: boolean }
+): TreeOpResult {
+  return applyTrackedInsertion(
+    part,
+    paragraph,
+    offset,
+    { length: 1, nodes: (mint) => [element(mint)] },
+    revision,
+    options
+  );
+}
+
+function applyTrackedInsertion(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  payload: TrackedInsertionPayload,
+  revision: RevisionAttributionInput,
+  options?: { readonly deferValidation?: boolean }
+): TreeOpResult {
   const mint = createNodeIdAllocator(part);
-  const mintRevision = nextRevisionId(part);
   const offsets = paragraphOffsetIndex(paragraph);
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -347,11 +303,13 @@ export function applyInsertTracked(
   const attribution: RevisionAttributionInput = replaced
     ? { author: revision.author, ...(replaced.date === undefined ? {} : { date: replaced.date }) }
     : revision;
-  const insertionId = replaced?.id ?? mintRevision();
+  // Minted LAZILY: `nextRevisionId` walks the whole part, and an insertion that adopts the
+  // adjacent deletion's id — every replace-typing keystroke — would pay that walk for nothing.
+  const insertionId = replaced?.id ?? nextRevisionId(part)();
 
   const wrap = (properties: readonly OoxmlNode[]): OoxmlNode =>
     build(mint(), 'revisionInsert', 'ins', revisionAttributes(insertionId, attribution), [
-      runWith(mint, properties, text, false),
+      runOf(mint, [...properties, ...payload.nodes(mint)]),
     ]);
 
   const rebuild = (nodes: readonly OoxmlNode[], stack: readonly OoxmlNode[]): OoxmlNode[] => {
@@ -477,9 +435,9 @@ export function applyInsertTracked(
         // Inside our OWN pending insertion: extend it. A second `w:ins` nested in the first
         // says two people proposed the same words, which is not what happened.
         if (own === revision.author) {
-          out.push(splitRunAndInsert(mint, offsets, node, offset - start, text, false));
+          out.push(splitRunAndInsert(mint, offsets, node, offset - start, payload.nodes(mint)));
           placed = true;
-          cursor.offset = end + text.length;
+          cursor.offset = end + payload.length;
           continue;
         }
         const properties = childrenOf(node)
@@ -541,30 +499,29 @@ function splitRun(
     seen += length;
   }
   return [
-    build(mint(), 'run', 'r', [], [...properties.map((child) => copy(mint, child)), ...head]),
-    build(mint(), 'run', 'r', [], [...properties.map((child) => copy(mint, child)), ...tail]),
+    runOf(mint, [...properties.map((child) => copy(mint, child)), ...head]),
+    runOf(mint, [...properties.map((child) => copy(mint, child)), ...tail]),
   ];
 }
 
-/** Put `text` into an existing run at a local offset — the extend-my-own-insertion path. */
+/** Put new content into an existing run at a local offset — the extend-my-own-insertion path. */
 function splitRunAndInsert(
   mint: () => string,
   offsets: ParagraphOffsetIndex,
   run: OoxmlNode,
   local: number,
-  text: string,
-  deleted: boolean
+  nodes: readonly OoxmlNode[]
 ): OoxmlNode {
   const [head, tail] = splitRun(mint, offsets, run, local);
   const content = [
     ...childrenOf(head).filter((child) => !isRunProperties(child)),
-    textNode(mint, text, deleted),
+    ...nodes,
     ...childrenOf(tail).filter((child) => !isRunProperties(child)),
   ];
   const properties = childrenOf(run)
     .filter(isRunProperties)
     .map((child) => copy(mint, child));
-  return build(mint(), 'run', 'r', [], [...properties, ...coalesced(mint, content)]);
+  return runOf(mint, [...properties, ...coalesced(mint, content)]);
 }
 
 /**

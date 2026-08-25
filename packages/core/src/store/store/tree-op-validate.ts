@@ -642,6 +642,14 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
       }
+      // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
+      // would serialize a proposal no reader can attribute or resolve.
+      if (
+        op.revision !== undefined &&
+        (typeof op.revision.author !== 'string' || op.revision.author.length === 0)
+      ) {
+        return 'invalid-property-value';
+      }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }

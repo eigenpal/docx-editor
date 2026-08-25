@@ -315,9 +315,27 @@ export type TreeDocOp =
       /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
       readonly scopeRootId?: string;
     }
-  | { readonly op: 'insertTab'; readonly paragraphId: string; readonly offset: number }
-  | { readonly op: 'insertHardBreak'; readonly paragraphId: string; readonly offset: number }
-  | { readonly op: 'insertPageBreak'; readonly paragraphId: string; readonly offset: number }
+  | {
+      readonly op: 'insertTab';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      readonly op: 'insertHardBreak';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      readonly op: 'insertPageBreak';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
+      readonly revision?: RevisionAttributionInput;
+    }
   | {
       /**
        * Insert an allowlisted page-number complex field at a UTF-16 offset.

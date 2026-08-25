@@ -33,6 +33,7 @@ import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import {
   applyDeleteTracked,
   applyInsertTracked,
+  applyInsertTrackedElement,
   applyParagraphMarkRevision,
   applyProposeParagraphMerge,
   retractsOwnParagraphMark,
@@ -174,6 +175,15 @@ function simpleElement(
     children: [],
   } as unknown as OoxmlNode;
 }
+
+/** The one run-level element each insert op places, shared by its tracked and untracked arms. */
+const RUN_ELEMENT_INSERTS: Readonly<
+  Record<'insertTab' | 'insertHardBreak' | 'insertPageBreak', (nextId: () => string) => OoxmlNode>
+> = {
+  insertTab: (nextId) => simpleElement(nextId, 'tab'),
+  insertHardBreak: (nextId) => simpleElement(nextId, 'br', 'line'),
+  insertPageBreak: (nextId) => simpleElement(nextId, 'br', 'page'),
+};
 
 /**
  * Where the caller's characters go once a prompt has been emptied.
@@ -383,21 +393,16 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         op.bias
       );
     case 'insertTab':
-      return applyInsertContent(
-        part,
-        paragraph,
-        op.offset,
-        [(mint) => simpleElement(mint, 'tab')],
-        options
-      );
     case 'insertHardBreak':
-      return applyInsertContent(
-        part,
-        paragraph,
-        op.offset,
-        [(mint) => simpleElement(mint, 'br', 'line')],
-        options
-      );
+    case 'insertPageBreak': {
+      // ONE builder per op, shared by the tracked and untracked arms — two lambdas per op
+      // would let suggesting mode insert a different element than edit mode for the same key.
+      const element = RUN_ELEMENT_INSERTS[op.op];
+      if (op.revision) {
+        return applyInsertTrackedElement(part, paragraph, op.offset, element, op.revision, options);
+      }
+      return applyInsertContent(part, paragraph, op.offset, [element], options);
+    }
     case 'setListLevel':
       return applySetListLevel(part, paragraph, op.level, options, nextId);
     case 'setParagraphMarkProperties':
@@ -412,14 +417,6 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         op.inForcePositionsTwips,
         options,
         nextId
-      );
-    case 'insertPageBreak':
-      return applyInsertContent(
-        part,
-        paragraph,
-        op.offset,
-        [(mint) => simpleElement(mint, 'br', 'page')],
-        options
       );
     case 'insertPageField':
       return applyInsertContent(

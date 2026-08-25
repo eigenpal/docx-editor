@@ -287,6 +287,35 @@ describe('a document with no tracked changes', () => {
     expect(items[0]!.text).toBe('MORE');
     expect(items[0]!.ranges[0]!.start.paragraphId).toBe(paragraphId);
   });
+
+  // A tab or a break has no `w:t`, so its card read as EMPTY — the reviewer was asked to
+  // accept content they were never shown. The card projects the same character the offset
+  // model counts for the element.
+  test('a tracked tab derives a card with the tab character, not empty text', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}"><w:body>` +
+        `<w:p><w:r><w:t>plain words only</w:t></w:r></w:p>` +
+        `</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const store = new TreeDocumentStore(result.part);
+    const paragraphId = [...deepParagraphOrderOfPart(store.part).keys()][0]!;
+    const applied = store.transact((tx) => {
+      tx.apply({
+        op: 'insertTab',
+        paragraphId,
+        offset: 5,
+        revision: { author: 'QA Reviewer', date: '2026-01-01T00:00:00Z' },
+      });
+    });
+    expect(applied.ok).toBe(true);
+    const items = revisionItemsOf(store.part);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('insert');
+    expect(items[0]!.text).toBe('\t');
+  });
 });
 
 describe('the revision-card memo is keyed on the part, not just its root', () => {

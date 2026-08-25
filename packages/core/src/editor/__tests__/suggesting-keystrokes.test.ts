@@ -381,16 +381,76 @@ describe('replacing a selection that spans paragraphs, in suggesting mode', () =
     });
   });
 
-  test('a Tab over a selection lands after the struck words', () => {
+  test('a Tab over a selection lands after the struck words, as a proposal', () => {
     withSurface(plainParagraph('Alpha Beta Gamma'), (surface) => {
       selectIn(surface, 0, 'Alpha '.length, 'Alpha Beta'.length);
       surface.insertTab();
       expect(surface.state().lastRejection).toBeNull();
       const xml = serializeOoxmlPart(surface.session.part());
-      // The strike then the tab, adjacent. (The tab itself is still written untracked in
-      // suggesting mode — a separate attribution gap; this pins only where it lands.)
-      expect(xml).toMatch(/<w:delText[^>]*>Beta<\/w:delText><\/w:r><\/w:del><w:r><w:tab\/>/);
+      // The strike then the tab, adjacent — and the tab is itself a tracked insertion, so
+      // Accept/Reject can act on it rather than the file recording an unattributed edit.
+      expect(xml).toMatch(
+        /<w:delText[^>]*>Beta<\/w:delText><\/w:r><\/w:del><w:ins[^>]*w:author="Ada Lovelace"[^>]*><w:r><w:tab\/>/
+      );
       expect(surface.state().selection.head.offset).toBe('Alpha Beta'.length + 1);
+    });
+  });
+
+  test('a line break and a page break are proposals too', () => {
+    withSurface(plainParagraph('Alpha one') + plainParagraph('Beta two'), (surface) => {
+      caretTo(surface, 0, 'Alpha'.length);
+      surface.insertLineBreak();
+      caretTo(surface, 1, 'Beta'.length);
+      surface.insertPageBreak();
+      expect(surface.state().lastRejection).toBeNull();
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).toMatch(/<w:ins[^>]*w:author="Ada Lovelace"[^>]*><w:r><w:br\/><\/w:r><\/w:ins>/);
+      expect(xml).toMatch(
+        /<w:ins[^>]*w:author="Ada Lovelace"[^>]*><w:r><w:br w:type="page"\/><\/w:r><\/w:ins>/
+      );
+    });
+  });
+
+  test('rejecting the proposal removes the tab', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      caretTo(surface, 0, 'Alpha'.length);
+      surface.insertTab();
+      expect(surface.state().lastRejection).toBeNull();
+      expect(serializeOoxmlPart(surface.session.part())).toMatch(/<w:tab\/>/);
+      const result = surface.session.applyTreeOps([{ op: 'rejectAllRevisions' }]);
+      expect(result.committed).toBe(true);
+      const xml = serializeOoxmlPart(surface.session.part());
+      expect(xml).not.toMatch(/<w:tab\/>/);
+      expect(xml).not.toMatch(/<w:ins/);
+    });
+  });
+
+  test('a Tab inside your own pending insertion extends it instead of nesting', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      caretTo(surface, 0, 0);
+      typeEach(surface, 'ab');
+      caretTo(surface, 0, 1);
+      surface.insertTab();
+      expect(surface.state().lastRejection).toBeNull();
+      const xml = serializeOoxmlPart(surface.session.part());
+      // ONE insertion: the tab joins the run the author is already proposing.
+      expect(xml).toMatch(/<w:ins[^>]*><w:r><w:t[^>]*>a<\/w:t><w:tab\/><w:t[^>]*>b<\/w:t>/);
+      expect(xml.match(/<w:ins /g)).toHaveLength(1);
+    });
+  });
+
+  test('a format armed at a caret INSIDE struck words survives the relocation', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      selectIn(surface, 0, 0, 'Alpha'.length);
+      surface.deleteBackward();
+      caretTo(surface, 0, 2);
+      surface.toggleRunProperty('b');
+      surface.type('X');
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['AlphaX one']);
+      const xml = serializeOoxmlPart(surface.session.part());
+      // The insert relocated past the deletion, and the armed bold rode along with it.
+      expect(xml).toMatch(/<w:ins[^>]*><w:r><w:rPr><w:b\/><\/w:rPr><w:t[^>]*>X<\/w:t>/);
     });
   });
 

@@ -521,7 +521,13 @@ export function mountPaginatedSurface(
   ): TreeDocOp[] {
     const armed = armedAtCaret();
     if (!armed || length === 0) return [];
-    const at = pendingFormats!.position;
+    // The insert this format rides RELOCATES past a deletion the caret rests in — the rule
+    // `rangeDeletionPlan` applies through `positionPastDeletion`. The armed anchor must
+    // follow the same relocation, or the two positions disagree by construction and the
+    // armed ops silently vanish: bold armed inside a `w:del`, then a character typed there,
+    // landed correctly and unbold. Identity everywhere else, so the exact-position check
+    // still guards a consumer that aims somewhere the caret never was.
+    const at = positionPastDeletion(currentLayout, pendingFormats!.position);
     if (at.paragraphId !== paragraphId || at.offset !== offset) return [];
     return [
       {
@@ -2685,13 +2691,46 @@ export function mountPaginatedSurface(
   }
 
   /** Ops that create or extend a reviewable proposal. */
+  /**
+   * The ops that carry per-op revision attribution, spelled ONCE.
+   *
+   * `attributeTrackedOps` stamps exactly these and `isTrackedEdit` reports exactly these, so
+   * a new revision-capable op added to one list but not the other would either write
+   * untracked in suggesting mode — the #458 failure — or stop `onTrackedChange` firing.
+   * Tabs and breaks are members because they are insertions too: passed through
+   * unattributed, they serialized as a plain run beside the strike — an edit the review
+   * pane could neither accept nor reject, in a document whose author believed everything
+   * they did was a proposal.
+   */
+  type RevisionCapableOp = Extract<
+    TreeDocOp,
+    {
+      op:
+        | 'insertText'
+        | 'deleteText'
+        | 'insertTab'
+        | 'insertHardBreak'
+        | 'insertPageBreak'
+        | 'insertTableRow'
+        | 'deleteTableRow';
+    }
+  >;
+  const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapableOp['op']>([
+    'insertText',
+    'deleteText',
+    'insertTab',
+    'insertHardBreak',
+    'insertPageBreak',
+    'insertTableRow',
+    'deleteTableRow',
+  ]);
+  function isRevisionCapable(op: TreeDocOp): op is RevisionCapableOp {
+    return REVISION_CAPABLE_OPS.has(op.op);
+  }
+
   function isTrackedEdit(op: TreeDocOp): boolean {
+    if (isRevisionCapable(op)) return op.revision !== undefined;
     switch (op.op) {
-      case 'insertText':
-      case 'deleteText':
-      case 'insertTableRow':
-      case 'deleteTableRow':
-        return op.revision !== undefined;
       case 'setParagraphMarkRevision':
       case 'proposeParagraphMerge':
         return true;
@@ -2709,22 +2748,9 @@ export function mountPaginatedSurface(
     revision: import('../store/store/tree-op-types.ts').RevisionAttributionInput
   ): TreeDocOp[] {
     return ops.flatMap((op): TreeDocOp[] => {
-      if (
-        (op.op === 'insertText' ||
-          op.op === 'deleteText' ||
-          op.op === 'insertTableRow' ||
-          op.op === 'deleteTableRow') &&
-        op.revision !== undefined
-      ) {
-        return [op];
-      }
-      if (
-        op.op === 'insertText' ||
-        op.op === 'deleteText' ||
-        op.op === 'insertTableRow' ||
-        op.op === 'deleteTableRow'
-      ) {
-        return [{ ...op, revision }];
+      // Already-attributed ops pass through untouched — a caller that named an author keeps it.
+      if (isRevisionCapable(op)) {
+        return [op.revision !== undefined ? op : { ...op, revision }];
       }
       // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
       // is already in two paragraphs, and what is being proposed is the break between them.

@@ -53,7 +53,7 @@ import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { readEditableTableTopology, type EditableTableTopology } from './tree-op-table-topology.ts';
-import { nextRevisionId } from './tree-op-tracked.ts';
+import { nextRevisionId } from './tree-op-revision-ids.ts';
 import type {
   RevisionAttributionInput,
   TreeOpEffect,

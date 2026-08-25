@@ -3478,9 +3478,9 @@ export interface ReviewModelInput {
     readonly commentsExtendedPart?: OoxmlPart | undefined;
     readonly commentsPart?: OoxmlPart | undefined;
     readonly customNodePayloads?: ReadonlyMap<string, {
-        readonly nodeId: string;
-        readonly label: string;
         readonly data: string;
+        readonly label: string;
+        readonly nodeId: string;
     }> | undefined;
     readonly customNodes?: readonly unknown[] | undefined;
     readonly furnitureParts?: readonly OoxmlPart[] | undefined;
@@ -3986,14 +3986,17 @@ export type TreeDocOp = {
     readonly offset: number;
     readonly op: 'insertTab';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly offset: number;
     readonly op: 'insertHardBreak';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly offset: number;
     readonly op: 'insertPageBreak';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly field: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y';
     readonly offset: number;

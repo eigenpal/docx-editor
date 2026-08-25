@@ -15,6 +15,7 @@
 
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { hardBreakText } from '../package/hard-break.ts';
 import { collectRevisionSites } from './tree-op-revisions.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import {
@@ -86,6 +87,12 @@ function wmlAttribute(node: OoxmlElement, localName: string): string | undefined
 /** Text under a node, counting `w:t` and `w:delText` alike. */
 function textUnder(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.value;
+  // A tab or a break carries no text value, so a card derived from a tracked one read as
+  // EMPTY — the reviewer was asked to accept content they were never shown, and a tab
+  // replacing a word presented as a pure deletion. Project the same characters the offset
+  // model counts for them.
+  if (node.kind === 'tab') return '\t';
+  if (node.kind === 'hardBreak') return hardBreakText(node);
   let text = '';
   for (const child of node.children) text += textUnder(child);
   return text;
