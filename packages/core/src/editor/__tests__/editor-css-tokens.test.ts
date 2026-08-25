@@ -132,8 +132,9 @@ describe('editor stylesheet custom properties', () => {
     const rule = /\.docx-editor-one-surface__caret\s*\{([^}]*)\}/.exec(withoutComments);
     expect(rule).not.toBeNull();
     expect(rule![1]).toMatch(/background:\s*var\(--doc-caret/);
-    // 2px, not 1: a hairline caret is a single device pixel on a high-DPI screen and
-    // reads as a rendering artefact rather than a cursor.
-    expect(rule![1]).toMatch(/width:\s*2px/);
+    // 1.5px, not 1: a hairline caret is a single device pixel on a high-DPI screen and
+    // reads as a rendering artefact rather than a cursor. Not 2: with the contrast
+    // ring the caret read as a slab that overlapped neighbouring glyphs.
+    expect(rule![1]).toMatch(/width:\s*1\.5px/);
   });
 });

@@ -2304,10 +2304,11 @@ a.docx-hyperlink:focus-visible {
 
 .docx-editor-one-surface__caret {
   position: absolute;
-  /* 2px, not 1: a hairline caret disappears against body text at 100% zoom on a
+  /* 1.5px, not 1: a hairline caret disappears against body text at 100% zoom on a
    * high-DPI screen, and reads as a rendering artefact rather than a cursor.
-   * Every desktop word processor draws a two-pixel insertion point. */
-  width: 2px;
+   * Not 2 either: with the contrast ring below, a 2px core read as a 4px slab that
+   * overlapped the neighbouring glyphs — Word's insertion bar is thinner. */
+  width: 1.5px;
   background: var(--doc-caret);
   /* A CONTRASTING 1px ring, because a caret position is not always beside text: the offset
    * before an inline image puts the insertion point exactly on the picture's leading edge,
@@ -2316,7 +2317,10 @@ a.docx-hyperlink:focus-visible {
    *
    * The ring and the core are a complementary pair, so whichever one the backdrop hides,
    * the other reads. On an ordinary white page the ring is white on white and the caret
-   * looks exactly as it did before.
+   * looks exactly as it did before. The ring is TRANSLUCENT: at full strength it drew a
+   * hard outline on mid-tone backdrops (highlights, table shading) where both colours are
+   * visible at once, and the caret read as a boxed slab instead of a bar. Half strength
+   * still lifts the bar off a dark photo without outlining it on a pink highlight.
    *
    * NOT `mix-blend-mode: difference`, which is the textbook XOR caret and is wrong here:
    * blending resolves against the nearest ISOLATED GROUP, and this stylesheet puts two of
@@ -2325,7 +2329,7 @@ a.docx-hyperlink:focus-visible {
    * editing. Inside either, the backdrop is transparent rather than the sheet's paper, so
    * the caret would blend to white and the dark page's inversion would then paint it black
    * on black: the very bug this ring exists to fix. The pair needs no backdrop at all. */
-  box-shadow: 0 0 0 1px var(--doc-caret-contrast);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--doc-caret-contrast) 50%, transparent);
   animation: docx-editor-caret-blink 1.06s steps(1) infinite;
 }
 
