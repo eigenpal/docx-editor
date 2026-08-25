@@ -689,3 +689,157 @@ describe('incremental notes layout (reserve persistence)', () => {
     expect(sessionEdit.stats.fullPasses).toBe(beforeEditFull);
   });
 });
+
+describe('multi-section reserve locality', () => {
+  /**
+   * Section 0 spans three pages and carries the one citation on its LAST page (reserve page
+   * slot 2). Sections 1 and 2 are one page each, so slot 2 sits past every reserve slot
+   * their passes can read — a reserve there must not enter their context keys.
+   */
+  function multiSectionFootnoteDoc(noteWords: number): Uint8Array {
+    const sectPr =
+      '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>';
+    const section0 = Array.from({ length: 80 }, (_, i) => {
+      const text = `S0 line ${i} ${'word '.repeat(18)}`;
+      if (i === 75) {
+        return `<w:p><w:r><w:t>${text}</w:t><w:footnoteReference w:id="1"/></w:r></w:p>`;
+      }
+      return `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    }).join('');
+    const shortSection = (label: string): string =>
+      Array.from(
+        { length: 4 },
+        (_, i) => `<w:p><w:r><w:t>${label} line ${i} ${'word '.repeat(10)}</w:t></w:r></w:p>`
+      ).join('');
+    const sectionBreak = `<w:p><w:pPr><w:sectPr>${sectPr}</w:sectPr></w:pPr></w:p>`;
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          section0 +
+          sectionBreak +
+          shortSection('S1') +
+          sectionBreak +
+          shortSection('S2') +
+          `<w:sectPr>${sectPr}</w:sectPr>` +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+          `<w:footnote w:id="1"><w:p><w:r><w:t>Note ${'note '.repeat(noteWords)}</w:t></w:r></w:p></w:footnote>` +
+          '</w:footnotes>'
+      ),
+    });
+  }
+
+  const layoutShape = (layout: SemanticLayout): string =>
+    JSON.stringify(
+      layout.pages.map((page) => ({
+        index: page.index,
+        box: page.box,
+        contentBox: page.contentBox,
+        fragments: page.fragments.map((f) => ({
+          kind: f.kind,
+          id: f.id,
+          box: f.box,
+          ...(f.kind === 'paragraph'
+            ? { paragraphId: f.paragraphId, range: f.range, lines: f.lines.length }
+            : {}),
+        })),
+        footnoteHeight: page.footnotes?.box.height ?? 0,
+      }))
+    );
+
+  function notesFor(bytes: Uint8Array): ReturnType<typeof loadNotesDoc> {
+    const { part, notes } = loadNotesDoc(bytes);
+    const props = notes.footnotePropsBySection[0]!;
+    const enProps = notes.endnotePropsBySection[0]!;
+    return {
+      part,
+      notes: {
+        ...notes,
+        footnotePropsBySection: [props, props, props],
+        endnotePropsBySection: [enProps, enProps, enProps],
+      },
+    };
+  }
+
+  test('a reserve change on section 0 relayouts only section 0; the result matches a clean pass', () => {
+    const { part, notes } = notesFor(multiSectionFootnoteDoc(20));
+    const session = createLayoutSession();
+    const first = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-section-locality',
+    });
+    // The reserve sits on section 0's last page (slot 2); sections 1 and 2 hold one page each.
+    expect(first.pages.length).toBe(5);
+    expect(session.notePageBottomReserves).not.toBeNull();
+    expect([...session.notePageBottomReserves!.keys()]).toEqual([2]);
+    const firstReserve = session.notePageBottomReserves!.get(2)!;
+    const sectionOnePage = first.pages[3]!;
+    const sectionTwoPage = first.pages[4]!;
+
+    // The edit grows the note, so section 0's reserve height changes ({2: h} -> {2: h'}).
+    const { part: editedPart, notes: editedNotes } = notesFor(multiSectionFootnoteDoc(60));
+    const incremental = layoutSemanticDocument(editedPart, 2, {
+      measurer: editedNotes.measurer,
+      notes: editedNotes,
+      session,
+      producer: 'notes-section-locality',
+    });
+    expect([...session.notePageBottomReserves!.keys()]).toEqual([2]);
+    expect(session.notePageBottomReserves!.get(2)!).toBeGreaterThan(firstReserve);
+
+    // Locality: the reserve change stayed inside section 0 — the other sections' pages come
+    // back as the SAME records, not rebuilt twins.
+    expect(incremental.pages[3]).toBe(sectionOnePage);
+    expect(incremental.pages[4]).toBe(sectionTwoPage);
+
+    // Equivalence: the sliced context key changes nothing about the layout itself.
+    const clean = layoutSemanticDocument(editedPart, 2, {
+      measurer: editedNotes.measurer,
+      notes: editedNotes,
+      producer: 'notes-section-locality',
+    });
+    expect(layoutShape(incremental)).toBe(layoutShape(clean));
+  });
+
+  test('open pays one full pass; the reserved reflow pass reuses every section', () => {
+    const { part, notes } = notesFor(multiSectionFootnoteDoc(20));
+    const session = createLayoutSession();
+    const first = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      session,
+      producer: 'notes-section-open',
+    });
+    expect(first.pages.length).toBe(5);
+    expect(session.notePageBottomReserves!.size).toBe(1);
+    // The reflow's second body pass re-places only the reserved section, so the open
+    // performs exactly one FULL pass. Before the per-section reserve slice it performed two.
+    expect(session.stats.fullPasses).toBe(1);
+    // And the second pass really applied the reserve: the citation page keeps room for the
+    // note above the page bottom.
+    const host = first.pages.find((page) =>
+      (page.footnotes?.notes ?? []).some((n) => n.noteId === 1 && !n.continuation)
+    );
+    expect(host).toBeTruthy();
+    expect(host!.index).toBe(2);
+  });
+});

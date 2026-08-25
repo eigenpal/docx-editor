@@ -152,7 +152,11 @@ import {
   type SectionColumns,
 } from './section-properties.ts';
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
-import { inheritNotesLayoutInput, layoutSemanticDocumentWithNotes } from './note-pagination.ts';
+import {
+  inheritNotesLayoutInput,
+  layoutSemanticDocumentWithNotes,
+  notesReserveContextKey,
+} from './note-pagination.ts';
 import { noteMarksCacheToken } from './note-projection.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
@@ -939,9 +943,12 @@ function layoutBlocksPass(
   // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
   // alternates by page number, so it is not a section-local question.
   const pageIndexStart = options.pageIndexStart ?? 0;
-  const notesReserveKey = pageBottomReserves
-    ? `|nr:${[...pageBottomReserves].map(([i, h]) => `${i}=${h}`).join(',')}`
-    : '';
+  // Only the reserve entries THIS pass can read belong in its context key. The pass reads
+  // reserves at consecutive page slots as it opens pages, so a bound of "the page count the
+  // previous pass produced, plus one" covers every slot an input-identical replay can touch —
+  // and keeps a reserve on another section's pages from invalidating this one. A fresh
+  // session has no such bound and folds the whole map (conservative, one full pass).
+  const reserveKeyBound = session?.previous ? session.previous.pages.length + 1 : Infinity;
   const columnRegionBottom = options.columnRegionBottom;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
   // Body line ids are paragraph-local, so a changed line count in an earlier section does
@@ -949,7 +956,9 @@ function layoutBlocksPass(
   // is deliberately NOT here — numbers re-project at finalize and shells renumber at remap;
   // keying on it re-laid every section below an Enter that added one page. The one real
   // dependence, page PARITY, is checked by `comparable` through the session parity fields.
-  const context = `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
+  const contextFor = (notesReserveKey: string): string =>
+    `${producer}|${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
+  const context = contextFor(notesReserveContextKey(pageBottomReserves, reserveKeyBound));
   const startPageParity = pageIndexStart & 1;
   /** Set when this pass places an anchored drawing whose geometry reads page parity. */
   let usedPageParity = false;
@@ -2997,7 +3006,11 @@ function layoutBlocksPass(
         ]
       : checkpoints;
     session.keys = flowKeys;
-    session.context = context;
+    // Re-sliced with the page count THIS pass produced: a pass that grew past the start-time
+    // bound read reserve slots the start-time key never folded, and the next comparison must
+    // see them. An input-identical replay produces the same count, so its start-time bound
+    // (previous count + 1) rebuilds this exact string.
+    session.context = contextFor(notesReserveContextKey(pageBottomReserves, pages.length + 1));
     // Sticky whenever any part of the previous layout was reused: a resumed pass never
     // re-places the prefix and a converged pass never re-places the tail, so their
     // parity-reading anchors could not fire `onPageParityRead` this pass. Only a pass that

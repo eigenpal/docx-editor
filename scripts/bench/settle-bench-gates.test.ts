@@ -51,12 +51,15 @@ test('a keystroke on the huge document performs the pinned amount of work', () =
   expect(report.paragraphs).toBe(12820);
   expect(report.work).toEqual({
     // The last pass of a one-character keystroke: a handful of re-placed paragraphs against
-    // the document's total, everything else reused. `fullPasses` counts the two passes the
-    // OPEN performs; typing must add none.
+    // the document's total, everything else reused. `fullPasses` counts the passes the OPEN
+    // performs; typing must add none. The open's note-reserve reflow used to force a second
+    // full pass because the document-wide reserve map was folded into every section's
+    // context key; the key now folds only the reserve slots a section's own pass can read,
+    // so the reflow's second body pass reuses every section and only the first pass is full.
     placed: 7,
     total: 6540,
     reusedPages: 555,
-    fullPasses: 2,
+    fullPasses: 1,
     staleDiscards: 0,
     cancelledRuns: 0,
   });

@@ -2260,6 +2260,33 @@ function tableParagraphIdsOf(table: OoxmlNode): readonly string[] {
   return ids;
 }
 
+/**
+ * The note-reserve slice of one section's layout context key.
+ *
+ * `pageBound` is EXCLUSIVE and names the highest page slot the pass can read plus one — the
+ * pass reads reserves at consecutive local page slots as it opens pages, so every entry at or
+ * past the bound is unreadable by it and must stay OUT of the key. Folding the whole
+ * document-wide map in (the previous behaviour) meant a reserve on one section's pages
+ * changed every other section's context, and the open's second reflow pass re-placed every
+ * section instead of only the reserved ones.
+ *
+ * Entries are sorted by page slot so two content-equal maps render one canonical key
+ * regardless of insertion order. `Infinity` folds the whole map (a pass with no prior page
+ * count cannot bound its reads).
+ */
+export function notesReserveContextKey(
+  reserves: ReadonlyMap<number, number> | undefined,
+  pageBound: number
+): string {
+  if (!reserves) return '';
+  const entries: [number, number][] = [];
+  for (const [pageSlot, height] of reserves) {
+    if (pageSlot < pageBound) entries.push([pageSlot, height]);
+  }
+  entries.sort((a, b) => a[0] - b[0]);
+  return `|nr:${entries.map(([pageSlot, height]) => `${pageSlot}=${height}`).join(',')}`;
+}
+
 /** Drop non-positive heights so missing and zero compare equal. */
 function compactFootnoteReserves(reserves: ReadonlyMap<number, number>): Map<number, number> {
   const next = new Map<number, number>();
