@@ -2172,10 +2172,9 @@ function paintPage(
   // ever stealing a repeated header image from a sibling page.
   const options = { ...baseOptions, paintInstance: `p${page.index}` };
   const element = positioned(document, 'div', page.box, options.scale);
-  // Deliberately NOT `layout-page`: that class carries the legacy lane's whole-frame
-  // inversion, which would flip the paper itself. The sheet keeps the canvas colour its
-  // token names and only `.docx-page-content` below is inverted, so the theme and print
-  // rules name that class instead.
+  // The FRAME is never lightness-inverted — flipping it would flip the paper itself. The
+  // sheet keeps the canvas colour its token names and only `.docx-page-content` below is
+  // inverted, so the theme and print rules name that class instead.
   element.className = 'docx-page';
   // The measurer's own fallback stack, so an unstyled run — or one whose declared family
   // the platform cannot resolve — RENDERS in the same face it was MEASURED in. Left to

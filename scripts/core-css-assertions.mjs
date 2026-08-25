@@ -30,7 +30,7 @@ const SCOPE = '.docx-editor';
  * ProseMirror editor got our rules on its elements.
  *
  * `.layout-` we do mint, but the names are generic enough that a host could
- * mint them too (`.layout-page`, `.layout-paragraph`).
+ * mint them too (`.layout-paragraph`, `.layout-run-text`).
  * The old rationale — that they match painted document elements rather than
  * chrome, so the scope class "would be wrong" — does not hold: painted elements
  * are always inside the viewport, which always carries the scope class. They are

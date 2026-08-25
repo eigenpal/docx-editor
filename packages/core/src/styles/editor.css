@@ -426,8 +426,7 @@
   * invert(1) hue-rotate(180deg) flips lightness but preserves hue for ALL
   * authored colors, so nothing is unreadable. Media is double-inverted back so
   * photos/logos render normally. */
-.docx-editor.dark .layout-page,
-/* The paginated lane paints its content into `.docx-page-content`; inverting the page
+/* The painter paints its content into `.docx-page-content`; inverting the page
    FRAME as well would flip the paper itself, so the sheet keeps its own token background
    and only the content it holds is lightness-inverted. */
 /* Highlights are COUNTER-INVERTED, like images.
@@ -436,8 +435,7 @@
    where it clamps to zero, landing on a dark olive that reads as a redaction bar. Word keeps
    a highlight its authored colour, so the run is inverted back — the same treatment media
    already gets, for the same reason. */
-.docx-editor.dark .docx-page-content [data-highlight],
-.docx-editor.dark .layout-page [data-highlight] {
+.docx-editor.dark .docx-page-content [data-highlight] {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -457,17 +455,6 @@
     * light glow) with a 1px ring. Pre-invert dark → post-invert a subtle light
     * border, matching Word's framed dark page. */
 }
-/* The ring replaces the page frame's drop shadow, so it belongs to the FRAME. Applied to
-   the content box as well it outlined the text area — a box Word never draws — while the
-   real page edge lost its separation from the workspace. */
-.docx-editor.dark .layout-page {
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18) !important;
-}
-.docx-editor.dark .layout-page img,
-.docx-editor.dark .layout-page svg,
-.docx-editor.dark .layout-page canvas,
-.docx-editor.dark .layout-page video,
-.docx-editor.dark .layout-page [data-no-color-invert],
 .docx-editor.dark .docx-page-content img,
 .docx-editor.dark .docx-page-content svg,
 .docx-editor.dark .docx-page-content canvas,
@@ -490,13 +477,6 @@
      file was one more unnamed token. Stays #000 in both themes so the content inversion
      lands on near-white. */
     --doc-page-text: #000000;
-  }
-  .docx-editor.dark .layout-page,
-  .docx-editor.dark .layout-page img,
-  .docx-editor.dark .layout-page svg,
-  .docx-editor.dark .layout-page canvas,
-  .docx-editor.dark .layout-page video {
-    filter: none;
   }
 }
 
@@ -785,22 +765,6 @@ a.docx-hyperlink:focus-visible {
 .docx-ai-selection-preview {
   background-color: rgba(156, 39, 176, 0.2);
   border-bottom: 2px dashed rgba(156, 39, 176, 0.6);
-}
-
-/* Transient paragraph flash used by scrollToParaId({ highlight }). */
-.docx-editor .layout-paragraph.docx-paragraph-flash {
-  animation: docx-paragraph-flash-fade var(--docx-paragraph-flash-duration, 1200ms) ease-out both;
-}
-
-@keyframes docx-paragraph-flash-fade {
-  0%,
-  70% {
-    box-shadow: inset 0 0 0 9999px var(--docx-paragraph-flash-color, rgba(255, 235, 59, 0.55));
-  }
-
-  100% {
-    box-shadow: inset 0 0 0 9999px transparent;
-  }
 }
 
 /* ============================================================================
@@ -1195,6 +1159,9 @@ a.docx-hyperlink:focus-visible {
 
 .docx-drawing {
   pointer-events: auto;
+  /* An arrow over pictures, as Word shows. Inline drawings paint INSIDE the line, so
+   * without this they inherit the content box's I-beam. */
+  cursor: default;
 }
 
 .docx-drawing-layer {
@@ -2818,7 +2785,8 @@ a.docx-hyperlink:focus-visible {
 
 /* The text column shows an I-beam over its whole box, as Word does — over the gaps
  * between paragraphs and below the last one, not only over glyphs (where selectable
- * text already produces one). Drawings live in sibling layers, so they keep theirs. */
+ * text already produces one). Anchored drawings live in sibling layers; inline
+ * drawings opt back to the arrow on `.docx-drawing`. */
 .docx-paginated-surface .docx-page-content {
   cursor: text;
 }
