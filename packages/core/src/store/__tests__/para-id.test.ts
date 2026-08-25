@@ -15,6 +15,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
+import { TreeDocumentStore } from '../store/tree-store.ts';
 import {
   isValidParaId,
   mintParaId,
@@ -263,5 +264,44 @@ describe('normalizeParagraphIdentity', () => {
     const reopened = loadDocument(serializeOoxmlPart(normalized));
     expect(canonicalOoxmlFingerprint(reopened)).toBe(canonicalOoxmlFingerprint(normalized));
     expect(usedParaIds(reopened.root)).toEqual(usedParaIds(normalized.root));
+  });
+});
+
+describe('usedParaIds', () => {
+  test('after a store split, the memoized set over the new root equals a full walk', () => {
+    // `usedParaIds` composes from per-subtree memos, and a split shares the untouched
+    // sibling paragraph by reference — so a stale entry would surface exactly here, as a
+    // set that misses the id the split just minted against it.
+    const part = loadDocument(
+      `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>` +
+        '<w:p w14:paraId="4C000001" w14:textId="4C000001"><w:r><w:t>alphaomega</w:t></w:r></w:p>' +
+        '<w:p w14:paraId="4C000002" w14:textId="4C000002"><w:r><w:t>second</w:t></w:r></w:p>' +
+        '</w:body></w:document>'
+    );
+    const store = new TreeDocumentStore(part);
+    // Warm the memo on the pre-split root, so the post-split read cannot pass by
+    // recomputing from scratch.
+    expect(usedParaIds(store.part.root)).toEqual(new Set(['4C000001', '4C000002']));
+    const firstParagraphId = wmlParagraphs(store.part)[0]!.id;
+    const result = store.transact((tx) => {
+      tx.apply({ op: 'splitParagraph', paragraphId: firstParagraphId, offset: 5 });
+    });
+    expect(result.ok).toBe(true);
+
+    // The oracle: an unmemoized full walk of the new root.
+    const walked = new Set<string>();
+    const visit = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') return;
+      const value = paraIdOf(node);
+      if (value !== null && isValidParaId(value)) walked.add(value.toUpperCase());
+      for (const child of node.children) visit(child);
+    };
+    visit(store.part.root);
+
+    expect(usedParaIds(store.part.root)).toEqual(walked);
+    expect(walked.size).toBe(3);
+    const minted = [...walked].filter((id) => id !== '4C000001' && id !== '4C000002');
+    expect(minted).toHaveLength(1);
+    expect(isValidParaId(minted[0]!)).toBe(true);
   });
 });

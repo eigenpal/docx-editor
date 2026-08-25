@@ -253,6 +253,42 @@ describe('a card id names the part it lives in', () => {
   });
 });
 
+describe('a document with no tracked changes', () => {
+  // The read answers [] without building the site-location index — so the guard here is
+  // that the shortcut is taken only when there is truly nothing, and a tracked insertion
+  // written afterwards still surfaces.
+  test('reads an empty array, and a tracked insertion then surfaces', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}"><w:body>` +
+        `<w:p><w:r><w:t>plain words only</w:t></w:r></w:p>` +
+        `</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const store = new TreeDocumentStore(result.part);
+    expect(revisionItemsOf(store.part)).toEqual([]);
+
+    const paragraphId = [...deepParagraphOrderOfPart(store.part).keys()][0]!;
+    const applied = store.transact((tx) => {
+      tx.apply({
+        op: 'insertText',
+        paragraphId,
+        offset: 5,
+        text: 'MORE',
+        revision: { author: 'QA Reviewer', date: '2026-01-01T00:00:00Z' },
+      });
+    });
+    expect(applied.ok).toBe(true);
+
+    const items = revisionItemsOf(store.part);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('insert');
+    expect(items[0]!.text).toBe('MORE');
+    expect(items[0]!.ranges[0]!.start.paragraphId).toBe(paragraphId);
+  });
+});
+
 describe('the revision-card memo is keyed on the part, not just its root', () => {
   test('two parts sharing one root under different names each get their own part name', () => {
     const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';

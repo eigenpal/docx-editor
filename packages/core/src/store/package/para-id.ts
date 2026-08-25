@@ -80,18 +80,44 @@ export function mintParaId(seed: string, used: ReadonlySet<string>): string {
 
 const usedParaIdCache = new WeakMap<OoxmlElement, ReadonlySet<string>>();
 
+/** One shared empty list for the (vast) majority of subtrees that carry no paraId. */
+const EMPTY_PARA_IDS: readonly string[] = Object.freeze([]);
+
+/**
+ * Valid paraIds under one immutable node, in document pre-order, uppercased.
+ *
+ * Per-NODE memo: an edit shares every untouched subtree by reference, so recomputing the
+ * root set after a split touches only the rebuilt spine and reuses every sibling block's
+ * cached list. The full walk this composes replaced was O(document) per fresh root, which
+ * every structural keystroke paid inside `applyOps` (a split mints its new id against this
+ * set). Subtrees with no id share one frozen empty list, so the memo costs nothing where
+ * there is nothing to remember.
+ */
+const subtreeParaIdsCache = new WeakMap<OoxmlNode, readonly string[]>();
+
+function subtreeParaIds(node: OoxmlNode): readonly string[] {
+  if (node.kind === 'textValue') return EMPTY_PARA_IDS;
+  const cached = subtreeParaIdsCache.get(node);
+  if (cached) return cached;
+  let found: string[] | null = null;
+  const value = paraIdOf(node);
+  if (value !== null && isValidParaId(value)) (found ??= []).push(value.toUpperCase());
+  for (const child of node.children) {
+    const ids = subtreeParaIds(child);
+    if (ids.length === 0) continue;
+    found ??= [];
+    for (const id of ids) found.push(id);
+  }
+  const result: readonly string[] = found ?? EMPTY_PARA_IDS;
+  subtreeParaIdsCache.set(node, result);
+  return result;
+}
+
 /** Every valid `w14:paraId` in the tree, uppercased. Memoized per root object. */
 export function usedParaIds(root: OoxmlElement): ReadonlySet<string> {
   const cached = usedParaIdCache.get(root);
   if (cached) return cached;
-  const used = new Set<string>();
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    const value = paraIdOf(node);
-    if (value !== null && isValidParaId(value)) used.add(value.toUpperCase());
-    for (const child of node.children) visit(child);
-  };
-  visit(root);
+  const used = new Set<string>(subtreeParaIds(root));
   usedParaIdCache.set(root, used);
   return used;
 }
