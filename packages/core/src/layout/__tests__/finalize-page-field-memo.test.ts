@@ -26,7 +26,10 @@ import {
   type PageRecord,
   type SemanticLayout,
 } from '../index.ts';
-import { finalizePageFieldProjection } from '../field-projection.ts';
+import {
+  carryStrippedPageFieldProjection,
+  finalizePageFieldProjection,
+} from '../field-projection.ts';
 import { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from '../hf-layout.ts';
 import type { HeaderFooterStoryRecord } from '../semantic-records.ts';
 
@@ -197,7 +200,7 @@ describe('finalizePageFieldProjection memo', () => {
     // Two sections, because that is the path where reused sheets still carry projectors at
     // finalize time: the multi-section publish re-finalizes every pass, so a memo entry taken
     // under the old total is what would serve the stale value here. (A single-section resume
-    // reuses already-finalized records, so it never re-projects furniture either way.)
+    // reuses already-finalized records, whose retained projectors the next describe covers.)
     const furniture: PageFurniture = {
       titlePage: false,
       evenAndOddHeaders: false,
@@ -232,5 +235,85 @@ describe('finalizePageFieldProjection memo', () => {
     expect(third.pages.length).toBe(second.pages.length);
     third.pages.forEach((page, index) => expect(page).toBe(second.pages[index]!));
     expect(footerText(third, 0)).toBe(`Page 1 of ${third.pages.length}`);
+  });
+});
+
+describe('single-section incremental reuse re-projects furniture page fields (#441)', () => {
+  test('a reused sheet updates NUMPAGES when the page count moves, and holds identity when it does not', () => {
+    // Single section, one session. The first pass finalizes and STRIPS every footer's
+    // projector; a later pass reuses the finished sheets whole. Without the retained
+    // projector, the reused footer kept the first pass's `of Y` text forever.
+    const furniture: PageFurniture = {
+      titlePage: false,
+      evenAndOddHeaders: false,
+      headers: new Map(),
+      footers: new Map([
+        ['default', layoutHeaderFooterStory(footerPart(), CONTENT_WIDTH, measurer, 'test')],
+      ]),
+    };
+    const session = createLayoutSession();
+    const build = (count: number) => partOf(filler(count) + tightSectPr);
+    const options = { measurer, producer: 'test', session, furniture };
+
+    const first = layoutSemanticDocument(build(18), 1, options);
+    const firstTotal = first.pages.length;
+    expect(firstTotal).toBeGreaterThan(2);
+    expect(footerText(first, 0)).toBe(`Page 1 of ${firstTotal}`);
+
+    // Grow the tail: page 1's flow is untouched, so the resume path carries its finished
+    // sheet over by reference — the reuse under suspicion.
+    const second = layoutSemanticDocument(build(40), 2, options);
+    const secondTotal = second.pages.length;
+    expect(secondTotal).toBeGreaterThan(firstTotal);
+    expect(session.stats.reusedPages).toBeGreaterThan(0);
+    expect(footerText(second, 0)).toBe(`Page 1 of ${secondTotal}`);
+    expect(footerText(second, secondTotal - 1)).toBe(`Page ${secondTotal} of ${secondTotal}`);
+
+    // A no-change pass keeps every sheet by identity: the retained projection context still
+    // holds, so re-finalize must not mint fresh footers.
+    const third = layoutSemanticDocument(build(40), 3, options);
+    expect(third.pages.length).toBe(secondTotal);
+    third.pages.forEach((page, index) => expect(page).toBe(second.pages[index]!));
+
+    // Shrink back: the same reused sheets re-project down as well.
+    const fourth = layoutSemanticDocument(build(18), 4, options);
+    expect(fourth.pages.length).toBe(firstTotal);
+    expect(footerText(fourth, 0)).toBe(`Page 1 of ${firstTotal}`);
+  });
+
+  test('a carried (remap-shifted) published story re-projects at its shifted origin', () => {
+    const base = lay(partOf(filler(20) + tightSectPr), 1);
+    const total = base.pages.length;
+    const unfinalized = unfinalizedLayoutOf(base, fieldFooterRecord(footerPart()));
+    const first = finalizePageFieldProjection(unfinalized);
+    const published = first.pages[1]!.footer!;
+
+    // What `remapPage` does to a reused published sheet: mint a Y-shifted furniture twin and
+    // carry the retained projection onto it, `dy` sheets of stack away.
+    const dy = 120;
+    const shifted: typeof published = {
+      ...published,
+      box: { ...published.box, y: published.box.y + dy },
+    };
+    carryStrippedPageFieldProjection(published, shifted, dy);
+    const withShifted = {
+      revision: 2,
+      pages: first.pages.map((page, index) => (index === 1 ? { ...page, footer: shifted } : page)),
+    };
+
+    // Unmoved context: the carried entry keeps the shifted record by identity.
+    const held = finalizePageFieldProjection(withShifted);
+    expect(held.pages[1]!.footer).toBe(shifted);
+
+    // Moved page count: the carried projector re-projects the text AND lands the box at the
+    // SHIFTED origin, not the minting pass's pre-shift one.
+    const extra: PageRecord = {
+      ...unfinalized.pages[total - 1]!,
+      index: total,
+      pageFieldSource: { pageNumber: total + 1, sectionPageCount: total + 1 },
+    };
+    const grown = finalizePageFieldProjection({ revision: 3, pages: [...held.pages, extra] });
+    expect(footerText(grown, 1)).toBe(`Page 2 of ${total + 1}`);
+    expect(grown.pages[1]!.footer!.box.y).toBe(published.box.y + dy);
   });
 });

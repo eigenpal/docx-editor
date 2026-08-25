@@ -600,7 +600,13 @@ export interface HeaderFooterStoryRecord {
   readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /**
    * Transient projector used between furniture attach and document-level page-field
-   * finalize. Absent on published layout records after finalize.
+   * finalize. Absent on published layout records after finalize — but not dead: finalize
+   * retains it (with the context it last ran under) in a side table keyed on the published
+   * record (`strippedStoryProjections` in `field-page-furniture.ts`), so a reused sheet can
+   * re-project when the page count moves (#441). The retained closure keeps its minting
+   * pass's scope alive for as long as the sheet is reused, and anything that clones a
+   * published field-bearing story must carry the entry onto the clone
+   * (`carryStrippedPageFieldProjection`).
    */
   readonly pageFieldProjector?: (context: {
     readonly pageNumber: number;

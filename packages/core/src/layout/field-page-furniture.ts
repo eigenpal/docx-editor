@@ -42,6 +42,9 @@ export const PAGE_FIELD_PLACEHOLDER = '0';
  * `pageNumber` is the displayed PAGE value after section `w:pgNumType/@w:start` (1-based).
  * `pageCount` is document NUMPAGES. `sectionPageCount` is SECTIONPAGES for the attached
  * section. `format` is the authored `w:pgNumType/@w:fmt` applied only to PAGE.
+ *
+ * A new field here must also join `sameFieldPageContext` below, or finalize compares two
+ * contexts that differ in it as equal and keeps a reused story's stale text.
  */
 export interface FieldPageContext {
   readonly pageNumber: number;
@@ -292,6 +295,81 @@ export function substituteBodyPageFields(
   return next ?? blocks;
 }
 
+/** Story projector retained past finalize, with the context its published text was projected under. */
+interface RetainedStoryProjection {
+  readonly context: FieldPageContext;
+  readonly projector: (context: FieldPageContext) => HeaderFooterStoryRecord;
+  /**
+   * Cumulative sheet-stack Y offset between where the projector places the story and where
+   * the published record sits. A NUMBER, not a composed closure: a sheet that survives many
+   * tail shifts folds each shift into this one value, so re-projection stays one projector
+   * call plus one translation however long the reuse lineage gets.
+   */
+  readonly dy: number;
+}
+
+/**
+ * Projectors of PUBLISHED story records, keyed on the stripped record finalize minted.
+ *
+ * Finalize strips `pageFieldProjector` from what it publishes, but incremental layout reuses
+ * published sheets whole: a later pass that changes the page count hands those stripped
+ * records straight back to finalize, which then has nothing to re-project NUMPAGES through —
+ * the reused footer kept the old `of Y` text. Retaining the projector on the side (with the
+ * context it last ran under) lets finalize keep an unchanged-context story by identity and
+ * re-project it when the pagination moved underneath it. Weak on the story record, so a story
+ * that falls out of the layout takes its projector with it. The retained closure keeps its
+ * minting pass's scope alive for as long as the sheet is reused — the same retention profile
+ * the multi-section span cache already has for LIVE projectors on `previousRemapped` pages.
+ *
+ * INVARIANT: anything that CLONES a published field-bearing story record must carry this
+ * entry onto the clone ({@link carryStrippedPageFieldProjection}) — a published story leaves
+ * no data trace of its field needs, so an orphaned clone silently keeps stale text.
+ * `remapPage` is the one cloner today.
+ */
+const strippedStoryProjections = new WeakMap<HeaderFooterStoryRecord, RetainedStoryProjection>();
+
+/**
+ * True when two projection contexts substitute identical values for every page field.
+ *
+ * Compares EVERY dimension of {@link FieldPageContext}, so it must grow in lockstep with
+ * that interface: a context field this misses compares as "same context" and finalize keeps
+ * a reused story's stale text. Needs-blind on purpose — finalize does not know which fields
+ * a published story reads, so it re-projects on any moved dimension; the story layout's own
+ * per-token cache absorbs the re-layout when the story's text did not actually change.
+ */
+function sameFieldPageContext(a: FieldPageContext, b: FieldPageContext): boolean {
+  return (
+    a.pageNumber === b.pageNumber &&
+    a.pageCount === b.pageCount &&
+    (a.sectionPageCount ?? a.pageCount) === (b.sectionPageCount ?? b.pageCount) &&
+    a.format === b.format
+  );
+}
+
+/**
+ * Carry a published story's retained projection onto its Y-shifted twin, `dy` points away.
+ *
+ * `remapPage` moves a reused sheet's furniture by minting a shifted record, which would
+ * orphan the retained projector — the shifted footer could never re-project at a new page
+ * count. The shift folds into the retained OFFSET rather than wrapping the projector in
+ * another closure, so repeated shifts cannot accumulate a call chain. The retained context
+ * is the source's: the shifted text is still the text projected under it, and the first
+ * finalize whose context differs re-projects.
+ */
+export function carryStrippedPageFieldProjection(
+  source: HeaderFooterStoryRecord,
+  shifted: HeaderFooterStoryRecord,
+  dy: number
+): void {
+  const retained = strippedStoryProjections.get(source);
+  if (!retained) return;
+  strippedStoryProjections.set(shifted, {
+    context: retained.context,
+    projector: retained.projector,
+    dy: retained.dy + dy,
+  });
+}
+
 /**
  * Finalized projection of one page under one total page count, memoized on the immutable
  * page record.
@@ -336,13 +414,32 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     const project = (
       story: HeaderFooterStoryRecord | undefined
     ): HeaderFooterStoryRecord | undefined => {
-      if (!story?.pageFieldProjector) return story;
+      if (!story) return story;
+      let projector = story.pageFieldProjector;
+      let dy = 0;
+      if (!projector) {
+        const retained = strippedStoryProjections.get(story);
+        // Already-published story: keep it by identity while the context it was projected
+        // under still holds; re-project through the retained projector when the pagination
+        // moved under the reused sheet. No retained entry means the story never carried a
+        // page field.
+        if (!retained || sameFieldPageContext(retained.context, context)) return story;
+        projector = retained.projector;
+        dy = retained.dy;
+      }
       changed = true;
-      const projected = story.pageFieldProjector(context);
-      // Strip the projector from the published record.
-      const { pageFieldProjector: _drop, ...rest } = projected;
+      const projected = projector(context);
+      // Strip the projector from the published record; retain it on the side so a reused
+      // sheet can still re-finalize when the page count moves. The retained offset applies
+      // here — the projector places at its minting pass's sheet Y.
+      const { pageFieldProjector: _drop, box, ...rest } = projected;
       void _drop;
-      return rest;
+      const placed: HeaderFooterStoryRecord = {
+        ...rest,
+        box: dy === 0 ? box : { ...box, y: box.y + dy },
+      };
+      strippedStoryProjections.set(placed, { context, projector, dy });
+      return placed;
     };
     const header = project(page.header);
     const footer = project(page.footer);
@@ -356,7 +453,8 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     // Reachable only for pages with NO live projector and NO body substitution: `project`
     // always mints a fresh record for a projector-bearing story (the rest-spread above), so
     // this identity entry can never publish — or memoize as final — a record that still
-    // carries a `pageFieldProjector`.
+    // carries a `pageFieldProjector`. A story kept by identity because its RETAINED
+    // projection context still holds is already published text under this exact context.
     if (header === page.header && footer === page.footer && fragments === page.fragments) {
       finalizedPageMemos.set(page, { pageCount, result: page });
       return page;

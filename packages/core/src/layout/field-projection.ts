@@ -55,6 +55,7 @@ import {
   type StoryPageFieldNeeds,
 } from './field-instruction.ts';
 import {
+  carryStrippedPageFieldProjection,
   fieldPageContextToken,
   finalizePageFieldProjection,
   formatPageNumber,
@@ -132,6 +133,7 @@ export {
   type StoryPageFieldNeeds,
 };
 export {
+  carryStrippedPageFieldProjection,
   fieldPageContextToken,
   finalizePageFieldProjection,
   formatPageNumber,

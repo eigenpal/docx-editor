@@ -61,7 +61,10 @@ export const PAGE_REUSE_GUARDS = {
   // variant's flow height, so that half is `context`.
   anchoredDrawings: 'flow',
   // `furnitureContext` folds each variant's flow height, content key and drawing-resource
-  // token, which is what a header or footer edit moves.
+  // token, which is what a header or footer edit moves. The PAGE/NUMPAGES/SECTIONPAGES text
+  // inside the furniture is the one part a reused sheet can hold stale: finalize strips the
+  // story's projector, so `finalizePageFieldProjection` retains it on the side and
+  // re-projects a reused story whose page context moved (#441).
   header: 'context',
   footer: 'context',
   // `attachNotesToLayout` rebuilds the note areas over the assembled pages every pass, and

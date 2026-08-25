@@ -20,6 +20,7 @@ import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
 import {
+  carryStrippedPageFieldProjection,
   detectStoryPageFields,
   fieldPageContextToken,
   storyNeedsPageFields,
@@ -441,7 +442,12 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
       box: shiftBox(story.box),
       ...(story.anchoredDrawings ? { anchoredDrawings: story.anchoredDrawings } : {}),
     };
-    if (!story.pageFieldProjector) return shifted;
+    if (!story.pageFieldProjector) {
+      // A published (already-finalized) story keeps its projector on the side; carry it onto
+      // the shifted twin so a moved reused sheet can still re-project at a new page count.
+      carryStrippedPageFieldProjection(story, shifted, dy);
+      return shifted;
+    }
     const project = story.pageFieldProjector;
     return {
       ...shifted,
