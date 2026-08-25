@@ -8,13 +8,13 @@ function feature(id: string) {
 }
 
 describe('word-features — images lane honesty', () => {
-  test('inline and anchored editing is partial with React-only note until Vue follow-up', () => {
+  test('inline and anchored editing is partial in both adapters', () => {
     for (const id of ['images.inline', 'images.anchored'] as const) {
       const row = feature(id);
       expect(row.editing).toBe('partial');
       expect(row.rendering).toBe('full');
       expect(row.roundTrip).toBe('full');
-      expect(row.notes?.toLowerCase()).toContain('vue');
+      expect(row.notes?.toLowerCase()).toContain('both');
     }
   });
 

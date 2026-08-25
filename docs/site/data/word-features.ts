@@ -904,12 +904,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'structure.repeating-sections',
     name: 'Repeating section controls',
     category: 'structure',
-    editing: 'partial',
+    editing: 'none',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Add and remove items in the editor. The section configuration itself is read-only. The document object model does not type a repeating section as a content control, so a script reaches the controls inside it instead.',
+      'Repeating-section markup is preserved and rendered. Item add and remove operations and section configuration edits are unsupported.',
     docsLink: '/docs/2.x/guides/content-controls',
   },
   {

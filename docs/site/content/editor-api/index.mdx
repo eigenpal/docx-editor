@@ -21,17 +21,20 @@ project must resolve exactly one copy of it, shared with any editor adapter you 
 
 ## Choose a host
 
-| Capability                 | Server runtime | Browser runtime |
-| -------------------------- | -------------- | --------------- |
-| Read and edit a DOCX       | Yes            | Yes             |
-| Own document bytes         | Yes            | No              |
-| Return bytes with `save()` | Yes            | No              |
-| Read or set selection      | No             | Yes             |
-| Scroll to content          | No             | Yes             |
-| Use layout geometry        | No             | Yes             |
+| `DocumentCapabilities` field | Server runtime | Browser runtime |
+| ---------------------------- | -------------- | --------------- |
+| `document`                   | Yes            | Yes             |
+| `save`                       | Yes            | No              |
+| `events`                     | Yes            | Yes             |
+| `selection`                  | No             | Yes             |
+| `scrolling`                  | No             | Yes             |
+| `layout`                     | No             | Yes             |
 
 `runtime.capabilities` reports these values. The values remain fixed for the
 runtime's lifetime.
+
+The current mode and document state can still refuse writes. These dynamic
+permissions are not capability fields.
 
 Use these prerequisites:
 
@@ -43,8 +46,7 @@ Use these prerequisites:
 | Write browser review data     | The Pro review module, an editable mode, and a host that accepts the write                       |
 | Use the package in production | A written commercial agreement                                                                   |
 
-Dynamic document state can change after runtime creation. A refusal from
-`sync()` is therefore authoritative.
+A refusal from `sync()` is authoritative.
 
 ## On a server
 

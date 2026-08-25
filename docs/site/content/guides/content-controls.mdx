@@ -14,21 +14,9 @@ The editor parses controls into the canonical tree, keeps them editable, renders
   variables; the two systems can coexist in one document.
 </Callout>
 
-## Support summary
-
-| Control or feature | Read and preserve | Fill                  | Create in editor   |
-| ------------------ | ----------------- | --------------------- | ------------------ |
-| Rich text          | Yes               | Yes                   | Yes                |
-| Plain text         | Yes               | Yes                   | Yes                |
-| Dropdown           | Yes               | Yes                   | Yes, without items |
-| Combo box          | Yes               | Yes                   | Yes, without items |
-| Checkbox           | Yes               | Yes                   | No                 |
-| Date picker        | Yes               | Yes                   | Yes                |
-| Picture            | Yes               | No                    | No                 |
-| Repeating section  | Yes               | No live behavior      | No                 |
-| `w:dataBinding`    | Yes               | Direct writes refused | No                 |
-
-Creating, filling, and removing controls do not create tracked changes.
+For cross-feature support levels, see the authoritative
+[Word fidelity matrix](/docs/2.x/word-fidelity). This guide covers content
+control tasks and operational refusals.
 
 ## Filling a template from a server
 
@@ -257,15 +245,16 @@ the reason.
 
 In the editor, typed controls get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. These controls work without host event handlers.
 
-## Current limits
+## Operational limits
 
-| Area               | Limit                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| Tables             | A control around a whole cell or row is unsupported. Controls inside a cell work.  |
-| Hyperlinks         | The editor does not surface a control inside a hyperlink.                          |
-| Data binding       | `w:dataBinding` round-trips without bound-value resolution.                        |
-| Repeating sections | Repeating sections round-trip without automatic expansion.                         |
-| Review             | Control creation, filling, and removal do not create revisions in suggesting mode. |
+- The editor does not support a control around a whole table cell or row.
+  Controls inside a cell work.
+- The editor does not surface a control inside a hyperlink.
+- `w:dataBinding` round-trips without bound-value resolution.
+- Repeating-section markup round-trips without item add, item remove, or
+  section configuration edits.
+- Control creation, filling, and removal do not create revisions in suggesting
+  mode.
 
 ## Next steps
 
