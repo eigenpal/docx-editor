@@ -59,6 +59,13 @@ export interface SurfaceSelectionSyncDeps {
   ): TreeApplyResult;
   render(): void;
   flushLayout(): boolean;
+  /**
+   * Land queued typing, any deferred layout pass and any deferred paint, so the painted
+   * DOM matches the committed model. The readback lane calls it after its own commit;
+   * without it, a layout or paint the commit deferred under input pressure would leave
+   * the screen behind the composition it just landed.
+   */
+  flushToPaint?(): void;
   /** The engine's painted caret, repainted with every mirror. */
   updateCaret(): void;
   /** The model text of one paragraph, for diffing what an IME wrote against it. */
@@ -624,7 +631,10 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // nobody can edit nothing would ever remove them. Forget the retained paint so the
       // render below rebuilds from records.
       if (session.revisionFor(scope) === before) deps.discardPaint?.();
-      deps.flushLayout();
+      // The readback's own commit may have deferred its layout or paint under input
+      // pressure; land both before the unconditional render below, so the screen leaves
+      // the composition current.
+      (deps.flushToPaint ?? deps.flushLayout)();
       deps.render();
     },
 

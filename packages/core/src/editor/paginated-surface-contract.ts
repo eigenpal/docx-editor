@@ -425,7 +425,13 @@ export interface PaginatedSurface {
    * keep calling it directly.
    */
   enqueueType(text: string): void;
-  /** Land any queued typed text now, as its own transaction. No-op when empty. */
+  /**
+   * Land any queued typed text now, as its own transaction, AND publish any layout pass a
+   * commit deferred under input pressure — so the caller reads current text and current
+   * geometry at one seam. Both halves are no-ops when nothing is pending, which is the
+   * common case: an isolated commit lays out synchronously in its own tail, and deferral
+   * only happens when the browser reports queued input behind an expensive pass.
+   */
   flushPendingInput(): void;
   /**
    * Insert text whose newlines are PARAGRAPH BOUNDARIES, in one commit.
