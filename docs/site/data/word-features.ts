@@ -654,11 +654,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Watermarks (text & image)',
     category: 'layout',
     editing: 'none',
-    rendering: 'planned',
+    rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Watermarks live as VML or drawings inside header parts. Layout and editing are deferred to the drawings work, and Editor.getWatermark() is a stub. The markup can survive in the header part, but watermarks are not a supported feature yet.',
+      'Watermarks use VML or drawing markup in header parts. The editor does not render or edit them. It preserves the authored markup and package relationships through save.',
     docsLink: '/docs/2.x/guides/headers-footers',
   },
   {

@@ -8,8 +8,8 @@ order: 61
 Suggesting mode records edits as Word revisions. The editor underlines
 insertions and strikes through deletions.
 
-Each revision keeps its author and timestamp. Saved files use Word `w:ins` and
-`w:del` markup.
+Each revision keeps available author and timestamp metadata. OOXML timestamps
+are optional. Saved files use Word `w:ins` and `w:del` markup.
 
 This feature requires the review module from
 [`@docx-editor.dev/pro`](/docs/2.x/pro).
@@ -75,29 +75,40 @@ export function Reviewer({ bytes }: { bytes: Uint8Array }) {
 <Framework value="vue">
 
 ```vue
+<!-- SuggestToggle.vue -->
 <script setup lang="ts">
-import {
-  DocxEditorContent,
-  DocxEditorRoot,
-  DocxEditorViewport,
-  useEditorCommand,
-  useEditorState,
-} from '@docx-editor.dev/vue';
-import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/vue';
+import { useEditorCommand, useEditorState } from '@docx-editor.dev/vue';
 
-defineProps<{ bytes: Uint8Array }>();
-
-const modules = [reviewModule()];
 const mode = useEditorState((state) => state.editingMode);
 const suggest = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
 const edit = useEditorCommand({ type: 'setEditingMode', mode: 'editing' });
 </script>
 
 <template>
+  <button
+    type="button"
+    @mousedown.prevent
+    @click="mode === 'suggesting' ? edit.execute() : suggest.execute()"
+  >
+    {{ mode === 'suggesting' ? 'Suggesting' : 'Editing' }}
+  </button>
+</template>
+```
+
+```vue
+<!-- Reviewer.vue -->
+<script setup lang="ts">
+import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/vue';
+import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/vue';
+import SuggestToggle from './SuggestToggle.vue';
+
+defineProps<{ bytes: Uint8Array }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
   <DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
-    <button type="button" @click="mode === 'suggesting' ? edit.execute() : suggest.execute()">
-      {{ mode === 'suggesting' ? 'Suggesting' : 'Editing' }}
-    </button>
+    <SuggestToggle />
     <DocxEditorViewport>
       <DocxEditorContent />
       <DocxEditorReview />
@@ -155,21 +166,24 @@ Selecting one opens its balloon.
 
 ### Review parts
 
-| Part                                  | Purpose                                       |
-| ------------------------------------- | --------------------------------------------- |
-| `List`, `Card`, `Empty`               | Build the card collection.                    |
-| `Avatar`, `Author`, `Time`, `Summary` | Display item metadata.                        |
-| `Accept`, `Reject`                    | Resolve a revision.                           |
-| `Resolve`, `Reopen`                   | Change comment thread state.                  |
-| `Delete`                              | Delete a thread or discard a suggestion.      |
-| `Replies`, `Reply`                    | Display or add replies.                       |
-| `Markers`                             | Show gutter markers while the pane is closed. |
-| `Balloon`                             | Show formatting or structural decisions.      |
-| `AddComment`, `Draft`                 | Author comments.                              |
+All listed parts accept `className` and `hidden`. The other supported props vary
+by part.
 
-Review parts support React and Vue. Every part accepts `className` and `hidden`.
-All parts except `Draft` and `Reply` accept `asChild`. `Accept`, `Reject`,
-`Delete`, and `Reply` also accept `icon`.
+| Parts                                 | Purpose                                    | `asChild` | `icon`           |
+| ------------------------------------- | ------------------------------------------ | --------- | ---------------- |
+| `List`                                | Builds the card collection.                | No        | No               |
+| `Card`                                | Wraps one review item.                     | Yes       | No               |
+| `Empty`                               | Shows the empty state.                     | No        | No               |
+| `Avatar`, `Author`, `Time`, `Summary` | Display item metadata.                     | Yes       | No               |
+| `Accept`, `Reject`                    | Resolve a revision.                        | Yes       | Yes              |
+| `Resolve`, `Reopen`                   | Change comment thread state.               | Yes       | Yes              |
+| `Delete`                              | Deletes a thread or discards a suggestion. | Yes       | Yes              |
+| `Replies`                             | Displays existing replies.                 | No        | No               |
+| `Reply`                               | Adds a reply.                              | No        | No               |
+| `Markers`                             | Shows markers while the pane is closed.    | No        | Function or node |
+| `Balloon`                             | Shows formatting or structural decisions.  | No        | No               |
+| `AddComment`                          | Starts a comment draft.                    | No        | No               |
+| `Draft`                               | Authors a new comment.                     | No        | No               |
 
 `Markers` accepts an icon function because one component draws all markers. The
 packaged icon identifies the item kind.
@@ -259,17 +273,39 @@ document points.
 ## Accept or reject in bulk
 
 The review hook has no accept-all command. Call the per-item action for each
-actionable item.
+actionable revision.
 
 ```tsx
+import { DocxEditor, useEditorState } from '@docx-editor.dev/react';
+import { DocxEditorReview, reviewModule, useReview } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
 function AcceptAll() {
   const { items, accept } = useReview();
-  const actionable = items.filter((item) => !item.readOnly);
+  const viewing = useEditorState((state) => state.editingMode === 'viewing');
+  const actionable = items.filter((item) => item.kind === 'revision' && !item.readOnly);
 
   return (
-    <button disabled={actionable.length === 0} onClick={() => actionable.forEach(accept)}>
+    <button
+      disabled={viewing || actionable.length === 0}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => actionable.forEach(accept)}
+    >
       Accept all ({actionable.length})
     </button>
+  );
+}
+
+export function BulkReviewer({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <AcceptAll />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
   );
 }
 ```

@@ -63,6 +63,7 @@ Use `loadFonts` for brand fonts or licensed Word fonts.
 
 ```ts
 import { composeFontConfiguration, loadFonts } from '@docx-editor.dev/core/editor';
+import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 
 const brand = await loadFonts({
   sources: [
@@ -105,6 +106,8 @@ Use `createFontSource` when you already have bytes from a file input, IndexedDB,
 or a bundler.
 
 ```ts
+import { composeFontConfiguration, createFontSource } from '@docx-editor.dev/core/editor';
+
 const made = createFontSource(bytes, {
   family: 'Acme Sans',
   weight: 400,
@@ -170,6 +173,9 @@ googleFonts({
   substitute: { Georgia: 'Tinos' },
 });
 ```
+
+An arbitrary substitute can change line breaks and pagination. Use a
+metric-compatible substitute when layout must remain stable.
 
 | Resolver constraint        | Required behavior                                                     |
 | -------------------------- | --------------------------------------------------------------------- |
