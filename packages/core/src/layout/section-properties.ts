@@ -312,10 +312,24 @@ export function parsePageNumbering(sectPr: OoxmlNode): SectionPageNumbering | un
   return numbering;
 }
 
+/**
+ * Memoized on the immutable `w:sectPr` node. Every layout pass re-enumerates sections over
+ * the fresh part, and re-parsing each unchanged sectPr allocated a new properties object per
+ * pass — which also broke identity-keyed memos downstream (geometry, structure keys).
+ */
+const parsedSectionProperties = new WeakMap<object, SectionProperties>();
+
 /** Parse one `w:sectPr` into geometry/break properties (null reads as Word's defaults). */
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties {
   if (!sectPr) return DEFAULT_SECTION_PROPERTIES;
+  const cached = parsedSectionProperties.get(sectPr);
+  if (cached !== undefined) return cached;
+  const parsed = parseSectionPropertiesUncached(sectPr);
+  parsedSectionProperties.set(sectPr, parsed);
+  return parsed;
+}
 
+function parseSectionPropertiesUncached(sectPr: OoxmlNode): SectionProperties {
   const pgSz = childNamed(sectPr, 'pgSz');
   const pgMar = childNamed(sectPr, 'pgMar');
   const cols = childNamed(sectPr, 'cols');
@@ -396,12 +410,22 @@ export function bodySectionNode(part: OoxmlPart): OoxmlNode | undefined {
   return find(part.root);
 }
 
+/**
+ * Memoized on the immutable paragraph: an edit replaces the paragraph object, so the answer
+ * holds for as long as the node does. Section enumeration asks this of EVERY body paragraph
+ * on every fresh part, which made the per-keystroke scan O(document).
+ */
+const paragraphSectionNodes = new WeakMap<OoxmlElement, OoxmlElement | null>();
+
 /** `w:sectPr` nested under a paragraph's `w:pPr`, if present. */
 export function paragraphSectionNode(paragraph: OoxmlElement): OoxmlElement | undefined {
+  const cached = paragraphSectionNodes.get(paragraph);
+  if (cached !== undefined) return cached ?? undefined;
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  if (!pPr) return undefined;
-  const sectPr = childNamed(pPr, 'sectPr');
-  return sectPr && sectPr.kind !== 'textValue' ? (sectPr as OoxmlElement) : undefined;
+  const sectPr = pPr ? childNamed(pPr, 'sectPr') : undefined;
+  const result = sectPr && sectPr.kind !== 'textValue' ? (sectPr as OoxmlElement) : undefined;
+  paragraphSectionNodes.set(paragraph, result ?? null);
+  return result;
 }
 
 /**
