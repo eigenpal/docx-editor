@@ -203,6 +203,50 @@ describe('commit-tail layout deferral under input pressure', () => {
   });
 });
 
+describe('refusals and pressure', () => {
+  test('a REFUSED commit under pressure still flushes in-task and reports its refusal', async () => {
+    const restorePressure = stubInputPending();
+    const restoreClock = stubClock(10);
+    const container = document.createElement('div');
+    document.body.append(container);
+    let changes = 0;
+    const { mountPaginatedSurface } = await import('../paginated-surface.ts');
+    const { docx } = await import('./paginated-surface-fixtures.ts');
+    const opened = mountPaginatedSurface(container, docx(paragraph('tail')), {
+      scale: 1,
+      onChange: () => {
+        changes += 1;
+      },
+    });
+    if (!opened.ok) throw new Error(opened.reason);
+    const surface = opened.surface;
+    try {
+      putCaret(surface, 0);
+      surface.type('a'); // leaves a deferred pass pending in the shared accumulator
+      const revisionBefore = surface.publishedLayout().revision;
+      const changesBefore = changes;
+
+      // A staged-ops build that returns null is a refusal that commits nothing. The
+      // shared accumulator still holds the typed commit's pass, so without the rejected
+      // gate the tail deferred — and the render that reports `lastRejection` with it.
+      surface.applyAutomationOps(() => null);
+
+      expect(surface.state().lastRejection).not.toBeNull();
+      // The refusal's synchronous flush landed the earlier deferred pass in-task; only
+      // the paint may still ride the pre-existing paint deferral one task.
+      expect(surface.publishedLayout().revision).toBeGreaterThan(revisionBefore);
+      await tick();
+      expect(changes).toBeGreaterThan(changesBefore);
+      expect(surface.state().lastRejection).not.toBeNull();
+    } finally {
+      surface.destroy();
+      container.remove();
+      restoreClock();
+      restorePressure();
+    }
+  });
+});
+
 describe('the deferral lane stays off outside its two conditions', () => {
   test('without navigator.scheduling an expensive commit stays fully synchronous', () => {
     const restoreClock = stubClock(10);

@@ -1010,7 +1010,13 @@ export function mountPaginatedSurface(
     });
   }
 
-  function hasPendingBrowserInput(): boolean {
+  /**
+   * `includeContinuous` folds mousemove/wheel into the answer. Paint deferral wants that
+   * (any input beats a repaint); the commit-tail LAYOUT deferral must not — a moving
+   * pointer over a large document would otherwise defer every toolbar op, paste and
+   * programmatic write, so that gate asks for discrete input (keys, clicks) only.
+   */
+  function hasPendingBrowserInput(includeContinuous = true): boolean {
     const scheduling = (
       container.ownerDocument.defaultView?.navigator as
         | (Navigator & {
@@ -1020,13 +1026,12 @@ export function mountPaginatedSurface(
           })
         | undefined
     )?.scheduling;
-    return scheduling?.isInputPending?.({ includeContinuous: true }) ?? false;
+    return scheduling?.isInputPending?.({ includeContinuous }) ?? false;
   }
 
   function renderPublishedLayout(): void {
     if (!hasPendingBrowserInput()) {
-      if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
-      deferredPublishRender = null;
+      // `render()` retires any armed deferred publish render itself.
       render();
       armDerivationPrewarmOnce();
       return;
@@ -1037,6 +1042,11 @@ export function mountPaginatedSurface(
     if (deferredPublishRender !== null) return;
     deferredPublishRender = setTimeout(() => {
       deferredPublishRender = null;
+      // Superseded: a newer commit is already pending, so this layout is not the one the
+      // user will see — its own publish paints and reports. Painting here anyway spent one
+      // full render per flush batch on a frame one commit behind, and mirrored the newer
+      // model selection into the older spans.
+      if (scheduler.pending() !== null) return;
       render();
       armDerivationPrewarmOnce();
     }, 0);
@@ -1264,20 +1274,24 @@ export function mountPaginatedSurface(
    *
    * Under input pressure the flush used to be one unyielding task — transact, layout and
    * paint — so a keystroke arriving mid-flush waited for all three. When the browser already
-   * holds queued input AND the previous pass was expensive, layout is left to the scheduler's
-   * `setTimeout(0)` backstop (armed by the commit's own `notify`), which runs layout+publish
-   * as its own task; `renderPublishedLayout` may defer paint to a third. Every synchronous
-   * reader regains current geometry through `flushLayout` at its own seam, and the deferred
-   * pass reads the model as it is when it runs, so no pass is ever published stale.
+   * holds queued DISCRETE input (a key, a click — never a mere mousemove) AND the previous
+   * pass was expensive, layout is left to the scheduler's `setTimeout(0)` backstop (armed by
+   * the commit's own `notify`), which runs layout+publish as its own task;
+   * `renderPublishedLayout` may defer paint to a third. Every synchronous reader regains
+   * current geometry through `flushLayout` at its own seam, and the deferred pass reads the
+   * model as it is when it runs, so no pass is ever published stale.
    *
-   * A REFUSED commit leaves the scheduler empty, so it takes the synchronous branch and the
-   * `render()` below refreshes the state it just changed, exactly as before.
+   * A REFUSED commit never defers, whatever the scheduler holds: the accumulator is shared
+   * (a prior deferred commit, an external commit, a drawing-resource invalidation can all
+   * have filled it), and the `render()` below is the one report of the refusal the host
+   * gets — deferring it delayed `lastRejection`, or lost it to a later commit entirely.
    */
-  function publishAfterCommit(): void {
+  function publishAfterCommit(rejected: boolean): void {
     if (
+      !rejected &&
       scheduler.pending() !== null &&
       lastLayoutMs > INPUT_PRESSURE_LAYOUT_DEFER_MS &&
-      hasPendingBrowserInput()
+      hasPendingBrowserInput(false)
     ) {
       return;
     }
@@ -1297,22 +1311,27 @@ export function mountPaginatedSurface(
   }
 
   /**
-   * Land queued typing, any deferred layout pass AND any deferred paint.
+   * Land queued typing, any deferred layout pass AND any deferred paint. Returns whether a
+   * paint happened, so a caller that must ALWAYS leave a fresh paint (the IME readback's
+   * discarded-paint rebuild) can render once instead of twice.
    *
    * For lanes that are about to hand the painted DOM over or read it back — the IME: a
    * composition writes into whatever is on screen, and the readback diffs the painted text
    * against the model, so both must describe the committed revision before it starts.
    */
-  function flushToPaint(): void {
+  function flushToPaint(): boolean {
     flushTypeBuffer();
-    flushLayout();
+    const published = flushLayout();
     // The flushes above render on their own synchronous paths; what can remain is only a
     // paint deferred under input pressure, and that is exactly what must land now.
-    if (deferredPublishRender === null) return;
-    clearTimeout(deferredPublishRender);
-    deferredPublishRender = null;
-    render();
-    armDerivationPrewarmOnce();
+    // `render()` retires the deferred timer itself.
+    if (deferredPublishRender !== null) {
+      render();
+      armDerivationPrewarmOnce();
+      return true;
+    }
+    // Published with nothing deferred means `renderPublishedLayout` painted synchronously.
+    return published;
   }
 
   /** TOC chrome is hover-projected; never sticky from caret/click. */
@@ -2390,6 +2409,15 @@ export function mountPaginatedSurface(
   }
 
   function render(notifyChange = true): void {
+    // Any render catches the screen up to `currentLayout`, so a paint deferred under input
+    // pressure is performed BY this one rather than repeated a task later — a scroll repaint
+    // during a deferral used to paint the same layout twice. The deferred render was also
+    // the commit's only state report, so this render inherits its notify duty.
+    if (deferredPublishRender !== null) {
+      clearTimeout(deferredPublishRender);
+      deferredPublishRender = null;
+      notifyChange = true;
+    }
     // Reading the DOM selection BEFORE the paint replaces the nodes it lives in is what makes
     // a repaint carry a gesture the queued `selectionchange` has not delivered yet, rather
     // than erase it — see `adoptBeforePaint`.
@@ -2851,8 +2879,9 @@ export function mountPaginatedSurface(
     // rather than silently dropped: the view is repainted from what the model actually
     // holds, so the user never keeps looking at an edit that will not be saved.
     const result = run();
-    if (typeof result !== 'boolean' && result.rejected) {
-      lastRejection = String(result.reason ?? 'rejected');
+    const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
+    if (rejection) {
+      lastRejection = String(rejection.reason ?? 'rejected');
     } else {
       lastRejection = null;
       // The post-edit selection is installed BEFORE the paint, so the single render below
@@ -2887,7 +2916,7 @@ export function mountPaginatedSurface(
     // nothing, so the surface still has to refresh the state it just changed. Under input
     // pressure the publish may hand layout+paint to the scheduler's own task — see
     // `publishAfterCommit`.
-    publishAfterCommit();
+    publishAfterCommit(rejection !== null);
   }
 
   /**
@@ -3086,7 +3115,12 @@ export function mountPaginatedSurface(
     setActiveScopeBodyOrHf: (scope) => hfScope!.setActiveScope(scope),
     setSelection: (next) => setSelection(next),
     noteModelMoved: () => selectionSync.noteModelMoved(),
-    render: () => render(),
+    // Flushed first: note ops render right after their own commit, whose pass may have
+    // deferred under input pressure — the render must show the note it just created. The
+    // publish paints on its own, so the explicit render only covers the nothing-pending case.
+    render: () => {
+      if (!flushLayout()) render();
+    },
     revealNote: (scopeId) => {
       // The note just inserted only exists in the post-commit layout, which the commit
       // may have deferred under input pressure.
@@ -4460,6 +4494,9 @@ export function mountPaginatedSurface(
     setSelection: (next) => setSelection(next),
 
     revealPage(pageIndex, options) {
+      // Flushed like its siblings below: a page the deferred pass creates is not findable
+      // in the superseded layout, and "false" must mean "no such page", not "not yet".
+      flushLayout();
       const page = currentLayout.pages.find((entry) => entry.index === pageIndex);
       return page ? scrollToContentY(page.box.y, page.box.height, options) : false;
     },
@@ -4556,6 +4593,9 @@ export function mountPaginatedSurface(
       // across what Accept or Reject removed. Clamping alone only fires when the paragraph
       // ends up shorter than the offset; a caret in the MIDDLE of a paragraph that shrank
       // silently re-points at different characters, and the next thing typed lands there.
+      // The baseline is read from the LAYOUT, so buffered typing and a deferred pass must
+      // land first or the diff runs against text the resolution never saw.
+      flushPendingInputAndLayout();
       const caretParagraph = selection.head.paragraphId;
       const beforeText = textOf(caretParagraph);
       return commit(
@@ -4670,8 +4710,9 @@ export function mountPaginatedSurface(
     editingMode: () => editingMode,
     setEditingMode: (mode) => {
       // Text typed under the OLD mode commits under it — a buffered edit must
-      // not silently become a suggestion (or a viewing-mode refusal).
-      flushTypeBuffer();
+      // not silently become a suggestion (or a viewing-mode refusal). The layout
+      // flush rides along so the mode repaint below is not one commit behind.
+      flushPendingInputAndLayout();
       // A host wiring a mode control re-sends the value it already has — a controlled prop
       // re-synced in an effect, a dropdown re-picking the current row. Repainting every
       // materialized page for a mode that did not move is the cost `setRevisionStyles`
@@ -4708,8 +4749,9 @@ export function mountPaginatedSurface(
       // BEFORE the repaint, as `rematerialize` does: `render` adopts a pending DOM gesture,
       // which moves the selection without passing `setSelection`'s buffer guard. A style
       // change can land mid-typing-burst — a colour picker is a live control — and buffered
-      // characters are still destined for the old selection.
-      flushTypeBuffer();
+      // characters are still destined for the old selection. The layout flush rides along
+      // so the repaint below shows the burst it just landed rather than the pre-burst pages.
+      flushPendingInputAndLayout();
       // Paint-level only: the reuse key moves with the resolved styles, so the pages
       // repaint in the new colours without a layout pass.
       render(false);
@@ -4999,8 +5041,11 @@ export function mountPaginatedSurface(
     },
     destroy() {
       // Typed-but-unflushed text lands before teardown, so a detach-then-save
-      // flow keeps the last keystrokes.
-      flushTypeBuffer();
+      // flow keeps the last keystrokes — all the way to a paint and its state
+      // report: the final commit's `onChange` used to come from the synchronous
+      // commit tail, and a deferral swallowed by `scheduler.cancel()` below
+      // would silence the last keystrokes for an onChange-driven host.
+      flushToPaint();
       document.removeEventListener('selectionchange', onSelectionChange);
       pagesLayer.removeEventListener('keydown', onKeyDown);
       pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
@@ -5283,7 +5328,15 @@ export function mountPaginatedSurface(
   // under input pressure must land too: the readback at compositionend diffs the
   // painted text against the model, and a composition that began over a stale
   // paint would read the missing edit back as the IME's own.
+  //
+  // The pending USER selection is taken up FIRST, exactly as `onKeyDown` does.
+  // The flush's render mirrors the model selection into the DOM — over the
+  // user's still-unadopted range — and its `applyingSelection` echo guard is
+  // still up (it clears on a microtask) when `onCompositionStart` performs its
+  // own mandatory adoption, which would skip it: the #383 lane choice would
+  // again be made from a selection the user no longer has.
   const onCompositionStart: typeof selectionSync.onCompositionStart = (...args) => {
+    selectionSync.adoptBeforeInput();
     flushToPaint();
     selectionSync.onCompositionStart(...args);
   };
@@ -5481,7 +5534,15 @@ export function mountPaginatedSurface(
       // portrait ones is painted at an x its record does not carry. Without this the
       // transform reads every point on such a page shifted by that offset.
       pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
-      layout: () => currentLayout,
+      // Flushed: the pointer maps a client point to a MODEL offset, and a pass a commit
+      // deferred under input pressure would hand it the pre-edit offsets — a click during
+      // a burst then wrote a caret shifted by the inserted length. Only ever a real pass
+      // right after a deferring commit; every other call is a cheap no-op check. This is
+      // an event-handler-only dep — no render path reads it — so it cannot re-enter paint.
+      layout: () => {
+        flushLayout();
+        return currentLayout;
+      },
       measurer: () => measurer,
       selection: () => selection,
       setSelection: (next) => setSelection(next),
@@ -5563,6 +5624,9 @@ export function mountPaginatedSurface(
           });
           if (!created?.ok) return;
           rId = slotsOf(session.headerFooterResolutionBySection())?.get(variant)?.rId;
+          // The band only exists in the post-create layout, and the create's commit may
+          // have deferred its pass — the same reason `revealNote` flushes.
+          flushLayout();
         }
         if (!rId) return;
         hfScope?.enterHeaderFooter({ rId, pageIndex, sectionIndex, kind, variant });
