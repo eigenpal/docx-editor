@@ -347,8 +347,9 @@ export interface SemanticLayoutOptions {
    */
   readonly notes?: import('./note-pagination.ts').NotesLayoutInput;
   /**
-   * Per-page bottom reserves (points) subtracted from content height before line placement.
-   * Produced by the note reflow loop; absent means full content column.
+   * Per-page bottom reserves (points) subtracted from content height before line placement,
+   * keyed by DOCUMENT page index. A section's pass reads its own slice through
+   * `pageIndexStart`. Produced by the note reflow loop; absent means full content column.
    */
   readonly pageBottomReserves?: ReadonlyMap<number, number>;
   /** Derived note marks for body/note projection (provisional or final). */
@@ -953,10 +954,11 @@ function layoutBlocksPass(
   // alternates by page number, so it is not a section-local question.
   const pageIndexStart = options.pageIndexStart ?? 0;
   // Only the reserve entries THIS pass can read belong in its context key. The pass reads
-  // reserves at consecutive page slots as it opens pages, so a bound of "the page count the
-  // previous pass produced, plus one" covers every slot an input-identical replay can touch —
-  // and keeps a reserve on another section's pages from invalidating this one. A fresh
-  // session has no such bound and folds the whole map (conservative, one full pass).
+  // reserves at `pageIndexStart` plus consecutive local page slots as it opens pages, so a
+  // bound of "the page count the previous pass produced, plus one" covers every slot an
+  // input-identical replay can touch — and keeps a reserve on another section's pages from
+  // invalidating this one. A fresh session has no such bound and folds every entry from
+  // `pageIndexStart` on (conservative, one full pass).
   const reserveKeyBound = session?.previous ? session.previous.pages.length + 1 : Infinity;
   const columnRegionBottom = options.columnRegionBottom;
   const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
@@ -971,7 +973,9 @@ function layoutBlocksPass(
   // embedding it copied that token into every section's context string on every pass.
   const contextFor = (notesReserveKey: string): string =>
     `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
-  const context = contextFor(notesReserveContextKey(pageBottomReserves, reserveKeyBound));
+  const context = contextFor(
+    notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
+  );
   const startPageParity = pageIndexStart & 1;
   /** Set when this pass places an anchored drawing whose geometry reads page parity. */
   let usedPageParity = false;
@@ -990,7 +994,14 @@ function layoutBlocksPass(
    * search reads "produced a second page" as "does not fit".
    */
   const contentHeight = (): number => {
-    const base = Math.max(1, baseContentHeight - (pageBottomReserves?.get(pages.length) ?? 0));
+    // Reserves are keyed by DOCUMENT page index (computeFootnoteReserves); this pass fills
+    // the document page at `pageIndexStart + pages.length`. A continuous section's local
+    // page 0 IS the previous section's last sheet: both passes read the same document slot,
+    // so every flow sharing the sheet stops above the same note area.
+    const base = Math.max(
+      1,
+      baseContentHeight - (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0)
+    );
     return columnRegionBottom !== undefined && pages.length === 0
       ? Math.max(1, Math.min(base, columnRegionBottom))
       : base;
@@ -3029,7 +3040,7 @@ function layoutBlocksPass(
     session.context =
       pages.length + 1 === reserveKeyBound
         ? context
-        : contextFor(notesReserveContextKey(pageBottomReserves, pages.length + 1));
+        : contextFor(notesReserveContextKey(pageBottomReserves, pageIndexStart, pages.length + 1));
     session.producer = producer;
     // Sticky whenever any part of the previous layout was reused: a resumed pass never
     // re-places the prefix and a converged pass never re-places the tail, so their

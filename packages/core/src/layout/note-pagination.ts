@@ -2353,36 +2353,42 @@ function tableParagraphIdsOf(table: OoxmlNode): readonly string[] {
 /**
  * The note-reserve slice of one section's layout context key.
  *
- * `pageBound` is EXCLUSIVE and names the highest page slot the pass can read plus one — the
- * pass reads reserves at consecutive PASS-LOCAL page slots as it opens pages
- * (`pageBottomReserves?.get(pages.length)`), so every entry at or past the bound is
- * unreadable by it and must stay OUT of the key. Folding the whole document-wide map in
- * (the previous behaviour) meant a reserve on one section's pages changed every other
- * section's context, and the open's second reflow pass re-placed every section instead of
- * only the reserved ones.
+ * The reserve map is keyed by DOCUMENT page index ({@link computeFootnoteReserves}), while a
+ * section's pass reads it at `pageIndexStart + localSlot` as it opens pages. The key folds
+ * exactly the entries that pass can read — document slots in
+ * `[pageIndexStart, pageIndexStart + pageBound)` — so a reserve on another section's pages
+ * cannot invalidate this one. `pageBound` is EXCLUSIVE and section-LOCAL: the highest local
+ * page slot the pass can read, plus one.
  *
- * KNOWN MISALIGNMENT, tracked as issue #460: {@link computeFootnoteReserves} keys the map by
- * DOCUMENT page index while the pass reads pass-local slots, so in a multi-section document
- * the two spaces disagree for every section after the first. This slice deliberately matches
- * what the pass READS, not what the computer meant — soundness of the memo requires exactly
- * that, and fixing the read side is a layout-output change that belongs to #460, not to a
- * key refactor whose contract is byte-identical output.
+ * Entries are emitted at their LOCAL slot (`documentSlot - pageIndexStart`), not the document
+ * one. The document page index is deliberately absent from a section's context key (an Enter
+ * that adds a page above must not re-lay every section below), and the local slot is what the
+ * pass's reads actually depend on: two passes whose readable windows carry the same heights
+ * at the same local offsets read identically wherever the section sits, so a section whose
+ * reserves shift down a sheet with it reconverges to its stored key once the reflow loop has
+ * recomputed the map, while a reserve that stays at a fixed document page as the section
+ * moves lands on a different local slot and invalidates.
  *
- * Entries are sorted by page slot so two content-equal maps render one canonical key
- * regardless of insertion order. `Infinity` folds the whole map (a pass with no prior page
- * count cannot bound its reads).
+ * Entries are sorted by slot so two content-equal maps render one canonical key regardless
+ * of insertion order. `Infinity` folds every entry from `pageIndexStart` on (a pass with no
+ * prior page count cannot bound its reads). A window with no entries keys like no map at
+ * all: both mean every read returns zero, and two encodings of that would invalidate every
+ * untouched section when a document's last note disappears.
  */
 export function notesReserveContextKey(
   reserves: ReadonlyMap<number, number> | undefined,
+  pageIndexStart: number,
   pageBound: number
 ): string {
   if (!reserves) return '';
   const entries: [number, number][] = [];
   for (const [pageSlot, height] of reserves) {
-    if (pageSlot < pageBound) entries.push([pageSlot, height]);
+    const localSlot = pageSlot - pageIndexStart;
+    if (localSlot >= 0 && localSlot < pageBound) entries.push([localSlot, height]);
   }
+  if (entries.length === 0) return '';
   entries.sort((a, b) => a[0] - b[0]);
-  return `|nr:${entries.map(([pageSlot, height]) => `${pageSlot}=${height}`).join(',')}`;
+  return `|nr:${entries.map(([localSlot, height]) => `${localSlot}=${height}`).join(',')}`;
 }
 
 /** Drop non-positive heights so missing and zero compare equal. */
