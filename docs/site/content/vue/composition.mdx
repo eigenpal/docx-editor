@@ -8,6 +8,21 @@ order: 37
 `<DocxEditor>` supplies one arrangement of public parts. Use the parts when you
 need a different interface.
 
+## Composition requirements
+
+| Requirement              | When required                    | Purpose                                                          |
+| ------------------------ | -------------------------------- | ---------------------------------------------------------------- |
+| `DocxEditorRoot`         | Every composed editor            | Owns and provides the editor instance                            |
+| `DocxEditorViewport`     | Every composed editor            | Supplies the scroll container and page-layout classes            |
+| `DocxEditorContent`      | Every composed editor            | Mounts the painted document surface                              |
+| Stable `modules` array   | When you register modules        | Prevents unintended module changes during construction           |
+| Positioned workspace row | When you use the navigation pane | Anchors the navigation pane                                      |
+| Pro review module        | When you use Pro review chrome   | Enables comments, tracked changes, and custom-node review chrome |
+
+If you use Pro review chrome, register its modules once on
+`DocxEditorRoot`. For setup, see the
+[Pro package documentation](/docs/2.x/pro).
+
 ## Primitives
 
 Every editor needs these three components in this order:
@@ -25,10 +40,6 @@ import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-edi
   </DocxEditorRoot>
 </template>
 ```
-
-- `DocxEditorRoot` holds the editor and provides it to descendants.
-- `DocxEditorViewport` supplies the scroll and page-layout container.
-- `DocxEditorContent` mounts the painted, editable document surface.
 
 You can place all optional chrome inside `DocxEditorRoot`.
 
@@ -361,17 +372,20 @@ control behavior, see
 
 ## Page furniture
 
-Mount only the furniture that your layout needs:
+Mount a part only when your layout needs its interface:
 
-- `DocxEditorPageNumber` shows the page count while the document scrolls.
-- `DocxEditorAuthorStyle` assigns a tracked-change style to one author.
-- `DocxEditorColorByChangeType` colors changes by type.
-- `DocxEditorFontNotice` lists substituted fonts.
-- `DocxEditorDocumentOutline` renders a standalone headings list.
-- `DocxEditorHeaderFooterChrome` supplies header and footer controls.
-- `DocxEditorNotesChrome` supplies footnote and endnote controls.
+| Part                           | Interface                                     |
+| ------------------------------ | --------------------------------------------- |
+| `DocxEditorPageNumber`         | Current and total page count during scrolling |
+| `DocxEditorAuthorStyle`        | Review style for one author                   |
+| `DocxEditorColorByChangeType`  | Tracked-change colors by change type          |
+| `DocxEditorFontNotice`         | List of substituted document fonts            |
+| `DocxEditorDocumentOutline`    | Standalone heading list with caret navigation |
+| `DocxEditorHeaderFooterChrome` | Header and footer editing controls            |
+| `DocxEditorNotesChrome`        | Footnote and endnote controls                 |
 
-See [Tracked changes](/docs/2.x/pro/tracked-changes) for author colors.
+For review colors, see
+[Tracked changes](/docs/2.x/pro/tracked-changes).
 
 ## Custom labels
 
@@ -413,8 +427,7 @@ canvas must show the document's saved colors.
 
 ## Custom tracked changes and comments
 
-Vue review chrome comes from `@docx-editor.dev/pro/vue`. Register `reviewModule`
-on the root.
+Vue review chrome comes from `@docx-editor.dev/pro/vue`.
 
 ```vue
 <script setup lang="ts">

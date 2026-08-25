@@ -14,6 +14,22 @@ The editor parses controls into the canonical tree, keeps them editable, renders
   variables; the two systems can coexist in one document.
 </Callout>
 
+## Support summary
+
+| Control or feature | Read and preserve | Fill                  | Create in editor   |
+| ------------------ | ----------------- | --------------------- | ------------------ |
+| Rich text          | Yes               | Yes                   | Yes                |
+| Plain text         | Yes               | Yes                   | Yes                |
+| Dropdown           | Yes               | Yes                   | Yes, without items |
+| Combo box          | Yes               | Yes                   | Yes, without items |
+| Checkbox           | Yes               | Yes                   | No                 |
+| Date picker        | Yes               | Yes                   | Yes                |
+| Picture            | Yes               | No                    | No                 |
+| Repeating section  | Yes               | No live behavior      | No                 |
+| `w:dataBinding`    | Yes               | Direct writes refused | No                 |
+
+Creating, filling, and removing controls do not create tracked changes.
+
 ## Filling a template from a server
 
 [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api) is the headless path, and its object model is Office.js-compatible. Reads are batched, then one `sync()` sends the writes as a single ordered batch:
@@ -219,19 +235,23 @@ editor.exec({
 });
 ```
 
-You can author `richText`, `plainText`, `dropdown` (also spelled `dropDownList`, as OOXML
-spells it), `comboBox`, and `date` controls. Checkbox, picture, and repeating-section controls
-carry content an insertion would have to invent, so they are not authored here. A dropdown or
-combo box starts with no items: add them in Word, or design the template there and fill it
-from code.
+You can author `richText`, `plainText`, `dropdown`, `comboBox`, and `date`
+controls. OOXML also spells `dropdown` as `dropDownList`.
+
+A new dropdown or combo box has no items. Add its items in Word, or fill a
+control from an existing template.
 
 `editor.can()` answers the same refusal `exec` would, so a button can disable itself and show
-the reason. The command rejects the operation when:
+the reason.
 
-- The selection crosses two paragraphs. A control over several paragraphs is a block wrapper,
-  which is a different element.
-- The position sits inside a hyperlink, a field, or another inline control. A control is a
-  sibling of the text around it, so those positions have no place to put one.
+| Operation    | Refusal condition                                            | Reason                                        |
+| ------------ | ------------------------------------------------------------ | --------------------------------------------- |
+| Fill or edit | The control or an ancestor locks its content                 | `locked`                                      |
+| Remove       | The control or an ancestor locks its wrapper                 | `locked`                                      |
+| Fill         | The control declares `w:dataBinding`                         | `bound`                                       |
+| Fill         | The value does not match the control type                    | `typeMismatch`                                |
+| Create       | The selection crosses paragraphs                             | Inline controls cannot wrap block content     |
+| Create       | The position is inside a hyperlink, field, or inline control | The new control has no valid sibling position |
 
 ## Typed control chrome
 
@@ -239,10 +259,13 @@ In the editor, typed controls get an interactive trigger at the top-right of the
 
 ## Current limits
 
-- A control that _wraps_ a whole table cell or row is not supported (controls _inside_ a cell are).
-- A control inside a hyperlink is not surfaced.
-- `dataBinding` and repeating sections round-trip but have no live behavior: no bound-value resolution, no automatic repeat expansion.
-- Creating, filling, and removing a control are not recorded as tracked changes, even in suggesting mode. A reviewer sees the result, not a revision to accept or reject.
+| Area               | Limit                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| Tables             | A control around a whole cell or row is unsupported. Controls inside a cell work.  |
+| Hyperlinks         | The editor does not surface a control inside a hyperlink.                          |
+| Data binding       | `w:dataBinding` round-trips without bound-value resolution.                        |
+| Repeating sections | Repeating sections round-trip without automatic expansion.                         |
+| Review             | Control creation, filling, and removal do not create revisions in suggesting mode. |
 
 ## Next steps
 

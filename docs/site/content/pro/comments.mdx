@@ -15,67 +15,21 @@ Comments share one sidebar, hook, and card layout with [tracked changes](/docs/2
 
 Comments require the review module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
-## Setup
+## Prerequisites
 
-This example registers the review module and the rail:
+| Task                                  | Requirement                                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| Read comments                         | A loaded document                                                                |
+| Show the review rail                  | `reviewModule()` and `DocxEditorReview`                                          |
+| Create or reply in a browser          | A non-empty `author`, `reviewModule()`, an editable mode, and an attached editor |
+| Resolve, reopen, or delete in browser | `reviewModule()`, an editable mode, and an attached editor                       |
+| Create or reply on a server           | A non-empty `author` and a server runtime                                        |
 
-<FrameworkTabs>
-<Framework value="react">
+OOXML requires `w:author` for each comment and reply. The engine refuses a
+write without an author.
 
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
-
-const MODULES = [reviewModule()];
-
-export function Commentable({ bytes }: { bytes: Uint8Array }) {
-  return (
-    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
-      <DocxEditor.Toolbar />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-        <DocxEditorReview />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  );
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import {
-  DocxEditorContent,
-  DocxEditorRoot,
-  DocxEditorToolbar,
-  DocxEditorViewport,
-} from '@docx-editor.dev/vue';
-import { DocxEditorReview, reviewModule } from '@docx-editor.dev/pro/vue';
-
-defineProps<{ bytes: Uint8Array }>();
-
-const modules = [reviewModule()];
-</script>
-
-<template>
-  <DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
-    <DocxEditorToolbar />
-    <DocxEditorViewport>
-      <DocxEditorContent />
-      <DocxEditorReview />
-    </DocxEditorViewport>
-  </DocxEditorRoot>
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-`author` supplies `w:author` for each comment and reply. OOXML requires this value.
-
-The engine refuses a write without an author.
+For module registration and licensing, see the
+[Pro package documentation](/docs/2.x/pro).
 
 ## Write a comment
 
@@ -168,8 +122,6 @@ await context.sync();
 ```
 
 Create the runtime with `{ author: 'Jess Lin' }`.
-
-Browser creation also requires the review module and a writable, attached editor. Server creation uses the licensed server host.
 
 The write uses one package transaction and one browser **Undo** unit. Collapsed ranges create insertion-point comments.
 
@@ -290,13 +242,18 @@ Render comment text with interpolation. The text comes from the file.
 </Framework>
 </FrameworkTabs>
 
-Comment items add `resolved` and `parentId` to the shared fields.
+Comment items include these fields:
 
-`resolved` reports whether `w15:commentsEx` marks the thread as complete. `parentId` is absent at the thread root.
-
-Shared fields include `key`, `id`, `author`, `initials`, `date`, `text`, and `replyIds`.
-
-They also include `anchorY`, `pageIndex`, and `isActive`.
+| Field                        | Meaning                                            |
+| ---------------------------- | -------------------------------------------------- |
+| `key`, `id`                  | Stable review and OOXML identifiers                |
+| `author`, `initials`, `date` | Comment author metadata                            |
+| `text`                       | File-derived comment text                          |
+| `replyIds`                   | Reply identifiers in the thread                    |
+| `resolved`                   | Whether `w15:commentsEx` marks the thread complete |
+| `parentId`                   | Parent comment identifier; absent on a thread root |
+| `anchorY`, `pageIndex`       | Document placement                                 |
+| `isActive`                   | Whether the caret is in the item                   |
 
 The editor reads `initials` from `w:initials` when available. Otherwise, it derives initials from the author name.
 
@@ -306,6 +263,19 @@ For a document-level read without the review module, `editor.getComments()` retu
 
 The packaged card renders `<DocxEditorReview.Resolve />` on an open comment and
 `<DocxEditorReview.Reopen />` on a resolved one. Custom cards use the matching hook actions:
+
+| Action                       | Result                                               | Refusal behavior                            |
+| ---------------------------- | ---------------------------------------------------- | ------------------------------------------- |
+| `comment(text, author?)`     | Adds a thread to the selection                       | Returns `false`; the caller keeps its draft |
+| `reply(item, text, author?)` | Adds a reply, or comments on a revision range        | Returns `false`                             |
+| `resolve(item)`              | Marks an open thread complete                        | Repeating it succeeds without a write       |
+| `reopen(item)`               | Reopens a complete thread                            | Repeating it succeeds without a write       |
+| `remove(item)`               | Deletes a comment thread or rejects a tracked change | Returns `false` when refused                |
+
+The hook does not own the caller's draft state.
+
+`commentResolutionDisabledReason` explains why Resolve and Reopen are
+unavailable.
 
 This example selects the correct action for the comment state:
 

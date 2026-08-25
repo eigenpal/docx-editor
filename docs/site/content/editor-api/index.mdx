@@ -19,6 +19,33 @@ npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 `@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
 project must resolve exactly one copy of it, shared with any editor adapter you install.
 
+## Choose a host
+
+| Capability                 | Server runtime | Browser runtime |
+| -------------------------- | -------------- | --------------- |
+| Read and edit a DOCX       | Yes            | Yes             |
+| Own document bytes         | Yes            | No              |
+| Return bytes with `save()` | Yes            | No              |
+| Read or set selection      | No             | Yes             |
+| Scroll to content          | No             | Yes             |
+| Use layout geometry        | No             | Yes             |
+
+`runtime.capabilities` reports these values. The values remain fixed for the
+runtime's lifetime.
+
+Use these prerequisites:
+
+| Task                          | Prerequisite                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ |
+| Create a server runtime       | DOCX bytes and one resolved copy of `@docx-editor.dev/core`                                      |
+| Create a browser runtime      | An attached editor from `@docx-editor.dev/react`, `@docx-editor.dev/vue`, or the core editor API |
+| Write a comment or reply      | A non-empty `author`                                                                             |
+| Write browser review data     | The Pro review module, an editable mode, and a host that accepts the write                       |
+| Use the package in production | A written commercial agreement                                                                   |
+
+Dynamic document state can change after runtime creation. A refusal from
+`sync()` is therefore authoritative.
+
 ## On a server
 
 The server runtime is headless. It accepts bytes and returns bytes.
@@ -104,11 +131,8 @@ await runtime.run(async (context) => {
 The `/browser` entry includes integration with the painted engine. Import the root entry on servers
 to keep that browser code out of the bundle.
 
-The optional `author` has the same meaning as it does for `createServer`: it is the identity written
-into a comment reply. Omit it and `Comment.reply()` refuses with `NotSupported` before anything is
-queued. An author is not a capability flag—browser comment writes also require the Pro review module,
-an editable mode, and a host that accepts the write. Those conditions are dynamic, so the typed
-refusal at `sync()` remains authoritative.
+The optional `author` has the same meaning as it does for `createServer`.
+It supplies the identity for comment writes.
 
 ## Delete comments and Undo
 
@@ -125,8 +149,7 @@ for (const comment of comments.items.slice(0, 2)) comment.delete();
 await context.sync(); // one transaction; editor Undo restores both threads
 ```
 
-Browser deletion requires the Pro review module and a writable, attached editor. The server runtime
-supports the same object-model calls without a browser module. This section covers deletion only.
+The server runtime supports the same object-model calls without a browser module.
 
 ## Programming model
 
@@ -142,13 +165,6 @@ supports the same object-model calls without a browser module. This section cove
 For content-control writes, load `isBound` with the other properties and skip controls where it is
 true. That boolean is safe preflight metadata, not a write guarantee: `sync()` always checks the
 current document again and atomically refuses the batch if a control is bound by then.
-
-## Capabilities
-
-`runtime.capabilities` reports host differences. `save` is false in the browser; `selection`,
-`scrolling` and `layout` are false on a server. Branch on these values because they remain frozen
-for the life of the runtime. Comment writes intentionally have no static capability flag because
-module registration, editing mode, and document state can change.
 
 ## Entries
 
@@ -244,18 +260,17 @@ For a complete tool catalog, see the
 
 ### Choose one revision text projection
 
-The runtime uses the `allMarkup` text projection by default. This projection includes ordinary
-text, pending deletions, pending insertions, and both sides of a pending replacement.
+The runtime uses the `allMarkup` text projection by default. Select one
+projection when you create the runtime:
 
-Use the `original` projection when an agent must read the document before pending changes are
-accepted. This projection matches Word's **Original** review view. It has these rules:
+| Content             | `allMarkup`            | `original`                      |
+| ------------------- | ---------------------- | ------------------------------- |
+| Ordinary text       | Visible and searchable | Visible and searchable          |
+| Pending deletion    | Visible and searchable | Visible and searchable          |
+| Pending insertion   | Visible and searchable | Hidden and not searchable       |
+| Pending replacement | Shows both sides       | Shows the deleted original only |
 
-- Ordinary text remains unchanged.
-- A pending deletion remains visible and searchable.
-- A pending insertion is hidden and is not searchable.
-- A pending replacement shows its deleted original and hides its inserted replacement.
-
-Choose the projection when you create the runtime:
+`original` matches Word's **Original** review view.
 
 ```ts
 const runtime = DocxEditor.createBrowser(editor, {

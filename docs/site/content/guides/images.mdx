@@ -65,7 +65,29 @@ editor.getSelectedImage(); // same SelectedImageState shape
 editor.snapshot().image; // reference-stable until selection or image fields move
 ```
 
-`SelectedImageState.wrap` reports all nine Word menu targets (`inline`, `square`, `squareLeft`, `squareRight`, `tight`, `through`, `topAndBottom`, `behind`, `inFront`). `behind` and `inFront` are both `wrapNone` with different `@behindDoc`.
+`SelectedImageState.wrap` reports one of these Word menu targets:
+
+| Value          | Text behavior                                   | OOXML mapping                |
+| -------------- | ----------------------------------------------- | ---------------------------- |
+| `inline`       | Places the picture in the text line             | `wp:inline`                  |
+| `square`       | Wraps on both sides of a square boundary        | `wrapSquare`, `bothSides`    |
+| `squareLeft`   | Wraps on the left                               | `wrapSquare`, `left`         |
+| `squareRight`  | Wraps on the right                              | `wrapSquare`, `right`        |
+| `tight`        | Wraps around the authored polygon               | `wrapTight`                  |
+| `through`      | Wraps through the authored polygon              | `wrapThrough`                |
+| `topAndBottom` | Keeps text above and below                      | `wrapTopAndBottom`           |
+| `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
+| `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
+
+The `resourceStatus` field reports image availability:
+
+| Status         | Meaning                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| `pending`      | Validation or decoding is in progress                                       |
+| `ready`        | Validated image bytes are ready to paint                                    |
+| `unrenderable` | Validation, decoding, conversion, or format support failed                  |
+| `external`     | The relationship points outside the package and is not loaded automatically |
+| `missing`      | The relationship target is missing                                          |
 
 ## Authoring surface
 
@@ -139,22 +161,16 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 
 ## Current limits
 
-Partially rendered:
-
-- Charts, SmartArt, groups, canvases: extent + labeled placeholder
-- Anchored text boxes render their story read-only, clipped to the extent (page-number
-  fields inside header/footer text boxes evaluate per page); inline text boxes, linked
-  chains, autofit, and rotation stay placeholders
-
-Preserved inertly:
-
-- VML (`w:pict`); watermark rendering and editing are not supported
-- `w:object` / `w:altChunk`: generic preservation with diagnostics
-- Tracked-change accept/reject on drawings
-
-Not rendered and not guaranteed to round-trip:
-
-- Artistic effects (`a:effectLst`)
+| Drawing content                                         | Status                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------ |
+| Charts, SmartArt, groups, and canvases                  | Preserve the extent and show a labeled placeholder     |
+| Anchored text boxes                                     | Render the story read-only and clip it to the extent   |
+| Page fields in anchored header or footer text boxes     | Evaluate per page                                      |
+| Inline text boxes, linked chains, autofit, and rotation | Show a placeholder                                     |
+| VML (`w:pict`)                                          | Preserve inertly; do not render or edit watermarks     |
+| `w:object` and `w:altChunk`                             | Preserve as generic content with diagnostics           |
+| Tracked-change decisions on drawings                    | Preserve the markup without accept or reject actions   |
+| Artistic effects (`a:effectLst`)                        | Do not render and do not guarantee round-trip fidelity |
 
 ## Next steps
 

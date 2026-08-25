@@ -12,6 +12,22 @@ bytes → bounded OPC/XML read → canonical OOXML tree → layout → painted p
 
 What you see painted and what an edit mutates are the same tree, so there is no separate view model to synchronize.
 
+## Architecture boundaries
+
+| Boundary          | Owns                                                                    | Must not own                     |
+| ----------------- | ----------------------------------------------------------------------- | -------------------------------- |
+| `contracts`       | Public engine types and interfaces                                      | Runtime implementation or state  |
+| `store`           | Canonical trees, package reads and writes, indexes, and transactions    | DOM or ProseMirror state         |
+| `layout`          | DOM-free pagination and interaction geometry                            | Browser layout or authored state |
+| `output`          | Painted pages from layout records                                       | Document mutation                |
+| `binding`         | The ProseMirror projection and conversion of edits into tree operations | Canonical document authority     |
+| `automation`      | Transport-neutral host operations for browser and server automation     | DOM or editor chrome             |
+| `editor`          | The public editor facade, surface input, caret, and chrome registry     | A second document model          |
+| `react` and `vue` | Providers, hooks or composables, and framework chrome                   | Editing state                    |
+
+The package boundary keeps one copy of `@docx-editor.dev/core` in an
+application. Both adapters use it as a peer dependency.
+
 ## The canonical tree
 
 Reading a `.docx` produces one tree per XML part, up to a bounded part count. Non-XML parts stay as bytes and are never parsed. Nodes are **typed** where layout needs them (the paragraph, run, and table vocabulary) and **generic** everywhere else, preserving the element verbatim.
@@ -41,7 +57,14 @@ The painted pages are `contenteditable`, but the DOM is a non-authoritative rend
 
 The editor also paints its own caret, from layout geometry rather than from the DOM, which is why an empty paragraph gets a caret. On failure it falls back: range selection, IME composition, or a position it cannot place all restore the native caret instead of showing no caret.
 
-Selection maps through paragraph identity and offsets, never through DOM traversal. Page furniture (headers, footers, page numbers) is marked non-editable and excluded from selection.
+Selection maps through paragraph identity and offsets. It does not use DOM
+traversal.
+
+| Page furniture                   | Layout behavior                       | Interaction behavior                      |
+| -------------------------------- | ------------------------------------- | ----------------------------------------- |
+| Headers and footers              | Lay out by section and page variant   | Use scoped editing controls               |
+| Page numbers and other furniture | Attach to each painted page           | Stay non-editable and outside selection   |
+| Body content                     | Flows around reserved furniture bands | Uses the normal caret and selection model |
 
 ## Saving
 
@@ -51,7 +74,11 @@ That is what "structural fidelity" means here: unsupported XML and package paylo
 
 ## Adapters
 
-`@docx-editor.dev/core` contains everything above and no framework code. An adapter supplies DOM and paints the engine's positioned display list; it holds no editing state of its own. `@docx-editor.dev/react` provides React providers, hooks, and chrome over the engine contract. Every control it includes is a consumer of the same public contract that custom controls use.
+`@docx-editor.dev/core` contains the engine and no framework code. An adapter
+mounts the engine and provides framework-specific state access and chrome.
+`@docx-editor.dev/react` and `@docx-editor.dev/vue` hold no editing state.
+
+Packaged and custom controls consume the same public engine contract.
 
 ## Next steps
 

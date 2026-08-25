@@ -11,6 +11,20 @@ Use the same components to build custom chrome.
 The packaged toolbar uses the hooks and primitives on this page.
 Your controls can use the same command and state APIs.
 
+## Composition requirements
+
+| Requirement              | When required                    | Purpose                                                          |
+| ------------------------ | -------------------------------- | ---------------------------------------------------------------- |
+| `DocxEditor.Root`        | Every composed editor            | Owns and provides the editor instance                            |
+| `DocxEditor.Viewport`    | Every composed editor            | Supplies the scroll container and page-layout classes            |
+| `DocxEditor.Content`     | Every composed editor            | Mounts the painted document surface                              |
+| Stable `modules` array   | When you register modules        | Prevents unintended module changes during construction           |
+| Positioned workspace row | When you use the navigation pane | Anchors the navigation pane                                      |
+| Pro review module        | When you use Pro review chrome   | Enables comments, tracked changes, and custom-node review chrome |
+
+If you use Pro review chrome, register its modules once on `Root`. For setup,
+see the [Pro package documentation](/docs/2.x/pro).
+
 <Callout>
   The [Igloo customization example](https://igloo.docx-editor.dev/) implements these patterns with
   custom markup. Open the demo, or read the
@@ -36,13 +50,8 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-- `Root` holds the editor instance and provides it through context.
-  It does not render a DOM element.
-  It accepts document-level props such as `document`, `mode`, `author`,
-  `fonts`, `locale`, `modules`, `onReady`, and `onChange`.
-- `Viewport` provides the scroll container and required page-layout classes.
-- `Content` provides the mount point for pages.
-  The rendered pages form the editable surface.
+`Root` does not render a DOM element. The rendered pages in `Content` form the
+editable surface.
 
 You can place optional chrome anywhere inside `Root`.
 Optional chrome includes the toolbar, menu, rulers, navigation pane,
@@ -428,18 +437,20 @@ For locks, data bindings, and fill-only mode, see the
 
 ## Page furniture
 
-Mount these parts only when you need their interface:
+Mount a part only when your layout needs its interface:
 
-- `DocxEditor.PageNumber` shows the current and total page count while you
-  scroll.
-- `DocxEditor.AuthorStyle` assigns a style to one review author.
-- `DocxEditor.ColorByChangeType` colors tracked changes by change type.
-  For details, see [Tracked changes](/docs/2.x/pro/tracked-changes).
-- `DocxEditor.FontNotice` lists substituted document fonts.
-- `DocxEditor.DocumentOutline` shows headings outside the navigation pane.
-  Selecting a heading moves the caret and scrolls it into view.
-- `DocxEditor.HeaderFooterChrome` provides header and footer editing controls.
-- `DocxEditor.NotesChrome` provides footnote and endnote controls.
+| Part                            | Interface                                     |
+| ------------------------------- | --------------------------------------------- |
+| `DocxEditor.PageNumber`         | Current and total page count during scrolling |
+| `DocxEditor.AuthorStyle`        | Review style for one author                   |
+| `DocxEditor.ColorByChangeType`  | Tracked-change colors by change type          |
+| `DocxEditor.FontNotice`         | List of substituted document fonts            |
+| `DocxEditor.DocumentOutline`    | Standalone heading list with caret navigation |
+| `DocxEditor.HeaderFooterChrome` | Header and footer editing controls            |
+| `DocxEditor.NotesChrome`        | Footnote and endnote controls                 |
+
+For review colors, see
+[Tracked changes](/docs/2.x/pro/tracked-changes).
 
 ## Custom labels
 
@@ -621,7 +632,6 @@ The node also includes `nodeId` and `text` when available.
 Use `useCustomNodeDefinitions()` to read registered definitions.
 
 Register the required module on `Root` before you use either compound.
-For module setup, see the [Pro package documentation](/docs/2.x/pro).
 
 ## A full composition
 
