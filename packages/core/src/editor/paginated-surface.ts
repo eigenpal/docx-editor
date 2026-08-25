@@ -174,6 +174,7 @@ import { createImageOps } from './surface-image-ops.ts';
 import { createHeaderFooterScopeController } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
+import { createDerivationPrewarmSteps, scheduleDerivationPrewarm } from './derivation-prewarm.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -990,6 +991,25 @@ export function mountPaginatedSurface(
 
   let deferredPublishRender: ReturnType<typeof setTimeout> | null = null;
 
+  // Armed once, after the first published render: the derivations a structural edit reads
+  // populate their per-node memos in idle tasks instead of inside the first Enter. An edit
+  // before the warm finishes stops it (the edit's own reads populate the new root), and
+  // view mode never warms (nothing structural can be typed there).
+  let cancelDerivationPrewarm: (() => void) | null = null;
+  let derivationPrewarmArmed = false;
+
+  function armDerivationPrewarmOnce(): void {
+    if (derivationPrewarmArmed) return;
+    derivationPrewarmArmed = true;
+    const revisionAtArm = session.packageRevision();
+    cancelDerivationPrewarm = scheduleDerivationPrewarm({
+      steps: createDerivationPrewarmSteps(() => session.part()),
+      shouldRun: () =>
+        editingMode !== 'view' && session.editable && session.packageRevision() === revisionAtArm,
+      hasPendingInput: hasPendingBrowserInput,
+    });
+  }
+
   function hasPendingBrowserInput(): boolean {
     const scheduling = (
       container.ownerDocument.defaultView?.navigator as
@@ -1008,6 +1028,7 @@ export function mountPaginatedSurface(
       if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
       deferredPublishRender = null;
       render();
+      armDerivationPrewarmOnce();
       return;
     }
     // Layout stays synchronous so the next edit reads current geometry, but paint and DOM
@@ -1018,6 +1039,7 @@ export function mountPaginatedSurface(
     deferredPublishRender = setTimeout(() => {
       deferredPublishRender = null;
       render();
+      armDerivationPrewarmOnce();
     }, 0);
   }
 
@@ -4934,6 +4956,8 @@ export function mountPaginatedSurface(
       scheduler.cancel();
       if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
       deferredPublishRender = null;
+      if (cancelDerivationPrewarm) cancelDerivationPrewarm();
+      cancelDerivationPrewarm = null;
       drawingBundle.dispose();
       detachDrawingUrlRegistry(pagesLayer);
       caret.destroy();
