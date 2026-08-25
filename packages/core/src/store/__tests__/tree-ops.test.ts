@@ -515,7 +515,7 @@ describe('rejections leave everything unchanged (task 5.3)', () => {
     },
     {
       name: 'text containing a character XML cannot represent',
-      op: { op: 'insertText', paragraphId: id!, offset: 0, text: ' ' },
+      op: { op: 'insertText', paragraphId: id!, offset: 0, text: '\u0000' },
       reason: 'invalid-text',
     },
   ];

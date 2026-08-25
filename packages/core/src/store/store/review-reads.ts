@@ -334,7 +334,7 @@ function pairReplacements(
   for (const insertion of pairable) {
     if (insertion.revisionKind !== 'insert') continue;
     const start = insertion.ranges[0]!.start;
-    const key = `${start.paragraphId} ${start.offset}`;
+    const key = `${start.paragraphId}\u0000${start.offset}`;
     const bucket = insertionsByStart.get(key);
     if (bucket) bucket.push(insertion);
     else insertionsByStart.set(key, [insertion]);
@@ -345,7 +345,7 @@ function pairReplacements(
     // The deletion's LAST range end: the end that actually meets the insertion's first
     // start when the halves span more than one range each.
     const end = deletion.ranges[deletion.ranges.length - 1]!.end;
-    const bucket = insertionsByStart.get(`${end.paragraphId} ${end.offset}`) ?? [];
+    const bucket = insertionsByStart.get(`${end.paragraphId}\u0000${end.offset}`) ?? [];
     // A ZERO-WIDTH insertion is not the replacement, even when it starts exactly here.
     // Several legal shapes cover no characters: an empty run carrying only run properties,
     // a comment reference, a bookmark pair. Taking the first candidate in the bucket paired
@@ -423,7 +423,7 @@ function mergeAdjacentSameKindEdits(
   if (mergeable.length < 2) return items;
 
   const keyOf = (item: ReviewRevisionItem, position: ReviewPosition): string =>
-    `${item.revisionKind} ${item.author} ${position.paragraphId} ${position.offset}`;
+    `${item.revisionKind}\u0000${item.author}\u0000${position.paragraphId}\u0000${position.offset}`;
   const byStart = new Map<string, ReviewRevisionItem>();
   const endKeys = new Set<string>();
   for (const item of mergeable) {
@@ -723,7 +723,7 @@ export interface LinkableReviewItem {
 /** A range as a comparable key, so "exactly these characters" is one lookup. */
 function rangeKey(range: ReviewRange): string {
   return (
-    `${range.partName} ${range.start.paragraphId}:${range.start.offset}` +
+    `${range.partName}\u0000${range.start.paragraphId}:${range.start.offset}` +
     `|${range.end.paragraphId}:${range.end.offset}`
   );
 }
