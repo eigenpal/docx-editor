@@ -117,6 +117,11 @@ export function resolveSelectedDrawingRecord(
   surface: PaginatedSurface | null
 ): SelectedDrawingRecord | null {
   if (!surface) return null;
+  // The mount-time caret sits at the start of the document, which routinely coincides with
+  // a drawing anchored at offset zero. Until something PLACES the selection — a gesture, an
+  // edit, or a selection write that moves it — no drawing reads as selected, so a document
+  // never opens with an image ring and eight handles the user did not ask for.
+  if (!surface.hasPlacedSelection()) return null;
   const { anchor, head } = surface.state().selection;
   if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
   const line = lineAtIndexedPosition(surface.layout(), anchor.paragraphId, anchor.offset);

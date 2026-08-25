@@ -28,6 +28,7 @@ import {
   cssPixelsToLayoutPoints,
   finalizeImageOverlayInteraction,
   overlayFrameToSheetCssPixels,
+  overlayHostOrigin,
   resizePreservesAspect,
 } from '@docx-editor.dev/core/editor';
 import type { DrawingPositionInput } from '@docx-editor.dev/core/editor';
@@ -105,6 +106,15 @@ export function ImageSelectionOverlay({
   const { t } = useTranslation();
   const [target, setTarget] = useState<SelectedDrawingOverlayTarget | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
+  // Where the surface's box begins inside the overlay's containing block. The surface
+  // centres itself with an auto margin, so a viewport resize moves this origin without any
+  // engine event firing. Held in state and measured in the observer (and once per
+  // selection), never per render: `overlayHostOrigin` reads offsetLeft/offsetTop, which
+  // forces layout, and preview renders arrive at pointermove frequency during a drag.
+  const [origin, setOrigin] = useState<{ readonly left: number; readonly top: number }>({
+    left: 0,
+    top: 0,
+  });
   const previewRef = useRef<PreviewState | null>(null);
   previewRef.current = preview;
   const pointerStartRef = useRef<{ readonly x: number; readonly y: number } | null>(null);
@@ -152,6 +162,28 @@ export function ImageSelectionOverlay({
       for (const unsubscribe of off) unsubscribe();
     };
   }, [editor]);
+
+  const refreshOrigin = useCallback(() => {
+    setOrigin((previous) => {
+      const next = overlayHostOrigin(containerRef.current);
+      return next.left === previous.left && next.top === previous.top ? previous : next;
+    });
+  }, [containerRef]);
+
+  useEffect(() => {
+    // Once per selection too: keyed on `target`, so a portal that mounted after the first
+    // pass still gets its observer, and a fresh selection re-measures a moved origin.
+    refreshOrigin();
+    const portal = portalRef.current;
+    if (!portal || typeof ResizeObserver !== 'function') return undefined;
+    const observer = new ResizeObserver(refreshOrigin);
+    observer.observe(portal);
+    // The origin is a function of BOTH boxes: the surface's own width moves the centring
+    // margin at a constant portal box (a page-size change), so observe the surface too.
+    const container = containerRef.current;
+    if (container) observer.observe(container);
+    return () => observer.disconnect();
+  }, [containerRef, portalRef, refreshOrigin, target]);
 
   useEffect(() => {
     if (scrollPortOverride) {
@@ -478,7 +510,7 @@ export function ImageSelectionOverlay({
     if (!editor?.surface || !active) return null;
     const layout = editor.surface.publishedLayout();
     const coordinates = editor.surface.overlayCoordinates();
-    const rect = overlayFrameToSheetCssPixels(
+    const sheetRect = overlayFrameToSheetCssPixels(
       layout,
       {
         pageIndex: active.pageIndex,
@@ -489,6 +521,13 @@ export function ImageSelectionOverlay({
       },
       coordinates
     );
+    // Sheet-space is surface-relative; the overlay's containing block is not the surface.
+    const rect = {
+      left: sheetRect.left + origin.left,
+      top: sheetRect.top + origin.top,
+      width: sheetRect.width,
+      height: sheetRect.height,
+    };
     const showHandles = active.canResize;
     const showMove = active.kind === 'anchored' && active.canMove;
     return (
@@ -565,7 +604,7 @@ export function ImageSelectionOverlay({
           : null}
       </div>
     );
-  }, [active, beginSession, editor, onOverlayKeyDown, t]);
+  }, [active, beginSession, editor, onOverlayKeyDown, origin.left, origin.top, t]);
 
   if (!rendered || !portalRef.current) return null;
   return createPortal(rendered, portalRef.current);

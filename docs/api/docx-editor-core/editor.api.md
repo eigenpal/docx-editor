@@ -1256,6 +1256,12 @@ export function overlayFrameToSheetCssPixels(layout: SemanticLayout, frame: Over
 };
 
 // @public
+export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
+    readonly left: number;
+    readonly top: number;
+};
+
+// @public
 export interface PaginatedSurface {
     activatedReviewKey(): string | null;
     activateReview(key: string, selection?: SemanticSelection): void;
@@ -1337,6 +1343,7 @@ export interface PaginatedSurface {
     // (undocumented)
     focus(): void;
     formatting(): SurfaceFormatting;
+    hasPlacedSelection(): boolean;
     headerFooterState(): {
         readonly editing: 'header' | 'footer' | null;
         readonly evenAndOddHeaders?: boolean;

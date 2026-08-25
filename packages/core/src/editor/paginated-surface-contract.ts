@@ -803,6 +803,16 @@ export interface PaginatedSurface {
    */
   publishedLayout(): SemanticLayout;
   /**
+   * Whether anything has PLACED the selection since mount.
+   *
+   * True after a pointer or keyboard gesture on the pages, an edit, or a selection write
+   * that moved the caret off its mount-time default. False for a freshly opened document,
+   * which is how the drawing-selection readers know not to report a selected image: the
+   * initial caret sits at the start of the document and routinely coincides with a drawing
+   * anchored at offset zero, and a document must not open with an image already selected.
+   */
+  hasPlacedSelection(): boolean;
+  /**
    * Paint-scale coordinate context for overlay chrome.
    *
    * Internal seam — not part of the public editor contract. Image overlay uses the same

@@ -148,6 +148,7 @@ import {
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { createPointerController, type PointerController } from './surface-pointer.ts';
+import { selectionsEqual } from './dom-selection.ts';
 import { createSurfaceSelectionSync } from './surface-selection-sync.ts';
 import { createSurfaceStructure } from './surface-structure.ts';
 // Deep import, not the store barrel: re-exporting a bound from there pulls the whole store
@@ -227,6 +228,13 @@ export function mountPaginatedSurface(
   const runtimeOptions = options as PaginatedSurfaceOptions & {
     readonly onTrackedChange?: () => void;
     readonly reviewAuthorSlots?: StableReviewAuthorSlots;
+    /**
+     * Start with the selection already PLACED. The facade's font-load remount carries the
+     * old surface's placement through here, because its caret restore is a same-position
+     * `setSelection` whenever the saved caret sits at the mount default — which must stay
+     * unarmed for a plain open, and so cannot re-arm a genuinely placed selection.
+     */
+    readonly initialSelectionPlaced?: boolean;
   };
   const opened = openTreeSession(
     bytes,
@@ -391,6 +399,15 @@ export function mountPaginatedSurface(
     anchor: { paragraphId: firstParagraph, offset: 0 },
     head: { paragraphId: firstParagraph, offset: 0 },
   };
+  /**
+   * False until something PLACES the selection: a pointer or keyboard gesture, an edit, or a
+   * selection write that moves it off the value above. The drawing-selection readers gate on
+   * this, because the mount-time caret routinely coincides with a drawing anchored at the very
+   * start of the document — and a document must not open with an image already selected.
+   * Value-moves alone are not enough to arm it: clicking the drawing at the untouched caret
+   * position re-sets the same offsets, which is why the gesture listeners arm it too.
+   */
+  let selectionPlaced = runtimeOptions.initialSelectionPlaced ?? false;
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
@@ -2897,6 +2914,8 @@ export function mountPaginatedSurface(
       if (next) {
         retireActivationPin();
         selection = next;
+        // An edit placed this caret, whatever position it lands on.
+        selectionPlaced = true;
         desiredX = null;
         caretFollowPending = true;
       }
@@ -2939,18 +2958,18 @@ export function mountPaginatedSurface(
   }
 
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
+    // Compared BEFORE the flush below, which can itself move the caret.
+    const moved = !selectionsEqual(next, selection);
+    // A write that MOVES the selection places it. A same-position set stays unarmed on
+    // purpose: the font-load remount restores the saved caret through here during a plain
+    // open, and that restore must not make the document open with a drawing selected.
+    if (moved) selectionPlaced = true;
     // Buffered typing lands at the OLD caret before a MOVE takes effect —
     // typing then clicking must not teleport the typed text to the click. A
     // same-position set (the selection mirror re-adopting the caret it painted,
     // which a browser echoes after every keystroke) is not a move and must not
     // break the batch.
-    if (
-      typeBuffer.length > 0 &&
-      (next.anchor.paragraphId !== selection.anchor.paragraphId ||
-        next.anchor.offset !== selection.anchor.offset ||
-        next.head.paragraphId !== selection.head.paragraphId ||
-        next.head.offset !== selection.head.offset)
-    ) {
+    if (typeBuffer.length > 0 && moved) {
       flushTypeBuffer();
     }
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
@@ -3033,6 +3052,8 @@ export function mountPaginatedSurface(
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
+      // Adoption reads the browser's selection back, so a value that moved was user-made.
+      if (!selectionsEqual(next, selection)) selectionPlaced = true;
       selection = next;
       desiredX = null;
       caretFollowPending = true;
@@ -4571,6 +4592,8 @@ export function mountPaginatedSurface(
 
     publishedLayout: () => currentLayout,
 
+    hasPlacedSelection: () => selectionPlaced,
+
     overlayCoordinates: () =>
       Object.freeze({
         paintScale: scale,
@@ -5036,6 +5059,8 @@ export function mountPaginatedSurface(
       // would silence the last keystrokes for an onChange-driven host.
       flushToPaint();
       document.removeEventListener('selectionchange', onSelectionChange);
+      pagesLayer.removeEventListener('pointerdown', onSelectionGesture, { capture: true });
+      pagesLayer.removeEventListener('keydown', onSelectionGesture, { capture: true });
       pagesLayer.removeEventListener('keydown', onKeyDown);
       pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
       pagesLayer.removeEventListener('copy', onCopy as EventListener);
@@ -5542,6 +5567,36 @@ export function mountPaginatedSurface(
   // Selection lives on the document, so this is where the browser reports it changing —
   // whatever produced it: a drag, a double-click, Select All, or a caret move.
   document.addEventListener('selectionchange', onSelectionChange);
+  // A gesture places the selection even when it lands on the exact position it already
+  // holds — clicking a drawing whose anchor coincides with the untouched mount-time caret
+  // re-sets the same offsets, and only this listener can tell that apart from the open.
+  // Filtered to gestures that can PLACE: a secondary button keeps its native behaviour
+  // (the pointer controller ignores it too), and a key that never moves a caret — a lone
+  // modifier, Escape — must not make the untouched mount caret read as a selected drawing.
+  const NON_PLACING_KEYS = new Set([
+    'Shift',
+    'Control',
+    'Alt',
+    'Meta',
+    'CapsLock',
+    'NumLock',
+    'ScrollLock',
+    'Escape',
+    'ContextMenu',
+  ]);
+  const onSelectionGesture = (event: Event): void => {
+    if (selectionPlaced) return;
+    if (event instanceof PointerEvent && event.button !== 0) return;
+    if (event instanceof KeyboardEvent && NON_PLACING_KEYS.has(event.key)) return;
+    selectionPlaced = true;
+    // The flip is observable state with no other channel when the gesture lands on the
+    // exact offsets the selection already holds — a touch tap on the mount-caret drawing
+    // bypasses the engine pointer path and adopts an equal selection, publishing nothing.
+    // Report once, so the facade sees the placement move and hosts can show the ring.
+    options.onChange?.(currentState());
+  };
+  pagesLayer.addEventListener('pointerdown', onSelectionGesture, { capture: true });
+  pagesLayer.addEventListener('keydown', onSelectionGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onKeyDown);
   pagesLayer.addEventListener('beforeinput', onBeforeInput as EventListener);
   pagesLayer.addEventListener('copy', onCopy as EventListener);

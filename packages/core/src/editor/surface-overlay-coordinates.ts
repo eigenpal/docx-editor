@@ -70,6 +70,25 @@ export function overlayFrameToSheetCssPixels(
   });
 }
 
+/**
+ * Where the painted surface's box begins inside overlay chrome's containing block, in CSS pixels.
+ *
+ * {@link overlayFrameToSheetCssPixels} produces coordinates relative to the surface element —
+ * the box the pages paint into — but overlay chrome portals OUTSIDE that element, and its
+ * absolutely positioned pieces resolve against the nearest positioned ancestor. The surface
+ * centres itself inside that ancestor with a stylesheet margin, so a frame placed without this
+ * origin lands at the far left of the viewport, one full centring margin off the image it rings.
+ * `offsetLeft`/`offsetTop` measure against the same positioned ancestor the chrome resolves
+ * against — every element between the two is static — which is what makes the two spaces agree.
+ */
+export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
+  readonly left: number;
+  readonly top: number;
+} {
+  if (!surfaceElement) return Object.freeze({ left: 0, top: 0 });
+  return Object.freeze({ left: surfaceElement.offsetLeft, top: surfaceElement.offsetTop });
+}
+
 /** Whether this handle drag should preserve aspect ratio. */
 export function resizePreservesAspect(
   handle: ImageResizeHandle,

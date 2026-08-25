@@ -28,6 +28,7 @@ import {
   cssPixelsToLayoutPoints,
   finalizeImageOverlayInteraction,
   overlayFrameToSheetCssPixels,
+  overlayHostOrigin,
   resizePreservesAspect,
 } from '@docx-editor.dev/core/editor';
 import type { DrawingPositionInput } from '@docx-editor.dev/core/editor';
@@ -110,6 +111,21 @@ export const ImageSelectionOverlay = defineComponent({
     const { t } = useTranslation();
     const target = ref<SelectedDrawingOverlayTarget | null>(null);
     const preview = ref<PreviewState | null>(null);
+    // Where the surface's box begins inside the overlay's containing block. The surface
+    // centres itself with an auto margin, so a viewport resize moves this origin without
+    // any engine event firing. Held in a ref and measured in the observer (and once per
+    // selection), never per render: `overlayHostOrigin` reads offsetLeft/offsetTop, which
+    // forces layout, and preview renders arrive at pointermove frequency during a drag.
+    const origin = shallowRef<{ readonly left: number; readonly top: number }>({
+      left: 0,
+      top: 0,
+    });
+    const refreshOrigin = (): void => {
+      const next = overlayHostOrigin(props.containerRef.value);
+      if (next.left !== origin.value.left || next.top !== origin.value.top) {
+        origin.value = next;
+      }
+    };
     const previewRef = shallowRef<PreviewState | null>(null);
     watch(
       preview,
@@ -167,6 +183,23 @@ export const ImageSelectionOverlay = defineComponent({
       },
       { immediate: true, flush: 'post' }
     );
+
+    watch(
+      [() => props.portalRef.value, () => props.containerRef.value],
+      ([portal, container], _, onCleanup) => {
+        refreshOrigin();
+        if ((!portal && !container) || typeof ResizeObserver !== 'function') return;
+        const observer = new ResizeObserver(refreshOrigin);
+        if (portal) observer.observe(portal);
+        // The origin is a function of BOTH boxes: the surface's own width moves the
+        // centring margin at a constant portal box (a page-size change), so observe both.
+        if (container) observer.observe(container);
+        onCleanup(() => observer.disconnect());
+      },
+      { immediate: true, flush: 'post' }
+    );
+    // A fresh selection re-measures a moved origin the observer could not see.
+    watch(target, refreshOrigin, { flush: 'post' });
 
     watch(
       [() => props.scrollPort, () => props.containerRef.value, editorRef],
@@ -501,7 +534,7 @@ export const ImageSelectionOverlay = defineComponent({
       if (!editor?.surface || !current || !portal) return null;
       const layout = editor.surface.publishedLayout();
       const coordinates = editor.surface.overlayCoordinates();
-      const rect = overlayFrameToSheetCssPixels(
+      const sheetRect = overlayFrameToSheetCssPixels(
         layout,
         {
           pageIndex: current.pageIndex,
@@ -512,6 +545,14 @@ export const ImageSelectionOverlay = defineComponent({
         },
         coordinates
       );
+      // Sheet-space is surface-relative; the overlay's containing block is not the surface.
+      // Reading the reactive `origin` re-runs this render when the measured origin moves.
+      const rect = {
+        left: sheetRect.left + origin.value.left,
+        top: sheetRect.top + origin.value.top,
+        width: sheetRect.width,
+        height: sheetRect.height,
+      };
       const showHandles = current.canResize;
       const showMove = current.kind === 'anchored' && current.canMove;
       return (

@@ -64,6 +64,8 @@ function inlinePictureDocument(
     readonly wrap?: 'inline' | 'anchor';
     readonly wrapSquare?: string;
     readonly behindDoc?: '0' | '1';
+    /** Put the drawing in the FIRST run, so its anchor coincides with the mount-time caret. */
+    readonly drawingFirst?: boolean;
   } = {}
 ): Uint8Array {
   const embed = options.embed ?? 'rIdImage';
@@ -99,9 +101,12 @@ function inlinePictureDocument(
         '<pic:spPr><a:xfrm rot="0"><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
         '</pic:pic></a:graphicData></a:graphic></wp:inline>';
 
+  const runs = options.drawingFirst
+    ? `<w:r><w:drawing>${drawingInner}</w:drawing></w:r><w:r><w:t>after</w:t></w:r>`
+    : `<w:r><w:t>before</w:t></w:r><w:r><w:drawing>${drawingInner}</w:drawing></w:r><w:r><w:t>after</w:t></w:r>`;
   const body =
     `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
-    `<w:body><w:p><w:r><w:t>before</w:t></w:r><w:r><w:drawing>${drawingInner}</w:drawing></w:r><w:r><w:t>after</w:t></w:r></w:p></w:body></w:document>`;
+    `<w:body><w:p>${runs}</w:p></w:body></w:document>`;
 
   return zipSync({
     '[Content_Types].xml': strToU8(
@@ -292,6 +297,46 @@ describe('docx-editor selected image context', () => {
       head: { paragraphId, offset: 2 },
     });
     expect(editor.snapshot().image).toBeNull();
+  });
+
+  test('a freshly opened document never reports a selected drawing', async () => {
+    // The mount-time caret sits at offset zero of the first paragraph — exactly where this
+    // drawing anchors. Nothing PLACED that caret, so nothing is selected: a document must
+    // not open with an image ring and eight resize handles.
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: inlinePictureDocument({ wrap: 'anchor', drawingFirst: true }),
+      imageDecodePort: createTestImageDecodePort(),
+    });
+    if (!editor.surface) throw new Error('surface failed to mount');
+    expect(editor.surface.hasPlacedSelection()).toBe(false);
+    expect(editor.snapshot().image).toBeNull();
+    expect(selectedDrawingOverlayTargetOf(editor.surface)).toBeNull();
+
+    // A pointer gesture places the selection even when it lands on the very same offsets,
+    // which is how clicking the drawing at the untouched caret position still selects it.
+    container.querySelector('.docx-pages')!.dispatchEvent(new Event('pointerdown'));
+    expect(editor.surface.hasPlacedSelection()).toBe(true);
+    await settleDrawingResources(editor);
+    expect(selectedDrawingOverlayTargetOf(editor.surface)).not.toBeNull();
+    expect(editor.snapshot().image).not.toBeNull();
+  });
+
+  test('an explicit selection write that moves the caret places the selection', () => {
+    const editor = mountEditor(inlinePictureDocument({ wrap: 'anchor', drawingFirst: true }));
+    expect(editor.surface!.hasPlacedSelection()).toBe(false);
+    // A same-position write stays unarmed — the font-load remount restores the saved caret
+    // through this path during a plain open.
+    const paragraphId = drawingParagraphId(editor);
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 0 },
+    });
+    expect(editor.surface!.hasPlacedSelection()).toBe(false);
+    selectInlineDrawing(editor, 1);
+    expect(editor.surface!.hasPlacedSelection()).toBe(true);
+    expect(selectedDrawingOverlayTargetOf(editor.surface)).not.toBeNull();
   });
 
   test('derives null for non-picture graphic', () => {

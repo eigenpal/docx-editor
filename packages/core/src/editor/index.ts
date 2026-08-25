@@ -227,6 +227,7 @@ export {
   cssPixelsToLayoutPoints,
   layoutPointsToCssPixels,
   overlayFrameToSheetCssPixels,
+  overlayHostOrigin,
   resizePreservesAspect,
   surfacePaintScale,
   finalizeImageOverlayInteraction,

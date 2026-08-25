@@ -88,6 +88,9 @@ describe('the image at the caret is the one in the caret’s paragraph', () => {
       expect(drawings).toHaveLength(2);
       expect(drawings[0]!.start).toBe(drawings[1]!.start);
 
+      // The mount-time caret is not a PLACED selection, and the first `idOf` below re-sets
+      // exactly that position. A gesture places it, so offset resolution alone is under test.
+      container.querySelector('.docx-pages')!.dispatchEvent(new Event('pointerdown'));
       const idOf = (paragraphId: string): string | undefined => {
         surface.setSelection({
           anchor: { paragraphId, offset: 0 },
