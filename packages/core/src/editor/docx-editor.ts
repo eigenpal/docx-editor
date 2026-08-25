@@ -152,6 +152,7 @@ import {
   isContentControlEditorCommand,
 } from './content-controls.ts';
 import {
+  drawingSelectionIntentKey,
   imageContextEqual,
   selectedImageStateOf,
   canExecuteImageCommand as canExecuteImageCommandOf,
@@ -183,6 +184,7 @@ import {
 } from './embedded-font-faces.ts';
 import {
   mountPaginatedSurface,
+  type DrawingSelectionIntent,
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
@@ -309,11 +311,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let parseError: string | null = null;
   let unsubscribeSession: Unsubscribe | null = null;
   let lastSelection: SurfaceSelection | null = null;
-  // Whether the last tick's selection had been PLACED. Clicking a drawing at the untouched
-  // mount-time caret re-sets the SAME value, so the value guard alone would swallow the report.
-  let lastSelectionPlaced = false;
-  // Placement carried across the font-load remount, whose same-position restore stays unarmed.
-  let remountSelectionPlaced = false;
+  // A press on a drawing can re-set the SAME selection value; the intent key reports it.
+  let lastDrawingIntentKey = 'none';
+  let remountDrawingIntent: DrawingSelectionIntent = { kind: 'none' };
   /**
    * The armed typing format the last tick reported (Word's stored marks).
    *
@@ -481,7 +481,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface?.destroy();
     surface = null;
     lastSelection = null;
-    lastSelectionPlaced = false;
+    lastDrawingIntentKey = 'none';
     lastPendingFormat = null;
     lastHeaderFooterKey = null;
     mountGeneration += 1;
@@ -527,7 +527,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? { revisionStyles: revisionStyleState.current() }
         : {}),
       reviewAuthorSlots,
-      initialSelectionPlaced: remountSelectionPlaced,
+      initialDrawingSelectionIntent: remountDrawingIntent,
       editingMode:
         editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
       // The free engine renders the FINAL-STATE projection (Word's "No Markup"):
@@ -600,11 +600,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         const hfKey = hf?.editing && hf.rId ? `${hf.editing}:${hf.rId}` : null;
         const hfMoved = hfKey !== lastHeaderFooterKey;
         lastHeaderFooterKey = hfKey;
-        const placed = surface.hasPlacedSelection();
-        const placementMoved = placed !== lastSelectionPlaced;
-        lastSelectionPlaced = placed;
+        const intentKey = drawingSelectionIntentKey(surface.drawingSelectionIntent());
+        const intentMoved = intentKey !== lastDrawingIntentKey;
+        lastDrawingIntentKey = intentKey;
         const quiet = selectionsMatch(state.selection, lastSelection) && !pendingMoved;
-        if (quiet && !hfMoved && !placementMoved) return;
+        if (quiet && !hfMoved && !intentMoved) return;
         lastSelection = state.selection;
         emitSelectionChange();
       },
@@ -636,7 +636,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface.setReviewActivationExclusions(reviewActivationExclusions);
     }
     lastSelection = surface.state().selection;
-    lastSelectionPlaced = surface.hasPlacedSelection();
+    lastDrawingIntentKey = drawingSelectionIntentKey(surface.drawingSelectionIntent());
     // `result.surface`, not the reassignable `surface`: this subscription is THIS session's.
     unsubscribeSession = result.surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
@@ -989,7 +989,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // scroller's offset made that first call travel to the right text and then lose its
         // highlight when this remount replaced the surface.
         const savedSelection = surface.state().selection;
-        remountSelectionPlaced = surface.hasPlacedSelection();
+        remountDrawingIntent = surface.drawingSelectionIntent();
         // A remount replaces the whole subtree, so focus lands on `document.body` — the
         // user typing while fonts resolved would silently stop being able to type.
         // Restore it when the OLD surface had it; never steal it otherwise.
@@ -1011,7 +1011,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         if (hadFocus) surface?.focus();
         surface?.setSelection(savedSelection);
-        remountSelectionPlaced = false; // consumed; the next plain open starts unplaced
+        remountDrawingIntent = { kind: 'none' }; // consumed; a plain open starts deselected
       } else bump();
     } catch (error) {
       if (destroyed || seq !== loadSeq) return;

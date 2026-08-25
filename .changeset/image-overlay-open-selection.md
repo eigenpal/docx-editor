@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-A document no longer opens with a drawing auto-selected when one anchors at the start of the first paragraph, and the image selection ring and resize handles now align with the selected image instead of landing outside the page.
+Drawing selection now follows Word's object-selection rule: a document no longer opens with a drawing selected, typing beside a drawing's anchor no longer selects it, and the selection ring and resize handles align with the image instead of landing outside the page.

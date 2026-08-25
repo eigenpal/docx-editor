@@ -141,6 +141,7 @@ export {
 } from './chrome-controls.ts';
 export {
   mountPaginatedSurface,
+  type DrawingSelectionIntent,
   type OpenPaginatedResult,
   type PaginatedSurface,
   type PaginatedSurfaceOptions,

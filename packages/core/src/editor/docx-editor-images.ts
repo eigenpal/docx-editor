@@ -113,21 +113,37 @@ function anchoredDrawingAtSelection(
   return null;
 }
 
+/**
+ * Comparable key for a drawing-selection intent, so a state guard can watch its transitions
+ * — including a press on the drawing at offsets the selection already holds.
+ */
+export function drawingSelectionIntentKey(
+  intent: import('./paginated-surface-contract.ts').DrawingSelectionIntent
+): string {
+  return intent.kind === 'pointer' ? `pointer:${intent.drawingNodeId}` : intent.kind;
+}
+
 export function resolveSelectedDrawingRecord(
   surface: PaginatedSurface | null
 ): SelectedDrawingRecord | null {
   if (!surface) return null;
-  // The mount-time caret sits at the start of the document, which routinely coincides with
-  // a drawing anchored at offset zero. Until something PLACES the selection — a gesture, an
-  // edit, or a selection write that moves it — no drawing reads as selected, so a document
-  // never opens with an image ring and eight handles the user did not ask for.
-  if (!surface.hasPlacedSelection()) return null;
+  // Word's rule: a caret at a drawing's anchor offset is a TEXT caret unless something
+  // selected the object — a pointer press on the painted drawing, or an explicit host
+  // selection write. The mount-time caret routinely coincides with a drawing anchored at
+  // offset zero, and typing lands the caret at anchor+1; neither means "selected".
+  const intent = surface.drawingSelectionIntent();
+  if (intent.kind === 'none') return null;
   const { anchor, head } = surface.state().selection;
   if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return null;
   const line = lineAtIndexedPosition(surface.layout(), anchor.paragraphId, anchor.offset);
-  const inline = inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset);
-  if (inline) return inline;
-  return anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset);
+  const record =
+    inlineDrawingAtOffset(line, anchor.paragraphId, anchor.offset) ??
+    anchoredDrawingAtSelection(surface, anchor.paragraphId, anchor.offset);
+  if (!record) return null;
+  // A pointer press names its drawing, so a stale press can never claim a DIFFERENT
+  // drawing the caret later visits (a find jump that lands at another anchor).
+  if (intent.kind === 'pointer' && record.drawingNodeId !== intent.drawingNodeId) return null;
+  return record;
 }
 
 function projectDrawingForRecord(

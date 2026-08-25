@@ -301,7 +301,7 @@ describe('docx-editor selected image context', () => {
 
   test('a freshly opened document never reports a selected drawing', async () => {
     // The mount-time caret sits at offset zero of the first paragraph — exactly where this
-    // drawing anchors. Nothing PLACED that caret, so nothing is selected: a document must
+    // drawing anchors. Nothing selected the OBJECT, so nothing is selected: a document must
     // not open with an image ring and eight resize handles.
     const container = document.createElement('div');
     const editor = createDocxEditor({
@@ -310,32 +310,42 @@ describe('docx-editor selected image context', () => {
       imageDecodePort: createTestImageDecodePort(),
     });
     if (!editor.surface) throw new Error('surface failed to mount');
-    expect(editor.surface.hasPlacedSelection()).toBe(false);
+    expect(editor.surface.drawingSelectionIntent().kind).toBe('none');
     expect(editor.snapshot().image).toBeNull();
     expect(selectedDrawingOverlayTargetOf(editor.surface)).toBeNull();
 
-    // A pointer gesture places the selection even when it lands on the very same offsets,
-    // which is how clicking the drawing at the untouched caret position still selects it.
+    // A press on the PAGES (not the drawing) is a text caret: still no object selection.
     container.querySelector('.docx-pages')!.dispatchEvent(new Event('pointerdown'));
-    expect(editor.surface.hasPlacedSelection()).toBe(true);
+    expect(editor.surface.drawingSelectionIntent().kind).toBe('none');
+    expect(selectedDrawingOverlayTargetOf(editor.surface)).toBeNull();
+
+    // A press ON the painted drawing selects it, even at the very same caret offsets.
+    const drawing = container.querySelector('[data-drawing-node-id]')!;
+    drawing.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(editor.surface.drawingSelectionIntent().kind).toBe('pointer');
     await settleDrawingResources(editor);
     expect(selectedDrawingOverlayTargetOf(editor.surface)).not.toBeNull();
     expect(editor.snapshot().image).not.toBeNull();
+
+    // Typing deselects the object — Word never rings an image from keystrokes.
+    editor.exec({ type: 'insertText', text: 'x' });
+    expect(editor.surface.drawingSelectionIntent().kind).toBe('none');
+    expect(selectedDrawingOverlayTargetOf(editor.surface)).toBeNull();
   });
 
-  test('an explicit selection write that moves the caret places the selection', () => {
+  test('an explicit selection write that moves the caret selects an adjacent drawing', () => {
     const editor = mountEditor(inlinePictureDocument({ wrap: 'anchor', drawingFirst: true }));
-    expect(editor.surface!.hasPlacedSelection()).toBe(false);
-    // A same-position write stays unarmed — the font-load remount restores the saved caret
+    expect(editor.surface!.drawingSelectionIntent().kind).toBe('none');
+    // A same-position write stays inert — the font-load remount restores the saved caret
     // through this path during a plain open.
     const paragraphId = drawingParagraphId(editor);
     editor.surface!.setSelection({
       anchor: { paragraphId, offset: 0 },
       head: { paragraphId, offset: 0 },
     });
-    expect(editor.surface!.hasPlacedSelection()).toBe(false);
+    expect(editor.surface!.drawingSelectionIntent().kind).toBe('none');
     selectInlineDrawing(editor, 1);
-    expect(editor.surface!.hasPlacedSelection()).toBe(true);
+    expect(editor.surface!.drawingSelectionIntent().kind).toBe('programmatic');
     expect(selectedDrawingOverlayTargetOf(editor.surface)).not.toBeNull();
   });
 

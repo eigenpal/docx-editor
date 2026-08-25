@@ -837,6 +837,16 @@ export interface DrawingPositionInput {
     readonly verticalEmu?: number;
 }
 
+// @public
+export type DrawingSelectionIntent = {
+    readonly kind: 'none';
+} | {
+    readonly drawingNodeId: string;
+    readonly kind: 'pointer';
+} | {
+    readonly kind: 'programmatic';
+};
+
 // @internal
 export function editorCommandKey(command: EditorCommand): string;
 
@@ -1318,6 +1328,7 @@ export interface PaginatedSurface {
     // (undocumented)
     destroy(): void;
     dismissActiveReview(): void;
+    drawingSelectionIntent(): DrawingSelectionIntent;
     editingMode(): SurfaceEditingMode;
     enqueueType(text: string): void;
     enterHeaderFooter(args: {
@@ -1343,7 +1354,6 @@ export interface PaginatedSurface {
     // (undocumented)
     focus(): void;
     formatting(): SurfaceFormatting;
-    hasPlacedSelection(): boolean;
     headerFooterState(): {
         readonly editing: 'header' | 'footer' | null;
         readonly evenAndOddHeaders?: boolean;

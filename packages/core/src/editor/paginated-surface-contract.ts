@@ -303,6 +303,15 @@ export interface RevealOptions {
 }
 
 /**
+ * How the current selection came to address a drawing — see
+ * {@link PaginatedSurface.drawingSelectionIntent}.
+ */
+export type DrawingSelectionIntent =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'pointer'; readonly drawingNodeId: string }
+  | { readonly kind: 'programmatic' };
+
+/**
  * Everything observable about the surface right now, as one immutable value.
  *
  * `revision` is the change token: it moves whenever anything else here does, which is what lets
@@ -803,15 +812,18 @@ export interface PaginatedSurface {
    */
   publishedLayout(): SemanticLayout;
   /**
-   * Whether anything has PLACED the selection since mount.
+   * How the current selection came to address a drawing, if it does at all.
    *
-   * True after a pointer or keyboard gesture on the pages, an edit, or a selection write
-   * that moved the caret off its mount-time default. False for a freshly opened document,
-   * which is how the drawing-selection readers know not to report a selected image: the
-   * initial caret sits at the start of the document and routinely coincides with a drawing
-   * anchored at offset zero, and a document must not open with an image already selected.
+   * Word's rule: a caret NEXT TO a floating object is a text caret, never an object
+   * selection — only clicking the object (or an explicit host selection write) selects it.
+   * The engine's selection is a caret at the drawing's anchor offset either way, so the
+   * offsets alone cannot tell the two apart; this is the discriminator. `none` for a fresh
+   * mount (a document must not open with an image selected — the initial caret routinely
+   * coincides with a drawing anchored at offset zero) and after typing, caret keys, or a
+   * pointer press on anything that is not a drawing. `pointer` names the drawing the press
+   * landed on, so a stale press can never claim a different drawing the caret later visits.
    */
-  hasPlacedSelection(): boolean;
+  drawingSelectionIntent(): DrawingSelectionIntent;
   /**
    * Paint-scale coordinate context for overlay chrome.
    *
