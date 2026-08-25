@@ -41,6 +41,7 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { forEachStoryDrawing } from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { layoutTextboxStory } from './textbox-story-layout.ts';
@@ -481,6 +482,9 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
   };
 }
 
+/** Memoized per story object, exactly like {@link storyDrawingResourceTokens}. */
+const storyListMarkerTokens = new WeakMap<HeaderFooterStoryLayout, string>();
+
 /**
  * Marker identity of every list item a header/footer story paints.
  *
@@ -494,8 +498,16 @@ export function remapPage(page: PageRecord, globalIndex: number, sheetY: number)
  * Measured before this existed: a body edit that also changed the numbering left six reused
  * pages showing the old header marker and the one rebuilt page showing the new one — two
  * different numbers for the same header in one section.
+ *
+ * Unlike {@link storyDrawingResourceToken} this walk stops at the story's own fragments: a
+ * text-box story never resolves list items today (`layoutTextboxStory` receives no
+ * `listItems`, so a `w:numPr` paragraph in a box carries no marker record). If text-box
+ * stories ever grow markers, this token must descend with them or a `numbering.xml` edit
+ * leaves a reused page showing the old number inside the box.
  */
 export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
+  const cached = storyListMarkerTokens.get(story);
+  if (cached !== undefined) return cached;
   const tokens: string[] = [];
   const visitBlock = (block: BlockFragmentRecord): void => {
     if (block.kind === 'table') {
@@ -508,8 +520,17 @@ export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
     if (marker) tokens.push(`${block.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
   };
   for (const block of story.fragments) visitBlock(block);
-  return tokens.length === 0 ? '' : `|list:${tokens.join(',')}`;
+  const token = tokens.length === 0 ? '' : `|list:${tokens.join(',')}`;
+  storyListMarkerTokens.set(story, token);
+  return token;
 }
+
+/**
+ * Memoized per story object: a story layout is immutable, and `hfStoryMemo` keeps the
+ * object identity stable across passes, so the walk would otherwise repeat per section per
+ * layout pass on the keystroke path.
+ */
+const storyDrawingResourceTokens = new WeakMap<HeaderFooterStoryLayout, string>();
 
 /**
  * Resource identity of every image a header/footer story paints.
@@ -521,29 +542,23 @@ export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
  * returns the previous pages BY IDENTITY, furniture included, so a header or footer image
  * stays a "loading" placeholder for the rest of the session — nothing will invalidate it
  * again. Body drawings have no such gap; they ride the per-paragraph flow keys.
+ *
+ * Walks with {@link forEachStoryDrawing}, which descends into each anchored drawing's
+ * text-box story: a picture inside a `wps:txbx` in a header settles on the same
+ * asynchronous clock as a direct one, so its resource has to move this token too.
  */
 export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): string {
+  const cached = storyDrawingResourceTokens.get(story);
+  if (cached !== undefined) return cached;
   const tokens: string[] = [];
-  const visitBlock = (block: BlockFragmentRecord): void => {
-    if (block.kind === 'table') {
-      for (const row of block.rows) {
-        for (const cell of row.cells) for (const inner of cell.blocks) visitBlock(inner);
-      }
-      return;
-    }
-    for (const line of block.lines) {
-      for (const drawing of line.drawings ?? []) {
-        tokens.push(drawingResourceLayoutToken(drawing.resource));
-      }
-    }
-  };
-  for (const drawing of story.anchoredDrawings ?? []) {
+  forEachStoryDrawing(story, (drawing) => {
     tokens.push(drawingResourceLayoutToken(drawing.resource));
-  }
-  for (const fragment of story.fragments) visitBlock(fragment);
+  });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a
   // plain header is byte-for-byte what it was.
-  return tokens.length === 0 ? '' : `!${tokens.join('!')}`;
+  const token = tokens.length === 0 ? '' : `!${tokens.join('!')}`;
+  storyDrawingResourceTokens.set(story, token);
+  return token;
 }
 
 /**

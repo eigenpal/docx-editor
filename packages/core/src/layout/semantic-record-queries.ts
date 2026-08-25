@@ -10,6 +10,7 @@ import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
   ContentControlLock,
+  InlineDrawingRecord,
   LayoutBox,
   LineRecord,
   PageRecord,
@@ -88,6 +89,58 @@ export function linesOf(layout: SemanticLayout): LineRecord[] {
 /** Anchored drawings on one body page (page-content coordinates). */
 export function anchoredDrawingsOf(page: PageRecord): readonly AnchoredDrawingRecord[] {
   return page.anchoredDrawings ?? [];
+}
+
+/** The fragment-plus-anchored-drawings shape every laid-out story shares. */
+export interface StoryDrawingHost {
+  readonly fragments: readonly BlockFragmentRecord[];
+  readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
+}
+
+/**
+ * Text-box stories descended per {@link forEachStoryDrawing} walk before it stops.
+ *
+ * Sits ABOVE layout's construction ceiling (`MAX_TEXTBOX_STORY_NESTING`, 4) on purpose:
+ * records deeper than the ceiling cannot be built, so the bound is defensive, not policy.
+ * Layout builds these records and a cycle should be impossible — which is the reason to
+ * bound the walk rather than to trust it, since the cost of the bound is nothing.
+ */
+const MAX_STORY_DRAWING_WALK_DEPTH = 16;
+
+/**
+ * Visit every drawing record one story paints — line drawings, anchored drawings, and the
+ * drawings inside each anchored drawing's text-box story, recursively.
+ *
+ * The ONE walk shared by the two consumers that must agree by construction: the furniture
+ * invalidation token (a drawing this walk misses leaves a settled picture a permanent
+ * placeholder) and paint's page reconcile (a drawing it misses gets a live resource
+ * revoked). Table interiors flatten through rows and cells.
+ */
+export function forEachStoryDrawing(
+  story: StoryDrawingHost,
+  visit: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
+): void {
+  const visitBlock = (block: BlockFragmentRecord): void => {
+    if (block.kind === 'table') {
+      for (const row of block.rows) {
+        for (const cell of row.cells) for (const inner of cell.blocks) visitBlock(inner);
+      }
+      return;
+    }
+    for (const line of block.lines) {
+      for (const drawing of line.drawings ?? []) visit(drawing);
+    }
+  };
+  const visitStory = (inner: StoryDrawingHost, depth: number): void => {
+    if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
+    for (const drawing of inner.anchoredDrawings ?? []) {
+      visit(drawing);
+      // A text box is a story of its own, nested in the drawing that anchors it.
+      if (drawing.textboxStory) visitStory(drawing.textboxStory, depth + 1);
+    }
+    for (const fragment of inner.fragments) visitBlock(fragment);
+  };
+  visitStory(story, 0);
 }
 
 /** Every fragment belonging to one paragraph, in order, across page boundaries. */

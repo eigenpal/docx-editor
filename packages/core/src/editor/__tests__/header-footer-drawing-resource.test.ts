@@ -14,41 +14,25 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
-import { validateRasterHeader, type ImageDecodePort } from '../../store/package/image-resources.ts';
-import { resolveImageResourceLimits } from '../../store/runtime/limits.ts';
 import type { HeaderFooterStoryRecord } from '../../layout/semantic-records.ts';
+import {
+  CT_NS,
+  DRAWING_NS,
+  IMG_REL,
+  OD_REL,
+  PNG_1X1,
+  REL_NS,
+  blockDrawingKinds,
+  deferredDecodePort,
+  inlinePicture,
+  mountWithImages,
+  picture,
+  settle,
+  textboxWithPicture,
+} from './image-decode-harness.ts';
 
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
-const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
-const IMG = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
 const HDR = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FTR = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
-const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
-const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-
-const PNG_1X1 = Uint8Array.from(
-  atob(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
-  ),
-  (c) => c.charCodeAt(0)
-);
-
-const NS = `xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"`;
-
-function picture(): string {
-  return (
-    `<a:graphic><a:graphicData uri="${PIC}"><pic:pic>` +
-    '<pic:nvPicPr><pic:cNvPr id="1" name="pic"/><pic:cNvPicPr/></pic:nvPicPr>' +
-    '<pic:blipFill><a:blip r:embed="rIdImg"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-    '<pic:spPr><a:xfrm><a:ext cx="457200" cy="457200"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr>' +
-    '</pic:pic></a:graphicData></a:graphic>'
-  );
-}
 
 /** Anchored the way a letterhead is: `wrapNone`, offset out past the text column. */
 function anchoredDrawing(): string {
@@ -60,26 +44,18 @@ function anchoredDrawing(): string {
     '<wp:positionH relativeFrom="column"><wp:posOffset>5000000</wp:posOffset></wp:positionH>' +
     '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
     '<wp:extent cx="457200" cy="457200"/><wp:wrapNone/><wp:docPr id="1" name="pic"/>' +
-    `${picture()}</wp:anchor></w:drawing></w:r>`
-  );
-}
-
-function inlineDrawing(): string {
-  return (
-    '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
-    '<wp:extent cx="457200" cy="457200"/><wp:docPr id="2" name="pic"/>' +
-    `${picture()}</wp:inline></w:drawing></w:r>`
+    `${picture(1)}</wp:anchor></w:drawing></w:r>`
   );
 }
 
 function docx(options: { readonly headerBody: string; readonly footerBody: string }): Uint8Array {
   const rels = (target: string) =>
     strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rIdImg" Type="${IMG}" Target="${target}"/></Relationships>`
+      `<Relationships xmlns="${REL_NS}"><Relationship Id="rIdImg" Type="${IMG_REL}" Target="${target}"/></Relationships>`
     );
   return zipSync({
     '[Content_Types].xml': strToU8(
-      `<Types xmlns="${CT}">` +
+      `<Types xmlns="${CT_NS}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="png" ContentType="image/png"/>' +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
@@ -88,10 +64,10 @@ function docx(options: { readonly headerBody: string; readonly footerBody: strin
         '</Types>'
     ),
     '_rels/.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      `<Relationships xmlns="${REL_NS}"><Relationship Id="rId1" Type="${OD_REL}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document ${NS}><w:body>` +
+      `<w:document ${DRAWING_NS}><w:body>` +
         '<w:p><w:r><w:t>body</w:t></w:r></w:p>' +
         '<w:sectPr>' +
         '<w:headerReference r:id="rIdHdr" w:type="default"/>' +
@@ -101,67 +77,41 @@ function docx(options: { readonly headerBody: string; readonly footerBody: strin
         '</w:sectPr></w:body></w:document>'
     ),
     'word/_rels/document.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}">` +
+      `<Relationships xmlns="${REL_NS}">` +
         `<Relationship Id="rIdHdr" Type="${HDR}" Target="header1.xml"/>` +
         `<Relationship Id="rIdFtr" Type="${FTR}" Target="footer1.xml"/>` +
         '</Relationships>'
     ),
-    'word/header1.xml': strToU8(`<w:hdr ${NS}><w:p>${options.headerBody}</w:p></w:hdr>`),
-    'word/footer1.xml': strToU8(`<w:ftr ${NS}><w:p>${options.footerBody}</w:p></w:ftr>`),
+    'word/header1.xml': strToU8(`<w:hdr ${DRAWING_NS}><w:p>${options.headerBody}</w:p></w:hdr>`),
+    'word/footer1.xml': strToU8(`<w:ftr ${DRAWING_NS}><w:p>${options.footerBody}</w:p></w:ftr>`),
     'word/_rels/header1.xml.rels': rels('media/image1.png'),
     'word/_rels/footer1.xml.rels': rels('media/image1.png'),
     'word/media/image1.png': PNG_1X1,
   });
 }
 
-/** Validates the real bytes, like the browser port does, but without a browser. */
-function decodePort(): ImageDecodePort {
-  return Object.freeze({
-    async decode(bytes, mime) {
-      const header = validateRasterHeader(bytes, mime);
-      if (!header) throw new Error('invalid raster');
-      const limits = resolveImageResourceLimits();
-      if (header.pixelWidth * header.pixelHeight > limits.maxPixels) throw new Error('too large');
-      return Object.freeze({ ...header, dpiX: 96, dpiY: 96 });
-    },
-  });
-}
-
-/** Resource resolution and the relayout it triggers are both asynchronous. */
-async function settle(): Promise<void> {
-  for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setTimeout(resolve, 5));
-}
-
 function storyDrawingKinds(story: HeaderFooterStoryRecord | undefined): string[] {
   if (!story) return [];
   const kinds = (story.anchoredDrawings ?? []).map((drawing) => drawing.resource.kind);
-  for (const fragment of story.fragments) {
-    if (fragment.kind === 'table') continue;
-    for (const line of fragment.lines) {
-      for (const drawing of line.drawings ?? []) kinds.push(drawing.resource.kind);
-    }
+  for (const kind of blockDrawingKinds(story.fragments)) kinds.push(kind);
+  return kinds;
+}
+
+/** Resource kinds of the pictures inside the story's anchored text-box stories. */
+function textboxStoryDrawingKinds(story: HeaderFooterStoryRecord | undefined): string[] {
+  if (!story) return [];
+  const kinds: string[] = [];
+  for (const drawing of story.anchoredDrawings ?? []) {
+    const inner = drawing.textboxStory;
+    if (!inner) continue;
+    for (const kind of blockDrawingKinds(inner.fragments)) kinds.push(kind);
   }
   return kinds;
 }
 
-async function mount(bytes: Uint8Array): Promise<{
-  surface: PaginatedSurface;
-  container: HTMLElement;
-}> {
-  const container = document.createElement('div');
-  document.body.append(container);
-  const opened = mountPaginatedSurface(container, bytes, {
-    scale: 1,
-    imageDecodePort: decodePort(),
-  });
-  if (!opened.ok) throw new Error(opened.reason);
-  await settle();
-  return { surface: opened.surface, container };
-}
-
 describe('header/footer picture resources reach the page', () => {
   test('an anchored header picture stops being pending once it decodes', async () => {
-    const { surface, container } = await mount(
+    const { surface, container } = await mountWithImages(
       docx({ headerBody: anchoredDrawing(), footerBody: '<w:r><w:t>f</w:t></w:r>' })
     );
     const page = surface.layout().pages[0]!;
@@ -174,8 +124,8 @@ describe('header/footer picture resources reach the page', () => {
   });
 
   test('an inline footer picture does too', async () => {
-    const { surface, container } = await mount(
-      docx({ headerBody: '<w:r><w:t>h</w:t></w:r>', footerBody: inlineDrawing() })
+    const { surface, container } = await mountWithImages(
+      docx({ headerBody: '<w:r><w:t>h</w:t></w:r>', footerBody: inlinePicture(2) })
     );
     const page = surface.layout().pages[0]!;
     expect(storyDrawingKinds(page.footer)).toEqual(['ready']);
@@ -184,9 +134,28 @@ describe('header/footer picture resources reach the page', () => {
     container.remove();
   });
 
+  // The regression for a picture nested one story deeper: `storyDrawingResourceToken` has to
+  // descend into each anchored drawing's text-box story, or the furniture context is identical
+  // before and after the decode and the unchanged-pass early exit returns the previous pages
+  // by identity — the picture stays a placeholder with nothing left to invalidate it.
+  test('a picture inside a header text box stops being pending once it decodes', async () => {
+    const { port, release } = deferredDecodePort();
+    const { surface, container } = await mountWithImages(
+      docx({ headerBody: textboxWithPicture(), footerBody: '<w:r><w:t>f</w:t></w:r>' }),
+      port
+    );
+    expect(textboxStoryDrawingKinds(surface.layout().pages[0]!.header)).toEqual(['pending']);
+    release();
+    await settle();
+    expect(textboxStoryDrawingKinds(surface.layout().pages[0]!.header)).toEqual(['ready']);
+    expect(container.querySelectorAll('.docx-drawing-placeholder')).toHaveLength(0);
+    surface.destroy();
+    container.remove();
+  });
+
   test('every page carries the resolved picture, not just the first', async () => {
-    const { surface, container } = await mount(
-      docx({ headerBody: anchoredDrawing(), footerBody: inlineDrawing() })
+    const { surface, container } = await mountWithImages(
+      docx({ headerBody: anchoredDrawing(), footerBody: inlinePicture(2) })
     );
     for (const page of surface.layout().pages) {
       expect(storyDrawingKinds(page.header)).toEqual(['ready']);

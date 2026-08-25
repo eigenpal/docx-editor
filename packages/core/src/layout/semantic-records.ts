@@ -856,6 +856,7 @@ export {
   anchoredDrawingsOf,
   contentControlsOfLayout,
   effectiveContentControlLock,
+  forEachStoryDrawing,
   fragmentsOfParagraph,
   lineAtPosition,
   linesOf,
@@ -863,3 +864,4 @@ export {
   paragraphFragmentsOfBlocks,
   unionLayoutBoxes,
 } from './semantic-record-queries.ts';
+export type { StoryDrawingHost } from './semantic-record-queries.ts';

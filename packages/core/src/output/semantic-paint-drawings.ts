@@ -17,6 +17,7 @@ import type {
   ParagraphFragmentRecord,
   TableFragmentRecord,
 } from '../layout/semantic-records.ts';
+import { forEachStoryDrawing } from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 
@@ -704,9 +705,6 @@ export function paintAnchoredDrawingsLayer(
   return Object.freeze(painted);
 }
 
-/** Nesting bound for text-box stories inside text-box stories. */
-const MAX_TEXTBOX_STORY_DEPTH = 16;
-
 /**
  * Every drawing one page paints, whatever story it is in.
  *
@@ -715,55 +713,30 @@ const MAX_TEXTBOX_STORY_DEPTH = 16;
  * body and the furniture stories meant the reconcile pass never saw those keys and treated them
  * as unused — so every repaint revoked the note image's resource and stripped its `src`. Typing
  * one character in the body blanked a picture in a footnote.
+ *
+ * Each story walks with {@link forEachStoryDrawing} — the SAME bounded walk the furniture
+ * invalidation token uses, so what layout invalidates and what paint keeps alive cannot
+ * drift apart.
  */
 function forEachPageDrawing(
   page: PageRecord,
   visitDrawing: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
 ): void {
-  const visitBlock = (block: ParagraphFragmentRecord | TableFragmentRecord): void => {
-    if (block.kind === 'table') {
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          for (const inner of cell.blocks) visitBlock(inner);
-        }
-      }
-      return;
-    }
-    for (const line of block.lines) {
-      for (const drawing of line.drawings ?? []) visitDrawing(drawing);
-    }
-  };
-  const visitStory = (
-    story: {
-      readonly fragments: readonly (ParagraphFragmentRecord | TableFragmentRecord)[];
-      readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
+  forEachStoryDrawing(
+    {
+      fragments: page.fragments,
+      ...(page.anchoredDrawings ? { anchoredDrawings: page.anchoredDrawings } : {}),
     },
-    depth = 0
-  ): void => {
-    // Capped like every other walk over file-derived structure here. Layout builds these
-    // records, so a cycle should be impossible — which is the reason to bound it rather than
-    // to trust it, since the cost of the bound is nothing.
-    if (depth > MAX_TEXTBOX_STORY_DEPTH) return;
-    for (const drawing of story.anchoredDrawings ?? []) {
-      visitDrawing(drawing);
-      // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) visitStory(drawing.textboxStory, depth + 1);
-    }
-    for (const fragment of story.fragments) visitBlock(fragment);
-  };
-
-  visitStory({
-    fragments: page.fragments,
-    ...(page.anchoredDrawings ? { anchoredDrawings: page.anchoredDrawings } : {}),
-  });
+    visitDrawing
+  );
   for (const story of [page.header, page.footer]) {
-    if (story) visitStory(story);
+    if (story) forEachStoryDrawing(story, visitDrawing);
   }
   for (const area of [page.footnotes, page.endnotes]) {
     if (!area) continue;
     // The separator is an authored story too, and `paintPageNoteAreas` paints it.
-    if (area.separator) visitStory(area.separator);
-    for (const note of area.notes) visitStory(note);
+    if (area.separator) forEachStoryDrawing(area.separator, visitDrawing);
+    for (const note of area.notes) forEachStoryDrawing(note, visitDrawing);
   }
 }
 
