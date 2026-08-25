@@ -9,13 +9,15 @@
 // data properties, so the clone carries the ORIGINAL ids and hits compare by value.
 //
 // Three probes per applied op:
-// 1. Full budget: hits AND the final `budget.visited` / `budget.truncated` must be
+// 1. The budget-free path FIRST (while the edited spine is still unmemoized), which
+//    runs the same walk over the same memo under an unbounded internal budget — so the
+//    two entry points cannot drift apart — then again warm through the root fast path.
+// 2. Full budget: hits AND the final `budget.visited` / `budget.truncated` must be
 //    byte-identical to the cold walk — downstream parts sharing one budget must truncate
 //    at exactly the same point.
-// 2. A budget small enough to truncate mid-tree: hits and accounting must STILL match
+// 3. A budget small enough to truncate mid-tree: hits and accounting must STILL match
 //    the cold walk byte-for-byte, because an overrunning memo falls through to the
 //    plain descent (pre-truncation prefixes feed diagnoseNoteReferences).
-// 3. The budget-free memoized path, so the two memo systems cannot drift apart.
 //
 // Determinism and the random-edit machinery live in `random-edit-test-support.ts`,
 // shared with `derivation-memo-freshness.test.ts`.
@@ -72,6 +74,22 @@ function assertBudgetedScanFresh(
   step: number,
   log: unknown[]
 ): void {
+  // Budget-free first, before anything re-memoizes the edited spine: the root entry is
+  // stale after an edit, so this exercises the warm budget-free WALK (in-walk bulk
+  // reuse and prune bookkeeping), not just the root fast path. It must agree with its
+  // own cold walk, so the two entry points into the shared memo cannot drift apart.
+  const plainJson = JSON.stringify(collectNoteReferences(part));
+  const plainColdJson = JSON.stringify(collectNoteReferences(structuredClone(part)));
+  if (plainJson !== plainColdJson) {
+    fail('budget-free hits', seed, step, `memoized: ${plainJson}\nfresh: ${plainColdJson}`, log);
+  }
+  // That walk completed, so a second budget-free scan serves from the root fast path
+  // and must return the same answer.
+  const plainWarmJson = JSON.stringify(collectNoteReferences(part));
+  if (plainWarmJson !== plainJson) {
+    fail('budget-free root reuse', seed, step, `warm: ${plainWarmJson}\nwalk: ${plainJson}`, log);
+  }
+
   // Full budget: hits and accounting byte-identical to the cold walk.
   const memoBudget = createNoteReferenceScanBudget(FULL_BUDGET);
   const memoHits = collectNoteReferences(part, {
@@ -101,14 +119,6 @@ function assertBudgetedScanFresh(
   }
   if (memoBudget.truncated) {
     fail('full budget', seed, step, 'full budget unexpectedly truncated', log);
-  }
-
-  // Budget-free memoized path must agree with its own cold walk too, so the two memo
-  // systems cannot drift apart.
-  const plainJson = JSON.stringify(collectNoteReferences(part));
-  const plainColdJson = JSON.stringify(collectNoteReferences(structuredClone(part)));
-  if (plainJson !== plainColdJson) {
-    fail('budget-free hits', seed, step, `memoized: ${plainJson}\nfresh: ${plainColdJson}`, log);
   }
 
   // A budget that truncates mid-tree: a warm memo whose bulk charge would overrun the
@@ -163,6 +173,8 @@ describe('budgeted note-reference scan memos stay fresh across random op sequenc
       assertBudgetedScanFresh(store.part, seed, -1, []);
 
       const reusesBefore = budgetedNoteScanMemoStats.reuses;
+      const budgetFreeReusesBefore = budgetedNoteScanMemoStats.budgetFreeReuses;
+      const rootReusesBefore = budgetedNoteScanMemoStats.budgetFreeRootReuses;
       const { applied, splitsApplied } = driveRandomEdits(store, {
         rand: mulberry32(seed),
         steps: STEPS,
@@ -172,11 +184,20 @@ describe('budgeted note-reference scan memos stay fresh across random op sequenc
 
       // Anti-vacuity: enough ops applied, and enough splits that fresh spines were
       // rescanned against — and read back through — the memoized subtrees. The reuse
-      // floor proves memos actually served (equivalence alone would also pass for a
+      // floors prove memos actually served (equivalence alone would also pass for a
       // memo that never hits, which delivers correctness but none of the latency win).
+      // The counters are per serve site, so a budgeted-walk regression cannot hide
+      // behind budget-free reuses, an in-walk regression cannot hide behind the root
+      // fast path, or the reverse.
       expect(applied).toBeGreaterThanOrEqual(12);
       expect(splitsApplied).toBeGreaterThanOrEqual(2);
       expect(budgetedNoteScanMemoStats.reuses - reusesBefore).toBeGreaterThanOrEqual(applied);
+      expect(
+        budgetedNoteScanMemoStats.budgetFreeReuses - budgetFreeReusesBefore
+      ).toBeGreaterThanOrEqual(applied);
+      expect(
+        budgetedNoteScanMemoStats.budgetFreeRootReuses - rootReusesBefore
+      ).toBeGreaterThanOrEqual(applied);
     });
   }
 });

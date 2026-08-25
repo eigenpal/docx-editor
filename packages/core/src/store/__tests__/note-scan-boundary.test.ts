@@ -21,6 +21,7 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/index.ts';
+import { budgetedNoteScanMemoStats } from '../package/note-references.ts';
 import { segmentsOf } from '../store/tree-op-segments.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -403,6 +404,147 @@ describe('diagnoseNoteReferences truncation signal', () => {
   });
 });
 
+function loadDocumentPart(bodyInner: string): OoxmlPart {
+  const read = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body>${bodyInner}<w:sectPr/></w:body></w:document>`,
+    {
+      name: '/word/document.xml',
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+    }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  return read.part;
+}
+
+describe('budget-free scans share the budgeted walk', () => {
+  function refParagraph(id: number): string {
+    return `<w:p><w:r><w:footnoteReference w:id="${id}"/></w:r></w:p>`;
+  }
+
+  test('finite maxHits without a budget returns the document-order prefix', () => {
+    const part = loadDocumentPart(refParagraph(1) + refParagraph(2) + refParagraph(3));
+    const all = collectNoteReferences(part);
+    expect(all.map((hit) => hit.noteId)).toEqual([1, 2, 3]);
+    const clipped = collectNoteReferences(structuredClone(part), { maxHits: 2 });
+    expect(JSON.stringify(clipped)).toBe(JSON.stringify(all.slice(0, 2)));
+  });
+
+  test('an unchanged part answers warm budget-free scans by identity', () => {
+    const part = loadDocumentPart(refParagraph(1) + refParagraph(2));
+    collectNoteReferences(part); // cold walk memoizes the root
+    const warm = collectNoteReferences(part);
+    expect(warm.map((hit) => hit.noteId)).toEqual([1, 2]);
+    expect(collectNoteReferences(part)).toBe(warm);
+    expect(Object.isFrozen(warm)).toBe(true);
+    // A clip below the cached hit count serves a warm slice with the same prefix.
+    const clippedWarm = collectNoteReferences(part, { maxHits: 1 });
+    expect(JSON.stringify(clippedWarm)).toBe(JSON.stringify(warm.slice(0, 1)));
+  });
+
+  test('depth past 64 prunes budget-free scans but fails budgeted scans closed', () => {
+    // A >64-deep generic chain between two shallow references. Budget-free (layout)
+    // scans prune the deep subtree and keep the trailing reference; budgeted (mutation)
+    // scans mark the shared budget truncated and stop, so callers refuse atomically.
+    const deepChain = '<w:x>'.repeat(70) + '</w:x>'.repeat(70);
+    const part = loadDocumentPart(refParagraph(1) + deepChain + refParagraph(2));
+
+    // A truncated budgeted scan first must not poison the later budget-free walk.
+    const preBudget = createNoteReferenceScanBudget(
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY
+    );
+    collectNoteReferences(part, { budget: preBudget, maxHits: Number.POSITIVE_INFINITY });
+    expect(preBudget.truncated).toBe(true);
+
+    const budgetFree = collectNoteReferences(part);
+    expect(budgetFree.map((hit) => hit.noteId)).toEqual([1, 2]);
+
+    // The pruned scan warmed the memos on this exact part; the budgeted walk over the
+    // SAME nodes must still fail closed — no entry may stand in for the pruned region.
+    const budget = createNoteReferenceScanBudget(
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY
+    );
+    const budgeted = collectNoteReferences(part, { budget, maxHits: Number.POSITIVE_INFINITY });
+    expect(budget.truncated).toBe(true);
+    expect(budgeted.map((hit) => hit.noteId)).toEqual([1]);
+
+    const coldBudget = createNoteReferenceScanBudget(
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY
+    );
+    const coldBudgeted = collectNoteReferences(structuredClone(part), {
+      budget: coldBudget,
+      maxHits: Number.POSITIVE_INFINITY,
+    });
+    expect(JSON.stringify(budgeted)).toBe(JSON.stringify(coldBudgeted));
+    expect(budget.visited).toBe(coldBudget.visited);
+
+    // Warm budget-free scans agree with the cold pruned walk.
+    expect(JSON.stringify(collectNoteReferences(part))).toBe(
+      JSON.stringify(collectNoteReferences(structuredClone(part)))
+    );
+  });
+
+  test('a paragraph re-parented deeper still serves its memo with budgeted parity', () => {
+    const flat = loadDocumentPart(refParagraph(1) + refParagraph(2));
+    collectNoteReferences(flat); // memoize the paragraph entries at their flat depth
+    const flatBody = flat.root.children.find((child) => child.kind === 'body')!;
+    const shared = flatBody.children.filter((child) => child.kind === 'paragraph');
+    expect(shared).toHaveLength(2);
+
+    // Rebuild a second part holding the SAME paragraph node objects six generic
+    // wrapper levels deeper. Spreads keep realistic node shapes; the memo keys on
+    // object identity, and paragraph answers must be depth-invariant.
+    const shell = loadDocumentPart('<w:x>'.repeat(6) + '</w:x>'.repeat(6));
+    const shellBody = shell.root.children.find((child) => child.kind === 'body')!;
+    const chain: OoxmlNode[] = [];
+    let cursor = shellBody.children.find(
+      (child) => child.kind !== 'textValue' && child.localName === 'x'
+    );
+    while (cursor && cursor.kind !== 'textValue') {
+      chain.push(cursor);
+      cursor = cursor.children.find(
+        (child) => child.kind !== 'textValue' && child.localName === 'x'
+      );
+    }
+    expect(chain).toHaveLength(6);
+    let rebuilt = { ...chain[5]!, children: shared } as OoxmlNode;
+    for (let level = 4; level >= 0; level -= 1) {
+      rebuilt = { ...chain[level]!, children: [rebuilt] } as OoxmlNode;
+    }
+    const deepBody = {
+      ...shellBody,
+      children: shellBody.children.map((child) => (child === chain[0] ? rebuilt : child)),
+    } as typeof shellBody;
+    const deepRoot = {
+      ...shell.root,
+      children: shell.root.children.map((child) => (child === shellBody ? deepBody : child)),
+    } as typeof shell.root;
+    const deepPart: OoxmlPart = { ...shell, root: deepRoot };
+
+    const reusesBefore = budgetedNoteScanMemoStats.reuses;
+    const warmBudget = createNoteReferenceScanBudget(1_000_000);
+    const warmHits = collectNoteReferences(deepPart, {
+      budget: warmBudget,
+      maxHits: Number.POSITIVE_INFINITY,
+    });
+    const coldBudget = createNoteReferenceScanBudget(1_000_000);
+    const coldHits = collectNoteReferences(structuredClone(deepPart), {
+      budget: coldBudget,
+      maxHits: Number.POSITIVE_INFINITY,
+    });
+    expect(warmHits.map((hit) => hit.noteId)).toEqual([1, 2]);
+    expect(JSON.stringify(warmHits)).toBe(JSON.stringify(coldHits));
+    expect(warmBudget.visited).toBe(coldBudget.visited);
+    expect(warmBudget.truncated).toBe(false);
+    expect(coldBudget.truncated).toBe(false);
+    // Anti-vacuity: both flat-depth paragraph entries served at the deeper depth.
+    expect(budgetedNoteScanMemoStats.reuses - reusesBefore).toBeGreaterThanOrEqual(2);
+  });
+});
+
 describe('collectNoteReferences atomOffset matches segmentsOf', () => {
   function findParagraph(node: OoxmlNode): OoxmlParagraphNode | null {
     if (node.kind === 'paragraph') return node;
@@ -418,18 +560,10 @@ describe('collectNoteReferences atomOffset matches segmentsOf', () => {
     readonly part: OoxmlPart;
     readonly paragraph: OoxmlParagraphNode;
   } {
-    const read = readOoxmlPart(
-      `<w:document xmlns:w="${W}"><w:body>${bodyInner}<w:sectPr/></w:body></w:document>`,
-      {
-        name: '/word/document.xml',
-        contentType:
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
-      }
-    );
-    if (!read.ok) throw new Error(read.reason);
-    const paragraph = findParagraph(read.part.root);
+    const part = loadDocumentPart(bodyInner);
+    const paragraph = findParagraph(part.root);
     if (!paragraph) throw new Error('missing paragraph');
-    return { part: read.part, paragraph };
+    return { part, paragraph };
   }
 
   function assertHitsMatchSegments(part: OoxmlPart, paragraph: OoxmlParagraphNode): void {
