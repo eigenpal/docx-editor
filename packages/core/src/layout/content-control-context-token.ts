@@ -64,8 +64,7 @@ function computeContentControlContextToken(part: OoxmlPart): string {
     // Paragraph, table and control wrappers are immutable and structurally shared across
     // text edits. Caching only at depth zero left every paragraph INSIDE a block control
     // (a TOC wrapped in `w:sdt` is the common shape) re-walked per part revision.
-    const memoizable =
-      node.kind === 'paragraph' || node.kind === 'table' || isContentControl(node);
+    const memoizable = node.kind === 'paragraph' || node.kind === 'table' || isContentControl(node);
     if (memoizable) {
       const cached = contentControlSubtreeTokens.get(node);
       if (cached !== undefined && cached.depth === depth) return cached.token;

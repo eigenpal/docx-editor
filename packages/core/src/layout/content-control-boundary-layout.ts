@@ -268,8 +268,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
       }
       const before = out.length;
       walkBlocks([child], 0, []);
-      const collected =
-        out.length === before ? EMPTY_CONTROLS : Object.freeze(out.slice(before));
+      const collected = out.length === before ? EMPTY_CONTROLS : Object.freeze(out.slice(before));
       topLevelBlockControls.set(child, collected);
       lists.push(collected);
     }

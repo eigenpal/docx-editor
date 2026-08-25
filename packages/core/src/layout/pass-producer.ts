@@ -7,14 +7,8 @@
 // per pass. Both helpers keep one retained slot (bounded); the inputs are identity-stable
 // when unchanged, so a hit is a handful of pointer compares.
 
-import {
-  noteMarksCacheToken,
-  type NoteMarkContext,
-} from './note-projection.ts';
-import {
-  DEFAULT_REVISION_DISPLAY_MODE,
-  type RevisionDisplayMode,
-} from './revision-projection.ts';
+import { noteMarksCacheToken, type NoteMarkContext } from './note-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 
 let controlProducerSlot: {
