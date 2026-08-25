@@ -63,6 +63,7 @@ export {
   type StoryTargetRejection,
   type TreePackageStoreOptions,
 } from './tree-package-store.ts';
+export type { RemotePackageAttribution } from './tree-package-remote.ts';
 export {
   addComment,
   setCommentResolved,

@@ -30,6 +30,14 @@ import {
 } from './package-edit.ts';
 import { IMAGE_RELATIONSHIP_TYPE, resolveImageRelationship } from './relationships.ts';
 import { withoutContentTypeOverride } from './hf-lifecycle-shell.ts';
+import { sha256FontBytes as sha256Bytes } from './sha256.ts';
+import {
+  isCanonicalPrimitiveCaptureActive,
+  recordDeleteBinary,
+  recordDeleteRelationship,
+  recordPutBinary,
+  runWithoutJournalCapture,
+} from './canonical-primitive-capture.ts';
 
 const WP_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const MAX_UNSIGNED_INT = 4_294_967_295;
@@ -330,19 +338,30 @@ export function withBinaryPart(
   if (existingBytes !== null && bytesEqual(existingBytes, copied)) {
     return withContentTypeOverride(pkg, normalized.partName, contentType, { forceOverride: true });
   }
-  const partBytes = new Map(pkg.partBytes);
-  partBytes.set(storedName, copied);
-  const parts = new Map(pkg.parts);
-  const storedKey = canonicalPartKey(storedName);
-  for (const name of [...parts.keys()]) {
-    if (storedKey !== null && canonicalPartKey(name) === storedKey) parts.delete(name);
+  const next = runWithoutJournalCapture(() => {
+    const partBytes = new Map(pkg.partBytes);
+    partBytes.set(storedName, copied);
+    const parts = new Map(pkg.parts);
+    const storedKey = canonicalPartKey(storedName);
+    for (const name of [...parts.keys()]) {
+      if (storedKey !== null && canonicalPartKey(name) === storedKey) parts.delete(name);
+    }
+    return withContentTypeOverride(
+      Object.freeze({ ...pkg, partBytes, parts }),
+      normalized.partName,
+      contentType,
+      { forceOverride: true }
+    );
+  });
+  if (isCanonicalPrimitiveCaptureActive()) {
+    recordPutBinary({
+      storageKey: storedName,
+      digest: sha256Bytes(copied),
+      size: copied.byteLength,
+      mediaType: contentType,
+    });
   }
-  return withContentTypeOverride(
-    Object.freeze({ ...pkg, partBytes, parts }),
-    normalized.partName,
-    contentType,
-    { forceOverride: true }
-  );
+  return next;
 }
 
 /**
@@ -546,6 +565,18 @@ export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string
   if (isPartReferencedByAnyInternalRelationship(pkg, normalized.partName)) return pkg;
 
   const storedName = storagePartName(normalized.partName, pkg);
+  const next = runWithoutJournalCapture(() =>
+    removeUnreferencedImagePart(pkg, normalized.partName, storedName)
+  );
+  if (next !== pkg) recordDeleteBinary(storedName);
+  return next;
+}
+
+function removeUnreferencedImagePart(
+  pkg: OoxmlPackage,
+  partName: string,
+  storedName: string
+): OoxmlPackage {
   const partBytes = new Map(pkg.partBytes);
   const storedKey = canonicalPartKey(storedName);
   let removed = false;
@@ -557,7 +588,7 @@ export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string
       }
     }
   }
-  if (!removed && !partPresent(pkg, normalized.partName)) return pkg;
+  if (!removed && !partPresent(pkg, partName)) return pkg;
 
   const parts = new Map(pkg.parts);
   if (storedKey !== null) {
@@ -567,7 +598,7 @@ export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string
   }
 
   const withoutBytes = Object.freeze({ ...pkg, partBytes, parts });
-  return withoutContentTypeOverride(withoutBytes, normalized.partName) ?? withoutBytes;
+  return withoutContentTypeOverride(withoutBytes, partName) ?? withoutBytes;
 }
 
 function relsAttribute(node: OoxmlNode, localName: string): string | undefined {
@@ -579,6 +610,21 @@ function relsAttribute(node: OoxmlNode, localName: string): string | undefined {
 
 /** Drop one internal relationship from an owner part and its `.rels` tree. */
 export function removeOwnerRelationship(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): OoxmlPackage | null {
+  const owned = pkg.relationships.get(ownerPart) ?? [];
+  const record = owned.find((entry) => entry.id === relationshipId);
+  if (!record) return pkg;
+  const next = runWithoutJournalCapture(() =>
+    dropOwnerRelationship(pkg, ownerPart, relationshipId)
+  );
+  if (next && next !== pkg) recordDeleteRelationship(ownerPart, relationshipId);
+  return next;
+}
+
+function dropOwnerRelationship(
   pkg: OoxmlPackage,
   ownerPart: string,
   relationshipId: string

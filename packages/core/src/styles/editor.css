@@ -192,16 +192,18 @@
      something did. */
   /* Per-AUTHOR review colours. OOXML carries no colour on a revision — Word assigns one per
      author in the application — so this ramp is presentation policy, and overriding a slot
-     under `.docx-editor` restyles both the painted document and the review cards. Chosen to stay
-     distinguishable from each other and from the black body text. */
+     under `.docx-editor` restyles both the painted document and the review cards.
+     One hue family per slot, so two authors never read as the same colour: red, blue, purple,
+     teal, amber, magenta, slate, green. Each stays dark enough to carry white text on a filled
+     avatar and to separate from black body text. */
   --doc-review-author-0: #c0392b;
   --doc-review-author-1: #1f6fb2;
   --doc-review-author-2: #7d3c98;
   --doc-review-author-3: #117a65;
-  --doc-review-author-4: #b9770e;
-  --doc-review-author-5: #a93226;
+  --doc-review-author-4: #9a6206;
+  --doc-review-author-5: #c2185b;
   --doc-review-author-6: #2e4053;
-  --doc-review-author-7: #6c3483;
+  --doc-review-author-7: #2e7d32;
   /* Retained as an override hook for a host that wants one neutral margin rule instead of the
      kind-coloured pair. Nothing reads it by default. */
   --doc-review-change-bar: #767676;

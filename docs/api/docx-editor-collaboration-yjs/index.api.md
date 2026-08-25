@@ -17,6 +17,24 @@ export class CollaborationSchemaError extends Error {
 }
 
 // @public
+export function createDocumentCollaboration(options: CreateDocumentCollaborationOptions): Promise<YjsCollaborationRoom>;
+
+// @public
+export interface CreateDocumentCollaborationOptions {
+    // (undocumented)
+    readonly awareness: Awareness;
+    // (undocumented)
+    readonly bootstrap: YjsCollaborationBootstrap;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    readonly sessionId?: string;
+    // (undocumented)
+    readonly ydoc: Y.Doc;
+}
+
+// @public
 export function createYjsCollaboration(options: CreateYjsCollaborationOptions): Promise<YjsCollaborationRoom>;
 
 // @public
@@ -29,6 +47,7 @@ export interface CreateYjsCollaborationOptions {
     readonly documentId: string;
     // (undocumented)
     readonly identity: CollaborationIdentity;
+    readonly sessionId?: string;
     // (undocumented)
     readonly ydoc: Y.Doc;
 }

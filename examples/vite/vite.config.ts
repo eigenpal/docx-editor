@@ -123,7 +123,7 @@ export default defineConfig(async () => {
             // `editor` and the `contracts/*` single-file entries are matched above / by the
             // capture.
             {
-              find: /^@docx-editor\.dev\/core\/(binding|layout|output|store|sync|clients|server)$/,
+              find: /^@docx-editor\.dev\/core\/(binding|collaboration|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
             },
             {
@@ -154,6 +154,14 @@ export default defineConfig(async () => {
             {
               find: '@docx-editor.dev/i18n',
               replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
+            },
+            {
+              find: '@docx-editor.dev/collaboration-yjs/webrtc',
+              replacement: path.join(monorepoRoot, 'packages/collaboration-yjs/src/webrtc.ts'),
+            },
+            {
+              find: '@docx-editor.dev/collaboration-yjs',
+              replacement: path.join(monorepoRoot, 'packages/collaboration-yjs/src/index.ts'),
             },
           ],
     },

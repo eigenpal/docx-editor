@@ -30,6 +30,13 @@ import {
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
 import type { RelationshipRecord } from './relationships.ts';
+import {
+  recordDeleteContentTypeOverride,
+  recordDeleteXmlPart,
+  recordPutContentTypeOverride,
+  recordPutRelationship,
+  runWithoutJournalCapture,
+} from './canonical-primitive-capture.ts';
 
 /** The OPC content-types part, which every package has exactly one of. */
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
@@ -273,7 +280,9 @@ function upsertContentTypeOverrideChildren(
   }
 
   if (!changed) return { part, changed: false };
-  const replaced = replaceChildren(part, root.id, nextChildren, { deferValidation: true });
+  const replaced = runWithoutJournalCapture(() =>
+    replaceChildren(part, root.id, nextChildren, { deferValidation: true })
+  );
   if (!replaced.ok) return { part, changed: false };
   return { part: replaced.part, changed: true };
 }
@@ -328,11 +337,13 @@ export function withContentTypeOverride(
     contentTypesEntry.storageKey,
     new TextEncoder().encode(serializeOoxmlPart(upserted.part))
   );
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     partBytes,
     contentTypes: { defaults: pkg.contentTypes.defaults, overrides } satisfies ContentTypeIndex,
   });
+  recordPutContentTypeOverride(canonical, contentType);
+  return next;
 }
 
 /**
@@ -482,6 +493,20 @@ export function withoutPart(pkg: OoxmlPackage, partName: string): WithoutPartRes
     if (!pkg.parts.has(relsPartNameFor(owner))) return { pkg, ok: false };
   }
 
+  const result = runWithoutJournalCapture(() =>
+    removePartFromPackage(pkg, canonical.partName, key, relsKey, removedIds)
+  );
+  if (result.ok && result.pkg !== pkg) recordDeleteXmlPart(canonical.partName);
+  return result;
+}
+
+function removePartFromPackage(
+  pkg: OoxmlPackage,
+  partName: string,
+  key: string,
+  relsKey: string,
+  removedIds: ReadonlyMap<string, ReadonlySet<string>>
+): WithoutPartResult {
   const parts = new Map(pkg.parts);
   const partBytes = new Map(pkg.partBytes);
   for (const map of [parts, partBytes] as Map<string, unknown>[]) {
@@ -492,7 +517,7 @@ export function withoutPart(pkg: OoxmlPackage, partName: string): WithoutPartRes
   }
 
   const relationships = new Map(pkg.relationships);
-  relationships.delete(canonical.partName);
+  relationships.delete(partName);
   for (const [owner, ids] of removedIds) {
     const records = relationships.get(owner) ?? [];
     relationships.set(
@@ -527,7 +552,7 @@ export function withoutPart(pkg: OoxmlPackage, partName: string): WithoutPartRes
     relationships,
     externalTargets,
   });
-  return { pkg: withoutContentTypeOverride(next, canonical.partName), ok: true };
+  return { pkg: withoutContentTypeOverride(next, partName), ok: true };
 }
 
 /** Drop a part's Override, which otherwise names a part that is no longer in the package. */
@@ -547,18 +572,22 @@ function withoutContentTypeOverride(pkg: OoxmlPackage, partName: string): OoxmlP
     return named === undefined || partNameKey(named.value) !== overrideKey;
   });
   if (children.length === parsed.part.root.children.length) return pkg;
-  const rewritten = replaceChildren(parsed.part, parsed.part.root.id, children);
+  const rewritten = runWithoutJournalCapture(() =>
+    replaceChildren(parsed.part, parsed.part.root.id, children)
+  );
   if (!rewritten.ok) return pkg;
 
   const overrides = new Map(pkg.contentTypes.overrides);
   overrides.delete(overrideKey);
   const partBytes = new Map(pkg.partBytes);
   partBytes.set(entry.storageKey, new TextEncoder().encode(serializeOoxmlPart(rewritten.part)));
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     partBytes,
     contentTypes: { defaults: pkg.contentTypes.defaults, overrides } satisfies ContentTypeIndex,
   });
+  recordDeleteContentTypeOverride(partName);
+  return next;
 }
 
 /**
@@ -663,6 +692,26 @@ export function withRelationship(
   // a silent identity return is indistinguishable from "no work needed".
   if (!relsPart) return { pkg, relationshipId, ok: false };
 
+  const result = runWithoutJournalCapture(() =>
+    appendRelationship(pkg, ownerPart, type, rawTarget, existing, relationshipId, relsPart)
+  );
+  if (result.ok && result.pkg !== pkg) {
+    const records = result.pkg.relationships.get(ownerPart) ?? [];
+    const record = records.find((entry) => entry.id === result.relationshipId);
+    if (record) recordPutRelationship(ownerPart, record);
+  }
+  return result;
+}
+
+function appendRelationship(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  type: string,
+  rawTarget: string,
+  existing: readonly RelationshipRecord[],
+  relationshipId: string,
+  relsPart: OoxmlPart
+): { readonly pkg: OoxmlPackage; readonly relationshipId: string; readonly ok: boolean } {
   const record = element(
     mintedId(relsPart, relationshipId),
     RELATIONSHIPS_NAMESPACE,

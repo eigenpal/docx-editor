@@ -347,11 +347,19 @@
   font-weight: 600;
 }
 
+.demo-collaboration-status.is-degraded {
+  background: var(--doc-warning-bg);
+}
+
 .demo-collaboration-status__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--doc-success);
+}
+
+.demo-collaboration-status.is-degraded .demo-collaboration-status__dot {
+  background: var(--doc-warning);
 }
 
 .demo-collaboration-status__count {

@@ -38,6 +38,8 @@ export interface CreateYjsCollaborationOptions {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
   readonly documentId: string;
+  /** Unique attachment identity. Omit it to generate a new identity for this session. */
+  readonly sessionId?: string;
   readonly identity: CollaborationIdentity;
   readonly bootstrap: YjsCollaborationBootstrap;
 }
@@ -97,6 +99,14 @@ function validateDocumentId(value: string): string {
     throw new CollaborationSchemaError('invalid-document-id');
   }
   return documentId;
+}
+
+function sessionIdentity(value: string | undefined): string {
+  const sessionId = value?.trim() || globalThis.crypto.randomUUID();
+  if (sessionId.length === 0 || sessionId.length > MAX_IDENTITY_LENGTH) {
+    throw new CollaborationSchemaError('invalid-session-id');
+  }
+  return sessionId;
 }
 
 function updateYText(text: Y.Text, next: string): void {
@@ -185,6 +195,7 @@ function decodeBytes(value: string): Uint8Array {
 
 class Session implements YjsCollaborationSession {
   readonly documentId: string;
+  readonly sessionId: string;
   readonly identity: CollaborationIdentity;
   private currentStatus: CollaborationStatus = 'initializing';
   private statusReason: string | undefined;
@@ -211,10 +222,12 @@ class Session implements YjsCollaborationSession {
     private readonly ydoc: Y.Doc,
     private readonly awareness: Awareness,
     documentId: string,
+    sessionId: string,
     identity: CollaborationIdentity,
     private readonly baseline: OpenedBaseline
   ) {
     this.documentId = documentId;
+    this.sessionId = sessionId;
     this.identity = identity;
     const { root, paragraphs } = schemaOf(ydoc);
     this.baselineSha256 = String(root.get('baselineSha256'));
@@ -569,13 +582,17 @@ class Session implements YjsCollaborationSession {
     this.applyingSharedState = true;
     try {
       this.validateParagraphSet(port);
+      const updates: { paragraphId: string; text: string }[] = [];
       for (const paragraph of port.paragraphs()) {
         const shared = paragraphs.get(paragraph.paragraphId);
         if (!shared) throw new CollaborationSchemaError('paragraph-set-mismatch');
         const next = shared.toString();
         if (next === paragraph.text) continue;
+        updates.push({ paragraphId: paragraph.paragraphId, text: next });
+      }
+      if (updates.length > 0) {
         this.remoteCounter += 1;
-        const result = port.applyParagraphText(paragraph.paragraphId, next, {
+        const result = port.applyParagraphTexts(updates, {
           origin: ORIGIN_IDS.mutationRemote,
           actorId: 'remote',
           operationId: `remote:${this.remoteCounter}`,
@@ -623,9 +640,17 @@ export async function createYjsCollaboration(
   options: CreateYjsCollaborationOptions
 ): Promise<YjsCollaborationRoom> {
   const documentId = validateDocumentId(options.documentId);
+  const sessionId = sessionIdentity(options.sessionId);
   const identity = validateIdentity(options.identity);
   const baseline = await bootstrap(options, documentId, identity);
-  const session = new Session(options.ydoc, options.awareness, documentId, identity, baseline);
+  const session = new Session(
+    options.ydoc,
+    options.awareness,
+    documentId,
+    sessionId,
+    identity,
+    baseline
+  );
   return Object.freeze({
     document: new Uint8Array(baseline.bytes),
     session,

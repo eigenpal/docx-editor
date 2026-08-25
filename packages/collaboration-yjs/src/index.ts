@@ -13,6 +13,10 @@ export {
   type YjsCollaborationSession,
 } from './session.ts';
 export {
+  createDocumentCollaboration,
+  type CreateDocumentCollaborationOptions,
+} from './document-session.ts';
+export {
   MAX_BASELINE_BYTES,
   PROTOCOL_VERSION,
   SCHEMA_VERSION,

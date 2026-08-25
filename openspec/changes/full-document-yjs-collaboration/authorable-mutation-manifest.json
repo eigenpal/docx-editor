@@ -1,0 +1,1442 @@
+{
+  "schema": "docx-editor.authorable-mutation-manifest/v1",
+  "task": "0.5",
+  "change": "full-document-yjs-collaboration",
+  "baseGitCommit": "45cf9fb5350af2ea70443342928376972b00ea79",
+  "baseGitSubject": "feat: add peer-to-peer Yjs collaboration demo",
+  "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
+  "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation at this commit. Working-tree files in this change do not add TreeDocOp kinds.",
+  "counts": {
+    "treeDocOpKinds": 69,
+    "singlePartApply": 57,
+    "headerFooterLifecycle": 5,
+    "noteLifecycle": 5,
+    "treeDocOpUnsupported": 2,
+    "chromeSlots": 55,
+    "chromeCommandWired": 28,
+    "chromeProbe": 6,
+    "acceptedRunProperties": 19,
+    "acceptedParagraphProperties": 12,
+    "insertableContentControlTypes": 5,
+    "imageWrapTargets": 9,
+    "storyScopeKinds": 3,
+    "namedPackageIntents": 16,
+    "unsupportedRows": 16,
+    "activeOpenSpecChanges": 23
+  },
+  "storyScopes": [
+    {
+      "kind": "body",
+      "notes": "Main document part. Default StoryScope."
+    },
+    {
+      "kind": "headerFooter",
+      "requires": "rId",
+      "notes": "One header or footer part resolved through a safe relationship."
+    },
+    {
+      "kind": "notesPart",
+      "requires": "noteKind",
+      "noteKind": ["footnote", "endnote"],
+      "notes": "One notes part store, not one store per note."
+    }
+  ],
+  "storyScopeExcluded": [
+    {
+      "kind": "textbox",
+      "reason": "Layout can host a text-box story. StoryScope has no textbox member. Text boxes are not an editable scope."
+    }
+  ],
+  "applyPathSets": {
+    "singlePart": [
+      "insertText",
+      "deleteText",
+      "setParagraphMarkRevision",
+      "proposeParagraphMerge",
+      "insertCommentMarker",
+      "acceptRevision",
+      "rejectRevision",
+      "acceptAllRevisions",
+      "rejectAllRevisions",
+      "insertTab",
+      "insertHardBreak",
+      "insertPageBreak",
+      "insertPageField",
+      "setListLevel",
+      "setListNumbering",
+      "setParagraphTabStops",
+      "setParagraphMarkProperties",
+      "splitParagraph",
+      "splitParagraphMany",
+      "joinParagraphs",
+      "setRunProperties",
+      "setParagraphProperties",
+      "setSectionProperties",
+      "setSectionMark",
+      "insertHyperlink",
+      "setHyperlinkTarget",
+      "removeHyperlink",
+      "setContentControlValue",
+      "removeContentControl",
+      "insertInlineContentControl",
+      "deleteBlock",
+      "insertTable",
+      "insertTableRow",
+      "deleteTableRow",
+      "insertTableColumn",
+      "deleteTableColumn",
+      "setTableColumnWidths",
+      "setTableRightEdgeWidth",
+      "setTableRowHeight",
+      "setTableCellBorders",
+      "setTableCellFill",
+      "setTableCellVerticalAlignment",
+      "setContentControlProperties",
+      "insertContentControl",
+      "insertDrawing",
+      "replaceDrawingResource",
+      "deleteDrawing",
+      "resizeDrawing",
+      "cropDrawing",
+      "positionDrawing",
+      "setDrawingWrap",
+      "setDrawingMetadata",
+      "setDrawingLocks",
+      "transformDrawing",
+      "insertToc",
+      "replaceTocResult",
+      "rewriteTocPageNumbers"
+    ],
+    "headerFooterLifecycle": [
+      "createHeaderFooter",
+      "deleteHeaderFooter",
+      "linkToPrevious",
+      "unlinkFromPrevious",
+      "setSectionFurnitureOptions"
+    ],
+    "noteLifecycle": [
+      "insertNote",
+      "deleteNote",
+      "convertNote",
+      "convertAllNotes",
+      "setNoteProperties"
+    ],
+    "unsupported": ["addRepeatingSectionItem", "removeRepeatingSectionItem"]
+  },
+  "treeDocOpKinds": [
+    "insertText",
+    "deleteText",
+    "setParagraphMarkRevision",
+    "proposeParagraphMerge",
+    "insertCommentMarker",
+    "acceptRevision",
+    "rejectRevision",
+    "acceptAllRevisions",
+    "rejectAllRevisions",
+    "insertTab",
+    "insertHardBreak",
+    "insertPageBreak",
+    "insertPageField",
+    "setListLevel",
+    "setListNumbering",
+    "setParagraphTabStops",
+    "setParagraphMarkProperties",
+    "splitParagraph",
+    "splitParagraphMany",
+    "joinParagraphs",
+    "setRunProperties",
+    "setParagraphProperties",
+    "setSectionProperties",
+    "setSectionMark",
+    "insertHyperlink",
+    "setHyperlinkTarget",
+    "removeHyperlink",
+    "setContentControlValue",
+    "removeContentControl",
+    "insertInlineContentControl",
+    "addRepeatingSectionItem",
+    "removeRepeatingSectionItem",
+    "deleteBlock",
+    "insertTable",
+    "insertTableRow",
+    "deleteTableRow",
+    "insertTableColumn",
+    "deleteTableColumn",
+    "setTableColumnWidths",
+    "setTableRightEdgeWidth",
+    "setTableRowHeight",
+    "setTableCellBorders",
+    "setTableCellFill",
+    "setTableCellVerticalAlignment",
+    "createHeaderFooter",
+    "deleteHeaderFooter",
+    "linkToPrevious",
+    "unlinkFromPrevious",
+    "setSectionFurnitureOptions",
+    "insertNote",
+    "deleteNote",
+    "convertNote",
+    "convertAllNotes",
+    "setNoteProperties",
+    "setContentControlProperties",
+    "insertContentControl",
+    "insertDrawing",
+    "replaceDrawingResource",
+    "deleteDrawing",
+    "resizeDrawing",
+    "cropDrawing",
+    "positionDrawing",
+    "setDrawingWrap",
+    "setDrawingMetadata",
+    "setDrawingLocks",
+    "transformDrawing",
+    "insertToc",
+    "replaceTocResult",
+    "rewriteTocPageNumbers"
+  ],
+  "authorableVariants": {
+    "insertText": {
+      "revision": [null, "RevisionAttributionInput"],
+      "inside": [null, "contentControlId"],
+      "bias": ["left", "right"]
+    },
+    "deleteText": {
+      "revision": [null, "RevisionAttributionInput"]
+    },
+    "setParagraphMarkRevision": {
+      "kind": ["ins", "del"]
+    },
+    "insertPageField": {
+      "field": ["PAGE", "NUMPAGES", "SECTIONPAGES", "PAGE_X_OF_Y"]
+    },
+    "insertHyperlink": {
+      "target": ["relationshipId", "anchor"]
+    },
+    "setHyperlinkTarget": {
+      "target": ["relationshipId", "anchor"]
+    },
+    "insertContentControl": {
+      "type": ["richText", "plainText", "dropDownList", "comboBox", "date"]
+    },
+    "setContentControlValue": {
+      "value": ["string", "text", "listItem", "checkbox", "date"]
+    },
+    "headerFooterSlot": {
+      "kind": ["header", "footer"],
+      "variant": ["default", "first", "even"]
+    },
+    "noteKind": ["footnote", "endnote"],
+    "setNoteProperties": {
+      "scope": ["document", "section"]
+    },
+    "setDrawingWrap": {
+      "wrap": [
+        "inline",
+        "square",
+        "squareLeft",
+        "squareRight",
+        "tight",
+        "through",
+        "topAndBottom",
+        "behind",
+        "inFront"
+      ]
+    },
+    "transformDrawing": {
+      "action": ["rotateCW", "rotateCCW", "flipH", "flipV"]
+    },
+    "setRunProperties": {
+      "localNames": [
+        "rFonts",
+        "sz",
+        "szCs",
+        "color",
+        "b",
+        "bCs",
+        "i",
+        "iCs",
+        "u",
+        "strike",
+        "dstrike",
+        "highlight",
+        "vertAlign",
+        "position",
+        "caps",
+        "smallCaps",
+        "spacing",
+        "w",
+        "kern"
+      ]
+    },
+    "setParagraphProperties": {
+      "localNames": [
+        "pStyle",
+        "jc",
+        "spacing",
+        "ind",
+        "tabs",
+        "numPr",
+        "keepNext",
+        "keepLines",
+        "widowControl",
+        "pageBreakBefore",
+        "contextualSpacing",
+        "shd"
+      ]
+    },
+    "setTableCellBorders": {
+      "target": ["all", "outside", "inside", "none", "top", "bottom", "left", "right"]
+    }
+  },
+  "operations": [
+    {
+      "kind": "insertText",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertText", "paste", "replaceMatch", "replaceAllMatches"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor", "typed-revisions-and-comments"]
+    },
+    {
+      "kind": "deleteText",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["deleteText", "cut", "replaceMatch", "replaceAllMatches"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor", "typed-revisions-and-comments"]
+    },
+    {
+      "kind": "setParagraphMarkRevision",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setEditingMode"],
+      "packageIntents": [],
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
+      "kind": "proposeParagraphMerge",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setEditingMode"],
+      "packageIntents": [],
+      "openSpec": ["typed-revisions-and-comments", "resolved-view-paragraph-merge"]
+    },
+    {
+      "kind": "insertCommentMarker",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["addComment"],
+      "packageIntents": ["addComment"],
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
+      "kind": "acceptRevision",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["acceptRevision"],
+      "packageIntents": [],
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
+      "kind": "rejectRevision",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["rejectRevision"],
+      "packageIntents": [],
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
+      "kind": "acceptAllRevisions",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["acceptAllRevisions"],
+      "packageIntents": [],
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
+      "kind": "rejectAllRevisions",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["rejectAllRevisions"],
+      "packageIntents": [],
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
+      "kind": "insertTab",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["surface-input"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "insertHardBreak",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertBreak"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "insertPageBreak",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body"],
+      "storyParity": "bodyOnly",
+      "commandExposure": ["insertBreak"],
+      "chromeSlots": ["insert.pageBreak"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "insertPageField",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["headerFooter"],
+      "storyParity": "furnitureOnly",
+      "commandExposure": ["insertPageField"],
+      "chromeSlots": [
+        "insert.pageNumber",
+        "insert.totalPages",
+        "insert.sectionPages",
+        "insert.pageXofY"
+      ],
+      "packageIntents": [],
+      "openSpec": ["scoped-header-footer-editing", "word-like-field-rendering"]
+    },
+    {
+      "kind": "setListLevel",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["adjustIndent"],
+      "chromeSlots": ["list.indent", "list.outdent"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setListNumbering",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["toggleList"],
+      "chromeSlots": ["list.bullet", "list.numbered"],
+      "packageIntents": ["ensureListDefinition", "ensureNumberingLevel"],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setParagraphTabStops",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["removeTabMark"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setParagraphMarkProperties",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["toggleMark", "setMarkAttr", "clearFormatting"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "splitParagraph",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["splitParagraph", "surface-input"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "splitParagraphMany",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["paste"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor", "typed-revisions-and-comments"]
+    },
+    {
+      "kind": "joinParagraphs",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["mergeParagraphs", "surface-input"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setRunProperties",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["toggleMark", "setMarkAttr", "clearFormatting", "applyFormatting"],
+      "chromeSlots": [
+        "text.bold",
+        "text.italic",
+        "text.underline",
+        "text.strike",
+        "script.super",
+        "script.sub",
+        "font.family",
+        "font.size",
+        "text.color",
+        "text.highlight"
+      ],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setParagraphProperties",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": [
+        "setAlignment",
+        "setLineSpacing",
+        "setParagraphSpacing",
+        "setIndent",
+        "setParagraphFormat",
+        "setParagraphStyle",
+        "clearFormatting"
+      ],
+      "chromeSlots": [
+        "alignment.left",
+        "alignment.center",
+        "alignment.right",
+        "alignment.justify",
+        "list.lineSpacing",
+        "styles.style",
+        "paragraph.dialog"
+      ],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setSectionProperties",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setPageSetup"],
+      "chromeSlots": ["file.pageSetup"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setSectionMark",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body"],
+      "storyParity": "bodyOnly",
+      "commandExposure": ["insertBreak"],
+      "chromeSlots": ["insert.sectionBreakNextPage"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "insertHyperlink",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertHyperlink"],
+      "chromeSlots": ["text.link"],
+      "packageIntents": ["withRelationship", "replacePackageShell"],
+      "openSpec": ["typed-hyperlinks-and-bookmarks"]
+    },
+    {
+      "kind": "setHyperlinkTarget",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertHyperlink"],
+      "packageIntents": ["withRelationship"],
+      "openSpec": ["typed-hyperlinks-and-bookmarks"]
+    },
+    {
+      "kind": "removeHyperlink",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["removeHyperlink"],
+      "packageIntents": [],
+      "openSpec": ["typed-hyperlinks-and-bookmarks"]
+    },
+    {
+      "kind": "setContentControlValue",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setContentControlValue"],
+      "packageIntents": [],
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "kind": "removeContentControl",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["removeContentControl"],
+      "chromeSlots": ["contentControl.remove"],
+      "packageIntents": [],
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "kind": "insertInlineContentControl",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertCustomNodeWrite"],
+      "packageIntents": ["insertCustomNodeWrite"],
+      "openSpec": ["pro-review-and-custom-nodes", "custom-node-payload-write-lane"]
+    },
+    {
+      "kind": "addRepeatingSectionItem",
+      "commitPath": "unsupported",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["addRepeatingSectionItem"],
+      "packageIntents": [],
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "kind": "removeRepeatingSectionItem",
+      "commitPath": "unsupported",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["removeRepeatingSectionItem"],
+      "packageIntents": [],
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "kind": "deleteBlock",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["deleteTable", "surface-input"],
+      "packageIntents": [],
+      "openSpec": ["structural-block-deletion"]
+    },
+    {
+      "kind": "insertTable",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertTable"],
+      "chromeSlots": ["table.insert"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "insertTableRow",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertRow"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "deleteTableRow",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["deleteRow"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "insertTableColumn",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertColumn"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "deleteTableColumn",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["deleteColumn"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableColumnWidths",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["commitTableColumnDividerResize"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableRightEdgeWidth",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["commitTableRightEdgeResize"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableRowHeight",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["surface-table"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableCellBorders",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setTableBorders"],
+      "chromeSlots": [
+        "table.borderTarget",
+        "table.borderColor",
+        "table.borderStyle",
+        "table.borderWidth"
+      ],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableCellFill",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setCellFill"],
+      "chromeSlots": ["table.cellFill"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "setTableCellVerticalAlignment",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setTableCellVerticalAlignment"],
+      "packageIntents": [],
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "kind": "createHeaderFooter",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["editHeaderFooter"],
+      "packageIntents": ["withNewPart", "withPart", "withContentTypeOverride", "withRelationship"],
+      "openSpec": ["scoped-header-footer-editing"]
+    },
+    {
+      "kind": "deleteHeaderFooter",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["removeHeaderFooter"],
+      "packageIntents": ["withoutPart", "withPart"],
+      "openSpec": ["scoped-header-footer-editing"]
+    },
+    {
+      "kind": "linkToPrevious",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["linkHeaderFooterToPrevious"],
+      "packageIntents": ["withoutPart", "withPart"],
+      "openSpec": ["scoped-header-footer-editing"]
+    },
+    {
+      "kind": "unlinkFromPrevious",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["unlinkHeaderFooterFromPrevious"],
+      "packageIntents": ["withNewPart", "withPart", "withContentTypeOverride", "withRelationship"],
+      "openSpec": ["scoped-header-footer-editing"]
+    },
+    {
+      "kind": "setSectionFurnitureOptions",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["setHeaderFooterOptions"],
+      "packageIntents": ["withPart"],
+      "openSpec": ["scoped-header-footer-editing"]
+    },
+    {
+      "kind": "insertNote",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": ["body"],
+      "storyParity": "bodyOnly",
+      "commandExposure": ["insertNote"],
+      "chromeSlots": ["insert.footnote", "insert.endnote"],
+      "packageIntents": ["withNewPart", "withPart", "withContentTypeOverride"],
+      "openSpec": ["typed-notes-footnotes-endnotes"]
+    },
+    {
+      "kind": "deleteNote",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["deleteNote"],
+      "packageIntents": ["withPart"],
+      "openSpec": ["typed-notes-footnotes-endnotes"]
+    },
+    {
+      "kind": "convertNote",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["convertNote"],
+      "packageIntents": ["withPart", "withNewPart"],
+      "openSpec": ["typed-notes-footnotes-endnotes"]
+    },
+    {
+      "kind": "convertAllNotes",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["convertAllNotes"],
+      "packageIntents": ["withPart", "withNewPart"],
+      "openSpec": ["typed-notes-footnotes-endnotes"]
+    },
+    {
+      "kind": "setNoteProperties",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["setNoteProperties"],
+      "packageIntents": ["withPart"],
+      "openSpec": ["typed-notes-footnotes-endnotes"]
+    },
+    {
+      "kind": "setContentControlProperties",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["automation"],
+      "packageIntents": [],
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "kind": "insertContentControl",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertContentControl"],
+      "packageIntents": [],
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "kind": "insertDrawing",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["insertImage"],
+      "chromeSlots": ["image.insert"],
+      "packageIntents": [
+        "withBinaryPart",
+        "withEmbeddedImage",
+        "withRelationship",
+        "withContentTypeOverride"
+      ],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "replaceDrawingResource",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["replaceImage"],
+      "packageIntents": ["withBinaryPart", "withRelationship"],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "deleteDrawing",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["deleteImage"],
+      "packageIntents": ["withoutUnreferencedImagePart"],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "resizeDrawing",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["surface-image"],
+      "packageIntents": [],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "cropDrawing",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["surface-image"],
+      "packageIntents": [],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "positionDrawing",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setImagePosition"],
+      "packageIntents": [],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "setDrawingWrap",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setImageWrapType"],
+      "chromeSlots": ["image.wrap"],
+      "packageIntents": [],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "setDrawingMetadata",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["setImageProperties"],
+      "chromeSlots": ["image.properties", "image.altText"],
+      "packageIntents": [],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "setDrawingLocks",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["surface-image"],
+      "packageIntents": [],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "transformDrawing",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["transformImage"],
+      "packageIntents": [],
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "kind": "insertToc",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body"],
+      "storyParity": "bodyOnly",
+      "commandExposure": ["insertToc"],
+      "chromeSlots": ["insert.toc"],
+      "packageIntents": [],
+      "openSpec": ["typed-toc-refresh"]
+    },
+    {
+      "kind": "replaceTocResult",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body"],
+      "storyParity": "bodyOnly",
+      "commandExposure": ["refreshToc"],
+      "packageIntents": [],
+      "openSpec": ["typed-toc-refresh"]
+    },
+    {
+      "kind": "rewriteTocPageNumbers",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body"],
+      "storyParity": "bodyOnly",
+      "commandExposure": ["refreshToc"],
+      "packageIntents": [],
+      "openSpec": ["typed-toc-refresh"]
+    }
+  ],
+  "packageIntents": [
+    {
+      "name": "withPart",
+      "file": "packages/core/src/store/package/ooxml-package.ts",
+      "publicExport": true,
+      "role": "Replace one XML part tree."
+    },
+    {
+      "name": "withNewPart",
+      "file": "packages/core/src/store/package/package-edit.ts",
+      "publicExport": true,
+      "role": "Create an XML part and a content-type override."
+    },
+    {
+      "name": "withoutPart",
+      "file": "packages/core/src/store/package/package-edit.ts",
+      "publicExport": false,
+      "role": "Delete a part, its .rels, override, and inbound relationships."
+    },
+    {
+      "name": "withRelationshipsPartFor",
+      "file": "packages/core/src/store/package/package-edit.ts",
+      "publicExport": false,
+      "role": "Create an empty owner .rels tree."
+    },
+    {
+      "name": "withRelationship",
+      "file": "packages/core/src/store/package/package-edit.ts",
+      "publicExport": true,
+      "role": "Append one Relationship child and update the relationship index."
+    },
+    {
+      "name": "withContentTypeOverride",
+      "file": "packages/core/src/store/package/package-edit.ts",
+      "publicExport": true,
+      "role": "Splice an Override into [Content_Types].xml bytes. A second string-patch copy lives in hf-lifecycle-shell.ts."
+    },
+    {
+      "name": "withBinaryPart",
+      "file": "packages/core/src/store/package/drawing-package-edit.ts",
+      "publicExport": true,
+      "role": "Copy bytes into partBytes and force an Override."
+    },
+    {
+      "name": "withEmbeddedImage",
+      "file": "packages/core/src/store/package/drawing-package-edit.ts",
+      "publicExport": true,
+      "role": "Binary part plus media name, relationship, and docPr id."
+    },
+    {
+      "name": "withoutUnreferencedImagePart",
+      "file": "packages/core/src/store/package/drawing-package-edit.ts",
+      "publicExport": true,
+      "role": "Drop orphan media bytes and Override."
+    },
+    {
+      "name": "replacePackageShell",
+      "file": "packages/core/src/store/store/tree-package-store.ts",
+      "publicExport": true,
+      "role": "Install an arbitrary package snapshot. History restore, hyperlink mint, comment graft, numbering shell. Not a collab authoring primitive."
+    },
+    {
+      "name": "addComment",
+      "file": "packages/core/src/store/store/comment-writes.ts",
+      "publicExport": true,
+      "role": "Create comments.xml / commentsExtended.xml, relationships, and insertCommentMarker ops."
+    },
+    {
+      "name": "setCommentResolved",
+      "file": "packages/core/src/store/store/comment-writes.ts",
+      "publicExport": true,
+      "role": "Rewrite comment resolution in commentsExtended.xml."
+    },
+    {
+      "name": "insertCustomNodeWrite",
+      "file": "packages/core/src/store/store/custom-node-writes.ts",
+      "publicExport": true,
+      "role": "Custom XML item plus props parts, relationships, and an inline content-control anchor."
+    },
+    {
+      "name": "removeCustomNodeWrite",
+      "file": "packages/core/src/store/store/custom-node-writes.ts",
+      "publicExport": true,
+      "role": "Remove a custom XML node and its bound control."
+    },
+    {
+      "name": "ensureListDefinition",
+      "file": "packages/core/src/store/package/numbering-part.ts",
+      "publicExport": false,
+      "role": "Mint numbering.xml children and a content-type patch."
+    },
+    {
+      "name": "ensureNumberingLevel",
+      "file": "packages/core/src/store/package/numbering-part.ts",
+      "publicExport": false,
+      "role": "Ensure a numbering level exists for a list definition."
+    }
+  ],
+  "chromeSlots": {
+    "all": [
+      "history.undo",
+      "history.redo",
+      "zoom.level",
+      "styles.style",
+      "font.family",
+      "font.size",
+      "text.bold",
+      "text.italic",
+      "text.underline",
+      "text.strike",
+      "text.color",
+      "text.highlight",
+      "text.link",
+      "script.super",
+      "script.sub",
+      "alignment.left",
+      "alignment.center",
+      "alignment.right",
+      "alignment.justify",
+      "list.bullet",
+      "list.numbered",
+      "list.outdent",
+      "list.indent",
+      "list.lineSpacing",
+      "format.clear",
+      "review.comments",
+      "review.editingMode",
+      "contentControl.showAll",
+      "contentControl.formFill",
+      "contentControl.inspector",
+      "contentControl.remove",
+      "image.insert",
+      "image.properties",
+      "image.wrap",
+      "image.altText",
+      "table.insert",
+      "table.borderTarget",
+      "table.borderColor",
+      "table.borderStyle",
+      "table.borderWidth",
+      "table.cellFill",
+      "paragraph.dialog",
+      "file.open",
+      "file.save",
+      "file.pageSetup",
+      "insert.footnote",
+      "insert.endnote",
+      "insert.pageNumber",
+      "insert.totalPages",
+      "insert.sectionPages",
+      "insert.pageXofY",
+      "insert.pageBreak",
+      "insert.sectionBreakNextPage",
+      "insert.sectionBreakContinuous",
+      "insert.toc"
+    ],
+    "commandWired": [
+      "history.undo",
+      "history.redo",
+      "text.bold",
+      "text.italic",
+      "text.underline",
+      "text.strike",
+      "script.super",
+      "script.sub",
+      "alignment.left",
+      "alignment.center",
+      "alignment.right",
+      "alignment.justify",
+      "list.bullet",
+      "list.numbered",
+      "list.outdent",
+      "list.indent",
+      "format.clear",
+      "review.comments",
+      "contentControl.remove",
+      "insert.footnote",
+      "insert.endnote",
+      "insert.pageNumber",
+      "insert.totalPages",
+      "insert.sectionPages",
+      "insert.pageXofY",
+      "insert.pageBreak",
+      "insert.sectionBreakNextPage",
+      "insert.toc"
+    ],
+    "probe": [
+      "text.link",
+      "image.insert",
+      "image.properties",
+      "table.insert",
+      "paragraph.dialog",
+      "file.pageSetup"
+    ],
+    "unwiredCommandShaped": [
+      "zoom.level",
+      "contentControl.showAll",
+      "contentControl.formFill",
+      "contentControl.inspector",
+      "insert.sectionBreakContinuous"
+    ],
+    "nonMutating": ["history.undo", "history.redo", "review.comments", "file.open", "file.save"]
+  },
+  "unsupportedRows": [
+    {
+      "id": "repeating-section-item",
+      "kinds": ["addRepeatingSectionItem", "removeRepeatingSectionItem"],
+      "layer": "TreeDocOp",
+      "evidence": "validateTreeOp and applyTreeOp return unsupported.",
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "id": "table-merge-split",
+      "commands": ["mergeCells", "splitCell"],
+      "layer": "EditorCommand",
+      "evidence": "planTableCommand refuses with cell merge/split is not supported yet. No TreeDocOp.",
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "id": "table-properties-header-select",
+      "commands": ["toggleHeaderRow", "selectTableRegion", "setTableProperties"],
+      "layer": "EditorCommand",
+      "evidence": "planTableCommand refuses command '…' is not supported by the tree editor. No TreeDocOp.",
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "id": "column-break",
+      "commands": ["insertBreak"],
+      "variant": "column",
+      "layer": "EditorCommand",
+      "evidence": "classifyCommand supports line, page, and section only.",
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "id": "continuous-section-break",
+      "chromeSlots": ["insert.sectionBreakContinuous"],
+      "layer": "chrome",
+      "evidence": "commandForSlot returns null. No insertBreak kind for a same-page section.",
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "id": "content-control-picture-repeating",
+      "layer": "TreeDocOp variant",
+      "evidence": "INSERTABLE_CONTENT_CONTROL_TYPES omits picture and repeatingSection.",
+      "openSpec": ["typed-content-controls"]
+    },
+    {
+      "id": "xml-part-rename",
+      "layer": "package intent",
+      "evidence": "No rename API. Design D3 keeps rename unsupported.",
+      "openSpec": ["full-document-yjs-collaboration"]
+    },
+    {
+      "id": "vml-watermark",
+      "commands": ["setWatermark"],
+      "layer": "EditorCommand",
+      "evidence": "EditorCommands declares setWatermark. docx-editor-support has no case. No TreeDocOp.",
+      "openSpec": ["typed-vml-watermarks"]
+    },
+    {
+      "id": "tracked-drawing-delete",
+      "kinds": ["deleteDrawing"],
+      "variant": "revision",
+      "layer": "TreeDocOp variant",
+      "evidence": "tree-op-types says suggesting-mode tracked deletion is refused.",
+      "openSpec": ["typed-drawings-and-images", "typed-revisions-and-comments"]
+    },
+    {
+      "id": "doctarget-insert-delete",
+      "commands": ["insertText", "deleteText"],
+      "layer": "EditorCommand",
+      "evidence": "classifyCommand refuses DocTarget addressing. Selection insert and delete remain authorable.",
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "id": "textbox-story-scope",
+      "layer": "StoryScope",
+      "evidence": "StoryScope has body, headerFooter, notesPart. Text boxes are not editable.",
+      "openSpec": ["textbox-story-layout"]
+    },
+    {
+      "id": "bookmark-insert-op",
+      "layer": "TreeDocOp",
+      "evidence": "No insertBookmark kind. TOC ops may create heading bookmarks. Hyperlinks may target an existing anchor.",
+      "openSpec": ["typed-hyperlinks-and-bookmarks", "typed-toc-refresh"]
+    },
+    {
+      "id": "reply-comment",
+      "commands": ["replyComment"],
+      "layer": "DocEdits",
+      "evidence": "Contract exists. No store write named replyComment.",
+      "openSpec": ["typed-revisions-and-comments"]
+    },
+    {
+      "id": "document-variables",
+      "commands": ["setVariable", "applyVariables"],
+      "layer": "DocEdits",
+      "evidence": "Contract exists. No TreeDocOp.",
+      "openSpec": ["typed-ooxml-paragraph-editor"]
+    },
+    {
+      "id": "arbitrary-shape-authoring",
+      "layer": "editor capability",
+      "evidence": "Design D14 names arbitrary shape editing as missing. Drawing ops cover wrap, crop, position, transform, metadata, and resource replace.",
+      "openSpec": ["typed-drawings-and-images"]
+    },
+    {
+      "id": "tracked-move",
+      "layer": "editor capability",
+      "evidence": "Design D14 names tracked moves as missing. No move TreeDocOp.",
+      "openSpec": ["typed-revisions-and-comments"]
+    }
+  ],
+  "openSpecDependencies": [
+    {
+      "name": "typed-ooxml-paragraph-editor",
+      "role": "mutation-owner",
+      "notes": "Active production authority. Text, paragraph, table, section, and list ops."
+    },
+    {
+      "name": "typed-content-controls",
+      "role": "mutation-owner",
+      "notes": "Content-control ops. Repeating-section kinds exist and are unsupported."
+    },
+    {
+      "name": "typed-revisions-and-comments",
+      "role": "mutation-owner",
+      "notes": "Revision, comment-marker, and tracked text variants."
+    },
+    {
+      "name": "typed-notes-footnotes-endnotes",
+      "role": "mutation-owner",
+      "notes": "Note lifecycle ops."
+    },
+    {
+      "name": "scoped-header-footer-editing",
+      "role": "mutation-owner",
+      "notes": "Header and footer lifecycle ops and furniture story scope."
+    },
+    {
+      "name": "typed-drawings-and-images",
+      "role": "mutation-owner",
+      "notes": "Drawing ops and binary package intents."
+    },
+    {
+      "name": "typed-hyperlinks-and-bookmarks",
+      "role": "mutation-owner",
+      "notes": "Hyperlink ops. No standalone bookmark insert op."
+    },
+    {
+      "name": "typed-toc-refresh",
+      "role": "mutation-owner",
+      "notes": "TOC insert and refresh ops."
+    },
+    {
+      "name": "structural-block-deletion",
+      "role": "mutation-owner",
+      "notes": "deleteBlock."
+    },
+    {
+      "name": "custom-node-payload-write-lane",
+      "role": "mutation-owner",
+      "notes": "Custom XML payload writes with insertInlineContentControl."
+    },
+    {
+      "name": "pro-review-and-custom-nodes",
+      "role": "mutation-owner",
+      "notes": "Custom-node contract that insertInlineContentControl serves."
+    },
+    {
+      "name": "typed-vml-watermarks",
+      "role": "mutation-owner-incomplete",
+      "notes": "Watermark command exists. No TreeDocOp and no support case."
+    },
+    {
+      "name": "resolved-view-paragraph-merge",
+      "role": "mutation-owner",
+      "notes": "proposeParagraphMerge companion behaviour."
+    },
+    {
+      "name": "word-like-field-rendering",
+      "role": "mutation-owner",
+      "notes": "Page-field insert vocabulary. Does not add a general field author op."
+    },
+    {
+      "name": "text-field-instruction-rendering",
+      "role": "independent",
+      "notes": "Field display. No new TreeDocOp kind."
+    },
+    {
+      "name": "textbox-story-layout",
+      "role": "mutation-owner-incomplete",
+      "notes": "Text-box layout. Not an editable StoryScope."
+    },
+    {
+      "name": "peer-to-peer-yjs-collaboration-demo",
+      "role": "collaboration-proof",
+      "notes": "Current collab gate admits untracked body insertText and deleteText only."
+    },
+    {
+      "name": "full-document-yjs-collaboration",
+      "role": "this-change",
+      "notes": "This freeze. Must cover every authorable row. Must not add missing editor capabilities."
+    },
+    {
+      "name": "vue-composable-adapter-parity",
+      "role": "independent",
+      "notes": "Adapter chrome. No store mutation kinds."
+    },
+    {
+      "name": "vue-drawing-authoring-parity",
+      "role": "independent",
+      "notes": "Adapter drawing chrome. No new TreeDocOp."
+    },
+    {
+      "name": "fit-to-viewport-zoom",
+      "role": "independent",
+      "notes": "View state. zoom.level is not a document mutation."
+    },
+    {
+      "name": "sub-frame-large-document-typing",
+      "role": "independent",
+      "notes": "Performance. No new mutation kind."
+    },
+    {
+      "name": "document-navigation-pane",
+      "role": "independent",
+      "notes": "Navigation chrome. No new mutation kind."
+    }
+  ],
+  "remainingAmbiguity": [
+    {
+      "id": "replacePackageShell-during-collaboration",
+      "detail": "replacePackageShell is a production write. Design D3 forbids it during active collaboration except bootstrap, materialization, or generation replacement. It is recorded as a package intent, not as an authorable collab row."
+    },
+    {
+      "id": "hyperlink-relationship-hook",
+      "detail": "insertHyperlink story wrap uses applyTreeOp. Package relationship mint historically used replacePackageShell / ensureHyperlinkRelationship rather than withRelationship. Task 3.2 notes that gap."
+    },
+    {
+      "id": "duplicate-withContentTypeOverride",
+      "detail": "package-edit.ts and hf-lifecycle-shell.ts both implement withContentTypeOverride."
+    },
+    {
+      "id": "withoutPart-public-export",
+      "detail": "withoutPart and withRelationshipsPartFor exist in package-edit.ts. The public package barrel exports withNewPart and withRelationship, not withoutPart."
+    },
+    {
+      "id": "command-to-op-composition",
+      "detail": "One EditorCommand can emit several TreeDocOps. Chrome slot mapping is the public exposure, not a 1:1 op table."
+    },
+    {
+      "id": "generic-ooxml",
+      "detail": "Lossless generic nodes round-trip. No generic-node TreeDocOp. Collaboration must still preserve generic children of admitted ops."
+    },
+    {
+      "id": "current-collaboration-gate",
+      "detail": "YjsCollaborationSession.gateOperations admits only untracked body insertText and deleteText. That is the experimental proof subset, not the authorable freeze."
+    },
+    {
+      "id": "reply-comment-and-variables",
+      "detail": "DocEdits lists replyComment, setVariable, and applyVariables. No matching store write was found. They stay unsupported until a write path exists."
+    },
+    {
+      "id": "openspec-non-directory",
+      "detail": "openspec/changes/word-fidelity-review-findings.md sits beside change directories. It is not an OpenSpec change."
+    }
+  ]
+}

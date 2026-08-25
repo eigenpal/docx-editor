@@ -5,6 +5,132 @@
 ```ts
 
 // @public
+export interface CanonicalAttributeName {
+    // (undocumented)
+    readonly localName: string;
+    // (undocumented)
+    readonly namespaceUri: string;
+    // (undocumented)
+    readonly prefix?: string;
+}
+
+// @public
+export interface CanonicalBinaryDescriptor {
+    // (undocumented)
+    readonly digest: string;
+    // (undocumented)
+    readonly mediaType: string;
+    // (undocumented)
+    readonly size: number;
+    // (undocumented)
+    readonly storageKey: string;
+}
+
+// @public
+export interface CanonicalElementNodeDescriptor {
+    // (undocumented)
+    readonly kind: OoxmlElement['kind'];
+    // (undocumented)
+    readonly logicalId: string;
+    // (undocumented)
+    readonly qname: CanonicalAttributeName;
+}
+
+// @public
+export type CanonicalNodeDescriptor = CanonicalTextNodeDescriptor | CanonicalElementNodeDescriptor;
+
+// @public
+export type CanonicalPrimitiveEffect = {
+    readonly kind: 'putNode';
+    readonly descriptor: CanonicalNodeDescriptor;
+} | {
+    readonly kind: 'spliceText';
+    readonly logicalId: string;
+    readonly utf16Start: number;
+    readonly deleteCount: number;
+    readonly insert: string;
+} | {
+    readonly kind: 'setAttribute';
+    readonly logicalId: string;
+    readonly qname: CanonicalAttributeName;
+    readonly value: string | null;
+} | {
+    readonly kind: 'setNamespaceBinding';
+    readonly logicalId: string;
+    readonly prefix: string;
+    readonly uri: string | null;
+} | {
+    readonly kind: 'spliceChildren';
+    readonly parentLogicalId: string;
+    readonly start: number;
+    readonly deleteCount: number;
+    readonly childLogicalIds: readonly string[];
+} | {
+    readonly kind: 'moveNode';
+    readonly logicalId: string;
+    readonly destinationParentLogicalId: string;
+    readonly destinationIndex: number;
+} | {
+    readonly kind: 'putXmlPart';
+    readonly name: string;
+    readonly rootLogicalId: string;
+} | {
+    readonly kind: 'deleteXmlPart';
+    readonly name: string;
+} | {
+    readonly kind: 'putRelationship';
+    readonly owner: string;
+    readonly record: CanonicalRelationshipRecord;
+} | {
+    readonly kind: 'deleteRelationship';
+    readonly owner: string;
+    readonly relationshipId: string;
+} | {
+    readonly kind: 'putContentTypeOverride';
+    readonly partName: string;
+    readonly mediaType: string;
+} | {
+    readonly kind: 'deleteContentTypeOverride';
+    readonly partName: string;
+} | {
+    readonly kind: 'putBinary';
+    readonly descriptor: CanonicalBinaryDescriptor;
+} | {
+    readonly kind: 'deleteBinary';
+    readonly storageKey: string;
+};
+
+// @public
+export interface CanonicalPrimitiveJournal {
+    // (undocumented)
+    readonly effects: readonly CanonicalPrimitiveEffect[];
+}
+
+// @public
+export interface CanonicalRelationshipRecord {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly order: number;
+    // (undocumented)
+    readonly ownerPart: string;
+    // (undocumented)
+    readonly rawTarget: string;
+    // (undocumented)
+    readonly targetMode: 'Internal' | 'External';
+    // (undocumented)
+    readonly type: string;
+}
+
+// @public
+export interface CanonicalTextNodeDescriptor {
+    // (undocumented)
+    readonly kind: 'textValue';
+    // (undocumented)
+    readonly logicalId: string;
+}
+
+// @public
 export type CollaborationApplyResult = {
     readonly ok: true;
     readonly changed: boolean;
@@ -18,7 +144,11 @@ export interface CollaborationDocumentPort {
     // (undocumented)
     applyParagraphText(paragraphId: string, text: string, mutation: CollaborationMutation): CollaborationApplyResult;
     // (undocumented)
+    applyParagraphTexts(updates: readonly CollaborationParagraphTextUpdate[], mutation: CollaborationMutation): CollaborationApplyResult;
+    applyRemotePackage(pkg: OoxmlPackage, mutation: CollaborationMutation): CollaborationApplyResult;
+    // (undocumented)
     readonly documentId: string;
+    observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
     // (undocumented)
     paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
     // (undocumented)
@@ -67,6 +197,14 @@ export interface CollaborationMutation {
 export interface CollaborationParagraph {
     readonly nodeId: string;
     readonly paragraphId: string;
+    readonly text: string;
+}
+
+// @public
+export interface CollaborationParagraphTextUpdate {
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
     readonly text: string;
 }
 
@@ -128,6 +266,7 @@ export interface EditorCollaborationSession {
     redo(): boolean;
     // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
+    readonly sessionId: string;
     // (undocumented)
     setLocalSelection(selection: CollaborationLocalSelection | null): void;
     // (undocumented)

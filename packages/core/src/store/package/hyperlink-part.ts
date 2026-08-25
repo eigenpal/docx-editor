@@ -26,6 +26,8 @@ import {
   isHyperlinkNode,
 } from './hyperlink.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, RELATIONSHIPS_NAMESPACE_URI } from './ooxml-tree.ts';
+import { withRelationshipsPartFor } from './package-edit.ts';
+import { recordPutRelationship, runWithoutJournalCapture } from './canonical-primitive-capture.ts';
 
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
@@ -145,8 +147,10 @@ export function ensureHyperlinkRelationship(
   if (reusable) return { pkg, relationshipId: reusable.id };
 
   const relsName = relsPartNameFor(owner);
-  const existing = pkg.parts.get(relsName);
-  const id = freeRelationshipId(pkg);
+  const prepared = withRelationshipsPartFor(pkg, owner);
+  const existing = prepared.parts.get(relsName);
+  if (!existing) return null;
+  const id = freeRelationshipId(prepared);
   const authored = readOoxmlPart(
     `<Relationships xmlns="${REL}">` +
       `<Relationship Id="${escapeXmlChecked(id, 'relationship id')}"` +
@@ -163,7 +167,7 @@ export function ensureHyperlinkRelationship(
   // this session had just created: it painted inert until the document was saved and
   // reopened.
   const externalTargets = [
-    ...pkg.externalTargets,
+    ...prepared.externalTargets,
     {
       ownerPart: owner,
       id,
@@ -172,28 +176,26 @@ export function ensureHyperlinkRelationship(
       sinkSafe: true,
     },
   ];
-
-  if (!existing) {
-    return {
-      pkg: Object.freeze({
-        ...pkg,
-        parts: new Map([...pkg.parts, [relsName, authored.part]]),
-        externalTargets,
-      }),
-      relationshipId: id,
-    };
-  }
-  const nextId = createNodeIdAllocator(existing);
   const node = authored.part.root.children[0];
   if (!node) return null;
-  const inserted = insertChildren(existing, existing.root.id, existing.root.children.length, [
-    withFreshIds(node, nextId),
-  ]);
+  const inserted = runWithoutJournalCapture(() =>
+    insertChildren(existing, existing.root.id, existing.root.children.length, [
+      withFreshIds(node, createNodeIdAllocator(existing)),
+    ])
+  );
   if (!inserted.ok) return null;
+  recordPutRelationship(owner, {
+    ownerPart: owner,
+    id,
+    type: HYPERLINK_RELATIONSHIP_TYPE,
+    rawTarget: target,
+    targetMode: 'External',
+    order: existing.root.children.length,
+  });
   return {
     pkg: Object.freeze({
-      ...pkg,
-      parts: new Map([...pkg.parts, [relsName, inserted.part]]),
+      ...prepared,
+      parts: new Map([...prepared.parts, [relsName, inserted.part]]),
       externalTargets,
     }),
     relationshipId: id,

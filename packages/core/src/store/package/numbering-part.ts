@@ -18,6 +18,7 @@ import type { OoxmlPackage } from './ooxml-package.ts';
 import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
+import { recordPutContentTypeOverride } from './canonical-primitive-capture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -579,7 +580,7 @@ function withNumberingContentType(pkg: OoxmlPackage): OoxmlPackage | null {
   if (after.children.length !== expected.length) return null;
   if (after.children.some((child, index) => child !== expected[index])) return null;
 
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     partBytes: new Map([...pkg.partBytes, [CONTENT_TYPES_PART, strToU8(patched)]]),
     contentTypes: Object.freeze({
@@ -590,6 +591,8 @@ function withNumberingContentType(pkg: OoxmlPackage): OoxmlPackage | null {
       ]),
     }),
   });
+  recordPutContentTypeOverride(NUMBERING_PART, NUMBERING_CONTENT_TYPE);
+  return next;
 }
 
 interface ContentTypesShape {

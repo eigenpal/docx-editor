@@ -55,19 +55,19 @@
 - [x] 7.2 Implement explicit creator and joiner convenience APIs, cryptographically strong room-link generation, connection/error status, and ownership-correct destroy behavior.
 - [x] 7.3 Build a runnable repository example with create/share-link join, initializing/connection state, presence, remote selection, supported typing, undo/redo, disconnect/reconnect, and DOCX save; make the documented start command and room link work between two independently started localhost instances on separate machines.
 - [x] 7.4 Document that public signaling is proof-only, room IDs are not authorization, WebRTC may require TURN, no durable shared availability exists, and no docx-editor backend is operated.
-- [ ] 7.5 Add isolated-browser end-to-end coverage for creator/joiner bootstrap, supported collaboration, temporary disconnect/reconnect, unsupported controls, and the same URL contract used by two separate localhost machines.
+- [x] 7.5 Add isolated-browser end-to-end coverage for creator/joiner bootstrap, supported collaboration, temporary disconnect/reconnect, unsupported controls, and the same URL contract used by two separate localhost machines.
 
 ## 8. Add the headless AI-agent path
 
 - [x] 8.1 Add a Yjs-neutral `DocxEditor.createCollaborative`-style editor-api factory that borrows a ready collaboration session's automation host and never constructs DOM, layout, paint, ProseMirror, React, or WebRTC.
 - [x] 8.2 Route agent `context.sync()` writes through the same supported-operation gate, existing `expectedRevision` stale-write guard, and tagged Yjs transaction path with stable actor/session/operation identity and typed refusals.
 - [x] 8.3 Add a runnable headless example using a consumer-supplied Yjs-compatible provider to load current paragraphs, insert text in an existing paragraph, observe a browser edit, and save from canonical state.
-- [ ] 8.4 Add tests with independent browser and headless `TreePackageStore`/`Y.Doc` replicas for bidirectional sync, duplicate operation identity, reconnect with stable actor identity, unsupported/oversized agent output, committed-read isolation, and borrowed-resource teardown.
-- [ ] 8.5 Add entry-point graph tests proving the headless path reaches no browser DOM, React, Vue, ProseMirror view, WebRTC, layout, or paint dependency.
+- [x] 8.4 Add tests with independent browser and headless `TreePackageStore`/`Y.Doc` replicas for bidirectional sync, duplicate operation identity, reconnect with stable actor identity, unsupported/oversized agent output, committed-read isolation, and borrowed-resource teardown.
+- [x] 8.5 Add entry-point graph tests proving the headless path reaches no browser DOM, React, Vue, ProseMirror view, WebRTC, layout, or paint dependency.
 
 ## 9. Prove and stop
 
-- [ ] 9.1 Add conformance fixtures that replay the same update sets through local, reordered, duplicated, disconnected, browser, and headless paths and compare canonical authored fingerprints.
+- [x] 9.1 Add conformance fixtures that replay the same update sets through local, reordered, duplicated, disconnected, browser, and headless paths and compare canonical authored fingerprints.
 - [x] 9.2 Prove converged replicas save and reopen with equal supported text, stable paragraph IDs, canonical fingerprints, and semantic digests while preserving fixture unknown OOXML.
 - [ ] 9.3 Run scoped collaboration tests plus typecheck, lint, format, parallel and serial tests, parity, API, i18n, package/build graph, and strict OpenSpec validation.
 - [ ] 9.4 Perform a manual test with two independently started localhost demos on separate machines, plus a local multi-browser and one-headless-agent test, and record reproducible room-link steps, results, and known network limits.

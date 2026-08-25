@@ -123,6 +123,33 @@ describe('provider-neutral Yjs collaboration', () => {
     }
   });
 
+  test('one remote transaction touching several paragraphs publishes one canonical revision', async () => {
+    const state = await replicas();
+    let publications = 0;
+    const unsubscribe = state.leftCanonical.store.subscribe(() => {
+      publications += 1;
+    });
+    try {
+      const before = state.leftCanonical.port.revision();
+      const { paragraphs } = schemaOf(state.leftDoc);
+      state.leftDoc.transact(() => {
+        paragraphs.get('11111111')!.insert(0, '[first]');
+        paragraphs.get('22222222')!.insert(0, '[second]');
+      }, 'remote-batch');
+
+      expect(state.leftCanonical.port.paragraphs().map((paragraph) => paragraph.text)).toEqual([
+        '[first]Alpha paragraph',
+        '[second]Bravo paragraph',
+        'Charlie paragraph',
+      ]);
+      expect(state.leftCanonical.port.revision()).toBe(before + 1);
+      expect(publications).toBe(1);
+    } finally {
+      unsubscribe();
+      state.destroy();
+    }
+  });
+
   test('concurrent same-position insertions converge and actor undo keeps remote work', async () => {
     const state = await replicas();
     try {

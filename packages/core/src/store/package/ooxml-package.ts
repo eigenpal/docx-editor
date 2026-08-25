@@ -51,6 +51,7 @@ import {
   type OoxmlPart,
   type OoxmlReadRejection,
 } from './ooxml-tree.ts';
+import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -508,9 +509,12 @@ export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
 export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage {
   // Copy the map directly instead of spreading through an intermediate entry array; this
   // runs on every staged op of every transaction.
+  const previous = pkg.parts.get(part.name);
   const parts = new Map(pkg.parts);
   parts.set(part.name, part);
-  return Object.freeze({ ...pkg, parts });
+  const next = Object.freeze({ ...pkg, parts });
+  if (!previous || previous.root.id !== part.root.id) captureXmlPartRoot(part);
+  return next;
 }
 
 export {

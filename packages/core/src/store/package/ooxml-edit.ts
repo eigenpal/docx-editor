@@ -24,6 +24,12 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
+import {
+  captureInsertChildren,
+  captureRemoveNode,
+  captureReplaceChildren,
+  captureReplaceNode,
+} from './canonical-primitive-lower.ts';
 
 /** An edited part, or the invariant violations that rejected the edit. */
 export type OoxmlEditResult =
@@ -384,7 +390,10 @@ export function replaceChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  return finish(rebuild(part, nodeId, withChildren(target, children)), options);
+  const knownIds = new Set(nodeIndexFor(part.root).nodes.keys());
+  const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
+  if (result.ok) captureReplaceChildren(target, children, knownIds);
+  return result;
 }
 
 /** Insert children into a node at `index` (clamped to the child list). */
@@ -401,7 +410,10 @@ export function insertChildren(
   }
   const at = Math.max(0, Math.min(index, target.children.length));
   const next = [...target.children.slice(0, at), ...children, ...target.children.slice(at)];
-  return finish(rebuild(part, nodeId, withChildren(target, next)), options);
+  const knownIds = new Set(nodeIndexFor(part.root).nodes.keys());
+  const result = finish(rebuild(part, nodeId, withChildren(target, next)), options);
+  if (result.ok) captureInsertChildren(target, at, children, knownIds);
+  return result;
 }
 
 /** Replace one node with another, keeping its position among its siblings. */
@@ -411,10 +423,15 @@ export function replaceNode(
   replacement: OoxmlNode,
   options?: EditOptions
 ): OoxmlEditResult {
-  if (!hasNode(part, nodeId)) {
+  const previous = findNode(part, nodeId);
+  if (!previous) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  return finish(rebuild(part, nodeId, replacement), options);
+  const knownIds = new Set(nodeIndexFor(part.root).nodes.keys());
+  const parent = parentNodeOf(part, nodeId);
+  const result = finish(rebuild(part, nodeId, replacement), options);
+  if (result.ok) captureReplaceNode(previous, parent, replacement, knownIds);
+  return result;
 }
 
 /** Remove a node and its subtree. */
@@ -423,10 +440,13 @@ export function removeNode(
   nodeId: string,
   options?: EditOptions
 ): OoxmlEditResult {
+  const parent = parentNodeOf(part, nodeId);
   if (!hasNode(part, nodeId)) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  return finish(rebuild(part, nodeId, null), options);
+  const result = finish(rebuild(part, nodeId, null), options);
+  if (result.ok && parent) captureRemoveNode(parent, nodeId);
+  return result;
 }
 
 /**

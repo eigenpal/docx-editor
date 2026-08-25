@@ -3323,6 +3323,16 @@ export type RelationshipTargetResolver = (relationshipId: string) => {
 export function relsPartNameFor(partName: string): string;
 
 // @public
+export interface RemotePackageAttribution {
+    // (undocumented)
+    readonly actorId?: string;
+    // (undocumented)
+    readonly operationId?: string;
+    // (undocumented)
+    readonly origin: string;
+}
+
+// @public
 export function removeCustomNodeWrite(store: TreeDocumentStore, controlNodeId: string): CustomNodeWriteResult;
 
 // @public
@@ -4662,6 +4672,7 @@ export class TreePackageStore {
     // (undocumented)
     endComposition(): void;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
+    installAuthoritativePackageSnapshot(snapshot: OoxmlPackage): void;
     installPackageSnapshot(snapshot: OoxmlPackage): void;
     // (undocumented)
     get lastModelChange(): TreeModelChange | null;
@@ -4672,6 +4683,7 @@ export class TreePackageStore {
     get packageRevision(): number;
     partFor(scope: StoryScope): OoxmlPart | null;
     promoteStoryTransactionToPackageUnit(beforePackage: OoxmlPackage, store: TreeDocumentStore, checkpoint: TreeDocumentCheckpoint, beforeDepth: number): TreeModelChange;
+    publishRemotePackage(pkg: OoxmlPackage, attribution: RemotePackageAttribution): PackageTransactResult;
     publishStoryWrite(change: TreeModelChange | null): TreeModelChange | null;
     // (undocumented)
     redo(): TreeModelChange | null;

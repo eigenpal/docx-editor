@@ -112,6 +112,7 @@ import {
   createCollaborationDocumentPort,
   type CollaborationDocumentPort,
 } from '../collaboration/index.ts';
+import { normalizeCollaborationTextPackage } from '../collaboration/document-port.ts';
 
 // The session view contract (TreeApplyResult + TreeDocxSessionView) lives in
 // tree-session-contract.ts; re-exported so every existing import through this module stays
@@ -709,6 +710,10 @@ export function openTreeSession(
           }
           return { committed: true, rejected: false, opCount: 1 };
         }
+        const partName =
+          options.recordsHistory === false && options.actorId && options.operationId
+            ? packageStore.partFor(scope)?.name
+            : undefined;
         const result = packageStore.transact(
           scope,
           (ctx) => {
@@ -720,6 +725,9 @@ export function openTreeSession(
             // tree the undo had discarded — offsets past the end of a paragraph it re-shortened.
             if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
             for (const op of ops) ctx.apply(op);
+            if (partName) {
+              ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));
+            }
           },
           options
         );

@@ -9,11 +9,12 @@ import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';
 import type { CollaborationIdentity } from '@docx-editor.dev/core/collaboration';
-import {
-  createYjsCollaboration,
-  type YjsCollaborationBootstrap,
-  type YjsCollaborationRoom,
-  type YjsCollaborationSession,
+import { createDocumentCollaboration } from './document-session.ts';
+import { installChunkedFraming, type ChunkablePeer } from './webrtc-chunking.ts';
+import type {
+  YjsCollaborationBootstrap,
+  YjsCollaborationRoom,
+  YjsCollaborationSession,
 } from './session.ts';
 
 /** Default public signaling endpoint for the local proof. @public */
@@ -51,6 +52,33 @@ export function validateRoomId(value: string): string {
   return roomId;
 }
 
+/**
+ * Frame oversize messages on every peer of one provider.
+ *
+ * A document sync exceeds the single-message ceiling of a data channel, so each
+ * `simple-peer` instance needs the chunking shim before its channel opens. The
+ * room is created inside a `key` continuation registered by the provider
+ * constructor, so a continuation registered here runs once the room exists.
+ * Wrapping `webrtcConns.set` then catches every connection at creation, which is
+ * always before its channel carries data.
+ */
+const installChunkedTransport = (provider: WebrtcProvider): void => {
+  void Promise.resolve(provider.key).then(() => {
+    const room = provider.room;
+    if (!room) return;
+    const connections = room.webrtcConns;
+    const attach = (connection: { readonly peer: unknown }): void => {
+      installChunkedFraming(connection.peer as ChunkablePeer);
+    };
+    for (const connection of connections.values()) attach(connection);
+    const originalSet = connections.set.bind(connections);
+    connections.set = (peerId, connection) => {
+      attach(connection);
+      return originalSet(peerId, connection);
+    };
+  });
+};
+
 /** Create one owned `y-webrtc` room and provider-neutral collaboration session. @public */
 export async function createWebrtcCollaboration(
   options: CreateWebrtcCollaborationOptions
@@ -59,8 +87,8 @@ export async function createWebrtcCollaboration(
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   let provider: WebrtcProvider | null = null;
-  const connectProvider = (): WebrtcProvider =>
-    new WebrtcProvider(roomId, ydoc, {
+  const connectProvider = (): WebrtcProvider => {
+    const created = new WebrtcProvider(roomId, ydoc, {
       awareness,
       signaling: [...(options.signaling ?? DEFAULT_SIGNALING_ENDPOINTS)],
       password: options.password ?? roomId,
@@ -74,10 +102,13 @@ export async function createWebrtcCollaboration(
           }
         : {}),
     });
+    installChunkedTransport(created);
+    return created;
+  };
   let room: YjsCollaborationRoom;
   try {
     if (options.bootstrap.kind === 'join') provider = connectProvider();
-    room = await createYjsCollaboration({
+    room = await createDocumentCollaboration({
       ydoc,
       awareness,
       documentId: roomId,

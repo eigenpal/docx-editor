@@ -119,19 +119,19 @@ Alternative considered: expose `Y.Doc` directly on `DocxEditor`. Rejected becaus
 The proof schema is versioned and private to the optional package:
 
 ```text
-root: Y.Map
-  meta: Y.Map
+docx-collaboration-v1: Y.Map
     protocolVersion
     schemaVersion
     documentId
     baselineSha256
     baselineByteLength
     initializedBy
-  baseline: Uint8Array
-  bodyParagraphs: Y.Map<UppercaseW14ParaId, Y.Text>
+    baseline
+    initialized
+docx-body-paragraphs-v1: Y.Map<UppercaseW14ParaId, Y.Text>
 ```
 
-The creator performs one transaction that records immutable metadata, baseline bytes, and initial body paragraph text. A joiner never seeds. `w14:paraId`, not session-local structural IDs, keys shared paragraphs. Every replica maintains a local map from `w14:paraId` to the current canonical paragraph node.
+The creator performs one transaction that records flat immutable metadata, baseline bytes, initialization state, and initial body paragraph text in the two named maps. A joiner never seeds. `w14:paraId`, not session-local structural IDs, keys shared paragraphs. Every replica maintains a local map from `w14:paraId` to the current canonical paragraph node.
 
 Only existing body paragraphs are admitted. The session refuses operations that add, remove, split, join, reorder, or target an unidentified/non-body paragraph. This avoids pretending the first schema answers structural identity. A later change may replace the per-paragraph representation with a long-lived story sequence and boundary records; this proof does not pre-decide it.
 
@@ -223,7 +223,7 @@ const room = await createYjsCollaboration({
   bootstrap: { kind: 'join' },
 });
 
-const runtime = DocxEditor.createCollaborative(room.session, {
+const runtime = await DocxEditor.createCollaborative(room.document, room.session, {
   author: 'Contract review agent',
 });
 

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useDocxEditor } from '@docx-editor.dev/react';
-import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
+import type {
+  CollaborationParticipant,
+  CollaborationStatus,
+} from '@docx-editor.dev/core/collaboration';
 import { createT, en } from '@docx-editor.dev/i18n';
 import {
   createCollaborationRoomId,
@@ -33,6 +36,7 @@ const strings = {
   joinDescription: t('collaborationDemo.joinDescription'),
   inviteLink: t('collaborationDemo.inviteLink'),
   connected: t('collaborationDemo.connected'),
+  reconnecting: t('collaborationDemo.reconnecting'),
   person: t('collaborationDemo.person'),
   people: t('collaborationDemo.people'),
   you: t('collaborationDemo.you'),
@@ -137,6 +141,7 @@ export function CollaborationControl({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [participants, setParticipants] = useState<readonly CollaborationParticipant[]>([]);
+  const [status, setStatus] = useState<CollaborationStatus>('initializing');
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -147,6 +152,18 @@ export function CollaborationControl({
     const update = () => setParticipants(room.session.participants());
     update();
     return room.session.subscribeParticipants(update);
+  }, [room]);
+
+  // The room object exists for as long as the transport does, so it cannot report health.
+  // Reading the session keeps the dialog from claiming "Connected" over a session that
+  // refuses every write.
+  useEffect(() => {
+    if (!room) {
+      setStatus('initializing');
+      return;
+    }
+    setStatus(room.session.status());
+    return room.session.subscribeStatus((next) => setStatus(next));
   }, [room]);
 
   useEffect(() => {
@@ -275,9 +292,13 @@ export function CollaborationControl({
 
                 {room && mode === 'connected' ? (
                   <div className="demo-collaboration-body">
-                    <div className="demo-collaboration-status">
+                    <div
+                      className={`demo-collaboration-status${
+                        status === 'ready' ? '' : ' is-degraded'
+                      }`}
+                    >
                       <span className="demo-collaboration-status__dot" />
-                      <span>{strings.connected}</span>
+                      <span>{status === 'ready' ? strings.connected : strings.reconnecting}</span>
                       <span className="demo-collaboration-status__count">
                         {participants.length}{' '}
                         {participants.length === 1 ? strings.person : strings.people}

@@ -317,6 +317,7 @@ export const assertValidatedResolvedFont: (font: unknown) => asserts font is Res
 import { sha256FontBytes } from '../store/package/sha256.ts';
 export { sha256FontBytes };
 
+
 const readUint16 = (bytes: Uint8Array, offset: number): number =>
   (bytes[offset]! << 8) | bytes[offset + 1]!;
 const readUint32 = (bytes: Uint8Array, offset: number): number =>

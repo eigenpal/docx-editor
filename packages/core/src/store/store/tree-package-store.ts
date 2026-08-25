@@ -48,6 +48,9 @@ import {
   deleteBlockMayStrandNote,
   deleteMayEmptyCommentRange,
   deleteMayStrandNote,
+  FOOTER_REL_TYPE,
+  HEADER_REL_TYPE,
+  locateHeaderFooterPart,
 } from './tree-package-gates.ts';
 import { cascadeEmptiedComments } from '../package/comment-lifecycle.ts';
 import {
@@ -78,6 +81,14 @@ import {
   type FragmentPasteResult,
 } from './tree-package-fragment.ts';
 import type { ImageDecodePort, SupportedImageMime } from '../package/image-resources.ts';
+import {
+  packageTransactionPublished,
+  runObservedStoreTransaction,
+} from '../package/canonical-primitive-capture.ts';
+import {
+  publishRemoteCanonicalPackage,
+  type RemotePackageAttribution,
+} from './tree-package-remote.ts';
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
 
@@ -361,13 +372,20 @@ export class TreePackageStore {
     return resolved.ok ? resolved.store.revision : null;
   }
 
-  /**
-   * Commit ops against one story as ONE transaction / undo unit / ModelChange.
-   * Header/footer and notes-part commits publish `impact: 'global'`.
-   * Deleting a `noteReference` via `deleteText` or a block subtree via `deleteBlock`
-   * cascades the note body in the same package undo unit.
-   */
+  /** One story transaction / undo unit / ModelChange. */
   transact(
+    scope: StoryScope,
+    build: (ctx: TransactionContext) => void,
+    options: Omit<TransactOptions, 'story' | 'minimumImpact'> = {}
+  ): PackageTransactResult {
+    return runObservedStoreTransaction(
+      this,
+      () => this.commitStoryTransaction(scope, build, options),
+      packageTransactionPublished
+    );
+  }
+
+  private commitStoryTransaction(
     scope: StoryScope,
     build: (ctx: TransactionContext) => void,
     options: Omit<TransactOptions, 'story' | 'minimumImpact'> = {}
@@ -647,11 +665,18 @@ export class TreePackageStore {
     store?.cancelComposition();
   }
 
-  /**
-   * Commit one furniture or note lifecycle op as a single ModelChange / undo unit that
-   * restores the entire package atomically (parts, rels, content-types, settings).
-   */
+  /** One furniture or note lifecycle op as a single ModelChange / undo unit. */
   applyLifecycleOp(
+    op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
+  ): PackageTransactResult {
+    return runObservedStoreTransaction(
+      this,
+      () => this.commitLifecycleOp(op),
+      packageTransactionPublished
+    );
+  }
+
+  private commitLifecycleOp(
     op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
   ): PackageTransactResult {
     const before = this.currentPackage();
@@ -952,6 +977,27 @@ export class TreePackageStore {
   }
 
   /**
+   * Install a package this replica did not author, verbatim.
+   *
+   * The shell merge below exists for LOCAL history, where a snapshot can predate a
+   * numbering or hyperlink write this replica made. A remotely materialized package is the
+   * opposite case: every replica already agreed on the whole package, `numbering.xml`
+   * included, so merging this replica's shell back over it would revert the remote list or
+   * link change here and leave the two replicas permanently different.
+   */
+  installAuthoritativePackageSnapshot(snapshot: OoxmlPackage): void {
+    this.installPackageSnapshotInternal(snapshot, false);
+  }
+
+  /** Publish one remotely materialized canonical package as one revision. */
+  publishRemotePackage(
+    pkg: OoxmlPackage,
+    attribution: RemotePackageAttribution
+  ): PackageTransactResult {
+    return publishRemoteCanonicalPackage(this, pkg, attribution);
+  }
+
+  /**
    * Replace the package shell while preserving opened stores. Used when numbering /
    * content-types mutate the package outside story trees.
    */
@@ -981,9 +1027,11 @@ export class TreePackageStore {
    * park when the part is temporarily absent and are pruned once history can no longer restore
    * the owner. Lifecycle-cloned owned relationships are not shell-minted and GC with the part.
    */
-  private installPackageSnapshotInternal(snapshot: OoxmlPackage): void {
+  private installPackageSnapshotInternal(snapshot: OoxmlPackage, mergeLocalShell = true): void {
     // Capture live shell before replacing — snapshot may predate numbering/hyperlink writes.
-    const merged = mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks);
+    const merged = mergeLocalShell
+      ? mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks)
+      : snapshot;
     const main = merged.parts.get(merged.mainDocumentPart);
     if (!main) return;
     this.body.replacePart(main);

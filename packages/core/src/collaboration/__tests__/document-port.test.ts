@@ -78,4 +78,77 @@ describe('canonical collaboration document port', () => {
     expect(store.undo()).not.toBeNull();
     expect(port.paragraphs()[0]!.text).toBe('Remote text');
   });
+
+  test('publishes multi-paragraph updates atomically and replays acknowledged output as a no-op', () => {
+    const { store, port } = open(['11111111', '22222222']);
+    let publications = 0;
+    store.subscribe(() => {
+      publications += 1;
+    });
+    const mutation = {
+      origin: ORIGIN_IDS.mutationRemote,
+      actorId: 'bob',
+      operationId: 'bob-batch-1',
+    };
+    const updates = [
+      { paragraphId: '11111111', text: 'First remote text' },
+      { paragraphId: '22222222', text: 'Second remote text' },
+    ];
+
+    expect(port.applyParagraphTexts(updates, mutation)).toEqual({ ok: true, changed: true });
+    expect(port.paragraphs().map((paragraph) => paragraph.text)).toEqual([
+      'First remote text',
+      'Second remote text',
+    ]);
+    expect(publications).toBe(1);
+    const revision = port.revision();
+
+    expect(port.applyParagraphTexts(updates, mutation)).toEqual({ ok: true, changed: false });
+    expect(port.revision()).toBe(revision);
+    expect(publications).toBe(1);
+  });
+
+  test('applyRemotePackage publishes one revision and emits no primitive journal', () => {
+    const source = open(['11111111']);
+    expect(
+      source.port.applyParagraphText('11111111', 'Remote package text', {
+        origin: ORIGIN_IDS.mutationRemote,
+        actorId: 'source',
+        operationId: 'source-1',
+      })
+    ).toEqual({ ok: true, changed: true });
+    const { store, port } = open(['11111111']);
+    const journals: unknown[] = [];
+    port.observePrimitiveJournal((journal) => journals.push(journal));
+    let publications = 0;
+    port.subscribe(() => {
+      publications += 1;
+    });
+    const mutation = {
+      origin: ORIGIN_IDS.mutationRemote,
+      actorId: 'bob',
+      operationId: 'bob-package-1',
+    };
+    expect(port.applyRemotePackage(source.store.currentPackage(), mutation)).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(port.paragraphs()[0]!.text).toBe('Remote package text');
+    expect(publications).toBe(1);
+    expect(journals).toHaveLength(0);
+    expect(store.canUndo).toBe(false);
+    expect(port.applyRemotePackage(source.store.currentPackage(), mutation)).toEqual({
+      ok: true,
+      changed: false,
+    });
+    expect(publications).toBe(1);
+    expect(
+      port.applyParagraphText('11111111', 'Local follow-up', {
+        origin: ORIGIN_IDS.mutationRemote,
+        actorId: 'bob',
+        operationId: 'bob-text-1',
+      })
+    ).toEqual({ ok: true, changed: true });
+    expect(port.paragraphs()[0]!.text).toBe('Local follow-up');
+  });
 });

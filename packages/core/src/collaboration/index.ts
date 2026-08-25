@@ -11,6 +11,8 @@
 import type { TreeModelChange } from '../store/store/tree-store.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import type { CanonicalPrimitiveJournal } from './primitive-journal.ts';
 
 /** Lifecycle state of one collaboration replica. @public */
 export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
@@ -45,6 +47,12 @@ export interface CollaborationMutation {
   readonly operationId: string;
 }
 
+/** One paragraph text value in an atomic collaboration publication. @public */
+export interface CollaborationParagraphTextUpdate {
+  readonly paragraphId: string;
+  readonly text: string;
+}
+
 /** Result of replacing one supported paragraph's canonical text. @public */
 export type CollaborationApplyResult =
   | { readonly ok: true; readonly changed: boolean }
@@ -67,8 +75,25 @@ export interface CollaborationDocumentPort {
     text: string,
     mutation: CollaborationMutation
   ): CollaborationApplyResult;
+  applyParagraphTexts(
+    updates: readonly CollaborationParagraphTextUpdate[],
+    mutation: CollaborationMutation
+  ): CollaborationApplyResult;
+  /**
+   * Publish one remotely materialized canonical package as one revision.
+   *
+   * The package is frozen canonical state. This port exposes no mutable store or CRDT.
+   */
+  applyRemotePackage(pkg: OoxmlPackage, mutation: CollaborationMutation): CollaborationApplyResult;
   revision(): number;
   subscribe(listener: (change: TreeModelChange) => void): () => void;
+  /**
+   * Observe one settled primitive journal per committed canonical transaction.
+   *
+   * Disabled observation allocates no journal. This is the collaboration write seam;
+   * adapters never write a CRDT through this port.
+   */
+  observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
   save(): Uint8Array;
 }
 
@@ -100,6 +125,8 @@ export interface CollaborationLocalSelection {
  */
 export interface EditorCollaborationSession {
   readonly documentId: string;
+  /** Unique identity for this attachment lifetime. It prevents operation ID reuse after reconnect. */
+  readonly sessionId: string;
   readonly identity: CollaborationIdentity;
   status(): CollaborationStatus;
   subscribeStatus(listener: (status: CollaborationStatus, reason?: string) => void): () => void;
@@ -125,3 +152,13 @@ export {
   createCollaborationDocumentPort,
   type CreateCollaborationDocumentPortOptions,
 } from './document-port.ts';
+export type {
+  CanonicalAttributeName,
+  CanonicalBinaryDescriptor,
+  CanonicalElementNodeDescriptor,
+  CanonicalNodeDescriptor,
+  CanonicalPrimitiveEffect,
+  CanonicalPrimitiveJournal,
+  CanonicalRelationshipRecord,
+  CanonicalTextNodeDescriptor,
+} from './primitive-journal.ts';

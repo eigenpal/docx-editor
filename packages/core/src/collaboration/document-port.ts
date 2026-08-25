@@ -6,6 +6,7 @@ import {
   writeOoxmlPackage,
   type OoxmlElement,
   type OoxmlNode,
+  type OoxmlPackage,
   type OoxmlPart,
 } from '../store/package/index.ts';
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
@@ -17,7 +18,9 @@ import type {
   CollaborationDocumentPort,
   CollaborationMutation,
   CollaborationParagraph,
+  CollaborationParagraphTextUpdate,
 } from './index.ts';
+import { observeCanonicalPrimitiveJournal } from './primitive-journal.ts';
 import type { TreeModelChange } from '../store/store/tree-store.ts';
 
 const BODY: StoryScope = Object.freeze({ kind: 'body' });
@@ -170,6 +173,34 @@ function normalizeParagraphTextNodes(node: OoxmlNode): OoxmlNode {
   return changed ? ({ ...node, children } as OoxmlNode) : node;
 }
 
+/** Normalize supported text edits inside their existing canonical transaction. */
+export function normalizeCollaborationTextPackage(
+  pkg: OoxmlPackage,
+  partName: string,
+  ops: readonly TreeDocOp[]
+): OoxmlPackage {
+  let part = pkg.parts.get(partName);
+  if (!part) return pkg;
+  let changed = false;
+  const paragraphIds = new Set<string>();
+  for (const op of ops) {
+    if ((op.op === 'insertText' || op.op === 'deleteText') && !op.revision) {
+      paragraphIds.add(op.paragraphId);
+    }
+  }
+  for (const paragraphId of paragraphIds) {
+    const paragraph = findNode(part, paragraphId);
+    if (!paragraph || paragraph.kind === 'textValue') continue;
+    const normalized = normalizeParagraphTextNodes(paragraph);
+    if (normalized === paragraph) continue;
+    const edited = replaceNode(part, paragraphId, normalized, { deferValidation: true });
+    if (!edited.ok) continue;
+    part = edited.part;
+    changed = true;
+  }
+  return changed ? withPart(pkg, part) : pkg;
+}
+
 /** Create the narrow collaboration view over one canonical package store. @public */
 export function createCollaborationDocumentPort(
   store: TreePackageStore,
@@ -183,6 +214,54 @@ export function createCollaborationDocumentPort(
   const paragraphs = (): readonly CollaborationParagraph[] =>
     paragraphSnapshot(store.bodyStore().part);
 
+  const applyParagraphTexts = (
+    updates: readonly CollaborationParagraphTextUpdate[],
+    mutation: CollaborationMutation
+  ): CollaborationApplyResult => {
+    if (updates.length === 0) return { ok: true, changed: false };
+    const snapshot = paragraphs();
+    const seen = new Set<string>();
+    const ops: TreeDocOp[] = [];
+    for (const update of updates) {
+      if (
+        typeof update.text !== 'string' ||
+        update.text.length > MAX_COLLABORATIVE_PARAGRAPH_TEXT
+      ) {
+        return { ok: false as const, reason: 'collaboration-text-limit' };
+      }
+      const paragraphId = update.paragraphId.toUpperCase();
+      if (seen.has(paragraphId)) {
+        return { ok: false as const, reason: 'duplicate-paragraph-id' };
+      }
+      seen.add(paragraphId);
+      const candidates = snapshot.filter((paragraph) => paragraph.paragraphId === paragraphId);
+      if (candidates.length !== 1) {
+        return { ok: false as const, reason: 'unknown-paragraph-id' };
+      }
+      const paragraph = candidates[0]!;
+      ops.push(...replacementOps(paragraph.nodeId, paragraph.text, update.text));
+    }
+    if (ops.length === 0) return { ok: true, changed: false };
+    const result = store.transact(
+      BODY,
+      (context) => {
+        for (const op of ops) context.apply(op);
+        context.applyPackage((pkg) =>
+          normalizeCollaborationTextPackage(pkg, pkg.mainDocumentPart, ops)
+        );
+      },
+      {
+        origin: mutation.origin,
+        actorId: mutation.actorId,
+        operationId: mutation.operationId,
+        recordsHistory: false,
+      }
+    );
+    return result.ok
+      ? { ok: true as const, changed: result.change !== null }
+      : { ok: false as const, reason: result.detail ?? result.reason };
+  };
+
   const port: CollaborationDocumentPort = {
     documentId,
     paragraphs,
@@ -194,46 +273,21 @@ export function createCollaborationDocumentPort(
       text: string,
       mutation: CollaborationMutation
     ): CollaborationApplyResult {
-      if (typeof text !== 'string' || text.length > MAX_COLLABORATIVE_PARAGRAPH_TEXT) {
-        return { ok: false as const, reason: 'collaboration-text-limit' };
-      }
-      const normalized = paragraphId.toUpperCase();
-      const candidates = paragraphs().filter((paragraph) => paragraph.paragraphId === normalized);
-      if (candidates.length !== 1) {
-        return { ok: false as const, reason: 'unknown-paragraph-id' };
-      }
-      const paragraph = candidates[0]!;
-      const ops = replacementOps(paragraph.nodeId, paragraph.text, text);
-      const result = store.transact(
-        BODY,
-        (context) => {
-          for (const op of ops) context.apply(op);
-          context.applyPackage((pkg) => {
-            const part = pkg.parts.get(pkg.mainDocumentPart);
-            if (!part) return pkg;
-            const nextParagraph = findNode(part, paragraph.nodeId);
-            if (!nextParagraph || nextParagraph.kind === 'textValue') return pkg;
-            const normalized = normalizeParagraphTextNodes(nextParagraph);
-            if (normalized === nextParagraph) return pkg;
-            const edited = replaceNode(part, paragraph.nodeId, normalized, {
-              deferValidation: true,
-            });
-            return edited.ok ? withPart(pkg, edited.part) : pkg;
-          });
-        },
-        {
-          origin: mutation.origin,
-          actorId: mutation.actorId,
-          operationId: mutation.operationId,
-          recordsHistory: false,
-        }
-      );
+      return applyParagraphTexts([{ paragraphId, text }], mutation);
+    },
+    applyParagraphTexts,
+    applyRemotePackage(
+      pkg: OoxmlPackage,
+      mutation: CollaborationMutation
+    ): CollaborationApplyResult {
+      const result = store.publishRemotePackage(pkg, mutation);
       return result.ok
         ? { ok: true as const, changed: result.change !== null }
         : { ok: false as const, reason: result.detail ?? result.reason };
     },
     revision: () => store.packageRevision,
     subscribe: (listener: (change: TreeModelChange) => void) => store.subscribe(listener),
+    observePrimitiveJournal: (listener) => observeCanonicalPrimitiveJournal(store, listener),
     save: () => writeOoxmlPackage(store.currentPackage()),
   };
   return Object.freeze(port);

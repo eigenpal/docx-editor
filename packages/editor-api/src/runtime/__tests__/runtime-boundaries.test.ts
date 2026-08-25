@@ -30,6 +30,7 @@ const RUNTIME = join(import.meta.dir, '..');
 const PACKAGE_SRC = join(RUNTIME, '..');
 /** The object model: a sibling directory, the same shipped lane, the same rules. */
 const MODEL = join(PACKAGE_SRC, 'model');
+const CORE_SRC = join(PACKAGE_SRC, '..', '..', 'core', 'src');
 /** The package's two published entry points, which live at the root of `src`. */
 const ENTRIES = [join(PACKAGE_SRC, 'index.ts'), join(PACKAGE_SRC, 'browser.ts')];
 const LANE = [RUNTIME, MODEL];
@@ -80,6 +81,36 @@ function bareSpecifiers(files: readonly string[]): string[] {
     }
   }
   return [...bare].sort();
+}
+
+function sourceTarget(file: string, specifier: string): string | null {
+  const mapped =
+    specifier === '@docx-editor.dev/core/automation'
+      ? join(CORE_SRC, 'automation', 'index.ts')
+      : specifier === '@docx-editor.dev/core/collaboration'
+        ? join(CORE_SRC, 'collaboration', 'index.ts')
+        : null;
+  if (mapped) return mapped;
+  if (!specifier.startsWith('.')) return null;
+  const unresolved = resolve(dirname(file), specifier);
+  for (const candidate of [unresolved, `${unresolved}.ts`, join(unresolved, 'index.ts')]) {
+    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+  }
+  return null;
+}
+
+function reachableSources(entry: string): string[] {
+  const seen = new Set<string>();
+  const walk = (file: string): void => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    for (const specifier of specifiersOf(file)) {
+      const target = sourceTarget(file, specifier);
+      if (target) walk(target);
+    }
+  };
+  walk(entry);
+  return [...seen];
 }
 
 /** Source with comments removed, so prose about documents is not read as a DOM reference. */
@@ -150,6 +181,27 @@ describe('what the runtime imports', () => {
     expect(reached).toContain(join('runtime', 'server.ts'));
     expect(reached).not.toContain(join('runtime', 'browser.ts'));
     expect(reached).not.toContain('browser.ts');
+  });
+
+  test('the headless collaboration graph reaches no browser or rendering lane', () => {
+    const reached = reachableSources(join(PACKAGE_SRC, 'index.ts')).map((file) =>
+      relative(join(PACKAGE_SRC, '..'), file)
+    );
+    const forbidden = reached.filter((file) =>
+      [
+        `${join('core', 'src', 'editor')}/`,
+        `${join('core', 'src', 'layout')}/`,
+        `${join('core', 'src', 'output')}/`,
+        `${join('core', 'src', 'binding')}/`,
+        `${join('react', 'src')}/`,
+        `${join('vue', 'src')}/`,
+        `${join('collaboration-yjs', 'src')}/`,
+      ].some((fragment) => file.includes(fragment))
+    );
+    expect(forbidden).toEqual([]);
+    expect(
+      reached.some((file) => file.includes('webrtc') || file.includes('prosemirror-view'))
+    ).toBe(false);
   });
 
   test('no store, tree, layout or binding module is reachable, by any spelling', () => {

@@ -34,6 +34,7 @@ import {
   createCollaborationDocumentPort,
   type EditorCollaborationSession,
 } from '../collaboration/index.ts';
+import { normalizeCollaborationTextPackage } from '../collaboration/document-port.ts';
 import { addComment, setCommentResolved } from '../store/store/comment-writes.ts';
 import {
   deleteCommentReply,
@@ -189,7 +190,7 @@ function packageStorePort(
           ? ORIGIN_IDS.mutationAgent
           : ORIGIN_IDS.mutationHuman,
       actorId: collaboration.identity.actorId,
-      operationId: `${collaboration.identity.actorId}:automation:${operationCounter}`,
+      operationId: `${collaboration.identity.actorId}:${collaboration.sessionId}:automation:${operationCounter}`,
       recordsHistory: false,
     };
   };
@@ -205,10 +206,14 @@ function packageStorePort(
       if (ops === null) return { ok: false, reason: 'unsupported-target' };
       const collaborationRefusal = collaboration?.gateOperations(ops, scope);
       if (collaborationRefusal) return { ok: false, reason: collaborationRefusal };
+      const partName = collaboration ? store.partFor(scope)?.name : undefined;
       const result = store.transact(
         scope,
         (ctx) => {
           for (const op of ops) ctx.apply(op);
+          if (partName) {
+            ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));
+          }
         },
         mutationOptions()
       );

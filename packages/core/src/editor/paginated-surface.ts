@@ -2817,7 +2817,7 @@ export function mountPaginatedSurface(
         ? {
             origin: ORIGIN_IDS.mutationHuman,
             actorId: options.collaboration.identity.actorId,
-            operationId: `${options.collaboration.identity.actorId}:browser:${collaborationOperationCounter}`,
+            operationId: `${options.collaboration.identity.actorId}:${options.collaboration.sessionId}:browser:${collaborationOperationCounter}`,
             recordsHistory: false,
           }
         : undefined
