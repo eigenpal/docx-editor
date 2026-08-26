@@ -578,6 +578,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         const propertiesRejection = validateProperties(op.properties, RUN_PROPERTY_SET);
         if (propertiesRejection) return propertiesRejection;
       }
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
+        return 'invalid-property-value';
+      }
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
@@ -725,11 +728,17 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         const propertiesRejection = validateProperties(op.properties, RUN_PROPERTY_SET);
         if (propertiesRejection) return propertiesRejection;
       }
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
+        return 'invalid-property-value';
+      }
       return rejectContentEdit(part, paragraph, op.start, op.end);
     }
     case 'setParagraphProperties': {
       const propertiesRejection = validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);
       if (propertiesRejection) return propertiesRejection;
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
+        return 'invalid-property-value';
+      }
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;

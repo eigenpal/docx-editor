@@ -403,6 +403,8 @@ export type TreeDocOp =
       readonly op: 'setParagraphMarkProperties';
       readonly paragraphId: string;
       readonly properties: readonly OoxmlProperty[];
+      /** Record this as a TRACKED format change (`w:pPr/w:rPr/w:rPrChange`, §17.13.5.31). */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       readonly op: 'setListNumbering';
@@ -469,6 +471,11 @@ export type TreeDocOp =
       readonly end: number;
       readonly properties: readonly OoxmlProperty[];
       /**
+       * Record this as a TRACKED format change: each run keeps its new `w:rPr` and gains a
+       * `w:rPrChange` (§17.13.5.30) holding the properties it had, so Reject restores them.
+       */
+      readonly revision?: RevisionAttributionInput;
+      /**
        * When set, format only these runs (field result ownership). Offset range still
        * gates the edit and drives edge splits; without this, multi-run field results that
        * share one atom offset would homogenise under a single property bag.
@@ -479,6 +486,8 @@ export type TreeDocOp =
       readonly op: 'setParagraphProperties';
       readonly paragraphId: string;
       readonly properties: readonly OoxmlProperty[];
+      /** Record this as a TRACKED format change (`w:pPrChange`, §17.13.5.29). */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /**

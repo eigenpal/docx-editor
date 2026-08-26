@@ -17,9 +17,14 @@
 // `surface-formatting.ts` re-exports these under the names the editor lane already used.
 
 import { findNode } from '../package/ooxml-edit.ts';
-import { isContentRevisionKind, WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { nullRecord } from '../package/safe-record.ts';
+import {
+  DEFAULT_FORMATTING_DISPLAY_MODE,
+  formattableRunsOfParagraph,
+  type FormattingDisplayMode,
+} from './formattable-runs.ts';
 import { segmentsOf } from './tree-op-segments.ts';
 import {
   ACCEPTED_PARAGRAPH_PROPERTIES,
@@ -313,55 +318,35 @@ export function runPropertyEdits(
   paragraphId: string,
   start: number,
   end: number,
-  incoming: OoxmlProperty | readonly OoxmlProperty[]
+  incoming: OoxmlProperty | readonly OoxmlProperty[],
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
 ): readonly RunPropertyEdit[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const edits: RunPropertyEdit[] = [];
-  // Field/note atoms contribute one unit on the begin run (segmentsOf). Hyperlink descent keeps
-  // link text addressable — skipping `w:hyperlink` used to mis-offset every run after. Field
-  // format ownership maps the atom onto result runs via `formatRunIds`.
+  // Field/note atoms contribute one unit on the begin run (segmentsOf). Field format
+  // ownership maps the atom onto result runs via `formatRunIds`.
   const runRanges = runAddressRanges(paragraph);
   const formatOwned = formatOwnedRunIds(paragraph);
-  const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'textValue') return;
-    // A revision wrapper (`w:ins`/`w:del`/`w:moveFrom`/`w:moveTo`) is a run container the
-    // same way a link is, and `segmentsOf` gives its runs offsets — stopping at the wrapper
-    // made every property write over tracked text plan zero edits, silently.
-    // The DELETION halves stay out: their runs are hidden in the default display mode, so a
-    // write over a visible selection must not restyle text the user cannot see, and a
-    // `w:moveFrom` write would desynchronize the pair anyway (its `w:moveTo` twin sits at
-    // other offsets). Display-mode-aware inclusion is #497.
-    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return;
-    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (child.kind !== 'run') return;
-    const range = runRanges.get(child.id);
-    if (!range || range.end <= range.start) return;
+  // ONE container walk, shared with the surface lane — see `formattable-runs.ts`. The two
+  // lanes disagreeing about which runs a range covers is the whole bug class this replaces.
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+    const range = runRanges.get(run.id);
+    if (!range || range.end <= range.start) continue;
     const from = Math.max(range.start, start);
     const to = Math.min(range.end, end);
-    if (from >= to) return;
+    if (from >= to) continue;
     const authored = authoredProperties(
-      propertyContainer(child, 'runProperties', 'rPr'),
+      propertyContainer(run, 'runProperties', 'rPr'),
       AUTHORABLE_RUN_PROPERTIES
     );
     edits.push({
       start: from,
       end: to,
       properties: mergedProperties(authored, withMultiSettingsKept(authored, incoming)),
-      ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
+      ...(formatOwned.has(run.id) ? { targetRunIds: [run.id] } : {}),
     });
-  };
-  for (const child of paragraph.children) visit(child);
+  }
   return edits;
 }
 
@@ -375,40 +360,23 @@ export function runsCovering(
   part: OoxmlPart,
   paragraphId: string,
   start: number,
-  end: number
+  end: number,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
 ): readonly OoxmlNode[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const runRanges = runAddressRanges(paragraph);
   const runs: OoxmlNode[] = [];
-  const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'textValue') return;
-    // Same containers as `runPropertyEdits` — the read must cover the runs the write splits.
-    // The DELETION halves stay out: their runs are hidden in the default display mode, so a
-    // write over a visible selection must not restyle text the user cannot see, and a
-    // `w:moveFrom` write would desynchronize the pair anyway (its `w:moveTo` twin sits at
-    // other offsets). Display-mode-aware inclusion is #497.
-    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return;
-    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (
-      child.kind === 'fldSimple' ||
-      (child.kind === 'generic' && child.localName === 'fldSimple')
-    ) {
-      for (const inner of child.children) visit(inner);
-      return;
-    }
-    if (child.kind !== 'run') return;
-    const range = runRanges.get(child.id);
-    if (!range || range.end <= range.start) return;
+  // The read must cover exactly the runs the write splits, so it walks through the same
+  // shared container walk `runPropertyEdits` does.
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+    const range = runRanges.get(run.id);
+    if (!range || range.end <= range.start) continue;
     const overlaps =
       end > start
         ? Math.max(range.start, start) < Math.min(range.end, end)
         : range.start <= start && start < range.end;
-    if (overlaps) runs.push(child);
-  };
-  for (const child of paragraph.children) visit(child);
+    if (overlaps) runs.push(run);
+  }
   return runs;
 }

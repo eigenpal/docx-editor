@@ -26,7 +26,7 @@ import {
   withPendingFormatting,
   type SurfaceProperty,
 } from './surface-formatting.ts';
-import type { TreeDocOp } from '@docx-editor.dev/core/store';
+import type { FormattingDisplayMode, TreeDocOp } from '@docx-editor.dev/core/store';
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
 import { mergedParagraphMarkProperties } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -38,6 +38,15 @@ export interface SurfaceFormatDeps {
   storyScope(): StoryScope;
   layout(): SemanticLayout;
   selection(): SemanticSelection;
+  /**
+   * Which revision halves the reader is LOOKING at.
+   *
+   * The formatting walks take it because a write must not restyle text the view hides: in the
+   * default `proposed` result a tracked deletion paints nothing and still owns its offsets, so
+   * a selection across visible words sweeps it (#497). Read per call — the surface's own mode
+   * is a mount option today, and a future `setRevisionDisplayMode` must move this with it.
+   */
+  displayMode(): FormattingDisplayMode;
   commit(
     run: () => TreeApplyResult | boolean,
     nextSelection?: () => SemanticSelection | null,
@@ -87,6 +96,7 @@ type FormatMethods = Pick<
 
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const { session, commit, orderedRange, selectionMark, textOf } = deps;
+  const displayMode = (): FormattingDisplayMode => deps.displayMode();
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
@@ -128,7 +138,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   ): void => {
     const part = storyPart();
     if (from.paragraphId === to.paragraphId) {
-      const edits = runPropertyEdits(part, from.paragraphId, from.offset, to.offset, incoming);
+      const edits = runPropertyEdits(
+        part,
+        from.paragraphId,
+        from.offset,
+        to.offset,
+        incoming,
+        displayMode()
+      );
       // No run in range means nothing was formatted, so the mark must not move either.
       if (edits.length === 0) return;
       const markProperties = mergedParagraphMarkProperties(part, from.paragraphId, incoming);
@@ -162,7 +179,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const text = textOf(paragraphId);
       const start = index === firstIndex ? from.offset : 0;
       const end = index === lastIndex ? to.offset : text.length;
-      const edits = start < end ? runPropertyEdits(part, paragraphId, start, end, incoming) : [];
+      const edits =
+        start < end ? runPropertyEdits(part, paragraphId, start, end, incoming, displayMode()) : [];
       for (const edit of edits) {
         ops.push({
           op: 'setRunProperties',
@@ -226,7 +244,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // change, so its mark below is the only place the format can live, and skipping it
       // outright left typing into that line unformatted. Same rule the range walk applies to
       // an empty paragraph inside its endpoints.
-      for (const edit of runPropertyEdits(part, paragraphId, 0, text.length, incoming)) {
+      for (const edit of runPropertyEdits(
+        part,
+        paragraphId,
+        0,
+        text.length,
+        incoming,
+        displayMode()
+      )) {
         ops.push({
           op: 'setRunProperties' as const,
           paragraphId,
@@ -483,7 +508,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         // for it even though the tree comes back identical — so an unconditional three ops
         // per paragraph made the eraser report `changed: true` over clean text and cost an
         // undo press that undid nothing.
-        if (start < end && hasAuthoredRunProperties(part, paragraphId, start, end)) {
+        if (start < end && hasAuthoredRunProperties(part, paragraphId, start, end, displayMode())) {
           ops.push({ op: 'setRunProperties', paragraphId, start, end, properties: [] });
         }
         // The MARK first: `setParagraphProperties` cannot name `w:rPr`, so it preserves the

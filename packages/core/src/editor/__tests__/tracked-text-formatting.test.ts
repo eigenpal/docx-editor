@@ -13,12 +13,21 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { runPropertyEdits, runsCovering, type OoxmlNode } from '@docx-editor.dev/core/store';
+import type { RevisionDisplayMode } from '@docx-editor.dev/core/layout';
 import { docx } from './paginated-surface-fixtures.ts';
 
-function withSurface(body: string, run: (surface: PaginatedSurface) => void): void {
+function withSurface(
+  body: string,
+  run: (surface: PaginatedSurface) => void,
+  displayMode?: RevisionDisplayMode
+): void {
   const container = document.createElement('div');
   document.body.append(container);
-  const opened = mountPaginatedSurface(container, docx(body));
+  const opened = mountPaginatedSurface(
+    container,
+    docx(body),
+    displayMode ? { revisionDisplayMode: displayMode } : undefined
+  );
   if (!opened.ok) throw new Error(opened.reason);
   try {
     run(opened.surface);
@@ -31,6 +40,9 @@ function withSurface(body: string, run: (surface: PaginatedSurface) => void): vo
 const ins = (runs: string) =>
   `<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z">${runs}</w:ins>`;
 const textRun = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+const del = (text: string, rPr = '') =>
+  '<w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z">' +
+  `<w:r>${rPr}<w:delText xml:space="preserve">${text}</w:delText></w:r></w:del>`;
 
 function firstParagraphNode(surface: PaginatedSurface): OoxmlNode {
   const found = findFirst(
@@ -144,33 +156,84 @@ describe('run formatting over tracked-change text', () => {
     );
   });
 
-  test('a selection across a tracked deletion leaves the deleted runs alone', () => {
-    // The deletion's runs are hidden in the default display mode but keep offsets, so the
-    // write must skip them: restyling text the user cannot see surfaces only when the
-    // deletion is rejected. Display-mode-aware inclusion is #497.
-    const del =
-      '<w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z">' +
-      '<w:r><w:delText xml:space="preserve">XYZ</w:delText></w:r></w:del>';
-    withSurface(`<w:p>${textRun('abc')}${del}${textRun('def')}</w:p>`, (surface) => {
-      select(surface, 0, 'abcXYZdef'.length);
-      surface.toggleRunProperty('b');
-      expect(runShapes(firstParagraphNode(surface))).toEqual([
-        { props: ['b'], text: 'abc', tracked: false },
-        { props: [], text: 'XYZ', tracked: false },
-        { props: ['b'], text: 'def', tracked: false },
-      ]);
-    });
+  test('a selection across a tracked deletion leaves the deleted runs alone in `proposed`', () => {
+    // The deletion's runs paint nothing in the proposed result but keep their offsets, so a
+    // selection across the visible words sweeps them. The write must skip them: restyling
+    // text nobody can see surfaces only when somebody rejects the deletion (#497).
+    withSurface(
+      `<w:p>${textRun('abc')}${del('XYZ')}${textRun('def')}</w:p>`,
+      (surface) => {
+        select(surface, 0, 'abcXYZdef'.length);
+        surface.toggleRunProperty('b');
+        expect(runShapes(firstParagraphNode(surface))).toEqual([
+          { props: ['b'], text: 'abc', tracked: false },
+          { props: [], text: 'XYZ', tracked: false },
+          { props: ['b'], text: 'def', tracked: false },
+        ]);
+      },
+      'proposed'
+    );
+  });
+
+  test('the same selection formats the deleted runs in `all-markup`', () => {
+    // All Markup paints the strike-through, so those characters ARE on the page and a
+    // selection over them means what it says. The reach follows the view (#497).
+    withSurface(
+      `<w:p>${textRun('abc')}${del('XYZ')}${textRun('def')}</w:p>`,
+      (surface) => {
+        select(surface, 0, 'abcXYZdef'.length);
+        surface.toggleRunProperty('b');
+        expect(runShapes(firstParagraphNode(surface))).toEqual([
+          { props: ['b'], text: 'abc', tracked: false },
+          { props: ['b'], text: 'XYZ', tracked: false },
+          { props: ['b'], text: 'def', tracked: false },
+        ]);
+      },
+      'all-markup'
+    );
+  });
+
+  test('the caret arms from the visible run, not a hidden deletion ending there', () => {
+    // `authoredRunPropertiesAt` takes the run to the caret's LEFT, and in the proposed
+    // result a hidden bold deletion ending at the caret is not a run the user can see.
+    withSurface(
+      `<w:p>${del('XYZ', '<w:rPr><w:b/></w:rPr>')}${textRun('def')}</w:p>`,
+      (surface) => {
+        select(surface, 3, 3);
+        expect(surface.formatting().bold).toBe(false);
+      },
+      'proposed'
+    );
+  });
+
+  test('Clear Formatting does not fire on a paragraph whose only bag is hidden', () => {
+    // `hasAuthoredRunProperties` gates the eraser. Counting a hidden deletion's `w:rPr`
+    // made Clear Formatting over visually clean text emit an op, publish a revision, and
+    // cost an undo press that undid nothing visible (#497).
+    withSurface(
+      `<w:p>${del('XYZ', '<w:rPr><w:b/></w:rPr>')}${textRun('def')}</w:p>`,
+      (surface) => {
+        const before = surface.session.packageRevision();
+        select(surface, 0, 'XYZdef'.length);
+        surface.clearFormatting();
+        expect(surface.session.packageRevision()).toBe(before);
+      },
+      'proposed'
+    );
   });
 
   test('the store lane plans no edits over a tracked deletion', () => {
-    const del =
-      '<w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z">' +
-      '<w:r><w:delText xml:space="preserve">XYZ</w:delText></w:r></w:del>';
-    withSurface(`<w:p>${del}</w:p>`, (surface) => {
+    // The headless answer, pinned: with no view to ask, the store lane reads the proposed
+    // result — the surviving text — so an automation `setFont` and a `fontRead` both skip a
+    // tracked deletion (#497 item 5).
+    withSurface(`<w:p>${del('XYZ')}</w:p>`, (surface) => {
       const part = surface.session.part();
       const id = surface.session.paragraphIds()[0]!;
       expect(runPropertyEdits(part, id, 0, 3, { localName: 'b' })).toEqual([]);
       expect(runsCovering(part, id, 0, 3)).toHaveLength(0);
+      // Named explicitly, the same lane reaches them.
+      expect(runPropertyEdits(part, id, 0, 3, { localName: 'b' }, 'all-markup')).toHaveLength(1);
+      expect(runsCovering(part, id, 0, 3, 'all-markup')).toHaveLength(1);
     });
   });
 

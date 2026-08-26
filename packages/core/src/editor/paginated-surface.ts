@@ -71,7 +71,10 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
-import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  type RevisionDisplayMode,
+} from '../layout/revision-projection.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { selectionMarkRects } from '../layout/selection-rects.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
@@ -737,6 +740,17 @@ export function mountPaginatedSurface(
     mintValidatedBytes: (handle, expectedContentId) =>
       drawingBundle.mintValidatedBytes(handle, expectedContentId),
   });
+  /**
+   * Which revision halves this surface is SHOWING — the one answer every lane asks for.
+   *
+   * Layout, furniture and the FORMATTING walks read it: a write must not restyle text the
+   * view hides, because the store offsets cover every revision half whatever the view does
+   * with them (#497). A function rather than a constant so a future
+   * `setRevisionDisplayMode` moves every reader at once.
+   */
+  const revisionDisplayMode = (): RevisionDisplayMode =>
+    options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+
   let furnitureSource = createFurnitureSource({
     session,
     measurer,
@@ -748,7 +762,7 @@ export function mountPaginatedSurface(
     // Furniture answers the document's display mode, like the body does — and it is named
     // even when it is the default, because a lane that says nothing is treated as saying
     // "not All Markup", which is what keeps markup out of the resolved views.
-    displayMode: options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+    displayMode: revisionDisplayMode(),
     inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
     drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
     drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -839,6 +853,7 @@ export function mountPaginatedSurface(
     paragraphOrder,
     layout: () => currentLayout,
     selection: () => selection,
+    displayMode: () => revisionDisplayMode(),
     commit: (run, nextSelection, options) => commit(run, nextSelection, options),
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
@@ -862,7 +877,8 @@ export function mountPaginatedSurface(
           authoredRunPropertiesAt(
             session.partFor(storyScope()) ?? session.part(),
             head.paragraphId,
-            head.offset
+            head.offset,
+            revisionDisplayMode()
           );
         pendingFormats = { position: head, properties: next, base };
       }
@@ -1242,7 +1258,7 @@ export function mountPaginatedSurface(
             collapseTo: positionPastDeletion(currentLayout, range.from),
           }
         : deleteSelectionPlan(author);
-    const ops = attributeTrackedOps(plan.ops, revision);
+    const ops = attributeTrackedOps(plan.ops, revision, formattingTracked());
     let caret = plan.collapseTo;
     if (kind === 'insertion' || kind === 'replacement') {
       // The plan's `replaceAt` owns the landing rule — after the struck words, in the last
@@ -2813,6 +2829,11 @@ export function mountPaginatedSurface(
    * own; in suggesting mode the link lane replaces the selection with tracked ops first,
    * so the `w:hyperlink` only ever wraps this author's own `w:ins` — which is the
    * reviewable unit.
+   *
+   * The three PROPERTY ops are members for the reason the tabs and breaks are: passed
+   * through unattributed they rewrote a `w:rPr` outright, so a suggester's Bold press was a
+   * permanent edit with no card, nothing to reject, and — once formatting learned to reach
+   * tracked text — a silent rewrite of another author's pending insertion (#495).
    */
   type RevisionCapableOp = Extract<
     TreeDocOp,
@@ -2826,7 +2847,10 @@ export function mountPaginatedSurface(
         | 'insertPageField'
         | 'insertNote'
         | 'insertTableRow'
-        | 'deleteTableRow';
+        | 'deleteTableRow'
+        | 'setRunProperties'
+        | 'setParagraphProperties'
+        | 'setParagraphMarkProperties';
     }
   >;
   const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapableOp['op']>([
@@ -2839,7 +2863,27 @@ export function mountPaginatedSurface(
     'insertNote',
     'insertTableRow',
     'deleteTableRow',
+    'setRunProperties',
+    'setParagraphProperties',
+    'setParagraphMarkProperties',
   ]);
+
+  /**
+   * The three ops whose tracked form is a PROPERTY CHANGE record.
+   *
+   * Named apart because `w:doNotTrackFormatting` (§17.15.1.50) turns exactly these off: a
+   * document may ask for its formatting changes to be applied without a `w:rPrChange` while
+   * its text edits stay tracked. That is a producer instruction, so it gates the WRITE and
+   * never how an existing record is read.
+   */
+  const PROPERTY_CHANGE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<TreeDocOp['op']>([
+    'setRunProperties',
+    'setParagraphProperties',
+    'setParagraphMarkProperties',
+  ]);
+
+  /** Whether this document wants its formatting changes recorded at all. */
+  const formattingTracked = (): boolean => !session.trackingSettings().doNotTrackFormatting;
   function isRevisionCapable(op: TreeDocOp): op is RevisionCapableOp {
     return REVISION_CAPABLE_OPS.has(op.op);
   }
@@ -2861,11 +2905,13 @@ export function mountPaginatedSurface(
 
   function attributeTrackedOps(
     ops: readonly TreeDocOp[],
-    revision: import('../store/store/tree-op-types.ts').RevisionAttributionInput
+    revision: import('../store/store/tree-op-types.ts').RevisionAttributionInput,
+    trackFormatting: boolean
   ): TreeDocOp[] {
     return ops.flatMap((op): TreeDocOp[] => {
       // Already-attributed ops pass through untouched — a caller that named an author keeps it.
       if (isRevisionCapable(op)) {
+        if (!trackFormatting && PROPERTY_CHANGE_OPS.has(op.op)) return [op];
         return [op.revision !== undefined ? op : { ...op, revision }];
       }
       // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
@@ -2907,7 +2953,7 @@ export function mountPaginatedSurface(
     // to write. The edit lands untracked rather than being refused: losing the user's typing
     // to a missing configuration value would be the worse failure.
     if (editingMode !== 'suggest' || !author) return [...ops];
-    return attributeTrackedOps(ops, { author, date: trackedDate() });
+    return attributeTrackedOps(ops, { author, date: trackedDate() }, formattingTracked());
   }
 
   /**
@@ -4181,7 +4227,7 @@ export function mountPaginatedSurface(
           styleCascade,
           numberingIndex,
           defaultTabStopPt,
-          displayMode: options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+          displayMode: revisionDisplayMode(),
           inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
           drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
           drawingTokenForParagraphForPart: (partName, paragraph) =>

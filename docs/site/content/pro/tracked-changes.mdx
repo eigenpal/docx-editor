@@ -130,6 +130,23 @@ const modules = [reviewModule()];
 | Tables               | Tracks row and cell insertion, deletion, and property changes.               |
 | Run formatting       | Tracks formatting changes in a separate card.                                |
 
+In suggesting mode, a formatting change keeps the new properties and records the
+old ones, so a reviewer can put them back. A run records `w:rPrChange`, a
+paragraph mark records `w:pPr/w:rPr/w:rPrChange`, and paragraph properties
+record `w:pPrChange`. Accept drops the record; reject restores what it holds.
+
+Two presses on the same run produce one card, because the record holds the
+properties the run started with. A change that lands back on those properties
+records nothing.
+
+Formatting text inside your own pending insertion records nothing either: the
+whole run is already your proposal, so rejecting the insertion takes the words
+and the formatting together. Formatting text inside another author's pending
+insertion does record a change, and it is theirs to accept or reject.
+
+A document that sets `w:doNotTrackFormatting` in `settings.xml` gets no
+formatting records. Its text edits stay tracked.
+
 A changed paragraph mark shows a colored pilcrow and margin change bar. This
 display also works inside table cells.
 

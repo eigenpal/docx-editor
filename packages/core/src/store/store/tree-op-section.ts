@@ -31,11 +31,14 @@ import {
 } from './tree-op-section-address.ts';
 import type {
   OoxmlProperty,
+  RevisionAttributionInput,
   TabStopWrite,
   TreeDocOp,
   TreeOpEffect,
   TreeOpResult,
 } from './tree-op-types.ts';
+import { withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   TEXT_DEPS,
   attributeValueOf,
@@ -710,14 +713,17 @@ const AFTER_PARAGRAPH_MARK = new Set(['sectPr', 'pPrChange']);
  * a FLAT property bag and the mark's own run properties are children.
  *
  * An empty `properties` removes the element rather than leaving an empty `w:rPr`, so a
- * cleared mark digests identically to one that never had any.
+ * cleared mark digests identically to one that never had any — unless a tracked format
+ * change put a `w:rPrChange` there, which is the one child that keeps the container alive
+ * with nothing else in it.
  */
 export function applySetParagraphMarkProperties(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   properties: readonly OoxmlProperty[],
   options: EditOptions | undefined,
-  nextId: () => string
+  nextId: () => string,
+  revision?: RevisionAttributionInput
 ): TreeOpResult {
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -733,12 +739,26 @@ export function applySetParagraphMarkProperties(
   // The mark is a run property container like any other: what the op names is rewritten,
   // and what it cannot name — a `w:rStyle` character style, `w:lang`, a revision record —
   // stays where it was authored.
-  const children = mergedPropertyChildren(
-    existing?.children ?? [],
+  const prior = existing?.children ?? [];
+  let children: readonly OoxmlNode[] = mergedPropertyChildren(
+    prior,
     properties,
     RUN_VOCABULARY,
     nextId
   );
+  // The mark's tracked format change is `w:pPr/w:rPr/w:rPrChange` (§17.13.5.31) — the same
+  // element a run writes, over `CT_ParaRPrOriginal` rather than `CT_RPrOriginal`. It is what
+  // keeps a list marker's face reversible when a whole-paragraph format is proposed.
+  if (revision) {
+    children = withPropertyChangeRecord({
+      container: 'runProperties',
+      prior,
+      next: children,
+      revision,
+      mint: nextId,
+      nextRevisionId: nextRevisionId(part),
+    });
+  }
 
   if (children.length === 0) {
     if (!existing) return ok(part, effect);

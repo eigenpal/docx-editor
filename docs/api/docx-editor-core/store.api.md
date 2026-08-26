@@ -972,6 +972,9 @@ export const DEFAULT_ENDNOTE_PROPERTIES: ResolvedEndnoteProperties;
 export const DEFAULT_FOOTNOTE_PROPERTIES: ResolvedFootnoteProperties;
 
 // @public
+export const DEFAULT_FORMATTING_DISPLAY_MODE: FormattingDisplayMode;
+
+// @public
 export const DEFAULT_IMAGE_RESOURCE_LIMITS: ImageResourceLimits;
 
 // @public
@@ -1411,6 +1414,15 @@ export function formatNoteScopeId(noteKind: NoteKind, noteId: number): string;
 export function formatOwnedRunIds(paragraph: Extract<OoxmlNode, {
     kind: 'paragraph';
 }>): ReadonlySet<string>;
+
+// @public
+export function formattableRunsOf(child: OoxmlNode, displayMode?: FormattingDisplayMode): readonly OoxmlNode[];
+
+// @public
+export function formattableRunsOfParagraph(paragraph: OoxmlParagraphNode, displayMode?: FormattingDisplayMode): readonly OoxmlNode[];
+
+// @public
+export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 // @public
 export interface FragmentCoverage {
@@ -3635,6 +3647,9 @@ export interface RevisionAddress {
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
 
 // @public
+export function revisionReachedInMode(kind: OoxmlNode['kind'], displayMode: FormattingDisplayMode): boolean;
+
+// @public
 export function runAddressRanges(paragraph: Extract<OoxmlNode, {
     kind: 'paragraph';
 }>): Map<string, {
@@ -3654,10 +3669,10 @@ export interface RunPropertyEdit {
 }
 
 // @public
-export function runPropertyEdits(part: OoxmlPart, paragraphId: string, start: number, end: number, incoming: OoxmlProperty | readonly OoxmlProperty[]): readonly RunPropertyEdit[];
+export function runPropertyEdits(part: OoxmlPart, paragraphId: string, start: number, end: number, incoming: OoxmlProperty | readonly OoxmlProperty[], displayMode?: FormattingDisplayMode): readonly RunPropertyEdit[];
 
 // @public
-export function runsCovering(part: OoxmlPart, paragraphId: string, start: number, end: number): readonly OoxmlNode[];
+export function runsCovering(part: OoxmlPart, paragraphId: string, start: number, end: number, displayMode?: FormattingDisplayMode): readonly OoxmlNode[];
 
 // @public
 export const RUNTIME_PORT_IDS: {
@@ -4086,6 +4101,7 @@ export type TreeDocOp = {
     readonly op: 'setParagraphMarkProperties';
     readonly paragraphId: string;
     readonly properties: readonly OoxmlProperty[];
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly level?: number;
     readonly numId: string | null;
@@ -4114,12 +4130,14 @@ export type TreeDocOp = {
     readonly op: 'setRunProperties';
     readonly paragraphId: string;
     readonly properties: readonly OoxmlProperty[];
+    readonly revision?: RevisionAttributionInput;
     readonly start: number;
     readonly targetRunIds?: readonly string[];
 } | {
     readonly op: 'setParagraphProperties';
     readonly paragraphId: string;
     readonly properties: readonly OoxmlProperty[];
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly anchorParagraphId?: string;
     readonly marginBottomTwips?: number;

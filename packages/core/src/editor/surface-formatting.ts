@@ -34,8 +34,12 @@ import {
   type OoxmlPart,
   type RunPropertyEdit,
 } from '@docx-editor.dev/core/store';
-import { mergedMultiSettingProperty } from '@docx-editor.dev/core/store';
-import { walkParagraphInline } from '../store/package/content-control-walk.ts';
+import {
+  DEFAULT_FORMATTING_DISPLAY_MODE,
+  formattableRunsOfParagraph,
+  mergedMultiSettingProperty,
+  type FormattingDisplayMode,
+} from '@docx-editor.dev/core/store';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
@@ -286,74 +290,46 @@ export {
 } from '@docx-editor.dev/core/store';
 
 /**
- * The runs one paragraph child contributes to the formatting lane: the run itself, or every
- * run inside a SURVIVING revision wrapper (`w:ins` / `w:moveTo`).
+ * Surface range formatting over the shared run-container walk.
  *
- * `walkParagraphInline` descends links and content controls but hands a revision wrapper
- * over whole, and `segmentsOf` gives tracked runs offsets — so stopping at the wrapper made
- * every property write over tracked text plan zero edits, silently.
- *
- * The DELETION halves (`w:del` / `w:moveFrom`) stay out, subtree and all: their runs are
- * hidden in the default display mode, so a write over a visible selection must not restyle
- * text the user cannot see, and a `w:moveFrom` write would desynchronize the move pair (its
- * `w:moveTo` twin sits at other offsets). Display-mode-aware inclusion is #497.
- */
-function formattableRunsOf(child: OoxmlNode, depth = 0): readonly OoxmlNode[] {
-  if (child.kind === 'run') return [child];
-  if (child.kind === 'textValue' || depth >= MAX_FORMATTABLE_RUN_DEPTH) return [];
-  if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return [];
-  if (
-    child.kind === 'hyperlink' ||
-    child.kind === 'revisionInsert' ||
-    child.kind === 'revisionMoveTo'
-  ) {
-    return child.children.flatMap((inner) => formattableRunsOf(inner, depth + 1));
-  }
-  return [];
-}
-
-/** Matches the nesting cap `runsUnder` applies to the same containers. */
-const MAX_FORMATTABLE_RUN_DEPTH = 32;
-
-/**
- * Surface range formatting uses the shared authored-property model while retaining v2's
- * content-control-aware inline walk. The automation lane consumes the same store primitives;
- * this wrapper is only the layout-backed surface traversal.
+ * Kept as a wrapper rather than folded into the store lane because the surface knows one
+ * thing the store lane cannot: which revision halves the reader is LOOKING at. Everything
+ * else — which containers hold addressable runs, how a bag merges — is the store's, so the
+ * two lanes cannot drift per container kind (#498).
  */
 export function runPropertyEdits(
   part: OoxmlPart,
   paragraphId: string,
   start: number,
   end: number,
-  incoming: SurfaceProperty
+  incoming: SurfaceProperty,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
 ): readonly RunPropertyEdit[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const edits: RunPropertyEdit[] = [];
   const runRanges = runAddressRanges(paragraph);
   const formatOwned = formatOwnedRunIds(paragraph);
-  walkParagraphInline(paragraph.children, 0, (child) => {
-    for (const run of formattableRunsOf(child)) {
-      const range = runRanges.get(run.id);
-      if (!range || range.end <= range.start) continue;
-      const from = Math.max(range.start, start);
-      const to = Math.min(range.end, end);
-      if (from >= to) continue;
-      const authored = authoredProperties(
-        propertyContainer(run, 'runProperties', 'rPr'),
-        AUTHORABLE_RUN_PROPERTIES
-      );
-      edits.push({
-        start: from,
-        end: to,
-        // Merged per attribute for the two run properties carrying several independent
-        // settings, the same rule the store lane's own walk applies — see
-        // `mergedMultiSettingProperty`.
-        properties: mergedProperties(authored, mergedMultiSettingProperty(authored, incoming)),
-        ...(formatOwned.has(run.id) ? { targetRunIds: [run.id] } : {}),
-      });
-    }
-  });
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+    const range = runRanges.get(run.id);
+    if (!range || range.end <= range.start) continue;
+    const from = Math.max(range.start, start);
+    const to = Math.min(range.end, end);
+    if (from >= to) continue;
+    const authored = authoredProperties(
+      propertyContainer(run, 'runProperties', 'rPr'),
+      AUTHORABLE_RUN_PROPERTIES
+    );
+    edits.push({
+      start: from,
+      end: to,
+      // Merged per attribute for the two run properties carrying several independent
+      // settings, the same rule the store lane's own walk applies — see
+      // `mergedMultiSettingProperty`.
+      properties: mergedProperties(authored, mergedMultiSettingProperty(authored, incoming)),
+      ...(formatOwned.has(run.id) ? { targetRunIds: [run.id] } : {}),
+    });
+  }
   return edits;
 }
 
@@ -372,31 +348,24 @@ export function hasAuthoredRunProperties(
   part: OoxmlPart,
   paragraphId: string,
   start: number,
-  end: number
+  end: number,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
 ): boolean {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return false;
   const runRanges = runAddressRanges(paragraph);
-  let found = false;
-  const visitRun = (child: OoxmlNode): void => {
-    if (found) return;
-    for (const run of formattableRunsOf(child)) {
-      const range = runRanges.get(run.id);
-      if (!range || range.end <= range.start) continue;
-      if (Math.max(range.start, start) >= Math.min(range.end, end)) continue;
-      if (
-        authoredProperties(
-          propertyContainer(run, 'runProperties', 'rPr'),
-          AUTHORABLE_RUN_PROPERTIES
-        ).length > 0
-      ) {
-        found = true;
-        return;
-      }
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+    const range = runRanges.get(run.id);
+    if (!range || range.end <= range.start) continue;
+    if (Math.max(range.start, start) >= Math.min(range.end, end)) continue;
+    if (
+      authoredProperties(propertyContainer(run, 'runProperties', 'rPr'), AUTHORABLE_RUN_PROPERTIES)
+        .length > 0
+    ) {
+      return true;
     }
-  };
-  walkParagraphInline(paragraph.children, 0, visitRun);
-  return found;
+  }
+  return false;
 }
 
 /**
@@ -411,22 +380,23 @@ export function hasAuthoredRunProperties(
 export function authoredRunPropertiesAt(
   part: OoxmlPart,
   paragraphId: string,
-  offset: number
+  offset: number,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
 ): readonly SurfaceProperty[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
   const runRanges = runAddressRanges(paragraph);
   let left: OoxmlNode | null = null;
   let right: OoxmlNode | null = null;
-  const visitRun = (child: OoxmlNode): void => {
-    for (const run of formattableRunsOf(child)) {
-      const range = runRanges.get(run.id);
-      if (!range || range.end <= range.start) continue;
-      if (range.start < offset && offset <= range.end) left = run;
-      if (right === null && range.start <= offset && offset < range.end) right = run;
-    }
-  };
-  walkParagraphInline(paragraph.children, 0, visitRun);
+  // Only runs the reader can SEE. A hidden tracked deletion ending at the caret used to win
+  // as `left`, so the toolbar face and the next typed character took their formatting from
+  // text nobody could look at.
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+    const range = runRanges.get(run.id);
+    if (!range || range.end <= range.start) continue;
+    if (range.start < offset && offset <= range.end) left = run;
+    if (right === null && range.start <= offset && offset < range.end) right = run;
+  }
   const owner = left ?? right;
   if (owner) {
     return authoredProperties(

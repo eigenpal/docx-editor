@@ -41,6 +41,8 @@ import {
   applyProposeParagraphMerge,
   retractsOwnParagraphMark,
 } from './tree-op-tracked-marks.ts';
+import { insideOwnInsertion, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   isValidParaId,
   mintParaId,
@@ -119,6 +121,7 @@ import { applyInsertTable } from './tree-op-insert-table.ts';
 import { applyReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import type {
   OoxmlProperty,
+  RevisionAttributionInput,
   TreeDocOp,
   TreeOpEffect,
   TreeOpRejection,
@@ -411,7 +414,14 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     case 'setListLevel':
       return applySetListLevel(part, paragraph, op.level, options, nextId);
     case 'setParagraphMarkProperties':
-      return applySetParagraphMarkProperties(part, paragraph, op.properties, options, nextId);
+      return applySetParagraphMarkProperties(
+        part,
+        paragraph,
+        op.properties,
+        options,
+        nextId,
+        op.revision
+      );
     case 'setListNumbering':
       return applySetListNumbering(part, paragraph, op.numId, op.level ?? 0, options, nextId);
     case 'setParagraphTabStops':
@@ -519,16 +529,30 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
         op.end,
         op.properties,
         options,
-        op.targetRunIds
+        op.targetRunIds,
+        op.revision
       );
     case 'setParagraphProperties': {
       const existing = paragraphPropertiesNodeOf(paragraph);
-      const children = mergedPropertyChildren(
-        existing?.children ?? [],
+      const prior = existing?.children ?? [];
+      let children: readonly OoxmlNode[] = mergedPropertyChildren(
+        prior,
         op.properties,
         PARAGRAPH_VOCABULARY,
         nextId
       );
+      // A tracked paragraph-property change records what `w:pPr` held in a `w:pPrChange`
+      // (§17.13.5.29), so Reject restores the alignment, indents and style it replaced.
+      if (op.revision) {
+        children = withPropertyChangeRecord({
+          container: 'paragraphProperties',
+          prior,
+          next: children,
+          revision: op.revision,
+          mint: nextId,
+          nextRevisionId: nextRevisionId(part),
+        });
+      }
       const effect: TreeOpEffect = {
         dirty: [paragraph.id],
         created: [],
@@ -3228,7 +3252,8 @@ function applySetRunProperties(
   end: number,
   properties: readonly OoxmlProperty[],
   options?: EditOptions,
-  targetRunIds?: readonly string[]
+  targetRunIds?: readonly string[],
+  revision?: RevisionAttributionInput
 ): TreeOpResult {
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
@@ -3263,17 +3288,33 @@ function applySetRunProperties(
     }
   }
   const nextId = createNodeIdAllocator(current);
+  const mintRevisionId = revision ? nextRevisionId(current) : null;
   for (const runId of runIds) {
     const run = findNode(current, runId);
     if (!run || run.kind !== 'run') continue;
     const existing = runPropertiesNodeOf(run);
     const content = run.children.filter((child) => !isRunPropertiesNode(child));
-    const children = mergedPropertyChildren(
-      existing?.children ?? [],
+    const prior = existing?.children ?? [];
+    let children: readonly OoxmlNode[] = mergedPropertyChildren(
+      prior,
       properties,
       RUN_VOCABULARY,
       nextId
     );
+    // A tracked format change keeps the run's NEW properties and records the old ones in a
+    // `w:rPrChange`, so Reject restores them. Skipped inside this author's own `w:ins`: the
+    // whole run is already their proposal, and rejecting it takes words and formatting
+    // together (#495).
+    if (revision && mintRevisionId && !insideOwnInsertion(current, run.id, revision.author)) {
+      children = withPropertyChangeRecord({
+        container: 'runProperties',
+        prior,
+        next: children,
+        revision,
+        mint: nextId,
+        nextRevisionId: mintRevisionId,
+      });
+    }
     if (children.length === 0) {
       if (!existing) continue;
       const cleared = replaceChildren(current, run.id, content, options);
