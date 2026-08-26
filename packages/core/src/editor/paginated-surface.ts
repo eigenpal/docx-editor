@@ -5399,14 +5399,6 @@ export function mountPaginatedSurface(
   }
 
   /**
-   * The plan that removes the current selection, or an empty one when it is collapsed.
-   *
-   * `collapseTo` rather than `orderedStart()` is what every caller must address afterwards:
-   * a plan that removes a table takes its cell paragraphs with it, so a range beginning in
-   * one has no start left to insert at, and an op naming a paragraph the same transaction
-   * deleted vetoes the whole transaction.
-   */
-  /**
    * Whether this Enter ends the paragraph it leaves behind, so Word's follower style applies
    * to the one it starts.
    *
@@ -5436,6 +5428,14 @@ export function mountPaginatedSurface(
       : nextStyle.atParagraphEnd(range.to.paragraphId, range.to.offset);
   }
 
+  /**
+   * The plan that removes the current selection, or an empty one when it is collapsed.
+   *
+   * `collapseTo` rather than `orderedStart()` is what every caller must address afterwards:
+   * a plan that removes a table takes its cell paragraphs with it, so a range beginning in
+   * one has no start left to insert at, and an op naming a paragraph the same transaction
+   * deleted vetoes the whole transaction.
+   */
   function deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan {
     // Every replacing lane reads `replaceAt` from the plan it already holds, so the landing
     // rule cannot be skipped by a lane that never heard of it — that is how tabs, breaks and
