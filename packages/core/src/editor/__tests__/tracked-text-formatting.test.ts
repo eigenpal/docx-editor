@@ -144,6 +144,36 @@ describe('run formatting over tracked-change text', () => {
     );
   });
 
+  test('a selection across a tracked deletion leaves the deleted runs alone', () => {
+    // The deletion's runs are hidden in the default display mode but keep offsets, so the
+    // write must skip them: restyling text the user cannot see surfaces only when the
+    // deletion is rejected. Display-mode-aware inclusion is #497.
+    const del =
+      '<w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z">' +
+      '<w:r><w:delText xml:space="preserve">XYZ</w:delText></w:r></w:del>';
+    withSurface(`<w:p>${textRun('abc')}${del}${textRun('def')}</w:p>`, (surface) => {
+      select(surface, 0, 'abcXYZdef'.length);
+      surface.toggleRunProperty('b');
+      expect(runShapes(firstParagraphNode(surface))).toEqual([
+        { props: ['b'], text: 'abc', tracked: false },
+        { props: [], text: 'XYZ', tracked: false },
+        { props: ['b'], text: 'def', tracked: false },
+      ]);
+    });
+  });
+
+  test('the store lane plans no edits over a tracked deletion', () => {
+    const del =
+      '<w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z">' +
+      '<w:r><w:delText xml:space="preserve">XYZ</w:delText></w:r></w:del>';
+    withSurface(`<w:p>${del}</w:p>`, (surface) => {
+      const part = surface.session.part();
+      const id = surface.session.paragraphIds()[0]!;
+      expect(runPropertyEdits(part, id, 0, 3, { localName: 'b' })).toEqual([]);
+      expect(runsCovering(part, id, 0, 3)).toHaveLength(0);
+    });
+  });
+
   test('the store lane plans edits and covers runs inside w:ins', () => {
     withSurface(`<w:p>${ins(textRun('hello'))}</w:p>`, (surface) => {
       const part = surface.session.part();

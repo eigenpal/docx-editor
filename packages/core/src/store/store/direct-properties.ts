@@ -328,6 +328,11 @@ export function runPropertyEdits(
     // A revision wrapper (`w:ins`/`w:del`/`w:moveFrom`/`w:moveTo`) is a run container the
     // same way a link is, and `segmentsOf` gives its runs offsets — stopping at the wrapper
     // made every property write over tracked text plan zero edits, silently.
+    // The DELETION halves stay out: their runs are hidden in the default display mode, so a
+    // write over a visible selection must not restyle text the user cannot see, and a
+    // `w:moveFrom` write would desynchronize the pair anyway (its `w:moveTo` twin sits at
+    // other offsets). Display-mode-aware inclusion is #497.
+    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return;
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visit(inner);
       return;
@@ -379,6 +384,11 @@ export function runsCovering(
   const visit = (child: OoxmlNode): void => {
     if (child.kind === 'textValue') return;
     // Same containers as `runPropertyEdits` — the read must cover the runs the write splits.
+    // The DELETION halves stay out: their runs are hidden in the default display mode, so a
+    // write over a visible selection must not restyle text the user cannot see, and a
+    // `w:moveFrom` write would desynchronize the pair anyway (its `w:moveTo` twin sits at
+    // other offsets). Display-mode-aware inclusion is #497.
+    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return;
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visit(inner);
       return;

@@ -34,8 +34,7 @@ import {
   type OoxmlPart,
   type RunPropertyEdit,
 } from '@docx-editor.dev/core/store';
-import { isContentRevisionKind, mergedMultiSettingProperty } from '@docx-editor.dev/core/store';
-import { runsUnder } from '../store/store/tree-op-segments.ts';
+import { mergedMultiSettingProperty } from '@docx-editor.dev/core/store';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
@@ -288,16 +287,33 @@ export {
 
 /**
  * The runs one paragraph child contributes to the formatting lane: the run itself, or every
- * run inside a revision wrapper (`w:ins` / `w:del` / `w:moveFrom` / `w:moveTo`).
+ * run inside a SURVIVING revision wrapper (`w:ins` / `w:moveTo`).
  *
  * `walkParagraphInline` descends links and content controls but hands a revision wrapper
  * over whole, and `segmentsOf` gives tracked runs offsets — so stopping at the wrapper made
  * every property write over tracked text plan zero edits, silently.
+ *
+ * The DELETION halves (`w:del` / `w:moveFrom`) stay out, subtree and all: their runs are
+ * hidden in the default display mode, so a write over a visible selection must not restyle
+ * text the user cannot see, and a `w:moveFrom` write would desynchronize the move pair (its
+ * `w:moveTo` twin sits at other offsets). Display-mode-aware inclusion is #497.
  */
-function formattableRunsOf(child: OoxmlNode): readonly OoxmlNode[] {
+function formattableRunsOf(child: OoxmlNode, depth = 0): readonly OoxmlNode[] {
   if (child.kind === 'run') return [child];
-  return isContentRevisionKind(child.kind) ? runsUnder(child) : [];
+  if (child.kind === 'textValue' || depth >= MAX_FORMATTABLE_RUN_DEPTH) return [];
+  if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return [];
+  if (
+    child.kind === 'hyperlink' ||
+    child.kind === 'revisionInsert' ||
+    child.kind === 'revisionMoveTo'
+  ) {
+    return child.children.flatMap((inner) => formattableRunsOf(inner, depth + 1));
+  }
+  return [];
 }
+
+/** Matches the nesting cap `runsUnder` applies to the same containers. */
+const MAX_FORMATTABLE_RUN_DEPTH = 32;
 
 /**
  * Surface range formatting uses the shared authored-property model while retaining v2's
