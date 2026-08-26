@@ -12,12 +12,35 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { revisionItemsOf } from '../../store/store/review-reads.ts';
 import { docx } from './paginated-surface-fixtures.ts';
 
 const AUTHOR = 'Bea';
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+/** The fixture plus a `settings.xml` asking for formatting changes NOT to be recorded. */
+function withoutFormatTracking(body: string): Uint8Array {
+  const entries = unzipSync(docx(body));
+  entries['word/settings.xml'] = strToU8(
+    `<w:settings xmlns:w="${W}"><w:doNotTrackFormatting/></w:settings>`
+  );
+  entries['[Content_Types].xml'] = strToU8(
+    strFromU8(entries['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.settings+xml"/></Types>'
+    )
+  );
+  entries['word/_rels/document.xml.rels'] = strToU8(
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      `<Relationship Id="rId30" Type="${R}/settings" Target="settings.xml"/></Relationships>`
+  );
+  return zipSync(entries);
+}
 
 function withSuggesting(
   body: string,
@@ -620,6 +643,40 @@ describe('tracked format changes in suggesting mode', () => {
         expect(findAll(insertedRuns[0]!, 'color')).toHaveLength(1);
       }
     );
+  });
+
+  test('w:doNotTrackFormatting applies the formatting bare and still tracks the text', () => {
+    // §17.15.1.50 is a producer instruction: a document may ask for its formatting changes to
+    // land without a `w:rPrChange` while its text edits stay tracked.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const opened = mountPaginatedSurface(
+      container,
+      withoutFormatTracking(`<w:p>${textRun('hello')}</w:p>`),
+      {
+        editingMode: 'suggest',
+        author: AUTHOR,
+        revisionDisplayMode: 'all-markup',
+      }
+    );
+    if (!opened.ok) throw new Error(opened.reason);
+    try {
+      const surface = opened.surface;
+      expect(surface.session.trackingSettings().doNotTrackFormatting).toBe(true);
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      // The format applied, with nothing to accept or reject.
+      expect(surface.formatting().bold).toBe(true);
+      expect(rPrChanges(surface)).toHaveLength(0);
+      expect(findAll(surface.session.part().root, 'pPrChange')).toHaveLength(0);
+      // A TEXT edit in the same document is still a proposal.
+      select(surface, 5, 5);
+      surface.type('!');
+      expect(findAll(surface.session.part().root, 'ins')).toHaveLength(1);
+    } finally {
+      opened.surface.destroy();
+      container.remove();
+    }
   });
 
   test('editing mode writes the properties with no record at all', () => {

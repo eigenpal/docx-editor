@@ -31,10 +31,11 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isWmlNamed } from './tree-op-tracked.ts';
 import { isContentControl } from '../package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { isParagraphMarkRevision } from './tree-op-nodes.ts';
-import { recordedProperties } from './tree-op-tracked-properties.ts';
+import { PROPERTY_CHANGE_WRAPPER_OF_OP, recordedProperties } from './tree-op-tracked-properties.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
@@ -61,8 +62,14 @@ const REFUSED_REVISION_NAMES: ReadonlySet<string> = new Set([
   'sectPrChange',
 ]);
 
-/** Property-change wrappers this pass does resolve: the run and paragraph property records. */
-const PROPERTY_CHANGE_NAMES: ReadonlySet<string> = new Set(['rPrChange', 'pPrChange']);
+/**
+ * Property-change wrappers this pass does resolve: the run and paragraph property records.
+ *
+ * Taken FROM the write side's own table rather than restated. Two lists of these names drift,
+ * and a name in one but not the other is a record this pass would either refuse to resolve or
+ * descend into as if its copies were decisions.
+ */
+const PROPERTY_CHANGE_NAMES: ReadonlySet<string> = new Set(PROPERTY_CHANGE_WRAPPER_OF_OP.values());
 
 /** The two members of `EG_ParaRPrTrackChanges` that record a MOVE of the paragraph mark. */
 const MARK_MOVE_NAMES: ReadonlySet<string> = new Set(['moveFrom', 'moveTo']);
@@ -554,14 +561,6 @@ interface RebuildPlan {
   readonly mergeForward: ReadonlySet<string>;
   /** Tracked inserted rows rejected, or tracked deleted rows accepted. */
   readonly removeRows: ReadonlySet<string>;
-}
-
-function isWmlNamed(node: OoxmlNode, localName: string): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.namespaceUri === WML_NAMESPACE_URI &&
-    node.localName === localName
-  );
 }
 
 /**
