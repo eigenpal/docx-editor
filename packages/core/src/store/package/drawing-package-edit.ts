@@ -3,6 +3,11 @@
 // Adds binary media parts, owner-relative image relationships, package-wide wp:docPr/@id
 // allocation, and orphan media cleanup. No store transaction wiring or drawing-tree insertion.
 
+import {
+  nextDenseDecimalId,
+  nextStripedDecimalId,
+  resolveAllocationActor,
+} from './actor-scoped-ids.ts';
 import { resolveContentType } from './content-types.ts';
 import { removeNode } from './ooxml-edit.ts';
 import { normalizePartName, partNameKey, resolveInternalTarget } from './opc-names.ts';
@@ -125,16 +130,26 @@ function walkNodes(node: OoxmlNode, visit: (node: OoxmlNode) => void): void {
   for (const child of node.children) walkNodes(child, visit);
 }
 
-function highestValidDocPrId(pkg: OoxmlPackage): number {
-  let max = 0;
+/**
+ * Every valid `wp:docPr/@id` the package holds, and the highest of them.
+ *
+ * `0` is seeded as used. It is a legal `xsd:unsignedInt` but names no drawing here —
+ * {@link parseValidDocPrId} refuses it, so an id nothing can read back must never be minted.
+ * The solo walk is `highest + 1` and cannot reach it; a striped residue of 0 would.
+ */
+function scanDocPrIds(pkg: OoxmlPackage): { readonly highest: number; readonly used: Set<string> } {
+  let highest = 0;
+  const used = new Set<string>(['0']);
   for (const part of pkg.parts.values()) {
     walkNodes(part.root, (node) => {
       if (!isDocPrNode(node)) return;
       const parsed = parseValidDocPrId(docPrIdAttributeValue(node));
-      if (parsed !== null) max = Math.max(max, parsed);
+      if (parsed === null) return;
+      used.add(String(parsed));
+      if (parsed > highest) highest = parsed;
     });
   }
-  return max;
+  return { highest, used };
 }
 
 /**
@@ -142,9 +157,28 @@ function highestValidDocPrId(pkg: OoxmlPackage): number {
  *
  * Package-wide rather than per-part: Word treats these ids as document-global, and a collision
  * makes it renumber on open.
+ *
+ * Solo: `highest + 1`, the dense sequence Word writes. With a collaboration actor bound —
+ * explicit argument, or the open store transaction — the id is the next unused value in that
+ * actor's stripe. Two peers inserting a picture from one snapshot otherwise both mint `id="1"`,
+ * and the merged document carries two drawings under one document-global id.
  */
-export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult {
-  const next = highestValidDocPrId(pkg) + 1;
+export function allocateDrawingPropertyId(
+  pkg: OoxmlPackage,
+  actorId?: string
+): DrawingPropertyIdResult {
+  const { highest, used } = scanDocPrIds(pkg);
+  const actor = resolveAllocationActor(actorId);
+  let next: number;
+  try {
+    next = Number(
+      actor
+        ? nextStripedDecimalId(used, actor, MAX_UNSIGNED_INT)
+        : nextDenseDecimalId(highest, undefined, MAX_UNSIGNED_INT)
+    );
+  } catch {
+    return { ok: false, reason: 'invalidArgs' };
+  }
   if (next <= 0 || next > MAX_UNSIGNED_INT) {
     return { ok: false, reason: 'invalidArgs' };
   }

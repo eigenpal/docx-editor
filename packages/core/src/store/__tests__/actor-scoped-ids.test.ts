@@ -17,6 +17,7 @@ import {
   runWithTransactionActor,
 } from '../package/actor-scoped-ids.ts';
 import { allocateContentControlId } from '../package/content-control-nodes.ts';
+import { allocateDrawingPropertyId, withEmbeddedImage } from '../package/drawing-package-edit.ts';
 import { allocateNoteId, type NoteKind } from '../package/note-nodes.ts';
 import { applyNoteLifecycleOp } from '../package/note-lifecycle.ts';
 import { allocateOwnerRelationshipId } from '../package/package-edit.ts';
@@ -34,6 +35,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const ADA = { author: 'Ada Lovelace', date: '2026-01-02T03:04:05Z' };
 
 function revisionPart(body: string): OoxmlPart {
@@ -765,6 +767,84 @@ describe('an attached actor stripes note ids', () => {
     // mint that handed either back would rewrite Word's note furniture.
     const actor = actorWithStripe(0);
     expect(allocateNoteId(footnotesPart().root, actor)).toBe(ACTOR_ID_STRIPE);
+  });
+});
+
+const PNG_1X1 = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+  ),
+  (character) => character.charCodeAt(0)
+);
+
+/** A package whose body carries one `wp:docPr`, or none when `id` is omitted. */
+function docPrPackage(id?: string): TreeDocumentStore['package'] {
+  const drawing =
+    id === undefined
+      ? ''
+      : `<w:p><w:r><w:drawing><wp:inline xmlns:wp="${WP}">` +
+        `<wp:extent cx="914400" cy="914400"/><wp:docPr id="${id}" name="pic"/>` +
+        '</wp:inline></w:drawing></w:r></w:p>';
+  return storeOf(`${drawing}<w:p><w:r><w:t>Hello world</w:t></w:r></w:p><w:sectPr/>`).package;
+}
+
+/** The `wp:docPr/@id` a peer's FIRST inserted picture takes, actor bound as a session binds it. */
+function insertFirstPicture(store: TreeDocumentStore, actorId?: string): number {
+  const embedded = runWithTransactionActor(actorId, () =>
+    withEmbeddedImage(store.package, store.package.mainDocumentPart, {
+      bytes: PNG_1X1,
+      mime: 'image/png',
+    })
+  );
+  if (!embedded.ok) throw new Error(embedded.reason);
+  return embedded.docPrId;
+}
+
+describe('drawing property ids stay one-past-max without an actor', () => {
+  test('a package carrying no drawing still mints 1', () => {
+    expect(allocateDrawingPropertyId(docPrPackage())).toEqual({ ok: true, id: 1 });
+  });
+
+  test('an existing 7 still mints 8', () => {
+    expect(allocateDrawingPropertyId(docPrPackage('7'))).toEqual({ ok: true, id: 8 });
+  });
+
+  test('a docPr id past the unsigned-int range is ignored for seeding', () => {
+    expect(allocateDrawingPropertyId(docPrPackage('4294967296'))).toEqual({ ok: true, id: 1 });
+  });
+
+  test('inserting a picture without an actor still writes id="1"', () => {
+    expect(insertFirstPicture(storeOf())).toBe(1);
+  });
+});
+
+describe('an attached actor stripes drawing property ids', () => {
+  test('two actors mint different ids from one package', () => {
+    const pkg = docPrPackage();
+    const alice = allocateDrawingPropertyId(pkg, 'alice');
+    const bob = allocateDrawingPropertyId(pkg, 'bob');
+    expect(alice).toEqual({ ok: true, id: actorStripe('alice') });
+    expect(bob).toEqual({ ok: true, id: actorStripe('bob') });
+  });
+
+  test('two transact actors inserting a first picture mint different wp:docPr ids', () => {
+    // The defect this pins: both peers took `id="1"`, so the merged document held two
+    // drawings under one document-global id and Word renumbered them on open.
+    const alice = insertFirstPicture(storeOf(), 'alice');
+    const bob = insertFirstPicture(storeOf(), 'bob');
+    expect(alice).toBe(actorStripe('alice'));
+    expect(bob).toBe(actorStripe('bob'));
+    expect(alice).not.toBe(bob);
+  });
+
+  test('a stripe that lands on 0 skips the unusable docPr id', () => {
+    // `wp:docPr/@id` is `xsd:unsignedInt` but 0 names no drawing: the solo mint is
+    // `highest + 1` and can never reach it, so a striped mint must not either.
+    const actor = actorWithStripe(0);
+    expect(allocateDrawingPropertyId(docPrPackage(), actor)).toEqual({
+      ok: true,
+      id: ACTOR_ID_STRIPE,
+    });
   });
 });
 

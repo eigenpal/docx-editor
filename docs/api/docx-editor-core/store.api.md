@@ -47,7 +47,7 @@ export const ALL_FROZEN_IDS: readonly string[];
 export function allocateContentControlId(root: OoxmlNode, actorId?: string): number | null;
 
 // @public
-export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult;
+export function allocateDrawingPropertyId(pkg: OoxmlPackage, actorId?: string): DrawingPropertyIdResult;
 
 // @public
 export function allocateNoteId(notesRoot: OoxmlNode, actorId?: string): number | null;
