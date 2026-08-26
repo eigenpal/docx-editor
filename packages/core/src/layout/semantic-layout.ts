@@ -142,6 +142,7 @@ import { furnitureLayoutContext, remapPage, type HeaderFooterStoryLayout } from 
 import {
   createPageContentInsets,
   headerFooterVariantFor,
+  registerPageContentInsets,
   type HeaderFooterVariantName,
   type PageContentInsets,
   type PageFurniture,
@@ -644,6 +645,8 @@ export function layoutSemanticDocument(
       laid.layout
     );
     const finalized = finalizePageFieldProjection(annotated);
+    // The notes pass mints overflow sheets from this layout; publish what index they land at.
+    registerPageContentInsets(finalized, laid.contentInsetsAt);
     if (opts.session) {
       opts.session.multi = null;
       opts.session.previous = finalized;
@@ -692,6 +695,14 @@ interface BlockLayoutResult {
    * sheet" from "that sheet is full and the break already ended it" without this.
    */
   readonly endsOpenPage: boolean;
+  /**
+   * The content box a page at a DOCUMENT index resolves to under this section's variants.
+   *
+   * Published so a pass that MINTS a sheet after layout — note overflow — can resolve the new
+   * index's box instead of copying whichever page it cloned from. Defined past the section's
+   * own last page, which is exactly where an overflow sheet lands.
+   */
+  readonly contentInsetsAt: (documentPageIndex: number) => PageContentInsets;
 }
 
 type BlockLayoutOptions = SemanticLayoutOptions & {
@@ -947,6 +958,15 @@ function layoutBlocksPass(
     pageIndexStart,
     ...(options.continuedPageInsets ? { continuedPageInsets: options.continuedPageInsets } : {}),
   });
+  /**
+   * The same resolution in DOCUMENT index space, for a caller outside this pass.
+   *
+   * `insetsFor` is section-local; a note-overflow sheet is inserted at a document index. The
+   * translation is exact after `remapPage` too, because the orchestrator publishes each
+   * section at the `pageIndexStart` it laid out with.
+   */
+  const contentInsetsAt = (documentPageIndex: number): PageContentInsets =>
+    insetsFor(documentPageIndex - pageIndexStart);
   // Only the reserve entries THIS pass can read belong in its context key. The pass reads
   // reserves at `pageIndexStart` plus consecutive local page slots as it opens pages, so a
   // bound of "the page count the previous pass produced, plus one" covers every slot an
@@ -1333,6 +1353,7 @@ function layoutBlocksPass(
       endCursorY: session.endCursorY,
       endSpaceAfter: session.endSpaceAfter,
       endsOpenPage: session.endsOpenPage,
+      contentInsetsAt,
     };
   }
 
@@ -3074,7 +3095,15 @@ function layoutBlocksPass(
       fullPasses: session.stats.fullPasses + (startIndex === 0 ? 1 : 0),
     };
   }
-  return { layout, pages, lineCounter, endCursorY, endSpaceAfter, endsOpenPage };
+  return {
+    layout,
+    pages,
+    lineCounter,
+    endCursorY,
+    endSpaceAfter,
+    endsOpenPage,
+    contentInsetsAt,
+  };
 }
 
 /** Content-relative bottom of each column's content on one page, floored at the region top. */

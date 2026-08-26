@@ -25,7 +25,7 @@ Page-number fields are stored as real Word fields, not static text. The page vie
 
 A "Page X of Y" footer is the two inserts with literal text between them: type the text "Page ", insert the page number, type " of " with the surrounding spaces, insert the total page count.
 
-A field can also carry a numeric picture switch, such as `PAGE \# 0#`, which pads page 2 to `02`. The editor evaluates the picture against the computed value, so a stale result saved into the file never reaches the page. Pictures support digit placeholders, a grouping comma, and literal text.
+A field can also carry a numeric picture switch, such as `PAGE \# 0#`, which pads page 2 to `02`. In a header or footer, the editor evaluates the picture against the computed value, so a stale result saved into the file never reaches the page. In the body, a field that has a cached result keeps painting it until you update the field. Pictures support digit placeholders, a grouping comma, and literal text.
 
 ## Per-section headers and footers
 

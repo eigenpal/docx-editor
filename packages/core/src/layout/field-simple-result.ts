@@ -212,15 +212,16 @@ export function collectSimpleFieldDisplay(args: {
         // Inside a tracked complex field's skipped cache the simple field is part of the
         // replaced result: descend so its runs are NOTED (visible cached content keeps the
         // live replacement alive), never appended on their own.
-        const nested = tracker.active
+        // NOT `nested`: that name is the enclosing complex-field parse state this walk shares.
+        const simplePageField = tracker.active
           ? null
           : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
-        if (nested && pageContext) {
+        if (simplePageField && pageContext) {
           if (!revisionsVisible(local, displayMode)) continue;
           const beforeLen = text.length;
           collect(child, nodeDepth + 1, local);
           text = text.slice(0, beforeLen);
-          text += projectPageFieldValue(nested.kind, pageContext, nested.picture);
+          text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField.picture);
           continue;
         }
         collect(child, nodeDepth + 1, local);

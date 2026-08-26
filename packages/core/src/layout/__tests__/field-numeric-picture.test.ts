@@ -21,15 +21,19 @@ describe('numeric picture rendering', () => {
     expect(formatNumericPicture(15, '$###')).toBe('$ 15');
   });
 
-  test('keeps every digit of a value wider than the picture', () => {
+  test('keeps every digit of a value wider than the picture, grouping included', () => {
     expect(formatNumericPicture(1234, '0#')).toBe('1234');
     expect(formatNumericPicture(100, '0')).toBe('100');
+    // Overflow digits repeat the interval the picture's separator established, as Word does.
+    expect(formatNumericPicture(1234567, '#,###')).toBe('1,234,567');
+    expect(formatNumericPicture(1234567, '#,##0')).toBe('1,234,567');
   });
 
   test('paints literals, and a grouping comma only with a digit to its left', () => {
     expect(formatNumericPicture(2, 'Page 0')).toBe('Page 2');
     expect(formatNumericPicture(1234, '#,##0')).toBe('1,234');
     expect(formatNumericPicture(5, '#,##0')).toBe('   5');
+    expect(formatNumericPicture(1000, '#,###')).toBe('1,000');
   });
 
   test('refuses a picture with no digit position, an oversized one, or a bad value', () => {

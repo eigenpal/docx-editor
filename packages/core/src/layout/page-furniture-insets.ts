@@ -10,6 +10,7 @@
 // shrink the content column to nothing, because pagination into a zero-height column never ends.
 
 import type { HeaderFooterStoryLayout } from './hf-layout.ts';
+import type { SemanticLayout } from './semantic-records.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
 export type HeaderFooterVariantName = 'default' | 'first' | 'even';
@@ -120,4 +121,39 @@ export function createPageContentInsets(
     memo.set(variant, insets);
     return insets;
   };
+}
+
+/**
+ * The content box a page at a DOCUMENT index resolves to, published per finished layout.
+ *
+ * A page record carries the box it was built with, and a pass that MINTS a new sheet from an
+ * existing one — note overflow does exactly that — used to copy that box verbatim. That was
+ * right while every page in a section shared one, and wrong once each page derives its own:
+ * an overflow sheet cloned from a title page inherits a box its own variant never resolves
+ * to, and lays its notes against it.
+ *
+ * Keyed by the finished layout rather than by a page, because every published page is a fresh
+ * object (page-field sources, projection finalize, boundary attachment all rebuild them) while
+ * the layout the notes pass receives is exactly the one the body pass returned. Absent — a
+ * caller that assembled a layout some other way — degrades to the template's own box.
+ */
+const layoutContentInsets = new WeakMap<
+  SemanticLayout,
+  (documentPageIndex: number) => PageContentInsets
+>();
+
+/** Publish `resolve` for `layout`; see {@link pageContentInsetsAt}. */
+export function registerPageContentInsets(
+  layout: SemanticLayout,
+  resolve: (documentPageIndex: number) => PageContentInsets
+): void {
+  layoutContentInsets.set(layout, resolve);
+}
+
+/** The insets a page at `documentPageIndex` resolves to, or undefined when unpublished. */
+export function pageContentInsetsAt(
+  layout: SemanticLayout,
+  documentPageIndex: number
+): PageContentInsets | undefined {
+  return layoutContentInsets.get(layout)?.(documentPageIndex);
 }

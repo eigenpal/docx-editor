@@ -30,7 +30,7 @@ import {
 } from './section-properties.ts';
 import type { PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
-import type { PageContentInsets } from './page-furniture-insets.ts';
+import { registerPageContentInsets, type PageContentInsets } from './page-furniture-insets.ts';
 
 export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
@@ -42,6 +42,8 @@ export interface SectionLayoutResult {
   readonly endSpaceAfter: number;
   /** Whether the last page is still open, or was closed by a trailing page break. */
   readonly endsOpenPage: boolean;
+  /** The content box a page at a DOCUMENT index resolves to under this section's variants. */
+  readonly contentInsetsAt: (documentPageIndex: number) => PageContentInsets;
 }
 
 export type LayoutSectionFn = (
@@ -368,6 +370,11 @@ export function layoutMultiSectionDocument(
   let flowCursorY = 0;
   let flowSpaceAfter = 0;
   let flowOpenPage = true;
+  /** Each section's document-index inset resolver, for a sheet minted after layout. */
+  const sectionInsets: {
+    readonly startIndex: number;
+    readonly at: (index: number) => PageContentInsets;
+  }[] = [];
   let previousGeometry: PageGeometry | null = null;
   let previousFurnitureKey = '';
   /** Next displayed PAGE value if the following section does not author `w:start`. */
@@ -445,6 +452,7 @@ export function layoutMultiSectionDocument(
       ...(continuedPageInsets ? { continuedPageInsets } : {}),
       ...(sectionSession ? { session: sectionSession } : {}),
     });
+    sectionInsets.push({ startIndex, at: laid.contentInsetsAt });
     lineCounter = laid.lineCounter;
     flowCursorY = laid.endCursorY;
     flowSpaceAfter = laid.endSpaceAfter;
@@ -581,6 +589,7 @@ export function layoutMultiSectionDocument(
     });
     retainOnce();
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });
+    registerPageContentInsets(finalized, laid.contentInsetsAt);
     if (multi) {
       multi.spans = [];
       multi.previousRemapped = laid.pages;
@@ -635,6 +644,16 @@ export function layoutMultiSectionDocument(
       fullPasses: session.stats.fullPasses + (placed === total && reusedPages === 0 ? 1 : 0),
     };
   }
+
+  // A note-overflow sheet lands in the section that owns the page before it, so dispatch on
+  // the last span that starts at or before the index; past the end, the final section answers.
+  registerPageContentInsets(finalized, (documentPageIndex) => {
+    let chosen = sectionInsets[0];
+    for (const span of sectionInsets) {
+      if (span.startIndex <= documentPageIndex) chosen = span;
+    }
+    return (chosen ?? sectionInsets[sectionInsets.length - 1])!.at(documentPageIndex);
+  });
 
   retainOnce();
   return finalized;

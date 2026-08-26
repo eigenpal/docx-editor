@@ -28,7 +28,9 @@ export const MAX_NUMERIC_PICTURE_CHARS = 64;
  *
  * A value with more digits than the picture has positions keeps every digit: the overflow is
  * painted at the leftmost position rather than truncated, because a page number that silently
- * loses its leading digit is worse than one that ignores its picture.
+ * loses its leading digit is worse than one that ignores its picture. Overflow digits keep the
+ * picture's grouping — `1234567` through `#,###` is `1,234,567`, as Word renders it, not
+ * `1234,567` — by repeating the interval the picture's last separator established.
  *
  * A picture with a DECIMAL POINT is refused rather than misread. `0.00` splits into integral
  * and fractional positions that fill in opposite directions, and this fills strictly from the
@@ -42,11 +44,15 @@ export function formatNumericPicture(value: number, picture: string): string | n
   const digits = String(Math.floor(value));
   let remaining = digits.length;
   let sawPosition = false;
+  /** Digit positions since the picture's last `,`, which sets the group width for overflow. */
+  let sinceGroup = 0;
+  let groupWidth = 0;
   const out: string[] = [];
   for (let index = picture.length - 1; index >= 0; index -= 1) {
     const glyph = picture[index]!;
     if (glyph === '0' || glyph === '#') {
       sawPosition = true;
+      sinceGroup += 1;
       if (remaining > 0) {
         remaining -= 1;
         out.push(digits[remaining]!);
@@ -56,12 +62,25 @@ export function formatNumericPicture(value: number, picture: string): string | n
       continue;
     }
     if (glyph === ',') {
+      // The first separator the walk meets fixes the interval every overflow group repeats.
+      if (groupWidth === 0) groupWidth = sinceGroup;
+      sinceGroup = 0;
       if (remaining > 0) out.push(',');
       continue;
     }
     out.push(glyph);
   }
   if (!sawPosition) return null;
-  if (remaining > 0) out.push(digits.slice(0, remaining));
+  // Digits the picture had no position for. They keep its grouping, so a value wider than the
+  // picture reads the way the picture said narrower ones would.
+  while (remaining > 0) {
+    if (groupWidth > 0 && sinceGroup >= groupWidth) {
+      out.push(',');
+      sinceGroup = 0;
+    }
+    remaining -= 1;
+    sinceGroup += 1;
+    out.push(digits[remaining]!);
+  }
   return out.reverse().join('');
 }

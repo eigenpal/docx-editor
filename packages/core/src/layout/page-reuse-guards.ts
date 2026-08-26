@@ -42,6 +42,14 @@ export const PAGE_REUSE_GUARDS = {
   // Page geometry opens the context string, so a margin or sheet change is a full pass by
   // construction.
   box: 'context',
+  // Geometry, and then the SAME furniture argument `header` and `footer` make below, because
+  // each page derives this from the variant it shows: `furnitureContext` folds every variant's
+  // flow height, so a header edit that moves the push-down invalidates the context. What
+  // context cannot answer is a page keeping its box while its INDEX moves — which is why
+  // `convergenceTailShiftAllowed` refuses a tail shift across index 0 whenever page 0 resolves
+  // a box its neighbours do not (`titlePage`, `continuedInsets`), and why a sheet minted after
+  // layout resolves its own index's insets rather than cloning the template's
+  // (`page-furniture-insets.ts`, `cloneEmptyOverflowPage`).
   contentBox: 'context',
   fragments: 'flow',
   // Computed in `flushPage` from the page's own fragments — true when any span carries the

@@ -62,6 +62,7 @@ import type { PendingLine } from './paragraph-flow.ts';
 import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { finalizePageFieldProjection } from './field-projection.ts';
+import { pageContentInsetsAt, type PageContentInsets } from './page-furniture-insets.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
 
 /** Bound on reflow attempts per document layout pass. */
@@ -1351,16 +1352,37 @@ function buildFootnoteArea(
   return { area, nextCarry };
 }
 
+/**
+ * A blank sheet minted after body layout, for notes that ran off the page.
+ *
+ * `insets` is the box the NEW index resolves to. It is not the template's: a sheet cloned from
+ * a title page inherits a content box that page 0's variant resolved and its own never does,
+ * and then lays its notes against it — 20 pt of a header's worth, on the shape this fixture
+ * class uses. Absent insets keep the template's box, which is what a layout assembled outside
+ * the body pass can offer.
+ *
+ * The template's HEADER and FOOTER records still ride along, so the sheet shows page 0's
+ * furniture where Word shows the section's default — a separate gap this does not close.
+ */
 function cloneEmptyOverflowPage(
   template: PageRecord,
   index: number,
-  noteStream?: PageNoteStream
+  noteStream?: PageNoteStream,
+  insets?: PageContentInsets
 ): PageRecord {
+  const contentBox = insets
+    ? {
+        x: template.contentBox.x,
+        y: template.box.y + insets.top,
+        width: template.contentBox.width,
+        height: insets.height,
+      }
+    : template.contentBox;
   return {
     id: `page-${index}`,
     index,
     box: template.box,
-    contentBox: template.contentBox,
+    contentBox,
     fragments: [],
     ...(noteStream ? { noteStream } : {}),
     ...(template.header ? { header: template.header } : {}),
@@ -1691,13 +1713,15 @@ function drainFootnoteCarryPages(
   noteMarks: NoteMarkContext,
   reasons: NotePaginationFallbackReason[],
   overflowBudget: NoteOverflowBudget,
-  separatorCache: NoteSeparatorCache
+  separatorCache: NoteSeparatorCache,
+  insetsAt?: (index: number) => PageContentInsets | undefined
 ): { pages: PageRecord[]; carry: NoteCarryMap } {
   let nextPages = pages;
   let nextCarry = carry;
   while (nextCarry.size > 0 && overflowBudget.remaining > 0) {
     const template = nextPages[nextPages.length - 1]!;
-    const page = cloneEmptyOverflowPage(template, template.index + 1, 'footnote-drain');
+    const index = template.index + 1;
+    const page = cloneEmptyOverflowPage(template, index, 'footnote-drain', insetsAt?.(index));
     const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons, {
       separatorCache,
     });
@@ -1726,9 +1750,10 @@ function insertOverflowPageAt(
   pages: PageRecord[],
   insertAt: number,
   template: PageRecord,
-  noteStream: PageNoteStream = 'endnote-overflow'
+  noteStream: PageNoteStream = 'endnote-overflow',
+  insets?: PageContentInsets
 ): { pages: PageRecord[]; pageIndex: number } {
-  const page = cloneEmptyOverflowPage(template, insertAt, noteStream);
+  const page = cloneEmptyOverflowPage(template, insertAt, noteStream, insets);
   const next = [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
   // Defer reindex to attachNotesToLayout — per-insert reindex is O(overflow²).
   return { pages: next, pageIndex: insertAt };
@@ -1783,6 +1808,8 @@ function placeEndnotesFromPage(
     /** First page index of the owning section (for SECTIONPAGES patching). */
     readonly sectionStartIndex?: number;
     readonly separatorCache?: NoteSeparatorCache;
+    /** The content box a sheet inserted at a document index resolves to. */
+    readonly insetsAt?: (index: number) => PageContentInsets | undefined;
   }
 ): PageRecord[] {
   if (refs.length === 0 || pages.length === 0) return pages;
@@ -1808,7 +1835,13 @@ function placeEndnotesFromPage(
         nextPages[Math.min(Math.max(index, 1), nextPages.length) - 1] ??
         nextPages[nextPages.length - 1]!;
       const insertAt = Math.min(index, stopBefore, nextPages.length);
-      const inserted = insertOverflowPageAt(nextPages, insertAt, template, 'endnote-overflow');
+      const inserted = insertOverflowPageAt(
+        nextPages,
+        insertAt,
+        template,
+        'endnote-overflow',
+        options?.insetsAt?.(insertAt)
+      );
       nextPages = inserted.pages;
       index = inserted.pageIndex;
       // Later-section pages shifted right by one; keep the boundary after the new sheet.
@@ -2016,6 +2049,9 @@ export function attachNotesToLayout(
   const overflowBudget: NoteOverflowBudget = { remaining: MAX_NOTE_OVERFLOW_PAGES };
   const refIndex = buildPageRefIndex(allRefs);
   const separatorCache = createNoteSeparatorCache();
+  // An overflow sheet resolves the box its OWN index gets, not the one it was cloned from.
+  const insetsAt = (index: number): PageContentInsets | undefined =>
+    pageContentInsetsAt(layout, index);
 
   // Build sites for mark derivation (page index from layout).
   const footnoteSites: NoteReferenceSite[] = [];
@@ -2147,7 +2183,8 @@ export function attachNotesToLayout(
       noteMarks,
       reasons,
       overflowBudget,
-      separatorCache
+      separatorCache,
+      insetsAt
     );
     pages = drained.pages;
     carry = drained.carry;
@@ -2182,6 +2219,7 @@ export function attachNotesToLayout(
           stopBeforeIndex: stopBefore,
           sectionStartIndex: sectionStart,
           separatorCache,
+          insetsAt,
         }
       );
     }
@@ -2199,7 +2237,7 @@ export function attachNotesToLayout(
       'docEnd',
       reasons,
       overflowBudget,
-      { separatorCache }
+      { separatorCache, insetsAt }
     );
   }
 
