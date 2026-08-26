@@ -4100,6 +4100,7 @@ export type TreeDocOp = {
     readonly offset: number;
     readonly op: 'splitParagraph';
     readonly paragraphId: string;
+    readonly tailStyleId?: string | null;
 } | {
     readonly offsets: readonly number[];
     readonly op: 'splitParagraphMany';

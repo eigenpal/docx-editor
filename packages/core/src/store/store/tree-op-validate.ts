@@ -104,6 +104,28 @@ function validateProperties(
 /** Longest `r:id`, `w:anchor` or `w:tooltip` an op may write. */
 const MAX_HYPERLINK_ATTRIBUTE_LENGTH = 512;
 
+/** Longest `w:pStyle` value an op may write — the same ceiling the styles reader applies. */
+const MAX_STYLE_ID_LENGTH = 128;
+
+/** Control characters, which no attribute value may carry into the saved XML. */
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
+
+/**
+ * A style id an op may name.
+ *
+ * The layout lane has the same predicate over the styles part, and cannot be borrowed here:
+ * `store` does not depend on `layout`. Both answer the same question — bounded length, no
+ * control characters — because both end up writing the value into an attribute.
+ */
+function isStyleId(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_STYLE_ID_LENGTH &&
+    !CONTROL_CHARACTERS.test(value) &&
+    isValidXmlText(value)
+  );
+}
+
 function rangePartiallyOverlapsDrawing(
   paragraph: OoxmlParagraphNode,
   start: number,
@@ -679,6 +701,11 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     case 'splitParagraph': {
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
+      }
+      // A style id becomes a `w:pStyle` attribute. Bound and character-check it here rather
+      // than at the writer: `TreeDocOp` is public, so the op is a trust boundary of its own.
+      if (op.tailStyleId !== undefined && op.tailStyleId !== null && !isStyleId(op.tailStyleId)) {
+        return 'invalid-property-value';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       if (rangePartiallyOverlapsDrawing(paragraph, op.offset, op.offset + 1)) {

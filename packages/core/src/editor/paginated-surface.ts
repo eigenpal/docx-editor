@@ -124,6 +124,7 @@ import {
   createKeyDownHandler,
 } from './surface-input.ts';
 import { insertableText } from './clipboard-plain-text.ts';
+import { createNextStyleWrites } from './surface-next-style.ts';
 import {
   createFurnitureSource,
   createNotesLayoutInput,
@@ -685,6 +686,12 @@ export function mountPaginatedSurface(
 
   // Style and numbering indexes are identity-memoized and shared by every story.
   const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
+  // Word's "style for following paragraph". Its own lane, because it is a question about
+  // `styles.xml` rather than about the selection an Enter is standing in.
+  const nextStyle = createNextStyleWrites({
+    session,
+    storyPart: () => session.partFor(storyScope()) ?? session.part(),
+  });
   let onDrawingResourcesChanged: (() => void) | null = null;
   const decodePort =
     options.imageDecodePort ??
@@ -4399,6 +4406,18 @@ export function mountPaginatedSurface(
       // Word carries the typing format across Enter: bold armed before the split applies
       // to the first characters typed in the new paragraph.
       const armed = armedAtCaret() ?? undefined;
+      // Word's `w:next`: Enter at the END of a paragraph starts one in the style that
+      // paragraph's style names as its follower, which is what stops a heading from being
+      // followed by a second heading. Only asked for a plain caret — with a range, the
+      // split point sits in a paragraph whose text the same transaction is still deleting,
+      // and "is this the end" cannot be read off the layout the plan was built against.
+      const tailStyleId =
+        plan.ops.length === 0
+          ? nextStyle.tailStyleId(
+              position.paragraphId,
+              position.offset === textOf(position.paragraphId).length
+            )
+          : undefined;
       commit(
         () =>
           applyOps(
@@ -4408,6 +4427,7 @@ export function mountPaginatedSurface(
                 op: 'splitParagraph',
                 paragraphId: position.paragraphId,
                 offset: position.offset,
+                tailStyleId,
               },
             ],
             selectionMark()

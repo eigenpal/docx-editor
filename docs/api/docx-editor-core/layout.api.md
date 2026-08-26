@@ -3035,6 +3035,7 @@ export interface StyleDefinition {
     // (undocumented)
     readonly basedOn: string | null;
     readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
+    readonly next: string | null;
     // (undocumented)
     readonly paragraphProperties: readonly OoxmlProperty[];
     readonly paragraphPropertiesNode: OoxmlElement | undefined;

@@ -434,7 +434,21 @@ export type TreeDocOp =
        */
       readonly inForcePositionsTwips?: readonly number[];
     }
-  | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
+  | {
+      readonly op: 'splitParagraph';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /**
+       * The `w:pStyle` the MINTED tail takes, instead of the head's own.
+       *
+       * A split otherwise clones the whole `w:pPr`, which is right for every property but
+       * the style when the caller is an Enter at the end of a paragraph: Word gives that
+       * new paragraph the style's `w:next`, so a heading is followed by body text rather
+       * than by a second heading. `null` authors no `w:pStyle` at all, which is what the
+       * document's default style is spelled as. Omit to clone the head's style unchanged.
+       */
+      readonly tailStyleId?: string | null;
+    }
   | {
       /**
        * Split one `w:p` at MANY offsets in a single op.
