@@ -514,6 +514,13 @@ export interface TreeDocxSessionView {
     drawingNodeId: string
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
 
+  /** Propose the drawing's deletion as a tracked change (`w:del`); media stays untouched. */
+  deleteImageTracked(
+    scope: StoryScope,
+    drawingNodeId: string,
+    revision: import('../store/store/tree-op-types.ts').RevisionAttributionInput
+  ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+
   /** Apply image property tree ops plus hyperlink relationship wiring atomically. */
   applyImageProperties(
     scope: StoryScope,
@@ -1676,6 +1683,10 @@ export function openTreeSession(
 
       deleteImage(scope, drawingNodeId) {
         return packageStore.deleteImage(scope, drawingNodeId);
+      },
+
+      deleteImageTracked(scope, drawingNodeId, revision) {
+        return packageStore.deleteImageTracked(scope, drawingNodeId, revision);
       },
 
       applyImageProperties(scope, input) {

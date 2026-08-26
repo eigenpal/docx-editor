@@ -587,14 +587,10 @@ export function gateImageCommand(
   if (!image) {
     return { ok: false, code: 'notFound', reason: 'no drawing is selected' };
   }
-  if (surface.editingMode() === 'suggest') {
-    if (command.type === 'deleteImage') {
-      return {
-        ok: false,
-        code: 'invalidArgs',
-        reason: 'trackedDrawingDeletionUnsupported',
-      };
-    }
+  // Suggesting supports exactly one image command: proposing the deletion. Every other
+  // image edit (resize, wrap, position, replace) still refuses — a tracked form of those
+  // does not exist yet, and a silent untracked commit is the one thing the mode forbids.
+  if (surface.editingMode() === 'suggest' && command.type !== 'deleteImage') {
     return {
       ok: false,
       code: 'invalidArgs',

@@ -26,9 +26,15 @@ import {
 } from '../package/hyperlink-part.ts';
 import { resolveImageRelationship } from '../package/relationships.ts';
 import type { ImageDecodePort, SupportedImageMime } from '../package/image-resources.ts';
-import type { OoxmlDrawingNode, OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
+import type {
+  OoxmlDrawingNode,
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import { docPrHyperlinkRelationshipId, setDocPrHyperlinkRelationship } from './tree-op-drawings.ts';
-import type { DrawingTreeDocOp } from './tree-op-types.ts';
+import { paragraphOffsetIndex } from './tree-op-segments.ts';
+import type { DrawingTreeDocOp, RevisionAttributionInput } from './tree-op-types.ts';
 import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree-package-store.ts';
 import type { TransactionContext, TreeDocumentStore } from './tree-store.ts';
 
@@ -465,6 +471,77 @@ export function deleteImage(
     ctx.applyPackage((current) =>
       cleanupOrphanImageMedia(current, owner, previousPart, previousRel)
     );
+    return drawingNodeId;
+  });
+}
+
+/**
+ * The drawing atom's model unit within its owning paragraph, from the SAME offset authority
+ * the tracked ops strike by (`paragraphOffsetIndex`), so the proposal covers exactly the
+ * unit `applyDeleteTracked` re-labels. Null when the drawing is not addressable content —
+ * unknown id, or chrome swallowed by a field atom (zero-length span).
+ */
+function locateDrawingModelUnit(
+  part: OoxmlPart,
+  drawingNodeId: string
+): { readonly paragraphId: string; readonly start: number; readonly end: number } | null {
+  let found: { paragraphId: string; start: number; end: number } | null = null;
+  const visit = (node: OoxmlNode): void => {
+    if (found !== null || node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      const span = paragraphOffsetIndex(node).spanOf(drawingNodeId);
+      if (span !== null && span.end > span.start) {
+        found = { paragraphId: node.id, start: span.start, end: span.end };
+      }
+      // No descent past the paragraph: a nested paragraph only exists inside a textbox
+      // story, which is not an editable lane and publishes no selectable drawing.
+      return;
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return found;
+}
+
+/**
+ * Propose the deletion instead of performing it: the drawing's single model unit goes into
+ * a `w:del`, exactly as a struck word does, so the page keeps the picture (dimmed, outlined)
+ * and the review queue offers one Accept. Media and relationships stay untouched — the file
+ * still shows the picture until someone accepts — and the author's own pending insertion is
+ * removed outright by the tracked apply, the same rule struck text follows.
+ */
+export function deleteImageTracked(
+  store: TreePackageStore,
+  scope: StoryScope,
+  drawingNodeId: string,
+  revision: RevisionAttributionInput
+): ImageIntentResult {
+  const resolved = store.resolveStory(scope);
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      reason: resolved.reason,
+      ...(resolved.detail ? { detail: resolved.detail } : {}),
+    };
+  }
+  const blocked = imageIntentBlockedDuringComposition(store, resolved.store);
+  if (blocked) return blocked;
+  const part = store.currentPackage().parts.get(resolved.story.partName);
+  if (!part) return { ok: false, reason: 'unknown-drawing' };
+  const located = locateDrawingModelUnit(part, drawingNodeId);
+  if (!located) return { ok: false, reason: 'unknown-drawing' };
+  return transactPackageImage(store, scope, (ctx) => {
+    if (
+      !ctx.apply({
+        op: 'deleteText',
+        paragraphId: located.paragraphId,
+        start: located.start,
+        end: located.end,
+        revision,
+      })
+    ) {
+      return null;
+    }
     return drawingNodeId;
   });
 }

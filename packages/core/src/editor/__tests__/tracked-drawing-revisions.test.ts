@@ -11,8 +11,10 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import type { SurfaceEditingMode } from '../paginated-surface-contract.ts';
 import type { RevisionDisplayMode } from '../../layout/revision-projection.ts';
 import type { InlineDrawingRecord } from '../../layout/drawing-layout.ts';
+import { revisionItemsOf } from '../../store/store/review-reads.ts';
 import {
   CT_NS,
   DRAWING_NS,
@@ -67,7 +69,8 @@ function docx(body: string): Uint8Array {
 
 async function mount(
   bytes: Uint8Array,
-  revisionDisplayMode?: RevisionDisplayMode
+  revisionDisplayMode?: RevisionDisplayMode,
+  extra?: { readonly author?: string; readonly editingMode?: SurfaceEditingMode }
 ): Promise<{ surface: PaginatedSurface; container: HTMLElement }> {
   const container = document.createElement('div');
   document.body.append(container);
@@ -75,6 +78,8 @@ async function mount(
     scale: 1,
     imageDecodePort: decodePort(),
     ...(revisionDisplayMode ? { revisionDisplayMode } : {}),
+    ...(extra?.author ? { author: extra.author } : {}),
+    ...(extra?.editingMode ? { editingMode: extra.editingMode } : {}),
   });
   if (!opened.ok) throw new Error(opened.reason);
   await settle();
@@ -230,6 +235,54 @@ describe('tracked drawings carry and paint their revision', () => {
         .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []));
       expect(cellLines.some((line) => (line.anchorRevisions ?? []).length > 0)).toBe(true);
       expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('suggesting deleteImage proposes the deletion, not a paragraph break', async () => {
+    const { surface, container } = await mount(
+      docx(
+        `<w:p>${inlinePicture(6)}</w:p><w:p><w:r><w:t xml:space="preserve">after</w:t></w:r></w:p>`
+      ),
+      undefined,
+      { author: 'Demo Reviewer', editingMode: 'suggest' }
+    );
+    try {
+      const target = lineDrawings(surface)[0]!;
+      const result = surface.deleteImage(target.drawingNodeId);
+      expect(result.ok).toBe(true);
+
+      // The picture stays on the page as a pending removal.
+      const after = lineDrawings(surface);
+      expect(after).toHaveLength(1);
+      expect(after[0]!.revisions![0]).toMatchObject({ kind: 'delete', author: 'Demo Reviewer' });
+      const element = container.querySelector<HTMLElement>('.docx-drawing');
+      expect(element!.classList.contains('docx-drawing--revision-deletion')).toBe(true);
+      expect(container.querySelector('.docx-change-bar-deletion')).not.toBeNull();
+
+      // The review queue offers the deletion itself — NOT a "deleted paragraph break" card.
+      const items = revisionItemsOf(surface.session.part());
+      expect(items).toHaveLength(1);
+      expect(items[0]!.revisionKind).toBe('delete');
+      expect(items[0]!.markDirection).toBeUndefined();
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('suggesting deleteImage without an author is refused', async () => {
+    const { surface, container } = await mount(docx(`<w:p>${inlinePicture(6)}</w:p>`), undefined, {
+      editingMode: 'suggest',
+    });
+    try {
+      const target = lineDrawings(surface)[0]!;
+      const result = surface.deleteImage(target.drawingNodeId);
+      expect(result.ok).toBe(false);
+      expect(lineDrawings(surface)).toHaveLength(1);
+      expect(lineDrawings(surface)[0]!.revisions).toBeUndefined();
     } finally {
       surface.destroy();
       container.remove();

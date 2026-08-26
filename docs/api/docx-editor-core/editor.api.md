@@ -2216,6 +2216,7 @@ export interface TreeDocxSessionView {
         readonly parentCommentId?: string;
     }[], scope?: StoryScope, noteId?: number): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
+    deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
     documentFonts(): readonly string[];
     documentOutline(): readonly DocumentOutlineEntry[];
     documentProperties(): DocumentProperties;

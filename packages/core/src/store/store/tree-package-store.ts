@@ -42,6 +42,7 @@ import {
 } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
+import type { RevisionAttributionInput } from './tree-op-types.ts';
 import {
   deleteBlockMayStrandNote,
   deleteMayEmptyCommentRange,
@@ -60,6 +61,7 @@ import {
 import {
   applyImagePropertiesIntent,
   deleteImage as deleteImageIntent,
+  deleteImageTracked as deleteImageTrackedIntent,
   embedExternalImage as embedExternalImageIntent,
   insertImage as insertImageIntent,
   replaceImage as replaceImageIntent,
@@ -828,6 +830,15 @@ export class TreePackageStore {
   /** Delete a picture drawing and collect orphaned media in one package undo unit. */
   deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult {
     return deleteImageIntent(this, scope, drawingNodeId);
+  }
+
+  /** Propose the deletion as a tracked change: the drawing goes into a `w:del`, media stays. */
+  deleteImageTracked(
+    scope: StoryScope,
+    drawingNodeId: string,
+    revision: RevisionAttributionInput
+  ): ImageIntentResult {
+    return deleteImageTrackedIntent(this, scope, drawingNodeId, revision);
   }
 
   /** Fetch external bytes explicitly and embed them; no fetch on open/load. */
