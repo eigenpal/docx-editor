@@ -108,6 +108,19 @@ test.describe('Vue contextual interactions', () => {
     await expect(page.getByTestId('composed-mount')).toBeVisible();
     await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
+    // Stub the link's real target at the CONTEXT level, so the route also covers the
+    // popup. Every other spec draws its bytes from the local dev middleware; this was the
+    // one place the suite reached the public internet, which fails on a runner with no
+    // egress and reads as a hyperlink regression rather than a network one. What the test
+    // is about — the editor opening the sanitized external URL in a new tab — is unchanged.
+    await page.context().route('https://example.com/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><title>Example</title>',
+      })
+    );
+
     const link = page.locator('.docx-hyperlink').filter({ hasText: 'Example' });
     await link.click();
     const opened = page.waitForEvent('popup');

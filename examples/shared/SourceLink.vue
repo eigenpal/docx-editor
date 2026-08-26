@@ -16,7 +16,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { sourceUrlFor, type ExampleName } from '../../shared/config';
+import { sourceUrlFor, type ExampleName } from './config';
 
 const props = defineProps<{
   /** Which example this screen IS, by its `config.ts` name — not which adapter it uses.
