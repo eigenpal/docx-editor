@@ -603,3 +603,158 @@ describe('note overflow across several runs', () => {
     // insertion shifts its page number, which predates per-page insets and is out of scope.
   });
 });
+
+describe('drain sheets behind a later insertion', () => {
+  /**
+   * Three sections under `w:evenAndOddHeaders`: section 1 has `sectEnd` endnotes that overflow,
+   * and the last body page carries a footnote that drains.
+   *
+   * The drain runs FIRST and appends at the end, then the section loop inserts section 1's
+   * sheets in front of them. An odd number of those moves every drain sheet one page along,
+   * and its variant — resolved when it was minted — no longer matches where it sits.
+   */
+  function drainShiftDoc(sectEndLines: number, footnoteLines: number): Uint8Array {
+    const notes = (label: string, count: number) =>
+      Array.from(
+        { length: count },
+        (_, i) => `<w:p><w:r><w:t>${label} ${i} ${'z'.repeat(60)}</w:t></w:r></w:p>`
+      ).join('');
+    const sectPr = (extra: string) =>
+      '<w:sectPr>' +
+      '<w:headerReference w:type="default" r:id="rIdH1"/>' +
+      '<w:headerReference w:type="even" r:id="rIdH2"/>' +
+      '<w:pgSz w:w="12240" w:h="4320"/>' +
+      '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"' +
+      ' w:header="360" w:footer="360"/>' +
+      extra +
+      '</w:sectPr>';
+    const sectEnd = '<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr>';
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>' +
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}">` +
+          `<Relationship Id="rIdS" Type="${R}/settings" Target="settings.xml"/>` +
+          `<Relationship Id="rIdH1" Type="${R}/header" Target="header1.xml"/>` +
+          `<Relationship Id="rIdH2" Type="${R}/header" Target="header2.xml"/>` +
+          `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+          `<Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/>` +
+          '</Relationships>'
+      ),
+      'word/settings.xml': strToU8(
+        `<w:settings xmlns:w="${W}"><w:evenAndOddHeaders/></w:settings>`
+      ),
+      'word/header1.xml': strToU8(
+        `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Odd</w:t></w:r></w:p></w:hdr>`
+      ),
+      'word/header2.xml': strToU8(
+        `<w:hdr xmlns:w="${W}">` +
+          '<w:p><w:r><w:t>Even a</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Even b</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Even c</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Even d</w:t></w:r></w:p>' +
+          '</w:hdr>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          '<w:p><w:r><w:t>One</w:t></w:r></w:p>' +
+          `<w:p><w:pPr>${sectPr('')}</w:pPr></w:p>` +
+          '<w:p><w:r><w:t>Two</w:t><w:endnoteReference w:id="1"/></w:r></w:p>' +
+          `<w:p><w:pPr>${sectPr(sectEnd)}</w:pPr></w:p>` +
+          '<w:p><w:r><w:t>Three</w:t><w:footnoteReference w:id="1"/></w:r></w:p>' +
+          sectPr('') +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>' +
+          '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>' +
+          `<w:footnote w:id="1">${notes('F', footnoteLines)}</w:footnote>` +
+          '</w:footnotes>'
+      ),
+      'word/endnotes.xml': strToU8(
+        `<w:endnotes xmlns:w="${W}">` +
+          '<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>' +
+          '<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>' +
+          `<w:endnote w:id="1">${notes('E', sectEndLines)}</w:endnote>` +
+          '</w:endnotes>'
+      ),
+    });
+  }
+
+  test('a drain sheet keeps its own page number behind an earlier section insertion', () => {
+    // Tuned so section 1 overflows by exactly ONE sheet: an odd number in front of the drain
+    // run is what flips parity. An even one slides it by two pages and hides the defect.
+    const loaded = readOoxmlPackage(drainShiftDoc(8, 10));
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const sectEndProps = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const docEndProps = resolveEndnoteProperties({ pos: 'docEnd' });
+    const sections = enumerateDocumentSections(part);
+    const bySection = resolveHeaderFooterPartsBySection(loaded.package);
+    const notesInput: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
+      footnotePropsBySection: sections.map(() => documentFootnoteProps),
+      endnotePropsBySection: [docEndProps, sectEndProps, docEndProps],
+      documentFootnoteProps,
+      documentEndnoteProps: docEndProps,
+      measurer,
+      producer: 'drainshift',
+    };
+    const furniture = sections.map((section, index) => {
+      const parts = bySection[index]!;
+      const geometry = geometryOfSection(section.properties);
+      const width = geometry.width - geometry.margin.left - geometry.margin.right;
+      const headers = new Map();
+      for (const [variant, hfPart] of parts.headers) {
+        headers.set(variant, layoutHeaderFooterStory(hfPart, width, measurer, 'drainshift'));
+      }
+      return {
+        titlePage: parts.titlePage,
+        evenAndOddHeaders: parts.evenAndOddHeaders,
+        headers,
+        footers: new Map(),
+      };
+    });
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      notes: notesInput,
+      producer: 'drainshift',
+      sectionFurniture: furniture,
+    });
+    const geometry = geometryOfSection(sections[0]!.properties);
+    const headers = furniture[0]!.headers;
+    const drain = layout.pages.filter((page) => page.noteStream === 'footnote-drain');
+    const inserted = layout.pages.filter((page) => page.noteStream === 'endnote-overflow');
+    expect(drain.length).toBeGreaterThan(0);
+    // An ODD number of sheets inserted in front of the drain run: the arrangement that moves
+    // every drain sheet onto the opposite parity.
+    expect(inserted.length % 2).toBe(1);
+    expect(Math.min(...drain.map((page) => page.index))).toBeGreaterThan(
+      Math.max(...inserted.map((page) => page.index))
+    );
+
+    for (const page of [...drain, ...inserted]) {
+      const expected = (page.index + 1) % 2 === 0 ? 'even' : 'default';
+      expect(page.header?.variant).toBe(expected);
+      const flow = headers.get(expected)!.flowHeight;
+      const top = Math.max(geometry.margin.top, (geometry.headerDistance ?? 36) + flow);
+      expect(page.contentBox.y - page.box.y).toBeCloseTo(top, 6);
+      expect(page.contentBox.height).toBeCloseTo(geometry.height - top - geometry.margin.bottom, 6);
+    }
+  });
+});

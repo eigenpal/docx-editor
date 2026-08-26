@@ -152,9 +152,14 @@ export interface OverflowPageShell {
  *
  * `documentPageIndex` is where the sheet finally LANDS, which is what decides its variant —
  * `w:evenAndOddHeaders` alternates on the page's number in the document, so drain sheets and
- * earlier overflow sheets in front of it all count. It is the sheet's array position: the notes
- * pass reindexes at the end, and inserts only ever move forward, so a position never shifts
- * again once a sheet occupies it.
+ * earlier overflow sheets in front of it all count. It is the sheet's array position, which the
+ * notes pass turns into the page index when it reindexes at the end.
+ *
+ * That only holds because nothing the pass does afterwards inserts IN FRONT of a sheet already
+ * minted, and that is an ordering the pass has to maintain rather than something it gets for
+ * free: a `sectEnd` run inserts inside its own section, so it lands ahead of anything appended
+ * at the document's end. `attachNotesToLayout` runs the section loop before the footnote drain
+ * for exactly this reason — see the comment there.
  *
  * `box` is the sheet the new page occupies, which furniture is positioned against.
  */

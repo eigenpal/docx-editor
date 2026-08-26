@@ -2,7 +2,11 @@
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '@docx-editor.dev/core/store';
-import { createFixedMeasurer, layoutSemanticDocument } from '../index.ts';
+import {
+  createFixedMeasurer,
+  createParagraphLayoutCache,
+  layoutSemanticDocument,
+} from '../index.ts';
 import { formatNumericPicture, MAX_NUMERIC_PICTURE_CHARS } from '../field-numeric-picture.ts';
 import { allowlistedPageField, matchAllowlistedPageField } from '../field-instruction.ts';
 import {
@@ -52,6 +56,17 @@ describe('numeric picture rendering', () => {
     expect(formatNumericPicture(2, '0'.repeat(MAX_NUMERIC_PICTURE_CHARS + 1))).toBeNull();
     expect(formatNumericPicture(Number.NaN, '0#')).toBeNull();
     expect(formatNumericPicture(-1, '0#')).toBeNull();
+  });
+
+  test('refuses a subpicture or literal-quote picture rather than copying its syntax', () => {
+    // `;` picks a subpicture by sign; taking the whole string paints `0;-3` for 3, and the
+    // placeholder measures `0;-0`.
+    expect(formatNumericPicture(3, '0;-0')).toBeNull();
+    expect(formatNumericPicture(0, '0;-0')).toBeNull();
+    expect(formatNumericPicture(1234, '#,##0;(#,##0)')).toBeNull();
+    // `'` delimits literal text; copying the quotes through paints `'p'3`.
+    expect(formatNumericPicture(3, "'p'0")).toBeNull();
+    expect(pageFieldPlaceholder('PAGE', '0;-0')).toBe(PAGE_FIELD_PLACEHOLDER);
   });
 
   test('refuses a fractional picture rather than filling it right to left', () => {
@@ -314,5 +329,73 @@ describe('a body page field on a continued section', () => {
     // `hasBodyPageFields` flag it was flushed with, so a field the continued section appended
     // to it never reaches `substituteBodyPageFields` at all — a separate gap in the continuous
     // merge, older than per-page insets and untouched here.
+  });
+});
+
+describe('a page-number format edit and the paragraph break cache', () => {
+  /** One body paragraph carrying a `PAGE` field with a picture, under an optional format. */
+  function formatDoc(pageNumberFormat?: string): Uint8Array {
+    const field =
+      '<w:p>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> PAGE \\# "000" </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '<w:r><w:t>END</w:t></w:r>' +
+      '</w:p>';
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${field}` +
+          '<w:sectPr>' +
+          (pageNumberFormat ? `<w:pgNumType w:fmt="${pageNumberFormat}"/>` : '') +
+          '<w:pgSz w:w="12240" w:h="15840"/>' +
+          '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720"/>' +
+          '</w:sectPr></w:body></w:document>'
+      ),
+    });
+  }
+
+  function fieldTextOf(layout: ReturnType<typeof layoutSemanticDocument>): string {
+    for (const fragment of layout.pages[0]!.fragments) {
+      if (fragment.kind !== 'paragraph') continue;
+      for (const line of fragment.lines) {
+        if (line.spans.some((span) => span.text === 'END')) return line.spans[0]!.text;
+      }
+    }
+    throw new Error('field line not found');
+  }
+
+  test('a w:pgNumType edit re-emits a paragraph the break cache already holds', () => {
+    // ONE cache across both passes, and the same paragraph text, width and node content. The
+    // only thing that moves is the section's format — which decides the placeholder the field
+    // emits and whether its `\# ` picture reaches finalize at all. If that does not reach the
+    // paragraph key, `breakParagraph` hands back the frozen lines and the stale value paints.
+    const cache = createParagraphLayoutCache();
+    const lay = (bytes: Uint8Array, revision: number) => {
+      const loaded = readOoxmlPackage(bytes);
+      if (!loaded.ok) throw new Error(loaded.reason);
+      const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+      return layoutSemanticDocument(part, revision, {
+        measurer: createFixedMeasurer(6, 14),
+        producer: 'cache-key',
+        cache,
+      });
+    };
+
+    // Roman first: the format wins over the picture, so the field paints `I`.
+    expect(fieldTextOf(lay(formatDoc('upperRoman'), 1))).toBe('I');
+    // Then decimal, through the warm cache: the picture applies and the field paints `001`.
+    expect(fieldTextOf(lay(formatDoc(undefined), 2))).toBe('001');
+    // And back again, so neither direction is the one that happens to work.
+    expect(fieldTextOf(lay(formatDoc('upperRoman'), 3))).toBe('I');
   });
 });

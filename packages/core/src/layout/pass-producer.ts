@@ -36,6 +36,7 @@ interface PassProducerEntry {
   readonly noteMarks: NoteMarkContext | undefined;
   readonly defaultTabStopPt: number | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly pageNumberFormat: string | undefined;
   readonly producer: string;
 }
 
@@ -54,19 +55,30 @@ function passProducerEntryMatches(
   base: string | undefined,
   noteMarks: NoteMarkContext | undefined,
   defaultTabStopPt: number | undefined,
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  pageNumberFormat: string | undefined
 ): entry is PassProducerEntry {
   return (
     entry != null &&
     entry.base === base &&
     entry.noteMarks === noteMarks &&
     entry.defaultTabStopPt === defaultTabStopPt &&
-    entry.displayMode === displayMode
+    entry.displayMode === displayMode &&
+    entry.pageNumberFormat === pageNumberFormat
   );
 }
 
 /**
- * The per-pass producer: base plus cascade, note-mark, default-tab and display-mode tokens.
+ * The per-pass producer: base plus cascade, note-mark, default-tab, display-mode and
+ * page-number-format tokens.
+ *
+ * `pageNumberFormat` is the section's `w:pgNumType/@w:fmt` as the body flow MEASURES against
+ * it. It belongs in the producer, not only in the section context string, because it changes
+ * what a paragraph EMITS: it decides the text of a body page-field placeholder and whether the
+ * atom carries its `\#` picture to finalize at all. The context governs session resume; the
+ * producer is what reaches `paragraphLayoutKey`, and a cache hit returns the frozen lines
+ * before the field walk runs — so a format edit would otherwise serve a stale placeholder and a
+ * stale marker until that paragraph was edited for some other reason.
  *
  * A multi-section pass derives this once per SECTION; rebuilding a content-equal
  * multi-kilobyte string per section made every downstream `===` a memcmp.
@@ -76,10 +88,20 @@ export function passProducerOf(
   styleCascade: StyleCascadeTable | undefined,
   noteMarks: NoteMarkContext | undefined,
   defaultTabStopPt: number | undefined,
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  pageNumberFormat?: string
 ): string {
   const entry = styleCascade ? passProducersByCascade.get(styleCascade) : cascadeFreeProducerSlot;
-  if (passProducerEntryMatches(entry, base, noteMarks, defaultTabStopPt, displayMode)) {
+  if (
+    passProducerEntryMatches(
+      entry,
+      base,
+      noteMarks,
+      defaultTabStopPt,
+      displayMode,
+      pageNumberFormat
+    )
+  ) {
     return entry.producer;
   }
   const producer =
@@ -87,8 +109,16 @@ export function passProducerOf(
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
     (noteMarks ? `|nm:${noteMarksCacheToken(noteMarks)}` : '') +
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
-    (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`);
-  const fresh: PassProducerEntry = { base, noteMarks, defaultTabStopPt, displayMode, producer };
+    (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+    (pageNumberFormat !== undefined ? `|pnf:${pageNumberFormat}` : '');
+  const fresh: PassProducerEntry = {
+    base,
+    noteMarks,
+    defaultTabStopPt,
+    displayMode,
+    pageNumberFormat,
+    producer,
+  };
   if (styleCascade) passProducersByCascade.set(styleCascade, fresh);
   else cascadeFreeProducerSlot = fresh;
   return producer;

@@ -937,7 +937,8 @@ function layoutBlocksPass(
     styleCascade,
     options.noteMarks,
     defaultTabStopPt,
-    displayMode
+    displayMode,
+    options.bodyPageNumberFormat
   );
 
   // Prepass and incremental keys use the first region. Placement re-prepares a block when it
@@ -1005,13 +1006,8 @@ function layoutBlocksPass(
   const continuedContext = continuedInsets
     ? `|cont:${continuedInsets.top},${continuedInsets.height}`
     : '';
-  // The page-number format decides how wide a body page-field placeholder measures, so a
-  // `w:pgNumType/@w:fmt` edit moves breaks and must not resume a flow measured under the old.
-  const pageNumberFormatContext = options.bodyPageNumberFormat
-    ? `|pnf:${options.bodyPageNumberFormat}`
-    : '';
   const contextFor = (notesReserveKey: string): string =>
-    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${pageNumberFormatContext}${furnitureContext}${notesReserveKey}${columnsContext}`;
+    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${furnitureContext}${notesReserveKey}${columnsContext}`;
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
   );

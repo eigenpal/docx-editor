@@ -33,15 +33,26 @@ export const MAX_NUMERIC_PICTURE_CHARS = 64;
  * picture's grouping — `1234567` through `#,###` is `1,234,567`, as Word renders it, not
  * `1234,567` — by repeating the interval the picture's last separator established.
  *
- * A picture with a DECIMAL POINT is refused rather than misread. `0.00` splits into integral
- * and fractional positions that fill in opposite directions, and this fills strictly from the
- * right, so it would render 3 as `0.03` where Word renders `3.00`. Page counts are integers,
- * so the plain number the caller falls back to is the right answer anyway.
+ * Three pictures are REFUSED rather than misread, because each means something this cannot
+ * express, and every character of one would otherwise be filled or copied as though it were a
+ * digit position or a literal:
+ *
+ *   - a DECIMAL POINT. `0.00` splits into integral and fractional positions that fill in
+ *     opposite directions, and this fills strictly from the right, so it would render 3 as
+ *     `0.03` where Word renders `3.00`.
+ *   - a SEMICOLON, Word's subpicture separator. `0;-0` picks a format by the value's sign, so
+ *     only the first subpicture can apply to a page number; taking the whole string paints
+ *     `0;-3` where Word paints `3`.
+ *   - a SINGLE QUOTE, Word's literal-text delimiter. `'p'0` paints `p3` in Word; the quotes are
+ *     syntax, and copying them through paints `'p'3`.
+ *
+ * A page number is a non-negative integer, so the plain value the caller falls back to is the
+ * right answer for all three.
  */
 export function formatNumericPicture(value: number, picture: string): string | null {
   if (!Number.isFinite(value) || value < 0) return null;
   if (picture.length === 0 || picture.length > MAX_NUMERIC_PICTURE_CHARS) return null;
-  if (picture.includes('.')) return null;
+  if (picture.includes('.') || picture.includes(';') || picture.includes("'")) return null;
   const digits = String(Math.floor(value));
   // Whether any REQUIRED position sits left of each index. A `0` there paints a digit even
   // when the value has run out, so the separator before it is still Word's `0,005`, not `0005`.

@@ -58,7 +58,7 @@ const complexField = (instr: string) =>
 const filler = (count: number) =>
   Array.from({ length: count }, (_, i) => `<w:p><w:r><w:t>filler ${i}</w:t></w:r></w:p>`).join('');
 
-/** Body-flow projection (bodyPageFields = true), the mode the layout uses for the document body. */
+/** Body-flow projection, the mode the layout uses for the document body. */
 function project(body: string, mode: RevisionDisplayMode = 'all-markup') {
   return piecesOfParagraph(
     paragraphOf(body),
@@ -73,7 +73,9 @@ function project(body: string, mode: RevisionDisplayMode = 'all-markup') {
     undefined,
     undefined,
     undefined,
-    true // bodyPageFields
+    // Body flow with no `w:pgNumType/@w:fmt`: a `\#` picture renders, as it does in a decimal
+    // section. An empty object, NOT `true` — the parameter is the body's page-field context.
+    {} // bodyPageFields
   );
 }
 

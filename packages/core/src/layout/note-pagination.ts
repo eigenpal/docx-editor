@@ -2240,22 +2240,6 @@ export function attachNotesToLayout(
 
   const pageCountBeforeOverflow = pages.length;
 
-  // Drain footnote continuations that outlive the final body page.
-  if (carry.size > 0) {
-    const drained = drainFootnoteCarryPages(
-      pages,
-      carry,
-      input,
-      noteMarks,
-      reasons,
-      overflowBudget,
-      separatorCache,
-      mint
-    );
-    pages = drained.pages;
-    carry = drained.carry;
-  }
-
   // Place sectEnd notes on the true last page of each section (body fragment ownership),
   // inserting overflow sheets before the next section rather than advancing into it.
   if (endnotesBySection.size > 0 && pages.length > 0) {
@@ -2289,6 +2273,34 @@ export function attachNotesToLayout(
         }
       );
     }
+  }
+
+  // Drain footnote continuations that outlive the final body page.
+  //
+  // AFTER the section loop, not before it. A drain sheet resolves its shell from where it
+  // lands, and the shell has to still describe that page when the pass finishes — but a
+  // `sectEnd` run inserts inside its own section, which is in FRONT of sheets appended at the
+  // end. Draining first meant an earlier section's insertion slid every drain sheet one page
+  // along, and under `w:evenAndOddHeaders` an odd number of them left each sheet showing the
+  // other variant's header over the other variant's content box.
+  //
+  // Nothing above depends on these sheets existing yet: `lastPageIndexForSection` and
+  // `sectionEndInsertBound` both walk past a `footnote-drain` page, and `isEndnoteHostEligible`
+  // refuses one as a host. The doc-end run below still lands after them, which is the order it
+  // had before.
+  if (carry.size > 0) {
+    const drained = drainFootnoteCarryPages(
+      pages,
+      carry,
+      input,
+      noteMarks,
+      reasons,
+      overflowBudget,
+      separatorCache,
+      mint
+    );
+    pages = drained.pages;
+    carry = drained.carry;
   }
 
   if (endnotesDoc.length > 0 && pages.length > 0) {
