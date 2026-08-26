@@ -6539,7 +6539,19 @@ export function mountPaginatedSurface(
     });
   }
   if (collaborationSession && collaborationPort) {
-    detachCollaboration = collaborationSession.attach(collaborationPort);
+    // `attach` runs inside the host's mount, so a session that throws here takes the whole editor
+    // with it and the reader gets a blank page instead of a document. Destroying the session moves
+    // it to `destroyed`, which hosts already render as out of sync — an honest "reload to rejoin"
+    // beats both a blank page and a room that says it is connecting forever.
+    try {
+      detachCollaboration = collaborationSession.attach(collaborationPort);
+    } catch {
+      try {
+        collaborationSession.destroy();
+      } catch {
+        // Already unusable; the surface still opens without a replica.
+      }
+    }
   }
   publishLocalCollaborationSelection();
   // The pages layer is created `contenteditable` unconditionally, so a surface OPENED in

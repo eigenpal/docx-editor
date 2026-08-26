@@ -321,11 +321,10 @@ class DocumentSession implements YjsCollaborationSession {
   }
 
   attach(port: CollaborationDocumentPort): () => void {
-    if (this.destroyed) throw new CollaborationSchemaError('session-destroyed');
-    if (this.port) throw new CollaborationSchemaError('session-already-attached');
-    if (port.documentId !== this.documentId) {
-      throw new CollaborationSchemaError('document-id-mismatch');
-    }
+    // Hosts call this from a layout effect. A throw unmounts the editor instead of
+    // leaving it mounted on the degraded status the host already renders.
+    const refused = this.refuseAttach(port);
+    if (refused) return refused;
     this.port = port;
     this.publishSharedToPort();
     const stopJournal = port.observePrimitiveJournal((journal) => {
@@ -344,6 +343,24 @@ class DocumentSession implements YjsCollaborationSession {
       this.detachPort = null;
     };
     return () => this.detachPort?.();
+  }
+
+  /** Return a no-op detach when this replica cannot accept a port. Never throw. */
+  private refuseAttach(port: CollaborationDocumentPort): (() => void) | null {
+    if (this.destroyed) return () => {};
+    if (this.port) {
+      // Re-attaching the SAME port is the benign case a remount produces, and the live
+      // attachment already observes it. A DIFFERENT port is not benign: this session observes
+      // one journal, so that port would never publish a keystroke while the status still read
+      // `ready`. Report it, because a silently unreplicated surface is the worse outcome.
+      if (this.port !== port) this.setStatus('error', 'port-already-attached');
+      return () => {};
+    }
+    if (port.documentId !== this.documentId) {
+      this.setStatus('error', 'document-id-mismatch');
+      return () => {};
+    }
+    return null;
   }
 
   /** Every authorable mutation replicates, so only session readiness gates a write. */

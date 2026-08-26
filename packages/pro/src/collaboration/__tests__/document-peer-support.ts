@@ -89,10 +89,58 @@ export function nodeText(node: OoxmlNode): string {
   return node.children.map(nodeText).join('');
 }
 
+export function packageDivergence(left: OoxmlPackage, right: OoxmlPackage): string {
+  const leftPrint = packageFingerprint(left);
+  const rightPrint = packageFingerprint(right);
+  const lines: string[] = [];
+  const leftParts = new Map<string, string>();
+  const rightParts = new Map<string, string>();
+  for (const line of leftPrint.split('\n')) {
+    const cut = line.indexOf(':');
+    if (cut < 0) continue;
+    leftParts.set(line.slice(0, cut), line.slice(cut + 1));
+  }
+  for (const line of rightPrint.split('\n')) {
+    const cut = line.indexOf(':');
+    if (cut < 0) continue;
+    rightParts.set(line.slice(0, cut), line.slice(cut + 1));
+  }
+  const names = [...new Set([...leftParts.keys(), ...rightParts.keys()])].sort();
+  for (const name of names) {
+    const leftHash = leftParts.get(name);
+    const rightHash = rightParts.get(name);
+    if (leftHash === rightHash) continue;
+    if (leftHash === undefined) lines.push(`part ${name} missing on left`);
+    else if (rightHash === undefined) lines.push(`part ${name} missing on right`);
+    else lines.push(`part ${name} fingerprint differs`);
+  }
+  const leftMain = left.parts.get(left.mainDocumentPart);
+  const rightMain = right.parts.get(right.mainDocumentPart);
+  if (leftMain && rightMain) {
+    const leftTexts: string[] = [];
+    const rightTexts: string[] = [];
+    walk(leftMain.root, (node) => {
+      if (node.kind === 'paragraph') leftTexts.push(nodeText(node));
+    });
+    walk(rightMain.root, (node) => {
+      if (node.kind === 'paragraph') rightTexts.push(nodeText(node));
+    });
+    if (leftTexts.join('\n') !== rightTexts.join('\n')) {
+      lines.push(
+        `main paragraphs left=${JSON.stringify(leftTexts)} right=${JSON.stringify(rightTexts)}`
+      );
+    }
+  }
+  return lines.join('; ') || 'packages differ';
+}
+
 export function createPeerHarness(documentId: string): {
   readonly pair: (
     bytes: Uint8Array
   ) => Promise<{ alice: Peer; bob: Peer; pause: () => void; resume: () => void }>;
+  readonly join: (host: Peer, name: string) => Promise<Peer>;
+  readonly leave: (peer: Peer) => void;
+  readonly remount: (peer: Peer) => Promise<Peer>;
   readonly apply: (peer: Peer, ops: readonly TreeDocOp[], scope?: StoryScope) => void;
   readonly packageOf: (peer: Peer) => OoxmlPackage;
   readonly expectConverged: (left: Peer, right: Peer) => void;
@@ -101,6 +149,7 @@ export function createPeerHarness(documentId: string): {
 } {
   const opened: Peer[] = [];
   const relays: (() => void)[] = [];
+  const liveDocs = new Set<Y.Doc>();
 
   function storeFrom(bytes: Uint8Array): TreePackageStore {
     const loaded = readOoxmlPackage(bytes);
@@ -116,6 +165,7 @@ export function createPeerHarness(documentId: string): {
     const detach = room.session.attach(port);
     const peer: Peer = { ydoc, awareness, room, store, port, detach };
     opened.push(peer);
+    liveDocs.add(ydoc);
     return peer;
   }
 
@@ -136,7 +186,8 @@ export function createPeerHarness(documentId: string): {
     let paused = false;
     const held: { readonly target: Y.Doc; readonly update: Uint8Array }[] = [];
     const forward = (target: Y.Doc) => (update: Uint8Array, origin: unknown) => {
-      if (origin === 'relay') return;
+      if (origin === 'relay' || origin === 'join') return;
+      if (!liveDocs.has(target)) return;
       if (paused) {
         held.push({ target, update });
         return;
@@ -157,9 +208,20 @@ export function createPeerHarness(documentId: string): {
       },
       resume: () => {
         paused = false;
-        for (const { target, update } of held.splice(0)) Y.applyUpdate(target, update, 'relay');
+        for (const { target, update } of held.splice(0)) {
+          if (liveDocs.has(target)) Y.applyUpdate(target, update, 'relay');
+        }
       },
     };
+  }
+
+  function wireToOpened(peer: Peer): { pause: () => void; resume: () => void } {
+    let controls = { pause: () => {}, resume: () => {} };
+    for (const existing of opened) {
+      if (existing === peer) continue;
+      controls = relay(existing, peer);
+    }
+    return controls;
   }
 
   async function joinPeer(
@@ -177,7 +239,39 @@ export function createPeerHarness(documentId: string): {
       bootstrap: { kind: 'join', timeoutMs: 5_000 },
     });
     const peer = attachPeer(ydoc, awareness, room);
-    return { peer, ...relay(host, peer) };
+    return { peer, ...wireToOpened(peer) };
+  }
+
+  function dropOpened(peer: Peer): void {
+    const index = opened.indexOf(peer);
+    if (index >= 0) opened.splice(index, 1);
+  }
+
+  function leave(peer: Peer): void {
+    liveDocs.delete(peer.ydoc);
+    dropOpened(peer);
+    peer.detach();
+    peer.room.destroy();
+    peer.awareness.destroy();
+    peer.ydoc.destroy();
+  }
+
+  async function remount(peer: Peer): Promise<Peer> {
+    const name = peer.room.session.identity.actorId;
+    const ydoc = peer.ydoc;
+    dropOpened(peer);
+    peer.detach();
+    peer.room.destroy();
+    peer.awareness.destroy();
+    const awareness = new Awareness(ydoc);
+    const room = await createDocumentCollaboration({
+      ydoc,
+      awareness,
+      documentId,
+      identity: { actorId: name, name },
+      bootstrap: { kind: 'join', timeoutMs: 5_000 },
+    });
+    return attachPeer(ydoc, awareness, room);
   }
 
   function packageOf(peer: Peer): OoxmlPackage {
@@ -196,6 +290,12 @@ export function createPeerHarness(documentId: string): {
       const joined = await joinPeer(alice, 'bob');
       return { alice, bob: joined.peer, pause: joined.pause, resume: joined.resume };
     },
+    async join(host, name) {
+      const joined = await joinPeer(host, name);
+      return joined.peer;
+    },
+    leave,
+    remount,
     apply(peer, ops, scope = BODY) {
       const refusal = peer.room.session.gateOperations(ops, scope);
       if (refusal) throw new Error(`gate refused: ${refusal}`);
@@ -207,13 +307,17 @@ export function createPeerHarness(documentId: string): {
     },
     packageOf,
     expectConverged(left, right) {
-      if (packageFingerprint(packageOf(right)) !== packageFingerprint(packageOf(left))) {
-        throw new Error('replicas did not converge');
+      const leftPkg = packageOf(left);
+      const rightPkg = packageOf(right);
+      if (packageFingerprint(rightPkg) !== packageFingerprint(leftPkg)) {
+        throw new Error(`replicas did not converge: ${packageDivergence(leftPkg, rightPkg)}`);
       }
-      const leftDigest = saveReopenDigest(packageOf(left));
-      const rightDigest = saveReopenDigest(packageOf(right));
+      const leftDigest = saveReopenDigest(leftPkg);
+      const rightDigest = saveReopenDigest(rightPkg);
       if (JSON.stringify(leftDigest) !== JSON.stringify(rightDigest)) {
-        throw new Error('save/reopen digests did not converge');
+        throw new Error(
+          `save/reopen digests did not converge: ${packageDivergence(leftPkg, rightPkg)}`
+        );
       }
     },
     paragraphIdAt(peer, index, scope = BODY) {
@@ -227,6 +331,7 @@ export function createPeerHarness(documentId: string): {
     },
     cleanup() {
       for (const stop of relays.splice(0)) stop();
+      liveDocs.clear();
       for (const peer of opened.splice(0)) {
         peer.detach();
         peer.room.destroy();

@@ -39,6 +39,7 @@ import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
 import { keepCaret } from './demoButtons';
 import { DemoHeaderButton } from './DemoHeaderButton';
 import { CollaborationControl } from './CollaborationDemo';
+import { createCollaborationRoomOwner } from './collaboration-room-owner';
 import type { WebrtcCollaborationRoom } from '@docx-editor.dev/pro/collaboration/webrtc';
 import {
   citationCardAt,
@@ -600,6 +601,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [workingDocument, setWorkingDocument] = useState<Uint8Array | null>(null);
   const [collaborationRoom, setCollaborationRoom] = useState<WebrtcCollaborationRoom | null>(null);
   const [collaborationIntent, setCollaborationIntent] = useState<'share' | 'join' | null>(null);
+  const collaborationRoomOwner = useRef(createCollaborationRoomOwner<WebrtcCollaborationRoom>());
   // The citation details card, owned HERE so both openers share it: a click on the chip
   // (`CustomNodeChrome.onNodeClick`) and the context menu's Edit row (`onEditNode`).
   const [citationCard, setCitationCard] = useState<CitationCard | null>(null);
@@ -624,12 +626,11 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
     error: loadError,
   } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
 
-  useEffect(
-    () => () => {
-      collaborationRoom?.destroy();
-    },
-    [collaborationRoom]
-  );
+  useEffect(() => {
+    const owner = collaborationRoomOwner.current;
+    owner.reclaimOwner();
+    return () => owner.disposeOwner();
+  }, []);
 
   const activeDocument = collaborationRoom?.document ?? workingDocument ?? bytes;
 
@@ -681,11 +682,13 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 room={collaborationRoom}
                 connectionIntent={collaborationIntent}
                 onStart={(room, intent) => {
+                  collaborationRoomOwner.current.adopt(room);
                   setWorkingDocument(room.document);
                   setCollaborationIntent(intent);
                   setCollaborationRoom(room);
                 }}
                 onLeave={(document) => {
+                  collaborationRoomOwner.current.leave();
                   setWorkingDocument(document);
                   setCollaborationIntent(null);
                   setCollaborationRoom(null);

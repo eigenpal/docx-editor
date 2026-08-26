@@ -289,10 +289,13 @@ class Session implements YjsCollaborationSession {
   }
 
   attach(port: CollaborationDocumentPort): () => void {
-    if (this.destroyed) throw new CollaborationSchemaError('session-destroyed');
-    if (this.port) throw new CollaborationSchemaError('session-already-attached');
+    // Hosts call this from a layout effect. A throw unmounts the editor instead of
+    // leaving it mounted on the degraded status the host already renders.
+    if (this.destroyed) return () => {};
+    if (this.port) return () => {};
     if (port.documentId !== this.documentId) {
-      throw new CollaborationSchemaError('document-id-mismatch');
+      this.setStatus('error', 'document-id-mismatch');
+      return () => {};
     }
     this.validateParagraphSet(port);
     this.port = port;

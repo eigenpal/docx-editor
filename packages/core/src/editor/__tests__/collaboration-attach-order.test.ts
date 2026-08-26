@@ -85,6 +85,30 @@ describe('attaching a replica to a paginated surface', () => {
     expect(container.querySelectorAll('[data-paragraph-id]').length).toBeGreaterThan(0);
   });
 
+  test('a session that throws while attaching leaves an editable document', () => {
+    const events: string[] = [];
+    const container = document.createElement('div');
+    const session = publishingSession(docx(paragraph('Remote')), (event) => events.push(event));
+    const throwing: EditorCollaborationSession = {
+      ...session,
+      attach: () => {
+        throw new Error('paragraph-set-mismatch');
+      },
+      destroy: () => events.push('destroyed'),
+    };
+    const result = mountPaginatedSurface(container, docx(paragraph('Alpha')), {
+      scale: 1,
+      collaborationModel: { session: throwing },
+    });
+    if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+    opened.push({ surface: result.surface, container });
+
+    // The document is painted and typing still works; only replication is gone. The session is
+    // destroyed rather than left mid-attach, so the host reports out of sync instead of connecting.
+    expect(container.querySelectorAll('[data-paragraph-id]').length).toBeGreaterThan(0);
+    expect(events).toEqual(['destroyed']);
+  });
+
   test('detach runs when the surface is destroyed', () => {
     const events: string[] = [];
     const container = document.createElement('div');
