@@ -38,6 +38,7 @@ import {
   resolveAllocationActor,
 } from './actor-scoped-ids.ts';
 import {
+  isCanonicalPrimitiveCaptureActive,
   recordDeleteContentTypeOverride,
   recordDeleteXmlPart,
   recordPutContentTypeOverride,
@@ -374,6 +375,7 @@ export function withContentTypeOverrides(
 
   let part = parsed.part;
   const overrides = new Map(pkg.contentTypes.overrides);
+  const capture = isCanonicalPrimitiveCaptureActive();
   const recorded: Array<readonly [string, string]> = [];
   let changed = false;
   for (const [partName, contentType] of entries) {
@@ -384,7 +386,7 @@ export function withContentTypeOverrides(
     part = upserted.part;
     overrides.set(partNameKey(canonical), contentType);
     changed = true;
-    recorded.push([canonical, contentType]);
+    if (capture) recorded.push([canonical, contentType]);
   }
   if (!changed) return pkg;
 
@@ -395,8 +397,10 @@ export function withContentTypeOverrides(
     partBytes,
     contentTypes: { defaults: pkg.contentTypes.defaults, overrides } satisfies ContentTypeIndex,
   });
-  for (const [partName, mediaType] of recorded) {
-    recordPutContentTypeOverride(partName, mediaType);
+  if (capture) {
+    for (const [partName, mediaType] of recorded) {
+      recordPutContentTypeOverride(partName, mediaType);
+    }
   }
   return next;
 }
@@ -466,11 +470,9 @@ export function withRelationships(
       ok: true as const,
     };
   });
-  if (result.ok && result.pkg !== pkg) {
-    const nextRecords = result.pkg.relationships.get(ownerPart) ?? [];
+  if (result.ok && result.pkg !== pkg && isCanonicalPrimitiveCaptureActive()) {
     for (const record of added) {
-      const written = nextRecords.find((entry) => entry.id === record.id);
-      if (written) recordPutRelationship(ownerPart, written);
+      recordPutRelationship(ownerPart, record);
     }
   }
   return result;

@@ -24,6 +24,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
+import { isCanonicalPrimitiveCaptureActive } from './canonical-primitive-capture.ts';
 import {
   captureInsertChildren,
   captureRemoveNode,
@@ -379,6 +380,15 @@ function finish(part: OoxmlPart | null, options?: EditOptions): OoxmlEditResult 
   return { ok: true, part };
 }
 
+/**
+ * Pre-edit ids for journal lowering. Copying them is O(part) per primitive, so skip
+ * the copy when no observed transaction is recording.
+ */
+function knownIdsIfCapturing(part: OoxmlPart): Set<string> | undefined {
+  if (!isCanonicalPrimitiveCaptureActive()) return undefined;
+  return new Set(nodeIndexFor(part.root).nodes.keys());
+}
+
 /** Replace one node's children wholesale. */
 export function replaceChildren(
   part: OoxmlPart,
@@ -390,7 +400,7 @@ export function replaceChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  const knownIds = new Set(nodeIndexFor(part.root).nodes.keys());
+  const knownIds = knownIdsIfCapturing(part);
   const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
   if (result.ok) captureReplaceChildren(target, children, knownIds);
   return result;
@@ -410,7 +420,7 @@ export function insertChildren(
   }
   const at = Math.max(0, Math.min(index, target.children.length));
   const next = [...target.children.slice(0, at), ...children, ...target.children.slice(at)];
-  const knownIds = new Set(nodeIndexFor(part.root).nodes.keys());
+  const knownIds = knownIdsIfCapturing(part);
   const result = finish(rebuild(part, nodeId, withChildren(target, next)), options);
   if (result.ok) captureInsertChildren(target, at, children, knownIds);
   return result;
@@ -427,8 +437,8 @@ export function replaceNode(
   if (!previous) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  const knownIds = new Set(nodeIndexFor(part.root).nodes.keys());
-  const parent = parentNodeOf(part, nodeId);
+  const knownIds = knownIdsIfCapturing(part);
+  const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
   const result = finish(rebuild(part, nodeId, replacement), options);
   if (result.ok) captureReplaceNode(previous, parent, replacement, knownIds);
   return result;
@@ -440,10 +450,10 @@ export function removeNode(
   nodeId: string,
   options?: EditOptions
 ): OoxmlEditResult {
-  const parent = parentNodeOf(part, nodeId);
   if (!hasNode(part, nodeId)) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
+  const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
   const result = finish(rebuild(part, nodeId, null), options);
   if (result.ok && parent) captureRemoveNode(parent, nodeId);
   return result;
