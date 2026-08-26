@@ -45,7 +45,8 @@ import {
 } from './canonical-primitive-capture.ts';
 
 const WP_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
-const MAX_UNSIGNED_INT = 4_294_967_295;
+/** `wp:docPr/@id` is `xsd:unsignedInt`, so this is the highest id any minter may take. */
+export const MAX_UNSIGNED_INT = 4_294_967_295;
 
 const MIME_TO_CONTENT_TYPE: Readonly<Record<SupportedImageMime, string>> = Object.freeze({
   'image/png': 'image/png',
@@ -136,8 +137,15 @@ function walkNodes(node: OoxmlNode, visit: (node: OoxmlNode) => void): void {
  * `0` is seeded as used. It is a legal `xsd:unsignedInt` but names no drawing here —
  * {@link parseValidDocPrId} refuses it, so an id nothing can read back must never be minted.
  * The solo walk is `highest + 1` and cannot reach it; a striped residue of 0 would.
+ *
+ * Exported because the clipboard merge mints a RUN of these ids for one paste and needs the
+ * same occupancy — reserved `0` included — that {@link allocateDrawingPropertyId} allocates
+ * against for a single one.
  */
-function scanDocPrIds(pkg: OoxmlPackage): { readonly highest: number; readonly used: Set<string> } {
+export function drawingPropertyIdOccupancy(pkg: OoxmlPackage): {
+  readonly highest: number;
+  readonly used: Set<string>;
+} {
   let highest = 0;
   const used = new Set<string>(['0']);
   for (const part of pkg.parts.values()) {
@@ -167,7 +175,7 @@ export function allocateDrawingPropertyId(
   pkg: OoxmlPackage,
   actorId?: string
 ): DrawingPropertyIdResult {
-  const { highest, used } = scanDocPrIds(pkg);
+  const { highest, used } = drawingPropertyIdOccupancy(pkg);
   const actor = resolveAllocationActor(actorId);
   let next: number;
   try {

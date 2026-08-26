@@ -6264,6 +6264,7 @@ export function mountPaginatedSurface(
             fragmentBytes: bytes,
             lastMarkCovered,
             priorOps: plan.ops as unknown as TreeDocOp[],
+            ...(collaborationSession ? { actorId: collaborationSession.identity.actorId } : {}),
           }
         );
         landed = result.ok;

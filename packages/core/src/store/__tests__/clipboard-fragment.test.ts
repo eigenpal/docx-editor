@@ -21,6 +21,7 @@ import {
   extractFragmentPackage,
   type FragmentCoverage,
 } from '../store/clipboard-fragment-extract.ts';
+import { carriesRevisionId } from '../store/tree-op-revision-ids.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 import { normalizedBodySignatures, referencedNoteSignatures } from './clipboard-fragment-oracle.ts';
 import { paragraphLength } from '../store/tree-op-segments.ts';
@@ -899,6 +900,109 @@ describe('clipboard fragment round trip', () => {
     expect(serializeOoxmlPart(store.currentPackage().parts.get(target.mainDocumentPart)!)).toBe(
       before
     );
+  });
+
+  test('a solo paste keeps the dense bookmark, revision and docPr sequences', () => {
+    // The pin that keeps striping honest. Every id below is minted by a counter that seeds
+    // from "one past the highest in the target" and then counts up, which is Word's own
+    // sequence. With no collaboration actor bound that sequence must not move: a solo
+    // author's saved file is the fidelity baseline, and two peers are the only reason to
+    // leave it. TWO of each namespace travel, so the second id is pinned too.
+    const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+    const DATE = '2026-01-01T00:00:00Z';
+    const png = Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      ),
+      (character) => character.charCodeAt(0)
+    );
+    const picture = (docPrId: string): string =>
+      '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="190500" cy="190500"/>' +
+      `<wp:docPr id="${docPrId}" name="dot${docPrId}"/>` +
+      '<wp:cNvGraphicFramePr/>' +
+      `<a:graphic><a:graphicData uri="${PIC}"><pic:pic>` +
+      '<pic:nvPicPr><pic:cNvPr id="0" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+      '<pic:blipFill><a:blip r:embed="rId7"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+      '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="190500" cy="190500"/></a:xfrm>' +
+      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic>' +
+      '</wp:inline></w:drawing></w:r>';
+    const marked = (index: string, docPrId: string): string =>
+      '<w:p>' +
+      `<w:bookmarkStart w:id="1${index}" w:name="mark${index}"/><w:bookmarkEnd w:id="1${index}"/>` +
+      `<w:ins w:id="2${index}" w:author="Source" w:date="${DATE}">` +
+      `<w:r><w:t>Pasted ${index}</w:t></w:r></w:ins>` +
+      picture(docPrId) +
+      '</w:p>';
+    const fragmentBytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="png" ContentType="image/png"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId7" Type="${R}/image" Target="media/image1.png"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}">` +
+          `<w:body>${marked('1', '31')}${marked('2', '32')}</w:body></w:document>`
+      ),
+      'word/media/image1.png': png,
+    });
+
+    // The target already holds bookmark 4 and revision 9, so the seeds are 5 and 10. It
+    // holds no drawing, so `allocateDrawingPropertyId` seeds the docPr walk at 1.
+    const target = buildPackage(
+      '<w:p><w:bookmarkStart w:id="4" w:name="host"/><w:bookmarkEnd w:id="4"/>' +
+        `<w:ins w:id="9" w:author="Host" w:date="${DATE}"><w:r><w:t>Host</w:t></w:r></w:ins>` +
+        '</w:p>'
+    );
+    const store = openStore(target);
+    const hostId = paragraphIdsUnder(
+      bodyOf(store.currentPackage().parts.get(target.mainDocumentPart)!)
+    )[0]!;
+    const pasted = store.applyFragmentPaste(
+      { kind: 'body' },
+      { paragraphId: hostId, offset: 0, fragmentBytes, lastMarkCovered: true }
+    );
+    expect(pasted.ok).toBe(true);
+
+    const part = store.currentPackage().parts.get(target.mainDocumentPart)!;
+    const idsOf = (read: (node: OoxmlNode) => string | undefined): number[] => {
+      const found = new Set<string>();
+      const walk = (node: OoxmlNode): void => {
+        if (node.kind === 'textValue') return;
+        const value = read(node);
+        if (value !== undefined) found.add(value);
+        for (const child of node.children) walk(child);
+      };
+      walk(part.root);
+      return [...found].map(Number).sort((left, right) => left - right);
+    };
+
+    expect(
+      idsOf((node) => (node.kind === 'bookmarkStart' ? attributeValueOf(node, 'id') : undefined))
+    ).toEqual([4, 5, 6]);
+    expect(
+      idsOf((node) => (carriesRevisionId(node) ? attributeValueOf(node, 'id') : undefined))
+    ).toEqual([9, 10, 11]);
+    expect(
+      idsOf((node) =>
+        node.kind === 'drawingDocPr'
+          ? node.attributes.find(
+              (attribute) => attribute.localName === 'id' && attribute.namespaceUri === ''
+            )?.value
+          : undefined
+      )
+    ).toEqual([1, 2]);
   });
 
   test('an invalid fragment refuses atomically', () => {

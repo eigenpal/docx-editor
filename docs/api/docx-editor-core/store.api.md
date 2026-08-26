@@ -1473,6 +1473,7 @@ export type FragmentMergeResult = {
 
 // @public (undocumented)
 export interface FragmentPasteInput {
+    readonly actorId?: string;
     readonly fragmentBytes: Uint8Array;
     // (undocumented)
     readonly lastMarkCovered: boolean;

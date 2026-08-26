@@ -34,6 +34,15 @@ export interface FragmentPasteInput {
   readonly lastMarkCovered: boolean;
   /** Ops that clear the current selection first (the surface's deleteSelectionPlan). */
   readonly priorOps?: readonly TreeDocOp[];
+  /**
+   * Collaboration actor for the ids this paste mints.
+   *
+   * A paste freshens three package-wide namespaces — bookmark `@w:id`, revision `@w:id` and
+   * `wp:docPr/@id` — and the merge reads the actor off the open transaction. Without one, two
+   * replicas pasting the same fragment from one snapshot mint the same numbers, and only the
+   * merged document shows it. Omitted (solo) keeps Word's dense sequences.
+   */
+  readonly actorId?: string;
 }
 
 export type FragmentPasteResult =
@@ -158,7 +167,13 @@ export function applyFragmentPaste(
             lastMarkCovered: input.lastMarkCovered,
           });
         },
-        { story }
+        {
+          story,
+          // THE BINDING THAT REACHES THE MINT. `transact` wraps the whole synchronous build in
+          // `runWithTransactionActor`, and the build is where the merge takes its bookmark,
+          // revision and `docPr` ids.
+          ...(input.actorId ? { actorId: input.actorId } : {}),
+        }
       );
 
       if (refusalDetail.length > 0) {

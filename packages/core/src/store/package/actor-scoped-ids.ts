@@ -107,6 +107,36 @@ export function nextStripedDecimalId(
 }
 
 /**
+ * A cursor over one actor's residue class, for a caller that mints SEVERAL ids at once.
+ *
+ * {@link nextStripedDecimalId} answers the same question for one id, and its first answer is
+ * this sequence's first answer. What it cannot do is continue: it restarts the walk at `stripe`
+ * on every call. So a caller minting N ids either pays N walks or — worse — seeds from it once
+ * and then counts up by one, which leaves the residue class on the SECOND id and lands on
+ * numbers another actor's stripe contains. That reads as striped and collides anyway. The
+ * cursor keeps its place instead, so every id it hands back satisfies
+ * `Number(id) % ACTOR_ID_STRIPE === actorStripe(actorId)`.
+ *
+ * `null` past the ceiling rather than a wrap, for the reason `nextStripedDecimalId` throws
+ * there: the only ids left in the stripe are ids somebody already holds. The caller decides
+ * whether that refuses the whole edit.
+ */
+export function stripedDecimalIdSequence(
+  used: ReadonlySet<string>,
+  actorId: string,
+  max: number
+): () => string | null {
+  let candidate = actorStripe(actorId);
+  return () => {
+    while (candidate <= max && used.has(String(candidate))) candidate += ACTOR_ID_STRIPE;
+    if (candidate > max) return null;
+    const id = String(candidate);
+    candidate += ACTOR_ID_STRIPE;
+    return id;
+  };
+}
+
+/**
  * Solo "one past highest". When that would pass `max`, scan from zero for an unused id —
  * the same wrap the revision minter already had, so a huge attacker-controlled `@w:id`
  * cannot push us into `w:id="1e+22"`.

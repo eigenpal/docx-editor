@@ -96,6 +96,10 @@ function usedRevisionIds(part: OoxmlPart): Set<string> {
  * Keying on kind missed them, so a document whose only revisions were a tracked row
  * insertion minted an id already in use — and the new edit then shared an address with a
  * structural revision the engine refuses, which marked the user's own insertion read-only.
+ *
+ * Exported so the clipboard merge occupies the same set when it mints ids for a pasted
+ * revision. A second list there would let a striped paste land on the id of a `w:cellIns` it
+ * never looked at, and the pasted insertion would join that row revision.
  */
 export const REVISION_ID_BEARING: ReadonlySet<string> = new Set([
   'ins',
