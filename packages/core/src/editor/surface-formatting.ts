@@ -24,19 +24,14 @@ import {
 import {
   AUTHORABLE_RUN_PROPERTIES,
   authoredProperties,
+  DEFAULT_FORMATTING_DISPLAY_MODE,
   directParagraphMarkProperties,
   findNode,
-  formatOwnedRunIds,
-  mergedProperties,
   propertyContainer,
   runAddressRanges,
+  type FormattingDisplayMode,
   type OoxmlNode,
   type OoxmlPart,
-  type RunPropertyEdit,
-} from '@docx-editor.dev/core/store';
-import {
-  DEFAULT_FORMATTING_DISPLAY_MODE,
-  type FormattingDisplayMode,
 } from '@docx-editor.dev/core/store';
 // By path, not through the store's public entry: the walk and its clip are the engine's own
 // answer to "which runs does this range cover", not surface a consumer builds on.
