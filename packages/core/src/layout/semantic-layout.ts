@@ -139,6 +139,12 @@ import {
   tocFieldChromeParagraphIds,
 } from './toc-layout.ts';
 import { furnitureLayoutContext, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
+import {
+  createPageContentInsets,
+  headerFooterVariantFor,
+  type HeaderFooterVariantName,
+  type PageFurniture,
+} from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import {
   attachContentControlBoundaries,
@@ -201,23 +207,9 @@ export {
   type LayoutSessionStats,
 } from './layout-session.ts';
 
-/** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
-export type HeaderFooterVariantName = 'default' | 'first' | 'even';
-
-/**
- * Pre-laid page furniture, supplied by the host (phase 2).
- *
- * Baseline stories are laid out once per variant (`layoutHeaderFooterStory`) for furniture
- * height. Stories that actually contain allowlisted PAGE/NUMPAGES fields attach a projector
- * so document-level finalize can re-layout under the known page count; field-free furniture
- * reuses the baseline on every sheet.
- */
-export interface PageFurniture {
-  readonly titlePage: boolean;
-  readonly evenAndOddHeaders: boolean;
-  readonly headers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
-  readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
-}
+// Both types moved to `page-furniture-insets.ts` with the per-page resolution that reads them;
+// they are re-exported here because this module is the import site every caller already has.
+export { type HeaderFooterVariantName, type PageFurniture } from './page-furniture-insets.ts';
 
 /**
  * Everything a layout pass needs beyond the document itself.
@@ -921,29 +913,13 @@ function layoutBlocksPass(
   // enters an unequal-width later column; multi-column passes conservatively skip resume.
   const contentWidth = columns.widths[0]!;
 
-  // PAGE FURNITURE. A header taller than the top-margin remainder pushes the content area
-  // down (Word's behaviour), computed as the worst case over the variants in use so the
-  // content column is one height for every page. Capped at 40% of the sheet per edge: a
-  // hostile header of five hundred paragraphs must not shrink the content area to nothing,
-  // because pagination into a zero-height column never terminates.
+  // PAGE FURNITURE. A header taller than the top-margin remainder pushes that page's content
+  // area down (Word's behaviour), and the header a page shows is the one its OWN variant
+  // resolves to — see `page-furniture-insets.ts` for why the worst case over the variants is
+  // not the same thing.
   const furniture = options.furniture;
   const headerDistance = geometry.headerDistance ?? 36;
   const footerDistance = geometry.footerDistance ?? 36;
-  const maxFlow = (stories: ReadonlyMap<string, HeaderFooterStoryLayout> | undefined): number => {
-    let max = 0;
-    for (const story of stories?.values() ?? []) max = Math.max(max, story.flowHeight);
-    return max;
-  };
-  const furnitureCap = geometry.height * 0.4;
-  const effectiveTop = Math.min(
-    furnitureCap,
-    Math.max(geometry.margin.top, furniture ? headerDistance + maxFlow(furniture.headers) : 0)
-  );
-  const effectiveBottom = Math.min(
-    furnitureCap,
-    Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
-  );
-  const baseContentHeight = geometry.height - effectiveTop - effectiveBottom;
   const pageBottomReserves = options.pageBottomReserves;
   const session = options.session;
   const lineCounterStart = options.lineCounterStart ?? 0;
@@ -953,6 +929,15 @@ function layoutBlocksPass(
   // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
   // alternates by page number, so it is not a section-local question.
   const pageIndexStart = options.pageIndexStart ?? 0;
+  const insetsFor = createPageContentInsets({
+    ...(furniture ? { furniture } : {}),
+    pageHeight: geometry.height,
+    marginTop: geometry.margin.top,
+    marginBottom: geometry.margin.bottom,
+    headerDistance,
+    footerDistance,
+    pageIndexStart,
+  });
   // Only the reserve entries THIS pass can read belong in its context key. The pass reads
   // reserves at `pageIndexStart` plus consecutive local page slots as it opens pages, so a
   // bound of "the page count the previous pass produced, plus one" covers every slot an
@@ -1000,7 +985,7 @@ function layoutBlocksPass(
     // so every flow sharing the sheet stops above the same note area.
     const base = Math.max(
       1,
-      baseContentHeight - (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0)
+      insetsFor(pages.length).height - (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0)
     );
     return columnRegionBottom !== undefined && pages.length === 0
       ? Math.max(1, Math.min(base, columnRegionBottom))
@@ -1415,21 +1400,9 @@ function layoutBlocksPass(
     height: geometry.height,
   });
 
-  /**
-   * The variant page `index` shows: title page first, then even/odd when declared.
-   *
-   * `w:titlePg` (17.6.55) is a property of the SECTION, so its first page is the section's
-   * own first — the local index. `w:evenAndOddHeaders` (17.10.1) lives in settings.xml and
-   * alternates by the page's number in the DOCUMENT, so it reads through `pageIndexStart`:
-   * a section that begins on an even page must open with the even header, and `remapPage`
-   * renumbers a page without ever re-picking its variant.
-   */
+  /** The variant page `index` shows — the same resolution its content box was derived from. */
   const variantFor = (index: number): HeaderFooterVariantName =>
-    furniture?.titlePage && index === 0
-      ? 'first'
-      : furniture?.evenAndOddHeaders && (pageIndexStart + index + 1) % 2 === 0
-        ? 'even'
-        : 'default';
+    headerFooterVariantFor(furniture, pageIndexStart, index);
 
   const furnitureFor = (
     kind: 'header' | 'footer',
@@ -1496,8 +1469,9 @@ function layoutBlocksPass(
   const anchorFrameBase = (): Omit<
     DrawingAnchorFrameContext,
     'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
-  > =>
-    Object.freeze({
+  > => {
+    const insets = insetsFor(pages.length);
+    return Object.freeze({
       pageNumber: pageIndexStart + pages.length + 1,
       onPageParityRead: markPageParityRead,
       pageWidth: geometry.width,
@@ -1505,19 +1479,20 @@ function layoutBlocksPass(
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
       marginBottom: geometry.margin.bottom,
-      // THE INSETS, NOT `w:pgMar`. The page content box starts at `effectiveTop`, which a
-      // header taller than the top margin pushes past it, and paint places every anchored
-      // drawing relative to that box. Handing the authored margin here made a
-      // `relativeFrom="page"` anchor land `effectiveTop − margin.top` too low — the whole
-      // header height for a `w:posOffset` of 0 (#274).
-      contentInsetTop: effectiveTop,
-      contentInsetBottom: effectiveBottom,
+      // THE INSETS, NOT `w:pgMar`. The page content box starts at this page's own top inset,
+      // which a header taller than the top margin pushes past `w:pgMar`, and paint places every
+      // anchored drawing relative to that box. Handing the authored margin here made a
+      // `relativeFrom="page"` anchor land `inset − margin.top` too low — the whole header
+      // height for a `w:posOffset` of 0 (#274).
+      contentInsetTop: insets.top,
+      contentInsetBottom: insets.bottom,
       contentWidth,
       contentHeight: contentHeight(),
-      contentBandHeight: baseContentHeight,
+      contentBandHeight: insets.height,
       ownerPartName: options.inlineDrawingLayout?.ownerPartName ?? WML_MAIN_DOCUMENT_PART,
       storyKind: 'body',
     });
+  };
 
   const pageContentClip = (): LayoutBox => pageClipRegion(anchorFrameBase());
 
@@ -1573,15 +1548,16 @@ function layoutBlocksPass(
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
     const { usedBottom, hasBodyPageFields } = summarizeFlushedPage(pageFragments, columnRegionTop);
+    const insets = insetsFor(index);
     pages.push({
       id: `page-${index}`,
       index,
       box,
       contentBox: {
         x: box.x + geometry.margin.left,
-        y: box.y + effectiveTop,
+        y: box.y + insets.top,
         width: contentWidthForReflow,
-        height: baseContentHeight,
+        height: insets.height,
       },
       fragments: pageFragments,
       hasBodyPageFields,

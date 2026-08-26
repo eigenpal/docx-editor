@@ -552,6 +552,7 @@ export function piecesOfParagraph(
           openAtomicBeginId = atomic ? grand.id : null;
           pending = {
             kind: null,
+            picture: null,
             symbolSpec: null,
             linkSpec: null,
             formSpec: null,
@@ -599,12 +600,14 @@ export function piecesOfParagraph(
       if (isFldChar(grand, 'separate')) {
         const outermostSeparate = field.nesting === 1 && field.phase === 'instruction';
         const separateLevel = field.nesting;
-        const kind = onFldCharSeparate(field);
+        const match = onFldCharSeparate(field);
         if (outermostSeparate && pending) {
           // Capture the allowlisted kind whether or not a page context is present. With one
           // (header/footer) the flush projects the live value; without one (body) it paints a
           // placeholder the kind marks, and document finalize substitutes the page's value.
-          pending.kind = kind;
+          // The `\#` picture rides along: it decides how that computed value is rendered.
+          pending.kind = match?.kind ?? null;
+          pending.picture = match?.picture ?? null;
           // Capture the SYMBOL / HYPERLINK / form-field spec while the machine still holds the
           // raw instruction (`onFldCharEnd` resets the buffer before the flush reads anything).
           // Nesting overflow refuses exactly as PAGE projection does: a >4-deep hostile field
@@ -623,7 +626,7 @@ export function piecesOfParagraph(
           // and while armed ignores deeper separates (part of the replaced result) and null
           // duplicates at the tracked level. Overflowed nesting never arms — projection would
           // be replacing content the atom parser already demoted.
-          nestedPage.onSeparate(pageContext ? kind : null, separateLevel);
+          nestedPage.onSeparate(pageContext ? match : null, separateLevel);
         }
         continue;
       }

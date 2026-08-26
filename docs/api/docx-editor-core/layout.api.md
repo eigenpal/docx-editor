@@ -704,6 +704,7 @@ export interface FieldAtomMarker {
     readonly formField: boolean;
     readonly pageField?: {
         readonly kind: AllowlistedPageField;
+        readonly picture?: string;
     };
 }
 

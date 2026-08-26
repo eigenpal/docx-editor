@@ -16,7 +16,7 @@
 // its cached result was seen and whether any of it was visible. Extracted so the walks stay a
 // straight-line reading of the field machine.
 
-import type { AllowlistedPageField } from './field-instruction.ts';
+import type { AllowlistedPageFieldMatch } from './field-instruction.ts';
 import { projectPageFieldValue, type FieldPageContext } from './field-page-furniture.ts';
 
 export interface NestedPageTracker {
@@ -29,7 +29,7 @@ export interface NestedPageTracker {
    * separate at the tracked level (null kind) must not clear tracking (the matched end still
    * appends). Callers pass null to decline arming (no page context, phase not projectable).
    */
-  onSeparate(kind: AllowlistedPageField | null, level: number): void;
+  onSeparate(match: AllowlistedPageFieldMatch | null, level: number): void;
   /**
    * Feed one `end` at `level` (the nesting BEFORE the machine decrements). Returns the live
    * text to append when this end closes the tracked field — possibly `''` when the inner
@@ -46,34 +46,36 @@ export interface NestedPageTracker {
 }
 
 export function createNestedPageTracker(): NestedPageTracker {
-  let kind: AllowlistedPageField | null = null;
+  let field: AllowlistedPageFieldMatch | null = null;
   let level = 0;
   let seen = false;
   let visible = false;
   const reset = (): void => {
-    kind = null;
+    field = null;
     level = 0;
     seen = false;
     visible = false;
   };
   return {
     get active(): boolean {
-      return kind !== null;
+      return field !== null;
     },
-    onSeparate(next: AllowlistedPageField | null, atLevel: number): void {
-      if (kind !== null) return;
+    onSeparate(next: AllowlistedPageFieldMatch | null, atLevel: number): void {
+      if (field !== null) return;
       if (next === null) return;
-      kind = next;
+      field = next;
       level = atLevel;
       seen = false;
       visible = false;
     },
     onEnd(atLevel: number, pageContext: FieldPageContext | undefined): string | null {
-      if (kind === null || atLevel > level) return null;
+      if (field === null || atLevel > level) return null;
       const closesTracked = atLevel === level;
       const suppressed = seen && !visible;
       const value =
-        closesTracked && pageContext && !suppressed ? projectPageFieldValue(kind, pageContext) : '';
+        closesTracked && pageContext && !suppressed
+          ? projectPageFieldValue(field.kind, pageContext, field.picture)
+          : '';
       reset();
       return closesTracked ? value : null;
     },

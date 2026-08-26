@@ -29,6 +29,7 @@ import type { SpanLinkRecord } from './semantic-records.ts';
 import { isSymbolRunChild, symbolGlyphOf } from './symbol-run.ts';
 import {
   allowlistedPageField,
+  pageFieldNumericPicture,
   consumeScanNode,
   createFieldParseState,
   ingestInstrTextBounded,
@@ -150,13 +151,13 @@ export function collectSimpleFieldDisplay(args: {
           if (isFldChar(grand, 'separate')) {
             const separateLevel = nested.nesting;
             const separatePhase = nested.phase;
-            const kind = onFldCharSeparate(nested);
+            const match = onFldCharSeparate(nested);
             // A level-1 machine field sits directly in this cache and always projects. A
             // DEEPER field projects only from a level-1 RESULT (never from an instruction —
             // that content is not painted) and never past the nesting cap, matching what
             // `detectStoryPageFields` notes so detection and projection stay one story.
             if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
-              tracker.onSeparate(pageContext ? kind : null, separateLevel);
+              tracker.onSeparate(pageContext ? match : null, separateLevel);
             }
             continue;
           }
@@ -220,7 +221,11 @@ export function collectSimpleFieldDisplay(args: {
           const beforeLen = text.length;
           collect(child, nodeDepth + 1, local);
           text = text.slice(0, beforeLen);
-          text += projectPageFieldValue(nestedKind, pageContext);
+          text += projectPageFieldValue(
+            nestedKind,
+            pageContext,
+            pageFieldNumericPicture(fldSimpleInstr(child) ?? '')
+          );
           continue;
         }
         collect(child, nodeDepth + 1, local);
@@ -255,7 +260,11 @@ export interface SimpleFieldProjection {
    * Present when this is a BODY page-field placeholder (no page context): {@link text} is the
    * measurement digit and document finalize substitutes the real value for this kind.
    */
-  readonly pageField?: { readonly kind: AllowlistedPageField };
+  readonly pageField?: {
+    readonly kind: AllowlistedPageField;
+    /** The field's `\#` numeric picture, carried to the substitute pass. */
+    readonly picture?: string;
+  };
 }
 
 /**
@@ -304,7 +313,11 @@ export function projectSimpleFieldResult(args: {
   if (pageKind && pageContext) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    return { text: projectPageFieldValue(pageKind, pageContext), props, style };
+    return {
+      text: projectPageFieldValue(pageKind, pageContext, pageFieldNumericPicture(instr)),
+      props,
+      style,
+    };
   }
   // A BODY page field (no page context) with no cached result: paint a placeholder and mark the
   // kind so document finalize substitutes the page's value. A cached result wins — it falls
@@ -318,7 +331,13 @@ export function projectSimpleFieldResult(args: {
   ) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    return { text: PAGE_FIELD_PLACEHOLDER, props, style, pageField: { kind: pageKind } };
+    const picture = pageFieldNumericPicture(instr);
+    return {
+      text: PAGE_FIELD_PLACEHOLDER,
+      props,
+      style,
+      pageField: { kind: pageKind, ...(picture !== undefined ? { picture } : {}) },
+    };
   }
 
   const symbolSpec = parseSymbolInstruction(instr);

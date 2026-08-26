@@ -13,6 +13,7 @@
 
 import type { AllowlistedPageField, StoryPageFieldNeeds } from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
+import { formatNumericPicture } from './field-numeric-picture.ts';
 import { formatDecimal, formatNumFmt } from './numbering-format.ts';
 import type {
   BlockFragmentRecord,
@@ -71,16 +72,34 @@ export function formatPageNumber(value: number, format: string | undefined): str
   return text.length > 0 ? text : formatDecimal(n);
 }
 
-/** Digit / formatted string for an allowlisted page field under a page context. */
+/**
+ * Digit / formatted string for an allowlisted page field under a page context.
+ *
+ * `picture` is the field's `\#` switch. It renders the computed value and outranks nothing
+ * else: an unusable picture falls back to the plain number, never to the cached result. A
+ * `w:pgNumType/@w:fmt` on PAGE still wins, because a non-decimal page format has no digits
+ * for a numeric picture to place.
+ */
 export function projectPageFieldValue(
   kind: AllowlistedPageField,
-  context: FieldPageContext
+  context: FieldPageContext,
+  picture?: string
 ): string {
-  if (kind === 'PAGE') return formatPageNumber(context.pageNumber, context.format);
+  if (kind === 'PAGE') {
+    if (picture !== undefined && !context.format) {
+      const painted = formatNumericPicture(context.pageNumber, picture);
+      if (painted !== null) return painted;
+    }
+    return formatPageNumber(context.pageNumber, context.format);
+  }
   const value =
     kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
   // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
   if (!Number.isFinite(value) || value < 0) return '';
+  if (picture !== undefined) {
+    const painted = formatNumericPicture(value, picture);
+    if (painted !== null) return painted;
+  }
   return formatDecimal(Math.floor(value));
 }
 
@@ -233,9 +252,9 @@ function substituteBodyPageFieldLine(line: LineRecord, context: FieldPageContext
   let spans: StyleSpanRecord[] | null = null;
   for (let index = 0; index < line.spans.length; index += 1) {
     const span = line.spans[index]!;
-    const kind = span.fieldAtom?.pageField?.kind;
-    if (!kind) continue;
-    const text = projectPageFieldValue(kind, context);
+    const marker = span.fieldAtom?.pageField;
+    if (!marker) continue;
+    const text = projectPageFieldValue(marker.kind, context, marker.picture);
     if (text === span.text) continue;
     if (!spans) spans = line.spans.slice();
     spans[index] = { ...span, text };

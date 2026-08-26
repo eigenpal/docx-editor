@@ -38,7 +38,11 @@ export interface AtomicFieldSynthesis {
    * document finalize substitutes the real value for this kind. The caller carries the marker onto
    * the span. Absent for the live header/footer value and every other synthesis.
    */
-  readonly pageField?: { readonly kind: AllowlistedPageField };
+  readonly pageField?: {
+    readonly kind: AllowlistedPageField;
+    /** The field's `\#` numeric picture, carried to the substitute pass. */
+    readonly picture?: string;
+  };
 }
 
 /** Document-global inputs the synthesis reads, none of them per-run. */
@@ -76,7 +80,7 @@ export function synthesizeAtomicField(
 
   if (pending.kind && ctx.pageContext) {
     return {
-      text: projectPageFieldValue(pending.kind, ctx.pageContext),
+      text: projectPageFieldValue(pending.kind, ctx.pageContext, pending.picture ?? undefined),
       props: pending.props,
       style: pending.style,
     };
@@ -95,7 +99,10 @@ export function synthesizeAtomicField(
         text: PAGE_FIELD_PLACEHOLDER,
         props: pending.props,
         style: pending.style,
-        pageField: { kind: pending.kind },
+        pageField: {
+          kind: pending.kind,
+          ...(pending.picture !== null ? { picture: pending.picture } : {}),
+        },
       };
     }
     if (pending.docPropertySpec) {
