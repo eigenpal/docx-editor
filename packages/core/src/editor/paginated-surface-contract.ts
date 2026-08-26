@@ -43,23 +43,8 @@ import type {
  */
 export type SurfaceEditingMode = 'edit' | 'suggest' | 'view';
 
-/**
- * Which review write is being committed through `commitReviewOps`.
- *
- * The callback that performs the write is opaque, so a lane deciding whether to allow it cannot
- * tell an Accept from a comment delete. That mattered once a replica was attached: these paths
- * reach the store directly rather than through `applyTreeOps`, and the ones that graft a package
- * and swap the shell record no primitive effects — they replicate as NOTHING, leaving the peer a
- * `commentReference` naming a comment it never received. Naming the write lets each be admitted
- * only once a two-replica test proves it arrives whole.
- */
-export type ReviewWriteIntent =
-  | 'revision-resolve'
-  | 'comment-add'
-  | 'comment-reply'
-  | 'comment-resolve'
-  | 'comment-delete'
-  | 'package-scoped';
+import type { ReviewWriteIntent } from './review-write-intent.ts';
+export type { ReviewWriteIntent };
 
 /**
  * Content-control interaction lane on the paginated surface.
@@ -468,14 +453,11 @@ export interface PaginatedSurface {
   /**
    * Queue plain typed text for a batched commit at the caret.
    *
-   * The DOM input lane's entry: keystrokes arriving in a burst append here and land
-   * through ONE `type()` call — one transaction, one undo step, one layout flush —
-   * when the input queue drains. Every surface-level mutation, selection or scope
-   * move, geometry read, composition start and teardown flushes the buffer first.
-   * Code reading `session` directly (its text or its bytes) sits BELOW the buffer
-   * and must call {@link flushPendingInput} first, as the facade's save/detach
-   * paths do. `type()` itself stays synchronous; automation and commands should
-   * keep calling it directly.
+   * The DOM input lane's entry: a burst of keystrokes appends here and lands through ONE
+   * `type()` call — one transaction, one undo step, one layout flush — when the queue drains.
+   * Every surface mutation, selection or scope move, geometry read, composition start and
+   * teardown flushes first. Code reading `session` directly sits BELOW the buffer and must
+   * call {@link flushPendingInput}, as save/detach do. `type()` stays synchronous.
    */
   enqueueType(text: string): void;
   /**
@@ -896,14 +878,12 @@ export interface PaginatedSurface {
   /**
    * How the current selection came to address a drawing, if it does at all.
    *
-   * Word's rule: a caret NEXT TO a floating object is a text caret, never an object
-   * selection — only clicking the object (or an explicit host selection write) selects it.
-   * The engine's selection is a caret at the drawing's anchor offset either way, so the
-   * offsets alone cannot tell the two apart; this is the discriminator. `none` for a fresh
-   * mount (a document must not open with an image selected — the initial caret routinely
-   * coincides with a drawing anchored at offset zero) and after typing, caret keys, or a
-   * pointer press on anything that is not a drawing. `pointer` names the drawing the press
-   * landed on, so a stale press can never claim a different drawing the caret later visits.
+   * Word's rule: a caret NEXT TO a floating object is a text caret, never an object selection —
+   * only clicking the object (or a host selection write) selects it. The engine's selection is a
+   * caret at the anchor offset either way, so offsets cannot tell them apart; this is the
+   * discriminator. `none` for a fresh mount (the initial caret routinely coincides with a drawing
+   * anchored at offset zero) and after typing, caret keys, or a press on a non-drawing. `pointer`
+   * names the drawing the press landed on, so a stale press cannot claim a later one.
    */
   drawingSelectionIntent(): DrawingSelectionIntent;
   /**

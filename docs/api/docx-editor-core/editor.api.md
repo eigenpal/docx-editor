@@ -2111,7 +2111,7 @@ export interface TableBorderStyleOption {
     readonly labelKey: string;
     readonly previewClass: string;
     // (undocumented)
-    readonly value: TableBorderStyle;
+    readonly value: TableBorderStyle_2;
 }
 
 // @public
@@ -2124,7 +2124,7 @@ export interface TableBorderTargetOption {
 }
 
 // @public
-export type TableBorderTargetValue = TableBorderEdgeTarget | 'none';
+export type TableBorderTargetValue = TableBorderEdgeTarget_2 | 'none';
 
 // @public
 export interface TableBorderWidthOption {
@@ -2137,7 +2137,7 @@ export interface TableBorderWidthOption {
 // @public
 export interface TableChromeDraft {
     // (undocumented)
-    readonly activeTarget: TableBorderEdgeTarget;
+    readonly activeTarget: TableBorderEdgeTarget_2;
     // (undocumented)
     readonly spec: TableBorderSpec;
 }
@@ -2146,7 +2146,7 @@ export interface TableChromeDraft {
 export function tableChromeIconPaths(name: keyof typeof GENERATED_ICON_PATHS): readonly string[];
 
 // @public
-export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget): string;
+export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget_2): string;
 
 // @public
 export interface TableChromePick {

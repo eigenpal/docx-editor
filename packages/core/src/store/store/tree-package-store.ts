@@ -227,13 +227,11 @@ export class TreePackageStore {
   } | null = null;
   private commitCounter = 0;
   /**
-   * Memo for {@link currentPackage}, keyed on the COMPLETE read set of that method by
-   * object identity: the package shell, the body part, and each open story's part in
-   * map order. Identity is the only sound key — `packageRevision` deliberately is not
-   * part of it, because shell writes (`replacePackageShell`, story-store grafts, lazy
-   * store opens) move `this.pkg` or a `store.part` without bumping the revision.
-   * Packages and parts are frozen-immutable, so a matching tuple proves the merged
-   * snapshot cannot differ; no explicit invalidation exists anywhere.
+   * Memo for {@link currentPackage}, keyed on that method's COMPLETE read set by object identity:
+   * the shell, the body part, and each open story's part in map order. Identity is the only sound
+   * key — `packageRevision` is excluded, because shell writes (`replacePackageShell`, story-store
+   * grafts, lazy opens) move `this.pkg` or a `store.part` without bumping it. Parts are frozen, so
+   * a matching tuple proves the snapshot cannot differ; nothing invalidates explicitly.
    */
   private currentPackageMemo: {
     readonly pkg: OoxmlPackage;
@@ -248,18 +246,16 @@ export class TreePackageStore {
     this.maxEditableStoryParts = options.maxEditableStoryParts ?? DEFAULT_MAX_EDITABLE_STORY_PARTS;
     this.cascadeNoteReferences =
       options.cascadeDeletedNoteReferences ?? cascadeDeletedNoteReferences;
-    // The WHOLE package, not the part alone. A transaction that writes several parts in one
-    // unit — a comment's markers in the story plus its body in `comments.xml` plus the
-    // relationship and content-type override — needs the package as its working set, and a
-    // store handed one part rebuilds a stub package the invariant check then refuses.
+    // The WHOLE package, not the part alone. A transaction writing several parts as one unit —
+    // a comment's story markers plus its body in `comments.xml` plus the relationship and
+    // content-type override — needs the package as its working set; a store handed one part
+    // rebuilds a stub package the invariant check refuses.
     this.body = new TreeDocumentStore(this.pkg, main.name, {
       historyLimit: this.historyLimit,
-      // The SAME live getter the story stores get. A store keeps its own working copy of the
-      // package, so a `settings.xml` replaced through the coordinator rather than through this
-      // store's own transaction left the body reading stale protection — and once the story
-      // stores read it live, the body was the one story a protected document still let you
-      // edit. Protection that holds in a header and not in the body is worse than protection
-      // that holds nowhere: it looks enforced.
+      // The SAME live getter the story stores get. A store keeps its own working copy, so a
+      // `settings.xml` replaced through the coordinator left the body reading stale protection —
+      // making the body the one story a protected document still let you edit. Protection that
+      // holds in a header but not the body is worse than none: it looks enforced.
       settingsPart: () => settingsPartOf(this.pkg),
     });
     this.body.setStoryRef({ kind: 'body', partName: main.name });
@@ -445,12 +441,10 @@ export class TreePackageStore {
               ) {
                 mayDeleteNoteAtoms = true;
               } else if (RESOLUTION_OPS.has(op.op)) {
-                // Accepting a deletion, or rejecting an insertion, removes the content the
-                // revision covers — and a note reference measures one model unit, so a
-                // selection struck through one carries the reference away with it. The gate
-                // cannot be narrowed to a paragraph range the way `deleteText` is, because a
-                // revision's sites are wherever the file put them; the cascade itself is a
-                // before/after diff and does nothing when no reference actually went.
+                // Resolving a revision removes the content it covers, and a note reference is one
+                // model unit, so a struck-through selection carries it away. Not narrowable to a
+                // paragraph range: a revision's sites are wherever the file put them. The cascade
+                // is a diff, so it is free.
                 mayDeleteNoteAtoms = true;
               }
             }
@@ -463,12 +457,10 @@ export class TreePackageStore {
                   commentTargets
                 );
               } else if (RESOLUTION_OPS.has(op.op) || CONTENT_REMOVING_OPS.has(op.op)) {
-                // Rejecting an insertion removes the words it inserted, and a comment can be
-                // anchored over exactly those — the same reason resolution opens the note gate.
-                // A row or column deletion removes whole cell PARAGRAPHS, markers and all,
-                // and it names a table rather than a paragraph, so there is no cheap subtree
-                // to probe the way `deleteText` has one. It opens the gate outright; the reap
-                // is a diff and costs nothing when the table held no comment.
+                // Rejecting an insertion removes the words it inserted, which a comment can be
+                // anchored over. A row or column deletion removes whole cell PARAGRAPHS, markers
+                // and all, and names a table rather than a paragraph, so there is no cheap
+                // subtree to probe. Opens the gate outright; the reap is a diff, so it is free.
                 mayEmptyComments = true;
               }
             }
@@ -964,13 +956,12 @@ export class TreePackageStore {
   /**
    * Record a write that spanned SEVERAL parts as one package undo unit.
    *
-   * A comment is not in one part — the body in `comments.xml`, the thread record in
-   * `commentsExtended.xml`, the markers in the story — and those writes reach the store
-   * through the story store directly rather than through `transact`. The story store's own
-   * history entry cannot undo them: `undo()` on a story pointer syncs the STORY PART back and
-   * nothing else, so undoing a comment restored the markers and left the body behind, or the
-   * other way round. The caller discards the story entry and hands the package it started
-   * from to this instead, which is the same promotion the note cascade does.
+   * A comment spans parts — the body in `comments.xml`, the thread record in
+   * `commentsExtended.xml`, the markers in the story — and those writes reach the store through
+   * the story store rather than `transact`. The story store's history cannot undo them: `undo()`
+   * on a story pointer syncs the STORY PART alone, so undoing a comment restored the markers and
+   * left the body, or the reverse. The caller discards the story entry and hands the package it
+   * started from to this instead, the same promotion the note cascade does.
    */
   adoptPackageUnit(before: OoxmlPackage): void {
     const after = this.currentPackage();

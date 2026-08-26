@@ -34,7 +34,7 @@ import {
   customNodePayloadsByControl,
   type CustomNodePayloadRead,
   sweepCustomNodePayloads,
-  type CustomNodeWriteResult,
+  type CustomNodeSweepOutcome,
 } from '../store/store/custom-node-writes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import { runObservedStoreTransaction } from '../store/package/canonical-primitive-capture.ts';
@@ -64,7 +64,6 @@ import {
   type OoxmlPackageRejection,
   type OoxmlPart,
   type StoryScope,
-  type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { headerFooterPartsFromResolution } from '../store/package/hf-references.ts';
@@ -104,10 +103,7 @@ import {
   readDocumentProperties,
   type DocumentProperties,
 } from '../store/package/document-properties.ts';
-import {
-  createCollaborationDocumentPort,
-  type CollaborationDocumentPort,
-} from '../collaboration/index.ts';
+import { createCollaborationDocumentPort } from '../collaboration/index.ts';
 import { commitSessionTreeOps } from './tree-session-apply.ts';
 
 // The session view contract (TreeApplyResult + TreeDocxSessionView) lives in

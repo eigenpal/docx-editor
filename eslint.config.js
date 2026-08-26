@@ -368,6 +368,7 @@ export default [
       'packages/core/src/editor/__tests__/table-command-plan.test.ts',
       'packages/core/src/editor/docx-editor-images.ts',
       'packages/core/src/store/__tests__/table-row-ops.test.ts',
+      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/store/tree-package-store.ts',
       'packages/core/src/store/store/tree-op-types.ts',
     ],
@@ -379,7 +380,6 @@ export default [
   {
     files: [
       'packages/core/src/layout/drawing-layout.ts',
-      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/__tests__/image-resources.test.ts',
     ],
     rules: {
@@ -418,7 +418,6 @@ export default [
 
   {
     files: [
-      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/store/tree-op-drawings.ts',
       'packages/core/src/store/store/tree-op-table-cell-properties.ts',
     ],
