@@ -237,6 +237,7 @@ export function piecesOfParagraph(
       readonly measureText?: string;
       readonly noteNav?: FieldAwarePiece['noteNav'];
       readonly inlineDrawing?: InlineDrawingLayoutInput;
+      readonly anchoredAtom?: true;
       readonly equation?: FieldAwarePiece['equation'];
       /**
        * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the
@@ -265,6 +266,7 @@ export function piecesOfParagraph(
         ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
         ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
         ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
+        ...(extras?.anchoredAtom ? { anchoredAtom: true as const } : {}),
         ...(extras?.equation ? { equation: extras.equation } : {}),
         ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
@@ -433,7 +435,9 @@ export function piecesOfParagraph(
       });
     };
 
-    if (grand.kind === 'drawing') {
+    // One branch for both run-level drawing atoms \u2014 `w:drawing` and an MC wrapper carrying
+    // one. Only the projection lookup differs: MC has no direct `project` fallback.
+    if (grand.kind === 'drawing' || isRunLevelMcAlternateContent(grand)) {
       const start = offset;
       offset += 1;
       const end = offset;
@@ -442,20 +446,18 @@ export function piecesOfParagraph(
         inlineDrawingLayout.projectionForAtom?.(grand.id) ??
         (grand.kind === 'drawing' ? inlineDrawingLayout.project(grand) : null);
       if (!projection || projection.kind !== 'inline') {
-        push('\uFFFC', props, style, true, start, end);
-        return;
-      }
-      emitInlineDrawing(grand.id, projection, start, end);
-      return;
-    }
-    if (isRunLevelMcAlternateContent(grand)) {
-      const start = offset;
-      offset += 1;
-      const end = offset;
-      if (!inlineDrawingLayout) return;
-      const projection = inlineDrawingLayout.projectionForAtom?.(grand.id) ?? null;
-      if (!projection || projection.kind !== 'inline') {
-        push('\uFFFC', props, style, true, start, end);
+        // The marker only for a drawing that will actually PUBLISH: hidden anchors and
+        // failed projections paint nothing, so they must cue no change bar either.
+        const anchored = projection?.kind === 'anchored' && !projection.hidden;
+        push(
+          '\uFFFC',
+          props,
+          style,
+          true,
+          start,
+          end,
+          anchored ? { anchoredAtom: true } : undefined
+        );
         return;
       }
       emitInlineDrawing(grand.id, projection, start, end);

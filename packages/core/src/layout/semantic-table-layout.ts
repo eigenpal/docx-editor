@@ -796,6 +796,7 @@ function placeCellParagraph(
       leading: pendingLine.leading,
       trailingSpacing: pendingLine.trailingSpacing,
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
+      ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
     });
     y += pendingLine.height;
     nextLineIndex = lineIndex + 1;

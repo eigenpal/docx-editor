@@ -203,25 +203,52 @@ describe('tracked drawings carry and paint their revision', () => {
       expect(element).not.toBeNull();
       expect(element!.classList.contains('docx-drawing--revision-insertion')).toBe(true);
       expect(element!.dataset.revisionKind).toBe('insert');
+
+      // The anchor line carries no span or line drawing for the picture, so the bar reads
+      // the line's own anchor attribution.
+      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
     } finally {
       surface.destroy();
       container.remove();
     }
   });
 
-  test('the original view drops an inserted anchored picture', async () => {
-    const { surface, container } = await mount(
-      docx(
-        `<w:p><w:r><w:t xml:space="preserve">anchor line</w:t></w:r>${ins(anchoredPicture(9))}</w:p>`
-      ),
-      'original'
-    );
-    try {
-      expect(surface.layout().pages[0]!.anchoredDrawings ?? []).toHaveLength(0);
-      expect(container.querySelector('.docx-drawing-layer .docx-drawing')).toBeNull();
-    } finally {
-      surface.destroy();
-      container.remove();
-    }
+  test('the original view drops an inserted anchored picture, its bar, and its wrap hole', async () => {
+    const topAndBottom = anchoredPicture(9).replace('<wp:wrapNone/>', '<wp:wrapTopAndBottom/>');
+    const body = (drawing: string): Uint8Array =>
+      docx(`<w:p>${drawing}<w:r><w:t xml:space="preserve">anchor line</w:t></w:r></w:p>`);
+    const firstLineY = async (
+      bytes: Uint8Array,
+      mode?: RevisionDisplayMode
+    ): Promise<{ y: number; bars: number; drawings: number }> => {
+      const { surface, container } = await mount(bytes, mode);
+      try {
+        const line = surface
+          .layout()
+          .pages[0]!.fragments.flatMap((block) =>
+            block.kind === 'paragraph' ? block.lines : []
+          )[0]!;
+        return {
+          y: line.box.y,
+          bars: container.querySelectorAll('.docx-change-bar').length,
+          drawings: (surface.layout().pages[0]!.anchoredDrawings ?? []).length,
+        };
+      } finally {
+        surface.destroy();
+        container.remove();
+      }
+    };
+    const markup = await firstLineY(body(ins(topAndBottom)));
+    const original = await firstLineY(body(ins(topAndBottom)), 'original');
+    const plain = await firstLineY(body(''));
+    // Under all-markup the inserted picture shows: it pushes the text down and draws a bar.
+    expect(markup.drawings).toBe(1);
+    expect(markup.y).toBeGreaterThan(plain.y);
+    expect(markup.bars).toBeGreaterThan(0);
+    // The original view promises the document before the insertion: no record, no bar, and
+    // no phantom text-wrap hole where the hidden picture would sit.
+    expect(original.drawings).toBe(0);
+    expect(original.bars).toBe(0);
+    expect(original.y).toBe(plain.y);
   });
 });

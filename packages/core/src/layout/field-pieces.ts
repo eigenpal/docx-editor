@@ -104,6 +104,12 @@ export interface FieldAwarePiece {
   };
   /** Typed inline drawing occupying one UTF-16 model unit. */
   readonly inlineDrawing?: InlineDrawingLayoutInput;
+  /**
+   * This piece is a visible ANCHORED drawing's zero-glyph placeholder. The record paints
+   * from the page layer, not from a span — so this marker is how the anchor line still
+   * learns it carries a tracked change (the margin bar reads it; see #479).
+   */
+  readonly anchoredAtom?: true;
   /** Bounded paragraph-level OMML projection occupying one UTF-16 model unit. */
   readonly equation?: OmmlEquationProjection;
   /**

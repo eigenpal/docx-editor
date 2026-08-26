@@ -14,6 +14,11 @@ import {
   type InlineDrawingLayoutContext,
 } from './drawing-layout.ts';
 import { drawingGeometryFromProjection } from './drawing-geometry.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  revisionsVisible,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import type { DrawingGeometry } from './drawing-geometry.ts';
 import {
@@ -505,13 +510,19 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   readonly anchorLineTopByModelStart: ReadonlyMap<number, number>;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
   readonly anchorCellBox?: LayoutBox | null;
+  /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
+  readonly displayMode?: RevisionDisplayMode;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
   const offsets = drawingModelOffsetsInParagraph(options.paragraph);
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const contentWidth = Math.max(1, options.contentRight - options.contentLeft);
   const zones: ExclusionZone[] = [];
   for (const atom of atoms) {
+    // A drawing the display mode resolves away publishes no record, so it must carve no
+    // hole either: the original view must not wrap text around an insertion it hides.
+    if (!revisionsVisible(atom.revisions, displayMode)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
     if (!wrapProducesExclusion(atom.projection.wrap) || atom.projection.wrap === 'topAndBottom')
       continue;
@@ -598,12 +609,17 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   readonly anchorLineTopByModelStart: ReadonlyMap<number, number>;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
   readonly columnIndex?: number;
+  /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
+  readonly displayMode?: RevisionDisplayMode;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
   const offsets = drawingModelOffsetsInParagraph(options.paragraph);
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const zones: ExclusionZone[] = [];
   for (const atom of atoms) {
+    // Same rule as the wrap zones above: no record, no hole.
+    if (!revisionsVisible(atom.revisions, displayMode)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
     if (atom.projection.wrap !== 'topAndBottom') continue;
     const modelStart = offsets.get(atom.atomId);

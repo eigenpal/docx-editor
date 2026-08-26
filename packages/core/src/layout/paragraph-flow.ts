@@ -27,6 +27,7 @@ import {
 } from './field-projection.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
+  revisionsVisible,
   type RevisionAttribution,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
@@ -373,93 +374,15 @@ function positionalTabDestination(
   };
 }
 
-export interface PendingLine {
-  readonly spans: StyleSpanRecord[];
-  readonly drawings: InlineDrawingRecord[];
-  readonly start: number;
-  end: number;
-  width: number;
-  height: number;
-  baseline: number;
-  /**
-   * Space ABOVE the glyph band inside {@link height}.
-   *
-   * Exact spacing can center the glyphs and move the baseline. Auto/atLeast spacing leaves
-   * this at zero and puts its extra depth below instead.
-   */
-  leading: number;
-  /**
-   * Auto/atLeast line-spacing depth below the painted glyph band.
-   *
-   * Word lets this external depth cross the bottom text margin when the glyphs themselves
-   * still fit. Pagination therefore budgets {@link height} minus this amount at a page
-   * bottom, while paint keeps the full box and padding.
-   */
-  trailingSpacing: number;
-  /** When true, layout must start a new page after this line is placed. */
-  pageBreakAfter?: boolean;
-  /** When true, layout must advance to the next authored section column. */
-  columnBreakAfter?: boolean;
-  /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
-  deletedRanges?: readonly ModelRange[];
-  /** Vertical gap inserted before this line to clear a topAndBottom exclusion band. */
-  exclusionSkipBefore?: number;
-}
-
-/** Vertical extent of a pending line for flow/pagination budget checks (skip + box + optional tail). */
-export function pendingLineFlowExtent(
-  line: Pick<PendingLine, 'height' | 'trailingSpacing' | 'exclusionSkipBefore'>,
-  tail = 0
-): number {
-  return (line.exclusionSkipBefore ?? 0) + Math.max(0, line.height - line.trailingSpacing) + tail;
-}
-
-/** Recompute topAndBottom skip at placement time from live page zones and absolute line top. */
-export function pendingLineFlowExtentAtPlacement(
-  lineTopY: number,
-  line: Pick<PendingLine, 'height' | 'trailingSpacing' | 'exclusionSkipBefore'>,
-  zones: readonly ExclusionZone[],
-  tail = 0
-): number {
-  const skip =
-    zones.length > 0
-      ? topAndBottomSkipBeforeLine(lineTopY, line.height, zones)
-      : (line.exclusionSkipBefore ?? 0);
-  return skip + Math.max(0, line.height - line.trailingSpacing) + tail;
-}
-
-/**
- * A cached line, safe to hand back on every later hit.
- *
- * Placement copies span boxes rather than mutating them, but a cache entry outlives the
- * layout that produced it — freezing means a future change to the placement path cannot
- * quietly corrupt every subsequent reuse.
- */
-export function frozenLine(line: PendingLine): PendingLine {
-  return Object.freeze({
-    spans: line.spans.map((span) =>
-      Object.freeze({ ...span, box: Object.freeze({ ...span.box }) })
-    ),
-    drawings: line.drawings.map((drawing) =>
-      Object.freeze({
-        ...drawing,
-        paintBounds: Object.freeze({ ...drawing.paintBounds }),
-        hitBounds: Object.freeze({ ...drawing.hitBounds }),
-      })
-    ),
-    start: line.start,
-    end: line.end,
-    width: line.width,
-    height: line.height,
-    baseline: line.baseline,
-    leading: line.leading,
-    trailingSpacing: line.trailingSpacing,
-    ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
-    ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
-    ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
-    ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
-  }) as PendingLine;
-}
+// The pending-line record and its budget/freeze helpers live in pending-line.ts;
+// re-exported so every existing import through this module stays stable.
+import {
+  frozenLine,
+  pendingLineFlowExtent,
+  pendingLineFlowExtentAtPlacement,
+  type PendingLine,
+} from './pending-line.ts';
+export { frozenLine, pendingLineFlowExtent, pendingLineFlowExtentAtPlacement, type PendingLine };
 
 /**
  * Soft ceiling on an indent, in twips (31_680 ≈ 22"), matching the paragraph-spacing and
@@ -752,11 +675,16 @@ export function breakParagraph(
   let topAndBottomSkipApplied = false;
   const anchorLineTopByModelStart = new Map<number, number>();
 
+  // The break-time wrap synthesis follows the published records: a drawing the display mode
+  // resolves away publishes no record, so it must reserve no line top and carve no hole.
+  const anchorDisplayMode = flow?.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+
   const topAndBottomAnchorStarts = (() => {
     const starts = new Set<number>();
     if (!flow?.inlineDrawingLayout) return starts;
     const offsets = drawingModelOffsetsInParagraph(paragraph);
     for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
+      if (!revisionsVisible(atom.revisions, anchorDisplayMode)) continue;
       if (atom.projection.wrap !== 'topAndBottom') continue;
       const modelStart = offsets.get(atom.atomId);
       if (modelStart !== undefined) starts.add(modelStart);
@@ -769,6 +697,7 @@ export function breakParagraph(
     if (!flow?.inlineDrawingLayout) return starts;
     const offsets = drawingModelOffsetsInParagraph(paragraph);
     for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
+      if (!revisionsVisible(atom.revisions, anchorDisplayMode)) continue;
       if (atom.projection.anchor?.behindDocument) continue;
       if (
         atom.projection.wrap === 'topAndBottom' ||
@@ -880,6 +809,7 @@ export function breakParagraph(
             paragraphStartY: flow.paragraphStartY ?? 0,
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
+            displayMode: anchorDisplayMode,
           })
         : Object.freeze([]);
     const synthesized =
@@ -892,6 +822,7 @@ export function breakParagraph(
             contentRight,
             paragraphStartY: flow?.paragraphStartY ?? 0,
             anchorLineTopByModelStart,
+            displayMode: anchorDisplayMode,
           })
         : Object.freeze([]);
     return Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]);
@@ -1348,6 +1279,17 @@ export function breakParagraph(
     }
     if (piece.projected && !piece.inlineDrawing && piece.text === '\uFFFC') {
       recordTopAndBottomAnchorLineTop(piece.start);
+      // A tracked anchored drawing paints from the page layer and leaves no span on its
+      // anchor line, so the line records the attribution itself \u2014 that is all the margin
+      // change bar has to read. Gated exactly like the published record: a drawing the
+      // display mode resolves away must cue no bar.
+      if (
+        piece.anchoredAtom &&
+        piece.revisions !== undefined &&
+        revisionsVisible(piece.revisions, anchorDisplayMode)
+      ) {
+        line.anchorRevisions = [...(line.anchorRevisions ?? []), ...piece.revisions];
+      }
       line.end = piece.end;
       continue;
     }
