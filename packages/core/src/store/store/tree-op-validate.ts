@@ -9,6 +9,7 @@ import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-
 import { findNode } from '../package/ooxml-edit.ts';
 import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equation.ts';
 import { isValidXmlText } from '../package/sinks.ts';
+import { isDangerousKey } from '../package/safe-record.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import {
@@ -113,15 +114,18 @@ const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
 /**
  * A style id an op may name.
  *
- * The layout lane has the same predicate over the styles part, and cannot be borrowed here:
- * `store` does not depend on `layout`. Both answer the same question — bounded length, no
- * control characters — because both end up writing the value into an attribute.
+ * The layout lane refuses the same three things over `styles.xml` — over-long, control
+ * bearing, or a dangerous object key — and cannot be borrowed here, because `store` does
+ * not depend on `layout`. The lists must agree: a value one side accepts and the other
+ * drops writes a `w:pStyle` that resolves nowhere, so the paragraph reports a style it
+ * does not render in.
  */
 function isStyleId(value: string): boolean {
   return (
     value.length > 0 &&
     value.length <= MAX_STYLE_ID_LENGTH &&
     !CONTROL_CHARACTERS.test(value) &&
+    !isDangerousKey(value) &&
     isValidXmlText(value)
   );
 }

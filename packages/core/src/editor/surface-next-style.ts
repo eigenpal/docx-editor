@@ -16,16 +16,20 @@
 // style question, answered against `styles.xml` and the document's own default, rather
 // than a structural edit at the selection.
 
-import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
-import { buildStyleCascadeTable, type StyleCascadeTable } from '@docx-editor.dev/core/layout';
-import { directParagraphProperties } from './surface-formatting.ts';
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import { directParagraphProperties, paragraphTextOf } from '@docx-editor.dev/core/store';
+import type { StyleCascadeTable } from '@docx-editor.dev/core/layout';
 
-/** What this lane borrows: the session it reads styles from, and the story it writes to. */
+/** What this lane borrows: the styles index, and the part the split's paragraph lives in. */
 export interface NextStyleDeps {
-  readonly session: TreeDocxSessionView;
-  /** The part holding the paragraph an Enter is splitting. */
-  storyPart(): OoxmlPart;
+  /**
+   * The styles part, indexed. The surface already holds one memoized on the styles root's
+   * identity; a second table here would be a second FNV pass over every style, and a
+   * second answer to what a style id means.
+   */
+  styleCascade(): StyleCascadeTable | undefined;
+  /** The part holding the paragraph an Enter is splitting, by that paragraph's node id. */
+  partOf(paragraphId: string): OoxmlPart;
 }
 
 export interface NextStyleWrites {
@@ -39,34 +43,23 @@ export interface NextStyleWrites {
    * is spelled — writing `<w:pStyle w:val="Normal"/>` on every new body paragraph would be
    * legal but is not what Word emits.
    */
-  tailStyleId(paragraphId: string, atParagraphEnd: boolean): string | null | undefined;
+  tailStyleId(paragraphId: string, offset: number): string | null | undefined;
 }
 
 export function createNextStyleWrites(deps: NextStyleDeps): NextStyleWrites {
-  const { session } = deps;
-
-  /**
-   * The styles part, indexed, memoized on the root's identity.
-   *
-   * Read through the layout cascade rather than by walking `w:style` here: `w:default` is
-   * `ST_OnOff` and last-wins, and style ids are bounded and control-character checked. One
-   * reader of `styles.xml` means one answer to what a style id means.
-   */
-  let tableMemo: { readonly root: OoxmlElement | null; readonly table: StyleCascadeTable } | null =
-    null;
-  function styleTable(): StyleCascadeTable {
-    const root = session.stylesRoot();
-    if (tableMemo === null || tableMemo.root !== root) {
-      tableMemo = { root, table: buildStyleCascadeTable(root, session.documentThemeFonts()) };
-    }
-    return tableMemo.table;
-  }
-
   return {
-    tailStyleId(paragraphId, atParagraphEnd) {
-      if (!atParagraphEnd) return undefined;
-      const table = styleTable();
-      const authored = directParagraphProperties(deps.storyPart(), paragraphId).find(
+    tailStyleId(paragraphId, offset) {
+      const part = deps.partOf(paragraphId);
+      // Model text, not layout text. `paragraphTextFromLayout` reconstructs from painted
+      // spans, and in `proposed` display mode a deletion struck at the END of a paragraph
+      // is not painted at all — the caret then sat at "the end" with model content still
+      // after it, and the struck words fell into the tail wearing the follower style.
+      // `paragraphTextOf` is the vocabulary the split op's own offsets are in.
+      const text = paragraphTextOf(part, paragraphId);
+      if (text === null || offset !== text.length) return undefined;
+      const table = deps.styleCascade();
+      if (!table) return undefined;
+      const authored = directParagraphProperties(part, paragraphId).find(
         (property) => property.localName === 'pStyle'
       )?.attributes?.val;
       // A paragraph with no `w:pStyle` of its own is in the document's default style, and

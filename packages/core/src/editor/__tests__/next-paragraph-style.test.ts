@@ -62,10 +62,13 @@ afterEach(() => {
   }
 });
 
-function mount(bytes: Uint8Array): { editor: DocxEditorInstance; surface: PaginatedSurface } {
+function mount(
+  bytes: Uint8Array,
+  author?: string
+): { editor: DocxEditorInstance; surface: PaginatedSurface } {
   const container = document.createElement('div');
   document.body.append(container);
-  const editor = createDocxEditor({ container, document: bytes });
+  const editor = createDocxEditor({ container, document: bytes, author });
   mounted.push({ editor, container });
   if (!editor.surface) throw new Error('surface failed to mount');
   return { editor, surface: editor.surface };
@@ -145,6 +148,34 @@ describe('Enter and the style for the following paragraph', () => {
     expect(authoredStyles(surface)).toEqual(['Heading1', null]);
     // Word carries indents, spacing and borders across Enter. Only the style is decided anew.
     expect(authoredNames(surface, 1)).toEqual(['ind']);
+  });
+
+  test('a suggested break keeps the style, so rejecting it restores the heading', () => {
+    // A suggested Enter proposes a `w:ins` mark on the HEAD, and rejecting it merges the
+    // two paragraphs back keeping the SURVIVING tail's `w:pPr`. A tail in the follower
+    // style would therefore demote the very heading the reviewer took the break back from.
+    // Word records a `w:pPrChange` for this; there is no tracked paragraph-property write
+    // here, so the follower style is declined instead.
+    const { surface } = mount(docx(STYLES, HEADING), 'Ada Lovelace');
+    surface.setEditingMode('suggest');
+    pressEnterAt(surface, 0, 5);
+    expect(authoredStyles(surface)).toEqual(['Heading1', 'Heading1']);
+    surface.session.applyTreeOps([{ op: 'rejectAllRevisions' }]);
+    expect(authoredStyles(surface)).toEqual(['Heading1']);
+  });
+
+  test('text struck at the end of a paragraph is not the end of the paragraph', () => {
+    // `proposed` display mode does not paint struck runs, so the layout's text stops short
+    // of the model's. Reading "am I at the end" off the layout put the caret at the end of
+    // a heading that still had content after it, and the struck words fell into a tail
+    // wearing the follower style.
+    const body =
+      `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Title</w:t></w:r>` +
+      `<w:del w:id="1" w:author="Grace Hopper" w:date="2026-01-01T00:00:00Z">` +
+      `<w:r><w:delText> draft</w:delText></w:r></w:del></w:p>`;
+    const { surface } = mount(docx(STYLES, body));
+    pressEnterAt(surface, 0, 5);
+    expect(authoredStyles(surface)).toEqual(['Heading1', 'Heading1']);
   });
 
   test('the follow-on style survives a save', async () => {

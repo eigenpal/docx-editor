@@ -689,8 +689,10 @@ export function mountPaginatedSurface(
   // Word's "style for following paragraph". Its own lane, because it is a question about
   // `styles.xml` rather than about the selection an Enter is standing in.
   const nextStyle = createNextStyleWrites({
-    session,
-    storyPart: () => session.partFor(storyScope()) ?? session.part(),
+    styleCascade,
+    // A pure read: `partOfNodeId`, never `partFor`, which would permanently retain a story
+    // store just to answer what style a paragraph is in.
+    partOf: (paragraphId) => partOfNodeId(session, paragraphId) ?? session.part(),
   });
   let onDrawingResourcesChanged: (() => void) | null = null;
   const decodePort =
@@ -2906,13 +2908,24 @@ export function mountPaginatedSurface(
     });
   }
 
+  /**
+   * The author this edit will be attributed to, or undefined when it lands untracked.
+   *
+   * `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
+   * to write. The edit lands untracked rather than being refused: losing the user's typing
+   * to a missing configuration value would be the worse failure. ONE answer, because a
+   * lane that decides what to write by re-deriving this condition drifts from the lane
+   * that decides how to attribute it.
+   */
+  function trackedAuthorOrNone(): string | undefined {
+    const author = options.author?.trim();
+    return editingMode === 'suggest' && author ? author : undefined;
+  }
+
   /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
-    const author = options.author?.trim();
-    // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
-    // to write. The edit lands untracked rather than being refused: losing the user's typing
-    // to a missing configuration value would be the worse failure.
-    if (editingMode !== 'suggest' || !author) return [...ops];
+    const author = trackedAuthorOrNone();
+    if (author === undefined) return [...ops];
     return attributeTrackedOps(ops, { author, date: trackedDate() });
   }
 
@@ -4408,15 +4421,18 @@ export function mountPaginatedSurface(
       const armed = armedAtCaret() ?? undefined;
       // Word's `w:next`: Enter at the END of a paragraph starts one in the style that
       // paragraph's style names as its follower, which is what stops a heading from being
-      // followed by a second heading. Only asked for a plain caret — with a range, the
-      // split point sits in a paragraph whose text the same transaction is still deleting,
-      // and "is this the end" cannot be read off the layout the plan was built against.
+      // followed by a second heading.
+      //
+      // Asked only for a plain caret in an untracked edit. With a RANGE, the split point
+      // sits in a paragraph whose text the same transaction is still deleting, so the store
+      // cannot be asked yet whether the caret is at its end. And a SUGGESTED break proposes
+      // a `w:ins` mark on the head, whose Reject merges the two paragraphs back and keeps
+      // the SURVIVING tail's `w:pPr` — so a tail wearing the follower style would demote the
+      // heading the user took the break back from. Word records a `w:pPrChange` for that
+      // case; this engine has no tracked paragraph-property write, so it declines instead.
       const tailStyleId =
-        plan.ops.length === 0
-          ? nextStyle.tailStyleId(
-              position.paragraphId,
-              position.offset === textOf(position.paragraphId).length
-            )
+        plan.ops.length === 0 && trackedAuthorOrNone() === undefined
+          ? nextStyle.tailStyleId(position.paragraphId, position.offset)
           : undefined;
       commit(
         () =>
