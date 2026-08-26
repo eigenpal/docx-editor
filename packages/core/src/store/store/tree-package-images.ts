@@ -10,6 +10,7 @@ import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
   DEFAULT_SUPPORTED_MC_REQUIRES,
   createDrawingRelationshipResolver,
+  isRunLevelMcAlternateContent,
 } from '../package/drawing-projection.ts';
 import {
   buildInlinePictureDrawing,
@@ -478,20 +479,59 @@ export function deleteImage(
 /**
  * The drawing atom's model unit within its owning paragraph, from the SAME offset authority
  * the tracked ops strike by (`paragraphOffsetIndex`), so the proposal covers exactly the
- * unit `applyDeleteTracked` re-labels. Null when the drawing is not addressable content —
- * unknown id, or chrome swallowed by a field atom (zero-length span).
+ * unit `applyDeleteTracked` re-labels. Null when the target is not an addressable drawing
+ * atom — unknown id, a node that is not a `w:drawing` or a run-level MC wrapper, or chrome
+ * swallowed by a field atom (zero-length span). `alreadyDeleted` reports an enclosing
+ * `w:del`/`w:moveFrom`, so the caller can answer a repeat proposal without writing one.
  */
 function locateDrawingModelUnit(
   part: OoxmlPart,
   drawingNodeId: string
-): { readonly paragraphId: string; readonly start: number; readonly end: number } | null {
-  let found: { paragraphId: string; start: number; end: number } | null = null;
+): {
+  readonly paragraphId: string;
+  readonly start: number;
+  readonly end: number;
+  readonly alreadyDeleted: boolean;
+} | null {
+  let found: {
+    paragraphId: string;
+    start: number;
+    end: number;
+    alreadyDeleted: boolean;
+  } | null = null;
+  const insideDeletion = (paragraph: OoxmlNode): boolean => {
+    let seen = false;
+    let deleted = false;
+    const walk = (node: OoxmlNode, enclosed: boolean): void => {
+      if (seen || node.kind === 'textValue') return;
+      if (node.id === drawingNodeId) {
+        seen = true;
+        deleted = enclosed;
+        return;
+      }
+      const next = enclosed || node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom';
+      for (const child of node.children) walk(child, next);
+    };
+    walk(paragraph, false);
+    return deleted;
+  };
   const visit = (node: OoxmlNode): void => {
     if (found !== null || node.kind === 'textValue') return;
     if (node.kind === 'paragraph') {
       const span = paragraphOffsetIndex(node).spanOf(drawingNodeId);
       if (span !== null && span.end > span.start) {
-        found = { paragraphId: node.id, start: span.start, end: span.end };
+        // Only a drawing atom may be struck through this lane: every run node has a span,
+        // and a public caller handing a text node's id must be refused, not obeyed.
+        const target = findNode(part, drawingNodeId);
+        if (!target || (target.kind !== 'drawing' && !isRunLevelMcAlternateContent(target))) {
+          return;
+        }
+        found = {
+          paragraphId: node.id,
+          start: span.start,
+          end: span.end,
+          alreadyDeleted: insideDeletion(node),
+        };
       }
       // No descent past the paragraph: a nested paragraph only exists inside a textbox
       // story, which is not an editable lane and publishes no selectable drawing.
@@ -507,8 +547,9 @@ function locateDrawingModelUnit(
  * Propose the deletion instead of performing it: the drawing's single model unit goes into
  * a `w:del`, exactly as a struck word does, so the page keeps the picture (dimmed, outlined)
  * and the review queue offers one Accept. Media and relationships stay untouched — the file
- * still shows the picture until someone accepts — and the author's own pending insertion is
- * removed outright by the tracked apply, the same rule struck text follows.
+ * still shows the picture until someone accepts, and the one branch that removes the drawing
+ * now (the author striking their OWN pending insertion) leaves the media part orphaned,
+ * which is the same shape the accept lane produces and valid OPC.
  */
 export function deleteImageTracked(
   store: TreePackageStore,
@@ -530,6 +571,11 @@ export function deleteImageTracked(
   if (!part) return { ok: false, reason: 'unknown-drawing' };
   const located = locateDrawingModelUnit(part, drawingNodeId);
   if (!located) return { ok: false, reason: 'unknown-drawing' };
+  // Already proposed away: the strike stands, and there is nothing further to say. The
+  // tracked apply would push the runs through unchanged, but the rebuilt wrapper still
+  // committed a unit — so the dimmed (still selectable) picture took one Delete per press
+  // into the undo stack, and the first Ctrl+Z visibly did nothing.
+  if (located.alreadyDeleted) return { ok: true, change: null };
   return transactPackageImage(store, scope, (ctx) => {
     if (
       !ctx.apply({

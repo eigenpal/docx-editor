@@ -267,6 +267,14 @@ describe('tracked drawings carry and paint their revision', () => {
       expect(items).toHaveLength(1);
       expect(items[0]!.revisionKind).toBe('delete');
       expect(items[0]!.markDirection).toBeUndefined();
+
+      // A second Delete on the struck picture says nothing new: no phantom undo unit, so
+      // ONE undo restores the untracked picture instead of visibly doing nothing first.
+      const again = surface.deleteImage(after[0]!.drawingNodeId);
+      expect(again.ok).toBe(true);
+      expect(revisionItemsOf(surface.session.part())).toHaveLength(1);
+      surface.undo();
+      expect(lineDrawings(surface)[0]!.revisions).toBeUndefined();
     } finally {
       surface.destroy();
       container.remove();
