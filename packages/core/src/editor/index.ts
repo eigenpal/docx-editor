@@ -151,6 +151,7 @@ export {
   type ParagraphPropertyEdit,
   type ParagraphTabStop,
   type SectionBreakInsertType,
+  type ReviewWriteIntent,
   type SurfaceFormatting,
 } from './paginated-surface.ts';
 export {
@@ -176,6 +177,8 @@ export {
   type EditorModuleRegistry,
   type ReviewModelInput,
   type ReviewModuleContribution,
+  type CollaborationModuleContribution,
+  type CollaborationSessionFactory,
 } from '../contracts/modules.ts';
 export {
   applyThemeShade,

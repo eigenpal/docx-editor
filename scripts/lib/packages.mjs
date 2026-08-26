@@ -91,12 +91,6 @@ export const PACKAGES = [
     tsconfigPath: 'packages/core/tsconfig.api.json',
   },
   {
-    name: '@docx-editor.dev/collaboration-yjs',
-    root: 'packages/collaboration-yjs',
-    pkgSlug: 'docx-editor-collaboration-yjs',
-    tsconfigPath: 'packages/collaboration-yjs/tsconfig.api.json',
-  },
-  {
     name: '@docx-editor.dev/pro',
     root: 'packages/pro',
     pkgSlug: 'docx-editor-pro',
@@ -110,7 +104,7 @@ export const PACKAGES = [
       allowlist: {
         // Owned by `core` and imported from there — a consumer CAN name these, just not
         // through this package, which is the boundary `contracts/modules.ts` documents.
-        index: ['Editor', 'EditorModule', 'ExecResult', 'OoxmlPart'],
+        index: ['Editor', 'EditorModule', 'ExecResult', 'OoxmlPart', 'CollaborationSessionFactory', 'EditorCollaborationSession'],
         // The react entry is a compound-parts barrel: every `Review*` here is a namespace
         // member reachable as `DocxEditorReview.Card`, and the three custom-node types are
         // re-exports of names the package's own index publishes. This is the noise case the
@@ -118,8 +112,11 @@ export const PACKAGES = [
         react: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
+          'CollaborationSessionFactory',
+          'CollaborationStatus',
           'CustomNodeDefinition',
           'Editor',
+          'EditorCollaborationSession',
           'EditorModule',
           'ReviewAccept',
           'ReviewAddComment',
@@ -148,11 +145,28 @@ export const PACKAGES = [
         vue: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
+          'CollaborationSessionFactory',
+          'CollaborationStatus',
           'CustomNodeDefinition',
           'Editor',
+          'EditorCollaborationSession',
           'EditorModule',
           'ReviewItemPlacement',
           'ReviewItemQuery',
+        ],
+        // Owned by core or by this package's other entries. The collaboration barrel
+        // names them in signatures but does not re-export them.
+        collaboration: [
+          'CollaborationIdentity',
+          'CollaborationSessionFactory',
+          'EditorCollaborationSession',
+          'EditorModule',
+          'ProLicenseOptions',
+        ],
+        'collaboration-webrtc': [
+          'CollaborationIdentity',
+          'YjsCollaborationBootstrap',
+          'YjsCollaborationRoom',
         ],
       },
     },

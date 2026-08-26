@@ -24,6 +24,7 @@ const manifest = JSON.parse(
 ) as {
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   devDependencies?: Record<string, string>;
 };
 
@@ -71,7 +72,22 @@ describe('how this package asks for the engine', () => {
     expect(manifest.devDependencies?.['@docx-editor.dev/i18n']).toBe('workspace:*');
   });
 
-  test('there are no runtime dependencies left to nest', () => {
-    expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);
+  test('the only runtime dependency is y-protocols', () => {
+    expect(Object.keys(manifest.dependencies ?? {})).toEqual(['y-protocols']);
+  });
+
+  test('yjs and y-webrtc are optional peers and never regular dependencies', () => {
+    expect(manifest.peerDependencies?.yjs).toMatch(/^\^13\./);
+    expect(manifest.peerDependencies?.['y-webrtc']).toMatch(/^\^10\./);
+    expect(manifest.peerDependenciesMeta?.yjs).toEqual({ optional: true });
+    expect(manifest.peerDependenciesMeta?.['y-webrtc']).toEqual({ optional: true });
+    expect(manifest.dependencies?.yjs).toBeUndefined();
+    expect(manifest.dependencies?.['y-webrtc']).toBeUndefined();
+  });
+
+  test('the default collaboration entry does not import a network provider', async () => {
+    const source = await Bun.file(join(import.meta.dir, '..', 'collaboration', 'index.ts')).text();
+    expect(source).not.toContain('y-webrtc');
+    expect(source).not.toContain('./webrtc');
   });
 });

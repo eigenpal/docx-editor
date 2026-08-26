@@ -4,11 +4,11 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /**
- * `@docx-editor.dev/pro` — the review module and integrator-defined custom nodes.
+ * `@docx-editor.dev/pro` — review, custom nodes, and realtime collaboration.
  *
  * Registering a module is the whole enablement story: the review chrome slots light up through
- * the same `toolbarCommandState` that disabled them, and the editor renders revisions as markup
- * rather than the free tier's final-state projection.
+ * the same `toolbarCommandState` that disabled them, the editor renders revisions as markup
+ * rather than the free tier's final-state projection, and a collaboration module attaches a replica.
  *
  * @example Enable comments, tracked changes, and a custom node type
  * ```ts
@@ -30,6 +30,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 export { reviewModule, type ReviewModuleOptions } from './review/review-module.ts';
+export {
+  collaborationModule,
+  type CollaborationModuleOptions,
+} from './collaboration/collaboration-module.ts';
 export { type ProLicenseOptions } from './license.ts';
 export {
   customNodesModule,

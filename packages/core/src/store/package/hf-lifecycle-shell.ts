@@ -15,6 +15,7 @@ import { createNodeIdAllocator, insertChildren, removeNode } from './ooxml-edit.
 import { readOoxmlPart, type OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlExternalTarget, OoxmlPackage } from './ooxml-package.ts';
 import { partNameKey, resolveInternalTarget, validateExternalTarget } from './opc-names.ts';
+import { freePackageRelationshipId } from './actor-scoped-ids.ts';
 import { contentTypesPartBytes, withRelationshipsPartFor } from './package-edit.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
@@ -26,20 +27,11 @@ const CONTENT_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content
 const MAX_OWNED_RELATIONSHIPS = 4_096;
 
 export function freeRelationshipId(pkg: OoxmlPackage): string {
-  let max = 0;
-  for (const records of pkg.relationships.values()) {
-    for (const record of records) {
-      const match = /^rId(\d{1,9})$/.exec(record.id);
-      if (match) max = Math.max(max, Number(match[1]));
-    }
-  }
   // External hyperlink targets live outside `relationships`; ignoring them reused ids and
   // collided with later furniture allocation after shell resources persisted across undo.
-  for (const external of pkg.externalTargets) {
-    const match = /^rId(\d{1,9})$/.exec(external.id);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `rId${max + 1}`;
+  // The shared scan still walks both maps. An attached collaboration actor stripes the
+  // number so two peers cannot mint the same `rId` from one snapshot.
+  return freePackageRelationshipId(pkg);
 }
 
 export function relsPartNameFor(partName: string): string {

@@ -1,14 +1,14 @@
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { DocxEditor } from '@docx-editor.dev/editor-api';
-import { createYjsCollaboration } from '@docx-editor.dev/collaboration-yjs';
+import { createDocumentCollaboration } from '@docx-editor.dev/pro/collaboration';
 import { demoDocumentBytes } from './src/demo-document';
 
 const roomId = 'headless-collaboration-proof';
 const inProcessProvider = Object.freeze({ kind: 'in-process-provider' });
 const browserDoc = new Y.Doc();
 const browserAwareness = new Awareness(browserDoc);
-const browserRoom = await createYjsCollaboration({
+const browserRoom = await createDocumentCollaboration({
   ydoc: browserDoc,
   awareness: browserAwareness,
   documentId: roomId,
@@ -19,7 +19,7 @@ const browserRoom = await createYjsCollaboration({
 const agentDoc = new Y.Doc();
 Y.applyUpdate(agentDoc, Y.encodeStateAsUpdate(browserDoc), inProcessProvider);
 const agentAwareness = new Awareness(agentDoc);
-const agentRoom = await createYjsCollaboration({
+const agentRoom = await createDocumentCollaboration({
   ydoc: agentDoc,
   awareness: agentAwareness,
   documentId: roomId,

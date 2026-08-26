@@ -362,6 +362,23 @@
   background: var(--doc-warning);
 }
 
+/* Divergence is not degradation. This peer holds a document the others do not, and no amount of
+   waiting reconciles it, so it reads as an error rather than a warning. */
+.demo-collaboration-status.is-diverged {
+  background: var(--doc-error-bg);
+}
+
+.demo-collaboration-status.is-diverged .demo-collaboration-status__dot {
+  background: var(--doc-error);
+}
+
+/* The trigger is the only collaboration state left on screen once the dialog closes, so a
+   diverged replica has to be legible from the header alone. */
+.demo-collaboration-trigger.is-diverged {
+  background: var(--doc-error-bg);
+  color: var(--doc-error);
+}
+
 .demo-collaboration-status__count {
   margin-left: auto;
   color: var(--doc-text-muted);

@@ -1,7 +1,7 @@
 {
   "name": "@docx-editor.dev/pro",
   "version": "2.10.0",
-  "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering) and custom inline nodes over content controls.",
+  "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering), custom inline nodes, and realtime collaboration.",
   "sideEffects": false,
   "type": "module",
   "exports": {
@@ -19,6 +19,16 @@
       "types": "./dist/vue/index.d.ts",
       "import": "./dist/vue/index.js",
       "require": "./dist/vue/index.cjs"
+    },
+    "./collaboration": {
+      "types": "./dist/collaboration/index.d.ts",
+      "import": "./dist/collaboration/index.js",
+      "require": "./dist/collaboration/index.cjs"
+    },
+    "./collaboration/webrtc": {
+      "types": "./dist/collaboration/webrtc.d.ts",
+      "import": "./dist/collaboration/webrtc.js",
+      "require": "./dist/collaboration/webrtc.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -40,7 +50,9 @@
     "@docx-editor.dev/vue": "~2.10.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
-    "vue": "^3.3.0"
+    "vue": "^3.3.0",
+    "yjs": "^13.6.32",
+    "y-webrtc": "^10.3.0"
   },
   "peerDependenciesMeta": {
     "@docx-editor.dev/react": {
@@ -57,10 +69,20 @@
     },
     "vue": {
       "optional": true
+    },
+    "yjs": {
+      "optional": true
+    },
+    "y-webrtc": {
+      "optional": true
     }
+  },
+  "dependencies": {
+    "y-protocols": "^1.0.7"
   },
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/editor-api": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
     "@docx-editor.dev/vue": "workspace:*",
@@ -72,13 +94,16 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.3.3",
+    "y-webrtc": "^10.3.0",
+    "yjs": "^13.6.32",
     "zod": "^4.4.3"
   },
   "keywords": [
     "docx",
     "tracked-changes",
     "comments",
-    "content-controls"
+    "content-controls",
+    "collaboration"
   ],
   "author": {
     "name": "EigenPal, Inc.",

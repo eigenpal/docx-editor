@@ -1,7 +1,10 @@
 // Complete-journal coverage for every authorable TreeDocOp kind (tasks 3.6 and 3.8).
 
 import { describe, expect, test } from 'bun:test';
-import { observeCanonicalPrimitiveJournal } from '../../collaboration/primitive-journal.ts';
+import {
+  observeCanonicalPrimitiveJournal,
+  flushPendingCanonicalJournals,
+} from '../../collaboration/primitive-journal.ts';
 import { isHeaderFooterLifecycleOp } from '../package/hf-lifecycle.ts';
 import { isNoteLifecycleOp } from '../package/note-lifecycle.ts';
 import { applyTreeOp, TREE_DOC_OP_KINDS, type TreeDocOp } from '../store/tree-ops.ts';
@@ -59,6 +62,7 @@ describe('canonical primitive journal completeness (tasks 3.6 and 3.8)', () => {
       });
       expect(result.ok).toBe(false);
     }
+    flushPendingCanonicalJournals(store);
     expect(journals).toHaveLength(0);
     expect(store.packageRevision).toBe(before);
   });

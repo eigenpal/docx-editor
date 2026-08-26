@@ -11,7 +11,7 @@ import {
   createWebrtcCollaboration,
   validateRoomId,
   type WebrtcCollaborationRoom,
-} from '@docx-editor.dev/collaboration-yjs/webrtc';
+} from '@docx-editor.dev/pro/collaboration/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
 const NAME_KEY = 'docx-editor-collaboration-name';
@@ -37,6 +37,8 @@ const strings = {
   inviteLink: t('collaborationDemo.inviteLink'),
   connected: t('collaborationDemo.connected'),
   reconnecting: t('collaborationDemo.reconnecting'),
+  outOfSync: t('collaborationDemo.outOfSync'),
+  outOfSyncShort: t('collaborationDemo.outOfSyncShort'),
   person: t('collaborationDemo.person'),
   people: t('collaborationDemo.people'),
   you: t('collaborationDemo.you'),
@@ -94,8 +96,12 @@ function roomIdFrom(value: string): string {
 
 function shareUrl(roomId: string): string {
   const url = new URL(location.href);
+  // Keep `fixture` so the joiner opens the same small file the creator did. Dropping it
+  // forced every peer to load `sample.docx` first, then throw it away for the room bytes.
+  const fixture = url.searchParams.get('fixture');
   url.search = '';
   url.searchParams.set('room', roomId);
+  if (fixture) url.searchParams.set('fixture', fixture);
   return url.toString();
 }
 
@@ -165,6 +171,17 @@ export function CollaborationControl({
     setStatus(room.session.status());
     return room.session.subscribeStatus((next) => setStatus(next));
   }, [room]);
+
+  // `error` and `destroyed` are NOT "reconnecting". A replica reaches them by refusing an update
+  // and keeping the copy it already had, so this peer is now editing a document the others do not
+  // have, and waiting will never fix it. Shown as one label with the other statuses collapsed into
+  // it read "Reconnecting", which tells the reader to sit and wait for a state that never arrives.
+  const diverged = status === 'error' || status === 'destroyed';
+  const statusLabel = diverged
+    ? strings.outOfSync
+    : status === 'ready'
+      ? strings.connected
+      : strings.reconnecting;
 
   useEffect(() => {
     if (!open) return;
@@ -237,7 +254,9 @@ export function CollaborationControl({
   return (
     <>
       <DemoHeaderButton
-        className={`demo-collaboration-trigger${room ? ' is-connected' : ''}`}
+        className={`demo-collaboration-trigger${room ? ' is-connected' : ''}${
+          room && diverged ? ' is-diverged' : ''
+        }`}
         onClick={() => {
           setError(null);
           setMode(room ? 'connected' : initialRoom ? 'join' : 'choice');
@@ -249,7 +268,17 @@ export function CollaborationControl({
         aria-busy={busy}
       >
         {room ? <ParticipantStack participants={participants} /> : <CollaborationIcon />}
-        <span>{room ? `${participants.length} ${strings.online}` : strings.connect}</span>
+        {/* A diverged replica still has peers in its participant list, so a headcount here
+            reads as healthy while this copy's edits reach nobody. The trigger is the only
+            collaboration state on screen once the dialog closes, so it has to carry the
+            warning in WORDS: the class alone would leave the meaning in the colour. */}
+        <span>
+          {!room
+            ? strings.connect
+            : diverged
+              ? strings.outOfSyncShort
+              : `${participants.length} ${strings.online}`}
+        </span>
       </DemoHeaderButton>
 
       {open
@@ -295,10 +324,10 @@ export function CollaborationControl({
                     <div
                       className={`demo-collaboration-status${
                         status === 'ready' ? '' : ' is-degraded'
-                      }`}
+                      }${diverged ? ' is-diverged' : ''}`}
                     >
                       <span className="demo-collaboration-status__dot" />
-                      <span>{status === 'ready' ? strings.connected : strings.reconnecting}</span>
+                      <span>{statusLabel}</span>
                       <span className="demo-collaboration-status__count">
                         {participants.length}{' '}
                         {participants.length === 1 ? strings.person : strings.people}

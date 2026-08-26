@@ -31,6 +31,13 @@ import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import {
+  MAX_RELATIONSHIP_NUMBER,
+  nextStripedDecimalId,
+  relationshipIdFromNumber,
+  relationshipNumberOf,
+  resolveAllocationActor,
+} from './actor-scoped-ids.ts';
+import {
   recordDeleteContentTypeOverride,
   recordDeleteXmlPart,
   recordPutContentTypeOverride,
@@ -624,6 +631,17 @@ export function relationshipIdsForOwner(pkg: OoxmlPackage, ownerPart: string): R
 /** First unused `rIdN` on one owner part — collision-safe against internal and external ids. */
 export function allocateOwnerRelationshipId(pkg: OoxmlPackage, ownerPart: string): string {
   const used = relationshipIdsForOwner(pkg, ownerPart);
+  const actor = resolveAllocationActor();
+  if (actor) {
+    const numbers = new Set<string>();
+    for (const id of used) {
+      const value = relationshipNumberOf(id);
+      if (value !== null) numbers.add(String(value));
+    }
+    return relationshipIdFromNumber(
+      Number(nextStripedDecimalId(numbers, actor, MAX_RELATIONSHIP_NUMBER))
+    );
+  }
   let max = 0;
   for (const id of used) {
     const match = /^rId(\d+)$/.exec(id);

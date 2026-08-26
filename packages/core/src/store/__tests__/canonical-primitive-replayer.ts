@@ -389,6 +389,12 @@ export function replayCanonicalPrimitiveJournal(
     reindexPackage(next, nodes, parents, partRoots, partMeta);
   };
 
+  const initialText = new Set<string>();
+  for (const effect of journal.effects) {
+    if (effect.kind === 'putNode' && effect.descriptor.kind === 'textValue') {
+      initialText.add(effect.descriptor.logicalId);
+    }
+  }
   for (const effect of journal.effects) applyEffect(effect);
 
   function applyEffect(effect: CanonicalPrimitiveEffect): void {
@@ -433,6 +439,14 @@ export function replayCanonicalPrimitiveJournal(
       case 'spliceText': {
         const recorded = nodes.get(effect.logicalId);
         if (!recorded) throw new Error(`replay missing text ${effect.logicalId}`);
+        if (
+          initialText.has(effect.logicalId) &&
+          effect.utf16Start === 0 &&
+          effect.deleteCount === 0
+        ) {
+          recorded.value = effect.insert;
+          return;
+        }
         recorded.value =
           recorded.value.slice(0, effect.utf16Start) +
           effect.insert +

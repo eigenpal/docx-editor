@@ -156,6 +156,11 @@ interface Budgets {
     readonly pullRequestTimingOrRss: string;
     readonly hardwareTimingOrRssMiss: string;
   };
+  readonly keystrokePath: {
+    readonly replicationInsideTransact: boolean;
+    readonly yjsUpdatesDuringLocalTransactMustBe: number;
+    readonly flushSeam: string;
+  };
 }
 
 const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')) as Baseline;
@@ -207,7 +212,7 @@ describe('collaboration budget artifact', () => {
     expect(budgets.localExact.layout).toEqual({
       placed: 13,
       total: 3200,
-      reusedPages: 154,
+      reusedPages: 203,
       fullPasses: 1,
       pagesBefore: 204,
       pagesAfter: 204,
@@ -303,6 +308,14 @@ describe('collaboration budget artifact', () => {
       eligibleMedianMs: 16.7,
       eligibleP95Ms: 33.4,
       surface: 'Chromium beforeinput presentation, not happy-dom paint',
+    });
+  });
+
+  test('pins collaboration replication off the local transact path', () => {
+    expect(budgets.keystrokePath).toEqual({
+      replicationInsideTransact: false,
+      yjsUpdatesDuringLocalTransactMustBe: 0,
+      flushSeam: 'CollaborationDocumentPort.flushPendingJournals',
     });
   });
 });

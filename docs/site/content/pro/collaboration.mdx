@@ -1,0 +1,137 @@
+---
+title: 'Realtime collaboration'
+description: 'Replicate a DOCX across peers with the Pro collaboration module. Register the module, then attach a Yjs session.'
+category: 'Pro'
+order: 64
+---
+
+Realtime collaboration replicates the canonical document across peers.
+
+It covers text, structure, formatting, tables, headers, footers, notes, drawings, relationships, and embedded parts. Peers also share presence and remote selections that can span paragraphs.
+
+Collaboration requires the collaboration module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+
+Without that module, the editor does not attach a replica. Local undo stays in charge, and `snapshot().collaborationStatus` is `'inactive'`.
+
+## Prerequisites
+
+Install the Pro package plus Yjs. Add `y-webrtc` only when you use the WebRTC helper:
+
+```bash
+npm install @docx-editor.dev/pro yjs y-webrtc
+```
+
+`yjs` and `y-webrtc` are optional peers of Pro. `y-protocols` installs with Pro.
+
+## Register the module
+
+Create a replica, then pass `collaborationModule({ session })` in `modules`.
+
+The editor reads modules when it is constructed. Keep the array stable across renders. Remount the editor when the session identity changes.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { collaborationModule } from '@docx-editor.dev/pro';
+import { createWebrtcCollaboration } from '@docx-editor.dev/pro/collaboration/webrtc';
+import { useCollaborationStatus } from '@docx-editor.dev/pro/react';
+
+const room = await createWebrtcCollaboration({
+  roomId,
+  identity: { actorId: 'alex', name: 'Alex' },
+  bootstrap: { kind: 'create', document: bytes },
+});
+
+const MODULES = [collaborationModule({ session: room.session })];
+
+function Status() {
+  const { status } = useCollaborationStatus(room.session);
+  return <span>{status}</span>;
+}
+
+export function CollaborativeEditor() {
+  return (
+    <DocxEditor.Root document={room.document} modules={MODULES}>
+      <Status />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { collaborationModule } from '@docx-editor.dev/pro';
+import { createWebrtcCollaboration } from '@docx-editor.dev/pro/collaboration/webrtc';
+import { useCollaborationStatus } from '@docx-editor.dev/pro/vue';
+
+const room = await createWebrtcCollaboration({
+  roomId,
+  identity: { actorId: 'alex', name: 'Alex' },
+  bootstrap: { kind: 'join' },
+});
+
+const MODULES = [collaborationModule({ session: room.session })];
+const { status } = useCollaborationStatus(room.session);
+</script>
+
+<template>
+  <DocxEditor.Root :document="room.document" :modules="MODULES">
+    <span>{{ status }}</span>
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The default Pro entry re-exports `collaborationModule` and does not import a network provider. Import `@docx-editor.dev/pro/collaboration` for the Yjs factories. Import `@docx-editor.dev/pro/collaboration/webrtc` for the WebRTC wrapper.
+
+## Own the Yjs document
+
+If you already own a `Y.Doc` and awareness instance, call `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It replicates the whole canonical package, which is what the WebRTC wrapper and the module use. You destroy those resources.
+
+The same entry also exports `createYjsCollaboration`, which replicates paragraph text alone. Use `createDocumentCollaboration` unless you want that narrower scope.
+
+## Headless replica
+
+`DocxEditor.createCollaborative` on `@docx-editor.dev/editor-api` opens a DOM-free replica. It registers the session through the same module seam.
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+import { createDocumentCollaboration } from '@docx-editor.dev/pro/collaboration';
+
+const room = await createDocumentCollaboration({
+  ydoc,
+  awareness,
+  documentId: 'room-1',
+  identity: { actorId: 'agent', name: 'Agent', role: 'agent' },
+  bootstrap: { kind: 'join' },
+});
+
+const runtime = await DocxEditor.createCollaborative(room.document, room.session, {
+  author: 'Agent',
+});
+```
+
+## Limits
+
+Peers connect directly over WebRTC when you use the WebRTC helper. A room lasts only as long as one peer stays open.
+
+Comment writes and custom-node writes are refused while a replica is attached.
+
+A typing run undoes as one step through the session undo manager.
+
+For module registration and licensing, see the
+[Pro package documentation](/docs/2.x/pro).

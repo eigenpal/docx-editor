@@ -257,6 +257,16 @@ export interface HyperlinkOpsDeps {
    * commit does not take it back. Asking first is what keeps a read-only document byte-identical.
    */
   readonly refusesWrite: () => boolean;
+  /**
+   * Bind the collaboration actor around the relationship mint below.
+   *
+   * The mint runs OUTSIDE the store transaction, so the actor a transaction would have bound
+   * for it is not set. Without one, two collaborators inserting a link at the same moment both
+   * take `rId${max + 1}` and share a single relationship id — a collision no CRDT can see,
+   * because the tree converges and only the id namespace is wrong. Absent (solo editing), the
+   * mint keeps Word's dense sequence.
+   */
+  readonly withMintActor?: <T>(mint: () => T) => T;
   /** Active story for reads/writes — body, header/footer, or notes part. */
   storyScope(): StoryScope;
   /**
@@ -410,7 +420,9 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
       // the undo stack, and a refused URL must not leave a half-applied edit behind.
       let relationshipId: string | undefined;
       if (wantsExternal) {
-        const minted = deps.session.ensureHyperlinkRelationship(input.url!, active);
+        const mint = (): string | null =>
+          deps.session.ensureHyperlinkRelationship(input.url!, active);
+        const minted = deps.withMintActor ? deps.withMintActor(mint) : mint();
         if (!minted) return false;
         relationshipId = minted;
       }

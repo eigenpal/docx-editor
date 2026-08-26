@@ -25,6 +25,7 @@ import {
   type OoxmlPackageLimits,
   type OoxmlPackageRejection,
 } from '../store/package/ooxml-package.ts';
+import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts';
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
@@ -32,15 +33,16 @@ import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
 import {
   createCollaborationDocumentPort,
+  type CollaborationModuleContribution,
   type EditorCollaborationSession,
 } from '../collaboration/index.ts';
 import { normalizeCollaborationTextPackage } from '../collaboration/document-port.ts';
-import { addComment, setCommentResolved } from '../store/store/comment-writes.ts';
 import {
-  deleteCommentReply,
-  deleteCommentThreadInStory,
-} from '../store/package/comment-lifecycle.ts';
-import { insertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
+  addPackageComment,
+  deletePackageComments,
+  setPackageCommentResolved,
+} from '../store/store/comment-package-write.ts';
+import { insertPackageCustomNode } from '../store/store/custom-node-package-write.ts';
 import type {
   AutomationCommentWriteResult,
   AutomationDocumentPort,
@@ -93,8 +95,11 @@ export interface ServerAutomationHostOptions {
    * may want smaller limits than the defaults. Omitted means the engine's own defaults.
    */
   readonly limits?: OoxmlPackageLimits;
-  /** Optional provider-neutral collaboration replica attached to this headless host. */
-  readonly collaboration?: EditorCollaborationSession;
+  /**
+   * Collaboration replica from the module registry. Absent, this host does
+   * not attach a replica.
+   */
+  readonly collaborationModel?: CollaborationModuleContribution;
 }
 
 const BODY: StoryScope = Object.freeze({ kind: 'body' as const });
@@ -126,16 +131,21 @@ export function createServerAutomationHost(
     };
   }
   const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+  const collaborationModel = options.collaborationModel;
+  const collaboration =
+    typeof collaborationModel?.session === 'function'
+      ? collaborationModel.session('document')
+      : collaborationModel?.session;
   let detachCollaboration = (): void => {};
-  const port = packageStorePort(store, options.collaboration, () => detachCollaboration());
+  const port = packageStorePort(store, collaboration, () => detachCollaboration());
   const host = createAutomationHost({
     port,
     capabilities: SERVER_AUTOMATION_CAPABILITIES,
   });
-  if (options.collaboration) {
-    detachCollaboration = options.collaboration.attach(
+  if (collaboration) {
+    detachCollaboration = collaboration.attach(
       createCollaborationDocumentPort(store, {
-        documentId: options.collaboration.documentId,
+        documentId: collaboration.documentId,
       })
     );
   }
@@ -194,6 +204,17 @@ function packageStorePort(
       recordsHistory: false,
     };
   };
+  // AN AUTOMATION BATCH IS NOT A KEYSTROKE. Publication is deferred so that holding a key down
+  // never waits on encoding, which is latency the browser needs and this host cannot use: no
+  // frame is pending, and the caller's very next line may read a peer. Left deferred, a script
+  // that awaited `sync()` saw a replica that had not received the edit yet — the edit arrived
+  // later, so nothing was lost, but "committed" and "replicated" disagreed for long enough to
+  // read as data loss. Every mutating return goes through here, so a method added later
+  // publishes by default instead of inheriting the browser's timing.
+  const published = <T>(result: T): T => {
+    collaboration?.flushPendingJournals();
+    return result;
+  };
   return {
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
@@ -202,7 +223,14 @@ function packageStorePort(
       // BUILT HERE, not by the planner: minting the relationship an external link names changes the
       // package, and this host has no mode to refuse a write, so "here" is as late as it gets — a
       // batch that was refused while planning has already left without touching anything.
-      const ops = staged((url) => mintExternalTarget(store, url, scope));
+      // Bound to the collaboration actor: the mint lands on the package shell before the
+      // transaction below, so nothing else binds one, and two hosts minting at the same moment
+      // would both take `rId${max + 1}` for different targets.
+      const ops = staged((url) =>
+        runWithTransactionActor(collaboration?.identity.actorId, () =>
+          mintExternalTarget(store, url, scope)
+        )
+      );
       if (ops === null) return { ok: false, reason: 'unsupported-target' };
       const collaborationRefusal = collaboration?.gateOperations(ops, scope);
       if (collaborationRefusal) return { ok: false, reason: collaborationRefusal };
@@ -223,7 +251,7 @@ function packageStorePort(
           reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
         };
       }
-      return { ok: true, changed: result.change !== null };
+      return published({ ok: true, changed: result.change !== null });
     },
     applyLifecycle(op: TreeDocOp): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
@@ -239,11 +267,10 @@ function packageStorePort(
           reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
         };
       }
-      return { ok: true, changed: result.change !== null };
+      return published({ ok: true, changed: result.change !== null });
     },
     applyCommentWrites(writes, scope): AutomationCommentWriteResult {
       if (!live) return { ok: false, reason: 'disposed' };
-      if (collaboration) return { ok: false, reason: 'experimental-collaboration-text-only' };
       if (writes.length === 0) return { ok: true, changed: false };
       const story = store.resolveStory(scope);
       if (!story.ok) return { ok: false, reason: story.reason };
@@ -253,83 +280,89 @@ function packageStorePort(
       // either half and one write silently overwrites the other's parts.
       story.store.graftPackage(() => store.currentPackage());
       if (writes.every((write) => write.kind === 'delete')) {
-        let refused = false;
-        let changed = false;
-        const transaction = story.store.transact((ctx) => {
-          ctx.applyPackage((current) => {
-            let next = current;
-            for (const write of writes) {
-              if (write.kind !== 'delete') continue;
-              const owner = {
-                storyPartName: story.store.part.name,
-                ...(write.noteId === undefined ? {} : { noteId: write.noteId }),
-              };
-              const deleted =
-                write.parentCommentId === undefined
-                  ? deleteCommentThreadInStory(next, write.commentId, owner)
-                  : deleteCommentReply(next, write.commentId, write.parentCommentId, owner);
-              if (deleted === null) {
-                refused = true;
-                return current;
-              }
-              changed ||= deleted !== next;
-              next = deleted;
-            }
-            return next;
-          });
-        });
-        if (refused || !transaction.ok) return { ok: false, reason: 'comment-delete-refused' };
-        if (changed) store.installPackageSnapshot(story.store.package);
-        return { ok: true, changed };
+        // Through the coordinator, so the deletion enters an observed transaction and journals.
+        // Deleting in the story store and swapping the shell records no effects: the peer kept
+        // both the markers and the comment, and the two documents disagreed with nothing to
+        // reconcile from. One `noteId` for the batch, the same collapse the browser host makes.
+        const first = writes.find((write) => write.kind === 'delete');
+        const changed = runWithTransactionActor(collaboration?.identity.actorId, () =>
+          deletePackageComments(
+            store,
+            writes.flatMap((write) =>
+              write.kind === 'delete'
+                ? [
+                    {
+                      commentId: write.commentId,
+                      ...(write.parentCommentId === undefined
+                        ? {}
+                        : { parentCommentId: write.parentCommentId }),
+                    },
+                  ]
+                : []
+            ),
+            scope,
+            first?.kind === 'delete' ? first.noteId : undefined
+          )
+        );
+        if (!changed) return { ok: false, reason: 'comment-delete-refused' };
+        return published({ ok: true, changed });
       }
       if (writes.length !== 1) return { ok: false, reason: 'mixed-comment-writes' };
       const write = writes[0]!;
-      const result =
-        write.kind === 'create'
-          ? addComment(story.store, {
+      // Through the package coordinator for create and reply, so the write enters an observed
+      // transaction and a replica sees `comments.xml`, its relationship and its content-type
+      // override — not just the markers in the story. This is the same path the editor's own
+      // comment lane takes, which is what keeps the two hosts from drifting.
+      if (write.kind === 'create' || write.kind === 'reply') {
+        const added = runWithTransactionActor(collaboration?.identity.actorId, () =>
+          addPackageComment(
+            store,
+            {
               anchor: write.anchor,
               author: write.author,
               text: write.text,
               ...(write.date === undefined ? {} : { date: write.date }),
-            })
-          : write.kind === 'reply'
-            ? addComment(story.store, {
-                anchor: write.anchor,
-                author: write.author,
-                text: write.text,
-                ...(write.date === undefined ? {} : { date: write.date }),
-                replyToCommentId: write.parentCommentId,
-              })
-            : write.kind === 'resolve'
-              ? setCommentResolved(story.store, write.commentId, write.resolved)
-              : null;
-      if (result === null) return { ok: false, reason: 'unsupported-comment-write' };
-      if (!result.ok) return { ok: false, reason: result.reason };
-      store.replacePackageShell(story.store.package);
-      return {
-        ok: true,
-        changed: true,
-        ...('commentId' in result ? { commentId: result.commentId } : {}),
-      };
+              ...(write.kind === 'reply' ? { replyToCommentId: write.parentCommentId } : {}),
+            },
+            scope
+          )
+        );
+        if (!added.ok) return { ok: false, reason: added.reason };
+        return published({
+          ok: true,
+          changed: true,
+          ...('commentId' in added ? { commentId: added.commentId } : {}),
+        });
+      }
+      if (write.kind !== 'resolve') return { ok: false, reason: 'unsupported-comment-write' };
+      // Also through the coordinator: `@w15:done` lives in `commentsExtended.xml`, which a thread
+      // with no reply does not have yet. Capture has to be armed for that create-part, or the peer
+      // keeps reading the thread as open.
+      const resolved = runWithTransactionActor(collaboration?.identity.actorId, () =>
+        setPackageCommentResolved(store, write.commentId, write.resolved)
+      );
+      if (!resolved.ok) return { ok: false, reason: resolved.reason };
+      // No `commentId`: resolving names a comment the caller already holds.
+      return published({ ok: true, changed: true });
     },
     applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
-      if (collaboration) return { ok: false, reason: 'experimental-collaboration-text-only' };
       const story = store.resolveStory(scope);
       if (!story.ok) return { ok: false, reason: story.reason };
-      // Grafted before and republished after, exactly as the comment path is: the story store's
-      // package is not the coordinator's, and skipping either half lets one write silently
-      // overwrite the parts the other made.
-      story.store.graftPackage(() => store.currentPackage());
-      const result = insertCustomNodeWrite(story.store, write);
+      // Through the coordinator, which grafts, runs an observed transaction, replaces the shell and
+      // publishes. Writing into the story store and swapping the shell recorded no effects, so a
+      // peer received neither the data part nor the `w:sdt` bound to it. The actor wrap covers the
+      // `rId` and content-control id this mints; the helper takes no actor of its own.
+      const result = runWithTransactionActor(collaboration?.identity.actorId, () =>
+        insertPackageCustomNode(store, write, scope)
+      );
       if (!result.ok) {
         return {
           ok: false,
           reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
         };
       }
-      store.replacePackageShell(story.store.package);
-      return { ok: true, changed: result.change !== null };
+      return published({ ok: true, changed: result.change !== null });
     },
     save: () => (live ? writeOoxmlPackage(store.currentPackage()) : null),
     subscribe: (listener) => store.subscribe(() => listener()),

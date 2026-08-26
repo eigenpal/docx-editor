@@ -6,7 +6,6 @@ const root = path.resolve(import.meta.dirname, '..');
 // Nuxt remains private and has no publishable dist artifact.
 const packageDirs = [
   'core',
-  'collaboration-yjs',
   'react',
   'vue',
   'editor-api',

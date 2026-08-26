@@ -89,7 +89,7 @@
     "layout": {
       "placed": 13,
       "total": 3200,
-      "reusedPages": 154,
+      "reusedPages": 203,
       "fullPasses": 1,
       "pagesBefore": 204,
       "pagesAfter": 204,
@@ -118,8 +118,8 @@
     "paint": {
       "pagesBefore": 204,
       "pagesAfter": 204,
-      "reusedPageRecords": 154,
-      "newPageRecords": 50,
+      "reusedPageRecords": 203,
+      "newPageRecords": 1,
       "materializedPages": 4,
       "reusedPaintElements": 204,
       "rebuiltPaintElements": 0
@@ -137,7 +137,7 @@
     "Insert one character with insertText at UTF-16 offset 0.",
     "Canonical allocation compares object identity of every node in the main part before and after the transaction.",
     "Dirty scope is TreeModelChange.dirty/created/deleted/impact/dependencyKeys from the committed transaction.",
-    "Layout work counters come from the warmed LayoutSession plus ParagraphLayoutCache.stats.",
+    "Layout work counters come from the warmed LayoutSession plus ParagraphLayoutCache.stats. Page-record identity reuse is 203 of 204 after main's incremental layout.",
     "Paint uses happy-dom. The viewport pins the edited page plus one overscan page. Incremental paint reuse counts retained page element identity.",
     "Memory samples process.memoryUsage() with no GC between stages. RSS and external bytes are the usable process-level signals on this Bun runtime.",
     "Yjs size seeds the proof paragraph map (docx-body-paragraphs-v1) with every w14:paraId text, fixes clientID=1, then encodes the incremental update for inserting X at the start of the target Y.Text."

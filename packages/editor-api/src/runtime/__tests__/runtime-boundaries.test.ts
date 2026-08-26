@@ -195,7 +195,7 @@ describe('what the runtime imports', () => {
         `${join('core', 'src', 'binding')}/`,
         `${join('react', 'src')}/`,
         `${join('vue', 'src')}/`,
-        `${join('collaboration-yjs', 'src')}/`,
+        `${join('pro', 'src', 'collaboration')}/`,
       ].some((fragment) => file.includes(fragment))
     );
     expect(forbidden).toEqual([]);

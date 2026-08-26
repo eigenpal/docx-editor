@@ -418,6 +418,7 @@ export default [
 
   {
     files: [
+      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/store/tree-op-drawings.ts',
       'packages/core/src/store/store/tree-op-table-cell-properties.ts',
     ],

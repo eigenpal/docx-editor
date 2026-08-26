@@ -8,6 +8,12 @@ import type { TreePackageStore } from '../store/store/tree-package-store.ts';
 import { observeCanonicalPrimitiveJournal as observeStoreJournal } from '../store/package/canonical-primitive-capture.ts';
 import type { CanonicalPrimitiveJournal } from '../store/package/canonical-primitive-journal.ts';
 
+export {
+  flushPendingCanonicalJournals,
+  pendingCanonicalJournalCount,
+  storeHasPendingCanonicalJournals,
+} from '../store/package/canonical-primitive-publish.ts';
+
 export type {
   CanonicalAttributeName,
   CanonicalBinaryDescriptor,

@@ -86,7 +86,11 @@
         "useReviewAuthor",
         "useReviewItem",
         "useReviewOf",
-        "useStackedReviewPositions"
+        "useStackedReviewPositions",
+        "collaborationModule",
+        "CollaborationModuleOptions",
+        "useCollaborationStatus",
+        "UseCollaborationStatusReturn"
       ],
       "deferredInVue": {},
       "vueExclusive": {}
@@ -126,7 +130,9 @@
       "ReviewModuleOptions",
       "ReviewPartProps",
       "ReviewProps",
-      "UseReviewReturn"
+      "UseReviewReturn",
+      "CollaborationModuleOptions",
+      "UseCollaborationStatusReturn"
     ],
     "interfaceMemberExceptions": {
       "ReviewMarkersProps": {

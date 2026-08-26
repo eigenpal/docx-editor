@@ -36,6 +36,13 @@ import type { DocumentEditingMode } from '../contracts/editor.ts';
 export const PRO_REVIEW_REASON =
   'comments and tracked changes require the pro review module (@docx-editor.dev/pro)';
 
+/**
+ * The refusal any attach or undo-takeover path gets when no collaboration
+ * module is registered.
+ */
+export const PRO_COLLABORATION_REASON =
+  'realtime collaboration requires the pro collaboration module (@docx-editor.dev/pro)';
+
 /** What a decision asks the facade to do: adopt a mode, publish a refusal, or neither. */
 export interface OpeningModeDecision {
   /** The mode to open in, or null to leave the current mode alone. */

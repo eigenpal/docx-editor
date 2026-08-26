@@ -790,6 +790,10 @@ function garbageCollectStory(
   rId: string,
   partName: string
 ): OoxmlPackage | null {
+  // `withoutPart` finds every relationship whose target resolves to the part, across every
+  // owner, so it covers this `rId` and any duplicate reference the old id-only removal left
+  // behind. It is also the one deletion primitive the journal records, so a story removed
+  // here replicates instead of surviving on the peer.
   void rId;
   const removed = withoutPart(pkg, partName);
   if (!removed.ok) return null;

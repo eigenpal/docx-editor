@@ -65,6 +65,14 @@ export {
 } from './tree-package-store.ts';
 export type { RemotePackageAttribution } from './tree-package-remote.ts';
 export {
+  addPackageComment,
+  deletePackageComments,
+  setPackageCommentResolved,
+  type PackageCommentDelete,
+} from './comment-package-write.ts';
+export { insertPackageCustomNode, removePackageCustomNode } from './custom-node-package-write.ts';
+export { nextCommentId } from './comment-id-mint.ts';
+export {
   addComment,
   setCommentResolved,
   commentPartNameOf,

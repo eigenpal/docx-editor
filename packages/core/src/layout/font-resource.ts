@@ -1,3 +1,9 @@
+// The implementation lives in the store lane (`store/package/sha256.ts`), where both
+// byte-fingerprinting trust boundaries sit; this import + re-export keeps the layout entry
+// point and every shaping consumer unchanged. layout → store is a lane-legal edge.
+import { sha256FontBytes } from '../store/package/sha256.ts';
+export { sha256FontBytes };
+
 /**
  * A face, as something asks for it: family plus the two axes this engine admits.
  *
@@ -310,13 +316,6 @@ export const assertValidatedResolvedFont: (font: unknown) => asserts font is Res
     throw new TypeError('Shaping requires a validated resolved font');
   }
 };
-
-// The implementation lives in the store lane (`store/package/sha256.ts`), where both
-// byte-fingerprinting trust boundaries sit; this import + re-export keeps the layout entry
-// point and every shaping consumer unchanged. layout → store is a lane-legal edge.
-import { sha256FontBytes } from '../store/package/sha256.ts';
-export { sha256FontBytes };
-
 
 const readUint16 = (bytes: Uint8Array, offset: number): number =>
   (bytes[offset]! << 8) | bytes[offset + 1]!;

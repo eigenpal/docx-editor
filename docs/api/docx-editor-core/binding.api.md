@@ -182,7 +182,8 @@ export interface TreeDocxSessionView {
         paragraphId: string;
         start: number;
     }, text: string, author: string,
-    date?: string, scope?: StoryScope): string | null;
+    date?: string, scope?: StoryScope,
+    actorId?: string): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;

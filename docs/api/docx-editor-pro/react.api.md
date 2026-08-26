@@ -13,6 +13,15 @@ import { ToolbarTranslate } from '@docx-editor.dev/react';
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
 
 // @public
+export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
+
+// @public
+export interface CollaborationModuleOptions extends ProLicenseOptions {
+    // (undocumented)
+    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+}
+
+// @public
 export function CustomNodeChrome(props: CustomNodeChromeProps): null;
 
 // @public
@@ -157,6 +166,15 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
     stack?: boolean;
     structural?: boolean;
     t?: ToolbarTranslate;
+}
+
+// @public
+export function useCollaborationStatus(session: EditorCollaborationSession | null): UseCollaborationStatusReturn;
+
+// @public
+export interface UseCollaborationStatusReturn {
+    // (undocumented)
+    readonly status: CollaborationStatus | 'inactive';
 }
 
 // @public

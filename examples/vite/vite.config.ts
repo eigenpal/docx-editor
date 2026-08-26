@@ -131,6 +131,14 @@ export default defineConfig(async () => {
               replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
             },
             {
+              find: '@docx-editor.dev/pro/collaboration/webrtc',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/webrtc.ts'),
+            },
+            {
+              find: '@docx-editor.dev/pro/collaboration',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/index.ts'),
+            },
+            {
               find: '@docx-editor.dev/pro/react',
               replacement: path.join(monorepoRoot, 'packages/pro/src/react/index.ts'),
             },
@@ -155,14 +163,6 @@ export default defineConfig(async () => {
               find: '@docx-editor.dev/i18n',
               replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
             },
-            {
-              find: '@docx-editor.dev/collaboration-yjs/webrtc',
-              replacement: path.join(monorepoRoot, 'packages/collaboration-yjs/src/webrtc.ts'),
-            },
-            {
-              find: '@docx-editor.dev/collaboration-yjs',
-              replacement: path.join(monorepoRoot, 'packages/collaboration-yjs/src/index.ts'),
-            },
           ],
     },
     css: {
@@ -182,6 +182,9 @@ export default defineConfig(async () => {
     server: {
       port: 5173,
       open: false,
+      // Collaboration Playwright starts its own Vite. Disable HMR there so a
+      // concurrent edit of engine source cannot remount the editor mid-suite.
+      ...(process.env.COLLAB_E2E === '1' ? { hmr: false, watch: null } : {}),
     },
     build: {
       outDir: 'dist',

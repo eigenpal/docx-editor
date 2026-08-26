@@ -37,10 +37,6 @@ export {
   type DocxEditorLoadingSpinnerProps,
 } from './editor/DocxEditorLoading';
 export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
-export {
-  useCollaborationStatus,
-  type UseCollaborationStatusReturn,
-} from './editor/useCollaborationStatus';
 export { useEditorState, editorStateActiveSubscriptionCount } from './editor/useEditorState';
 export { notificationYieldsToTask } from './editor/deferred-notifier';
 export { useScopeClassName } from './editor/scope-context';

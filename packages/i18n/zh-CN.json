@@ -785,6 +785,8 @@
     "title": null,
     "undo": null,
     "warning": null,
-    "you": null
+    "you": null,
+    "outOfSync": null,
+    "outOfSyncShort": null
   }
 }

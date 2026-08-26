@@ -20,7 +20,11 @@ import type {
   CollaborationParagraph,
   CollaborationParagraphTextUpdate,
 } from './index.ts';
-import { observeCanonicalPrimitiveJournal } from './primitive-journal.ts';
+import {
+  flushPendingCanonicalJournals,
+  observeCanonicalPrimitiveJournal,
+  storeHasPendingCanonicalJournals,
+} from './primitive-journal.ts';
 import type { TreeModelChange } from '../store/store/tree-store.ts';
 
 const BODY: StoryScope = Object.freeze({ kind: 'body' });
@@ -288,6 +292,10 @@ export function createCollaborationDocumentPort(
     revision: () => store.packageRevision,
     subscribe: (listener: (change: TreeModelChange) => void) => store.subscribe(listener),
     observePrimitiveJournal: (listener) => observeCanonicalPrimitiveJournal(store, listener),
+    hasPendingJournals: () => storeHasPendingCanonicalJournals(store),
+    flushPendingJournals: () => {
+      flushPendingCanonicalJournals(store);
+    },
     save: () => writeOoxmlPackage(store.currentPackage()),
   };
   return Object.freeze(port);

@@ -112,6 +112,8 @@ function expandInserted(node: OoxmlNode, knownIds?: ReadonlySet<string>): void {
   if (knownIds?.has(node.id)) return;
   recordPutNode(nodeDescriptor(node));
   if (node.kind === 'textValue') {
+    // Initial fill of a shell this journal put. Apply replaces the node's current value,
+    // because `deleteCount: 0` would insert again if the same journal ran twice.
     if (node.value.length > 0) recordSpliceText(node.id, 0, 0, node.value);
     return;
   }
@@ -140,10 +142,17 @@ function qnameChanged(previous: OoxmlElement, next: OoxmlElement): boolean {
   );
 }
 
+function indexSubtree(node: OoxmlNode, into: Map<string, OoxmlNode>): void {
+  into.set(node.id, node);
+  if (node.kind === 'textValue') return;
+  for (const child of node.children) indexSubtree(child, into);
+}
+
 function lowerSameIdentity(
   previous: OoxmlNode,
   next: OoxmlNode,
-  knownIds?: ReadonlySet<string>
+  knownIds?: ReadonlySet<string>,
+  previousNodes?: ReadonlyMap<string, OoxmlNode>
 ): void {
   if (previous === next) return;
   if (previous.kind === 'textValue' || next.kind === 'textValue') {
@@ -156,14 +165,15 @@ function lowerSameIdentity(
   if (qnameChanged(previous, next)) recordPutNode(nodeDescriptor(next));
   lowerAttributes(previous.id, previous, next);
   lowerNamespaceBindings(previous.id, previous, next);
-  lowerChildList(previous.id, previous.children, next.children, knownIds);
+  lowerChildList(previous.id, previous.children, next.children, knownIds, previousNodes);
 }
 
 function lowerChildList(
   parentLogicalId: string,
   previous: readonly OoxmlNode[],
   next: readonly OoxmlNode[],
-  knownIds?: ReadonlySet<string>
+  knownIds?: ReadonlySet<string>,
+  previousNodes?: ReadonlyMap<string, OoxmlNode>
 ): void {
   if (previous === next) return;
   const previousById = new Map<string, OoxmlNode>();
@@ -175,7 +185,7 @@ function lowerChildList(
     start < next.length &&
     previous[start]!.id === next[start]!.id
   ) {
-    lowerSameIdentity(previous[start]!, next[start]!, knownIds);
+    lowerSameIdentity(previous[start]!, next[start]!, knownIds, previousNodes);
     start += 1;
   }
 
@@ -186,7 +196,7 @@ function lowerChildList(
     nextEnd > start &&
     previous[previousEnd - 1]!.id === next[nextEnd - 1]!.id
   ) {
-    lowerSameIdentity(previous[previousEnd - 1]!, next[nextEnd - 1]!, knownIds);
+    lowerSameIdentity(previous[previousEnd - 1]!, next[nextEnd - 1]!, knownIds, previousNodes);
     previousEnd -= 1;
     nextEnd -= 1;
   }
@@ -194,9 +204,12 @@ function lowerChildList(
   const deleted = previous.slice(start, previousEnd);
   const inserted = next.slice(start, nextEnd);
   for (const node of inserted) {
-    const prior = previousById.get(node.id);
+    const prior = previousById.get(node.id) ?? previousNodes?.get(node.id);
     if (prior) {
-      if (prior !== node) lowerSameIdentity(prior, node, knownIds);
+      // A rejected deletion unwraps `w:del` and turns `w:delText` into `w:t` on the same id.
+      // That run was a grandchild, so a parent-only previous list skipped the qname change.
+      // Replay then kept `w:delText` outside any wrapper.
+      if (prior !== node) lowerSameIdentity(prior, node, knownIds, previousNodes);
       continue;
     }
     // Existing document nodes that MOVE into this parent must not be re-expanded. Re-emitting
@@ -218,7 +231,9 @@ export function captureReplaceChildren(
   knownIds?: ReadonlySet<string>
 ): void {
   if (!isCanonicalPrimitiveCaptureActive()) return;
-  lowerChildList(target.id, target.children, children, knownIds);
+  const previousNodes = new Map<string, OoxmlNode>();
+  indexSubtree(target, previousNodes);
+  lowerChildList(target.id, target.children, children, knownIds, previousNodes);
 }
 
 /** Lower `insertChildren` after a successful edit. */
@@ -260,7 +275,9 @@ export function captureReplaceNode(
 ): void {
   if (!isCanonicalPrimitiveCaptureActive()) return;
   if (previous.id === replacement.id) {
-    lowerSameIdentity(previous, replacement, knownIds);
+    const previousNodes = new Map<string, OoxmlNode>();
+    indexSubtree(previous, previousNodes);
+    lowerSameIdentity(previous, replacement, knownIds, previousNodes);
     return;
   }
   if (!parent) return;

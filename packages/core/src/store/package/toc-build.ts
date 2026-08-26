@@ -1,8 +1,13 @@
 // Build TOC result paragraphs and ensure heading bookmarks.
 
+import {
+  MAX_DECIMAL_ID,
+  nextStripedDecimalId,
+  resolveAllocationActor,
+} from './actor-scoped-ids.ts';
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
-import { buildBookmarkIndex } from './bookmarks.ts';
+import { buildBookmarkIndex, type BookmarkIndex } from './bookmarks.ts';
 import { twips, type Twips } from '../units.ts';
 /** Outline heading shape consumed by TOC planning (mirrors DocumentOutlineEntry). */
 export interface TocOutlineHeading {
@@ -388,6 +393,53 @@ function bookmarkNameOk(name: string): boolean {
   return name.length > 0 && name.length <= 40 && !/[\u0000-\u001F\u007F-\u009F]/.test(name);
 }
 
+const TOC_NAME_PREFIX = '_Toc';
+/** Word's own `_Toc` seed. Solo documents must keep minting from this exact formula. */
+const TOC_SOLO_BASE = 1_600_000_000;
+const TOC_SOLO_SPREAD = 10_000;
+
+/** The decimal suffix of a `_TocN` name, when N is a seed we may stripe past. */
+function tocNumberOf(name: string): string | null {
+  if (!name.startsWith(TOC_NAME_PREFIX)) return null;
+  const suffix = name.slice(TOC_NAME_PREFIX.length);
+  if (!/^\d{1,10}$/.test(suffix)) return null;
+  const value = Number(suffix);
+  if (value > MAX_DECIMAL_ID) return null;
+  return String(value);
+}
+
+function usedTocNumbers(index: BookmarkIndex): Set<string> {
+  const used = new Set<string>();
+  for (const name of index.keys()) {
+    const number = tocNumberOf(name);
+    if (number) used.add(number);
+  }
+  return used;
+}
+
+/**
+ * Next `_Toc` number for a planned heading bookmark.
+ *
+ * No actor: `1_600_000_000 + (bookmarkCount % 10_000)`, then +1 — byte-identical to the
+ * previous local-count seed. An actor takes the next unused value in its stripe instead.
+ * Two peers whose documents hold the same bookmark count otherwise compute the SAME name,
+ * and after the CRDT merges both TOCs the shared name jumps to the first heading in
+ * document order — the other TOC then links to the wrong heading.
+ */
+function nextTocBookmarkNumber(index: BookmarkIndex, actorId?: string): () => number {
+  const actor = resolveAllocationActor(actorId);
+  if (actor) {
+    const used = usedTocNumbers(index);
+    return () => {
+      const id = nextStripedDecimalId(used, actor, MAX_DECIMAL_ID);
+      used.add(id);
+      return Number(id);
+    };
+  }
+  let next = TOC_SOLO_BASE + (index.size % TOC_SOLO_SPREAD);
+  return () => next++;
+}
+
 /**
  * Word flattens manual line/tab breaks from a heading into spaces in its TOC cache.
  * Carrying them verbatim makes a short title wrap even when the row has ample room, and the
@@ -402,13 +454,19 @@ export function tocEntryText(text: string): string {
 
 /**
  * Plan TOC entries from the outline and existing bookmarks.
+ *
+ * `actorId` is explicit because this planner runs BEFORE the store transaction, so the
+ * ambient transaction actor is not bound. Callers that already have the collaboration
+ * identity pass it here. `resolveAllocationActor` still honours a
+ * `runWithTransactionActor` wrap when the caller prefers that seam.
  */
 export function planTocEntries(
   part: OoxmlPart,
   outline: readonly TocOutlineHeading[],
   instruction: TocInstruction,
   pageNumberByParagraphId: ReadonlyMap<string, string>,
-  excludeParagraphIds: ReadonlySet<string>
+  excludeParagraphIds: ReadonlySet<string>,
+  actorId?: string
 ): {
   readonly entries: readonly TocEntryPlan[];
   readonly bookmarksToCreate: readonly { paragraphId: string; name: string }[];
@@ -424,7 +482,7 @@ export function planTocEntries(
   const entries: TocEntryPlan[] = [];
   const bookmarksToCreate: { paragraphId: string; name: string }[] = [];
   let bookmarkAlloc = 0;
-  let nextTocId = 1_600_000_000 + (index.size % 10_000);
+  const nextTocId = nextTocBookmarkNumber(index, actorId);
 
   for (const heading of outline) {
     if (entries.length >= TOC_MAX_ENTRIES) break;
@@ -435,8 +493,7 @@ export function planTocEntries(
     let bookmarkName = nameByParagraph.get(heading.blockId);
     if (!bookmarkName && instruction.hyperlink) {
       if (bookmarkAlloc >= TOC_MAX_BOOKMARKS_PER_REFRESH) continue;
-      bookmarkName = `_Toc${nextTocId}`;
-      nextTocId += 1;
+      bookmarkName = `${TOC_NAME_PREFIX}${nextTocId()}`;
       if (!bookmarkNameOk(bookmarkName)) continue;
       bookmarksToCreate.push({ paragraphId: heading.blockId, name: bookmarkName });
       bookmarkAlloc += 1;

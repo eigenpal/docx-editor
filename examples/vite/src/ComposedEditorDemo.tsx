@@ -26,7 +26,7 @@ import {
 // review module on the Root and mount the pane; without the module the same
 // document still opens (final-state view) and the review toolbar controls
 // disable with the engine's own "requires the pro review module" reason.
-import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
+import { collaborationModule, customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
@@ -35,10 +35,11 @@ import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
+import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
 import { keepCaret } from './demoButtons';
 import { DemoHeaderButton } from './DemoHeaderButton';
 import { CollaborationControl } from './CollaborationDemo';
-import type { WebrtcCollaborationRoom } from '@docx-editor.dev/collaboration-yjs/webrtc';
+import type { WebrtcCollaborationRoom } from '@docx-editor.dev/pro/collaboration/webrtc';
 import {
   citationCardAt,
   CitationCardActions,
@@ -650,12 +651,15 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         <DocxEditor.Root
           key={collaborationRoom?.session.documentId ?? 'local-document'}
           {...(activeDocument ? { document: activeDocument } : {})}
-          collaboration={collaborationRoom?.session}
           author="Demo Reviewer"
           // The demo always opens ready to type: without an explicit mode, a document
           // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
           mode="edit"
-          modules={PRO_MODULES}
+          modules={
+            collaborationRoom
+              ? [...PRO_MODULES, collaborationModule({ session: collaborationRoom.session })]
+              : PRO_MODULES
+          }
           {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
         >
@@ -726,6 +730,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
                 />
               </DocxEditor.ContextMenu>
               <DrawingsE2eBridge />
+              <ReviewWritesE2eBridge />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}

@@ -14,6 +14,8 @@ import { zipSync, strToU8, unzipSync, strFromU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { toolbarCommandState } from '../toolbar-commands.ts';
 import { stubReviewModule } from './review-test-module.ts';
+import { stubCollaborationModule, stubCollaborationSession } from './collaboration-test-module.ts';
+import type { EditorModule } from '../../contracts/modules.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -46,7 +48,7 @@ const TRACKED =
 
 const PLAIN = `<w:p><w:r><w:t>Nothing tracked here.</w:t></w:r></w:p>`;
 
-function mount(body: string, modules?: readonly ReturnType<typeof stubReviewModule>[]) {
+function mount(body: string, modules?: readonly EditorModule[]) {
   const container = document.createElement('div');
   const editor: DocxEditorInstance = createDocxEditor({
     container,
@@ -129,5 +131,47 @@ describe('with a review module registered', () => {
     expect(painted).toContain('gone');
     expect(editor.can({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
     expect(editor.exec({ type: 'toggleReviewPane' }).ok).toBe(true);
+  });
+});
+
+describe('free tier: no collaboration module', () => {
+  test('collaborationStatus is inactive and local undo stays the authority', () => {
+    const { editor } = mount(PLAIN);
+    expect(editor.snapshot().collaborationStatus).toBe('inactive');
+    editor.surface!.type('x');
+    expect(editor.snapshot().canUndo).toBe(true);
+    editor.surface!.undo();
+    expect(editor.surface!.session.bodyText()).toContain('Nothing tracked here');
+  });
+});
+
+describe('with a collaboration module registered', () => {
+  test('the registered session attaches and takes over undo', () => {
+    const session = stubCollaborationSession();
+    const { editor } = mount(PLAIN, [stubCollaborationModule(session)]);
+    expect(session.attached).toBe(true);
+    expect(editor.snapshot().collaborationStatus).toBe('ready');
+    expect(editor.snapshot().canUndo).toBe(true);
+    editor.surface!.undo();
+    expect(session.undoCalls).toBe(1);
+  });
+
+  test('the first of two collaboration modules wins', () => {
+    const first = stubCollaborationSession();
+    const second = stubCollaborationSession();
+    const { editor } = mount(PLAIN, [
+      stubCollaborationModule(first),
+      stubCollaborationModule(second),
+    ]);
+    expect(first.attached).toBe(true);
+    expect(second.attached).toBe(false);
+    expect(editor.snapshot().collaborationStatus).toBe('ready');
+  });
+
+  test('review and collaboration register together', () => {
+    const session = stubCollaborationSession();
+    const { editor } = mount(TRACKED, [stubReviewModule(), stubCollaborationModule(session)]);
+    expect(session.attached).toBe(true);
+    expect(editor.can({ type: 'setEditingMode', mode: 'suggesting' }).ok).toBe(true);
   });
 });

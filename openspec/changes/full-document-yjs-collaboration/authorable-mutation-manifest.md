@@ -17,8 +17,8 @@ Drift test:
 | Git commit                 | `45cf9fb5350af2ea70443342928376972b00ea79`    |
 | Subject                    | feat: add peer-to-peer Yjs collaboration demo |
 | Date                       | 2026-08-24 14:45:47 +0200                     |
-| `TreeDocOp` kinds          | **69**                                        |
-| Single-part apply          | **57**                                        |
+| `TreeDocOp` kinds          | **72**                                        |
+| Single-part apply          | **60**                                        |
 | Header/footer lifecycle    | **5**                                         |
 | Note lifecycle             | **5**                                         |
 | Explicit unsupported kinds | **2**                                         |
@@ -33,13 +33,13 @@ do not add `TreeDocOp` kinds.
 
 | Path                    | Kinds | Validate                       | Commit                                                               |
 | ----------------------- | ----- | ------------------------------ | -------------------------------------------------------------------- |
-| Single-part             | 57    | `validateTreeOp`               | `applyTreeOp`                                                        |
+| Single-part             | 60    | `validateTreeOp`               | `applyTreeOp`                                                        |
 | Header/footer lifecycle | 5     | `invalidArgs` on a single part | `TreePackageStore.applyLifecycleOp` → `applyHeaderFooterLifecycleOp` |
 | Note lifecycle          | 5     | `invalidArgs` on a single part | `TreePackageStore.applyLifecycleOp` → `applyNoteLifecycleOp`         |
 | Repeating section       | 2     | `unsupported`                  | none                                                                 |
 
 `TREE_OP_REACH` is a mapped type over `TreeDocOpKind`. Reach classification
-covers all 69 kinds.
+covers all 72 kinds.
 
 ## Story scopes
 
@@ -106,6 +106,7 @@ Mutation owners that can add authorable rows:
 - `typed-drawings-and-images`
 - `typed-hyperlinks-and-bookmarks`
 - `typed-toc-refresh`
+- `mathematical-equations`
 - `structural-block-deletion`
 - `custom-node-payload-write-lane`
 - `pro-review-and-custom-nodes`
@@ -121,6 +122,7 @@ Collaboration:
 
 - `peer-to-peer-yjs-collaboration-demo`
 - `full-document-yjs-collaboration`
+- `pro-collaboration-module` (packaging, no new op)
 
 Independent of this freeze:
 
@@ -168,11 +170,11 @@ Independent of this freeze:
 
 Exact authorable freeze:
 
-- 67 of 69 `TreeDocOp` kinds have a commit path (57 single-part, 10 lifecycle).
+- 70 of 72 `TreeDocOp` kinds have a commit path (60 single-part, 10 lifecycle).
 - 2 kinds are explicit unsupported rows.
 - 3 editable story scopes, plus documented body-only and furniture-only variants.
 - 16 named package intents, including non-authorable `replacePackageShell`.
 - 16 unsupported rows for missing editor capabilities and refused kinds.
 
-This freeze does not claim current collaboration admits those 67 kinds. The
+This freeze does not claim current collaboration admits those 70 kinds. The
 proof session still gates to untracked body text.

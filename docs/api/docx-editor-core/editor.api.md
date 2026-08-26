@@ -668,6 +668,14 @@ export function chromeSlotId(group: {
 }): ChromeSlotId;
 
 // @public
+export interface CollaborationModuleContribution {
+    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+}
+
+// @public
+export type CollaborationSessionFactory = (documentId: string) => EditorCollaborationSession;
+
+// @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
 // @public
@@ -780,7 +788,6 @@ export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
 export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
-    collaboration?: EditorCollaborationSession;
     container?: HTMLElement;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
@@ -853,6 +860,7 @@ export function editorCommandKey(command: EditorCommand): string;
 
 // @public
 export interface EditorModule {
+    readonly collaboration?: CollaborationModuleContribution;
     readonly customNodePayloadNamespaces?: readonly string[];
     readonly customNodes?: readonly unknown[];
     readonly id: string;
@@ -862,6 +870,8 @@ export interface EditorModule {
 
 // @public
 export interface EditorModuleRegistry {
+    // (undocumented)
+    readonly collaboration: CollaborationModuleContribution | null;
     readonly customNodeDiagnostics: readonly ((diagnostic: unknown) => void)[];
     readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)
@@ -1310,7 +1320,7 @@ export interface PaginatedSurface {
     commitReviewOps(run: () => {
         readonly committed: boolean;
         readonly reason?: unknown;
-    }): void;
+    }, intent?: ReviewWriteIntent): void;
     readonly contentControls: ContentControlOps;
     // (undocumented)
     convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
@@ -1500,7 +1510,7 @@ export interface PaginatedSurface {
 // @public
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
-    readonly collaboration?: EditorCollaborationSession;
+    readonly collaborationModel?: CollaborationModuleContribution;
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
@@ -1534,6 +1544,7 @@ export interface PaginatedSurfaceState {
     // (undocumented)
     readonly canUndo: boolean;
     readonly cellSelection: CellSelection | null;
+    readonly collaborationStatus: CollaborationStatus | 'inactive';
     readonly contentControls: ContentControlSurfaceState;
     readonly contextTocId: string | null;
     // (undocumented)
@@ -1676,6 +1687,9 @@ export interface ReviewModuleContribution {
     readonly displayModes: readonly RevisionDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
+
+// @public
+export type ReviewWriteIntent = 'revision-resolve' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
 
 // @public
 export interface RevisionAuthorAssignments {
@@ -2271,7 +2285,8 @@ export interface TreeDocxSessionView {
         paragraphId: string;
         start: number;
     }, text: string, author: string,
-    date?: string, scope?: StoryScope): string | null;
+    date?: string, scope?: StoryScope,
+    actorId?: string): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;

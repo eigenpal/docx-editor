@@ -14,7 +14,6 @@ import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
 import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
 import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
-import { CollaborationStatus } from '@docx-editor.dev/core/collaboration';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
@@ -28,7 +27,6 @@ import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
 import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { Editor } from '@docx-editor.dev/core/contracts/editor';
-import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
@@ -771,7 +769,6 @@ export interface DocxEditorRootProps {
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
-    collaboration?: EditorCollaborationSession;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
@@ -2072,15 +2069,6 @@ export { TranslationKey }
 
 // @public
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
-
-// @public
-export function useCollaborationStatus(session: EditorCollaborationSession | null): UseCollaborationStatusReturn;
-
-// @public
-export interface UseCollaborationStatusReturn {
-    // (undocumented)
-    readonly status: CollaborationStatus | 'inactive';
-}
 
 // @public
 export function useContentControl(): UseContentControlResult;

@@ -34,6 +34,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 export { reviewModule, type ReviewModuleOptions } from '../review/review-module.ts';
+export {
+  collaborationModule,
+  type CollaborationModuleOptions,
+} from '../collaboration/collaboration-module.ts';
 export { type ProLicenseOptions } from '../license.ts';
 export {
   DocxEditorReview,
@@ -64,3 +68,7 @@ export {
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview';
+export {
+  useCollaborationStatus,
+  type UseCollaborationStatusReturn,
+} from './useCollaborationStatus.ts';

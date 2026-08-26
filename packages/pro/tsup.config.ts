@@ -80,12 +80,18 @@ const shared = {
   minify: true,
   external: [
     '@docx-editor.dev/core',
+    '@docx-editor.dev/core/collaboration',
+    '@docx-editor.dev/core/store',
     '@docx-editor.dev/i18n',
     '@docx-editor.dev/react',
     '@docx-editor.dev/vue',
     'react',
     'react-dom',
     'vue',
+    'yjs',
+    'y-protocols',
+    'y-protocols/awareness',
+    'y-webrtc',
   ],
 };
 
@@ -95,6 +101,8 @@ export default defineConfig([
     entry: {
       index: 'src/index.ts',
       'react/index': 'src/react/index.ts',
+      'collaboration/index': 'src/collaboration/index.ts',
+      'collaboration/webrtc': 'src/collaboration/webrtc.ts',
     },
     dts: true,
     // The one config in this array that may let tsup name the file. See

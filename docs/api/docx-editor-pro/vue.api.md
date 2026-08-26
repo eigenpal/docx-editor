@@ -18,6 +18,15 @@ import * as vue_jsx_runtime from 'vue/jsx-runtime';
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
 
 // @public
+export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
+
+// @public
+export interface CollaborationModuleOptions extends ProLicenseOptions {
+    // (undocumented)
+    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+}
+
+// @public
 export const CustomNodeChrome: {
     new (): {
         $props: CustomNodeChromeProps;
@@ -755,6 +764,15 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
     structural?: boolean;
     // (undocumented)
     t?: (key: string, params?: Record<string, string | number>) => string;
+}
+
+// @public
+export function useCollaborationStatus(session: MaybeRefOrGetter<EditorCollaborationSession | null>): UseCollaborationStatusReturn;
+
+// @public
+export interface UseCollaborationStatusReturn {
+    // (undocumented)
+    readonly status: Readonly<Ref<CollaborationStatus | 'inactive'>>;
 }
 
 // @public

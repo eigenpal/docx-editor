@@ -9,6 +9,11 @@ It re-proves the same membership outcomes in its own tests.
 Captured: 2026-08-24, Bun 1.3.14, arm64, darwin.
 Budgets: `collaboration-budgets.json` maintained-hardware profile.
 
+After rebase onto `origin/main`, this comparison re-records layout page-record
+identity reuse from 154 to 203 of 204. Higher reuse is better. Cache hits,
+cache misses, materialized pages, and paint element reuse stay at the original
+exact row.
+
 ## Selection
 
 Select the **registry** backend.
@@ -89,7 +94,7 @@ Remote total is remote apply plus layout plus paint.
 | Canonical allocated local / remote |                      6 / n/a |                    6 / 6 |
 | Off-path allocated                 |                            0 |                    0 / 0 |
 | Layout pages                       |                    204 → 204 |                204 → 204 |
-| Layout reused pages                |                          154 |                      154 |
+| Layout reused pages                |                          203 |                      203 |
 | Layout cache hits / misses         |                    12 / 3201 |                12 / 3201 |
 | Reused / rebuilt paint elements    |                      204 / 0 |                  204 / 0 |
 | Materialized pages                 |                            4 |                        4 |

@@ -228,6 +228,7 @@ const SNAPSHOT_FIELDS = {
   pageSetup: 'compared',
   reviewPaneOpen: 'compared',
   hasReviewContent: 'compared',
+  collaborationStatus: 'compared',
   editingMode: 'compared',
   lastRejection: 'compared',
   fontSubstitutions: 'compared',

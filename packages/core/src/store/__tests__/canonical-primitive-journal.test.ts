@@ -6,10 +6,12 @@ import { createCollaborationDocumentPort } from '../../collaboration/document-po
 import { observeCanonicalPrimitiveJournal } from '../../collaboration/primitive-journal.ts';
 import {
   canonicalPrimitiveJournalAllocationCount,
+  flushPendingCanonicalJournals,
   observeCanonicalPrimitiveJournal as observeAnyStore,
   packageTransactionPublished,
   recordMoveNode,
   runObservedStoreTransaction,
+  storeHasPendingCanonicalJournals,
 } from '../package/canonical-primitive-capture.ts';
 import type {
   CanonicalAttributeName,
@@ -218,6 +220,7 @@ function captureJournal<T>(run: () => T): {
   });
   try {
     const result = runObservedStoreTransaction(host, run, packageTransactionPublished);
+    flushPendingCanonicalJournals(host);
     return { result, journal };
   } finally {
     stop();
@@ -231,12 +234,26 @@ describe('canonical primitive journal (task 3.5)', () => {
     const stop = observeCanonicalPrimitiveJournal(store, (journal) => journals.push(journal));
     insertHello(store);
     insertHello(store);
+    flushPendingCanonicalJournals(store);
     stop();
     expect(journals).toHaveLength(2);
     expect(Object.isFrozen(journals[0])).toBe(true);
     expect(Object.isFrozen(journals[0]!.effects)).toBe(true);
     expect(journals[0]!.effects.length).toBeGreaterThan(0);
     expect(journals[0]).not.toBe(journals[1]);
+  });
+
+  test('a committed journal is not frozen or delivered until flushPendingCanonicalJournals', () => {
+    const store = openStore();
+    const journals: CanonicalPrimitiveJournal[] = [];
+    observeCanonicalPrimitiveJournal(store, (journal) => journals.push(journal));
+    insertHello(store);
+    expect(journals).toHaveLength(0);
+    expect(storeHasPendingCanonicalJournals(store)).toBe(true);
+    flushPendingCanonicalJournals(store);
+    expect(storeHasPendingCanonicalJournals(store)).toBe(false);
+    expect(journals).toHaveLength(1);
+    expect(Object.isFrozen(journals[0])).toBe(true);
   });
 
   test('a rejected transaction emits no journal and does not move revision or history', () => {
@@ -253,6 +270,7 @@ describe('canonical primitive journal (task 3.5)', () => {
       });
     });
     expect(result.ok).toBe(false);
+    flushPendingCanonicalJournals(store);
     expect(journals).toHaveLength(0);
     expect(store.packageRevision).toBe(beforeRevision);
     expect(store.canUndo).toBe(false);
@@ -266,6 +284,7 @@ describe('canonical primitive journal (task 3.5)', () => {
     observeCanonicalPrimitiveJournal(second, (journal) => journals.push(journal));
     insertHello(first);
     insertHello(second);
+    flushPendingCanonicalJournals();
     expect(JSON.stringify(journals[0])).toBe(JSON.stringify(journals[1]));
   });
 
@@ -546,6 +565,7 @@ describe('journal capture isolates nested store frames (task 3.5)', () => {
       },
       packageTransactionPublished
     );
+    flushPendingCanonicalJournals();
     stopOuter();
     stopInner();
     expect(outerJournals).toHaveLength(1);
@@ -592,6 +612,7 @@ describe('journal capture isolates nested store frames (task 3.5)', () => {
       });
     });
     expect(result.ok).toBe(true);
+    flushPendingCanonicalJournals();
     expect(storeOuter).toHaveLength(1);
     expect(storeInner).toHaveLength(1);
     expect(spliceInserts(storeOuter[0]!)).toEqual([' OUTER']);
@@ -622,6 +643,7 @@ describe('journal capture isolates nested store frames (task 3.5)', () => {
       },
       packageTransactionPublished
     );
+    flushPendingCanonicalJournals();
     stopOuter();
     expect(canonicalPrimitiveJournalAllocationCount()).toBe(beforeHostAllocations + 1);
     expect(outerJournals).toHaveLength(1);
@@ -649,6 +671,7 @@ describe('journal capture isolates nested store frames (task 3.5)', () => {
       });
     });
     expect(result.ok).toBe(true);
+    flushPendingCanonicalJournals();
     expect(canonicalPrimitiveJournalAllocationCount()).toBe(beforeStoreAllocations + 1);
     expect(storeOuter).toHaveLength(1);
     expect(spliceInserts(storeOuter[0]!)).toEqual([' OUTER']);
@@ -687,6 +710,7 @@ describe('journal capture is silent without observers (task 3.9)', () => {
     const journals: CanonicalPrimitiveJournal[] = [];
     port.observePrimitiveJournal((journal) => journals.push(journal));
     insertHello(store);
+    port.flushPendingJournals();
     expect(journals).toHaveLength(1);
     expect(journals[0]!.effects.length).toBeGreaterThan(0);
   });

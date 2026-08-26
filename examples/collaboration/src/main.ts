@@ -3,11 +3,12 @@ import './style.css';
 
 import { createT, en } from '@docx-editor.dev/i18n';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { collaborationModule } from '@docx-editor.dev/pro';
 import {
   createCollaborationRoomId,
   createWebrtcCollaboration,
   type WebrtcCollaborationRoom,
-} from '@docx-editor.dev/collaboration-yjs/webrtc';
+} from '@docx-editor.dev/pro/collaboration/webrtc';
 import { demoDocumentBytes } from './demo-document';
 
 const t = createT(en);
@@ -217,7 +218,7 @@ async function startRoom(roomId: string, creator: boolean): Promise<void> {
     }
     const editor = createDocxEditor({
       document: room.document,
-      collaboration: room.session,
+      modules: [collaborationModule({ session: room.session })],
     });
     const cleanup = renderRoom(roomId, room, editor);
     addEventListener('beforeunload', cleanup, { once: true });

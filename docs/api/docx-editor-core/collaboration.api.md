@@ -41,14 +41,14 @@ export type CanonicalNodeDescriptor = CanonicalTextNodeDescriptor | CanonicalEle
 
 // @public
 export type CanonicalPrimitiveEffect = {
-    readonly kind: 'putNode';
     readonly descriptor: CanonicalNodeDescriptor;
+    readonly kind: 'putNode';
 } | {
+    readonly deleteCount: number;
+    readonly insert: string;
     readonly kind: 'spliceText';
     readonly logicalId: string;
     readonly utf16Start: number;
-    readonly deleteCount: number;
-    readonly insert: string;
 } | {
     readonly kind: 'setAttribute';
     readonly logicalId: string;
@@ -60,16 +60,16 @@ export type CanonicalPrimitiveEffect = {
     readonly prefix: string;
     readonly uri: string | null;
 } | {
+    readonly childLogicalIds: readonly string[];
+    readonly deleteCount: number;
     readonly kind: 'spliceChildren';
     readonly parentLogicalId: string;
     readonly start: number;
-    readonly deleteCount: number;
-    readonly childLogicalIds: readonly string[];
 } | {
+    readonly destinationIndex: number;
+    readonly destinationParentLogicalId: string;
     readonly kind: 'moveNode';
     readonly logicalId: string;
-    readonly destinationParentLogicalId: string;
-    readonly destinationIndex: number;
 } | {
     readonly kind: 'putXmlPart';
     readonly name: string;
@@ -87,14 +87,14 @@ export type CanonicalPrimitiveEffect = {
     readonly relationshipId: string;
 } | {
     readonly kind: 'putContentTypeOverride';
-    readonly partName: string;
     readonly mediaType: string;
+    readonly partName: string;
 } | {
     readonly kind: 'deleteContentTypeOverride';
     readonly partName: string;
 } | {
-    readonly kind: 'putBinary';
     readonly descriptor: CanonicalBinaryDescriptor;
+    readonly kind: 'putBinary';
 } | {
     readonly kind: 'deleteBinary';
     readonly storageKey: string;
@@ -132,8 +132,8 @@ export interface CanonicalTextNodeDescriptor {
 
 // @public
 export type CollaborationApplyResult = {
-    readonly ok: true;
     readonly changed: boolean;
+    readonly ok: true;
 } | {
     readonly ok: false;
     readonly reason: string;
@@ -148,6 +148,8 @@ export interface CollaborationDocumentPort {
     applyRemotePackage(pkg: OoxmlPackage, mutation: CollaborationMutation): CollaborationApplyResult;
     // (undocumented)
     readonly documentId: string;
+    flushPendingJournals(): void;
+    hasPendingJournals(): boolean;
     observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
     // (undocumented)
     paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
@@ -176,11 +178,14 @@ export interface CollaborationIdentity {
 // @public
 export interface CollaborationLocalSelection {
     // (undocumented)
-    readonly end: number;
+    readonly anchor: CollaborationSelectionAddress;
     // (undocumented)
-    readonly paragraphId: string;
-    // (undocumented)
-    readonly start: number;
+    readonly head: CollaborationSelectionAddress;
+}
+
+// @public
+export interface CollaborationModuleContribution {
+    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
 }
 
 // @public
@@ -219,18 +224,35 @@ export interface CollaborationRemoteSelection {
     // (undocumented)
     readonly actorId: string;
     // (undocumented)
+    readonly anchor: CollaborationRemoteSelectionAddress;
+    // (undocumented)
     readonly color?: string;
     // (undocumented)
-    readonly end: number;
+    readonly head: CollaborationRemoteSelectionAddress;
     // (undocumented)
     readonly name: string;
+}
+
+// @public
+export interface CollaborationRemoteSelectionAddress {
     // (undocumented)
     readonly nodeId: string;
     // (undocumented)
-    readonly paragraphId: string;
+    readonly offset: number;
     // (undocumented)
-    readonly start: number;
+    readonly paragraphId: string;
 }
+
+// @public
+export interface CollaborationSelectionAddress {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export type CollaborationSessionFactory = (documentId: string) => EditorCollaborationSession;
 
 // @public
 export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
@@ -256,6 +278,7 @@ export interface EditorCollaborationSession {
     destroy(): void;
     // (undocumented)
     readonly documentId: string;
+    flushPendingJournals(): void;
     // (undocumented)
     gateOperations(ops: readonly TreeDocOp[], scope: StoryScope): string | null;
     // (undocumented)

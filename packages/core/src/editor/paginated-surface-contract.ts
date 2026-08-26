@@ -15,8 +15,11 @@ import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
-import type { ReviewModuleContribution } from '../contracts/modules.ts';
-import type { EditorCollaborationSession } from '../collaboration/index.ts';
+import type {
+  ReviewModuleContribution,
+  CollaborationModuleContribution,
+} from '../contracts/modules.ts';
+import type { CollaborationStatus } from '../collaboration/index.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationActivation, EquationOps } from './surface-equations.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
@@ -39,6 +42,24 @@ import type {
  * refuses edits outright.
  */
 export type SurfaceEditingMode = 'edit' | 'suggest' | 'view';
+
+/**
+ * Which review write is being committed through `commitReviewOps`.
+ *
+ * The callback that performs the write is opaque, so a lane deciding whether to allow it cannot
+ * tell an Accept from a comment delete. That mattered once a replica was attached: these paths
+ * reach the store directly rather than through `applyTreeOps`, and the ones that graft a package
+ * and swap the shell record no primitive effects — they replicate as NOTHING, leaving the peer a
+ * `commentReference` naming a comment it never received. Naming the write lets each be admitted
+ * only once a two-replica test proves it arrives whole.
+ */
+export type ReviewWriteIntent =
+  | 'revision-resolve'
+  | 'comment-add'
+  | 'comment-reply'
+  | 'comment-resolve'
+  | 'comment-delete'
+  | 'package-scoped';
 
 /**
  * Content-control interaction lane on the paginated surface.
@@ -88,8 +109,12 @@ export interface ContentControlOps {
  * on a server, or leave it off in a browser to get the canvas measurer.
  */
 export interface PaginatedSurfaceOptions {
-  /** Optional provider-neutral collaboration replica for this canonical session. */
-  readonly collaboration?: EditorCollaborationSession;
+  /**
+   * The collaboration module's replica for this surface's session. Absent,
+   * the surface does not attach, and local store history remains the undo
+   * authority.
+   */
+  readonly collaborationModel?: CollaborationModuleContribution;
   readonly measurer?: TextMeasurer;
   /** Ambient author for tracked edits. Required before suggesting can write anything. */
   readonly author?: string;
@@ -334,6 +359,11 @@ export interface PaginatedSurfaceState {
   readonly cellSelection: CellSelection | null;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
+  /**
+   * Lifecycle of the attached replica, or `'inactive'` when no collaboration
+   * module is registered on this surface.
+   */
+  readonly collaborationStatus: CollaborationStatus | 'inactive';
   readonly lastRejection: string | null;
   /**
    * The typing format armed at the caret (Word's stored marks), or null.
@@ -840,12 +870,19 @@ export interface PaginatedSurface {
    * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
    * takes: layout, paint, and a caret clamped to what the document now holds.
    *
+   * `intent` names WHICH review write this is, so a lane that judges them can tell them apart.
+   * The callback is opaque, and a replica admits only the writes proven to replicate — see
+   * {@link ReviewWriteIntent}.
+   *
    * Applying them straight to the session skipped all three. Rejecting an insertion left the
    * pages painting text the tree no longer had, every card anchored where it used to be, and
    * the caret past the end of the paragraph — after which every keystroke was refused with
    * `offset-out-of-range` until the user happened to click somewhere else.
    */
-  commitReviewOps(run: () => { readonly committed: boolean; readonly reason?: unknown }): void;
+  commitReviewOps(
+    run: () => { readonly committed: boolean; readonly reason?: unknown },
+    intent?: ReviewWriteIntent
+  ): void;
   /**
    * The layout as last PUBLISHED, without forcing pending work.
    *

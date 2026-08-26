@@ -13,7 +13,6 @@ import type {
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
-import type { EditorCollaborationSession } from '../collaboration/index.ts';
 import type {
   ReviewAuthorInfo,
   RevisionAuthorStyle,
@@ -50,12 +49,6 @@ export interface DocxEditorConfig {
    * nothing. Omitting this mounts NO document, which is not the same as an empty one.
    */
   document?: DocumentSource;
-  /**
-   * Experimental provider-neutral collaboration replica.
-   *
-   * The smallest proof accepts text insertion and deletion in existing body paragraphs only.
-   */
-  collaboration?: EditorCollaborationSession;
   /**
    * Font bytes for Word-accurate (HarfBuzz-shaped) line wrap and pagination. Omitted,
    * layout falls back to a fixed-width estimate; fonts embedded in the document are

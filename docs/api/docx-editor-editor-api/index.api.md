@@ -10,6 +10,7 @@ import { AutomationHost } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
 import { AutomationSpan } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
+import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 
 // @public
@@ -246,13 +247,13 @@ export type ContentControlValue = {
 };
 
 // @public
-export type CreateCollaborativeOptions = Omit<CreateServerOptions, 'collaboration'>;
+export type CreateCollaborativeOptions = CreateServerOptions;
 
 // @public
 export interface CreateServerOptions {
     readonly author?: string;
-    readonly collaboration?: EditorCollaborationSession;
     readonly limits?: DocumentLimits;
+    readonly modules?: readonly EditorModule[];
     readonly revisionTextView?: RevisionTextView;
 }
 
@@ -391,6 +392,14 @@ export interface DocxEditorRuntime {
 // @public
 export interface DocxEditorServerRuntime extends DocxEditorRuntime {
     save(): Promise<Uint8Array>;
+}
+
+// @public
+export interface EditorModule {
+    // (undocumented)
+    readonly collaboration?: CollaborationModuleContribution;
+    // (undocumented)
+    readonly id: string;
 }
 
 // @public

@@ -2,7 +2,10 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { observeCanonicalPrimitiveJournal } from '../../collaboration/primitive-journal.ts';
+import {
+  observeCanonicalPrimitiveJournal,
+  flushPendingCanonicalJournals,
+} from '../../collaboration/primitive-journal.ts';
 import { withPart, readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { paragraphTextOf } from '../store/tree-ops.ts';
@@ -285,8 +288,10 @@ describe('remote canonical package publication', () => {
     const journals: unknown[] = [];
     observeCanonicalPrimitiveJournal(store, (journal) => journals.push(journal));
     expect(store.publishRemotePackage(editedPackage(documentBytes(), 'X'), REMOTE).ok).toBe(true);
+    flushPendingCanonicalJournals(store);
     expect(journals).toHaveLength(0);
     insertAtStart(store, 'Y');
+    flushPendingCanonicalJournals(store);
     expect(journals).toHaveLength(1);
   });
 

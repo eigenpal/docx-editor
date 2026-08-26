@@ -98,6 +98,14 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
           },
           {
+            find: '@docx-editor.dev/pro/collaboration/webrtc',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/webrtc.ts'),
+          },
+          {
+            find: '@docx-editor.dev/pro/collaboration',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/index.ts'),
+          },
+          {
             find: '@docx-editor.dev/pro/vue',
             replacement: path.join(monorepoRoot, 'packages/pro/src/vue/index.ts'),
           },

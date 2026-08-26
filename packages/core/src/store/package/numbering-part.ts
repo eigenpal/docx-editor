@@ -18,6 +18,7 @@ import type { OoxmlPackage } from './ooxml-package.ts';
 import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
+import { freePackageRelationshipId } from './actor-scoped-ids.ts';
 import { recordPutContentTypeOverride } from './canonical-primitive-capture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -513,18 +514,7 @@ function relsPartNameFor(partName: string): string {
 
 /** An `rIdN` no owner in the package already uses. */
 function freeRelationshipId(pkg: OoxmlPackage): string {
-  let max = 0;
-  for (const records of pkg.relationships.values()) {
-    for (const record of records) {
-      const match = /^rId(\d{1,9})$/.exec(record.id);
-      if (match) max = Math.max(max, Number(match[1]));
-    }
-  }
-  for (const external of pkg.externalTargets) {
-    const match = /^rId(\d{1,9})$/.exec(external.id);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `rId${max + 1}`;
+  return freePackageRelationshipId(pkg);
 }
 
 const NUMBERING_OVERRIDE = `<Override PartName="${NUMBERING_PART}" ContentType="${NUMBERING_CONTENT_TYPE}"/>`;

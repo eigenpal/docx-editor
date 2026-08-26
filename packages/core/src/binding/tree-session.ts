@@ -21,23 +21,21 @@ import {
 } from './review-patch.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import {
-  addComment,
-  setCommentResolved,
-  commentPartNameOf,
-  commentsExtendedPartNameOf,
-} from '../store/store/comment-writes.ts';
+  addPackageComment,
+  deletePackageComments,
+  setPackageCommentResolved,
+} from '../store/store/comment-package-write.ts';
+import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
+import {
+  insertPackageCustomNode,
+  removePackageCustomNode,
+} from '../store/store/custom-node-package-write.ts';
 import {
   customNodePayloadsByControl,
   type CustomNodePayloadRead,
-  insertCustomNodeWrite,
-  removeCustomNodeWrite,
   sweepCustomNodePayloads,
   type CustomNodeWriteResult,
 } from '../store/store/custom-node-writes.ts';
-import {
-  deleteCommentReply,
-  deleteCommentThreadInStory,
-} from '../store/package/comment-lifecycle.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import {
   ORIGIN_IDS,
@@ -53,8 +51,6 @@ import {
   ensureHyperlinkRelationship,
   buildBookmarkIndex,
   relationshipTargetIn,
-  isHeaderFooterLifecycleOp,
-  isNoteLifecycleOp,
   normalizeParagraphIdentity,
   paragraphTextOf,
   collectRevisionSites,
@@ -68,7 +64,6 @@ import {
   type OoxmlPart,
   type StoryScope,
   type TreeDocOp,
-  type TreeDocumentStore,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { headerFooterPartsFromResolution } from '../store/package/hf-references.ts';
@@ -112,7 +107,7 @@ import {
   createCollaborationDocumentPort,
   type CollaborationDocumentPort,
 } from '../collaboration/index.ts';
-import { normalizeCollaborationTextPackage } from '../collaboration/document-port.ts';
+import { commitSessionTreeOps } from './tree-session-apply.ts';
 
 // The session view contract (TreeApplyResult + TreeDocxSessionView) lives in
 // tree-session-contract.ts; re-exported so every existing import through this module stays
@@ -242,33 +237,6 @@ export function openTreeSession(
   const bodyStore = () => packageStore.bodyStore();
   const currentPackage = (): OoxmlPackage => packageStore.currentPackage();
   const BODY_SCOPE: StoryScope = Object.freeze({ kind: 'body' as const });
-
-  /**
-   * Run a write that touches the story AND the package, and publish it as ONE undo unit.
-   *
-   * The same promotion a comment write gets, and for the same three reasons. The story store
-   * keeps a package of its own, so the coordinator's package-level writes have to be grafted in
-   * or this transaction builds on a package that never saw them. The story's own history entry
-   * cannot undo a customXml part, because undoing a story pointer syncs the story part and
-   * nothing else — so it is discarded for a package pointer. And the change is published last,
-   * after the shell is installed, so a subscriber re-deriving on the notification already sees
-   * the store the control it is about to paint binds to.
-   */
-  const customNodeTransaction = (
-    store: TreeDocumentStore,
-    run: () => CustomNodeWriteResult
-  ): CustomNodeWriteResult => {
-    const beforePackage = packageStore.currentPackage();
-    const checkpoint = store.checkpoint();
-    store.graftPackage(() => packageStore.currentPackage());
-    const result = run();
-    if (!result.ok) return result;
-    store.restoreHistoryStacks(checkpoint);
-    packageStore.replacePackageShell(store.package);
-    packageStore.adoptPackageUnit(beforePackage);
-    packageStore.publishStoryWrite(result.change);
-    return result;
-  };
 
   const resolvedHeaderFooterBySection = (): {
     readonly parts: readonly HeaderFooterParts[];
@@ -682,59 +650,14 @@ export function openTreeSession(
         createCollaborationDocumentPort(packageStore, { documentId }),
 
       applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE, options = {}) {
-        if (ops.length === 0) return { committed: false, rejected: false, opCount: 0 };
-        const lifecycleCount = ops.filter(
-          (op) => isHeaderFooterLifecycleOp(op) || isNoteLifecycleOp(op)
-        ).length;
-        if (lifecycleCount > 0) {
-          // Lifecycle ops are package-level transactions; refuse mixing with story ops or
-          // batching multiple lifecycle ops into one call (each is its own ModelChange).
-          if (lifecycleCount !== ops.length || ops.length !== 1) {
-            return {
-              committed: false,
-              rejected: true,
-              opCount: ops.length,
-              reason: 'invalidArgs',
-            };
-          }
-          const result = packageStore.applyLifecycleOp(ops[0]!);
-          if (!result.ok) {
-            return {
-              committed: false,
-              rejected: true,
-              opCount: 1,
-              // Prefer the lifecycle detail (`first-section`, `not-declared`, …) so Editor
-              // gates can surface engine reasons rather than a bare `invalidArgs`.
-              reason: result.detail ?? result.reason,
-            };
-          }
-          return { committed: true, rejected: false, opCount: 1 };
-        }
-        const partName =
-          options.recordsHistory === false && options.actorId && options.operationId
-            ? packageStore.partFor(scope)?.name
-            : undefined;
-        const result = packageStore.transact(
+        return commitSessionTreeOps(
+          packageStore,
+          ops,
+          selectionBefore,
+          selectionAfter,
           scope,
-          (ctx) => {
-            // Recorded BEFORE the ops run, so undo restores where the caret was when the user
-            // made the edit rather than where it ended up afterwards.
-            if (selectionBefore !== undefined) ctx.selectionBefore(selectionBefore);
-            // And where it ends up, so REDO has somewhere to put it. No caller supplied this,
-            // so `selectionForRedo` was always null and redo left the caret addressing the
-            // tree the undo had discarded — offsets past the end of a paragraph it re-shortened.
-            if (selectionAfter !== undefined) ctx.selectionAfter(selectionAfter);
-            for (const op of ops) ctx.apply(op);
-            if (partName) {
-              ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));
-            }
-          },
           options
         );
-        if (!result.ok) {
-          return { committed: false, rejected: true, opCount: ops.length, reason: result.reason };
-        }
-        return { committed: true, rejected: false, opCount: ops.length };
       },
 
       projectDoc: () => treeToDoc(bodyStore().part),
@@ -1074,78 +997,37 @@ export function openTreeSession(
         return reviewContentCache.present;
       },
 
-      replyToComment(parentCommentId, anchor, text, author, date, scope = BODY_SCOPE) {
+      replyToComment(parentCommentId, anchor, text, author, date, scope = BODY_SCOPE, actorId) {
         // The story that OWNS the anchor. Resolving a refused scope falls back to the body
         // rather than throwing: the caller's next check is the null return either way.
-        const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
-        const store = resolved?.ok ? resolved.store : bodyStore();
-        // Captured BEFORE the graft, so the undo unit spans exactly what this write changed.
-        const beforePackage = packageStore.currentPackage();
-        const checkpoint = store.checkpoint();
-        // The story store keeps a package of its OWN, and package-level writes that are not
-        // story intents — a `numbering.xml` graft, a minted hyperlink relationship — land on
-        // the coordinator's copy through `replacePackageShell`. Without this graft the comment
-        // transaction builds on a package that never saw them, and publishing its result back
-        // overwrites them: a `w:numPr` or an `r:id` left dangling on save by an unrelated
-        // reply. `graftPackage` is the narrow lane for exactly this — a package write that is
-        // not a user intent and publishes no revision.
-        store.graftPackage(() => packageStore.currentPackage());
-        // The comment ITSELF is a user intent and does publish one — see the
-        // `publishStoryWrite` below.
-        const result = addComment(store, {
-          anchor: {
-            paragraphId: anchor.paragraphId,
-            start: anchor.start,
-            end: anchor.end,
-            // A range that ends in a LATER paragraph is ordinary in OOXML: the start and end
-            // markers are independent elements. Dropping the end paragraph would anchor the
-            // comment to an offset in the wrong one.
-            ...(anchor.endParagraphId === undefined
-              ? {}
-              : { endParagraphId: anchor.endParagraphId }),
+        const result = addPackageComment(
+          packageStore,
+          {
+            anchor: {
+              paragraphId: anchor.paragraphId,
+              start: anchor.start,
+              end: anchor.end,
+              // A range that ends in a LATER paragraph is ordinary in OOXML: the start and end
+              // markers are independent elements. Dropping the end paragraph would anchor the
+              // comment to an offset in the wrong one.
+              ...(anchor.endParagraphId === undefined
+                ? {}
+                : { endParagraphId: anchor.endParagraphId }),
+            },
+            author,
+            text,
+            ...(date === undefined ? {} : { date }),
+            ...(parentCommentId === null ? {} : { replyToCommentId: parentCommentId }),
+            ...(actorId === undefined ? {} : { actorId }),
           },
-          author,
-          text,
-          ...(date === undefined ? {} : { date }),
-          ...(parentCommentId === null ? {} : { replyToCommentId: parentCommentId }),
-        });
-        if (!result.ok) return null;
-        // A comment write creates PARTS — `comments.xml`, `commentsExtended.xml`, their
-        // relationships and content types. Those live on the package, and the transaction
-        // wrote them into the story store's copy of it, so the coordinator has to be told or
-        // `currentPackage()` keeps answering with a package that has no comment part and the
-        // reply reads back as never written.
-        // The story entry the transaction just recorded is DISCARDED in favour of a package
-        // pointer. Undoing a story entry syncs the story part alone, so a comment undone that
-        // way put the markers back and left the body in `comments.xml`.
-        store.restoreHistoryStacks(checkpoint);
-        packageStore.replacePackageShell(store.package);
-        packageStore.adoptPackageUnit(beforePackage);
-        // Published LAST, so a subscriber that re-derives on the notification already sees the
-        // shell installed above. Publishing first handed the change to a rail whose next
-        // `reviewItems()` still read a package with no comment part in it.
-        packageStore.publishStoryWrite(result.change);
-        return result.commentId;
+          scope
+        );
+        return result.ok ? result.commentId : null;
       },
 
       setCommentResolved(commentId, resolved) {
-        const store = bodyStore();
-        const beforePackage = packageStore.currentPackage();
-        const checkpoint = store.checkpoint();
-        // Grafted and republished for the same reason a reply is: the story store's package does
-        // not carry the coordinator's package-level writes, and publishing back over them would
-        // drop a minted relationship or a numbering graft an unrelated edit had made.
-        store.graftPackage(() => packageStore.currentPackage());
-        const result = setCommentResolved(store, commentId, resolved);
-        if (!result.ok) return false;
-        if (!result.changed) return true;
-        // Promoted to a package unit, like a reply: `@w15:done` lives in a sibling part.
-        store.restoreHistoryStacks(checkpoint);
-        packageStore.replacePackageShell(store.package);
-        packageStore.adoptPackageUnit(beforePackage);
-        // Resolving is a document change like any other — see `replyToComment`.
-        packageStore.publishStoryWrite(result.change);
-        return true;
+        const result = setPackageCommentResolved(packageStore, commentId, resolved);
+        return result.ok;
       },
 
       deleteComment(commentId, scope = BODY_SCOPE, noteId) {
@@ -1153,78 +1035,15 @@ export function openTreeSession(
       },
 
       deleteComments(comments, scope = BODY_SCOPE, noteId) {
-        if (comments.length === 0) return false;
-        const storyPart = scope.kind === 'body' ? bodyStore().part : packageStore.partFor(scope);
-        if (!storyPart) return false;
-        const owner = {
-          storyPartName: storyPart.name,
-          ...(noteId === undefined ? {} : { noteId }),
-        };
-        const store = bodyStore();
-        const beforePackage = packageStore.currentPackage();
-        const checkpoint = store.checkpoint();
-        // Grafted and republished exactly as a reply and a resolve are, and for the same
-        // reason: the story store's package does not carry the coordinator's package-level
-        // writes, and publishing back over them would drop a minted relationship.
-        store.graftPackage(() => packageStore.currentPackage());
-        let refused = false;
-        let removed = false;
-        const result = store.transact((ctx) => {
-          // ONE `applyPackage`, because a comment is not in one part. The body, the thread
-          // record and the story markers are three places describing one remark, and a
-          // transaction that took them separately could commit a body with no markers.
-          ctx.applyPackage((current) => {
-            let next = current;
-            for (const comment of comments) {
-              const deleted =
-                comment.parentCommentId === undefined
-                  ? deleteCommentThreadInStory(next, comment.commentId, owner)
-                  : deleteCommentReply(next, comment.commentId, comment.parentCommentId, owner);
-              if (deleted === null) {
-                refused = true;
-                return current;
-              }
-              removed ||= deleted !== next;
-              next = deleted;
-            }
-            return next;
-          });
-        });
-        // An unchanged package means the id named no comment. That is not a failure the
-        // caller can act on differently from a refusal, but it is not a write either, so it
-        // must not publish a change nothing changed.
-        if (refused || !result.ok || !removed) return false;
-        store.restoreHistoryStacks(checkpoint);
-        // INSTALLED, not shell-replaced — the one comment write that differs from a reply.
-        // `replacePackageShell` re-overlays every OPENED story store's own part on top of
-        // the package, and this write strips markers from every story, so a header the
-        // reader had once entered came back with its `commentRangeStart` restored and the
-        // body already gone: the half-deleted state this module exists to prevent. Installing
-        // the snapshot pushes the result INTO those stores instead, which is what the reap
-        // path has always done.
-        packageStore.installPackageSnapshot(store.package);
-        packageStore.adoptPackageUnit(beforePackage);
-        packageStore.publishStoryWrite(result.change);
-        return true;
+        return deletePackageComments(packageStore, comments, scope, noteId);
       },
 
       insertCustomNode(write, scope = BODY_SCOPE) {
-        // The story the paragraph belongs to. An update is a replace through this call, so
-        // a chip in a header was rewritten against the body store and refused.
-        const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
-        const store = resolved?.ok ? resolved.store : bodyStore();
-        return customNodeTransaction(store, () =>
-          insertCustomNodeWrite(store, write, bodyStore().part.name)
-        );
+        return insertPackageCustomNode(packageStore, write, scope);
       },
 
       removeCustomNode(controlNodeId, scope = BODY_SCOPE) {
-        // The story that HOLDS the chip. A header is an ordinary place to put one, and the
-        // body store has never heard of a control that lives elsewhere, so the write was
-        // refused with `unknown-content-control` over a node the reader was looking at.
-        const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
-        const store = resolved?.ok ? resolved.store : bodyStore();
-        return customNodeTransaction(store, () => removeCustomNodeWrite(store, controlNodeId));
+        return removePackageCustomNode(packageStore, controlNodeId, scope);
       },
 
       sweepCustomNodePayloads(namespaces) {

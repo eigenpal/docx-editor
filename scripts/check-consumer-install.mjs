@@ -163,7 +163,6 @@ try {
   const tarballs = [
     packPackage('packages/i18n'),
     packPackage('packages/core'),
-    packPackage('packages/collaboration-yjs'),
     packPackage('packages/react'),
     packPackage('packages/vue'),
     packPackage('packages/fonts'),
@@ -204,8 +203,8 @@ import * as Engine from '@docx-editor.dev/core';
 import * as EngineEditor from '@docx-editor.dev/core/editor';
 import * as Fonts from '@docx-editor.dev/fonts';
 import * as EditorApi from '@docx-editor.dev/editor-api';
-import * as CollaborationYjs from '@docx-editor.dev/collaboration-yjs';
-import * as CollaborationWebrtc from '@docx-editor.dev/collaboration-yjs/webrtc';
+import * as Collaboration from '@docx-editor.dev/pro/collaboration';
+import * as CollaborationWebrtc from '@docx-editor.dev/pro/collaboration/webrtc';
 import * as Pro from '@docx-editor.dev/pro';
 import * as ProReact from '@docx-editor.dev/pro/react';
 import '@docx-editor.dev/core/styles/editor.css';
@@ -215,7 +214,7 @@ const exportedSurfaceChecks = [
   EngineEditor,
   Fonts,
   EditorApi,
-  CollaborationYjs,
+  Collaboration,
   CollaborationWebrtc,
   Pro,
   ProReact,

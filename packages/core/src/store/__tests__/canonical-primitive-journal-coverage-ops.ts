@@ -1,12 +1,14 @@
 // Journal coverage fixtures for every authorable TreeDocOp kind (task 3.8).
 
 import { contentControlsIn } from '../package/content-control-nodes.ts';
+import { storyRootsOf } from '../package/story-blocks.ts';
 import { detectBodyTocs } from '../package/toc-detect.ts';
 import type { TreeDocOp } from '../store/tree-ops.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 import {
   findKind,
   firstParagraphId,
+  M,
   paragraphIds,
   parseDrawingTemplate,
   PIC_URI,
@@ -17,12 +19,17 @@ import {
   tableIds,
   transactBody,
   W,
+  walkNodes,
   zipDoc,
   type JournalCoverageFixture,
 } from './canonical-primitive-journal-coverage-support.ts';
 
 const TWO_P =
   '<w:p><w:r><w:t>Hello</w:t></w:r></w:p><w:p><w:r><w:t>World</w:t></w:r></w:p><w:sectPr/>';
+
+const MATH_P =
+  '<w:p><w:r><w:t>A</w:t></w:r><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>' +
+  '<w:r><w:t>Z</w:t></w:r></w:p><w:p><w:r><w:t>y</w:t></w:r></w:p><w:sectPr/>';
 
 const TABLE =
   '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr>' +
@@ -178,6 +185,32 @@ function lifecycle(
   };
 }
 
+function bodyRootId(store: TreePackageStore): string {
+  const story = storyRootsOf(store.bodyStore().part).find((entry) => entry.kind === 'body');
+  if (!story) throw new Error('missing body');
+  return story.root.id;
+}
+
+function mathDoc(): Uint8Array {
+  return zipDoc({ body: MATH_P, extraXmlns: `xmlns:m="${M}"` });
+}
+
+function equationId(store: TreePackageStore): string {
+  let found: string | undefined;
+  walkNodes(store.bodyStore().part.root, (node) => {
+    if (
+      found === undefined &&
+      node.kind !== 'textValue' &&
+      node.namespaceUri === M &&
+      node.localName === 'oMath'
+    ) {
+      found = node.id;
+    }
+  });
+  if (found === undefined) throw new Error('missing equation');
+  return found;
+}
+
 function drawingId(store: TreePackageStore): string {
   return findKind(store.bodyStore().part, 'drawing').id;
 }
@@ -192,6 +225,11 @@ function controlId(store: TreePackageStore): string {
 
 export function authorableCoverageFixtures(): JournalCoverageFixture[] {
   return [
+    story('replaceStoryBlocks', plainDoc(), (store) => ({
+      op: 'replaceStoryBlocks',
+      storyRootId: bodyRootId(store),
+      paragraphs: ['Fresh', 'Next'],
+    })),
     story('insertText', plainDoc(), (store) => ({
       op: 'insertText',
       paragraphId: firstParagraphId(store),
@@ -330,6 +368,15 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
     story('removeHyperlink', linkDoc(), (store) => ({
       op: 'removeHyperlink',
       linkId: hyperlinkId(store),
+    })),
+    story('setMathEquation', mathDoc(), (store) => ({
+      op: 'setMathEquation',
+      equationId: equationId(store),
+      linear: '{a+b}/{2}',
+    })),
+    story('removeMathEquation', mathDoc(), (store) => ({
+      op: 'removeMathEquation',
+      equationId: equationId(store),
     })),
     story('setContentControlValue', zipDoc({ body: SDT }), (store) => ({
       op: 'setContentControlValue',

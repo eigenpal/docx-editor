@@ -25,6 +25,12 @@ maintained hardware job as green from work counters alone.
 
 A fixture hash mismatch fails the run before any budget comparison.
 
+After rebase onto `origin/main`, incremental layout reuses 203 of 204 page
+records for this one-character edit. The previous exact budget was 154. Higher
+reuse is better, so this change re-records the local exact row and the remote
+floors upward. New page records drop from 50 to 1. Cache hits, cache misses,
+materialized pages, and paint element reuse are unchanged.
+
 ## Lanes
 
 | Lane                                                                                                  | Pull request | Maintained hardware          |
@@ -84,11 +90,11 @@ The local non-collaborative path and the local authoring path must match the
 | Created / deleted                      | 0 / 0                         |
 | Dependency keys                        | 1                             |
 | Layout placed / total                  | 13 / 3200                     |
-| Layout reused pages                    | 154                           |
+| Layout reused pages                    | 203                           |
 | Layout full passes                     | 1                             |
 | Pages before → after                   | 204 → 204                     |
 | Cache hits / misses / evictions / size | 12 / 3201 / 0 / 3201          |
-| Reused / new page records              | 154 / 50                      |
+| Reused / new page records              | 203 / 1                       |
 | Materialized pages                     | 4                             |
 | Reused / rebuilt paint elements        | 204 / 0                       |
 | Proof-schema incremental update        | 14 bytes                      |
@@ -106,12 +112,12 @@ Compare a warm remote apply of the same insert against the local exact row.
 | Dirty impact, ids, created, deleted, keys | exact local row     | —         | any widening                 |
 | Layout placed                             | `≤ 26`              | —         | `≥ 3200` or `fullPasses > 1` |
 | Layout total                              | 3200                | —         | other                        |
-| Reused pages                              | `≥ 154`             | —         | `< 154`                      |
+| Reused pages                              | `≥ 203`             | —         | `< 203`                      |
 | Pages                                     | 204 → 204           | —         | count change                 |
 | Cache evictions                           | 0                   | —         | `> 0`                        |
 | Cache hits                                | `≥ 12`              | —         | —                            |
-| Reused page records                       | `≥ 154`             | —         | `< 154`                      |
-| New page records                          | `≤ 50`              | —         | `> 50`                       |
+| Reused page records                       | `≥ 203`             | —         | `< 203`                      |
+| New page records                          | `≤ 1`               | —         | `> 1`                        |
 | Materialized pages                        | 4                   | —         | other                        |
 | Reused paint elements                     | 204                 | —         | other                        |
 | Rebuilt paint elements                    | 0                   | —         | `> 0`                        |
@@ -252,9 +258,10 @@ document. This 200-page collaboration bench does not replace it.
   warm remote materialization and paint within 2× local.
 - The repair spec requires deterministic work counters on pull requests and
   hardware-sensitive timings plus retained memory on maintained runs.
-- `edit-bench-gates.test.ts` already pins `placed = 13`, `reusedPages = 154`,
-  `fullPasses = 1`, and `pages = 204` for `steady-middle-text`. Collaboration
-  must not loosen those counters.
+- `edit-bench-gates.test.ts` pins `placed = 13`, `fullPasses = 1`, and
+  `pages = 204` for `steady-middle-text`. After main's incremental layout raised
+  page-record identity reuse, this change re-records `reusedPages` to 203 of
+  204. Collaboration must not loosen those counters.
 - Local allocated = 6 and off-path = 0, so a whole-tree rebuild is a kill, not
   an optimize band.
 - Local incremental update = 14 bytes. A one-character update that scales with

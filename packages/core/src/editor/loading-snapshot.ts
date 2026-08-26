@@ -25,4 +25,5 @@ export const LOADING_SNAPSHOT: EditorSnapshot = Object.freeze({
   page: Object.freeze({ current: 0, total: 0 }),
   canUndo: false,
   canRedo: false,
+  collaborationStatus: 'inactive',
 });

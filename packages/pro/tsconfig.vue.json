@@ -20,6 +20,7 @@
       "@docx-editor.dev/core/output": ["../core/src/output/index.ts"],
       "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
       "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"],
+      "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
       "@docx-editor.dev/vue": ["../vue/src/index.ts"]
     }
   },

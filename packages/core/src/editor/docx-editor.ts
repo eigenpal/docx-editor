@@ -566,7 +566,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? { tableInteractionLabel: config.tableInteractionLabel }
         : {}),
       ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
-      ...(config.collaboration ? { collaboration: config.collaboration } : {}),
+      ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       // Read through the holder rather than captured: the popover mounts AFTER the editor
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
@@ -1083,6 +1083,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
       hasReviewContent: surface?.session.hasReviewContent() ?? false,
+      collaborationStatus: state?.collaborationStatus ?? 'inactive',
       editingMode,
       // The facade's own refusal wins while it stands: the surface never saw the request.
       // A document that ASKS for tracked changes and cannot get them — no author configured
@@ -1383,9 +1384,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * live selection. Null when nothing is selected, or the selection is a caret.
    */
   function commentTargetRange(): { from: SemanticPosition; to: SemanticPosition } | null {
-    // The captured offsets outlive this read (they anchor the comment), so any
-    // queued typing must land before they are taken.
-    surface?.flushPendingInput();
+    // A READ. `useReview` polls this through `getReviewRevision` / `getSelectionPlacement`
+    // as a `useSyncExternalStore` snapshot, so a flush here committed queued typing
+    // and layout during React render: Chrome updated while the rail was rendering,
+    // and consecutive snapshot reads returned different ticks.
     const selection = surface?.retainedSelection() ?? surface?.state().selection ?? null;
     if (!selection) return null;
     const { anchor, head } = selection;
@@ -1747,7 +1749,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         storyScopeOfReviewItem(item)
       );
       return applied;
-    });
+    }, 'revision-resolve');
     if (!applied?.committed) {
       const reason =
         typeof applied?.reason === 'string' ? applied.reason : 'the revision was refused';
@@ -2196,6 +2198,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!reviewEnabled) {
         return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
       }
+      // The captured offsets outlive this write (they anchor the comment), so any
+      // queued typing must land before they are taken. The range read itself is
+      // flush-free: it is also the review store's snapshot.
+      surface?.flushPendingInput();
       const range = commentTargetRange();
       if (!range || !surface) {
         return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
@@ -2230,7 +2236,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           storyScopeOfParagraph(range.from.paragraphId)
         );
         return { committed: created !== null };
-      });
+      }, 'comment-add');
       if (created === null) {
         return { ok: false, code: 'unsupported', reason: 'the comment could not be committed' };
       }
@@ -2448,7 +2454,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           parsed?.noteId
         );
         return { committed: deleted };
-      });
+      }, 'comment-delete');
       if (!deleted) {
         return { ok: false, code: 'unsupported', reason: 'the comment could not be deleted' };
       }
@@ -2501,7 +2507,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           storyScopeOfReviewItem(item)
         );
         return { committed: created !== null };
-      });
+      }, 'comment-reply');
       if (created === null) {
         return { ok: false, code: 'unsupported', reason: 'the reply could not be committed' };
       }

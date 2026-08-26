@@ -9,6 +9,11 @@ OpenSpec task 1.7 for `full-document-yjs-collaboration`.
 - Config: 9 measured rounds, 2 warmup, fixed(6px,14px)
 - Edit: insertText('X') at offset 0 on paragraph 1600 (`/word/document.xml#0.0.1599` / `4A7E6EC2`)
 
+After rebase onto `origin/main`, incremental layout reuses 203 of 204 page
+records for this edit. The previous baseline was 154 reused pages and 50 new
+page records. Higher reuse is better, so this change re-records those work
+counters to 203 / 1. Timing and RSS rows stay on the original 1.7 capture.
+
 ## Metrics
 
 | Metric                                            | Value                       |
@@ -23,11 +28,11 @@ OpenSpec task 1.7 for `full-document-yjs-collaboration`.
 | Created / deleted ids                             | 0 / 0                       |
 | Dependency keys                                   | 1                           |
 | Layout placed / total                             | 13 / 3200                   |
-| Layout reused pages                               | 154                         |
+| Layout reused pages                               | 203                         |
 | Layout full passes                                | 1                           |
 | Pages before → after                              | 204 → 204                   |
 | Layout cache hits / misses / evictions / size     | 12 / 3201 / 0 / 3201        |
-| Reused / new page records                         | 154 / 50                    |
+| Reused / new page records                         | 203 / 1                     |
 | Materialized pages                                | 4                           |
 | Reused / rebuilt paint elements                   | 204 / 0                     |
 | Transaction median / p95 (ms)                     | 9.306 / 10.815              |
@@ -52,7 +57,7 @@ OpenSpec task 1.7 for `full-document-yjs-collaboration`.
 - Insert one character with insertText at UTF-16 offset 0.
 - Canonical allocation compares object identity of every node in the main part before and after the transaction.
 - Dirty scope is TreeModelChange.dirty/created/deleted/impact/dependencyKeys from the committed transaction.
-- Layout work counters come from the warmed LayoutSession plus ParagraphLayoutCache.stats.
+- Layout work counters come from the warmed LayoutSession plus ParagraphLayoutCache.stats. Page-record identity reuse is 203 of 204 after main's incremental layout.
 - Paint uses happy-dom. The viewport pins the edited page plus one overscan page. Incremental paint reuse counts retained page element identity.
 - Memory samples process.memoryUsage() with no GC between stages. RSS and external bytes are the usable process-level signals on this Bun runtime.
 - Yjs size seeds the proof paragraph map (docx-body-paragraphs-v1) with every w14:paraId text, fixes clientID=1, then encodes the incremental update for inserting X at the start of the target Y.Text.

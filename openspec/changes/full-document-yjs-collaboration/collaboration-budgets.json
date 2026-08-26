@@ -93,7 +93,7 @@
     "layout": {
       "placed": 13,
       "total": 3200,
-      "reusedPages": 154,
+      "reusedPages": 203,
       "fullPasses": 1,
       "pagesBefore": 204,
       "pagesAfter": 204,
@@ -102,8 +102,8 @@
     "paint": {
       "pagesBefore": 204,
       "pagesAfter": 204,
-      "reusedPageRecords": 154,
-      "newPageRecords": 50,
+      "reusedPageRecords": 203,
+      "newPageRecords": 1,
       "materializedPages": 4,
       "reusedPaintElements": 204,
       "rebuiltPaintElements": 0
@@ -156,7 +156,7 @@
       "layout": {
         "placedMaxInclusive": 26,
         "total": 3200,
-        "reusedPagesMinInclusive": 154,
+        "reusedPagesMinInclusive": 203,
         "fullPasses": 1,
         "pagesBefore": 204,
         "pagesAfter": 204,
@@ -166,8 +166,8 @@
       "pageIdentity": {
         "pagesBefore": 204,
         "pagesAfter": 204,
-        "reusedPageRecordsMinInclusive": 154,
-        "newPageRecordsMaxInclusive": 50
+        "reusedPageRecordsMinInclusive": 203,
+        "newPageRecordsMaxInclusive": 1
       },
       "paint": {
         "materializedPages": 4,
@@ -232,5 +232,10 @@
     "identityOrMoveKill": "reject-representation",
     "mutationClassRatioMiss": "keep-experimental",
     "bothRepresentationsFail": "stop-no-editor-integration"
+  },
+  "keystrokePath": {
+    "replicationInsideTransact": false,
+    "yjsUpdatesDuringLocalTransactMustBe": 0,
+    "flushSeam": "CollaborationDocumentPort.flushPendingJournals"
   }
 }

@@ -282,6 +282,48 @@ and one valid canonical publication.
 - **WHEN** a remote Yjs update merges
 - **THEN** the system SHALL validate and, when necessary, safely repair the candidate before publishing one canonical revision
 
+### Requirement: Cross-paragraph presence selection
+
+Ephemeral awareness SHALL publish a selection as one anchor address and one head
+address. Each address is a stable paragraph id and a UTF-16 offset.
+The payload SHALL NOT list every covered paragraph.
+The receiver SHALL resolve the covered range from its own canonical tree.
+Presence SHALL NOT enter the document, the undo stack, or the canonical tree.
+
+The awareness payload shape is not a Yjs document schema change.
+`PROTOCOL_VERSION` and `SCHEMA_VERSION` SHALL stay unchanged.
+A peer that still publishes `{ paragraphId, start, end }` SHALL be tolerated.
+
+#### Scenario: Cross-paragraph selection replicates
+
+- **WHEN** a peer selects text that spans two or more paragraphs
+- **THEN** the other peer SHALL receive that range and SHALL paint every covered line
+
+#### Scenario: Select-all stays bounded
+
+- **WHEN** a peer selects the whole document
+- **THEN** the awareness payload SHALL carry two addresses, not one entry per paragraph
+
+#### Scenario: Backwards selection paints the same
+
+- **WHEN** the anchor is after the head in document order
+- **THEN** the receiver SHALL paint the same range as the forward selection
+
+#### Scenario: Unresolvable address drops quietly
+
+- **WHEN** either address names a paragraph this replica does not have
+- **THEN** the receiver SHALL omit that selection and SHALL NOT throw
+
+#### Scenario: Old single-paragraph payload
+
+- **WHEN** a peer publishes the previous `{ paragraphId, start, end }` awareness shape
+- **THEN** this replica SHALL paint that single-paragraph range or omit it, and SHALL NOT crash
+
+#### Scenario: Presence is not a document revision
+
+- **WHEN** a peer publishes a selection
+- **THEN** the receiver SHALL NOT emit a canonical primitive journal and SHALL NOT advance a document revision
+
 ### Requirement: Projection layers remain non-authoritative
 
 The canonical materialized tree SHALL remain the only document state consumed by

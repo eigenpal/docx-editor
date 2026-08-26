@@ -94,25 +94,69 @@ export interface CollaborationDocumentPort {
    * adapters never write a CRDT through this port.
    */
   observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
+  /** True when a committed journal has not yet been frozen or delivered to observers. */
+  hasPendingJournals(): boolean;
+  /**
+   * Freeze and deliver queued journals in production order.
+   *
+   * Local edit, layout, and paint do not wait for this. Tests and teardown call it
+   * instead of sleeping on the publication timer.
+   */
+  flushPendingJournals(): void;
   save(): Uint8Array;
 }
 
-/** Stable remote selection resolved into this replica's canonical paragraph address. @public */
+/**
+ * One endpoint of a published selection: a stable paragraph id and a UTF-16 offset.
+ *
+ * The wire payload carries only these two endpoints. The receiver walks its own canonical
+ * tree to find the paragraphs between them, so a select-all does not grow with document size.
+ *
+ * @public
+ */
+export interface CollaborationSelectionAddress {
+  readonly paragraphId: string;
+  readonly offset: number;
+}
+
+/**
+ * One endpoint of a remote selection resolved into this replica's canonical addresses.
+ *
+ * `paragraphId` is the stable `w14:paraId`. `nodeId` is replica-local and is used to paint.
+ *
+ * @public
+ */
+export interface CollaborationRemoteSelectionAddress {
+  readonly paragraphId: string;
+  readonly nodeId: string;
+  readonly offset: number;
+}
+
+/**
+ * Stable remote selection resolved into this replica's canonical paragraph addresses.
+ *
+ * Anchor and head may name different paragraphs. A collapsed caret is the same address twice.
+ *
+ * @public
+ */
 export interface CollaborationRemoteSelection {
   readonly actorId: string;
   readonly name: string;
   readonly color?: string;
-  readonly paragraphId: string;
-  readonly nodeId: string;
-  readonly start: number;
-  readonly end: number;
+  readonly anchor: CollaborationRemoteSelectionAddress;
+  readonly head: CollaborationRemoteSelectionAddress;
 }
 
-/** Selection published by the local editor through ephemeral awareness. @public */
+/**
+ * Selection published by the local editor through ephemeral awareness.
+ *
+ * Publish an anchor address and a head address. Do not materialize every covered paragraph.
+ *
+ * @public
+ */
 export interface CollaborationLocalSelection {
-  readonly paragraphId: string;
-  readonly start: number;
-  readonly end: number;
+  readonly anchor: CollaborationSelectionAddress;
+  readonly head: CollaborationSelectionAddress;
 }
 
 /**
@@ -145,7 +189,38 @@ export interface EditorCollaborationSession {
   subscribeRemoteSelections(
     listener: (selections: readonly CollaborationRemoteSelection[]) => void
   ): () => void;
+  /**
+   * Publish queued local journals to shared state.
+   *
+   * Local typing does not wait for replication. Undo, destroy, and page hide call this
+   * so a queued journal is never dropped.
+   */
+  flushPendingJournals(): void;
   destroy(): void;
+}
+
+/**
+ * Build a replica from the opened document id. Core calls this at most once
+ * per mount. `EditorModule` still has no lifecycle hooks.
+ *
+ * @public
+ */
+export type CollaborationSessionFactory = (documentId: string) => EditorCollaborationSession;
+
+/**
+ * What a collaboration module contributes: the replica the surface attaches.
+ *
+ * @public
+ */
+export interface CollaborationModuleContribution {
+  /**
+   * A ready session, or a factory invoked once at surface mount with the
+   * opened package's document id.
+   *
+   * A ready session is the ordinary path. The host creates the Yjs room, then
+   * wraps it with `collaborationModule({ session })`.
+   */
+  readonly session: EditorCollaborationSession | CollaborationSessionFactory;
 }
 
 export {

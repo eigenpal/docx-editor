@@ -15,6 +15,7 @@
 // structurally shared: an entry retains the previous part by reference rather than cloning
 // it, so undo is a pointer swap and history costs nothing per entry.
 
+import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
@@ -407,6 +408,13 @@ export class TreeDocumentStore {
   transact(
     build: (ctx: TransactionContext) => void,
     options: TransactOptions = {}
+  ): TransactResult {
+    return runWithTransactionActor(options.actorId, () => this.commitTransaction(build, options));
+  }
+
+  private commitTransaction(
+    build: (ctx: TransactionContext) => void,
+    options: TransactOptions
   ): TransactResult {
     const origin = options.origin ?? ORIGIN_IDS.mutationHuman;
     const before = this.current;

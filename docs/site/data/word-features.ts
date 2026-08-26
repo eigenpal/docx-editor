@@ -977,9 +977,10 @@ export const wordFeatures: WordFeature[] = [
     editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
-    tier: 'community',
+    tier: 'pro',
+    docsLink: '/docs/2.x/pro/collaboration',
     notes:
-      'Experimental Yjs proof synchronizes insertions and deletions in existing body paragraphs, presence, remote selections, and actor-local undo. Structural edits, formatting, review data, tables, headers, footers, notes, and drawings do not synchronize.',
+      'Experimental Yjs replication covers the whole canonical package: text, structure, formatting, tables, headers, footers, notes, drawings, relationships, and embedded parts, with presence, remote selections that can span paragraphs, and actor-local undo. Comments, tracked-change decisions, tables of contents, and custom nodes all replicate, and ids that two peers can mint at the same time are allocated per actor so they cannot collide. Peers connect directly over WebRTC, so a room lasts only as long as one peer stays open. One write path is refused while a replica is attached: applying an edited ProseMirror document.',
   },
   {
     id: 'collab.find-replace',

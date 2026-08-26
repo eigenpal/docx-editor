@@ -15,7 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import * as Y from '../../packages/collaboration-yjs/node_modules/yjs/dist/yjs.mjs';
+import * as Y from 'yjs';
 import { createCollaborationDocumentPort } from '../../packages/core/src/collaboration/index.ts';
 import {
   createFixedMeasurer,
@@ -42,7 +42,7 @@ import {
   type OoxmlPart,
   type OoxmlParagraphNode,
 } from '../../packages/core/src/store/index.ts';
-import { PARAGRAPHS_KEY } from '../../packages/collaboration-yjs/src/schema.ts';
+import { PARAGRAPHS_KEY } from '../../packages/pro/src/collaboration/schema.ts';
 
 interface Args {
   fixture: string;

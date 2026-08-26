@@ -26,6 +26,7 @@ import {
   isHyperlinkNode,
 } from './hyperlink.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, RELATIONSHIPS_NAMESPACE_URI } from './ooxml-tree.ts';
+import { freePackageRelationshipId } from './actor-scoped-ids.ts';
 import { withRelationshipsPartFor } from './package-edit.ts';
 import { recordPutRelationship, runWithoutJournalCapture } from './canonical-primitive-capture.ts';
 
@@ -74,21 +75,10 @@ function relsPartNameFor(partName: string): string {
 
 /** An `rIdN` no owner in the package already uses. */
 function freeRelationshipId(pkg: OoxmlPackage): string {
-  let max = 0;
-  for (const records of pkg.relationships.values()) {
-    for (const record of records) {
-      const match = /^rId(\d{1,9})$/.exec(record.id);
-      if (match) max = Math.max(max, Number(match[1]));
-    }
-  }
   // External targets live OUTSIDE `relationships` (that map holds the internal ones), so an
   // id already spent on a hyperlink would be handed out a second time without this — two
   // links pointing at one URL, and editing either would silently move the other.
-  for (const external of pkg.externalTargets) {
-    const match = /^rId(\d{1,9})$/.exec(external.id);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `rId${max + 1}`;
+  return freePackageRelationshipId(pkg);
 }
 
 /** Re-key a grafted subtree so it cannot collide with the part it is joining. */

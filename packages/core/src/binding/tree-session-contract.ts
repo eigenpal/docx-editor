@@ -272,7 +272,9 @@ export interface TreeDocxSessionView {
     author: string,
     /** ISO-8601. Omitted writes no `@w:date`, because inventing one is a content change. */
     date?: string,
-    scope?: StoryScope
+    scope?: StoryScope,
+    /** Binds id allocation to one actor, so two peers cannot mint the same comment id. */
+    actorId?: string
   ): string | null;
   /**
    * Resolve a comment thread, or reopen it. False when the document holds no such comment.

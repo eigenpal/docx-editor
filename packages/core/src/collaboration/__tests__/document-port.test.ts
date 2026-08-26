@@ -133,6 +133,7 @@ describe('canonical collaboration document port', () => {
       ok: true,
       changed: true,
     });
+    port.flushPendingJournals();
     expect(port.paragraphs()[0]!.text).toBe('Remote package text');
     expect(publications).toBe(1);
     expect(journals).toHaveLength(0);

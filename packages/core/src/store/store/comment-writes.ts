@@ -15,6 +15,7 @@ import {
   resolveContentTypeOf,
   withNewPart,
   withRelationship,
+  withRelationshipsPartFor,
 } from '../package/package-edit.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { insertChildren, findNode, replaceNode } from '../package/ooxml-edit.ts';
@@ -45,6 +46,7 @@ import {
   validateCommentAuthor,
   validateCommentText,
 } from './comment-input-validate.ts';
+import { nextCommentId } from './comment-id-mint.ts';
 import { rewriteExtendedRoot, stampThreadParaIds } from './comment-resolution-rewrites.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
 import type { TreeOpRejection } from './tree-op-validate.ts';
@@ -88,6 +90,13 @@ export interface AddCommentRequest {
   readonly text: string;
   /** The comment this replies to. Its thread link is written to `commentsExtended.xml`. */
   readonly replyToCommentId?: string;
+  /**
+   * Collaboration actor that mints `@w:id`. Absent keeps Word's dense solo sequence.
+   *
+   * Concurrent peers that both take "highest + 1" mint the same comment id, and the CRDT
+   * then cross-links their anchors. The actor is the store transaction's `actorId`.
+   */
+  readonly actorId?: string;
 }
 
 /** The new comment's id and the story change, or the reason the write was refused. */
@@ -208,8 +217,9 @@ function relatedPartName(
  * and the part may already exist because a STORY relates it, in which case the creation branch
  * is skipped and the main document would otherwise never gain its own.
  *
- * `withRelationship` fails closed when the owner has no `.rels` part. The main document always
- * has one, which is the other reason the relationship belongs there rather than on a header.
+ * `withRelationship` fails closed when the owner has no `.rels` part. The write mints one
+ * through `withRelationshipsPartFor` so a package that loaded without a modeled `.rels` tree
+ * still records `putRelationship` instead of publishing `comments.xml` that nothing points at.
  */
 function withMainDocumentRelationship(
   pkg: OoxmlPackage,
@@ -222,11 +232,18 @@ function withMainDocumentRelationship(
     const resolved = resolveInternalTarget(owner, record.rawTarget);
     if (resolved.ok && resolved.partName === targetPartName) return pkg;
   }
+  // Mint an empty `.rels` tree when the owner has none. `withRelationship` refuses that
+  // case rather than guessing, and a comment write that created `comments.xml` with no
+  // relationship left Word to repair the part away. Hyperlink and furniture writes already
+  // go through `withRelationshipsPartFor` so the journal carries `putXmlPart` of the empty
+  // root and then `putRelationship`.
+  const prepared = withRelationshipsPartFor(pkg, owner);
   // DERIVED from the part, not a literal. The part name honours a story's redirect to a
   // non-conventional name, so a hardcoded `comments.xml` beside it minted a relationship
   // naming a part that does not exist — which the guard above could then never match, so the
   // branch was re-entered on every comment and the write was refused outright.
-  return withRelationship(pkg, owner, relationshipType, relativeTarget(owner, targetPartName)).pkg;
+  return withRelationship(prepared, owner, relationshipType, relativeTarget(owner, targetPartName))
+    .pkg;
 }
 
 /** The comment part this story points at, or the conventional name when it has none yet. */
@@ -245,29 +262,6 @@ function extendedPartNameFor(pkg: OoxmlPackage, storyPartName: string): string {
     COMMENTS_EXTENDED_TYPES,
     COMMENTS_EXTENDED_PART
   );
-}
-
-/** Highest `w:comment/@w:id` in the part, so the next is seeded from the document. */
-function nextCommentId(part: OoxmlPart | undefined): string {
-  if (!part) return '0';
-  let highest = -1;
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.kind === 'comment') {
-      const raw = attribute(node, WML_NAMESPACE_URI, 'id');
-      // `ST_DecimalNumber` is unbounded in the schema and signed 32-bit in Word, so a value
-      // outside that range is ignored for seeding rather than used and overflowed.
-      if (raw !== undefined && /^\d{1,10}$/.test(raw)) {
-        const value = Number(raw);
-        if (Number.isSafeInteger(value) && value <= 2_147_483_647 && value > highest) {
-          highest = value;
-        }
-      }
-    }
-    for (const child of node.children) visit(child);
-  };
-  visit(part.root);
-  return String(highest + 1);
 }
 
 /** Every `w14:paraId` already used anywhere in the package, so a mint cannot collide. */
@@ -344,7 +338,11 @@ function withW14Binding(part: OoxmlPart): { part: OoxmlPart; prefix: string } {
       { prefix: 'w14', namespaceUri: W14_NAMESPACE_URI },
     ],
   } as OoxmlElement;
-  return { part: { ...part, root: bound }, prefix: 'w14' };
+  // replaceNode, not a spread. Capture records `setNamespaceBinding` only on that path.
+  // Spreading a new root left the peer's comments part without `w14`, so `w14:paraId`
+  // failed `invalid-qname` and the remote package was refused — markers never landed.
+  const replaced = replaceNode(part, part.root.id, bound, { deferValidation: true });
+  return { part: replaced.ok ? replaced.part : { ...part, root: bound }, prefix: 'w14' };
 }
 
 /**
@@ -543,7 +541,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
   const commentsName = commentsPartNameFor(pkg, storyPartName);
   const extendedName = extendedPartNameFor(pkg, storyPartName);
   const commentsPart = pkg.parts.get(commentsName);
-  const commentId = nextCommentId(commentsPart);
+  const commentId = nextCommentId(commentsPart, authored.actorId);
   const paraId = mintParaId(`${commentsName}#${commentId}`, paraIdsInPackage(pkg));
 
   // A reply's parent needs a `w14:paraId`, because `w15:commentsEx` keys the thread by it and
@@ -574,107 +572,123 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
 
   const endParagraphId = request.anchor.endParagraphId ?? request.anchor.paragraphId;
 
-  const result = store.transact((ctx) => {
-    // The comment part first, so the relationship the story needs already has a target.
-    ctx.applyPackage((current) => {
-      const withCommentsPart = current.parts.has(commentsName)
-        ? current
-        : (() => {
-            const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
-            return root ? withNewPart(current, commentsName, root, COMMENTS_TYPE) : null;
-          })();
-      if (withCommentsPart === null) return current;
-      return withMainDocumentRelationship(withCommentsPart, COMMENTS_REL, commentsName);
-    });
-
-    if (parentTarget && mintedParentParaId) {
-      ctx.applyPackage((current) =>
-        withStampedParaId(current, commentsName, parentTarget.id, mintedParentParaId)
-      );
-    }
-
-    ctx.applyPackage((current) => {
-      const part = current.parts.get(commentsName);
-      if (!part) return current;
-      const bound = withW14Binding(part);
-      const appended = insertChildren(
-        bound.part,
-        bound.part.root.id,
-        bound.part.root.children.length,
-        [commentElement(commentId, paraId, authored, bound.prefix)],
-        { deferValidation: true }
-      );
-      return appended.ok ? withPart(current, appended.part) : current;
-    });
-
-    // Thread state only when there is a thread. A file with no reply gains no sibling part,
-    // which is what keeps an untouched round trip untouched.
-    if (parentParaId !== null) {
+  const result = store.transact(
+    (ctx) => {
+      // The comment part first, so the relationship the story needs already has a target.
       ctx.applyPackage((current) => {
-        const withExtended = current.parts.has(extendedName)
+        const withCommentsPart = current.parts.has(commentsName)
           ? current
           : (() => {
-              const root = emptyPart(
-                extendedName,
-                `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`
-              );
-              return root ? withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE) : null;
+              const root = emptyPart(commentsName, `<w:comments xmlns:w="${WML_NAMESPACE_URI}"/>`);
+              return root ? withNewPart(current, commentsName, root, COMMENTS_TYPE) : null;
             })();
-        if (withExtended === null) return current;
-        return withMainDocumentRelationship(withExtended, COMMENTS_EXTENDED_REL, extendedName);
+        if (withCommentsPart === null) return current;
+        return withMainDocumentRelationship(withCommentsPart, COMMENTS_REL, commentsName);
       });
+
+      if (parentTarget && mintedParentParaId) {
+        ctx.applyPackage((current) =>
+          withStampedParaId(current, commentsName, parentTarget.id, mintedParentParaId)
+        );
+      }
 
       ctx.applyPackage((current) => {
-        const part = current.parts.get(extendedName);
+        const part = current.parts.get(commentsName);
         if (!part) return current;
-        const entries = extendedEntries(part);
-        // Word expects commentsExtended.xml to describe BOTH ends of a thread. Our reader can
-        // follow a child-only parent pointer, but Word discards that incomplete thread and draws
-        // two independent comments on the coincident range. Preserve an existing parent record
-        // verbatim (including resolved state or its own parent link); otherwise add the top-level
-        // record before the reply.
-        const additions = [
-          ...(entries.has(parentParaId.toUpperCase())
-            ? []
-            : [
-                resolvedEntry(`${extendedName}#ex-${parentParaId}`, parentParaId, undefined, false),
-              ]),
-          resolvedEntry(`${extendedName}#ex-${paraId}`, paraId, parentParaId, false),
-        ];
-        const appended = insertChildren(part, part.root.id, part.root.children.length, additions, {
-          deferValidation: true,
-        });
+        const bound = withW14Binding(part);
+        const appended = insertChildren(
+          bound.part,
+          bound.part.root.id,
+          bound.part.root.children.length,
+          [commentElement(commentId, paraId, authored, bound.prefix)],
+          { deferValidation: true }
+        );
         return appended.ok ? withPart(current, appended.part) : current;
       });
-    }
 
-    // The story markers last. `insertCommentMarker` orders coincident markup for Word
-    // (starts outer→inner, ends inner→outer, refs outer→inner). REFERENCE is applied before
-    // END so a brand-new range still serializes end→ref; both go in before START when the
-    // range is in one paragraph, because splitting the run at the start reshapes the children
-    // the end index counts even though markers occupy no offsets.
-    ctx.applyTo(storyPartName, {
-      op: 'insertCommentMarker',
-      paragraphId: endParagraphId,
-      offset: request.anchor.end,
-      commentId,
-      marker: 'reference',
-    });
-    ctx.applyTo(storyPartName, {
-      op: 'insertCommentMarker',
-      paragraphId: endParagraphId,
-      offset: request.anchor.end,
-      commentId,
-      marker: 'end',
-    });
-    ctx.applyTo(storyPartName, {
-      op: 'insertCommentMarker',
-      paragraphId: request.anchor.paragraphId,
-      offset: request.anchor.start,
-      commentId,
-      marker: 'start',
-    });
-  });
+      // Thread state only when there is a thread. A file with no reply gains no sibling part,
+      // which is what keeps an untouched round trip untouched.
+      if (parentParaId !== null) {
+        ctx.applyPackage((current) => {
+          const withExtended = current.parts.has(extendedName)
+            ? current
+            : (() => {
+                const root = emptyPart(
+                  extendedName,
+                  `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`
+                );
+                return root
+                  ? withNewPart(current, extendedName, root, COMMENTS_EXTENDED_TYPE)
+                  : null;
+              })();
+          if (withExtended === null) return current;
+          return withMainDocumentRelationship(withExtended, COMMENTS_EXTENDED_REL, extendedName);
+        });
+
+        ctx.applyPackage((current) => {
+          const part = current.parts.get(extendedName);
+          if (!part) return current;
+          const entries = extendedEntries(part);
+          // Word expects commentsExtended.xml to describe BOTH ends of a thread. Our reader can
+          // follow a child-only parent pointer, but Word discards that incomplete thread and draws
+          // two independent comments on the coincident range. Preserve an existing parent record
+          // verbatim (including resolved state or its own parent link); otherwise add the top-level
+          // record before the reply.
+          const additions = [
+            ...(entries.has(parentParaId.toUpperCase())
+              ? []
+              : [
+                  resolvedEntry(
+                    `${extendedName}#ex-${parentParaId}`,
+                    parentParaId,
+                    undefined,
+                    false
+                  ),
+                ]),
+            resolvedEntry(`${extendedName}#ex-${paraId}`, paraId, parentParaId, false),
+          ];
+          const appended = insertChildren(
+            part,
+            part.root.id,
+            part.root.children.length,
+            additions,
+            {
+              deferValidation: true,
+            }
+          );
+          return appended.ok ? withPart(current, appended.part) : current;
+        });
+      }
+
+      // The story markers last. `insertCommentMarker` orders coincident markup for Word
+      // (starts outer→inner, ends inner→outer, refs outer→inner). REFERENCE is applied before
+      // END so a brand-new range still serializes end→ref; both go in before START when the
+      // range is in one paragraph, because splitting the run at the start reshapes the children
+      // the end index counts even though markers occupy no offsets.
+      ctx.applyTo(storyPartName, {
+        op: 'insertCommentMarker',
+        paragraphId: endParagraphId,
+        offset: request.anchor.end,
+        commentId,
+        marker: 'reference',
+      });
+      ctx.applyTo(storyPartName, {
+        op: 'insertCommentMarker',
+        paragraphId: endParagraphId,
+        offset: request.anchor.end,
+        commentId,
+        marker: 'end',
+      });
+      ctx.applyTo(storyPartName, {
+        op: 'insertCommentMarker',
+        paragraphId: request.anchor.paragraphId,
+        offset: request.anchor.start,
+        commentId,
+        marker: 'start',
+      });
+    },
+    authored.actorId === undefined ? {} : { actorId: authored.actorId }
+  );
 
   if (!result.ok) return { ok: false, reason: result.reason };
   return { ok: true, commentId, change: result.change };
@@ -915,13 +929,12 @@ export function setCommentResolvedWithBudget(
         const root = emptyPart(extendedName, `<w15:commentsEx xmlns:w15="${W15_NAMESPACE_URI}"/>`);
         if (!root) return current;
         const withExtended = withNewPart(next, extendedName, root, COMMENTS_EXTENDED_TYPE);
+        // Through `withMainDocumentRelationship`, not a raw `withRelationship` on the story.
+        // A package that loaded without a modeled `.rels` tree would otherwise skip
+        // `putRelationship`, and a peer would hold `commentsExtended.xml` that nothing
+        // points at — Word repairs that part away and the resolved state never lands.
         next = createRelationship
-          ? withRelationship(
-              withExtended,
-              storyPartName,
-              COMMENTS_EXTENDED_REL,
-              'commentsExtended.xml'
-            ).pkg
+          ? withMainDocumentRelationship(withExtended, COMMENTS_EXTENDED_REL, extendedName)
           : withExtended;
       }
       const part = next.parts.get(extendedName);

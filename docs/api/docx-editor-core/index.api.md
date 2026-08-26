@@ -1013,7 +1013,6 @@ export interface DocxDocumentJSON {
 export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
-    collaboration?: EditorCollaborationSession;
     container?: HTMLElement;
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
@@ -1547,6 +1546,7 @@ export interface EditorHeaderFooterCommands {
 
 // @public
 export interface EditorModule {
+    readonly collaboration?: CollaborationModuleContribution;
     readonly customNodePayloadNamespaces?: readonly string[];
     readonly customNodes?: readonly unknown[];
     readonly id: string;
@@ -1695,6 +1695,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
+    readonly collaborationStatus: CollaborationStatus | 'inactive';
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
     readonly fontSubstitutions?: readonly string[];

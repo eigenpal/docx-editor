@@ -41,6 +41,7 @@
     "pro/comments",
     "pro/custom-nodes",
     "pro/custom-nodes-reference",
+    "pro/collaboration",
     "---Editing API---",
     "editor-api/index",
     "editor-api/office-js-api",

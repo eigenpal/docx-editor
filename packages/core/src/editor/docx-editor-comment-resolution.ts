@@ -117,7 +117,7 @@ export function setReviewCommentResolved(
     ok = deps.surface!.session.setCommentResolved(thread.id, resolved);
     changed = ok && deps.surface!.session.packageRevision() !== revision;
     return { committed: changed };
-  });
+  }, 'comment-resolve');
   if (!ok) {
     return { ok: false, code: 'notFound', reason: 'the comment could not be resolved' };
   }

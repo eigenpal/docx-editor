@@ -22,6 +22,7 @@
 // is fetched, resolved, or evaluated. A projection that reached for a part would be a
 // zero-click load of a target an untrusted file chose.
 
+import { nextStripedDecimalId, resolveAllocationActor } from './actor-scoped-ids.ts';
 import { W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlContentControlContentNode,
@@ -808,13 +809,47 @@ export function orderedContentControlProperties(
 }
 
 /**
- * The next `w:id` to write, seeded from the document's own maximum plus one.
+ * Occupied non-negative `w:id` values a striped mint must skip.
  *
- * Never a clock, a timestamp, a random source or a hash: those collide with ids already
- * in the file and produce values Word rejects. Null when the document already reaches the
- * signed 32-bit bound, so the caller refuses rather than wrapping into a negative id.
+ * Hostile or out-of-range values never reach here — {@link parseContentControlId} dropped
+ * them. Negatives are valid signed 32-bit ids but are ignored for seeding, the same way
+ * the solo walk starts `max` at zero and only counts `id > max`.
  */
-export function allocateContentControlId(root: OoxmlNode): number | null {
+function usedContentControlIds(root: OoxmlNode): Set<string> {
+  const used = new Set<string>();
+  for (const entry of contentControlsIn(root)) {
+    const id = contentControlPropertiesOf(entry.node).id;
+    if (id === undefined || id < 0) continue;
+    used.add(String(id));
+  }
+  return used;
+}
+
+/**
+ * The next `w:id` to write.
+ *
+ * Solo: one past the document's own maximum. Never a clock, a timestamp, a random source
+ * or a hash: those collide with ids already in the file and produce values Word rejects.
+ * Null when the document already reaches the signed 32-bit bound, so the caller refuses
+ * rather than wrapping into a negative id. Hostile or out-of-range existing values are
+ * ignored for seeding rather than counted past.
+ *
+ * When a collaboration actor is bound (explicit argument or the open store transaction),
+ * the next id is the next unused value in that actor's stripe. Two peers inserting a
+ * generic content control — including a custom node authored as `w:sdt` — from the same
+ * snapshot then cannot share a `w:id`.
+ */
+export function allocateContentControlId(root: OoxmlNode, actorId?: string): number | null {
+  const actor = resolveAllocationActor(actorId);
+  if (actor) {
+    try {
+      return Number(
+        nextStripedDecimalId(usedContentControlIds(root), actor, CONTENT_CONTROL_ID_MAX)
+      );
+    } catch {
+      return null;
+    }
+  }
   let max = 0;
   for (const entry of contentControlsIn(root)) {
     const id = contentControlPropertiesOf(entry.node).id;

@@ -6,15 +6,25 @@
 // frame, including an unobserved transaction nested under an observed one. Recording
 // targets only the top observed frame. Suppression is local to that frame.
 
-import {
-  freezeCanonicalPrimitiveJournal,
-  type CanonicalAttributeName,
-  type CanonicalBinaryDescriptor,
-  type CanonicalNodeDescriptor,
-  type CanonicalPrimitiveEffect,
-  type CanonicalPrimitiveJournal,
+import type {
+  CanonicalAttributeName,
+  CanonicalBinaryDescriptor,
+  CanonicalNodeDescriptor,
+  CanonicalPrimitiveEffect,
+  CanonicalPrimitiveJournal,
 } from './canonical-primitive-journal.ts';
+import {
+  bindCanonicalPrimitiveJournalListeners,
+  enqueuePendingCanonicalJournal,
+} from './canonical-primitive-publish.ts';
+import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
+
+export {
+  flushPendingCanonicalJournals,
+  pendingCanonicalJournalCount,
+  storeHasPendingCanonicalJournals,
+} from './canonical-primitive-publish.ts';
 
 interface CaptureFrame {
   readonly observed: boolean;
@@ -63,6 +73,8 @@ export function observeCanonicalPrimitiveJournal(
   };
 }
 
+bindCanonicalPrimitiveJournalListeners((store) => observersByStore.get(store));
+
 function storeObserverCount(store: object): number {
   return observersByStore.get(store)?.size ?? 0;
 }
@@ -77,16 +89,11 @@ function popFrame(): CaptureFrame | undefined {
   return frames.pop();
 }
 
-function notifyStore(store: object, journal: CanonicalPrimitiveJournal): void {
-  const listeners = observersByStore.get(store);
-  if (!listeners || listeners.size === 0) return;
-  for (const listener of listeners) listener(journal);
-}
-
 /**
  * Run one store transaction. Capture is armed only when that store has observers.
  *
- * A rejected or identity result discards the journal and notifies nobody.
+ * A rejected or identity result discards the journal and notifies nobody. Freeze and
+ * observer notify run after the keystroke, through `flushPendingCanonicalJournals`.
  */
 export function runObservedStoreTransaction<T>(
   store: object,
@@ -99,7 +106,7 @@ export function runObservedStoreTransaction<T>(
     const result = run();
     const frame = popFrame();
     if (observed && frame?.effects && committed(result)) {
-      notifyStore(store, freezeCanonicalPrimitiveJournal(frame.effects));
+      enqueuePendingCanonicalJournal(store, frame.effects);
     }
     return result;
   } catch (error) {
@@ -214,11 +221,16 @@ export function recordDeleteRelationship(owner: string, relationshipId: string):
 }
 
 export function recordPutContentTypeOverride(partName: string, mediaType: string): void {
-  record({ kind: 'putContentTypeOverride', partName, mediaType });
+  // The package index stores Override keys case-folded. Recording the authored spelling
+  // left `/customXml/itemProps1.xml` in the journal; a peer looks up
+  // `/customxml/itemprops1.xml` and falls through to Default `application/xml`. Then
+  // `findCustomXmlDataPart` refuses the props part, and a bound control names a store
+  // the reader will not load.
+  record({ kind: 'putContentTypeOverride', partName: partNameKey(partName), mediaType });
 }
 
 export function recordDeleteContentTypeOverride(partName: string): void {
-  record({ kind: 'deleteContentTypeOverride', partName });
+  record({ kind: 'deleteContentTypeOverride', partName: partNameKey(partName) });
 }
 
 export function recordPutBinary(descriptor: CanonicalBinaryDescriptor): void {

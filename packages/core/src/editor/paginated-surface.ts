@@ -102,6 +102,7 @@ import {
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
+import { localCollaborationSelection, paintRemoteSelections } from './surface-remote-selection.ts';
 import type {
   ContentControlOps,
   DrawingSelectionIntent,
@@ -109,6 +110,7 @@ import type {
   PaginatedSurface,
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
+  ReviewWriteIntent,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
 import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
@@ -190,6 +192,7 @@ import { createHeaderFooterScopeController } from './surface-hf-editing.ts';
 import { createNoteOps } from './surface-note-ops.ts';
 import { notePropertiesStateOf, notePreviewTextOf } from './surface-note-state.ts';
 import { createDerivationPrewarmSteps, scheduleDerivationPrewarm } from './derivation-prewarm.ts';
+import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -208,12 +211,34 @@ export type {
   ParagraphPropertyEdit,
   ParagraphTabStop,
   SectionBreakInsertType,
+  ReviewWriteIntent,
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
 
 type ScaleMutableSurface = PaginatedSurface & {
   setScale(nextScale: number): boolean;
 };
+
+/**
+ * The review writes a replica admits, and nothing else.
+ *
+ * FAIL CLOSED, including for an unnamed intent. Review writes reach the store directly instead of
+ * through `applyTreeOps`, and the ones that graft a package and swap the shell record no primitive
+ * effects, so they replicate as nothing at all — the peer keeps a `commentReference` naming a
+ * comment it never got, which is a corrupt document produced silently. A refusal the user can see
+ * is the better failure. Add an intent here only with a two-replica test behind it.
+ *
+ * Every named intent is admitted today. The set stays, and stays fail-closed, because it is what
+ * makes the next review write declare itself before a replica carries it.
+ */
+const REPLICABLE_REVIEW_WRITES: ReadonlySet<ReviewWriteIntent> = new Set<ReviewWriteIntent>([
+  'comment-add',
+  'comment-delete',
+  'comment-reply',
+  'comment-resolve',
+  'package-scoped',
+  'revision-resolve',
+]);
 
 /**
  * Rescale a mounted surface in place, or report that this one cannot be.
@@ -263,6 +288,11 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
+  const collaborationContribution = options.collaborationModel;
+  const collaborationSession =
+    typeof collaborationContribution?.session === 'function'
+      ? collaborationContribution.session('document')
+      : collaborationContribution?.session;
   let scale = options.scale ?? 96 / 72;
   const tableLabelState = {
     resolve:
@@ -836,17 +866,29 @@ export function mountPaginatedSurface(
    */
   const gatedSession: TreeDocxSession = {
     ...session,
+    // The SCOPE has to travel. `applyOps` defaults it to the open story, so dropping the
+    // argument here silently rewrote every caller that named one — and the one caller that
+    // needs to is section geometry, which pins `{ kind: 'body' }` because `w:sectPr` lives on
+    // the body story and nowhere else. A header store has no `w:body`, so with the caret in a
+    // header every page-setup write was refused as `tree-invariant`: the ruler snapped back and
+    // Page Setup's Apply did nothing, with the dialog still reading the right section.
     applyTreeOps: (ops, before, after, scope) => applyOps(ops, before, after, scope),
     applyPmDoc: (doc) => {
       if (editingMode === 'view') {
         return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
       }
-      if (options.collaboration) {
+      // Not "text-only" — replication carries the whole package. This path derives ordinary tree
+      // ops and commits them through the same journaled transaction `applyTreeOps` uses, so the
+      // mechanism is the proven one. What is unproven is the DERIVATION: no host in this repo
+      // drives the editor through a ProseMirror doc, so no two-replica test covers a diff that
+      // refuses or under-describes an edit. Admitting it would ship a replicated path nothing
+      // exercises. Prove it, then lift it.
+      if (collaborationSession) {
         return {
           committed: false,
           rejected: true,
           opCount: 0,
-          reason: 'experimental-collaboration-text-only',
+          reason: 'collaboration-pm-doc-unproven',
         };
       }
       if (selectionTouchesToc()) {
@@ -980,6 +1022,7 @@ export function mountPaginatedSurface(
     // either way, but the mint is a package write that the refusal does not roll back — Ctrl+K in a
     // document open for reading left its target declared in `.rels`.
     refusesWrite: () => writeRefusal(true) !== null,
+    withMintActor: (mint) => runWithTransactionActor(collaborationSession?.identity.actorId, mint),
     storyScope,
     // Non-null exactly when suggesting: the link lane then replaces the selection with
     // tracked ops and wraps the fresh insertion, instead of writing an unattributed wrap.
@@ -1411,16 +1454,20 @@ export function mountPaginatedSurface(
     pendingFormats = null;
     scheduler.notify(modelChange);
   });
-  const collaborationPort = options.collaboration
-    ? session.collaborationPort(options.collaboration.documentId)
+  const collaborationPort = collaborationSession
+    ? session.collaborationPort(collaborationSession.documentId)
     : null;
-  const detachCollaboration =
-    options.collaboration && collaborationPort
-      ? options.collaboration.attach(collaborationPort)
-      : () => {};
+  // Attach happens at the END of mount, not here.
+  //
+  // A replica publishes shared state into the store synchronously on attach, which fires the
+  // subscriber above, which reads bindings this function declares much further down. Attaching
+  // at this point threw a temporal-dead-zone `ReferenceError` before the room could open, so
+  // every session came up in `error` and the dialog never left "Reconnecting".
+  let detachCollaboration: () => void = () => {};
+  let unsubscribeCollaborationStatus: () => void = () => {};
   let remoteSelectionRenderingReady = false;
-  const unsubscribeRemoteSelections = options.collaboration
-    ? options.collaboration.subscribeRemoteSelections(() => {
+  const unsubscribeRemoteSelections = collaborationSession
+    ? collaborationSession.subscribeRemoteSelections(() => {
         if (remoteSelectionRenderingReady) renderRemoteSelections();
       })
     : () => {};
@@ -2530,8 +2577,9 @@ export function mountPaginatedSurface(
       pageCount: currentLayout.pages.length,
       selection,
       cellSelection,
-      canUndo: options.collaboration?.canUndo() ?? session.canUndo(),
-      canRedo: options.collaboration?.canRedo() ?? session.canRedo(),
+      canUndo: collaborationSession?.canUndo() ?? session.canUndo(),
+      canRedo: collaborationSession?.canRedo() ?? session.canRedo(),
+      collaborationStatus: collaborationSession?.status() ?? 'inactive',
       lastRejection,
       // Reference-stable while unchanged: `pendingAtCaret` hands back the stored array,
       // so a host can compare states to see whether the armed format moved.
@@ -2794,7 +2842,7 @@ export function mountPaginatedSurface(
     flushTypeBuffer();
     const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
-    const collaborationRefusal = options.collaboration?.gateOperations(ops, scope);
+    const collaborationRefusal = collaborationSession?.gateOperations(ops, scope);
     if (collaborationRefusal) {
       return {
         committed: false,
@@ -2813,11 +2861,11 @@ export function mountPaginatedSurface(
       selectionBefore,
       selectionAfter,
       scope,
-      options.collaboration
+      collaborationSession
         ? {
             origin: ORIGIN_IDS.mutationHuman,
-            actorId: options.collaboration.identity.actorId,
-            operationId: `${options.collaboration.identity.actorId}:${options.collaboration.sessionId}:browser:${collaborationOperationCounter}`,
+            actorId: collaborationSession.identity.actorId,
+            operationId: `${collaborationSession.identity.actorId}:${collaborationSession.sessionId}:browser:${collaborationOperationCounter}`,
             recordsHistory: false,
           }
         : undefined
@@ -3296,17 +3344,11 @@ export function mountPaginatedSurface(
     if (previousActive !== nextActive || previousToc !== nextToc) {
       render(false);
     }
-    const awarenessParagraph =
-      selection.anchor.paragraphId === selection.head.paragraphId
-        ? collaborationPort?.paragraphByNodeId(selection.head.paragraphId)
-        : null;
-    options.collaboration?.setLocalSelection(
-      awarenessParagraph
-        ? {
-            paragraphId: awarenessParagraph.paragraphId,
-            start: selection.anchor.offset,
-            end: selection.head.offset,
-          }
+    collaborationSession?.setLocalSelection(
+      collaborationPort
+        ? localCollaborationSelection(selection, (nodeId) =>
+            collaborationPort.paragraphByNodeId(nodeId)
+          )
         : null
     );
     options.onChange?.(currentState());
@@ -3977,85 +4019,16 @@ export function mountPaginatedSurface(
       remoteSelectionLayer.replaceChildren();
       return;
     }
-    const collaboration = options.collaboration;
+    const collaboration = collaborationSession;
     if (!collaboration) {
       remoteSelectionLayer.replaceChildren();
       return;
     }
-    const rects: OverlayRect[] = [];
-    const rectColors: (string | undefined)[] = [];
-    const labels: {
-      readonly name: string;
-      readonly color?: string;
-      readonly pageIndex: number;
-      readonly x: number;
-      readonly y: number;
-    }[] = [];
-    for (const remote of collaboration.remoteSelections()) {
-      const labelGeometry = caretAt(currentLayout, {
-        paragraphId: remote.nodeId,
-        offset: remote.end,
-      });
-      if (labelGeometry) {
-        labels.push({
-          name: remote.name,
-          ...(remote.color ? { color: remote.color } : {}),
-          pageIndex: labelGeometry.pageIndex,
-          x: labelGeometry.x,
-          y: labelGeometry.y,
-        });
-      }
-      if (remote.start === remote.end) {
-        const geometry = caretAt(currentLayout, {
-          paragraphId: remote.nodeId,
-          offset: remote.start,
-        });
-        if (!geometry) continue;
-        rects.push({
-          pageIndex: geometry.pageIndex,
-          x: geometry.x,
-          y: geometry.y,
-          width: Math.max(1 / scale, 1),
-          height: geometry.height,
-          className: 'docx-remote-caret',
-        });
-        rectColors.push(remote.color);
-        continue;
-      }
-      const selection: SemanticSelection = {
-        anchor: { paragraphId: remote.nodeId, offset: remote.start },
-        head: { paragraphId: remote.nodeId, offset: remote.end },
-      };
-      for (const rect of selectionRects(currentLayout, selection, paragraphOrder())) {
-        rects.push({ ...rect, className: 'docx-remote-selection-rect' });
-        rectColors.push(remote.color);
-      }
-    }
-    paintSelectionOverlay(remoteSelectionLayer, currentLayout, rects, {
+    paintRemoteSelections(remoteSelectionLayer, currentLayout, collaboration.remoteSelections(), {
       scale,
       pageOffsetX: materializedExtent?.pageOffsetX,
+      paragraphOrder: paragraphOrder(),
     });
-    [...remoteSelectionLayer.children].forEach((element, index) => {
-      const color = rectColors[index];
-      if (!color || !(element instanceof HTMLElement)) return;
-      element.style.setProperty('--doc-remote-color', color);
-    });
-    for (const label of labels) {
-      const page = currentLayout.pages[label.pageIndex];
-      if (!page) continue;
-      const element = document.createElement('div');
-      element.className = 'docx-remote-caret-label';
-      element.textContent = label.name;
-      element.style.left = `${
-        (page.contentBox.x +
-          label.x +
-          (materializedExtent?.pageOffsetX.get(label.pageIndex) ?? 0)) *
-        scale
-      }px`;
-      element.style.top = `${(page.contentBox.y + label.y) * scale}px`;
-      if (label.color) element.style.setProperty('--doc-remote-color', label.color);
-      remoteSelectionLayer.append(element);
-    }
   }
 
   function targetToc(tocId?: string) {
@@ -4152,7 +4125,7 @@ export function mountPaginatedSurface(
   }
 
   function canRefreshToc(tocId?: string): boolean {
-    if (editingMode === 'view' || !session.editable || options.collaboration) return false;
+    if (editingMode === 'view' || !session.editable) return false;
     const toc = targetToc(tocId);
     if (!toc) return false;
     return (
@@ -4256,7 +4229,11 @@ export function mountPaginatedSurface(
         surface.layout(),
         outline.map((entry) => entry.blockId)
       ),
-      tocParagraphIds()
+      tocParagraphIds(),
+      // Planning runs BEFORE the transaction, so no ambient actor is bound yet. Passed
+      // explicitly, the `_Toc` names two peers mint concurrently land in separate stripes
+      // instead of colliding on one name that then anchors both hyperlinks.
+      collaborationSession?.identity.actorId
     );
     return {
       op: 'insertToc' as const,
@@ -4269,13 +4246,7 @@ export function mountPaginatedSurface(
   }
 
   function canInsertToc(): boolean {
-    if (
-      editingMode === 'view' ||
-      !session.editable ||
-      options.collaboration ||
-      selectionTouchesToc()
-    )
-      return false;
+    if (editingMode === 'view' || !session.editable || selectionTouchesToc()) return false;
     const op = insertTocOp();
     return op !== null && validateTreeOp(session.part(), op) === null;
   }
@@ -4308,7 +4279,8 @@ export function mountPaginatedSurface(
         outline,
         toc.instruction,
         pageNumbersFor(layout, outlineBlockIds),
-        tocRegionOf(toc)
+        tocRegionOf(toc),
+        collaborationSession?.identity.actorId
       );
       const replaced = session.applyTreeOps([
         {
@@ -4998,7 +4970,7 @@ export function mountPaginatedSurface(
         pageOffsetX: materializedExtent?.pageOffsetX ?? new Map<number, number>(),
       }),
 
-    commitReviewOps: (run) => {
+    commitReviewOps: (run, intent) => {
       // The text the caret's paragraph held BEFORE the resolution, so the caret can be mapped
       // across what Accept or Reject removed. Clamping alone only fires when the paragraph
       // ends up shorter than the offset; a caret in the MIDDLE of a paragraph that shrank
@@ -5018,7 +4990,10 @@ export function mountPaginatedSurface(
           if (editingMode === 'view') {
             return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
           }
-          if (options.collaboration) {
+          if (
+            collaborationSession &&
+            (intent === undefined || !REPLICABLE_REVIEW_WRITES.has(intent))
+          ) {
             return {
               committed: false,
               rejected: true,
@@ -5092,7 +5067,14 @@ export function mountPaginatedSurface(
           let refused: string | null = null;
           const ops = staged((url) => {
             const refusal = writeRefusal(true, [], false);
-            if (refusal === null) return session.ensureHyperlinkRelationship(url, story);
+            // Bound to the collaboration actor for the same reason the mint is called out above:
+            // it lands on the package outside the transaction, so nothing else would bind one, and
+            // two peers linking at once would otherwise agree on `rId${max + 1}`.
+            if (refusal === null) {
+              return runWithTransactionActor(collaborationSession?.identity.actorId, () =>
+                session.ensureHyperlinkRelationship(url, story)
+              );
+            }
             refused = refusal;
             return null;
           });
@@ -5270,8 +5252,8 @@ export function mountPaginatedSurface(
       // Batched typing becomes its own undo step BEFORE the rewind, so undo
       // first removes what was just typed rather than skipping past it.
       flushTypeBuffer();
-      if (options.collaboration) {
-        if (options.collaboration.undo()) restoreSelection(null);
+      if (collaborationSession) {
+        if (collaborationSession.undo()) restoreSelection(null);
         return;
       }
       restoreSelection(session.undo());
@@ -5283,8 +5265,8 @@ export function mountPaginatedSurface(
         return;
       }
       flushTypeBuffer();
-      if (options.collaboration) {
-        if (options.collaboration.redo()) restoreSelection(null);
+      if (collaborationSession) {
+        if (collaborationSession.redo()) restoreSelection(null);
         return;
       }
       restoreSelection(session.redo());
@@ -5514,6 +5496,7 @@ export function mountPaginatedSurface(
       detachDrawingUrlRegistry(pagesLayer);
       caret.destroy();
       unsubscribeRemoteSelections();
+      unsubscribeCollaborationStatus();
       detachCollaboration();
       unsubscribe();
       container.replaceChildren();
@@ -6495,16 +6478,20 @@ export function mountPaginatedSurface(
   render();
   remoteSelectionRenderingReady = true;
   renderRemoteSelections();
-  const initialAwarenessParagraph = collaborationPort?.paragraphByNodeId(
-    selection.head.paragraphId
-  );
-  options.collaboration?.setLocalSelection(
-    initialAwarenessParagraph
-      ? {
-          paragraphId: initialAwarenessParagraph.paragraphId,
-          start: selection.anchor.offset,
-          end: selection.head.offset,
-        }
+  // The surface is fully constructed, so shared state can now be published through it.
+  if (collaborationSession) {
+    unsubscribeCollaborationStatus = collaborationSession.subscribeStatus(() => {
+      options.onChange?.(currentState());
+    });
+  }
+  if (collaborationSession && collaborationPort) {
+    detachCollaboration = collaborationSession.attach(collaborationPort);
+  }
+  collaborationSession?.setLocalSelection(
+    collaborationPort
+      ? localCollaborationSelection(selection, (nodeId) =>
+          collaborationPort.paragraphByNodeId(nodeId)
+        )
       : null
   );
   // The pages layer is created `contenteditable` unconditionally, so a surface OPENED in

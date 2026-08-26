@@ -15,6 +15,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
 
 // @public
 export interface AddCommentRequest {
+    readonly actorId?: string;
     // (undocumented)
     readonly anchor: CommentAnchorRequest;
     readonly author: string;
@@ -37,10 +38,13 @@ export type AddCommentResult = {
 };
 
 // @public
+export function addPackageComment(packageStore: TreePackageStore, request: AddCommentRequest, scope?: StoryScope): AddCommentResult;
+
+// @public
 export const ALL_FROZEN_IDS: readonly string[];
 
 // @public
-export function allocateContentControlId(root: OoxmlNode): number | null;
+export function allocateContentControlId(root: OoxmlNode, actorId?: string): number | null;
 
 // @public
 export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult;
@@ -1013,6 +1017,9 @@ export interface DefaultRecord {
 export function deleteCommentThread(pkg: OoxmlPackage, commentId: string, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
+export function deletePackageComments(packageStore: TreePackageStore, comments: readonly PackageCommentDelete[], scope?: StoryScope, noteId?: number): boolean;
+
+// @public
 export function deobfuscateFont(bytes: Uint8Array, fontKey: string): Uint8Array | null;
 
 // @public
@@ -1838,6 +1845,9 @@ export function insertCustomNodeWrite(store: TreeDocumentStore, write: InsertCus
 dataOwnerPartName?: string): CustomNodeWriteResult;
 
 // @public
+export function insertPackageCustomNode(packageStore: TreePackageStore, write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+
+// @public
 export function instrTextValue(node: OoxmlNode): string;
 
 // @public
@@ -2152,6 +2162,9 @@ export type NameResult = {
     readonly ok: false;
     readonly reason: NameRejection;
 };
+
+// @public
+export function nextCommentId(part: OoxmlPart | undefined, actorId?: string): string;
 
 // @public
 export const NO_TRACKING_SETTINGS: DocumentTrackingSettings;
@@ -3041,6 +3054,14 @@ export interface OverrideRecord {
 }
 
 // @public
+export interface PackageCommentDelete {
+    // (undocumented)
+    readonly commentId: string;
+    // (undocumented)
+    readonly parentCommentId?: string;
+}
+
+// @public
 export type PackageInvariantCode = 'dangling-relationship' | 'missing-content-type'
 /** A part occupies a name OPC reserves for package infrastructure. */
 | 'reserved-part-name'
@@ -3155,7 +3176,7 @@ export interface PersistencePort {
 }
 
 // @public
-export function planTocEntries(part: OoxmlPart, outline: readonly TocOutlineHeading[], instruction: TocInstruction, pageNumberByParagraphId: ReadonlyMap<string, string>, excludeParagraphIds: ReadonlySet<string>): {
+export function planTocEntries(part: OoxmlPart, outline: readonly TocOutlineHeading[], instruction: TocInstruction, pageNumberByParagraphId: ReadonlyMap<string, string>, excludeParagraphIds: ReadonlySet<string>, actorId?: string): {
     readonly bookmarksToCreate: readonly {
         name: string;
         paragraphId: string;
@@ -3337,6 +3358,9 @@ export function removeCustomNodeWrite(store: TreeDocumentStore, controlNodeId: s
 
 // @public
 export function removeNode(part: OoxmlPart, nodeId: string, options?: EditOptions): OoxmlEditResult;
+
+// @public
+export function removePackageCustomNode(packageStore: TreePackageStore, controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
 
 // @public
 export function replaceChildren(part: OoxmlPart, nodeId: string, children: readonly OoxmlNode[], options?: EditOptions): OoxmlEditResult;
@@ -3797,6 +3821,9 @@ export type SetCommentResolvedResult = {
     readonly ok: false;
     readonly reason: TreeOpRejection | 'unknown-comment';
 };
+
+// @public
+export function setPackageCommentResolved(packageStore: TreePackageStore, commentId: string, resolved: boolean): SetCommentResolvedResult;
 
 // @public
 export function settingsPartOf(pkg: OoxmlPackage): OoxmlPart | null;

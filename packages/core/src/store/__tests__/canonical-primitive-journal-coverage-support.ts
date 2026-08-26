@@ -1,7 +1,10 @@
 // Shared helpers for journal completeness coverage (tasks 3.6 and 3.8).
 
 import { strToU8, zipSync } from 'fflate';
-import { observeCanonicalPrimitiveJournal } from '../../collaboration/primitive-journal.ts';
+import {
+  observeCanonicalPrimitiveJournal,
+  flushPendingCanonicalJournals,
+} from '../../collaboration/primitive-journal.ts';
 import { semanticDigest } from '../package/ooxml-digest.ts';
 import {
   readOoxmlPackage,
@@ -36,6 +39,7 @@ export const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 export const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 export const PIC_URI = PIC;
 export const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+export const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 
 export const PNG = Uint8Array.from(
   atob(
@@ -57,6 +61,7 @@ export function zipDoc(options: {
   readonly rels?: string;
   readonly overrides?: string;
   readonly defaults?: string;
+  readonly extraXmlns?: string;
   readonly extraXml?: Record<string, string>;
   readonly extraBytes?: Record<string, Uint8Array>;
 }): Uint8Array {
@@ -75,8 +80,9 @@ export function zipDoc(options: {
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:w14="${W14}">` +
-        `<w:body>${options.body}</w:body></w:document>`
+      `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:w14="${W14}"${
+        options.extraXmlns ? ` ${options.extraXmlns}` : ''
+      }>` + `<w:body>${options.body}</w:body></w:document>`
     ),
   };
   if (options.rels) {
@@ -205,6 +211,7 @@ export function captureOneJournal(
   const stop = observeCanonicalPrimitiveJournal(store, (journal) => journals.push(journal));
   try {
     const result = run();
+    flushPendingCanonicalJournals(store);
     return { result, journal: journals[0] ?? null };
   } finally {
     stop();

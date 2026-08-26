@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@docx-editor.dev/collaboration-yjs": "workspace:*",
     "@docx-editor.dev/core": "workspace:*",
     "@docx-editor.dev/editor-api": "workspace:*",
     "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
     "fflate": "^0.8.3",
     "y-protocols": "^1.0.7",
     "y-webrtc": "^10.3.0",

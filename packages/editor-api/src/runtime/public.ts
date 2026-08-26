@@ -82,5 +82,6 @@ export type {
   DocumentLimits,
   DocumentXmlLimits,
   DocumentZipLimits,
+  EditorModule,
 } from './server.ts';
 export { TrackedObjects } from './tracked-objects.ts';

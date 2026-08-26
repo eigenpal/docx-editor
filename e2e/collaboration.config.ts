@@ -1,10 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 5276;
+const PORT = Number.parseInt(process.env.COLLAB_E2E_PORT ?? '5276', 10);
 
 export default defineConfig({
   testDir: '.',
-  testMatch: '**/collaboration.{interaction,fulldocument}.spec.ts',
+  testMatch: '**/collaboration.{interaction,fulldocument,resilience,reviewwrites}.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

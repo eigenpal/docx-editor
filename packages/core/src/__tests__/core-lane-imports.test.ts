@@ -33,8 +33,10 @@ const LANES = Object.keys(CORE_LANES) as LaneName[];
 const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: LaneName }[] = [
   { file: 'contracts/editor.ts', to: 'layout' },
   { file: 'contracts/editor.ts', to: 'store' },
+  { file: 'contracts/editor.ts', to: 'collaboration' },
   { file: 'contracts/modules.ts', to: 'layout' },
   { file: 'contracts/modules.ts', to: 'store' },
+  { file: 'contracts/modules.ts', to: 'collaboration' },
   { file: 'layout/table-interaction-targets.ts', to: 'contracts' },
   { file: 'store/store/tree-op-types.ts', to: 'contracts' },
 ];

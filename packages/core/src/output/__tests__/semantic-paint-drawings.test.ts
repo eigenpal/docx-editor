@@ -29,6 +29,7 @@ import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semant
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
+  detachDrawingUrlRegistry,
   drawingUrlRegistryFor,
   paintDrawingRecord,
   type PaintImageUrlPort,
@@ -688,5 +689,34 @@ describe('URL port lifecycle', () => {
       { scale: 1, imageUrlPort: port }
     );
     expect(revoked.length).toBe(1);
+  });
+});
+
+describe('ready drawings with unavailable bytes', () => {
+  test('paint a placeholder instead of throwing', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const port: PaintImageUrlPort = {
+      create(handle) {
+        throw new Error(
+          `PaintImageUrlSource: validated bytes unavailable for ${handle.resourceKey}`
+        );
+      },
+      revoke() {},
+    };
+    const registry = drawingUrlRegistryFor(host, port);
+    const drawing = readyRecordFromXml(inlinePictureXml());
+    let element: HTMLElement | null = null;
+    expect(() => {
+      element = paintDrawingRecord(
+        document,
+        drawing,
+        { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: port },
+        registry
+      );
+    }).not.toThrow();
+    expect(element?.classList.contains('docx-drawing-placeholder')).toBe(true);
+    detachDrawingUrlRegistry(host);
+    host.remove();
   });
 });

@@ -21,7 +21,6 @@ import { settingsPartOf } from '../package/note-properties.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship } from '../package/relationships.ts';
-import { FOOTER_REL_TYPE, HEADER_REL_TYPE, locateHeaderFooterPart } from './story-part-locate.ts';
 import {
   applyHeaderFooterLifecycleOp,
   isHeaderFooterLifecycleOp,
@@ -372,7 +371,12 @@ export class TreePackageStore {
     return resolved.ok ? resolved.store.revision : null;
   }
 
-  /** One story transaction / undo unit / ModelChange. */
+  /**
+   * Commit ops against one story as ONE transaction / undo unit / ModelChange.
+   * Header/footer and notes-part commits publish `impact: 'global'`.
+   * Deleting a `noteReference` via `deleteText` or a block subtree via `deleteBlock`
+   * cascades the note body in the same package undo unit.
+   */
   transact(
     scope: StoryScope,
     build: (ctx: TransactionContext) => void,
@@ -665,7 +669,10 @@ export class TreePackageStore {
     store?.cancelComposition();
   }
 
-  /** One furniture or note lifecycle op as a single ModelChange / undo unit. */
+  /**
+   * Commit one furniture or note lifecycle op as a single ModelChange / undo unit that
+   * restores the entire package atomically (parts, rels, content-types, settings).
+   */
   applyLifecycleOp(
     op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
   ): PackageTransactResult {

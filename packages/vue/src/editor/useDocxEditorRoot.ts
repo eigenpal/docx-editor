@@ -31,7 +31,6 @@ import {
   type ImageDecodePort,
 } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
-import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { useTranslation, type TranslationKey } from '../i18n';
 import {
   docxEditorKey,
@@ -60,7 +59,6 @@ export interface DocxEditorRootProps {
   zoomMode?: ZoomMode | 'auto';
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
-  collaboration?: EditorCollaborationSession;
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;
   onFontError?: (error: EditorFontError) => void;
@@ -209,7 +207,6 @@ export function useDocxEditorRootOwner(
       ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
-      ...(p.collaboration ? { collaboration: p.collaboration } : {}),
       onFontError: fireFontError,
     });
     const notify = deferredTick(() => {
