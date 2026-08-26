@@ -88,7 +88,7 @@ import {
   type PositionalTab,
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
-import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
+import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { legacyFormFieldDataOf, parsedFieldSpansOf } from '../store/package/field-nodes.ts';
 import {
   emptyNamespaceScope,
@@ -407,60 +407,22 @@ export function piecesOfParagraph(
     props: readonly OoxmlProperty[],
     style: ResolvedRunStyle
   ): void => {
-    const emitInlineDrawing = (
-      drawingNodeId: string,
-      projection: NonNullable<ReturnType<InlineDrawingLayoutContext['project']>>,
-      start: number,
-      end: number
-    ): void => {
-      // A tracked-deleted picture stays LAID OUT in `all-markup`, exactly as deleted text
-      // does \u2014 the reader is looking at a pending removal, and dropping it showed the
-      // proposed result under a mode that promises the markup (#479). Its model range is
-      // still recorded as deleted in every mode, because the offset exists in every mode.
-      const deleted = revisionsAreDeletion(revisions);
-      if (deleted && deletedRanges) appendModelRange(deletedRanges, start, end);
-      const suppressed = style.hidden || !revisionsVisible(revisions, displayMode);
-      if (projection.hidden || suppressed) {
-        if (!projection.hidden) return;
-        push('\uFFFC', props, style, true, start, end);
-        return;
-      }
-      push('\uFFFC', props, style, true, start, end, {
-        inlineDrawing: Object.freeze({
-          drawingNodeId,
-          ownerPartName: inlineDrawingLayout!.ownerPartName,
-          projection,
-          resource: inlineDrawingLayout!.resourceOf(projection),
-        }),
-      });
-    };
-
     // One branch for both run-level drawing atoms \u2014 `w:drawing` and an MC wrapper carrying
-    // one. Only the projection lookup differs: MC has no direct `project` fallback.
-    if (grand.kind === 'drawing' || isRunLevelMcAlternateContent(grand)) {
+    // one; the plan itself (visibility, deletion, payload) lives in field-drawing-atom.ts.
+    if (isRunDrawingAtom(grand)) {
       const start = offset;
       offset += 1;
       const end = offset;
       if (!inlineDrawingLayout) return;
-      const projection =
-        inlineDrawingLayout.projectionForAtom?.(grand.id) ??
-        (grand.kind === 'drawing' ? inlineDrawingLayout.project(grand) : null);
-      if (!projection || projection.kind !== 'inline') {
-        // The marker only for a drawing that will actually PUBLISH: hidden anchors and
-        // failed projections paint nothing, so they must cue no change bar either.
-        const anchored = projection?.kind === 'anchored' && !projection.hidden;
-        push(
-          '\uFFFC',
-          props,
-          style,
-          true,
-          start,
-          end,
-          anchored ? { anchoredAtom: true } : undefined
-        );
-        return;
-      }
-      emitInlineDrawing(grand.id, projection, start, end);
+      const plan = runDrawingAtomPlan({
+        node: grand,
+        layout: inlineDrawingLayout,
+        hiddenRun: style.hidden,
+        revisions,
+        displayMode,
+      });
+      if (plan.recordDeleted && deletedRanges) appendModelRange(deletedRanges, start, end);
+      if (plan.emit) push('\uFFFC', props, style, true, start, end, plan.extras);
       return;
     }
     if (isProjectableNoteAtom(grand)) {
