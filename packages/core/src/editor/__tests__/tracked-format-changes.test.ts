@@ -100,6 +100,20 @@ function resolve(surface: PaginatedSurface, action: 'accept' | 'reject', node: O
   if (result.rejected) throw new Error(String(result.reason));
 }
 
+/** Resolve every DISTINCT format record address once — one press writes one address. */
+function resolveAll(surface: PaginatedSurface, action: 'accept' | 'reject'): void {
+  const seen = new Set<string>();
+  for (const change of [
+    ...rPrChanges(surface),
+    ...findAll(surface.session.part().root, 'pPrChange'),
+  ]) {
+    const key = `${attributeOf(change, 'id')}\u0000${attributeOf(change, 'author')}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    resolve(surface, action, change);
+  }
+}
+
 const textRun = (text: string, rPr = '') =>
   `<w:r>${rPr}<w:t xml:space="preserve">${text}</w:t></w:r>`;
 
@@ -187,7 +201,7 @@ describe('tracked format changes in suggesting mode', () => {
       (surface) => {
         select(surface, 0, 5);
         surface.toggleRunProperty('b');
-        for (const change of [...rPrChanges(surface)]) resolve(surface, 'reject', change);
+        resolveAll(surface, 'reject');
         expect(rPrChanges(surface)).toHaveLength(0);
         select(surface, 0, 5);
         expect(surface.formatting().bold).toBe(false);
@@ -200,7 +214,7 @@ describe('tracked format changes in suggesting mode', () => {
     withSuggesting(`<w:p>${textRun('hello')}</w:p>`, (surface) => {
       select(surface, 0, 5);
       surface.toggleRunProperty('b');
-      for (const change of [...rPrChanges(surface)]) resolve(surface, 'accept', change);
+      resolveAll(surface, 'accept');
       expect(rPrChanges(surface)).toHaveLength(0);
       select(surface, 0, 5);
       expect(surface.formatting().bold).toBe(true);
@@ -252,7 +266,7 @@ describe('tracked format changes in suggesting mode', () => {
       expect(onMark).toHaveLength(1);
       // The record does NOT carry Ada's mark insertion.
       expect(recorded(onMark[0]!)).not.toContain('ins');
-      for (const change of [...rPrChanges(surface)]) resolve(surface, 'reject', change);
+      resolveAll(surface, 'reject');
       // Ada's decision is still there to answer.
       const marks = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
         findAll(pPr, 'ins')
@@ -314,11 +328,14 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
-  test('a write landing on a record another producer wrote drops it', () => {
-    // `CT_ParaRPrOriginal` admits `EG_ParaRPrTrackChanges`, so a record Word wrote carries a
-    // `w:ins`. Comparing that raw against a narrowed container made the two sides unequal for
-    // good: the write re-attributed the other author's proposal and copied their `w:ins` in
-    // beside the live one, two revisions sharing an `@w:id`.
+  test('a write landing on another author record leaves their record standing', () => {
+    // Dropping it would resolve their pending decision from a formatting press: silently,
+    // with nothing recorded, and nothing for the review pane to show. A standing decision can
+    // be reconciled; a dropped one cannot.
+    //
+    // `CT_ParaRPrOriginal` admits `EG_ParaRPrTrackChanges`, so the record Cy wrote carries
+    // Ada's `w:ins` — and the comparison narrows both sides the same way, or a write landing
+    // exactly on the recorded original could never be recognised as one.
     const foreign =
       '<w:p><w:pPr><w:rPr>' +
       '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
@@ -336,17 +353,55 @@ describe('tracked format changes in suggesting mode', () => {
         anchor: { paragraphId: id, offset: 0 },
         head: { paragraphId: id, offset: 5 },
       });
-      // Exactly Cy's recorded original, so Cy's proposal is undone rather than re-attributed.
+      // Exactly Cy's recorded original.
       surface.setRunProperty('color', { val: '00FF00' });
       const onMark = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
         findAll(pPr, 'rPrChange')
       );
-      expect(onMark).toHaveLength(0);
-      // Ada's mark insertion is still there, exactly once.
-      const marks = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
-        findAll(pPr, 'ins')
-      );
-      expect(marks).toHaveLength(1);
+      expect(onMark).toHaveLength(1);
+      // Cy's, untouched — not re-attributed and not replaced.
+      expect(attributeOf(onMark[0]!, 'author')).toBe('Cy');
+      expect(attributeOf(onMark[0]!, 'id')).toBe('5');
+    });
+  });
+
+  test('a write landing on this author own record drops it', () => {
+    withSuggesting(
+      `<w:p>${textRun('hello', '<w:rPr><w:color w:val="FF0000"/></w:rPr>')}</w:p>`,
+      (surface) => {
+        select(surface, 0, 5);
+        surface.setRunProperty('color', { val: '00FF00' });
+        expect(runRPrChanges(surface)).toHaveLength(1);
+        select(surface, 0, 5);
+        surface.setRunProperty('color', { val: 'FF0000' });
+        expect(runRPrChanges(surface)).toHaveLength(0);
+      }
+    );
+  });
+
+  test('Accept All survives a record another producer wrote revisions into', () => {
+    // A change record's contents are a COPY, not a decision. `CT_ParaRPrOriginal` admits
+    // `EG_ParaRPrTrackChanges`, so a Word-written record holds a `w:ins` — and classifying
+    // that copy as a site of its own read it as a misplaced mark, which refuses the WHOLE
+    // decision: Accept All and Reject All failed for every revision in the document.
+    const foreign =
+      '<w:p><w:pPr><w:rPr>' +
+      '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '<w:b/>' +
+      '<w:rPrChange w:id="5" w:author="Cy" w:date="2026-01-02T00:00:00Z"><w:rPr>' +
+      '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '</w:rPr></w:rPrChange>' +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p><w:p>' +
+      textRun('second') +
+      '</w:p>';
+    withSuggesting(foreign, (surface) => {
+      // The copy inside the record is not a card of its own; Ada's mark and Cy's format are.
+      expect(revisionItemsOf(surface.session.part())).toHaveLength(2);
+      const result = surface.applyAutomationOps(() => [{ op: 'acceptAllRevisions' as const }]);
+      expect(result.rejected).toBe(false);
+      expect(revisionItemsOf(surface.session.part())).toEqual([]);
     });
   });
 
@@ -371,10 +426,11 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
-  test('a wide format mints one distinct id per record', () => {
-    // The transaction lends its formatting ops ONE id minter, because `nextRevisionId` walks
-    // the whole part and formatting emits an op per run. A minter that handed the same id
-    // twice would make two changes one card in the review pane.
+  test('one press is one card, however many runs it covers', () => {
+    // Cards group on the element name plus the address, so a fresh id per record turned a
+    // Bold over three runs into four decisions the reviewer had to answer one at a time. A
+    // revision spanning many elements that share an id is the shape this engine is built
+    // around, and it is what Word writes.
     const runs = [
       textRun('one ', '<w:rPr><w:color w:val="FF0000"/></w:rPr>'),
       textRun('two ', '<w:rPr><w:color w:val="00FF00"/></w:rPr>'),
@@ -385,13 +441,46 @@ describe('tracked format changes in suggesting mode', () => {
       surface.toggleRunProperty('b');
       const ids = rPrChanges(surface).map((change) => attributeOf(change, 'id'));
       expect(ids).toHaveLength(4);
-      expect(new Set(ids).size).toBe(4);
-      // Each record still holds its own run's colour, not the first run's.
+      expect(new Set(ids).size).toBe(1);
+      const cards = revisionItemsOf(surface.session.part()).filter(
+        (item) => item.revisionKind === 'format'
+      );
+      expect(cards).toHaveLength(1);
+      // Each record still holds its OWN run's colour, not the first run's.
       expect(runRPrChanges(surface).map((change) => recorded(change))).toEqual([
         ['color'],
         ['color'],
         ['color'],
       ]);
+    });
+  });
+
+  test('a second press is a second card, not a merge into the first', () => {
+    withSuggesting(`<w:p>${textRun('hello')}${textRun(' there')}</w:p>`, (surface) => {
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      select(surface, 5, 11);
+      surface.toggleRunProperty('i');
+      const cards = revisionItemsOf(surface.session.part()).filter(
+        (item) => item.revisionKind === 'format'
+      );
+      expect(cards).toHaveLength(2);
+    });
+  });
+
+  test('a paragraph whose mark this author proposed takes no w:pPrChange', () => {
+    // The paragraph-level twin of the run rule: rejecting that `w:ins` runs the paragraph into
+    // the next one and takes its properties with it.
+    const marked =
+      '<w:p><w:pPr><w:rPr>' +
+      `<w:ins w:id="4" w:author="${AUTHOR}" w:date="2026-01-01T00:00:00Z"/>` +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p>';
+    withSuggesting(marked, (surface) => {
+      select(surface, 0, 5);
+      surface.setParagraphProperty('jc', { val: 'center' });
+      expect(findAll(surface.session.part().root, 'pPrChange')).toHaveLength(0);
     });
   });
 

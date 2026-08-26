@@ -37,7 +37,7 @@ import type {
   TreeOpEffect,
   TreeOpResult,
 } from './tree-op-types.ts';
-import { withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { ownProposedMark, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   TEXT_DEPS,
@@ -703,25 +703,6 @@ function sectionInsertIndex(children: readonly OoxmlNode[], localName: string): 
  * section mark and Word's reader rejects it.
  */
 const AFTER_PARAGRAPH_MARK = new Set(['sectPr', 'pPrChange']);
-
-/**
- * Whether the paragraph mark carries a `w:ins` THIS author proposed.
- *
- * `EG_ParaRPrTrackChanges` sits in the same `w:pPr/w:rPr` the format record does, so the
- * answer is in the container the write is rewriting.
- */
-function ownProposedMark(markProperties: readonly OoxmlNode[], author: string): boolean {
-  for (const child of markProperties) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'ins') continue;
-    const owner = child.attributes.find(
-      (attribute) =>
-        attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'author'
-    );
-    return (owner?.value ?? '') === author;
-  }
-  return false;
-}
 
 /**
  * Write the run properties of the paragraph MARK (`w:pPr/w:rPr`, 17.3.1.29).

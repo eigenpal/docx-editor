@@ -40,7 +40,7 @@
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { parentNodeOf } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
-import { cloneWithNewIds, isParagraphMarkRevision } from './tree-op-nodes.ts';
+import { attributeValueOf, cloneWithNewIds, isParagraphMarkRevision } from './tree-op-nodes.ts';
 import { build, revisionAttributes } from './tree-op-tracked.ts';
 import type { RevisionAttributionInput } from './tree-op-validate.ts';
 
@@ -145,8 +145,11 @@ function recordedIn(
  * caller's own `mergedPropertyChildren` output, change wrapper and all, because the merge
  * keeps every child its vocabulary cannot name.
  *
- * Returns `next` unchanged in shape when the write lands back on the recorded original: no
- * wrapper is added, and an existing one is DROPPED, because there is nothing left to revert.
+ * When the write lands back on the recorded original there is nothing left to revert, so no
+ * wrapper is added — and one this author put there is DROPPED. Another author's is not:
+ * dropping it would resolve their pending decision from a formatting press, silently, with
+ * nothing recorded and nothing for the review pane to show. A silently-dropped decision is
+ * worse than a standing one, because only the standing one can be reconciled.
  */
 export function withPropertyChangeRecord(options: {
   readonly container: PropertyChangeContainer;
@@ -173,7 +176,13 @@ export function withPropertyChangeRecord(options: {
     container
   );
   const body = next.filter((child) => !isWmlNamed(child, changeName));
-  if (sameProperties(recordable(body, container), recorded)) return body;
+  if (sameProperties(recordable(body, container), recorded)) {
+    // Back at the original. This author's own record goes; anyone else's stays exactly as
+    // they wrote it — see the doc comment.
+    return existing !== undefined && !ownedBy(existing, revision.author)
+      ? [...body, existing]
+      : body;
+  }
 
   const copy = recorded.map((child) => cloneWithNewIds(child, mint));
   // The record's inner container carries the TYPED kind, because that is what re-reading the
@@ -184,14 +193,20 @@ export function withPropertyChangeRecord(options: {
     mint(),
     'generic',
     changeName,
-    // A fresh id even when a record was already standing: the previous author's proposal is
-    // being replaced by this one, and reusing the id would join two authors' cards.
+    // The TRANSACTION's id, so one press is one card however many runs it covers — and a
+    // fresh one relative to any record already standing, because that proposal is being
+    // replaced by this one and sharing its id would join two authors' cards.
     revisionAttributes(nextRevisionId(), revision),
     [record]
   );
   // BOTH change wrappers are the last member of their container's sequence — `CT_RPr` ends
   // with `w:rPrChange`, `CT_PPr` with `w:pPrChange` — so the tail is the only legal slot.
   return [...body, wrapper];
+}
+
+/** Whether a `CT_TrackChange` element names this author. An absent `@w:author` is nobody's. */
+function ownedBy(node: OoxmlNode, author: string): boolean {
+  return attributeValueOf(node, 'author', WML_NAMESPACE_URI) === author;
 }
 
 /**
@@ -213,14 +228,26 @@ export function withPropertyChangeRecord(options: {
 export function insideOwnInsertion(part: OoxmlPart, nodeId: string, author: string): boolean {
   let ancestor = parentNodeOf(part, nodeId);
   while (ancestor !== null) {
-    if (ancestor.kind === 'revisionInsert') {
-      const owner = ancestor.attributes.find(
-        (attribute) =>
-          attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'author'
-      );
-      return (owner?.value ?? '') === author;
-    }
+    if (ancestor.kind === 'revisionInsert') return ownedBy(ancestor, author);
     ancestor = parentNodeOf(part, ancestor.id);
+  }
+  return false;
+}
+
+/**
+ * Whether the paragraph MARK carries a `w:ins` this author proposed.
+ *
+ * `EG_ParaRPrTrackChanges` sits in `w:pPr/w:rPr`, so the answer is in the mark's own property
+ * container. The paragraph-level twin of {@link insideOwnInsertion}, and it decides the same
+ * thing for the two writes that address a paragraph rather than a run: rejecting that `w:ins`
+ * runs the paragraph into the next one and takes its properties with it, so a record of what
+ * they used to be decides nothing. The mark never existed for anyone else.
+ */
+export function ownProposedMark(markProperties: readonly OoxmlNode[], author: string): boolean {
+  for (const child of markProperties) {
+    if (child.kind === 'textValue') continue;
+    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'ins') continue;
+    return ownedBy(child, author);
   }
   return false;
 }

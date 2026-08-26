@@ -268,6 +268,17 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
           nesting,
         });
+        // A CHANGE RECORD'S CONTENTS ARE A COPY, NOT A DECISION. `CT_ParaRPrOriginal` admits
+        // `EG_ParaRPrTrackChanges` and `CT_PPrBase` admits `w:numPr/w:ins`, so a Word-written
+        // record legitimately holds revision elements — and they are the paragraph as it WAS,
+        // already answered by accepting or rejecting the record around them.
+        //
+        // Descending classified those copies as sites of their own. A `w:ins` inside
+        // `w:pPr/w:rPr/w:rPrChange/w:rPr` has parent `rPr` and grandparent `rPrChange`, so it
+        // read as a misplaced mark, and one refused site refuses the whole decision: Accept All
+        // and Reject All failed for EVERY revision in a document Word had written normally,
+        // with a reason no reviewer can act on.
+        if (PROPERTY_CHANGE_NAMES.has(node.localName)) return;
       }
     }
     // Only a CONTENT wrapper deepens the count. A structural or property-change revision
@@ -718,8 +729,14 @@ function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
           node.children.filter((child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr')),
           plan
         );
-        // `w:rPr` and `w:sectPr` CLOSE `CT_PPr`, so they follow the recorded base.
-        return [{ ...node, children: [...recorded, ...preserved] } as OoxmlElement];
+        // `w:rPr` and `w:sectPr` CLOSE `CT_PPr`, so they follow the recorded base — and the
+        // record's own copies of them go, or a malformed `CT_PPrBase` holding either produces
+        // a `w:pPr` with two, which the tree invariants refuse and the reviewer sees as a
+        // Reject that failed on a file Word opens.
+        const base = recorded.filter(
+          (child) => !isWmlNamed(child, 'rPr') && !isWmlNamed(child, 'sectPr')
+        );
+        return [{ ...node, children: [...base, ...preserved] } as OoxmlElement];
       }
       const liveMarks = rebuildChildren(
         node.children.filter((child) => isParagraphMarkRevision(child)),

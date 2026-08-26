@@ -424,32 +424,36 @@ export class TreeDocumentStore {
     let opCaret: SelectionMark | null = null;
 
     /**
-     * One `@w:id` minter shared by the FORMATTING ops of this transaction, per part.
+     * ONE `@w:id` for the format records of this transaction, per part.
      *
-     * `nextRevisionId` walks the whole part, and a formatting write emits one op per run: a
-     * Select All + Bold in suggesting mode paid a document-wide walk thousands of times over,
-     * which is quadratic in document size.
+     * Two problems, one answer. `nextRevisionId` walks the whole part, and a formatting write
+     * emits an op per RUN — so a Select All + Bold in suggesting mode paid a document-wide
+     * walk thousands of times over, quadratic in document size. And one press is ONE decision:
+     * cards group on `localName` plus the address, so a fresh id per record turned a two-
+     * paragraph Bold into seven cards the reviewer had to answer one at a time, where Word
+     * writes one. A revision spanning many elements that share an id is the shape this module
+     * is built around.
      *
-     * Shared only across the three property ops, and dropped the moment anything else runs.
-     * Those three MINT ids and never import one, so a minter seeded before the first of them
-     * still knows every id in use when the last lands. A paste carries its own revision ids,
-     * so a minter that survived one would hand out an address the document had just started
-     * using — and two revisions sharing an address are one card in the review pane.
+     * Shared only across the three property ops, and dropped the moment anything else runs —
+     * including `applyPackage`. Those three MINT ids and never import one, so an id taken
+     * before the first of them is still free when the last lands. A paste carries its own
+     * revision ids, so an id that survived one would be an address the document had just
+     * started using, and two decisions sharing an address are one card.
      */
-    const minters = new Map<string, () => string>();
+    const revisionIdOfPart = new Map<string, () => string>();
     const sharedRevisionIds = (op: TreeDocOp, part: OoxmlPart): (() => string) | null => {
       if (!SHARED_REVISION_ID_OPS.has(op.op)) {
-        minters.clear();
+        revisionIdOfPart.clear();
         return null;
       }
-      const existing = minters.get(part.name);
+      const existing = revisionIdOfPart.get(part.name);
       if (existing) return existing;
-      // Built LAZILY on the first formatting op of a run of them, so an untracked format —
-      // the common case — never pays the walk at all.
-      let minted: (() => string) | null = null;
-      const lazy = (): string => (minted ??= nextRevisionId(part))();
-      minters.set(part.name, lazy);
-      return lazy;
+      // Taken LAZILY on the first record actually written, so an untracked format — the
+      // common case — never pays the walk at all.
+      let id: string | null = null;
+      const shared = (): string => (id ??= nextRevisionId(part)());
+      revisionIdOfPart.set(part.name, shared);
+      return shared;
     };
 
     const applyToPart = (partName: string, op: TreeDocOp): boolean => {
@@ -517,9 +521,9 @@ export class TreeDocumentStore {
       applyPackage: (edit) => {
         if (failure) return false;
         // The SECOND write channel, and it imports whole parts — a pasted fragment carries
-        // its own revision ids. The shared id minter is seeded from the part it first saw, so
-        // it goes here for the same reason a non-property op drops it.
-        minters.clear();
+        // its own revision ids. The shared id is taken from the part it first saw, so it goes
+        // here for the same reason a non-property op drops it.
+        revisionIdOfPart.clear();
         const next = edit(working);
         if (next === working) return true;
         for (const [name, part] of next.parts) {

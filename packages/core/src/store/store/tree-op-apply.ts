@@ -41,7 +41,11 @@ import {
   applyProposeParagraphMerge,
   retractsOwnParagraphMark,
 } from './tree-op-tracked-marks.ts';
-import { insideOwnInsertion, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import {
+  insideOwnInsertion,
+  ownProposedMark,
+  withPropertyChangeRecord,
+} from './tree-op-tracked-properties.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   isValidParaId,
@@ -544,7 +548,12 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       );
       // A tracked paragraph-property change records what `w:pPr` held in a `w:pPrChange`
       // (§17.13.5.29), so Reject restores the alignment, indents and style it replaced.
-      if (op.revision) {
+      //
+      // Skipped on a paragraph whose mark THIS author proposed adding, the same rule the run
+      // and mark writes apply: rejecting that `w:ins` runs the paragraph into the next one and
+      // takes its properties with it, so a record of what they used to be decides nothing.
+      const markProperties = namedChild(existing, 'rPr')?.children ?? [];
+      if (op.revision && !ownProposedMark(markProperties, op.revision.author)) {
         children = withPropertyChangeRecord({
           container: 'paragraphProperties',
           prior,
