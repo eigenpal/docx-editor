@@ -1,5 +1,24 @@
 # @eigenpal/docx-js-editor
 
+## 2.10.0
+
+### Patch Changes
+
+- 2af5fea: Align the `DocxEditorShell` outline toggle with the page top when the ruler is shown, and stop insetting the outline past a vertical ruler that read-only mode hides. Fixes #486
+- df91189: The error notification toast animates with a `docx-` prefixed keyframes name from the core stylesheet instead of injecting a global `@keyframes slideIn`, so it no longer collides with a host application's animation of the same name. Fixes #485
+- 6b1b045: Remove the `DocxEditorShell` review highlight styles, which targeted class names the editor does not render, so they never painted in any release. To mark the active comment or tracked change, use `Editor.setActiveReviewItem`. Fixes #481
+- Updated dependencies [79170d8]
+- Updated dependencies [99c7408]
+- Updated dependencies [56848c8]
+- Updated dependencies [ab81336]
+- Updated dependencies [8ac2e88]
+- Updated dependencies [0928951]
+- Updated dependencies [0e3663d]
+- Updated dependencies [b10d396]
+- Updated dependencies [0e3663d]
+  - @docx-editor.dev/core@2.10.0
+  - @docx-editor.dev/i18n@2.10.0
+
 ## 2.9.2
 
 ### Patch Changes

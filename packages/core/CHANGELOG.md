@@ -1,5 +1,23 @@
 # @docx-editor.dev/core
 
+## 2.10.0
+
+### Minor Changes
+
+- 79170d8: Add continuous section breaks: `insertBreak` takes a new `sectionContinuous` kind, and the Insert > Break > Section break (continuous) menu row is live. A next-page break cut from a continuous section now really starts a page.
+- 56848c8: Add an Image row to the packaged Insert menu that opens the shared file picker, and scale an inserted image down proportionally when its natural size does not fit its cell, column, or page content box. Fixes #276
+- 8ac2e88: Word-like copy and paste: copy writes plain text plus HTML with an embedded document fragment, and paste restores styles, lists, tables, links, images, and footnotes — inside the editor and from external HTML. Adds a `pasteWithoutFormatting` command (Ctrl+Shift+V) and an optional `html` payload on `paste`.
+- 0e3663d: Suggesting mode records a formatting change as a tracked change instead of applying it outright, so a reviewer can reject it and get the previous properties back. Formatting also reaches the same runs through the toolbar and the automation object model, and only the runs the current view shows. Fixes #495, fixes #497, fixes #498
+
+### Patch Changes
+
+- 99c7408: Press Enter at the end of a paragraph, and the new paragraph takes the style's `w:next` the way Word does, so a heading is followed by body text instead of a second heading.
+- ab81336: Remove leftover stylesheet rules for class names the painter no longer emits, and restore the text cursor over the page content area. Fixes #239
+- 0928951: Mark a drawing inside a tracked insertion or deletion with a revision outline, the standard revision datasets, and a margin change bar; a deleted picture stays visible and dimmed under all-markup and disappears from the proposed result. In suggesting mode, inserting an image proposes a tracked insertion, deleting a selected image proposes a tracked deletion, and Delete on a pointer-selected picture deletes the picture instead of the paragraph break beside it. Fixes #479
+- b10d396: Run formatting (bold, italic, font family, font size, color) now applies to text inside tracked changes; it previously did nothing over runs wrapped in `w:ins` or `w:del`. Fixes #493
+- 0e3663d: Double-clicking either half of a tracked replacement now selects that half. A word no longer runs through struck text, which Word paints immediately before the text proposed to replace it.
+- @docx-editor.dev/i18n@2.10.0
+
 ## 2.9.2
 
 ### Patch Changes
