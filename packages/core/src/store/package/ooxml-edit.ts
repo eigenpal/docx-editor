@@ -24,17 +24,12 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
-import {
-  isCanonicalPrimitiveCaptureActive,
-  journalCaptureMark,
-  truncateJournalCapture,
-} from './canonical-primitive-capture.ts';
+import { isCanonicalPrimitiveCaptureActive } from './canonical-primitive-capture.ts';
 import {
   captureInsertChildren,
   captureRemoveNode,
   captureReplaceChildren,
   captureReplaceNode,
-  type KnownIds,
 } from './canonical-primitive-lower.ts';
 
 /** An edited part, or the invariant violations that rejected the edit. */
@@ -386,15 +381,28 @@ function finish(part: OoxmlPart | null, options?: EditOptions): OoxmlEditResult 
 }
 
 /**
- * Pre-edit ids for journal lowering.
+ * Pre-edit membership for journal lowering, restricted to the subtrees the edit introduces.
  *
- * The index Map already answers `has`. Callers must capture BEFORE `stealPatchedIndex`
- * mutates that Map: a Set copy of every key was O(document) per primitive, and a live
- * read after the steal treated minted ids as already known, so `putNode` never ran.
+ * Lowering only ever asks `knownIds.has(...)` for ids inside the incoming subtrees, so
+ * probing the cached pre-edit index for exactly those ids costs the size of the edit.
+ * Copying every id in the part was O(part) per primitive — the "cost the document" shape
+ * the journal work removed elsewhere — and the live index map cannot stand in for the
+ * copy because `rebuild` steals and patches it to post-edit membership before capture runs.
  */
-function knownIdsIfCapturing(part: OoxmlPart): KnownIds | undefined {
+function knownIdsIfCapturing(
+  part: OoxmlPart,
+  introduced: readonly OoxmlNode[]
+): Set<string> | undefined {
   if (!isCanonicalPrimitiveCaptureActive()) return undefined;
-  return nodeIndexFor(part.root).nodes;
+  const preEdit = nodeIndexFor(part.root).nodes;
+  const known = new Set<string>();
+  const walk = (node: OoxmlNode): void => {
+    if (preEdit.has(node.id)) known.add(node.id);
+    if (node.kind === 'textValue') return;
+    for (const child of node.children) walk(child);
+  };
+  for (const node of introduced) walk(node);
+  return known;
 }
 
 /** Replace one node's children wholesale. */
@@ -408,11 +416,9 @@ export function replaceChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  const knownIds = knownIdsIfCapturing(part);
-  const mark = journalCaptureMark();
-  captureReplaceChildren(target, children, knownIds);
+  const knownIds = knownIdsIfCapturing(part, children);
   const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
-  if (!result.ok) truncateJournalCapture(mark);
+  if (result.ok) captureReplaceChildren(target, children, knownIds);
   return result;
 }
 
@@ -430,11 +436,9 @@ export function insertChildren(
   }
   const at = Math.max(0, Math.min(index, target.children.length));
   const next = [...target.children.slice(0, at), ...children, ...target.children.slice(at)];
-  const knownIds = knownIdsIfCapturing(part);
-  const mark = journalCaptureMark();
-  captureInsertChildren(target, at, children, knownIds);
+  const knownIds = knownIdsIfCapturing(part, children);
   const result = finish(rebuild(part, nodeId, withChildren(target, next)), options);
-  if (!result.ok) truncateJournalCapture(mark);
+  if (result.ok) captureInsertChildren(target, at, children, knownIds);
   return result;
 }
 
@@ -449,12 +453,10 @@ export function replaceNode(
   if (!previous) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  const knownIds = knownIdsIfCapturing(part);
+  const knownIds = knownIdsIfCapturing(part, [replacement]);
   const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
-  const mark = journalCaptureMark();
-  captureReplaceNode(previous, parent, replacement, knownIds);
   const result = finish(rebuild(part, nodeId, replacement), options);
-  if (!result.ok) truncateJournalCapture(mark);
+  if (result.ok) captureReplaceNode(previous, parent, replacement, knownIds);
   return result;
 }
 
