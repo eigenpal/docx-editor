@@ -647,8 +647,8 @@ export function layoutSemanticDocument(
     );
     const finalized = finalizePageFieldProjection(annotated);
     // The notes pass mints overflow sheets from this layout; publish what index they land at.
-    registerOverflowPageShell(finalized, (_anchorIndex, offset, box) =>
-      laid.overflowShellAt(_anchorIndex + offset, box)
+    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
+      laid.overflowShellAt(documentPageIndex, box)
     );
     if (opts.session) {
       opts.session.multi = null;
@@ -970,13 +970,6 @@ function layoutBlocksPass(
     pageIndexStart,
     ...(options.continuedPageInsets ? { continuedPageInsets: options.continuedPageInsets } : {}),
   });
-  /**
-   * The same resolution in DOCUMENT index space, for a caller outside this pass.
-   *
-   * `insetsFor` is section-local; a note-overflow sheet is inserted at a document index. The
-   * translation is exact after `remapPage` too, because the orchestrator publishes each
-   * section at the `pageIndexStart` it laid out with.
-   */
   /**
    * What the body flow measures a page-field placeholder against.
    *

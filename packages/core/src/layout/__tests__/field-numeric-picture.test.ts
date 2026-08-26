@@ -237,3 +237,82 @@ describe('a body page field carrying a picture', () => {
     expect(line.gap).toBeCloseTo(line.charWidth, 6);
   });
 });
+
+describe('a body page field on a continued section', () => {
+  /**
+   * Section A authors no `w:pgNumType`; section B is `continuous` with `w:fmt="upperRoman"` and
+   * opens with a `PAGE \# "00"` field.
+   *
+   * B's local page 0 merges onto A's last sheet, which keeps A's decimal format, while B's own
+   * sheets keep roman. One pass measures one placeholder, so the two cannot both match unless
+   * the decision the placeholder took travels to the value.
+   */
+  function continuedDoc(): Uint8Array {
+    const field =
+      '<w:p>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> PAGE \\# "00" </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+      '<w:r><w:t>END</w:t></w:r>' +
+      '</w:p>';
+    const geometry =
+      '<w:pgSz w:w="12240" w:h="15840"/>' +
+      '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720"/>';
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          '<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>' +
+          `<w:p><w:pPr><w:sectPr>${geometry}</w:sectPr></w:pPr></w:p>` +
+          field +
+          `<w:sectPr><w:type w:val="continuous"/><w:pgNumType w:fmt="upperRoman"/>${geometry}</w:sectPr>` +
+          '</w:body></w:document>'
+      ),
+    });
+  }
+
+  test('measures and paints the same field width on the host sheet', () => {
+    const loaded = readOoxmlPackage(continuedDoc());
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+      producer: 'continued',
+    });
+    // The continued section shares the host sheet, so everything is on page 1.
+    expect(layout.pages.length).toBe(1);
+
+    let field: { text: string; x: number } | undefined;
+    let end: { text: string; x: number; width: number } | undefined;
+    for (const fragment of layout.pages[0]!.fragments) {
+      if (fragment.kind !== 'paragraph') continue;
+      for (const line of fragment.lines) {
+        const endSpan = line.spans.find((span) => span.text === 'END');
+        if (!endSpan || line.spans.length < 2) continue;
+        field = { text: line.spans[0]!.text, x: line.spans[0]!.box.x };
+        end = { text: endSpan.text, x: endSpan.box.x, width: endSpan.box.width };
+      }
+    }
+    if (!field || !end) throw new Error('field line not found');
+
+    // Whatever the field paints, `END` starts exactly that far along. The picture is dropped
+    // because the pass measured under a format that suppresses it, and the decision travels
+    // with the atom — so no later substitution can widen the text past the slot measured for it.
+    const charWidth = end.width / 'END'.length;
+    expect(end.x - field.x).toBeCloseTo(field.text.length * charWidth, 6);
+    expect(field.text).toHaveLength(1);
+    // NOT asserting a substituted page number. A merged host sheet keeps the
+    // `hasBodyPageFields` flag it was flushed with, so a field the continued section appended
+    // to it never reaches `substituteBodyPageFields` at all — a separate gap in the continuous
+    // merge, older than per-page insets and untouched here.
+  });
+});

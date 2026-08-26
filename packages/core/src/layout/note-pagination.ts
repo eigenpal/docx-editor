@@ -1353,6 +1353,58 @@ function buildFootnoteArea(
 }
 
 /**
+ * The last page at or before `position` that the BODY pass produced.
+ *
+ * Only such a page carries an index in the layout's original space, which is what a section
+ * lookup needs. `lastEndnoteHostIndex` and `lastPageIndexForSection` both hand back a page that
+ * can HOST notes, and an endnote overflow sheet qualifies — `isEndnoteHostEligible` turns away
+ * only footnote drain sheets — so the run's starting page is not itself a guarantee. Position 0
+ * is always a body-pass page: minting needs a template, so nothing can be inserted before it.
+ */
+function originalPageAtOrBefore(pages: readonly PageRecord[], position: number): number {
+  let at = Math.min(Math.max(position, 0), pages.length - 1);
+  while (at > 0 && pages[at]!.noteStream !== undefined) at -= 1;
+  return at;
+}
+
+/**
+ * Mints the blank sheets a note run needs, each resolving its OWN shell.
+ *
+ * Both indices come from the caller, and each answers a different question in its own space.
+ *
+ * The SECTION ANCHOR must read in the layout's ORIGINAL index space, so it comes from a page the
+ * body pass produced — {@link originalPageAtOrBefore} finds one. A sheet this pass minted cannot
+ * serve: `insertOverflowPageAt` stamps it with an insertion POSITION, and the section spans it
+ * would be looked up against are in original space.
+ *
+ * The LANDING INDEX is the array position the sheet occupies, which is the document index it
+ * keeps once the pass reindexes — inserts only ever move forward, so nothing displaces it
+ * afterwards. It decides the variant, and through it the content box, because
+ * `w:evenAndOddHeaders` alternates on the page's number in the document: the drain sheets and
+ * earlier overflow sheets in front of this one all count towards it.
+ */
+function createOverflowSheetMinter(layout: SemanticLayout): OverflowSheetMinter {
+  return (args) => {
+    const shell = overflowPageShellAt(
+      layout,
+      args.sectionAnchorIndex,
+      args.landingIndex,
+      args.template.box
+    );
+    return cloneEmptyOverflowPage(args.template, args.landingIndex, args.noteStream, shell);
+  };
+}
+
+type OverflowSheetMinter = (args: {
+  readonly template: PageRecord;
+  /** Array position the sheet is inserted at, which is also its final document index. */
+  readonly landingIndex: number;
+  readonly noteStream?: PageNoteStream;
+  /** Original-space index of a body-pass page in the section the new sheet belongs to. */
+  readonly sectionAnchorIndex: number;
+}) => PageRecord;
+
+/**
  * A blank sheet minted after body layout, for notes that ran off the page.
  *
  * `shell` is the content box AND the furniture the NEW index resolves to. Neither is the
@@ -1364,42 +1416,6 @@ function buildFootnoteArea(
  * header high. Absent shell keeps the template's, which is what a layout assembled outside the
  * body pass can offer.
  */
-/**
- * Mints the blank sheets a note run needs, each resolving its OWN shell.
- *
- * ANCHOR-AND-OFFSET comes from the caller, not from the template, and each half answers a
- * different question.
- *
- * The ANCHOR is an ORIGINAL page of the section the new sheet belongs to, and it picks the
- * SECTION. It has to be a page whose `index` still reads in the layout's index space — the
- * notes pass reindexes only at the end — and it has to be a page of the owning section, because
- * a `sectEnd` sheet is inserted at the first page of the NEXT one and its landing index would
- * name that section instead.
- *
- * The OFFSET is how many ARRAY SLOTS the new sheet sits past the anchor, and it gives the local
- * index — which decides the variant, and through it the content box. Slots, not sheets minted
- * by this run: the footnote drain runs first and appends its own sheets between the anchor and
- * wherever the endnote run inserts, so counting only this run's sheets lands the shell an
- * entire drain run early. Under `w:evenAndOddHeaders` an odd drain count then inverts the
- * variant of every endnote sheet behind it.
- */
-function createOverflowSheetMinter(layout: SemanticLayout): OverflowSheetMinter {
-  return (args) => {
-    const shell = overflowPageShellAt(layout, args.anchorIndex, args.offset, args.template.box);
-    return cloneEmptyOverflowPage(args.template, args.index, args.noteStream, shell);
-  };
-}
-
-type OverflowSheetMinter = (args: {
-  readonly template: PageRecord;
-  readonly index: number;
-  readonly noteStream?: PageNoteStream;
-  /** An ORIGINAL page of the section the new sheet belongs to. */
-  readonly anchorIndex: number;
-  /** How many sheets after the anchor this one sits — 1 for the first of a run. */
-  readonly offset: number;
-}) => PageRecord;
-
 function cloneEmptyOverflowPage(
   template: PageRecord,
   index: number,
@@ -1756,19 +1772,16 @@ function drainFootnoteCarryPages(
 ): { pages: PageRecord[]; carry: NoteCarryMap } {
   let nextPages = pages;
   let nextCarry = carry;
-  // The drain run appends after the last page, which is still an ORIGINAL one: this runs
-  // before any endnote insertion. Offsets count ARRAY SLOTS from that page's own position.
-  const anchorPosition = pages.length - 1;
-  const anchorIndex = pages[anchorPosition]!.index;
+  // This run appends after the last page and goes before any endnote insertion, so that page
+  // is a body-pass one — the walk-back is belt and braces, and states the requirement.
+  const sectionAnchorIndex = pages[originalPageAtOrBefore(pages, pages.length - 1)]!.index;
   while (nextCarry.size > 0 && overflowBudget.remaining > 0) {
     const template = nextPages[nextPages.length - 1]!;
-    const landingPosition = nextPages.length;
     const page = mint({
       template,
-      index: landingPosition,
+      landingIndex: nextPages.length,
       noteStream: 'footnote-drain',
-      anchorIndex,
-      offset: landingPosition - anchorPosition,
+      sectionAnchorIndex,
     });
     const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons, {
       separatorCache,
@@ -1799,11 +1812,10 @@ function insertOverflowPageAt(
   insertAt: number,
   template: PageRecord,
   mint: OverflowSheetMinter,
-  anchorIndex: number,
-  offset: number,
+  sectionAnchorIndex: number,
   noteStream: PageNoteStream = 'endnote-overflow'
 ): { pages: PageRecord[]; pageIndex: number } {
-  const page = mint({ template, index: insertAt, noteStream, anchorIndex, offset });
+  const page = mint({ template, landingIndex: insertAt, noteStream, sectionAnchorIndex });
   const next = [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
   // Defer reindex to attachNotesToLayout — per-insert reindex is O(overflow²).
   return { pages: next, pageIndex: insertAt };
@@ -1863,12 +1875,10 @@ function placeEndnotesFromPage(
   }
 ): PageRecord[] {
   if (refs.length === 0 || pages.length === 0) return pages;
-  // Anchored on the page the run starts from — an original body page in the owning section,
-  // never a drain sheet (`lastEndnoteHostIndex` / `lastPageIndexForSection` both skip those).
-  // Its ARRAY POSITION is the offset origin: the drain sheets those helpers skipped sit between
-  // it and wherever this run inserts, and the new sheet's local index has to count them.
-  const anchorPosition = Math.min(Math.max(startIndex, 0), pages.length - 1);
-  const anchorIndex = pages[anchorPosition]!.index;
+  // The section comes from the nearest BODY-PASS page at or before the run's start. The start
+  // itself may be a sheet an earlier run minted: `lastEndnoteHostIndex` accepts an endnote
+  // overflow sheet, and that sheet's `index` is an insertion position, not a layout index.
+  const sectionAnchorIndex = pages[originalPageAtOrBefore(pages, startIndex)]!.index;
   let nextPages = [...pages];
   let pending = [...refs];
   let carry: NoteCarryMap = new Map();
@@ -1896,8 +1906,7 @@ function placeEndnotesFromPage(
         insertAt,
         template,
         options.mint,
-        anchorIndex,
-        insertAt - anchorPosition,
+        sectionAnchorIndex,
         'endnote-overflow'
       );
       nextPages = inserted.pages;

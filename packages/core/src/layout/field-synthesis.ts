@@ -19,6 +19,7 @@ import type { DocumentProperties } from '@docx-editor.dev/core/store';
 import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
 import {
+  numericPictureApplies,
   pageFieldPlaceholder,
   projectPageFieldValue,
   type BodyPageFieldContext,
@@ -96,7 +97,15 @@ export function synthesizeAtomicField(
     // document finalize substitutes the page's real value. Gated on `bodyPageFields` because
     // headers/footers took the live branch above, and notes / text boxes have no substitute pass.
     if (pending.kind && ctx.bodyPageFields) {
-      const picture = pending.picture ?? undefined;
+      // ONE decision, taken here and RECORDED. Finalize substitutes the value without
+      // re-measuring, so it must render through the picture exactly when this placeholder was
+      // measured through it — and it cannot re-derive that, because the page it lands on can
+      // carry a different `w:pgNumType/@w:fmt` from the pass that measured it (a continued
+      // section's first page keeps its HOST's). Carrying the picture only when it applies is
+      // what makes the two sides agree by construction.
+      const applied =
+        pending.picture !== null && numericPictureApplies(pending.kind, ctx.bodyPageFields.format);
+      const picture = applied ? pending.picture! : undefined;
       return {
         text: pageFieldPlaceholder(pending.kind, picture, ctx.bodyPageFields.format),
         props: pending.props,

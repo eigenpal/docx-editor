@@ -139,21 +139,28 @@ export interface OverflowPageShell {
 }
 
 /**
- * Resolve the shell for a sheet minted `offset` sheets after the page at `anchorIndex`.
+ * Resolve the shell for a sheet minted at `documentPageIndex`, in the section that owns
+ * `sectionAnchorIndex`.
  *
- * ANCHOR-AND-OFFSET, not the new sheet's own index, for two reasons the note pass makes
- * unavoidable. The new sheet belongs to the section that owns the page BEFORE it — at a section
- * boundary its insertion index is the next section's first page, and dispatching on that index
- * picks the wrong section. And the notes pass mutates its page array in place, reindexing only
- * at the end, so an insertion position stops matching the layout's index space as soon as one
- * sheet has been inserted. An anchor is a page whose `index` still reads in the original space,
- * and the offset counts sheets within the run.
+ * TWO indices, because the two questions live in different index spaces and the notes pass
+ * makes that unavoidable.
+ *
+ * `sectionAnchorIndex` picks the SECTION. It has to read in the layout's ORIGINAL index space,
+ * where the section spans were recorded, so it comes from a page the body pass produced. It
+ * cannot be the new sheet's own index: at a section boundary a `sectEnd` sheet is inserted at
+ * the first page of the NEXT section, and dispatching on that index picks that section instead.
+ *
+ * `documentPageIndex` is where the sheet finally LANDS, which is what decides its variant —
+ * `w:evenAndOddHeaders` alternates on the page's number in the document, so drain sheets and
+ * earlier overflow sheets in front of it all count. It is the sheet's array position: the notes
+ * pass reindexes at the end, and inserts only ever move forward, so a position never shifts
+ * again once a sheet occupies it.
  *
  * `box` is the sheet the new page occupies, which furniture is positioned against.
  */
 export type OverflowPageShellResolver = (
-  anchorIndex: number,
-  offset: number,
+  sectionAnchorIndex: number,
+  documentPageIndex: number,
   box: LayoutBox
 ) => OverflowPageShell | undefined;
 
@@ -176,9 +183,9 @@ export function registerOverflowPageShell(
 /** The shell a minted sheet resolves to, or undefined when the layout published none. */
 export function overflowPageShellAt(
   layout: SemanticLayout,
-  anchorIndex: number,
-  offset: number,
+  sectionAnchorIndex: number,
+  documentPageIndex: number,
   box: LayoutBox
 ): OverflowPageShell | undefined {
-  return layoutOverflowShells.get(layout)?.(anchorIndex, offset, box);
+  return layoutOverflowShells.get(layout)?.(sectionAnchorIndex, documentPageIndex, box);
 }

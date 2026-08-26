@@ -10,6 +10,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
+import { numericPictureApplies } from './field-page-furniture.ts';
 import {
   remapPage,
   storyDrawingResourceToken,
@@ -382,6 +383,8 @@ export function layoutMultiSectionDocument(
   }[] = [];
   let previousGeometry: PageGeometry | null = null;
   let previousFurnitureKey = '';
+  /** The page-number format the previous section stamped, which its last sheet keeps. */
+  let previousPageNumberFormat: string | undefined;
   /** Next displayed PAGE value if the following section does not author `w:start`. */
   let nextDisplayed = 1;
 
@@ -442,6 +445,22 @@ export function layoutMultiSectionDocument(
     // the taller box packs content past the host's content bottom.
     const continuedPageInsets = continues ? contentInsetsOf(pages[pages.length - 1]!) : undefined;
 
+    // The page-number format a body page-field placeholder is MEASURED against.
+    //
+    // Normally the section's own, so the placeholder matches the value that replaces it. A
+    // CONTINUED section is the exception: its local page 0 merges onto the host sheet, which
+    // keeps the previous section's `pageFieldSource.format`, while its own sheets keep this
+    // section's. When those two disagree about whether a `\#` picture renders at all, no single
+    // measurement is right for both — so measure against whichever format SUPPRESSES the
+    // picture. That reserves the plain number's width, and a picture-rendered value overruns it
+    // exactly as an unpictured multi-digit value already does; the reverse would reserve a
+    // width the other pages never fill.
+    const sectionPageNumberFormat = section.properties.pageNumbering?.fmt;
+    const measuredPageNumberFormat =
+      continues && !numericPictureApplies('PAGE', previousPageNumberFormat)
+        ? previousPageNumberFormat
+        : sectionPageNumberFormat;
+
     const laid = layoutSection(slice, revision, {
       ...rest,
       retainKeys,
@@ -455,10 +474,8 @@ export function layoutMultiSectionDocument(
       pageIndexStart: continues ? startIndex - 1 : startIndex,
       ...(continues ? { flowStartY: flowCursorY, spaceBeforeCarry: flowSpaceAfter } : {}),
       ...(continuedPageInsets ? { continuedPageInsets } : {}),
-      // The section's own page-number format, so a body page-field placeholder is measured
-      // the way the value that replaces it will be rendered.
-      ...(section.properties.pageNumbering?.fmt
-        ? { bodyPageNumberFormat: section.properties.pageNumbering.fmt }
+      ...(measuredPageNumberFormat !== undefined
+        ? { bodyPageNumberFormat: measuredPageNumberFormat }
         : {}),
       ...(sectionSession ? { session: sectionSession } : {}),
     });
@@ -469,6 +486,7 @@ export function layoutMultiSectionDocument(
     flowOpenPage = laid.endsOpenPage;
     previousGeometry = geometry;
     previousFurnitureKey = furnitureKey;
+    previousPageNumberFormat = sectionPageNumberFormat;
 
     if (sectionSession) {
       placed += sectionSession.stats.placed;
@@ -599,8 +617,8 @@ export function layoutMultiSectionDocument(
     });
     retainOnce();
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });
-    registerOverflowPageShell(finalized, (anchorIndex, offset, box) =>
-      laid.overflowShellAt(anchorIndex + offset, box)
+    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
+      laid.overflowShellAt(documentPageIndex, box)
     );
     if (multi) {
       multi.spans = [];
@@ -662,13 +680,13 @@ export function layoutMultiSectionDocument(
   // after the one the sheet belongs to — which would pair the previous section's sheet box
   // with the next section's content box. The anchor is a page of the owning section, and the
   // offset walks that section's own resolver past its last page.
-  registerOverflowPageShell(finalized, (anchorIndex, offset, box) => {
+  registerOverflowPageShell(finalized, (sectionAnchorIndex, documentPageIndex, box) => {
     let chosen = sectionShells[0];
     for (const span of sectionShells) {
-      if (span.startIndex <= anchorIndex) chosen = span;
+      if (span.startIndex <= sectionAnchorIndex) chosen = span;
     }
     const owner = chosen ?? sectionShells[sectionShells.length - 1];
-    return owner?.at(anchorIndex + offset, box);
+    return owner?.at(documentPageIndex, box);
   });
 
   retainOnce();

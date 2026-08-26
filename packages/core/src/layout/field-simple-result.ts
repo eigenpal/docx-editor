@@ -43,6 +43,7 @@ import {
 } from './field-instruction.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
+  numericPictureApplies,
   pageFieldPlaceholder,
   projectPageFieldValue,
   type BodyPageFieldContext,
@@ -328,14 +329,18 @@ export function projectSimpleFieldResult(args: {
   ) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
+    // The same ONE decision the complex-field flush takes, recorded the same way: the picture
+    // travels to finalize only when this placeholder was measured through it.
+    const applied =
+      pageField.picture !== undefined &&
+      numericPictureApplies(pageField.kind, args.bodyPageFields.format);
+    const picture = applied ? pageField.picture : undefined;
     return {
-      text: pageFieldPlaceholder(pageField.kind, pageField.picture, args.bodyPageFields.format),
+      text: pageFieldPlaceholder(pageField.kind, picture, args.bodyPageFields.format),
       props,
       style,
       pageField:
-        pageField.picture === undefined
-          ? { kind: pageField.kind }
-          : { kind: pageField.kind, picture: pageField.picture },
+        picture === undefined ? { kind: pageField.kind } : { kind: pageField.kind, picture },
     };
   }
 
