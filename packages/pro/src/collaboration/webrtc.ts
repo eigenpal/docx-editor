@@ -211,7 +211,10 @@ export async function createWebrtcCollaboration(
   };
   let handle: DocumentCollaborationHandle;
   try {
-    if (options.bootstrap.kind === 'join') provider = connectProvider();
+    // 'join' reads already-synced shared state and 'create-or-join' probes for it, so both
+    // need the provider connected before the factory runs. 'create' seeds first, so nothing
+    // half-seeded is broadcast.
+    if (options.bootstrap.kind !== 'create') provider = connectProvider();
     handle = await createDocumentCollaboration({
       ydoc,
       awareness,

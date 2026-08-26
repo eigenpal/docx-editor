@@ -72,12 +72,47 @@ function roomFromInput(value: string): string {
   }
 }
 
-function navigateToRoom(roomId: string, creator: boolean, name: string): void {
+/**
+ * The room's encryption key, carried in the URL fragment.
+ *
+ * The room id is the signaling topic, so it cannot double as the key — the signaling host sees
+ * it. A fragment is never sent to that host, so two peers who opened the same invite share a
+ * secret it never learns. Anyone holding the whole link can still decrypt, which is what
+ * joining the room means anyway.
+ */
+function createRoomSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+}
+
+const COLLAB_FRAGMENT = '#collab=';
+
+/** Read the key out of a pasted invite, or out of the address bar for a link opened directly. */
+function roomSecretFrom(value: string): string | undefined {
+  for (const candidate of [value.trim(), location.href]) {
+    if (!candidate) continue;
+    let hash = '';
+    try {
+      hash = new URL(candidate).hash;
+    } catch {
+      continue;
+    }
+    if (hash.startsWith(COLLAB_FRAGMENT)) return hash.slice(COLLAB_FRAGMENT.length);
+  }
+  return undefined;
+}
+
+function navigateToRoom(roomId: string, name: string, secret: string | undefined): void {
   localStorage.setItem('docx-collaboration-name', name);
   const url = new URL(location.href);
   url.search = '';
   url.searchParams.set('room', roomId);
-  if (creator) url.searchParams.set('role', 'create');
+  // The key rides in the fragment so `startRoom` and the share link both see it while the
+  // signaling host never does.
+  url.hash = secret ? `${COLLAB_FRAGMENT.slice(1)}${secret}` : '';
   location.assign(url);
 }
 
@@ -94,13 +129,19 @@ function renderLobby(): void {
   const create = element('button', 'primary', strings.create);
   create.type = 'button';
   create.addEventListener('click', () => {
-    navigateToRoom(createCollaborationRoomId(), true, name.value.trim() || storedName());
+    navigateToRoom(
+      createCollaborationRoomId(),
+      name.value.trim() || storedName(),
+      createRoomSecret()
+    );
   });
   const join = element('button', undefined, strings.join);
   join.type = 'button';
   join.addEventListener('click', () => {
     const roomId = roomFromInput(room.value);
-    if (roomId) navigateToRoom(roomId, false, name.value.trim() || storedName());
+    if (roomId) {
+      navigateToRoom(roomId, name.value.trim() || storedName(), roomSecretFrom(room.value));
+    }
   });
 
   const actions = element('div', 'lobby-actions');
@@ -139,6 +180,9 @@ function renderRoom(
   const share = new URL(location.href);
   share.search = '';
   share.searchParams.set('room', roomId);
+  // The invite carries the key in its fragment, so the joiner gets both halves in one link.
+  const secret = roomSecretFrom('');
+  share.hash = secret ? `${COLLAB_FRAGMENT.slice(1)}${secret}` : '';
   const shareInput = element('input', 'share-link');
   shareInput.readOnly = true;
   shareInput.value = share.toString();
@@ -198,9 +242,14 @@ function renderRoom(
   };
 }
 
-async function startRoom(roomId: string, creator: boolean): Promise<void> {
+async function startRoom(roomId: string): Promise<void> {
   app.replaceChildren(element('main', 'lobby', strings.connection));
   const name = storedName();
+  // `create-or-join` needs no out-of-band role: the first peer seeds the room and every
+  // later peer joins it, so the share link carries the room id plus the fragment key.
+  // Passed explicitly rather than left for the engine to read off the address bar, so this
+  // file is the one place that decides where the key comes from.
+  const secret = roomSecretFrom('');
   const room = await createWebrtcCollaboration({
     roomId,
     identity: {
@@ -208,14 +257,10 @@ async function startRoom(roomId: string, creator: boolean): Promise<void> {
       name,
       color: 'var(--doc-accent)',
     },
-    bootstrap: creator ? { kind: 'create', document: demoDocumentBytes() } : { kind: 'join' },
+    bootstrap: { kind: 'create-or-join', document: demoDocumentBytes() },
+    ...(secret ? { password: secret } : {}),
   });
   try {
-    if (creator) {
-      const joinUrl = new URL(location.href);
-      joinUrl.searchParams.delete('role');
-      history.replaceState(null, '', joinUrl);
-    }
     const editor = createDocxEditor({
       document: room.document,
       modules: [collaborationModule({ session: room.session })],
@@ -233,7 +278,7 @@ const roomId = parameters.get('room');
 if (!roomId) {
   renderLobby();
 } else {
-  startRoom(roomId, parameters.get('role') === 'create').catch((error) => {
+  startRoom(roomId).catch((error) => {
     const message = element('main', 'lobby');
     message.append(
       element('h1', undefined, strings.failed),

@@ -410,6 +410,52 @@ describe('full-document presence selection', () => {
     ]);
   });
 
+  // A peer's `color` is attacker-controlled awareness data. Hosts paint it into a CSS
+  // `background` custom property, where `url(//host/t)` is a zero-click GET, so the decode
+  // boundary must drop everything the engine would not produce itself.
+  test('a hostile awareness color never reaches participants or selections', async () => {
+    const alice = await createPeer('alice');
+    const bob = await joinPeer(alice, 'bob');
+    const first = bob.port.paragraphs()[0]!;
+    bob.awareness.setLocalStateField('docxEditor', {
+      actorId: 'bob',
+      name: 'bob',
+      color: 'url(//x/t)',
+      role: 'human',
+      selection: {
+        anchor: { paragraphId: first.paragraphId, offset: 0 },
+        head: { paragraphId: first.paragraphId, offset: 2 },
+      },
+    });
+    syncAwareness(bob, alice);
+    const remoteBob = alice.room.session.participants().find((entry) => entry.actorId === 'bob');
+    expect(remoteBob).toBeDefined();
+    expect(remoteBob?.color).toBeUndefined();
+    const selection = alice.room.session.remoteSelections()[0];
+    expect(selection?.actorId).toBe('bob');
+    expect(selection?.color).toBeUndefined();
+  });
+
+  test('a hex awareness color still reaches participants and selections', async () => {
+    const alice = await createPeer('alice');
+    const bob = await joinPeer(alice, 'bob');
+    const first = bob.port.paragraphs()[0]!;
+    bob.awareness.setLocalStateField('docxEditor', {
+      actorId: 'bob',
+      name: 'bob',
+      color: '#ff8800',
+      role: 'human',
+      selection: {
+        anchor: { paragraphId: first.paragraphId, offset: 0 },
+        head: { paragraphId: first.paragraphId, offset: 2 },
+      },
+    });
+    syncAwareness(bob, alice);
+    const remoteBob = alice.room.session.participants().find((entry) => entry.actorId === 'bob');
+    expect(remoteBob?.color).toBe('#ff8800');
+    expect(alice.room.session.remoteSelections()[0]?.color).toBe('#ff8800');
+  });
+
   test('a cell rectangle stays two endpoints plus a kind', async () => {
     const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
     const cell = (id: string, text: string): string =>

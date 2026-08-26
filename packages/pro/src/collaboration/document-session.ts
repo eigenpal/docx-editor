@@ -16,11 +16,7 @@ import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import {
   ORIGIN_IDS,
-  TreePackageStore,
-  normalizeParagraphIdentity,
-  readOoxmlPackage,
   writeOoxmlPackage,
-  type OoxmlPackage,
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
@@ -54,6 +50,14 @@ import {
 } from './document/seed.ts';
 import { droppedContentDetail } from './document/schema.ts';
 import { SharedBlobStore, limitFailure } from './shared-blob-store.ts';
+import {
+  DEFAULT_INITIALIZATION_TIMEOUT_MS,
+  observeSeedRecords,
+  openBaselinePackage,
+  runCreateOrJoinBootstrap,
+  seedRecordCount,
+  waitForSharedInitialization,
+} from './document-bootstrap.ts';
 import { LogicalIdentityMap } from './document-identity.ts';
 import { CollaborationSchemaError } from './schema.ts';
 import type {
@@ -67,8 +71,6 @@ const AWARENESS_FIELD = 'docxEditor';
 const BLOBS_KEY = 'docx-package-blobs-v1';
 const MAX_IDENTITY_LENGTH = 256;
 const MAX_AWARENESS_STATES = 256;
-const MAX_BASELINE_BYTES = 20 * 1024 * 1024;
-const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
 /** One refused journal recovers; a run of them means the next edit refuses too. */
 const MAX_REFUSALS_IN_A_ROW = 3;
 /** Local journals inside this window share one actor undo item. */
@@ -143,24 +145,6 @@ function sessionIdentity(value: string | undefined): string {
   return sessionId;
 }
 
-/** Normalized canonical package for the creator's baseline bytes. */
-function openBaselinePackage(bytes: Uint8Array): OoxmlPackage {
-  if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
-    throw new CollaborationSchemaError('invalid-baseline');
-  }
-  if (bytes.byteLength > MAX_BASELINE_BYTES) {
-    throw new CollaborationSchemaError('baseline-too-large');
-  }
-  const loaded = readOoxmlPackage(bytes, {
-    zip: { maxEntries: 10_000, maxTotalBytes: MAX_BASELINE_BYTES, maxRatio: 200 },
-  });
-  if (!loaded.ok) throw new CollaborationSchemaError('invalid-baseline');
-  const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
-  if (!main) throw new CollaborationSchemaError('no-main-document-part');
-  const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
-  return store.currentPackage();
-}
-
 function encodedSelectionAddress(value: unknown): EncodedSelectionAddress | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -214,8 +198,11 @@ function awarenessPayload(value: unknown): AwarenessPayload | null {
   ) {
     return null;
   }
-  const color =
-    typeof record.color === 'string' && record.color.length <= 64 ? record.color : undefined;
+  // Trust boundary for a peer's presence record. The color flows into `participants()` and
+  // `remoteSelections()`, and hosts paint it into CSS (`background:` via a custom property),
+  // where `url(//host/t)` is a zero-click GET. Only the shapes this engine itself produces
+  // pass; anything else drops so every consumer falls back to the accent color.
+  const color = safeParticipantColor(typeof record.color === 'string' ? record.color : undefined);
   const role: 'human' | 'agent' = record.role === 'agent' ? 'agent' : 'human';
   const base = { actorId: record.actorId, name: record.name, ...(color ? { color } : {}), role };
   const selection = encodedSelection(record.selection);
@@ -248,6 +235,7 @@ class DocumentSession implements DocumentCollaborationSession {
   private destroyed = false;
   private refusedInARow = 0;
   private readonly stopBlobWatch: () => void;
+  private readonly stopSeedWatch: () => void;
 
   constructor(
     private readonly ydoc: Y.Doc,
@@ -277,6 +265,12 @@ class DocumentSession implements DocumentCollaborationSession {
     });
     this.publishAwareness();
     this.setStatus('ready');
+    // A second seed record means two seed transactions merged: every paragraph exists twice
+    // and no client can pick one side. Terminal by design — every replica that observes the
+    // merged array reports the same code, with no repair attempt.
+    this.stopSeedWatch = observeSeedRecords(ydoc, () => {
+      this.setStatus('error', 'concurrent-seed');
+    });
     // A session that is never attached still reports `ready`, and in the connect-later flow a
     // missed `key` remount silently stops replication. The failure codes are a closed core
     // union with only terminal statuses, so this cannot be a typed non-fatal warning; a
@@ -553,6 +547,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.detachPort?.();
     this.destroyed = true;
     this.stopBlobWatch();
+    this.stopSeedWatch();
     this.ydoc.off('afterTransaction', this.onYjsTransaction);
     this.awareness.off('change', this.onAwarenessChange);
     this.awareness.setLocalState(null);
@@ -770,62 +765,6 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 }
 
-function sharedBinariesReady(registry: DocumentRegistry, blobs: SharedBlobStore): boolean {
-  for (const descriptor of registry.binaries()) {
-    if (!blobs.has(descriptor.digest)) return false;
-  }
-  return true;
-}
-
-function waitForSharedInitialization(
-  registry: DocumentRegistry,
-  blobs: SharedBlobStore,
-  timeoutMs: number,
-  signal?: AbortSignal
-): Promise<void> {
-  const meta = registry.schema.meta;
-  const ready = (): boolean =>
-    meta.get('initialized') === true && sharedBinariesReady(registry, blobs);
-  // A blob that does not hash to its key reads as absent here, so without this the wait ends in
-  // `initialization-timeout` — a joiner told to retry a room that will never satisfy it.
-  const poison = (): CollaborationSchemaError | null => {
-    const digest = blobs.poisonedDigest();
-    return digest ? new CollaborationSchemaError('blob-digest-mismatch', digest) : null;
-  };
-  if (ready()) return Promise.resolve();
-  const poisonedNow = poison();
-  if (poisonedNow) return Promise.reject(poisonedNow);
-  if (signal?.aborted) {
-    return Promise.reject(new CollaborationSchemaError('initialization-aborted'));
-  }
-  return new Promise((resolve, reject) => {
-    const finish = (error?: Error): void => {
-      clearTimeout(timer);
-      meta.unobserve(onChange);
-      registry.doc.off('afterTransaction', onChange);
-      signal?.removeEventListener('abort', onAbort);
-      if (error) reject(error);
-      else resolve();
-    };
-    const onChange = (): void => {
-      const poisoned = poison();
-      if (poisoned) {
-        finish(poisoned);
-        return;
-      }
-      if (ready()) finish();
-    };
-    const onAbort = (): void => finish(new CollaborationSchemaError('initialization-aborted'));
-    const timer = setTimeout(
-      () => finish(new CollaborationSchemaError('initialization-timeout')),
-      timeoutMs
-    );
-    meta.observe(onChange);
-    registry.doc.on('afterTransaction', onChange);
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
-}
-
 /**
  * Full-document collaboration session.
  *
@@ -897,6 +836,26 @@ export async function createDocumentCollaboration(
     options.ydoc.transact(() => {
       registry.schema.meta.set('documentId', documentId);
     });
+  } else if (options.bootstrap.kind === 'create-or-join') {
+    const outcome = await runCreateOrJoinBootstrap({
+      ydoc: options.ydoc,
+      awareness: options.awareness,
+      registry,
+      blobs,
+      documentId,
+      document: options.bootstrap.document,
+      probeTimeoutMs: options.bootstrap.probeTimeoutMs,
+      electionWindowMs: options.bootstrap.electionWindowMs,
+      timeoutMs: options.bootstrap.timeoutMs,
+      signal: options.bootstrap.signal,
+    });
+    if (outcome === 'joined') {
+      if (registry.schema.meta.get('documentId') !== documentId) {
+        throw new CollaborationSchemaError('document-id-mismatch');
+      }
+      // Same rebuild as the join path: shared state arrived before this registry existed.
+      registry.rebuildDerivedIndexes();
+    }
   } else {
     await waitForSharedInitialization(
       registry,
@@ -911,6 +870,13 @@ export async function createDocumentCollaboration(
     // built from child-array EVENTS. Without one rebuild here a joiner materializes a
     // document with no known parents.
     registry.rebuildDerivedIndexes();
+  }
+
+  // Two merged seed transactions duplicate the whole document, and no client can pick one
+  // side. Refuse the room before any edit can ride on it; a legacy room with no seed
+  // records (or exactly one) passes.
+  if (seedRecordCount(options.ydoc) > 1) {
+    throw new CollaborationSchemaError('concurrent-seed');
   }
 
   const exceeded = limitFailure(registry, blobs);

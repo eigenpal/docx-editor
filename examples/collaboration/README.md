@@ -24,10 +24,16 @@ The demo removes the creator role from the address after initialization. Share o
 shown on the page. Do not initialize the same room from two creator pages. The room status reports
 schema readiness. Confirm peer discovery with the connected-participant count.
 
+A join link has the shape `?room=<id>#collab=<key>`. The query string carries the public room id,
+which is the signaling topic. The fragment carries a generated encryption key that the demo passes
+to `y-webrtc` as the room password. Browsers don't send the fragment to servers, so the signaling
+host never sees the key. Anyone who has the full link can join and decrypt the room.
+
 ## Limits
 
 - Public signaling supports this proof only.
-- A room identifier is not access control.
+- A room identifier is not access control. The `#collab=` fragment key encrypts signaling, but
+  the full link still grants join access.
 - WebRTC can require a TURN relay on restrictive networks.
 - The room has no durable shared storage.
 - Concurrent creators with different baselines enter an error state after their updates meet.

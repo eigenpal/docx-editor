@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useDocxEditor } from '@docx-editor.dev/react';
+import { safeParticipantColor } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
 import { useCollaborationParticipants, useCollaborationStatus } from '@docx-editor.dev/pro/react';
 import { createT, en } from '@docx-editor.dev/i18n';
@@ -76,6 +77,15 @@ function CloseIcon() {
   );
 }
 
+/**
+ * The engine sanitizes a peer's color before it reaches `participants()`, but a peer on a
+ * build that predates that gate can still publish a raw value (`url(//host/t)` fires a
+ * zero-click GET from a `background` shorthand). Re-check here before the value enters CSS.
+ */
+function participantColor(participant: CollaborationParticipant): string | undefined {
+  return safeParticipantColor(participant.color);
+}
+
 function identityColor(name: string): string {
   let hash = 0;
   for (const character of name) hash = (hash * 31 + character.charCodeAt(0)) | 0;
@@ -146,7 +156,7 @@ function ParticipantStack({ participants }: { participants: readonly Collaborati
           className="demo-collaboration-avatar"
           key={participant.actorId}
           title={participant.name}
-          style={{ '--demo-participant-color': participant.color } as CSSProperties}
+          style={{ '--demo-participant-color': participantColor(participant) } as CSSProperties}
         >
           {participant.name.slice(0, 1).toUpperCase()}
         </span>
@@ -364,7 +374,7 @@ export function CollaborationControl({
                             className="demo-collaboration-person__avatar"
                             style={
                               {
-                                '--demo-participant-color': participant.color,
+                                '--demo-participant-color': participantColor(participant),
                               } as CSSProperties
                             }
                           >

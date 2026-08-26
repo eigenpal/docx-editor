@@ -24,6 +24,8 @@ export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'e
  * {@link CollaborationFailure.detail}, not here. `invalid-shared-metadata` follows that rule:
  * it names one malformed field of the room's shared metadata, and which field is the detail.
  * Distinct from `invalid-document-id`, which rejects a document id this host passed in.
+ * `concurrent-seed` reports two merged seed transactions in one room; the room cannot be
+ * repaired client-side — create a new room from saved bytes.
  *
  * @public
  */
@@ -39,6 +41,7 @@ export type CollaborationFailureCode =
   | 'collaboration-session-not-attached'
   | 'collaboration-session-not-ready'
   | 'collaboration-text-limit'
+  | 'concurrent-seed'
   | 'document-id-mismatch'
   | 'duplicate-paragraph-id'
   | 'experimental-collaboration-body-text-only'
@@ -99,6 +102,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'collaboration-session-not-attached': true,
   'collaboration-session-not-ready': true,
   'collaboration-text-limit': true,
+  'concurrent-seed': true,
   'document-id-mismatch': true,
   'duplicate-paragraph-id': true,
   'experimental-collaboration-body-text-only': true,

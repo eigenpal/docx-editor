@@ -43,11 +43,29 @@ const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
  * Create or join bootstrap for one collaboration replica.
  *
  * Text, document, and WebRTC factories share this union.
+ *
+ * `create-or-join` removes the out-of-band decision about which peer creates a room.
+ * The replica probes for an initialized room and joins it when one appears. Otherwise it
+ * runs a short awareness election and only the winning candidate seeds from `document`.
+ * A room that two peers seeded concurrently reports the terminal failure code
+ * `concurrent-seed` on every replica. The document and WebRTC factories accept this kind;
+ * the experimental text factory refuses it.
  * @public
  */
 export type CollaborationBootstrap =
   | { readonly kind: 'create'; readonly document: Uint8Array }
-  | { readonly kind: 'join'; readonly timeoutMs?: number; readonly signal?: AbortSignal };
+  | { readonly kind: 'join'; readonly timeoutMs?: number; readonly signal?: AbortSignal }
+  | {
+      readonly kind: 'create-or-join';
+      readonly document: Uint8Array;
+      /** Wait for an existing initialized room before the seed election. Default 4000 ms. */
+      readonly probeTimeoutMs?: number;
+      /** Seed election window after an empty probe. Default 1500 ms. */
+      readonly electionWindowMs?: number;
+      /** Join wait after this replica loses the seed election. Default 30000 ms. */
+      readonly timeoutMs?: number;
+      readonly signal?: AbortSignal;
+    };
 
 /**
  * Display-identity fields a live session can update.
@@ -777,6 +795,11 @@ async function bootstrap(
   documentId: string,
   identity: CollaborationIdentity
 ): Promise<OpenedBaseline> {
+  if (options.bootstrap.kind === 'create-or-join') {
+    throw new TypeError(
+      "createTextCollaboration does not support bootstrap kind 'create-or-join'. Use createDocumentCollaboration."
+    );
+  }
   if (options.bootstrap.kind === 'create') {
     const opened = openBaseline(options.bootstrap.document, documentId);
     await initializeSchema(options.ydoc, documentId, identity.actorId, opened);

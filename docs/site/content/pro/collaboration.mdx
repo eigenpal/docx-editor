@@ -51,7 +51,7 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
     room: {
       roomId,
       identity: { actorId: 'alex', name: 'Alex' },
-      bootstrap: { kind: 'create', document: bytes },
+      bootstrap: { kind: 'create-or-join', document: bytes },
     },
   });
 
@@ -90,7 +90,7 @@ const { document, modules, session, pending, error, leave } = useWebrtcCollabora
   room: {
     roomId,
     identity: { actorId: 'alex', name: 'Alex' },
-    bootstrap: { kind: 'join' },
+    bootstrap: { kind: 'create-or-join', document: bytes },
   },
 });
 
@@ -113,6 +113,10 @@ async function leaveRoom() {
 
 </Framework>
 </FrameworkTabs>
+
+With `create-or-join`, every peer can open the same room with the same options. The first peer finds no room and seeds it from `document`. Every later peer finds the room and joins it, so no host has to decide out-of-band which peer creates the room. The `create` and `join` kinds remain available for hosts that already know their role.
+
+Two peers that seed the same room at the same time, without seeing each other, produce a room no client can repair. Every replica then reports the failure code `concurrent-seed` and stops. Recover by creating a new room from bytes you saved.
 
 Omit `room` when the user chooses share or join later. Call `connect` with the same options after that choice. `connect` and `leave` keep a stable identity across renders.
 
