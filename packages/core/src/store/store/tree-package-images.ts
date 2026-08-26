@@ -66,11 +66,23 @@ export interface InsertImageInput {
   readonly hyperlink?: string;
   /** Present in suggesting mode: the inserted drawing's run goes into a `w:ins`. */
   readonly revision?: RevisionAttributionInput;
+  /**
+   * Collaboration actor for the ids this insert mints — `wp:docPr/@id`, the image
+   * relationship, and a hyperlink relationship when one is asked for.
+   *
+   * EXPLICIT, and not the ambient `runWithTransactionActor` binding, because this entry is
+   * async: the mint runs after `await validateEmbeddedImageForCommit` and the ambient actor
+   * is synchronous-only. A wrap around the call would compile, read as correct, and be gone
+   * by the time the id is taken. Omitted (solo) keeps Word's dense `highest + 1` sequence.
+   */
+  readonly actorId?: string;
 }
 
 export interface ReplaceImageOptions {
   readonly expectedPackageRevision: number;
   readonly commitGuard?: () => boolean;
+  /** Collaboration actor for the replacement's minted ids. See {@link InsertImageInput.actorId}. */
+  readonly actorId?: string;
 }
 
 export type ImageIntentResult =
@@ -129,11 +141,22 @@ function resolveEmbedMediaPart(
   return resolved.mode === 'internal' ? resolved.partName : null;
 }
 
+interface ImageTransactOptions {
+  readonly expectedPackageRevision?: number;
+  readonly commitGuard?: () => boolean;
+  /**
+   * Collaboration actor handed to `storyStore.transact`, which binds it for the whole
+   * synchronous `build` — so `withEmbeddedImage`, its relationship mint and the hyperlink
+   * mint all read the same actor without an argument of their own.
+   */
+  readonly actorId?: string;
+}
+
 function transactPackageImage(
   store: TreePackageStore,
   scope: StoryScope,
   build: (ctx: TransactionContext, ownerPartName: string) => string | null,
-  options?: { readonly expectedPackageRevision?: number; readonly commitGuard?: () => boolean }
+  options?: ImageTransactOptions
 ): ImageIntentResult {
   const resolved = store.resolveStory(scope);
   if (!resolved.ok) {
@@ -160,7 +183,7 @@ function commitPackageImage(
   storyStore: TreeDocumentStore,
   story: TreeStoryRef,
   build: (ctx: TransactionContext, ownerPartName: string) => string | null,
-  options?: { readonly expectedPackageRevision?: number; readonly commitGuard?: () => boolean }
+  options?: ImageTransactOptions
 ): ImageIntentResult {
   const ownerPartName = story.partName;
   const beforePackage = store.currentPackage();
@@ -192,6 +215,10 @@ function commitPackageImage(
     },
     {
       story,
+      // THE BINDING THAT REACHES THE MINT. `transact` wraps the whole synchronous build in
+      // `runWithTransactionActor`, and the build is where `withEmbeddedImage` takes the
+      // `wp:docPr` id. An ambient wrap at the async entry could not get here.
+      ...(options?.actorId ? { actorId: options.actorId } : {}),
       ...(story.kind === 'headerFooter' || story.kind === 'notesPart'
         ? { minimumImpact: 'global' as const }
         : {}),
@@ -375,6 +402,7 @@ export async function insertImage(
     {
       expectedPackageRevision: input.expectedPackageRevision,
       ...(input.commitGuard ? { commitGuard: input.commitGuard } : {}),
+      ...(input.actorId ? { actorId: input.actorId } : {}),
     }
   );
 
@@ -466,6 +494,7 @@ export async function replaceImage(
     {
       expectedPackageRevision: options.expectedPackageRevision,
       ...(options.commitGuard ? { commitGuard: options.commitGuard } : {}),
+      ...(options.actorId ? { actorId: options.actorId } : {}),
     }
   );
 }
@@ -628,7 +657,8 @@ export async function embedExternalImage(
   url: string,
   port: ExternalImageFetchPort,
   signal: AbortSignal,
-  decodePort: ImageDecodePort
+  decodePort: ImageDecodePort,
+  actorId?: string
 ): Promise<ImageIntentResult> {
   const fetched = await fetchExternalImageBytes(port, url, signal, undefined, decodePort);
   if (!fetched.ok) {
@@ -639,8 +669,11 @@ export async function embedExternalImage(
     };
   }
 
+  // The actor travels the SAME way it does through `insertImage`: explicitly, past the two
+  // awaits above. Nothing ambient survives `fetchExternalImageBytes`.
   return replaceImage(store, scope, drawingNodeId, fetched.bytes, fetched.mime, decodePort, {
     expectedPackageRevision: store.packageRevision,
+    ...(actorId ? { actorId } : {}),
   });
 }
 

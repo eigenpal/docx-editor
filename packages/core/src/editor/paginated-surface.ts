@@ -5524,6 +5524,7 @@ export function mountPaginatedSurface(
       author: () => options.author,
       trackedDate,
       decodePort: () => decodePort,
+      actorId: () => collaborationSession?.identity.actorId,
     }),
 
     // `preventScroll`: the pages layer is the WHOLE document tall, and focusing it scrolls

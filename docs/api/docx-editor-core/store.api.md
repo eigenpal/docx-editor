@@ -4695,7 +4695,7 @@ export class TreePackageStore {
     currentPackage(): OoxmlPackage;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
-    embedExternalImage(scope: StoryScope, drawingNodeId: string, url: string, port: ExternalImageFetchPort, signal: AbortSignal, decodePort: ImageDecodePort): Promise<ImageIntentResult>;
+    embedExternalImage(scope: StoryScope, drawingNodeId: string, url: string, port: ExternalImageFetchPort, signal: AbortSignal, decodePort: ImageDecodePort, actorId?: string): Promise<ImageIntentResult>;
     // (undocumented)
     endComposition(): void;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;

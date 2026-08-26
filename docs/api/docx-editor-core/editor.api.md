@@ -1383,7 +1383,7 @@ export interface PaginatedSurface {
     // (undocumented)
     imageDecodePort(): ImageDecodePort;
     // (undocumented)
-    insertImage(input: Omit<InsertImageInput, 'decodePort'>): Promise<ImageIntentResult>;
+    insertImage(input: SurfaceInsertImageInput): Promise<ImageIntentResult>;
     insertLineBreak(): void;
     insertNote(noteKind: 'footnote' | 'endnote'): boolean;
     insertPageBreak(): void;
@@ -2035,6 +2035,9 @@ export interface SurfaceHyperlink {
     // (undocumented)
     readonly tooltip?: string;
 }
+
+// @public
+export type SurfaceInsertImageInput = Omit<InsertImageInput, 'decodePort' | 'actorId'>;
 
 // @public
 export interface SurfaceNavigation {

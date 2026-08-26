@@ -65,7 +65,7 @@ import {
   applyImagePropertiesIntent,
   deleteImage as deleteImageIntent,
   deleteImageTracked as deleteImageTrackedIntent,
-  embedExternalImage as embedExternalImageIntent,
+  embedExternalImage as embedExternalIntent,
   insertImage as insertImageIntent,
   replaceImage as replaceImageIntent,
   setDrawingMetadataWithHyperlink as setDrawingMetadataWithHyperlinkIntent,
@@ -823,9 +823,7 @@ export class TreePackageStore {
     return openStoryTokenOf(this.stories, this.pkg);
   }
 
-  /**
-   * Insert a validated raster image as one package undo unit (task 12).
-   */
+  /** Insert a validated raster image as one package undo unit (task 12). */
   insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult> {
     return insertImageIntent(this, scope, input);
   }
@@ -868,9 +866,10 @@ export class TreePackageStore {
     url: string,
     port: ExternalImageFetchPort,
     signal: AbortSignal,
-    decodePort: ImageDecodePort
+    decodePort: ImageDecodePort,
+    actorId?: string
   ): Promise<ImageIntentResult> {
-    return embedExternalImageIntent(this, scope, drawingNodeId, url, port, signal, decodePort);
+    return embedExternalIntent(this, scope, drawingNodeId, url, port, signal, decodePort, actorId);
   }
 
   /** Metadata plus hyperlink target creation in one package transaction. */

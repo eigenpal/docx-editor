@@ -280,6 +280,7 @@ export {
   type ImageResourceLimits,
 } from '../store/runtime/limits.ts';
 export type { HyperlinkOps, SurfaceHyperlink } from './surface-hyperlinks.ts';
+export type { SurfaceInsertImageInput } from './surface-image-ops.ts';
 export {
   equationAtPosition,
   type EquationActivation,

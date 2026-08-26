@@ -428,7 +428,7 @@ export interface PaginatedSurface {
     drawingNodeId: string
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
   insertImage(
-    input: Omit<import('../store/store/tree-package-images.ts').InsertImageInput, 'decodePort'>
+    input: import('./surface-image-ops.ts').SurfaceInsertImageInput
   ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
   replaceImage(
     drawingNodeId: string,
