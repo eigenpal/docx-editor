@@ -881,22 +881,27 @@ describe('the span bound is what decides when the gate stops planning', () => {
     Array.from({ length: count }, (_, i) => p(`b ${i}`)).join('') +
     '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
 
-  test('MAX_GATED_BREAK_SPAN is small enough to stay off the plan for a long drag', () => {
-    expect(MAX_GATED_BREAK_SPAN).toBeLessThanOrEqual(64);
+  test('MAX_GATED_BREAK_SPAN is the measured value, not a round number', () => {
+    // Pinned exactly. `toBeLessThanOrEqual` passed at the value the measurement rejected, so
+    // the bound could drift back to tens of milliseconds per row without a test noticing.
+    expect(MAX_GATED_BREAK_SPAN).toBe(32);
   });
 
   test('a span inside the bound is answered exactly; past it the press answers', () => {
     // Sections disagree, so neither short-circuit settles it and only the plan can.
-    const editor = mount(MIXED(40), 'suggesting');
+    // Wide enough that both spans address real paragraphs whatever the bound is, so a pass
+    // can never come from an out-of-range index.
+    const half = MAX_GATED_BREAK_SPAN + 40;
+    const editor = mount(MIXED(half), 'suggesting');
     const ids = editor.surface!.session.paragraphIds();
     const spanning = (count: number) => {
       editor.surface!.setSelection({
-        anchor: { paragraphId: ids[40 - Math.floor(count / 2)]!, offset: 0 },
-        head: { paragraphId: ids[40 + Math.ceil(count / 2)]!, offset: 1 },
+        anchor: { paragraphId: ids[half - Math.floor(count / 2)]!, offset: 0 },
+        head: { paragraphId: ids[half + Math.ceil(count / 2)]!, offset: 1 },
       });
       return editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never);
     };
     expect(spanning(MAX_GATED_BREAK_SPAN - 2).ok).toBe(false);
-    expect(spanning(MAX_GATED_BREAK_SPAN + 20)).toEqual({ ok: true });
+    expect(spanning(MAX_GATED_BREAK_SPAN + 2)).toEqual({ ok: true });
   });
 });

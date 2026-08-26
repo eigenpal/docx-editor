@@ -44,62 +44,56 @@ export const LOCKED_CONTENT_BREAK_REFUSAL =
   'a section break cannot be inserted in locked or linked content';
 
 /**
- * Whether ANY content control in the part declares a lock or a binding a break could hit.
+ * The paragraphs a RANGE has to rule out before a cheap answer can stand, in one walk.
  *
- * A fast-path exit: a document with none — which is nearly every document — skips both lock
- * questions for a range without ordering the selection or planning anything, and the ones
- * that do have them pay for the answer. It reads the same two declarations the store's own
- * guards read, so it cannot answer "no" where one of them would refuse.
+ * Two things refuse before anything the cheap path can see: a cell, where a section cannot
+ * end at all, and content a control holds. Both are about the LANDING, which is exactly what
+ * the cheap path does not have — so they are ruled out across the whole span instead.
+ *
+ * `held` is a conservative superset of the store's `effectiveContentLockAt(...).content` and
+ * `isBoundAt`: it marks every paragraph under a control that DECLARES one of those, without
+ * reading which wins where they nest. A fast-path exit may over-report and lose a shortcut;
+ * it may never under-report and skip a refusal. The landing itself is still asked the store's
+ * own question.
  */
-export function partDeclaresContentControlLocks(part: OoxmlPart): boolean {
-  let found = false;
-  const walk = (node: OoxmlNode): void => {
-    if (found || node.kind === 'textValue' || !('localName' in node)) return;
-    // NAMESPACE-QUALIFIED, and by what the lock says. Matching `lock` on its local name alone
-    // matched VML's `o:lock`, which Word writes inside `v:shapetype` for every legacy picture
-    // — so one shape anywhere turned this true and cost the gate its cheap exact answers. A
-    // `sdtLocked` control is not a match either: it refuses REMOVAL of the wrapper and leaves
-    // the content editable, which is not a refusal a break can hit.
-    if (node.namespaceUri === WML_NAMESPACE_URI) {
-      if (node.localName === 'dataBinding') {
-        found = true;
-        return;
-      }
-      if (node.localName === 'lock') {
-        const value = node.attributes?.find(
-          (attribute) =>
-            attribute.localName === 'val' && attribute.namespaceUri === WML_NAMESPACE_URI
-        )?.value;
-        if (value === 'contentLocked' || value === 'sdtContentLocked') found = true;
-        return;
-      }
+export function paragraphHazards(part: OoxmlPart): {
+  readonly inCell: ReadonlySet<string>;
+  readonly held: ReadonlySet<string>;
+} {
+  const inCell = new Set<string>();
+  const held = new Set<string>();
+  const declaresHold = (node: OoxmlNode): boolean => {
+    if (node.kind === 'textValue' || !('localName' in node) || node.localName !== 'sdt') {
+      return false;
     }
-    for (const child of node.children ?? []) walk(child);
+    const properties = node.children?.find(
+      (child) => child.kind !== 'textValue' && 'localName' in child && child.localName === 'sdtPr'
+    );
+    if (!properties || properties.kind === 'textValue') return false;
+    return (properties.children ?? []).some((child) => {
+      if (child.kind === 'textValue' || !('localName' in child)) return false;
+      if (child.namespaceUri !== WML_NAMESPACE_URI) return false;
+      if (child.localName === 'dataBinding') return true;
+      if (child.localName !== 'lock') return false;
+      const value = child.attributes?.find(
+        (attribute) => attribute.localName === 'val' && attribute.namespaceUri === WML_NAMESPACE_URI
+      )?.value;
+      return value === 'contentLocked' || value === 'sdtContentLocked';
+    });
   };
-  walk(part.root);
-  return found;
-}
-
-/**
- * Every paragraph the part holds inside a `w:tbl`, in one walk.
- *
- * The same predicate `isTableNested` answers one id at a time. A RANGE needs it for the whole
- * span — the landing is somewhere in there and a section cannot end in a cell — and asking per
- * paragraph would be a walk each.
- */
-export function tableNestedParagraphIds(part: OoxmlPart): ReadonlySet<string> {
-  const nested = new Set<string>();
-  const walk = (node: OoxmlNode, inTable: boolean): void => {
+  const walk = (node: OoxmlNode, cell: boolean, hold: boolean): void => {
     if (node.kind === 'textValue') return;
     if (node.kind === 'paragraph') {
-      if (inTable) nested.add(node.id);
+      if (cell) inCell.add(node.id);
+      if (hold) held.add(node.id);
       return;
     }
-    const below = inTable || node.kind === 'table';
-    for (const child of node.children ?? []) walk(child, below);
+    const belowCell = cell || node.kind === 'table';
+    const belowHold = hold || declaresHold(node);
+    for (const child of node.children ?? []) walk(child, belowCell, belowHold);
   };
-  walk(part.root, false);
-  return nested;
+  walk(part.root, false, false);
+  return { inCell, held };
 }
 
 /**
@@ -222,20 +216,17 @@ export function sectionBreakGate(input: SectionBreakGateInput): string | null {
     // A CARET is its own landing, so it settles every question with no ordering, no flush and
     // one walk — and a caret is what a toolbar derives against nearly always. `orderedRange()`
     // flushes pending input, which is a write, and this is a read React runs during render.
-    const part = input.part();
-    if (isTableNested(part, input.caretParagraphId)) return TABLE_CELL_BREAK_REFUSAL;
-    return landedBreakRefusal(part, input.caretParagraphId, breakType, suggesting);
+    return landedBreakRefusal(input.part(), input.caretParagraphId, breakType, suggesting);
   }
-  // A RANGE has two questions left, and each needs a reason to exist: the suggesting one needs
-  // suggesting, and the lock one needs a control that declares a lock or a binding. Neither,
-  // and there is nothing to work out — which is nearly every document, and one walk is what it
-  // costs to know that without ordering the selection.
-  const mayHold = partDeclaresContentControlLocks(input.part());
-  // A cell refuses whatever the mode, so a document holding one cannot take this exit even in
-  // edit mode. Both walks happen before `orderedRange()`, which is fine: flushing pending
-  // input adds no table and declares no lock.
-  const cells = tableNestedParagraphIds(input.part());
-  if (!suggesting && !mayHold && cells.size === 0) return null;
+  // A RANGE has three questions left, and each needs a reason to exist: the suggesting one
+  // needs suggesting, and the cell and lock ones need the document to hold a table or declare
+  // a lock at all. None of them, and there is nothing to work out — which is nearly every
+  // document, and one walk is what it costs to know that without ordering the selection.
+  //
+  // Before `orderedRange()`, which is fine: flushing pending input adds no table, and declares
+  // no lock.
+  const hazards = paragraphHazards(input.part());
+  if (!suggesting && hazards.inCell.size === 0 && hazards.held.size === 0) return null;
   // AFTER the flush `orderedRange` runs, so the sections come from the tree the plan would be
   // built against.
   const { from, to } = input.orderedRange();
@@ -262,14 +253,21 @@ export function sectionBreakGate(input: SectionBreakGateInput): string | null {
   const order = input.paragraphOrder();
   const first = order.indexOf(from.paragraphId);
   const last = order.indexOf(to.paragraphId);
-  const mayNest =
-    first === -1 || last === -1 || order.slice(first, last + 1).some((id) => cells.has(id));
-  const exact = !mayHold && !mayNest;
+  // Scoped to the SPAN, not the document: a locked control ten pages away cannot be the
+  // landing, and treating it as if it could sent every range in the document down the plan
+  // path — 22ms for a thirty-paragraph drag, twice per toolbar derivation.
+  const slice = first === -1 || last === -1 ? null : order.slice(first, last + 1);
+  const exact =
+    slice !== null &&
+    !slice.some((id) => hazards.inCell.has(id)) &&
+    !slice.some((id) => hazards.held.has(id));
   // A settled type that is NOT the requested one means the break definitely retypes.
   if (settled !== null && settled !== breakType) {
     // The section's own owner is known whenever both ends resolve to one section, and it
-    // outranks the mode — see `landedBreakRefusal`.
-    if (oneSection && atStart.ownerId !== null && heldByControl(part, atStart.ownerId)) {
+    // outranks the mode — see `landedBreakRefusal`. Only when the landing itself cannot be
+    // held, though: that question comes FIRST there, and answering the owner's would name a
+    // different lock than the press does.
+    if (exact && oneSection && atStart.ownerId !== null && heldByControl(part, atStart.ownerId)) {
       return LOCKED_SECTION_BREAK_REFUSAL;
     }
     // Suggesting refuses it, and says so here only when nothing else could have refused
@@ -285,8 +283,10 @@ export function sectionBreakGate(input: SectionBreakGateInput): string | null {
   //
   // Past it a definite retype still REFUSES while suggesting — the press will too, and the
   // reason may be the more specific one. Answering `null` there was a live row for a break
-  // the gate already knew would fail.
-  if (last - first > MAX_GATED_BREAK_SPAN) {
+  // the gate already knew would fail. A retype is only DEFINITE when the span's sections
+  // agree on a type that is not the requested one; where they disagree the answer really does
+  // depend on which one the landing falls in, and past the bound the row stays live.
+  if (slice === null || slice.length - 1 > MAX_GATED_BREAK_SPAN) {
     return suggesting && settled !== null && settled !== breakType ? SUGGESTED_BREAK_REFUSAL : null;
   }
   const landing = sectionBreakLanding(part, input.deleteSelectionPlan());

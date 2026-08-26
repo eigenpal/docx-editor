@@ -702,15 +702,19 @@ export interface PaginatedSurface {
   /**
    * Why {@link insertSectionBreak} would refuse this kind right now, or `null`.
    *
-   * THE authority for that question, so `Editor.can` and the write cannot answer it
-   * differently. Both halves of the answer are things only the surface knows: the LIVE
-   * editing mode (a document that declares `w:trackRevisions` opens suggesting without
-   * anyone passing a mode, and Review > Track Changes moves it again afterwards), and the
-   * paragraph the break would actually land in — which for a range in suggesting mode is
-   * past the struck words, not the selection's head.
+   * THE authority for the BREAK's own questions, so `Editor.can` and the write cannot answer
+   * those differently. Both halves are things only the surface knows: the LIVE editing mode
+   * (a document that declares `w:trackRevisions` opens suggesting without anyone passing a
+   * mode, and Review > Track Changes moves it again afterwards), and the paragraph the break
+   * would actually land in — which for a range in suggesting mode is past the struck words,
+   * not the selection's head.
    *
-   * Answers only the break's own question. Story scope is gated separately, because a
-   * caret in a header refuses every break kind for a different reason.
+   * NOT the deletion's questions. A break replaces the selection first, and that deletion can
+   * cross content a control holds or a region protected some other way; only the store sees
+   * that, and it sees it at write time. So a range whose landing is fine while its deletion
+   * is not answers `null` here and refuses at the press — as every other replacing command in
+   * the engine does, less loudly. Story scope is gated separately again, because a caret in a
+   * header refuses every break kind for a different reason.
    */
   sectionBreakRefusal(breakType?: SectionBreakInsertType): string | null;
   /** The layout session, so a host or a test can see how much work a pass actually did. */

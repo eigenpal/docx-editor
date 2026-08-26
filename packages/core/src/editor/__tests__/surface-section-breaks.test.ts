@@ -7,7 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
-import { partDeclaresContentControlLocks } from '../surface-section-breaks.ts';
+import { paragraphHazards } from '../surface-section-breaks.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
@@ -28,7 +28,10 @@ const P = '<w:p><w:r><w:t>text</w:t></w:r></w:p>';
 const sdt = (properties: string) =>
   `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent>${P}</w:sdtContent></w:sdt>`;
 
-describe('partDeclaresContentControlLocks', () => {
+/** Whether any paragraph in the part sits under a control that would refuse a break. */
+const anyHeld = (body: string): boolean => paragraphHazards(load(body)).held.size > 0;
+
+describe('paragraphHazards: which controls hold content', () => {
   test.each([
     ['a plain document', P],
     // Word writes this inside `v:shapetype` for every legacy picture. Matching `lock` on its
@@ -50,7 +53,7 @@ describe('partDeclaresContentControlLocks', () => {
     ['a foreign lock carrying a real w:val', sdt('<x:lock w:val="contentLocked"/>')],
     ['a control with no lock at all', sdt('<w:alias w:val="Field"/>')],
   ])('is false for %s', (_label, body) => {
-    expect(partDeclaresContentControlLocks(load(body))).toBe(false);
+    expect(anyHeld(body)).toBe(false);
   });
 
   test.each([
@@ -69,6 +72,6 @@ describe('partDeclaresContentControlLocks', () => {
       `${P}<w:tbl><w:tr><w:tc>${sdt('<w:lock w:val="contentLocked"/>')}</w:tc></w:tr></w:tbl>`,
     ],
   ])('is true for %s', (_label, body) => {
-    expect(partDeclaresContentControlLocks(load(body))).toBe(true);
+    expect(anyHeld(body)).toBe(true);
   });
 });
