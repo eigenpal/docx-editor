@@ -411,10 +411,14 @@ export function piecesOfParagraph(
       start: number,
       end: number
     ): void => {
+      // A tracked-deleted picture stays LAID OUT in `all-markup`, exactly as deleted text
+      // does \u2014 the reader is looking at a pending removal, and dropping it showed the
+      // proposed result under a mode that promises the markup (#479). Its model range is
+      // still recorded as deleted in every mode, because the offset exists in every mode.
       const deleted = revisionsAreDeletion(revisions);
-      const suppressed = style.hidden || !revisionsVisible(revisions, displayMode) || deleted;
+      if (deleted && deletedRanges) appendModelRange(deletedRanges, start, end);
+      const suppressed = style.hidden || !revisionsVisible(revisions, displayMode);
       if (projection.hidden || suppressed) {
-        if (deleted && deletedRanges) appendModelRange(deletedRanges, start, end);
         if (!projection.hidden) return;
         push('\uFFFC', props, style, true, start, end);
         return;

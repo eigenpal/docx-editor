@@ -306,6 +306,7 @@ function resolvedDrawingPaint(ctx: ResolvedPaintContext): DrawingPaintContext {
     ...(ctx.imageUrlPort ? { imageUrlPort: ctx.imageUrlPort } : {}),
     ...(ctx.inertLinks ? { inertLinks: true } : {}),
     ...(ctx.paintInstance ? { paintInstance: ctx.paintInstance } : {}),
+    ...(ctx.revisionStyles ? { revisionStyles: ctx.revisionStyles } : {}),
     paintStoryFragment: (
       document: Document,
       fragment: ParagraphFragmentRecord | TableFragmentRecord
@@ -1045,6 +1046,10 @@ function paintChangeBars(
   for (const line of fragment.lines) {
     const revisions = [
       ...line.spans.flatMap((span) => span.revisions ?? []),
+      // Inline drawings too: a line whose ONLY change is an inserted or deleted picture
+      // carries no revision span — the atom is projected, not a span — and without this the
+      // margin said nothing had changed on it (#479).
+      ...(line.drawings ?? []).flatMap((drawing) => drawing.revisions ?? []),
       ...(line === markLine ? (fragment.markRevisions ?? []) : []),
     ];
     if (revisions.length === 0) continue;

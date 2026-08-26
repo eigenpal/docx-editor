@@ -2777,6 +2777,7 @@ function layoutBlocksPass(
             measurer,
             sourceOrderOf,
             layoutTextboxStory: layoutTextboxStoryForBody,
+            displayMode,
           })
         );
       }

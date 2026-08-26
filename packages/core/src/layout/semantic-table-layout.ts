@@ -376,6 +376,7 @@ function publishDeferredRowAnchors(
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
         ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+        ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
       })
     );
   }
@@ -417,6 +418,7 @@ function republishAnchoredParagraphsInBlocks(
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
         ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+        ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
       })
     );
   }
@@ -1010,6 +1012,7 @@ function placeCellParagraph(
           pageClip: deps.pageContentClip(),
           measurer: deps.measurer,
           ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+          ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
         })
       );
     }

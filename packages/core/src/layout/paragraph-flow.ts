@@ -1370,6 +1370,7 @@ export function breakParagraph(
           baseline: line.baseline,
           contentLeft,
           contentRight,
+          ...(piece.revisions ? { revisions: piece.revisions } : {}),
         })
       );
       line.width += atomWidth;

@@ -1716,6 +1716,23 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-revision-deletion-wash);
 }
 
+/* A DRAWING inside a tracked change. The outline is the box's underline/strike: there is no
+   text to decorate, so the frame carries the claim, in the same kind tokens the text rules
+   use. Drawn INSIDE the box (negative offset) because pages, cells and clipped paint bounds
+   crop at the box edge and would shave an outer ring off. Under author colouring the painter
+   overrides `outline-color` inline, exactly as span ink follows the author. */
+.docx-drawing--revision-insertion {
+  outline: 2px solid var(--doc-revision-insertion);
+  outline-offset: -2px;
+}
+
+.docx-drawing--revision-deletion {
+  outline: 2px solid var(--doc-revision-deletion);
+  outline-offset: -2px;
+  /* Pending removal reads as on its way out — the box twin of the strike-through. */
+  opacity: 0.6;
+}
+
 /* FIELD SHADING — the grey block Word draws behind computed text (a page number, a
    cross-reference, the blank in a form). It marks where text came from, not what it says.
 
