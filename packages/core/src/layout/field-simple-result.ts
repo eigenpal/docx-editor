@@ -28,8 +28,6 @@ import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import { isSymbolRunChild, symbolGlyphOf } from './symbol-run.ts';
 import {
-  allowlistedPageField,
-  pageFieldNumericPicture,
   consumeScanNode,
   createFieldParseState,
   ingestInstrTextBounded,
@@ -39,12 +37,13 @@ import {
   onFldCharBegin,
   onFldCharEnd,
   onFldCharSeparate,
+  matchAllowlistedPageField,
   type AllowlistedPageField,
   type FieldScanBudget,
 } from './field-instruction.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
-  PAGE_FIELD_PLACEHOLDER,
+  pageFieldPlaceholder,
   projectPageFieldValue,
   type FieldPageContext,
 } from './field-page-furniture.ts';
@@ -213,19 +212,15 @@ export function collectSimpleFieldDisplay(args: {
         // Inside a tracked complex field's skipped cache the simple field is part of the
         // replaced result: descend so its runs are NOTED (visible cached content keeps the
         // live replacement alive), never appended on their own.
-        const nestedKind = tracker.active
+        const nested = tracker.active
           ? null
-          : allowlistedPageField(fldSimpleInstr(child) ?? '');
-        if (nestedKind && pageContext) {
+          : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
+        if (nested && pageContext) {
           if (!revisionsVisible(local, displayMode)) continue;
           const beforeLen = text.length;
           collect(child, nodeDepth + 1, local);
           text = text.slice(0, beforeLen);
-          text += projectPageFieldValue(
-            nestedKind,
-            pageContext,
-            pageFieldNumericPicture(fldSimpleInstr(child) ?? '')
-          );
+          text += projectPageFieldValue(nested.kind, pageContext, nested.picture);
           continue;
         }
         collect(child, nodeDepth + 1, local);
@@ -309,12 +304,12 @@ export function projectSimpleFieldResult(args: {
   const instr = fldSimpleInstr(simple) ?? '';
   const props = display.resultProps ?? inheritedRunProperties;
 
-  const pageKind = allowlistedPageField(instr);
-  if (pageKind && pageContext) {
+  const pageField = matchAllowlistedPageField(instr);
+  if (pageField && pageContext) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
     return {
-      text: projectPageFieldValue(pageKind, pageContext, pageFieldNumericPicture(instr)),
+      text: projectPageFieldValue(pageField.kind, pageContext, pageField.picture),
       props,
       style,
     };
@@ -323,7 +318,7 @@ export function projectSimpleFieldResult(args: {
   // kind so document finalize substitutes the page's value. A cached result wins — it falls
   // through to paint normally, exactly as it would in Word until the field is next updated.
   if (
-    pageKind &&
+    pageField &&
     args.bodyPageFields &&
     !pageContext &&
     display.text.length === 0 &&
@@ -331,12 +326,14 @@ export function projectSimpleFieldResult(args: {
   ) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    const picture = pageFieldNumericPicture(instr);
     return {
-      text: PAGE_FIELD_PLACEHOLDER,
+      text: pageFieldPlaceholder(pageField.picture),
       props,
       style,
-      pageField: { kind: pageKind, ...(picture !== undefined ? { picture } : {}) },
+      pageField:
+        pageField.picture === undefined
+          ? { kind: pageField.kind }
+          : { kind: pageField.kind, picture: pageField.picture },
     };
   }
 

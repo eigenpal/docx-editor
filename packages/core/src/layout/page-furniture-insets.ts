@@ -53,6 +53,21 @@ export interface PageContentInsetInputs {
   readonly footerDistance: number;
   /** Where this section's first sheet lands in the DOCUMENT, for even/odd selection. */
   readonly pageIndexStart: number;
+  /**
+   * The content box local page 0 must flow against when this section CONTINUES the previous
+   * one's sheet, instead of opening one of its own.
+   *
+   * A `continuous` section's local page 0 is physically the previous section's last sheet: the
+   * orchestrator appends the fragments to that page and drops this section's shell, keeping the
+   * host's `contentBox`. So the variant this section would resolve for its own first page says
+   * nothing about the box the fragments land in — and when both sections carry `w:titlePg`, the
+   * host resolves `default` while this section resolves `first`, a taller box, and the flow
+   * packs content past the host sheet's content bottom into the bottom margin.
+   *
+   * Passing the host's own insets makes the shared sheet one box for both flows, whatever
+   * either section's variants say.
+   */
+  readonly continuedPageInsets?: PageContentInsets;
 }
 
 /**
@@ -90,6 +105,8 @@ export function createPageContentInsets(
     // the authored margin is the whole inset.
     Math.min(cap, Math.max(margin, story ? distance + story.flowHeight : 0));
   return (index: number): PageContentInsets => {
+    // Local page 0 of a continued section is the host's sheet, not this section's first page.
+    if (index === 0 && inputs.continuedPageInsets) return inputs.continuedPageInsets;
     const variant = headerFooterVariantFor(furniture, inputs.pageIndexStart, index);
     const cached = memo.get(variant);
     if (cached) return cached;

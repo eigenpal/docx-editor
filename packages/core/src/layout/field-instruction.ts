@@ -84,47 +84,6 @@ export function normalizeFieldInstruction(raw: string): string | null {
  */
 const NUMERIC_PICTURE_SWITCH = /\s*\\#\s*(?:"([^"]*)"|([^\\"]+))$/;
 
-/** The instruction with a trailing `\#` picture removed, for keyword matching. */
-function withoutNumericPicture(instruction: string): string {
-  const match = NUMERIC_PICTURE_SWITCH.exec(instruction);
-  return match ? instruction.slice(0, match.index).trim() : instruction;
-}
-
-/**
- * Exact allowlist for live page-field projection.
- *
- * A trailing `\#` numeric picture rides along: the keyword still has to match exactly, and the
- * picture only decides how the computed value is rendered ({@link pageFieldNumericPicture}).
- * Broader keywords (DATE, TOC, INCLUDE*, DDE, …) remain unevaluated here on purpose, and so
- * does every other switch — `\n`, `\* Arabic` and friends leave the field inert.
- */
-export function allowlistedPageField(instruction: string): AllowlistedPageField | null {
-  const normalized = normalizeFieldInstruction(instruction);
-  if (normalized === null) return null;
-  const keyword = withoutNumericPicture(normalized);
-  if (keyword === 'PAGE' || keyword === 'NUMPAGES' || keyword === 'SECTIONPAGES') {
-    return keyword;
-  }
-  return null;
-}
-
-/**
- * The `\#` picture of an allowlisted page field, read from the RAW instruction.
- *
- * Raw, not normalized: {@link normalizeFieldInstruction} uppercases for keyword matching, and
- * a picture may hold literal text whose case is the author's. Returns undefined when the field
- * states no picture, or when the instruction is not an allowlisted page field at all.
- */
-export function pageFieldNumericPicture(instruction: string): string | undefined {
-  if (allowlistedPageField(instruction) === null) return undefined;
-  if (instruction.length > MAX_FIELD_INSTRUCTION_CHARS) return undefined;
-  const collapsed = instruction.replace(/\s+/g, ' ').trim().replace(MERGEFORMAT_SUFFIX, '').trim();
-  const match = NUMERIC_PICTURE_SWITCH.exec(collapsed);
-  if (!match) return undefined;
-  const picture = match[1] ?? match[2] ?? '';
-  return picture.length > 0 ? picture : undefined;
-}
-
 /** An allowlisted page field with the `\#` picture that renders its value. */
 export interface AllowlistedPageFieldMatch {
   readonly kind: AllowlistedPageField;
@@ -132,12 +91,59 @@ export interface AllowlistedPageFieldMatch {
   readonly picture?: string;
 }
 
-/** {@link allowlistedPageField} plus its picture, as one read of the instruction. */
+/**
+ * Split one instruction into its keyword and its `\#` picture, in ONE read.
+ *
+ * The keyword is uppercased for matching; the PICTURE is not, because it may hold literal text
+ * whose case is the author's. Every question asked about a page-field instruction routes
+ * through here, so a `fldChar separate` on the paragraph walk pays for one whitespace collapse
+ * and one regex rather than one of each per question.
+ */
+function splitPageFieldInstruction(
+  raw: string
+): { readonly keyword: string; readonly picture: string | undefined } | null {
+  if (raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
+  const collapsed = raw.replace(/\s+/g, ' ').trim();
+  if (collapsed.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
+  const instruction = collapsed.replace(MERGEFORMAT_SUFFIX, '').trim();
+  const match = NUMERIC_PICTURE_SWITCH.exec(instruction);
+  if (!match) return { keyword: instruction.toUpperCase(), picture: undefined };
+  const picture = match[1] ?? match[2] ?? '';
+  return {
+    keyword: instruction.slice(0, match.index).trim().toUpperCase(),
+    picture: picture.length > 0 ? picture : undefined,
+  };
+}
+
+/**
+ * The allowlisted kind and its picture, from ONE read of the instruction.
+ *
+ * A trailing `\#` numeric picture rides along: the keyword still has to match exactly, and the
+ * picture only decides how the computed value is rendered. Broader keywords (DATE, TOC,
+ * INCLUDE*, DDE, …) remain unevaluated here on purpose, and so does every other switch —
+ * `\n`, `\* Arabic` and friends leave the field inert.
+ */
 export function matchAllowlistedPageField(instruction: string): AllowlistedPageFieldMatch | null {
-  const kind = allowlistedPageField(instruction);
-  if (kind === null) return null;
-  const picture = pageFieldNumericPicture(instruction);
-  return picture === undefined ? { kind } : { kind, picture };
+  const split = splitPageFieldInstruction(instruction);
+  if (split === null) return null;
+  const { keyword, picture } = split;
+  if (keyword !== 'PAGE' && keyword !== 'NUMPAGES' && keyword !== 'SECTIONPAGES') return null;
+  return picture === undefined ? { kind: keyword } : { kind: keyword, picture };
+}
+
+/** Exact allowlist for live page-field projection — {@link matchAllowlistedPageField}'s kind. */
+export function allowlistedPageField(instruction: string): AllowlistedPageField | null {
+  return matchAllowlistedPageField(instruction)?.kind ?? null;
+}
+
+/**
+ * The `\#` picture of an allowlisted page field.
+ *
+ * Undefined when the field states no picture, or when the instruction is not an allowlisted
+ * page field at all.
+ */
+export function pageFieldNumericPicture(instruction: string): string | undefined {
+  return matchAllowlistedPageField(instruction)?.picture;
 }
 
 export function isFldChar(node: OoxmlNode, type: 'begin' | 'separate' | 'end'): boolean {

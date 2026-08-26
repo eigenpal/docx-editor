@@ -19,7 +19,7 @@ import type { DocumentProperties } from '@docx-editor.dev/core/store';
 import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
 import {
-  PAGE_FIELD_PLACEHOLDER,
+  pageFieldPlaceholder,
   projectPageFieldValue,
   type FieldPageContext,
 } from './field-page-furniture.ts';
@@ -95,13 +95,14 @@ export function synthesizeAtomicField(
     // document finalize substitutes the page's real value. Gated on `bodyPageFields` because
     // headers/footers took the live branch above, and notes / text boxes have no substitute pass.
     if (pending.kind && ctx.bodyPageFields) {
+      const picture = pending.picture ?? undefined;
       return {
-        text: PAGE_FIELD_PLACEHOLDER,
+        text: pageFieldPlaceholder(picture),
         props: pending.props,
         style: pending.style,
         pageField: {
           kind: pending.kind,
-          ...(pending.picture !== null ? { picture: pending.picture } : {}),
+          ...(picture !== undefined ? { picture } : {}),
         },
       };
     }

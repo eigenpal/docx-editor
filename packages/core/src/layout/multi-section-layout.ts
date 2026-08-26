@@ -30,6 +30,7 @@ import {
 } from './section-properties.ts';
 import type { PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
+import type { PageContentInsets } from './page-furniture-insets.ts';
 
 export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
@@ -54,6 +55,7 @@ export type LayoutSectionFn = (
     readonly spaceBeforeCarry?: number;
     readonly pageIndexStart?: number;
     readonly balanceColumns?: boolean;
+    readonly continuedPageInsets?: PageContentInsets;
   }
 ) => SectionLayoutResult;
 
@@ -211,6 +213,16 @@ function samePageSize(a: PageGeometry, b: PageGeometry): boolean {
  * The host page keeps its own furniture: the header/footer belong to the sheet, and the
  * continued section contributes content to it, not chrome.
  */
+/** One sheet's content box, as the insets a section pass flows against. */
+function contentInsetsOf(page: PageRecord): PageContentInsets {
+  const top = page.contentBox.y - page.box.y;
+  return {
+    top,
+    bottom: page.box.height - top - page.contentBox.height,
+    height: page.contentBox.height,
+  };
+}
+
 function withAppendedFragments(page: PageRecord, continued: PageRecord): PageRecord {
   if (
     continued.fragments.length === 0 &&
@@ -411,6 +423,12 @@ export function layoutMultiSectionDocument(
       section.properties.columns.count > 1 &&
       sections[sectionIndex + 1]?.properties.breakType === 'continuous';
 
+    // A continued section's local page 0 IS the host sheet, so it must flow against the box
+    // that sheet already has. Its own variants describe a page it never opens: with `w:titlePg`
+    // on both sections the host resolves `default` and this section would resolve `first`, and
+    // the taller box packs content past the host's content bottom.
+    const continuedPageInsets = continues ? contentInsetsOf(pages[pages.length - 1]!) : undefined;
+
     const laid = layoutSection(slice, revision, {
       ...rest,
       retainKeys,
@@ -423,6 +441,7 @@ export function layoutMultiSectionDocument(
       // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
       pageIndexStart: continues ? startIndex - 1 : startIndex,
       ...(continues ? { flowStartY: flowCursorY, spaceBeforeCarry: flowSpaceAfter } : {}),
+      ...(continuedPageInsets ? { continuedPageInsets } : {}),
       ...(sectionSession ? { session: sectionSession } : {}),
     });
     lineCounter = laid.lineCounter;

@@ -18,6 +18,7 @@ import {
   layoutSemanticDocument,
   type PageFurniture,
 } from '../index.ts';
+import { convergenceTailShiftAllowed } from '../page-reuse-guards.ts';
 import { readOoxmlPackage, resolveHeaderFooterPartsBySection } from '@docx-editor.dev/core/store';
 import type { OoxmlPackage, OoxmlPart } from '@docx-editor.dev/core/store';
 import type { PageRecord } from '../semantic-records.ts';
@@ -87,17 +88,41 @@ function storyTextOf(story: PageRecord['header']): string {
   );
 }
 
+/** The fixture's `w:sectPr`, optionally with a break type of its own. */
+function sectPr(breakType?: string): string {
+  return (
+    '<w:sectPr>' +
+    (breakType ? `<w:type w:val="${breakType}"/>` : '') +
+    '<w:headerReference w:type="default" r:id="rId7"/>' +
+    '<w:footerReference w:type="first" r:id="rId8"/>' +
+    '<w:pgSz w:w="12240" w:h="15840"/>' +
+    '<w:pgMar w:top="1080" w:right="720" w:bottom="2880" w:left="720"' +
+    ' w:header="1080" w:footer="720"/>' +
+    '<w:titlePg/>' +
+    '</w:sectPr>'
+  );
+}
+
+function lines(count: number, label: string): string {
+  return Array.from(
+    { length: count },
+    (_unused, index) => `<w:p><w:r><w:t>${label} ${index + 1}</w:t></w:r></w:p>`
+  ).join('');
+}
+
 /**
  * The fixture's section shape with a body of `paragraphs` lines.
  *
  * Same references and same `w:pgMar` as the fixture; only the amount of body changes, so a
  * test can put content in the band that fits page 1's taller box and not the section-wide one.
+ * `continuedParagraphs` appends a second section that resumes the first one's sheet.
  */
-function titlePageDoc(paragraphs: number): Uint8Array {
-  const body = Array.from(
-    { length: paragraphs },
-    (_unused, index) => `<w:p><w:r><w:t>Line ${index + 1}</w:t></w:r></w:p>`
-  ).join('');
+function titlePageDoc(paragraphs: number, continuedParagraphs = 0): Uint8Array {
+  const body =
+    continuedParagraphs > 0
+      ? `${lines(paragraphs, 'Line')}<w:p><w:pPr>${sectPr()}</w:pPr></w:p>` +
+        lines(continuedParagraphs, 'Continued')
+      : lines(paragraphs, 'Line');
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -128,14 +153,8 @@ function titlePageDoc(paragraphs: number): Uint8Array {
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}` +
-        '<w:sectPr>' +
-        '<w:headerReference w:type="default" r:id="rId7"/>' +
-        '<w:footerReference w:type="first" r:id="rId8"/>' +
-        '<w:pgSz w:w="12240" w:h="15840"/>' +
-        '<w:pgMar w:top="1080" w:right="720" w:bottom="2880" w:left="720"' +
-        ' w:header="1080" w:footer="720"/>' +
-        '<w:titlePg/>' +
-        '</w:sectPr></w:body></w:document>'
+        sectPr(continuedParagraphs > 0 ? 'continuous' : undefined) +
+        '</w:body></w:document>'
     ),
   });
 }
@@ -202,5 +221,49 @@ describe('per-page header/footer variant insets', () => {
       ...single.pages[0]!.fragments.map((fragment) => fragment.box.y + fragment.box.height)
     );
     expect(used).toBeGreaterThan(sectionWideBox);
+  });
+
+  test('a continuous section flows against the host sheet box, not its own first page', () => {
+    // Both sections carry `w:titlePg` and the same references — the copied-`sectPr` shape the
+    // continuation gate requires. Section 2's local page 0 IS section 1's last sheet, so it
+    // must use that sheet's box: resolving its own `first` variant hands it a box taller by a
+    // whole header and packs content past the host's content bottom into the bottom margin.
+    const layout = layoutOf(titlePageDoc(60, 30));
+    expect(layout.pages.length).toBeGreaterThan(1);
+    for (const page of layout.pages) {
+      const used = Math.max(
+        0,
+        ...page.fragments.map((fragment) => fragment.box.y + fragment.box.height)
+      );
+      expect(used).toBeLessThanOrEqual(page.contentBox.height + 0.001);
+    }
+  });
+});
+
+describe('convergence tail shift over a title page', () => {
+  const base = {
+    titlePage: true,
+    evenAndOddHeaders: false,
+    parityDependent: false,
+    usedPageParity: false,
+    hasNoteReserves: false,
+    hasExclusionZones: false,
+  };
+
+  test('refuses a tail that would carry the title sheet, or land on it', () => {
+    // The tail starts at page 0 and moves: the title sheet is IN it.
+    expect(convergenceTailShiftAllowed({ ...base, delta: 1, markPageCount: 0 })).toBe(false);
+    // The tail starts after page 0 but a negative delta lands it ON page 0, where `remapPage`
+    // would keep the `default` variant's header record and content box.
+    expect(convergenceTailShiftAllowed({ ...base, delta: -2, markPageCount: 2 })).toBe(false);
+  });
+
+  test('allows a shift that keeps the tail clear of page 0', () => {
+    expect(convergenceTailShiftAllowed({ ...base, delta: 2, markPageCount: 1 })).toBe(true);
+    expect(convergenceTailShiftAllowed({ ...base, delta: -1, markPageCount: 2 })).toBe(true);
+    // Without a title page, index 0 carries nothing a shift can invalidate.
+    expect(
+      convergenceTailShiftAllowed({ ...base, titlePage: false, delta: -2, markPageCount: 2 })
+    ).toBe(true);
   });
 });

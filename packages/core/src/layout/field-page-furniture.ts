@@ -34,8 +34,25 @@ import type {
  * that is NOT last on its line paints its extra digits over the following same-line content,
  * because that content was placed at the one-digit x; Word instead re-measures and reflows.
  * Last-on-line and label usage (the common cases) are unaffected.
+ *
+ * A field with a `\#` picture measures through {@link pageFieldPlaceholder} instead: the
+ * picture states the width, so there is no reason to guess at one digit.
  */
 export const PAGE_FIELD_PLACEHOLDER = '0';
+
+/**
+ * The placeholder a body page field with `picture` should be MEASURED at.
+ *
+ * A picture decides how wide the substituted value is, and finalize swaps the text in without
+ * re-measuring. `PAGE \# "Page 0 of"` paints about ten characters, so measuring it at one
+ * would overprint whatever follows it on the line. Rendering zero through the picture gives a
+ * placeholder the same shape as every value it can be replaced by — `0#` measures `00`, the
+ * width of `02` — while a pictureless field keeps the historical single digit.
+ */
+export function pageFieldPlaceholder(picture: string | undefined): string {
+  if (picture === undefined) return PAGE_FIELD_PLACEHOLDER;
+  return formatNumericPicture(0, picture) ?? PAGE_FIELD_PLACEHOLDER;
+}
 
 /**
  * Page-field evaluation context for furniture projection.
@@ -77,8 +94,9 @@ export function formatPageNumber(value: number, format: string | undefined): str
  *
  * `picture` is the field's `\#` switch. It renders the computed value and outranks nothing
  * else: an unusable picture falls back to the plain number, never to the cached result. A
- * `w:pgNumType/@w:fmt` on PAGE still wins, because a non-decimal page format has no digits
- * for a numeric picture to place.
+ * NON-DECIMAL `w:pgNumType/@w:fmt` on PAGE wins instead, because a roman or alphabetic page
+ * number has no digits for a numeric picture to place. An authored `w:fmt="decimal"` — which
+ * Word writes — is decimal, so the picture still applies.
  */
 export function projectPageFieldValue(
   kind: AllowlistedPageField,
@@ -86,7 +104,7 @@ export function projectPageFieldValue(
   picture?: string
 ): string {
   if (kind === 'PAGE') {
-    if (picture !== undefined && !context.format) {
+    if (picture !== undefined && (!context.format || context.format === 'decimal')) {
       const painted = formatNumericPicture(context.pageNumber, picture);
       if (painted !== null) return painted;
     }

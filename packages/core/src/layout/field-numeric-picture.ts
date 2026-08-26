@@ -27,10 +27,16 @@ export const MAX_NUMERIC_PICTURE_CHARS = 64;
  * A value with more digits than the picture has positions keeps every digit: the overflow is
  * painted at the leftmost position rather than truncated, because a page number that silently
  * loses its leading digit is worse than one that ignores its picture.
+ *
+ * A picture with a DECIMAL POINT is refused rather than misread. `0.00` splits into integral
+ * and fractional positions that fill in opposite directions, and this fills strictly from the
+ * right, so it would render 3 as `0.03` where Word renders `3.00`. Page counts are integers,
+ * so the plain number the caller falls back to is the right answer anyway.
  */
 export function formatNumericPicture(value: number, picture: string): string | null {
   if (!Number.isFinite(value) || value < 0) return null;
   if (picture.length === 0 || picture.length > MAX_NUMERIC_PICTURE_CHARS) return null;
+  if (picture.includes('.')) return null;
   const digits = String(Math.floor(value));
   let remaining = digits.length;
   let sawPosition = false;

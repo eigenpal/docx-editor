@@ -143,6 +143,7 @@ import {
   createPageContentInsets,
   headerFooterVariantFor,
   type HeaderFooterVariantName,
+  type PageContentInsets,
   type PageFurniture,
 } from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
@@ -701,6 +702,13 @@ type BlockLayoutOptions = SemanticLayoutOptions & {
   readonly spaceBeforeCarry?: number;
   readonly pageIndexStart?: number;
   /**
+   * The host sheet's content box, when this section continues the previous one onto it.
+   *
+   * Set with `flowStartY` by the multi-section orchestrator. See `continuedPageInsets` in
+   * `page-furniture-insets.ts` for why the section's own variants cannot answer this.
+   */
+  readonly continuedPageInsets?: PageContentInsets;
+  /**
    * Balance this section's columns (ECMA-376 §17.6.4): Word divides the content of a
    * multi-column section that ends in a continuous section break evenly across its
    * columns instead of filling each to the page bottom first.
@@ -937,6 +945,7 @@ function layoutBlocksPass(
     headerDistance,
     footerDistance,
     pageIndexStart,
+    ...(options.continuedPageInsets ? { continuedPageInsets: options.continuedPageInsets } : {}),
   });
   // Only the reserve entries THIS pass can read belong in its context key. The pass reads
   // reserves at `pageIndexStart` plus consecutive local page slots as it opens pages, so a
@@ -956,8 +965,14 @@ function layoutBlocksPass(
   // The producer is compared BESIDE the context (`session.producer`), not embedded in it:
   // it carries the control token, which runs to kilobytes on a control-heavy document, and
   // embedding it copied that token into every section's context string on every pass.
+  const continuedInsets = options.continuedPageInsets;
+  // The host sheet's box is an INPUT to this section's flow, so a host whose own variant moved
+  // must not let this section resume a flow measured against the box it used to have.
+  const continuedContext = continuedInsets
+    ? `|cont:${continuedInsets.top},${continuedInsets.height}`
+    : '';
   const contextFor = (notesReserveKey: string): string =>
-    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
+    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${furnitureContext}${notesReserveKey}${columnsContext}`;
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
   );

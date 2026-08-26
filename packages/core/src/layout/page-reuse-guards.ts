@@ -117,16 +117,20 @@ export interface TailShiftInputs {
  * refused when anything on the tail reads a page's absolute index: a title-page variant on
  * a moving first page, page parity over an odd delta (even/odd headers, inside/outside
  * anchors), per-page-index note reserves, or per-page-index wrap exclusion zones.
+ *
+ * The title-page test has TWO halves, because index 0 is special in both directions. A
+ * positive delta must not carry the title sheet along inside the tail (`markPageCount > 0`
+ * proves the tail starts after it). A negative delta must not land the tail ON index 0
+ * either: `delta + markPageCount` is the number of pages completed before the join, and at
+ * zero the tail's first sheet becomes page 0 — keeping the `default` variant's header record
+ * AND its content box on a page that must resolve `first`.
  */
 export function convergenceTailShiftAllowed(inputs: TailShiftInputs): boolean {
   if (inputs.delta === 0) return true;
   const parityHolds =
     inputs.delta % 2 === 0 ||
     (!inputs.evenAndOddHeaders && !inputs.parityDependent && !inputs.usedPageParity);
-  return (
-    parityHolds &&
-    (!inputs.titlePage || inputs.markPageCount > 0) &&
-    !inputs.hasNoteReserves &&
-    !inputs.hasExclusionZones
-  );
+  const titlePageHolds =
+    !inputs.titlePage || (inputs.markPageCount > 0 && inputs.delta + inputs.markPageCount > 0);
+  return parityHolds && titlePageHolds && !inputs.hasNoteReserves && !inputs.hasExclusionZones;
 }
