@@ -179,7 +179,6 @@ export interface TreePackageStoreOptions {
   readonly cascadeDeletedNoteReferences?: NoteCascadeFn;
 }
 
-
 /**
  * Package-level mutation authority: routes `TreeDocOp`s to the store for a story part,
  * publishes one ModelChange / undo unit per transaction, and keeps `currentPackage()`

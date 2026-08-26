@@ -41,11 +41,13 @@ The sugar `<DocxEditor>` host accepts `document` and `modules`. You do not need 
 <Framework value="react">
 
 ```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
+import { useRef } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
 export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: Uint8Array }) {
-  const { document, modules, pending, error, leave } = useWebrtcCollaboration({
+  const editorRef = useRef<DocxEditorRef>(null);
+  const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
     room: {
       roomId,
       identity: { actorId: 'alex', name: 'Alex' },
@@ -53,15 +55,22 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
     },
   });
 
+  async function leaveRoom() {
+    // `leave` requires the current bytes. The hook cannot read them itself, and
+    // anything else would drop what the room typed.
+    const saved = await editorRef.current?.save();
+    if (saved) leave(new Uint8Array(saved));
+  }
+
   if (error) return <p>{error.detail ?? error.code}</p>;
   if (pending || !document) return <p>Connecting…</p>;
 
   return (
     <>
-      <button type="button" onClick={() => leave()}>
+      <button type="button" onClick={leaveRoom}>
         Leave
       </button>
-      <DocxEditor document={document} modules={modules} />
+      <DocxEditor ref={editorRef} key={session?.sessionId} document={document} modules={modules} />
     </>
   );
 }
@@ -72,24 +81,32 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
 
 ```vue
 <script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
+import { ref } from 'vue';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
 
-const { document, modules, pending, error, leave } = useWebrtcCollaboration({
+const editorRef = ref<DocxEditorRef | null>(null);
+const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
   room: {
     roomId,
     identity: { actorId: 'alex', name: 'Alex' },
     bootstrap: { kind: 'join' },
   },
 });
+
+async function leaveRoom() {
+  // `leave` requires the current bytes so nothing the room typed is lost.
+  const saved = await editorRef.value?.save();
+  if (saved) leave(new Uint8Array(saved));
+}
 </script>
 
 <template>
   <p v-if="error">{{ error.detail ?? error.code }}</p>
   <p v-else-if="pending || !document">Connecting…</p>
   <template v-else>
-    <button type="button" @click="leave()">Leave</button>
-    <DocxEditor :document="document" :modules="modules" />
+    <button type="button" @click="leaveRoom">Leave</button>
+    <DocxEditor ref="editorRef" :key="session?.sessionId" :document="document" :modules="modules" />
   </template>
 </template>
 ```
@@ -99,9 +116,17 @@ const { document, modules, pending, error, leave } = useWebrtcCollaboration({
 
 Omit `room` when the user chooses share or join later. Call `connect` with the same options after that choice. `connect` and `leave` keep a stable identity across renders.
 
-The editor reads `modules` at construction time. Remount when the session identity changes. Set `key` to the session `documentId`.
+The editor reads `modules` at construction time. Set `key` to the session `sessionId`, as in the examples. Without the `key`, a connect after mount leaves the collaboration module unregistered, the editor keeps editing locally, and nothing replicates. The session logs a console warning when it is created but never attached.
+
+The hook also returns `ydoc` and `provider` (both `null` while pending), so you can add persistence such as `y-indexeddb` or drive the provider directly. `rejoin(bytes)` recovers from an `error` status: it leaves with your saved bytes and reconnects to the same room as a joiner.
 
 The default Pro entry re-exports `collaborationModule` and does not import a network provider. Import `@docx-editor.dev/pro/collaboration` for the Yjs factories. Import `@docx-editor.dev/pro/collaboration/webrtc` for room helpers such as `createCollaborationRoomId`.
+
+## Show status and participants
+
+`useCollaborationStatus(session)` returns the live status and last failure. `useCollaborationParticipants(session)` returns the people in the room for a presence list. Both live on `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
+
+When you own the Yjs resources yourself, `useDocumentCollaboration` from the same entries gives you the identical `connect`/`leave` lifecycle over `createDocumentCollaboration`, with no WebRTC import.
 
 ## Use your own signaling
 
@@ -113,7 +138,46 @@ For production, pass your own `signaling` URLs to `connect` or to the `room` opt
 
 If you already own a `Y.Doc` and awareness instance, call `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It replicates the whole canonical package, which is what the WebRTC wrapper and the module use. You destroy those resources.
 
-The same entry exports `createTextCollaboration`, which replicates paragraph text alone. Use `createDocumentCollaboration` unless you want that narrower scope.
+Four rules make a bring-your-own-provider integration work:
+
+1. Connect your provider before you pass `bootstrap: { kind: 'join' }`. The factory reads already-synced shared state. A joiner with no connected provider fails with `initialization-timeout` after 30 seconds.
+2. Pass an `Awareness` instance from `y-protocols/awareness`. Presence and remote selections travel through it.
+3. Wire your provider's connection events to `session.setTransportStatus`. Without that call, the status stays `ready` during an outage and users get no signal.
+4. Large documents exceed the single-message ceiling of some transports. The WebRTC wrapper installs its own message framing. A WebSocket provider does not need it.
+
+This example wires `y-websocket`:
+
+```ts
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import { WebsocketProvider } from 'y-websocket';
+import { createDocumentCollaboration } from '@docx-editor.dev/pro/collaboration';
+
+const ydoc = new Y.Doc();
+const awareness = new Awareness(ydoc);
+const provider = new WebsocketProvider('wss://example.test', 'room-1', ydoc, { awareness });
+
+await new Promise((resolve) => provider.once('sync', resolve));
+
+const room = await createDocumentCollaboration({
+  ydoc,
+  awareness,
+  documentId: 'room-1',
+  identity: { actorId: 'alex', name: 'Alex' },
+  bootstrap: { kind: 'join' },
+});
+
+provider.on('status', ({ status }: { status: string }) => {
+  room.session.setTransportStatus(
+    status === 'connected' ? 'ready' : 'disconnected',
+    status === 'connected' ? undefined : 'websocket-disconnected'
+  );
+});
+```
+
+The factory rejects with a typed `CollaborationSchemaError`. The codes you handle in this flow are `initialization-timeout` (no synced room appeared), `document-id-mismatch` (the room replicates a different `documentId`), and `protocol-version-mismatch` or `schema-version-mismatch` (the room uses a different protocol or schema version).
+
+The same entry exports `createTextCollaboration`, which replicates paragraph text alone and refuses structural edits. It is an experimental proof. Use `createDocumentCollaboration`.
 
 ## Headless replica
 
@@ -220,9 +284,22 @@ Comments, tracked-change decisions, tables of contents, and custom nodes replica
 
 Two write paths stay refused while a replica is attached. Applying an edited ProseMirror document is refused because no host exercises that derivation under replication. A review write without a named intent is also refused.
 
-Tree edits are refused when the session is destroyed, not ready, or not attached to the document port.
+Tree edits are refused when the session is destroyed, not ready, or not attached to the document port. A transport drop therefore pauses editing until the connection returns.
 
 A typing run undoes as one step through the session undo manager.
+
+### Numeric limits
+
+Each limit produces a typed failure code when a value exceeds it.
+
+| Limit                                      | Value          | Failure code                                  | Remedy                                                             |
+| ------------------------------------------ | -------------- | --------------------------------------------- | ------------------------------------------------------------------ |
+| Seed document size                         | 20 MB          | `baseline-too-large`                          | Reduce the document before you create the room.                    |
+| One embedded file                          | 32 MiB         | `blob-too-large`                              | Compress or downscale the media file.                              |
+| All embedded files in a room               | 64 MiB         | `blob-store-full`                             | Remove media from the document, then reseed a new room.            |
+| `actorId`, `name`, and `documentId` length | 256 characters | `invalid-identity`, `invalid-document-id`     | Shorten the value.                                                 |
+| Participants listed with presence          | 256            | none; presence reads list the first 256 peers | Keep rooms below 256 participants.                                 |
+| Join wait for a synced room                | 30 seconds     | `initialization-timeout`                      | Connect the provider first, and confirm one peer created the room. |
 
 For module registration and licensing, see the
 [Pro package documentation](/docs/2.x/pro).
