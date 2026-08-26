@@ -213,6 +213,29 @@ describe('tracked drawings carry and paint their revision', () => {
     }
   });
 
+  test('a tracked anchored picture in a table cell cues a change bar too', async () => {
+    const { surface, container } = await mount(
+      docx(
+        '<w:tbl><w:tblGrid><w:gridCol w:w="4800"/></w:tblGrid><w:tr><w:tc>' +
+          `<w:p><w:r><w:t xml:space="preserve">cell text</w:t></w:r>${ins(anchoredPicture(9))}</w:p>` +
+          '</w:tc></w:tr></w:tbl><w:p><w:r><w:t>after</w:t></w:r></w:p>'
+      )
+    );
+    try {
+      const cellLines = surface
+        .layout()
+        .pages[0]!.fragments.flatMap((block) => (block.kind === 'table' ? block.rows : []))
+        .flatMap((row) => row.cells)
+        .flatMap((cell) => cell.blocks)
+        .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []));
+      expect(cellLines.some((line) => (line.anchorRevisions ?? []).length > 0)).toBe(true);
+      expect(container.querySelector('.docx-change-bar-insertion')).not.toBeNull();
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
   test('the original view drops an inserted anchored picture, its bar, and its wrap hole', async () => {
     const topAndBottom = anchoredPicture(9).replace('<wp:wrapNone/>', '<wp:wrapTopAndBottom/>');
     const body = (drawing: string): Uint8Array =>

@@ -1343,6 +1343,7 @@ export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number;
 
 // @public
 export interface LineRecord {
+    readonly anchorRevisions?: readonly RevisionAttribution[];
     readonly baseline: number;
     // (undocumented)
     readonly box: LayoutBox;
