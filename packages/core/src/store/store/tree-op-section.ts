@@ -569,6 +569,35 @@ export function applySetSectionMark(
         )
       : null;
 
+  // Nothing outside the marked paragraph changes in the ordinary case, so it takes the
+  // path-local edit rather than a whole-part rebuild: the walk below allocates one array per
+  // node and discards it for every untouched subtree, which on an 8000-paragraph part costs
+  // about 40ms per gesture for no gain. The rebuild is reserved for the two writes that
+  // genuinely reach a second, distant node.
+  if (!retypedGoverning && !mintedBodySection) {
+    if (!pPr) {
+      const minted = {
+        id: nextId(),
+        kind: 'paragraphProperties',
+        namespaceUri: WML_NAMESPACE_URI,
+        localName: 'pPr',
+        prefix: 'w',
+        namespaceBindings: [],
+        attributes: [],
+        children: [sectPr],
+      } as unknown as OoxmlNode;
+      // `w:pPr` must be the paragraph's FIRST child per the schema.
+      return fromEdit(insertChildren(part, paragraph.id, 0, [minted], options), effect);
+    }
+    const change = pPr.children.findIndex(
+      (child) => 'localName' in child && child.localName === 'pPrChange'
+    );
+    return fromEdit(
+      insertChildren(part, pPr.id, change === -1 ? pPr.children.length : change, [sectPr], options),
+      effect
+    );
+  }
+
   const rebuilt = (node: OoxmlNode): OoxmlNode => {
     if (node.kind === 'textValue') return node;
     if (node.id === paragraph.id) return markedParagraph(node as OoxmlParagraphNode);

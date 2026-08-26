@@ -699,6 +699,20 @@ export interface PaginatedSurface {
    * previous section ended, which is how a mid-page column or margin change is authored.
    */
   insertSectionBreak(breakType?: SectionBreakInsertType): boolean;
+  /**
+   * Why {@link insertSectionBreak} would refuse this kind right now, or `null`.
+   *
+   * THE authority for that question, so `Editor.can` and the write cannot answer it
+   * differently. Both halves of the answer are things only the surface knows: the LIVE
+   * editing mode (a document that declares `w:trackRevisions` opens suggesting without
+   * anyone passing a mode, and Review > Track Changes moves it again afterwards), and the
+   * paragraph the break would actually land in — which for a range in suggesting mode is
+   * past the struck words, not the selection's head.
+   *
+   * Answers only the break's own question. Story scope is gated separately, because a
+   * caret in a header refuses every break kind for a different reason.
+   */
+  sectionBreakRefusal(breakType?: SectionBreakInsertType): string | null;
   /** The layout session, so a host or a test can see how much work a pass actually did. */
   layoutSession(): {
     readonly stats: {

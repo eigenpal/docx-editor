@@ -1422,6 +1422,7 @@ export interface PaginatedSurface {
         sectionIndex: number;
         sectionStart: number;
     };
+    sectionBreakRefusal(breakType?: SectionBreakInsertType): string | null;
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;

@@ -11,6 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -40,8 +41,15 @@ function mount(body: string, mode: 'edit' | 'suggesting' = 'edit'): DocxEditorIn
     document: docx(body),
     mode,
     author: 'Ada Lovelace',
+    // Required, not decoration: `resolveOpeningEditingMode` refuses `'suggesting'` when no
+    // review module is registered and opens the editor in editing mode instead. Without it
+    // every assertion below would pass while the editor was never suggesting at all.
+    ...(mode === 'suggesting' ? { modules: [stubReviewModule()] } : {}),
   });
   if (!editor.surface) throw new Error('surface failed to mount');
+  if (mode === 'suggesting' && editor.getEditingMode() !== 'suggesting') {
+    throw new Error(`expected suggesting, got ${editor.getEditingMode()}`);
+  }
   return editor;
 }
 
@@ -196,5 +204,63 @@ describe('suggesting mode publishes the one break it cannot propose', () => {
       changed: true,
     });
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
+  });
+});
+
+describe('the gate and the write read ONE authority', () => {
+  const SUGGESTED_REASON =
+    'a section break that changes where the next section starts cannot be suggested; ' +
+    'turn off suggesting to insert it';
+
+  test('the LIVE mode decides, not the one the editor was constructed with', () => {
+    // The most common way into suggesting is a file that declares `w:trackRevisions` —
+    // nobody passes a mode at all. Reading the constructed one left the gate silent there:
+    // the row stayed enabled and the press did nothing.
+    const editor = mount(p('before after'), 'edit');
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 6 },
+      head: { paragraphId: id, offset: 6 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toEqual({
+      ok: true,
+    });
+
+    editor.surface!.setEditingMode('suggest');
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: SUGGESTED_REASON,
+    });
+    expect(editor.surface!.insertSectionBreak('continuous')).toBe(false);
+
+    // And back: a mode that moved must not leave a permanently dead control behind.
+    editor.surface!.setEditingMode('edit');
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toEqual({
+      ok: true,
+    });
+    expect(editor.surface!.insertSectionBreak('continuous')).toBe(true);
+  });
+
+  test('a REVERSED selection over a section boundary gets one answer, not two', () => {
+    // `can` used to read `selection.head` while the write landed past the struck words. Drag
+    // backwards across a boundary and the two resolved different governing sections, so the
+    // control said yes and the write silently refused — or the reverse.
+    const editor = mount(
+      p('one') +
+        '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+        '<w:r><w:t>two</w:t></w:r></w:p>' +
+        p('three') +
+        '<w:sectPr><w:type w:val="continuous"/><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>',
+      'suggesting'
+    );
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[2]!, offset: 2 },
+      head: { paragraphId: ids[0]!, offset: 2 },
+    });
+    const can = editor.can({ type: 'insertBreak', kind: 'section' } as never);
+    const committed = editor.surface!.insertSectionBreak('nextPage');
+    expect(committed).toBe(can.ok);
   });
 });

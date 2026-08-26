@@ -128,6 +128,7 @@ type StructureMethods = Pick<
   | 'sectionAnchorParagraphAt'
   | 'setSectionProperties'
   | 'insertSectionBreak'
+  | 'sectionBreakRefusal'
 >;
 
 /**
@@ -226,6 +227,40 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   const { session, commit, orderedStart, orderedRange, selectionMark, collapsedAt } = deps;
   const deleteSelectionPlan = deps.deleteSelectionPlan;
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
+
+  /**
+   * Where a section break actually lands, which is not the selection's head.
+   *
+   * The plan's `replaceAt`, like the tab and break lanes: in suggesting mode the struck
+   * words stay, and a split at the range START cut the paragraph in FRONT of them — the
+   * break and the strike read as two unrelated edits. EXCEPT when the landing sits in a
+   * table cell: a section mark cannot be minted there (the store refuses it, and one
+   * refused op vetoes the strike with it), so the break falls back to `collapseTo`. That
+   * only saves the gesture when the range STARTS outside the table — a selection wholly
+   * inside one is still refused by the store, as it always was.
+   *
+   * Both the gate and the write resolve it here. Reading `selection.head` instead put the
+   * two on different paragraphs whenever the drag ran backwards over a section boundary,
+   * and they then disagreed about which section the break would retype.
+   */
+  const sectionBreakLanding = (plan: RangeDeletionPlan): SemanticPosition => {
+    const landing = plan.replaceAt ?? plan.collapseTo;
+    return isTableNested(session.part(), landing.paragraphId) ? plan.collapseTo : landing;
+  };
+
+  /**
+   * The break's own refusal at one landing, or null. See `sectionBreakRefusal` on the
+   * surface contract for why the editing mode has to be read LIVE here.
+   */
+  const sectionBreakRefusalFor = (
+    paragraphId: string,
+    breakType: 'nextPage' | 'continuous'
+  ): string | null =>
+    deps.editingMode?.() === 'suggest' &&
+    sectionBreakRetypesFollowing(session.part(), paragraphId, breakType)
+      ? 'a section break that changes where the next section starts cannot be suggested; ' +
+        'turn off suggesting to insert it'
+      : null;
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
@@ -826,30 +861,22 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       return committed;
     },
 
+    sectionBreakRefusal(breakType = 'nextPage' as const) {
+      if (deps.storyScope().kind !== 'body') return null;
+      return sectionBreakRefusalFor(
+        sectionBreakLanding(deleteSelectionPlan()).paragraphId,
+        breakType
+      );
+    },
+
     insertSectionBreak(breakType = 'nextPage' as const) {
       // Section breaks are body-only; refuse while a furniture scope is open.
       if (deps.storyScope().kind !== 'body') return false;
       const plan = deleteSelectionPlan();
-      // The plan's `replaceAt`, like the tab and break lanes: in suggesting mode the struck
-      // words stay, and a split at the range START cut the paragraph in FRONT of them — the
-      // break and the strike read as two unrelated edits. EXCEPT when the landing sits in a
-      // table cell: a section mark cannot be minted there (the store refuses it, and one
-      // refused op vetoes the strike with it), so the break falls back to `collapseTo`.
-      // That only saves the gesture when the range STARTS outside the table — a selection
-      // wholly inside one is still refused by the store, as it always was.
-      const landing = plan.replaceAt ?? plan.collapseTo;
-      const start = isTableNested(session.part(), landing.paragraphId) ? plan.collapseTo : landing;
-      // A break that RETYPES the following section cannot be proposed — see `editingMode` on
-      // the deps. Refused rather than written untracked: the reject that removes the split
-      // would leave the retype standing, and a `w:type` the reviewer never accepted is a
-      // layout change nobody can undo. The ordinary next-page break in a document with no
-      // authored `w:type` retypes nothing and is unaffected.
-      if (
-        deps.editingMode?.() === 'suggest' &&
-        sectionBreakRetypesFollowing(session.part(), start.paragraphId, breakType)
-      ) {
-        return false;
-      }
+      const start = sectionBreakLanding(plan);
+      // Asked through the SAME method `Editor.can` asks, so the control and the write cannot
+      // answer differently.
+      if (sectionBreakRefusalFor(start.paragraphId, breakType) !== null) return false;
       const before = new Set(session.paragraphIds());
       let committed = false;
       commit(
