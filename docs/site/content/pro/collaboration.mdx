@@ -85,12 +85,14 @@ import { ref } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
 
+const props = defineProps<{ roomId: string; bytes: Uint8Array }>();
+
 const editorRef = ref<DocxEditorRef | null>(null);
 const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
   room: {
-    roomId,
+    roomId: props.roomId,
     identity: { actorId: 'alex', name: 'Alex' },
-    bootstrap: { kind: 'create-or-join', document: bytes },
+    bootstrap: { kind: 'create-or-join', document: props.bytes },
   },
 });
 

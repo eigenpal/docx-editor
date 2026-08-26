@@ -573,11 +573,17 @@ export class PackageMaterializer {
         if (listers.length > 1) {
           this.placementContested = true;
           this.contestEncountered.add(childId);
-          // A tombstoned lister routes the child through survivor ADOPTION, which places it
-          // somewhere `parentOf` does not model — the skip's oracle would approve a pass
-          // that leaves the child in the survivor's reused subtree AND under the rebuilt
-          // live lister. Adoption-involved contests always take the full pass.
-          if (listers.some((lister) => this.registry.isTombstoned(lister))) {
+          // A tombstoned lister with a survivor routes the child through ADOPTION, which
+          // places it somewhere `parentOf` does not model — the skip's oracle would approve
+          // a pass that leaves the child in the survivor's reused subtree AND under the
+          // rebuilt live lister. Adoption-involved contests always take the full pass. A
+          // survivor-less tombstone routes no adoption, so it keeps the skip.
+          if (
+            listers.some(
+              (lister) =>
+                this.registry.isTombstoned(lister) && this.registry.replacedByOf(lister) !== null
+            )
+          ) {
             this.contestMatchesResolution = false;
           }
           // Placing the child here reproduces the full pass only when here is where the
