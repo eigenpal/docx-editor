@@ -82,6 +82,31 @@ const SECURITY_SINK_SELECTORS = [
   },
 ];
 
+// `@keyframes` names are document-global — no selector strategy can scope them, so
+// the shipped stylesheet's namespace guard (scripts/core-css-assertions.mjs) requires
+// a docx-/hf- prefix on every name in dist/editor.css. That guard cannot see CSS a
+// component injects from a <style> element, which is exactly how an unprefixed
+// `@keyframes slideIn` shipped and collided with host apps (#485). These selectors
+// close that gap at the source: any `@keyframes <name>` inside a string or template
+// literal in package source must carry the same prefix. They ride alongside
+// SECURITY_SINK_SELECTORS in every `no-restricted-syntax` value below, for the same
+// flat-config replacement reason.
+const NO_GLOBAL_KEYFRAMES_MSG =
+  '@keyframes names are document-global. Give the name a docx-/hf- prefix, or move the ' +
+  'keyframes — under a docx-/hf- prefixed name, since inline animation references are ' +
+  'not rewritten by the build — into packages/core/src/styles/editor.css where the ' +
+  'namespace guard (scripts/core-css-assertions.mjs) covers it.';
+const GLOBAL_KEYFRAMES_SELECTORS = [
+  {
+    selector: 'TemplateElement[value.raw=/@(-\\w+-)?keyframes\\s+(?!docx-|hf-)/]',
+    message: NO_GLOBAL_KEYFRAMES_MSG,
+  },
+  {
+    selector: 'Literal[value=/@(-\\w+-)?keyframes\\s+(?!docx-|hf-)/]',
+    message: NO_GLOBAL_KEYFRAMES_MSG,
+  },
+];
+
 // ESLint's `no-restricted-imports` skips `await import(...)` (it's an
 // `ImportExpression` AST node, not `ImportDeclaration`). Use
 // `no-restricted-syntax` to match dynamic imports by literal source value.
@@ -89,6 +114,7 @@ const restrictDynamic = (specifiers, message) => ({
   'no-restricted-syntax': [
     'error',
     ...SECURITY_SINK_SELECTORS,
+    ...GLOBAL_KEYFRAMES_SELECTORS,
     ...specifiers.map((s) => ({
       selector: `ImportExpression[source.value=${JSON.stringify(s)}]`,
       message,
@@ -189,7 +215,9 @@ export default [
   {
     files: ['packages/*/src/**/*.{ts,tsx,vue}'],
     ignores: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx'],
-    rules: { 'no-restricted-syntax': ['error', ...SECURITY_SINK_SELECTORS] },
+    rules: {
+      'no-restricted-syntax': ['error', ...SECURITY_SINK_SELECTORS, ...GLOBAL_KEYFRAMES_SELECTORS],
+    },
   },
 
   // The DOM-free engine lanes additionally ban spreading an array into a call. A
@@ -208,6 +236,7 @@ export default [
       'no-restricted-syntax': [
         'error',
         ...SECURITY_SINK_SELECTORS,
+        ...GLOBAL_KEYFRAMES_SELECTORS,
         {
           selector:
             "CallExpression:not([callee.object.name='Math'])" +

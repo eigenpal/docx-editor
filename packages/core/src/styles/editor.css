@@ -1606,6 +1606,21 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
+/* Error notification toast entrance (the React adapter's NotificationToast sets
+    `animation: docx-notification-slide-in ...` inline; the rest of its styling is
+    inline too). Keyframes names are document-global, so it lives here where the
+    build's namespace guard (scripts/core-css-assertions.mjs) covers it. */
+@keyframes docx-notification-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* Section break indicator */
 .docx-section-break {
   position: relative;
