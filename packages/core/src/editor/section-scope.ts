@@ -14,8 +14,7 @@ import { enumerateDocumentSections } from '../layout/section-properties.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import { noteIdOf, notesOf } from '../store/package/note-nodes.ts';
-import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { sectionBreakTypeOf, targetSectionNodes } from '../store/store/tree-op-section-address.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 
 /** Depth cap for the note-body walk, matching the shared tree-walk bound. */
 const MAX_NOTE_WALK_DEPTH = 32;
@@ -188,24 +187,4 @@ function holdsParagraph(root: OoxmlNode, paragraphId: string): boolean {
     return false;
   };
   return walk(root, 0);
-}
-
-/**
- * Whether inserting `breakType` at this paragraph would RETYPE the section that follows.
- *
- * `w:type` states how a section starts relative to the one before it (ECMA-376 §17.6.22), so
- * the break belongs to the section that starts at the mark — the governing `w:sectPr`, which
- * hangs on a different paragraph than the one being split. When that section already starts
- * the requested way there is nothing to write, and the break touches only the paragraph it
- * splits.
- *
- * Both the gate and the write ask this, so a control cannot report one answer and the surface
- * act on another.
- */
-export function sectionBreakRetypesFollowing(
-  part: OoxmlPart,
-  paragraphId: string,
-  breakType: 'nextPage' | 'continuous'
-): boolean {
-  return sectionBreakTypeOf(targetSectionNodes(part, paragraphId)[0] ?? null) !== breakType;
 }

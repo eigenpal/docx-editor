@@ -7,13 +7,15 @@
 // the same question for the gate and for the write — so it is spelled once, here.
 
 import type { SemanticPosition } from '@docx-editor.dev/core/layout';
-import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   allSectionNodes,
   bodySectionOf,
+  governingSectionAt,
   isTableNested,
   sectionBreakTypeOf,
 } from '../store/store/tree-op-section-address.ts';
+import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 
 /**
@@ -36,6 +38,32 @@ export const TABLE_CELL_BREAK_REFUSAL = 'a section break cannot be inserted insi
  */
 export const LOCKED_SECTION_BREAK_REFUSAL =
   'a section break cannot change a section that a locked or linked content control holds';
+
+/** The store's other lock pair: the mark itself, in content a control holds. */
+export const LOCKED_CONTENT_BREAK_REFUSAL =
+  'a section break cannot be inserted in locked or linked content';
+
+/**
+ * Whether ANY content control in the part declares a lock or a data binding.
+ *
+ * A fast-path exit, not a policy. It does not read what a lock SAYS, only that one is
+ * declared, so it can never answer "no" where a refusal is possible. A document with none —
+ * which is nearly every document — skips both lock questions for a range without ordering
+ * the selection or planning anything; the documents that do have them pay for the answer.
+ */
+export function partDeclaresContentControlLocks(part: OoxmlPart): boolean {
+  let found = false;
+  const walk = (node: OoxmlNode): void => {
+    if (found || node.kind === 'textValue') return;
+    if ('localName' in node && (node.localName === 'lock' || node.localName === 'dataBinding')) {
+      found = true;
+      return;
+    }
+    for (const child of node.children ?? []) walk(child);
+  };
+  walk(part.root);
+  return found;
+}
 
 /**
  * How far a break gate will plan a deletion to find its exact answer.
@@ -77,4 +105,37 @@ export function uniformSectionBreakType(part: OoxmlPart): string | null {
 export function sectionBreakLanding(part: OoxmlPart, plan: RangeDeletionPlan): SemanticPosition {
   const landing = plan.replaceAt ?? plan.collapseTo;
   return isTableNested(part, landing.paragraphId) ? plan.collapseTo : landing;
+}
+
+const heldByControl = (part: OoxmlPart, paragraphId: string): boolean =>
+  isBoundAt(part, paragraphId) || effectiveContentLockAt(part, paragraphId).content;
+
+/**
+ * Every refusal a break at ONE KNOWN LANDING carries, or null.
+ *
+ * All three are about the section that STARTS at the mark, so all three are questions only a
+ * landing can answer. `suggesting` is passed in rather than read, because the gate and the
+ * write reach here from different places and there must be one answer.
+ */
+export function landedBreakRefusal(
+  part: OoxmlPart,
+  paragraphId: string,
+  breakType: 'nextPage' | 'continuous',
+  suggesting: boolean
+): string | null {
+  // The store guards TWO paragraphs, so this mirrors both. First the mark itself: a section
+  // cannot end inside content a control holds, whatever the break would do to the section
+  // after it. Mirroring only the second one left a caret in a locked control with two live
+  // rows and a press that failed with the store's `locked`.
+  if (heldByControl(part, paragraphId)) return LOCKED_CONTENT_BREAK_REFUSAL;
+  // The rest only arise when the break actually retypes the section that follows.
+  const { section, ownerId } = governingSectionAt(part, paragraphId);
+  if (sectionBreakTypeOf(section) === breakType) return null;
+  // Then the section's OWN paragraph, which is not the one the caret is in. Said in the
+  // lane's words: the store's `locked` is a diagnostic, and read as a sentence it would
+  // claim the selection is locked when the selection is ordinary editable text.
+  if (ownerId !== null && heldByControl(part, ownerId)) return LOCKED_SECTION_BREAK_REFUSAL;
+  // Suggesting comes LAST of the three. It tells the user to turn suggesting off, and that is
+  // only worth saying when doing so would actually let the break through.
+  return suggesting ? SUGGESTED_BREAK_REFUSAL : null;
 }

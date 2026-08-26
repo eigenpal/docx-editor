@@ -200,6 +200,38 @@ export function targetSectionNodes(
 }
 
 /**
+ * The section governing the anchor AND the paragraph it hangs on, in one walk.
+ *
+ * The two questions always come together — "how does the following section start" and "may I
+ * write to where it lives" — and answering them apart walked the same tree twice.
+ * `ownerId` is `null` for the body-level section: it is `w:body`'s own last child, which no
+ * content control can wrap.
+ */
+export function governingSectionAt(
+  part: OoxmlPart,
+  anchorParagraphId: string
+): { readonly section: OoxmlNode | null; readonly ownerId: string | null } {
+  let seenAnchor = false;
+  let found: { section: OoxmlNode; ownerId: string } | undefined;
+  const walk = (node: OoxmlNode, inTable: boolean): void => {
+    if (found || node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      if (node.id === anchorParagraphId) seenAnchor = true;
+      if (seenAnchor && !inTable) {
+        const pPr = paragraphPropertiesNodeOf(node);
+        const sectPr = pPr ? sectionChild(pPr, 'sectPr') : null;
+        if (sectPr) found = { section: sectPr, ownerId: node.id };
+      }
+      return;
+    }
+    const below = inTable || node.kind === 'table';
+    for (const child of node.children ?? []) walk(child, below);
+  };
+  walk(part.root, false);
+  return found ?? { section: bodySectionOf(part), ownerId: null };
+}
+
+/**
  * The paragraph whose `w:pPr/w:sectPr` governs the anchor, or `null` for the body-level one.
  *
  * The same walk `targetSectionNodes` does, answering WHO OWNS the section rather than what it

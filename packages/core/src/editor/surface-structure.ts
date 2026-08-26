@@ -7,7 +7,7 @@
 // composition root.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { OoxmlPart, TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
+import type { TreeDocOp, StoryScope } from '@docx-editor.dev/core/store';
 import {
   enumerateDocumentSections,
   paragraphsInCells,
@@ -16,18 +16,12 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
 import {
-  sectionAnchorParagraphFor,
-  sectionBreakRetypesFollowing,
-  sectionIndexForCaret,
-} from './section-scope.ts';
-import {
-  governingSectionOwnerId,
   isTableNested,
   sectionBreakTypeOf,
   targetSectionNodes,
 } from '../store/store/tree-op-section-address.ts';
-import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
 import { paragraphTabStopsOf } from './surface-formatting.ts';
@@ -64,8 +58,9 @@ import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 import {
   MAX_GATED_BREAK_SPAN,
   SUGGESTED_BREAK_REFUSAL,
-  LOCKED_SECTION_BREAK_REFUSAL,
   TABLE_CELL_BREAK_REFUSAL,
+  landedBreakRefusal,
+  partDeclaresContentControlLocks,
   sectionBreakLanding,
   uniformSectionBreakType,
 } from './surface-section-breaks.ts';
@@ -267,23 +262,6 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
    * can answer, and neither arises unless the break would actually retype that section. The
    * editing mode is read LIVE — see `sectionBreakRefusal` on the surface contract.
    */
-  const landedBreakRefusal = (
-    part: OoxmlPart,
-    paragraphId: string,
-    breakType: 'nextPage' | 'continuous'
-  ): string | null => {
-    if (!sectionBreakRetypesFollowing(part, paragraphId, breakType)) return null;
-    if (deps.editingMode?.() === 'suggest') return SUGGESTED_BREAK_REFUSAL;
-    // The store refuses a retype that reaches a locked or data-bound control, and it names
-    // the paragraph the section hangs on — which is not the one the caret is in. Reported in
-    // the lane's own words: the store's `locked` is a diagnostic, and read as a sentence it
-    // would claim the SELECTION is locked, which it is not.
-    const owner = governingSectionOwnerId(part, paragraphId);
-    if (owner === null) return null;
-    return isBoundAt(part, owner) || effectiveContentLockAt(part, owner).content
-      ? LOCKED_SECTION_BREAK_REFUSAL
-      : null;
-  };
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
@@ -905,9 +883,20 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         // `orderedRange()` flushes pending input, which is a write, and this is a read that
         // React runs during its render phase.
         if (isTableNested(session.part(), caret)) return TABLE_CELL_BREAK_REFUSAL;
-        return landedBreakRefusal(session.part(), caret, breakType);
+        return landedBreakRefusal(
+          session.part(),
+          caret,
+          breakType,
+          deps.editingMode?.() === 'suggest'
+        );
       }
-      if (deps.editingMode?.() !== 'suggest') return null;
+      // A RANGE has two questions left, and each needs a reason to exist: the suggesting one
+      // needs suggesting, and the lock one needs a control that declares a lock or a binding.
+      // Neither, and there is nothing to work out — which is nearly every document, and one
+      // walk is what it costs to know that without ordering the selection.
+      const suggesting = deps.editingMode?.() === 'suggest';
+      const mayHold = partDeclaresContentControlLocks(session.part());
+      if (!suggesting && !mayHold) return null;
       // AFTER the flush `orderedRange` runs, so the tree the sections are read from is the
       // one the plan below would be built against.
       const { from, to } = orderedRange();
@@ -922,13 +911,18 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // means that node governs everything between them. Comparing the resolved TYPE here
       // instead of the node was wrong — two different sections share a type routinely, and an
       // intermediate landing could then carry a third.
-      const atStart = targetSectionNodes(part, from.paragraphId)[0] ?? null;
-      const atEnd = targetSectionNodes(part, to.paragraphId)[0] ?? null;
-      // Second: every section in the document starts the same way. Then the landing's section
-      // does too, whichever it is. This is what answers a selection that spans sections.
-      const settled =
-        atStart === atEnd ? sectionBreakTypeOf(atStart) : uniformSectionBreakType(part);
-      if (settled !== null) return settled === breakType ? null : SUGGESTED_BREAK_REFUSAL;
+      //
+      // They answer the SUGGESTING question only. A lock is about one specific paragraph, so
+      // a document that declares one always needs the landing itself.
+      if (!mayHold) {
+        const atStart = targetSectionNodes(part, from.paragraphId)[0] ?? null;
+        const atEnd = targetSectionNodes(part, to.paragraphId)[0] ?? null;
+        // Second: every section in the document starts the same way. Then the landing's
+        // section does too, whichever it is — which answers a selection spanning sections.
+        const settled =
+          atStart === atEnd ? sectionBreakTypeOf(atStart) : uniformSectionBreakType(part);
+        if (settled !== null) return settled === breakType ? null : SUGGESTED_BREAK_REFUSAL;
+      }
       // Sections that disagree AND a span reaching more than one of them: only the plan says
       // which one the break lands in, and planning a deletion is superlinear in the SELECTION
       // — seconds on a select-all in a long document, which is not a price a read may charge.
@@ -946,7 +940,8 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       return landedBreakRefusal(
         part,
         sectionBreakLanding(part, deleteSelectionPlan()).paragraphId,
-        breakType
+        breakType,
+        suggesting
       );
     },
 
@@ -959,7 +954,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // reason rather than leaving the press to report the store's rejection enum.
       const refusal =
         (isTableNested(session.part(), start.paragraphId) ? TABLE_CELL_BREAK_REFUSAL : null) ??
-        landedBreakRefusal(session.part(), start.paragraphId, breakType);
+        landedBreakRefusal(
+          session.part(),
+          start.paragraphId,
+          breakType,
+          deps.editingMode?.() === 'suggest'
+        );
       if (refusal !== null) {
         deps.publishRefusal?.(refusal);
         return false;

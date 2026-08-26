@@ -727,7 +727,8 @@
     "furnitureOnlyPageField": null,
     "suggestingSectionBreak": null,
     "tableCellSectionBreak": null,
-    "lockedSectionBreak": null
+    "lockedSectionBreak": null,
+    "lockedContentBreak": null
   },
   "equationPopup": {
     "apply": null,

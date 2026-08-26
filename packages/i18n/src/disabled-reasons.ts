@@ -46,6 +46,8 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // so one sentence cannot be true of all of them. Each lane says what its own refusal means.
   'a section break cannot change a section that a locked or linked content control holds':
     'disabledReason.lockedSectionBreak',
+  'a section break cannot be inserted in locked or linked content':
+    'disabledReason.lockedContentBreak',
 });
 
 /**

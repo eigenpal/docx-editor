@@ -599,3 +599,102 @@ describe('a section a locked control holds is reported, not discovered on press'
     });
   });
 });
+
+describe('the gate mirrors BOTH of the store lock guards', () => {
+  // `setSectionMark` guards two paragraphs: the one it marks, and the one the section it
+  // retypes hangs on. Mirroring only the second left a caret INSIDE a locked control with two
+  // live rows and a press that failed with the store's `locked`.
+  const sdt = (properties: string, inner: string) =>
+    `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+  const LOCK = '<w:lock w:val="contentLocked"/>';
+  const BIND = '<w:dataBinding w:xpath="/root/a" w:storeItemID="{1}"/>';
+  const MARK_HELD = (properties: string) =>
+    p('Alpha') +
+    sdt(properties, p('Inside')) +
+    p('Beta') +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  const CONTENT_REASON = 'a section break cannot be inserted in locked or linked content';
+  const SECTION_REASON =
+    'a section break cannot change a section that a locked or linked content control holds';
+
+  test.each([
+    ['locked', LOCK],
+    ['data-bound', BIND],
+  ])('%s content refuses the mark itself, through can and exec', (_label, properties) => {
+    const editor = mount(MARK_HELD(properties));
+    const inside = editor.surface!.session.paragraphIds()[1]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: inside, offset: 3 },
+      head: { paragraphId: inside, offset: 3 },
+    });
+    for (const kind of ['section', 'sectionContinuous'] as const) {
+      expect(editor.can({ type: 'insertBreak', kind } as never)).toEqual({
+        ok: false,
+        code: 'unsupported',
+        reason: CONTENT_REASON,
+      });
+      expect(editor.exec({ type: 'insertBreak', kind } as never)).toMatchObject({
+        ok: false,
+        reason: CONTENT_REASON,
+      });
+    }
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(3);
+  });
+
+  test('a RANGE reaches the lock questions too, not only a caret', () => {
+    // Edit mode used to return before the lock check for anything non-collapsed, so the same
+    // document answered one way for a caret and another for a two-character drag.
+    const editor = mount(
+      p('Alpha') +
+        sdt(
+          LOCK,
+          '<w:p><w:pPr><w:sectPr><w:type w:val="oddPage"/><w:pgSz w:w="12240" w:h="15840"/>' +
+            '</w:sectPr></w:pPr><w:r><w:t>Inside</w:t></w:r></w:p>'
+        ) +
+        p('Beta') +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 3 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: SECTION_REASON,
+    });
+    expect(editor.surface!.insertSectionBreak('nextPage')).toBe(false);
+  });
+
+  test('a locked control the break never touches costs a range nothing and refuses nothing', () => {
+    const editor = mount(p('Alpha') + sdt(LOCK, p('Inside')) + p('Beta'));
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 3 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+  });
+});
+
+describe('a caret answers without writing anything', () => {
+  test('neither mode flushes the pending type buffer for a caret', () => {
+    // `orderedRange()` flushes, which commits queued keystrokes — a write from a read, and
+    // `useEditorCommand` runs this inside a React render. A caret needs no ordering at all.
+    for (const mode of ['edit', 'suggesting'] as const) {
+      const editor = mount(p('before after'), mode);
+      const id = editor.surface!.session.paragraphIds()[0]!;
+      editor.surface!.setSelection({
+        anchor: { paragraphId: id, offset: 6 },
+        head: { paragraphId: id, offset: 6 },
+      });
+      editor.surface!.enqueueType('ZZZ');
+      const before = editor.surface!.session.bodyText();
+      editor.can({ type: 'insertBreak', kind: 'section' } as never);
+      editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never);
+      expect(editor.surface!.session.bodyText()).toBe(before);
+    }
+  });
+});
