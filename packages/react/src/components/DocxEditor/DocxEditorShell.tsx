@@ -4,7 +4,7 @@ import type { RulerPageSetup, RulerTabStop } from '../ui/HorizontalRuler';
 import { LocaleProvider } from '../../i18n';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary, ErrorProvider } from '../ErrorBoundary';
-import { HorizontalRuler } from '../ui/HorizontalRuler';
+import { HorizontalRuler, RULER_HEIGHT } from '../ui/HorizontalRuler';
 import { VerticalRuler, RULER_WIDTH } from '../ui/VerticalRuler';
 import type { ReactNode } from 'react';
 import {
@@ -137,6 +137,9 @@ export function DocxEditorShell({
   dialogs: ReactNode;
   fileInputs: ReactNode;
 }) {
+  // The vertical ruler renders only when editable; the outline insets must
+  // gate on the same condition or they clear a ruler that is not on screen.
+  const showVerticalRuler = showRuler && !readOnlyProp;
   return (
     // The container below carries the scope class, so chrome parts inside it
     // must not add their own — see editor/scope-context.ts.
@@ -216,7 +219,7 @@ export function DocxEditorShell({
                       >
                         {/* Vertical ruler — sits at the editor content's left
                           edge so it scrolls horizontally with the page. */}
-                        {showRuler && !readOnlyProp && (
+                        {showVerticalRuler && (
                           <div
                             style={{
                               position: 'absolute',
@@ -224,8 +227,10 @@ export function DocxEditorShell({
                               top: 0,
                               // Above the inline HF editor so it stays readable on horizontal scroll.
                               zIndex: Z_INDEX.ruler,
-                              // Must match `.paged-editor__pages` padding-top
-                              // (24 viewport + 24 pages container) in editor.css.
+                              // Must match the space above the first page in
+                              // editor.css: `.docx-editor-one-surface__viewport`
+                              // padding (24) + `.docx-paginated-surface` top
+                              // margin (24).
                               paddingTop: 48,
                             }}
                           >
@@ -269,7 +274,7 @@ export function DocxEditorShell({
                   {showOutline && (
                     <DocumentOutline
                       {...outlineProps}
-                      leftOffset={OUTLINE_LEFT_OFFSET + (showRuler ? RULER_WIDTH : 0)}
+                      leftOffset={OUTLINE_LEFT_OFFSET + (showVerticalRuler ? RULER_WIDTH : 0)}
                     />
                   )}
 
@@ -277,11 +282,13 @@ export function DocxEditorShell({
                     <OutlineToggleButton
                       onClick={onToggleOutline}
                       // Aligns with the page top: toolbar + horizontal ruler row
-                      // (22 ruler + 8 py-1 padding) + PagedEditor viewport
-                      // padding-top (24) + pages container padding (24).
-                      topPx={toolbarHeight + (showRuler ? 30 : 0) + 48}
+                      // (RULER_HEIGHT + 8 py-1 padding) + viewport padding (24)
+                      // + first-page top margin (24), per editor.css.
+                      topPx={toolbarHeight + (showRuler ? RULER_HEIGHT + 8 : 0) + 48}
                       scrollLeft={editorScrollLeft}
-                      leftOffset={OUTLINE_BUTTON_LEFT_OFFSET + (showRuler ? RULER_WIDTH : 0)}
+                      leftOffset={
+                        OUTLINE_BUTTON_LEFT_OFFSET + (showVerticalRuler ? RULER_WIDTH : 0)
+                      }
                     />
                   )}
                 </div>

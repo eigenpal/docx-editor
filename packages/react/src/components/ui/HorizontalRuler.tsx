@@ -100,7 +100,8 @@ const TWIPS_PER_CM = 567;
 const STRIP_HEIGHT = 20;
 /** The left box hangs BELOW the strip, which is how it and the hanging triangle coexist. */
 const BOX_HEIGHT = 6;
-const RULER_HEIGHT = STRIP_HEIGHT + BOX_HEIGHT + 2;
+/** Full ruler height; consumers that stack chrome below the ruler derive from this. */
+export const RULER_HEIGHT = STRIP_HEIGHT + BOX_HEIGHT + 2;
 
 const RULER_TEXT_COLOR = 'var(--doc-text-muted)';
 const RULER_TICK_COLOR = 'var(--doc-text-subtle)';
