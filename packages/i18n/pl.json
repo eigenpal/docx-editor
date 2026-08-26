@@ -725,7 +725,8 @@
     "bodyOnlySectionBreak": null,
     "bodyOnlyToc": null,
     "furnitureOnlyPageField": null,
-    "suggestingSectionBreak": null
+    "suggestingSectionBreak": null,
+    "tableCellSectionBreak": null
   },
   "equationPopup": {
     "apply": null,

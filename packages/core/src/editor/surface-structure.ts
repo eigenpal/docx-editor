@@ -59,6 +59,13 @@ const PARAGRAPH_FLAG_PROPERTIES = [
   ['pageBreakBefore', 'pageBreakBefore'],
 ] as const satisfies readonly (readonly [keyof SurfaceParagraphFormat, string])[];
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
+import {
+  MAX_GATED_BREAK_SPAN,
+  SUGGESTED_BREAK_REFUSAL,
+  TABLE_CELL_BREAK_REFUSAL,
+  sectionBreakLanding,
+  uniformSectionBreakType,
+} from './surface-section-breaks.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
 export interface SurfaceStructureDeps {
@@ -103,6 +110,24 @@ export interface SurfaceStructureDeps {
    * gesture survives the reject that removes everything else the gesture did.
    */
   editingMode?(): 'edit' | 'suggest' | 'view';
+  /**
+   * The paragraph a COLLAPSED caret is in, or `null` for a range — read raw, without
+   * ordering the selection or flushing pending input.
+   *
+   * `orderedRange()` flushes, and `sectionBreakRefusal` runs on every toolbar derivation:
+   * asking it just to find out whether the caret is in a table cell would commit the user's
+   * queued keystrokes from a read. Pending typing cannot move a caret across a table
+   * boundary, so the raw value answers that question exactly.
+   */
+  caretParagraphId?(): string | null;
+  /**
+   * Record why a write refused, for `state().lastRejection`.
+   *
+   * The gate BOUNDS how far it will plan, so past that bound it answers "allowed" and the
+   * press is where the refusal is found. Without this the press reported the store's
+   * rejection enum instead of the lane's own reason.
+   */
+  publishRefusal?(reason: string): void;
   /**
    * The cells a RECTANGLE selection covers, when there is one.
    *
@@ -227,39 +252,10 @@ function writeFirstLine(
   return attributes;
 }
 
-/**
- * The one break this engine cannot propose. Spelled once, and listed in
- * `DISABLED_REASON_KEYS` so chrome renders it in the reader's language rather than raw
- * English — an engine `disabledReason` is text a user reads.
- */
-const SUGGESTED_BREAK_REFUSAL =
-  'a section break that changes where the next section starts cannot be suggested; ' +
-  'turn off suggesting to insert it';
-
 export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMethods {
   const { session, commit, orderedStart, orderedRange, selectionMark, collapsedAt } = deps;
   const deleteSelectionPlan = deps.deleteSelectionPlan;
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
-
-  /**
-   * Where a section break actually lands, which is not the selection's head.
-   *
-   * The plan's `replaceAt`, like the tab and break lanes: in suggesting mode the struck
-   * words stay, and a split at the range START cut the paragraph in FRONT of them — the
-   * break and the strike read as two unrelated edits. EXCEPT when the landing sits in a
-   * table cell: a section mark cannot be minted there (the store refuses it, and one
-   * refused op vetoes the strike with it), so the break falls back to `collapseTo`. That
-   * only saves the gesture when the range STARTS outside the table — a selection wholly
-   * inside one is still refused by the store, as it always was.
-   *
-   * Both the gate and the write resolve it here. Reading `selection.head` instead put the
-   * two on different paragraphs whenever the drag ran backwards over a section boundary,
-   * and they then disagreed about which section the break would retype.
-   */
-  const sectionBreakLanding = (plan: RangeDeletionPlan): SemanticPosition => {
-    const landing = plan.replaceAt ?? plan.collapseTo;
-    return isTableNested(session.part(), landing.paragraphId) ? plan.collapseTo : landing;
-  };
 
   /**
    * The break's own refusal at one landing, or null. See `sectionBreakRefusal` on the
@@ -879,21 +875,49 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // a range-deletion plan that scales with the SELECTION. Asking it eagerly made
       // `can(insertBreak)` take seconds on a select-all in a long document, on the next-page
       // row that had no gate at all before this feature as well as on the new one.
-      if (deps.editingMode?.() !== 'suggest') return null;
       if (deps.storyScope().kind !== 'body') return null;
-      // Still cheap, and still EXACT. The governing section is the first `w:sectPr` at or
-      // after a paragraph, which only moves FORWARD through the document — so when both ends
-      // of the range resolve to the same one, every paragraph between them does too, and the
-      // landing cannot be anywhere else. A range inside one section, which is nearly every
-      // range, is answered without planning a deletion at all.
       const part = session.part();
+      // A caret in a table cell refuses whatever the mode: a section cannot end there, Word
+      // never writes one there, and the read side would ignore it. Collapsed only — that is
+      // the case where the landing is known to be the caret's own paragraph, and where the
+      // answer costs no ordering. A RANGE that starts in a table still reports at `exec`.
+      const caret = deps.caretParagraphId?.() ?? null;
+      if (caret !== null && isTableNested(part, caret)) return TABLE_CELL_BREAK_REFUSAL;
+      if (deps.editingMode?.() !== 'suggest') return null;
       const { from, to } = orderedRange();
-      const atStart = sectionBreakTypeOf(targetSectionNodes(part, from.paragraphId)[0] ?? null);
-      const atEnd = sectionBreakTypeOf(targetSectionNodes(part, to.paragraphId)[0] ?? null);
-      if (atStart === atEnd) return atStart === breakType ? null : SUGGESTED_BREAK_REFUSAL;
-      // The range STRADDLES a boundary, so only the plan says which side the break lands on.
+      // Two exact short-circuits, so nearly every answer costs no deletion plan. The landing
+      // is somewhere in `[from, to]` — `replacementTarget` walks it BACK from `to` through the
+      // author's own pending paragraph marks — so any rule that holds for EVERY paragraph in
+      // that span holds for the landing.
+      //
+      // First: the same governing NODE at both ends. The governing section is the first
+      // `w:sectPr` at or after a paragraph, which only moves forward, so one node at both ends
+      // means that node governs everything between them. Comparing the resolved TYPE here
+      // instead of the node was wrong — two different sections share a type routinely, and an
+      // intermediate landing could then carry a third.
+      const atStart = targetSectionNodes(part, from.paragraphId)[0] ?? null;
+      const atEnd = targetSectionNodes(part, to.paragraphId)[0] ?? null;
+      // Second: every section in the document starts the same way. Then the landing's section
+      // does too, whichever it is. This is what answers a selection that spans sections.
+      const settled =
+        atStart === atEnd ? sectionBreakTypeOf(atStart) : uniformSectionBreakType(part);
+      if (settled !== null) return settled === breakType ? null : SUGGESTED_BREAK_REFUSAL;
+      // Sections that disagree AND a span reaching more than one of them: only the plan says
+      // which one the break lands in, and planning a deletion is superlinear in the SELECTION
+      // — seconds on a select-all in a long document, which is not a price a read may charge.
+      //
+      // So the plan is BOUNDED by how much it would have to walk. Up to a few hundred
+      // paragraphs it is milliseconds and the gate stays exact, which covers a caret and
+      // every ordinary drag. Past that the control stays enabled and the press reports the
+      // same refusal exactly, from `exec`, which has already paid for a write. That leaves a
+      // narrow honesty gap — suggesting mode, sections that start differently, and a range
+      // spanning them that is longer than the bound — and it is the better half of the trade
+      // against stopping the main thread on every toolbar derivation.
+      const order = orderOf();
+      const span = order.indexOf(to.paragraphId) - order.indexOf(from.paragraphId);
+      if (span > MAX_GATED_BREAK_SPAN) return null;
       return sectionBreakRefusalFor(
-        sectionBreakLanding(deleteSelectionPlan()).paragraphId,
+        sectionBreakLanding(part, deleteSelectionPlan()).paragraphId,
         breakType
       );
     },
@@ -902,10 +926,16 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // Section breaks are body-only; refuse while a furniture scope is open.
       if (deps.storyScope().kind !== 'body') return false;
       const plan = deleteSelectionPlan();
-      const start = sectionBreakLanding(plan);
-      // Asked through the SAME method `Editor.can` asks, so the control and the write cannot
-      // answer differently.
-      if (sectionBreakRefusalFor(start.paragraphId, breakType) !== null) return false;
+      const start = sectionBreakLanding(session.part(), plan);
+      // The write is EXACT, whatever the gate's bound let it answer, and it publishes its own
+      // reason rather than leaving the press to report the store's rejection enum.
+      const refusal =
+        (isTableNested(session.part(), start.paragraphId) ? TABLE_CELL_BREAK_REFUSAL : null) ??
+        sectionBreakRefusalFor(start.paragraphId, breakType);
+      if (refusal !== null) {
+        deps.publishRefusal?.(refusal);
+        return false;
+      }
       const before = new Set(session.paragraphIds());
       let committed = false;
       commit(

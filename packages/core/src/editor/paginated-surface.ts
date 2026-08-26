@@ -878,6 +878,15 @@ export function mountPaginatedSurface(
     // its corners in document order.
     selectedCells: () => cellSelection?.cellIds,
     editingMode: () => editingMode,
+    publishRefusal: (reason) => {
+      lastRejection = reason;
+    },
+    // RAW, on purpose: `orderedRange()` flushes pending input, and this is asked from `can`.
+    caretParagraphId: () =>
+      selection.anchor.paragraphId === selection.head.paragraphId &&
+      selection.anchor.offset === selection.head.offset
+        ? selection.head.paragraphId
+        : null,
     layout: () => currentLayout,
     // Structural edits at the caret KEEP the armed typing format, the way Word does: a
     // Shift+Enter line break, a Tab, a page break or turning the paragraph into a list item

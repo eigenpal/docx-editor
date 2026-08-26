@@ -321,3 +321,158 @@ describe('the break gate stays cheap enough to run on every toolbar derivation',
     expect(editor.surface!.insertSectionBreak('nextPage')).toBe(can.ok);
   });
 });
+
+describe('the gate agrees with the write on every selection shape', () => {
+  // The short-circuits exist for speed, so they have to answer what the plan would answer.
+  // A previous version compared the resolved TYPE at the two ends, and two different
+  // sections share a type routinely — so an intermediate landing could carry a third and
+  // the row said yes while the write refused, or the reverse. `replacementTarget` walks the
+  // landing BACK from the range end through the author's OWN pending paragraph marks, which
+  // is exactly the shape Word writes when a break is inserted with track changes on.
+  const AUTHOR = 'Ada Lovelace';
+  const insMark = `<w:pPr><w:rPr><w:ins w:id="90" w:author="${AUTHOR}" w:date="2024-01-01T00:00:00Z"/></w:rPr>`;
+  const sect = (type: string | null) =>
+    `<w:sectPr>${type ? `<w:type w:val="${type}"/>` : ''}<w:pgSz w:w="12240" w:h="15840"/></w:sectPr>`;
+
+  /** One body paragraph: text, an optional pending mark, an optional section mark. */
+  const para = (text: string, ins: boolean, type: string | null | undefined) => {
+    const properties =
+      ins || type !== undefined
+        ? (ins ? insMark : '<w:pPr>') + (type !== undefined ? sect(type) : '') + '</w:pPr>'
+        : '';
+    return `<w:p>${properties}<w:r><w:t>${text}</w:t></w:r></w:p>`;
+  };
+
+  const SHAPES: readonly (readonly [string, string])[] = [
+    [
+      'pending mark hides a continuous section between two nextPage ends',
+      para('one', false, undefined) +
+        para('two', false, 'nextPage') +
+        para('three', true, 'continuous') +
+        para('four', false, undefined) +
+        sect('nextPage'),
+    ],
+    [
+      'pending mark hides a nextPage section between two continuous ends',
+      para('one', false, undefined) +
+        para('two', false, 'continuous') +
+        para('three', true, null) +
+        para('four', false, undefined) +
+        sect('continuous'),
+    ],
+    [
+      'every section agrees, so no plan is needed at all',
+      para('one', false, undefined) +
+        para('two', true, 'continuous') +
+        para('three', false, undefined) +
+        sect('continuous'),
+    ],
+  ];
+
+  for (const [label, body] of SHAPES) {
+    for (const kind of ['section', 'sectionContinuous'] as const) {
+      for (const reversed of [false, true]) {
+        test(`${label} — ${kind}${reversed ? ', reversed' : ''}`, () => {
+          const editor = mount(body, 'suggesting');
+          const ids = editor.surface!.session.paragraphIds();
+          const first = { paragraphId: ids[0]!, offset: 1 };
+          const last = { paragraphId: ids[ids.length - 1]!, offset: 1 };
+          editor.surface!.setSelection(
+            reversed ? { anchor: last, head: first } : { anchor: first, head: last }
+          );
+          const can = editor.can({ type: 'insertBreak', kind } as never);
+          const committed = editor.surface!.insertSectionBreak(
+            kind === 'section' ? 'nextPage' : 'continuous'
+          );
+          expect(committed).toBe(can.ok);
+        });
+      }
+    }
+  }
+});
+
+describe('a caret in a table cell says so instead of failing on press', () => {
+  // The store refuses a section mark in a cell, and used to report its own rejection enum —
+  // `invalid-property-value`, which names no cause and no locale can translate.
+  const CELL = (text: string) =>
+    `<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>${p(text)}</w:tc>`;
+  const TABLE =
+    '<w:tbl><w:tblPr><w:tblW w:w="8000" w:type="dxa"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="4000"/></w:tblGrid>' +
+    `<w:tr>${CELL('CellA')}${CELL('CellB')}</w:tr></w:tbl>`;
+
+  test('both break kinds report the cell, through can and through exec', () => {
+    const editor = mount(p('before') + TABLE + p('after'));
+    const inCell = editor.surface!.session.paragraphIds()[1]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: inCell, offset: 2 },
+      head: { paragraphId: inCell, offset: 2 },
+    });
+    for (const kind of ['section', 'sectionContinuous'] as const) {
+      expect(editor.can({ type: 'insertBreak', kind } as never)).toEqual({
+        ok: false,
+        code: 'unsupported',
+        reason: 'a section break cannot be inserted inside a table cell',
+      });
+      expect(editor.exec({ type: 'insertBreak', kind } as never)).toMatchObject({
+        ok: false,
+        reason: 'a section break cannot be inserted inside a table cell',
+      });
+    }
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(4);
+  });
+
+  test('a caret OUTSIDE the table is unaffected', () => {
+    const editor = mount(p('before') + TABLE + p('after'));
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 3 },
+      head: { paragraphId: id, offset: 3 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+  });
+});
+
+describe('the gate bounds how far it will plan', () => {
+  // Planning a deletion is superlinear in the range, and the gate runs on every toolbar
+  // derivation, so past a few hundred paragraphs it stops asking and lets the press report
+  // the refusal instead. `exec` is exact either way — it has already paid for a write.
+  const LONG_MIXED =
+    Array.from({ length: 600 }, (_, i) => p(`a ${i}`)).join('') +
+    '<w:p><w:pPr><w:sectPr><w:type w:val="continuous"/><w:pgSz w:w="12240" w:h="15840"/>' +
+    '</w:sectPr></w:pPr><w:r><w:t>mid</w:t></w:r></w:p>' +
+    Array.from({ length: 600 }, (_, i) => p(`b ${i}`)).join('') +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  test('a span past the bound stays enabled, and exec still refuses exactly', () => {
+    const editor = mount(LONG_MIXED, 'suggesting');
+    editor.surface!.selectAll();
+    // Sections disagree and the span reaches both, so the cheap answers do not settle it.
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toEqual({
+      ok: true,
+    });
+    expect(editor.exec({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toMatchObject({
+      ok: false,
+      reason:
+        'a section break that changes where the next section starts cannot be suggested; ' +
+        'turn off suggesting to insert it',
+    });
+  });
+
+  test('the same document answers exactly for a caret', () => {
+    const editor = mount(LONG_MIXED, 'suggesting');
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 1 },
+      head: { paragraphId: id, offset: 1 },
+    });
+    // The caret's section is the mid-body continuous one, so a continuous break retypes
+    // nothing and a next-page break retypes it.
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toEqual({
+      ok: true,
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toMatchObject({
+      ok: false,
+    });
+  });
+});
