@@ -1,10 +1,14 @@
+<!-- This screen IS the sample app, so the link points at the directory that builds it and a
+     visitor can read the exact composition they are looking at. It renders unconditionally:
+     it says nothing about any other example, so it does not belong behind the
+     framework-switcher flag. -->
 <template>
   <a
     class="source-link"
     :href="href"
     target="_blank"
     rel="noreferrer"
-    :title="`Read the ${label} demo source on GitHub`"
+    :title="`Read the ${example} example source on GitHub`"
   >
     (see source)
   </a>
@@ -12,22 +16,15 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { sourceUrlFor, type ExampleName } from '../../shared/config';
 
-const props = defineProps<{ current: 'react' | 'vue' }>();
+const props = defineProps<{
+  /** Which example this screen IS, by its `config.ts` name — not which adapter it uses.
+   *  Several examples here render React, so the adapter would not identify the tree. */
+  example: ExampleName;
+}>();
 
-// This screen IS the sample app, so the link points at the directory that builds it and a
-// visitor can read the exact composition they are looking at. It renders unconditionally:
-// it says nothing about the other adapter, so it does not belong behind the
-// framework-switcher flag.
-const sourceUrl = {
-  react: 'https://github.com/eigenpal/docx-editor/tree/main/examples/vite',
-  vue: 'https://github.com/eigenpal/docx-editor/tree/main/examples/vue',
-} as const;
-
-const labels = { react: 'React', vue: 'Vue' } as const;
-
-const href = computed(() => sourceUrl[props.current]);
-const label = computed(() => labels[props.current]);
+const href = computed(() => sourceUrlFor(props.example));
 </script>
 
 <style scoped>

@@ -1,21 +1,11 @@
 import React from 'react';
-
-type Adapter = 'react' | 'vue';
+import { sourceUrlFor, type ExampleName } from './config';
 
 interface Props {
-  current: Adapter;
+  /** Which example this screen IS, by its `config.ts` name — not which adapter it uses.
+   *  Several examples here render React, so the adapter would not identify the tree. */
+  example: ExampleName;
 }
-
-// This screen IS the sample app, so the link points at the directory that builds it and a
-// visitor can read the exact composition they are looking at. It renders unconditionally:
-// it says nothing about the other adapter, so it does not belong behind the
-// framework-switcher flag.
-const sourceUrl: Record<Adapter, string> = {
-  react: 'https://github.com/eigenpal/docx-editor/tree/main/examples/vite',
-  vue: 'https://github.com/eigenpal/docx-editor/tree/main/examples/vue',
-};
-
-const label: Record<Adapter, string> = { react: 'React', vue: 'Vue' };
 
 // The header row is a flex container with its own gap, so this needs no margin.
 const style: React.CSSProperties = {
@@ -26,14 +16,18 @@ const style: React.CSSProperties = {
   textUnderlineOffset: '2px',
 };
 
-export function SourceLink({ current }: Props) {
+// This screen IS the sample app, so the link points at the directory that builds it and a
+// visitor can read the exact composition they are looking at. It renders unconditionally:
+// it says nothing about any other example, so it does not belong behind the
+// framework-switcher flag.
+export function SourceLink({ example }: Props) {
   return (
     <a
-      href={sourceUrl[current]}
+      href={sourceUrlFor(example)}
       target="_blank"
       rel="noreferrer"
       style={style}
-      title={`Read the ${label[current]} demo source on GitHub`}
+      title={`Read the ${example} example source on GitHub`}
     >
       (see source)
     </a>

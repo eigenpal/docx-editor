@@ -27,7 +27,7 @@ const localPorts = {
   Vue: 5174,
 };
 
-export const examples: FrameworkExample[] = [
+export const examples = [
   {
     name: 'Vite',
     url: 'https://docx-editor-vite.vercel.app',
@@ -68,4 +68,19 @@ export const examples: FrameworkExample[] = [
     description: 'Vue 3 + Vite',
     icon: icons.vue,
   },
-];
+] as const satisfies readonly FrameworkExample[];
+
+/** The name of one entry above — the only accepted key for {@link sourceUrlFor}. */
+export type ExampleName = (typeof examples)[number]['name'];
+
+/**
+ * The GitHub directory that builds a given demo. One home for the URL, so a demo's own
+ * "see source" link and the cross-example switcher can never point at different trees.
+ */
+export function sourceUrlFor(name: ExampleName): string {
+  const example = examples.find((entry) => entry.name === name);
+  // `ExampleName` is derived from `examples`, so this cannot miss at runtime; the throw
+  // is here so a hand-widened type fails loudly instead of rendering a dead link.
+  if (!example) throw new Error(`no example named ${name}`);
+  return example.sourceUrl;
+}

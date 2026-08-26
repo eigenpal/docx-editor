@@ -4,7 +4,7 @@
       <div class="demo-header__left">
         <BrandLogo />
         <AdapterSwitcher v-if="showAdapterSwitcher" current="vue" />
-        <SourceLink current="vue" />
+        <SourceLink example="Vue" />
       </div>
 
       <div class="demo-header__title-block">
