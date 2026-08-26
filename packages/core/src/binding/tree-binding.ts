@@ -78,12 +78,22 @@ function normalizeProps(props: readonly OoxmlProperty[]): OoxmlProperty[] {
     .sort((a, b) => (a.localName < b.localName ? -1 : 1));
 }
 
-/** Accepted `w:rPr` / `w:pPr` children of a container, as authored. */
+/**
+ * `w:rPr` / `w:pPr` children of a container, as authored, for the ProseMirror projection.
+ *
+ * A tracked FORMAT RECORD is not one of them. `w:rPrChange` and `w:pPrChange` hold the
+ * container as it WAS, in children of their own, and neither the projection nor an op can
+ * express that — so carrying them across put a name outside the accepted boundary into the
+ * bag the reverse diff builds its op from, and the store refused the whole transaction as
+ * `unsupported-property`. A formatting edit over a run with a pending record did nothing at
+ * all. They are preserved on the node, like every other child a write cannot name.
+ */
 function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
   if (!container || container.kind === 'textValue') return [];
   const props: OoxmlProperty[] = [];
   for (const child of container.children) {
     if (child.kind === 'textValue') continue;
+    if (child.localName === 'rPrChange' || child.localName === 'pPrChange') continue;
     const attributes: Record<string, string> = {};
     for (const attribute of child.attributes) attributes[attribute.localName] = attribute.value;
     props.push(
