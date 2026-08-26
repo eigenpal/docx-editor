@@ -267,14 +267,31 @@ function coveredParagraphIdsIn(
   return covered;
 }
 
-/** Outermost tables and block SDTs whose every paragraph the range covers mark-to-mark. */
-function fullyCoveredBlocksIn(part: OoxmlPart, covered: ReadonlySet<string>): string[] {
+/**
+ * Outermost tables and block SDTs whose every LAYOUT-KNOWN paragraph the range covers
+ * mark-to-mark.
+ *
+ * Judged against the layout's paragraph universe (`knownIds`), not the raw part tree: the
+ * layout legitimately omits paragraphs the reader cannot select — a TOC's hidden field
+ * machinery, the empty paragraph inside a `w:vMerge` continuation cell. Requiring THOSE
+ * in `covered` made a select-all read the TOC SDT and every vertically merged table as
+ * "partially covered", so the SDT unwrapped and the table flattened to paragraphs. A
+ * layout-invisible paragraph rides along with its block's subtree instead.
+ */
+function fullyCoveredBlocksIn(
+  part: OoxmlPart,
+  covered: ReadonlySet<string>,
+  knownIds: ReadonlySet<string>
+): string[] {
   const out: string[] = [];
   const walk = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
     if (node.kind === 'table' || isContentControl(node)) {
       const paragraphs = paragraphIdsUnder(node);
-      if (paragraphs.length > 0 && paragraphs.every((id) => covered.has(id))) {
+      const known = paragraphs.filter((id) => knownIds.has(id));
+      // At least one selectable paragraph, and all of them covered. A block whose every
+      // paragraph is layout-invisible has nothing the gesture could have covered.
+      if (known.length > 0 && known.every((id) => covered.has(id))) {
         out.push(node.id);
         return;
       }
@@ -315,7 +332,7 @@ export function fragmentCoverageOf(
     startOffset: from.offset,
     endOffset: to.offset,
     coveredParagraphIds: [...covered],
-    fullyCoveredBlockIds: fullyCoveredBlocksIn(part, covered),
+    fullyCoveredBlockIds: fullyCoveredBlocksIn(part, covered, new Set(effectiveOrder)),
     lastMarkCovered: to.offset === textOf(lastId).length,
   };
 }

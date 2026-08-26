@@ -102,6 +102,11 @@ test('select-all copy pastes the sample into a blank document with its structure
   expect(documentXml).toContain('<w:hyperlink');
   expect(documentXml).toContain('<w:drawing>');
   expect(documentXml).toContain('footnoteReference');
+  // Coverage judged against the layout's paragraph universe: the TOC travels as an SDT
+  // and vertically merged tables keep their structure instead of flattening.
+  expect(documentXml).toContain('<w:sdt>');
+  expect(documentXml).toContain('vMerge');
+  expect(documentXml).toContain('gridSpan');
 
   const stylesXml = strFromU8(entries['word/styles.xml']!);
   expect(stylesXml).toContain('Heading1');

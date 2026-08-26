@@ -9,6 +9,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test, afterEach } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
 import { docx, mount, paragraph, putCaret } from './paginated-surface-fixtures.ts';
@@ -45,6 +46,62 @@ describe('rich copy', () => {
     const { surface } = mount(paragraph('hello'));
     putCaret(surface, 2);
     expect(surface.copyFlavours()).toEqual({ text: '', html: null });
+  });
+});
+
+describe('full-document fidelity through the real surface', () => {
+  // The store-level oracle builds coverage from the part tree; THIS test goes through
+  // `fragmentCoverageOf` against the real layout, which omits paragraphs the reader
+  // cannot select (TOC field machinery, `w:vMerge` continuation cells). Judging block
+  // coverage against the raw tree flattened every vertically merged table and unwrapped
+  // the TOC SDT on a real select-all copy - exactly what this pins.
+  const SAMPLE = `${import.meta.dir}/../../../../../examples/vite/public/sample.docx`;
+
+  test('select-all copy of the sample keeps merged tables, the TOC SDT, and numbering', () => {
+    const bytes = new Uint8Array(readFileSync(SAMPLE));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const mounted = mountPaginatedSurface(container, bytes, { scale: 1 });
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const source = mounted.surface;
+    source.selectAll();
+    const flavours = source.copyFlavours();
+    expect(flavours.html).not.toBeNull();
+    const sourceXml = serializeOoxmlPart(source.session.part());
+
+    const container2 = document.createElement('div');
+    document.body.appendChild(container2);
+    const mounted2 = mountPaginatedSurface(container2, docx('<w:p/>'), { scale: 1 });
+    if (!mounted2.ok) throw new Error(mounted2.reason);
+    const target = mounted2.surface;
+    target.pasteRich(flavours.text, flavours.html);
+    const pastedXml = serializeOoxmlPart(target.session.part());
+
+    const count = (xml: string, re: RegExp): number => (xml.match(re) ?? []).length;
+    // Structure parity with the source part, through the PRODUCTION coverage path.
+    expect(count(pastedXml, /<w:tbl>/g)).toBe(count(sourceXml, /<w:tbl>/g));
+    expect(count(pastedXml, /<w:sdt>/g)).toBe(count(sourceXml, /<w:sdt>/g));
+    expect(count(pastedXml, /<w:numPr>/g)).toBe(count(sourceXml, /<w:numPr>/g));
+    expect(count(pastedXml, /vMerge/g)).toBe(count(sourceXml, /vMerge/g));
+    expect(count(pastedXml, /gridSpan/g)).toBe(count(sourceXml, /gridSpan/g));
+
+    // Every pasted list resolves against the target's numbering part.
+    const pastedPkg = target.session.currentPackage();
+    const numbering = pastedPkg.parts.get('/word/numbering.xml');
+    expect(numbering).toBeDefined();
+    const numberingXml = serializeOoxmlPart(numbering!);
+    const usedNumIds = new Set(
+      [...pastedXml.matchAll(/<w:numId w:val="(\d+)"\/>/g)].map((m) => m[1]!)
+    );
+    const definedNumIds = new Set(
+      [...numberingXml.matchAll(/<w:num w:numId="(\d+)"/g)].map((m) => m[1]!)
+    );
+    for (const id of usedNumIds) expect(definedNumIds.has(id)).toBe(true);
+
+    source.destroy();
+    target.destroy();
+    container.remove();
+    container2.remove();
   });
 });
 
