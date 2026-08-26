@@ -25,7 +25,6 @@ import type { EquationActivation, EquationOps } from './surface-equations.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
-  ContentControlBoundaryRecord,
   NavigationCommand,
   SectionProperties,
   SemanticLayout,
@@ -44,48 +43,11 @@ import type {
 export type SurfaceEditingMode = 'edit' | 'suggest' | 'view';
 
 import type { ReviewWriteIntent } from './review-write-intent.ts';
-export type { ReviewWriteIntent };
-
-/**
- * Content-control interaction lane on the paginated surface.
- *
- * Chrome toggles are surface state; value / remove commit through tree ops.
- */
-export interface ContentControlOps {
-  /** Toggle show-all boundary chrome. No layout reflow. */
-  setShowAll(show: boolean): void;
-  /** Toggle form-fill Tab navigation mode. */
-  setFormFill(active: boolean): void;
-  /** Whether show-all chrome is on. */
-  showAll(): boolean;
-  /** Whether form-fill navigation is on. */
-  formFill(): boolean;
-  /** Innermost control at the caret from layout boundary records. */
-  atCaret(): ContentControlBoundaryRecord | null;
-  /**
-   * Move to the next or previous editable control (tabIndex, then document order).
-   *
-   * Skips content-locked and bound controls. Selects the control's content for replacement.
-   * Returns whether navigation landed somewhere.
-   */
-  navigate(direction: 'next' | 'previous'): boolean;
-  /**
-   * Set a control's value through `setContentControlValue`. Honours lock / bound refusals.
-   * Returns whether the op committed.
-   */
-  setValue(controlId: string, value: string): boolean;
-  /**
-   * Unwrap a control keeping its content (`removeContentControl`). Defaults to the control
-   * at the caret. Returns whether the op committed.
-   */
-  remove(controlId?: string): boolean;
-  /**
-   * Engine reason a widget or remove action is disabled, or null when allowed.
-   *
-   * `edit` covers content / value changes; `remove` covers unwrap.
-   */
-  disabledReason(controlId: string, action: 'edit' | 'remove'): string | null;
-}
+import type {
+  ContentControlOps,
+  ContentControlSurfaceState,
+} from './surface-content-control-contract.ts';
+export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
 
 /**
  * How a paginated surface opens. Every field is optional.
@@ -376,21 +338,6 @@ export interface PaginatedSurfaceState {
   readonly contextTocId: string | null;
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
-}
-
-/**
- * Observable content-control interaction state on the paginated surface.
- *
- * Boundary furniture visibility and form-fill navigation are surface chrome, not model
- * bytes — toggling them never reflows layout records.
- */
-export interface ContentControlSurfaceState {
-  /** Show boundary chrome for every control. */
-  readonly showAll: boolean;
-  /** Tab / Shift+Tab navigate between editable controls. */
-  readonly formFill: boolean;
-  /** Innermost control containing the caret, or null. */
-  readonly activeControlId: string | null;
 }
 
 /**
