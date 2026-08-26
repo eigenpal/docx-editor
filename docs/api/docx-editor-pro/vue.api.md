@@ -767,7 +767,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
-export function useCollaborationStatus(session: MaybeRefOrGetter<EditorCollaborationSession | null>): UseCollaborationStatusReturn;
+export function useCollaborationStatus(session: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationStatusReturn;
 
 // @public
 export interface UseCollaborationStatusReturn {

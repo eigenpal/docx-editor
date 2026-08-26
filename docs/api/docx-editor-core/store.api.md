@@ -50,7 +50,7 @@ export function allocateContentControlId(root: OoxmlNode, actorId?: string): num
 export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult;
 
 // @public
-export function allocateNoteId(notesRoot: OoxmlNode): number | null;
+export function allocateNoteId(notesRoot: OoxmlNode, actorId?: string): number | null;
 
 // @public
 export interface AnchorSnapshot {

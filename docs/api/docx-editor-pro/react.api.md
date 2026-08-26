@@ -169,7 +169,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
-export function useCollaborationStatus(session: EditorCollaborationSession | null): UseCollaborationStatusReturn;
+export function useCollaborationStatus(session: CollaborationSession | null): UseCollaborationStatusReturn;
 
 // @public
 export interface UseCollaborationStatusReturn {
