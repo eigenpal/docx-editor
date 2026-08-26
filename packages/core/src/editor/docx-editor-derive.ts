@@ -426,7 +426,10 @@ export function gateCommand(
   // refuses outside the body. Without this arm the refusal was never PUBLISHED: `can` saw only
   // the static break vocabulary, so the control rendered live in a header and pressing it did
   // nothing at all. A gate the toolbar cannot see is a button that lies.
-  if (command.type === 'insertBreak' && command.kind === 'section') {
+  if (
+    command.type === 'insertBreak' &&
+    (command.kind === 'section' || command.kind === 'sectionContinuous')
+  ) {
     const active = surface.activeScope?.() ?? { kind: 'body' as const };
     if (active.kind !== 'body') {
       return {
@@ -437,6 +440,22 @@ export function gateCommand(
           reason: 'a section break can only be inserted in the editable document body',
         },
       };
+    }
+    // Suggesting mode: a break that RETYPES the following section cannot be proposed. `w:type`
+    // lands on the section that starts at the mark, which hangs on a paragraph the break does
+    // not touch, and Word's record for that — `w:sectPrChange` — is one this engine refuses in
+    // accept and reject. Written untracked it would survive the reject that removes the split.
+    //
+    // Asked of the SURFACE rather than answered here. The two inputs are both ones only it
+    // holds: the LIVE editing mode — `mode` is the constructed one, and a file that declares
+    // `w:trackRevisions` opens suggesting with nobody passing it — and the paragraph the break
+    // lands in, which for a range in suggesting mode is past the struck words rather than the
+    // selection's head. Deriving either of them here made the control and the write disagree.
+    const refusal = surface.sectionBreakRefusal(
+      command.kind === 'section' ? 'nextPage' : 'continuous'
+    );
+    if (refusal) {
+      return { ok: false, refusal: { ok: false, code: 'unsupported', reason: refusal } };
     }
   }
   // A page break is body structure for the same reason, and the sibling arm above missed it.

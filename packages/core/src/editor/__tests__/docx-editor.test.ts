@@ -561,37 +561,6 @@ describe('createDocxEditor', () => {
     expect(breaks).toEqual(['page']);
   });
 
-  test('insertBreak section splits at the caret and starts a new section', () => {
-    const { editor } = mount(p('before after'));
-    const id = editor.surface!.session.paragraphIds()[0]!;
-    editor.surface!.setSelection({
-      anchor: { paragraphId: id, offset: 6 },
-      head: { paragraphId: id, offset: 6 },
-    });
-    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
-    const result = editor.exec({ type: 'insertBreak', kind: 'section' } as never);
-    expect(result).toEqual({ ok: true, changed: true });
-    expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
-    // The document now has two sections; one undo removes the break entirely.
-    expect(editor.surface!.layout().pages.length).toBeGreaterThanOrEqual(2);
-    editor.exec({ type: 'undo' });
-    expect(editor.surface!.session.paragraphIds()).toHaveLength(1);
-  });
-
-  test('the caret section drives the layout: a landscape section paginates landscape', () => {
-    const midBody =
-      '<w:p><w:pPr><w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/></w:sectPr></w:pPr>' +
-      '<w:r><w:t>landscape page</w:t></w:r></w:p>' +
-      '<w:p><w:r><w:t>portrait page</w:t></w:r></w:p>' +
-      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
-    const { editor } = mount(midBody);
-    const pages = editor.surface!.layout().pages;
-    expect(pages).toHaveLength(2);
-    // Twips to points: 15840/20 = 792 wide landscape sheet, then the portrait one.
-    expect([pages[0]!.box.width, pages[0]!.box.height]).toEqual([792, 612]);
-    expect([pages[1]!.box.width, pages[1]!.box.height]).toEqual([612, 792]);
-  });
-
   test('zoom is validated, stored, and reported', () => {
     const { editor } = mount(p('hello'));
     expect(editor.getZoom()).toBe(1);

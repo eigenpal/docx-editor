@@ -249,7 +249,7 @@ describe('useEditorCommand', () => {
     let binding: ReturnType<typeof useEditorCommand> | null = null;
     const Probe = defineComponent({
       setup() {
-        binding = useEditorCommand('insert.sectionBreakContinuous');
+        binding = useEditorCommand('zoom.level');
         return () => null;
       },
     });

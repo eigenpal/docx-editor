@@ -373,16 +373,19 @@ describe('legacy chrome descriptor', () => {
     expect(rows).toEqual(['file.open', 'file.save', 'file.pageSetup']);
   });
 
-  test('the Insert menu reaches the two break kinds the engine wires', () => {
-    // `insert.pageBreak` and `insert.sectionBreakNextPage` are live commands; the
-    // continuous break is present and refused, so the menu shows Word's three choices
-    // without faking the one layout cannot do.
+  test('the Insert menu reaches all three break kinds the engine wires', () => {
+    // Word's three break choices are three live commands. The two section kinds are
+    // separate `insertBreak` kinds, not one command with a flag, so a host reading the
+    // registry dispatches each without knowing what a `w:type` is.
     expect(commandForSlot('insert.pageBreak')).toEqual({ type: 'insertBreak', kind: 'page' });
     expect(commandForSlot('insert.sectionBreakNextPage')).toEqual({
       type: 'insertBreak',
       kind: 'section',
     });
-    expect(commandForSlot('insert.sectionBreakContinuous')).toBeNull();
+    expect(commandForSlot('insert.sectionBreakContinuous')).toEqual({
+      type: 'insertBreak',
+      kind: 'sectionContinuous',
+    });
   });
 
   test('open and save each report which of the two they are missing', () => {

@@ -25,7 +25,11 @@
     "bodyOnlySectionBreak": "Section breaks go in the document body.",
     "bodyOnlyToc": "A table of contents goes in the document body.",
     "bodyOnlyNote": "Footnotes and endnotes are added from the document body.",
-    "furnitureOnlyPageField": "Open a header or footer to insert a page number."
+    "furnitureOnlyPageField": "Open a header or footer to insert a page number.",
+    "suggestingSectionBreak": "Turn off suggesting to insert this section break. It changes where the next section starts, which can't be suggested.",
+    "tableCellSectionBreak": "Section breaks go outside a table.",
+    "lockedSectionBreak": "A locked or linked content control holds the next section, so this break can't change it.",
+    "lockedContentBreak": "A content control locks this text, so you can't break a section here."
   },
   "toolbar": {
     "ariaLabel": "Formatting toolbar",

@@ -163,9 +163,12 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
     parity: 'bodyOnly',
     reason: 'a section break can only be inserted in the editable document body',
   },
-  // Deliberately unwired: a continuous section break has no `insertBreak` command shape, so the
-  // slot is disabled everywhere with the registry's own unwired reason.
-  'insert.sectionBreakContinuous': { parity: 'same' },
+  // The continuous break splits the same `w:sectPr` chain, so it refuses outside the body for
+  // the same reason its next-page twin does.
+  'insert.sectionBreakContinuous': {
+    parity: 'bodyOnly',
+    reason: 'a section break can only be inserted in the editable document body',
+  },
 
   // PAGE / NUMPAGES / SECTIONPAGES project per page, so they mean something only in furniture.
   'insert.pageNumber': {

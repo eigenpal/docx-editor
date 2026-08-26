@@ -252,12 +252,19 @@ export function execEditorCommand(
       }
       break;
     case 'insertBreak':
-      if (command.kind === 'section') {
-        if (!mounted.insertSectionBreak()) {
+      if (command.kind === 'section' || command.kind === 'sectionContinuous') {
+        const breakType = command.kind === 'section' ? 'nextPage' : 'continuous';
+        if (!mounted.insertSectionBreak(breakType)) {
+          // The lane's OWN reason first. `lastRejection` here is the store's rejection enum
+          // (`invalid-property-value` for a mark in a table cell), which is a diagnostic, not
+          // chrome: it names no cause a reader can act on and no locale can translate it.
           return {
             ok: false,
             code: 'invalidArgs',
-            reason: mounted.state().lastRejection ?? 'the section break was refused',
+            reason:
+              mounted.sectionBreakRefusal(breakType) ??
+              mounted.state().lastRejection ??
+              'the section break was refused',
           };
         }
         break;

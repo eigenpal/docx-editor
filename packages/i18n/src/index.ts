@@ -269,47 +269,7 @@ function formatMessage(
  */
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
-const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Object.freeze({
-  'editor is not ready': 'disabledReason.editorNotReady',
-  'not wired to an editor command': 'disabledReason.notWired',
-  'this document was opened for viewing': 'disabledReason.viewing',
-  'the document is open for viewing': 'disabledReason.viewing',
-  'this document permits editing only as tracked changes': 'disabledReason.trackedOnly',
-  'no document is loaded': 'disabledReason.noDocument',
-  'no document is open': 'disabledReason.noDocument',
-  'no content control at the selection': 'disabledReason.noContentControl',
-  'no drawing is selected': 'disabledReason.noDrawing',
-  'the drawing is locked': 'disabledReason.drawingLocked',
-  'a comment needs a selected range': 'disabledReason.commentSelection',
-  'cell merge is not supported yet': 'disabledReason.mergeUnsupported',
-  'cell split is not supported yet': 'disabledReason.splitUnsupported',
-  'image changes are not supported in suggesting mode': 'disabledReason.imageSuggesting',
-  'invalid table chrome value': 'disabledReason.invalidValue',
-  'invalid value for toolbar command': 'disabledReason.invalidValue',
-  'unsupported table command': 'disabledReason.unavailable',
-  // Scope refusals. Each names a story limit the engine really enforces, so each is chrome the
-  // user reads — and each rendered as raw English in every locale until it was listed here.
-  'a section break can only be inserted in the editable document body':
-    'disabledReason.bodyOnlySectionBreak',
-  'a table of contents can only be inserted in the editable document body':
-    'disabledReason.bodyOnlyToc',
-  'insertNote requires body scope': 'disabledReason.bodyOnlyNote',
-  'insertPageField requires an open header or footer scope':
-    'disabledReason.furnitureOnlyPageField',
-});
-
-/**
- * Translate a known engine refusal for adapter chrome.
- *
- * Unknown diagnostics stay exact, so integrations never lose the engine's explanation.
- *
- * @public
- */
-export function localizeDisabledReason(reason: string | null, t: TFunction): string | null {
-  if (!reason) return null;
-  const key = DISABLED_REASON_KEYS[reason];
-  return key ? t(key) : reason;
-}
+export { localizeDisabledReason } from './disabled-reasons';
 
 /**
  * Build a typed `t(key, vars?)` function from a merged locale.

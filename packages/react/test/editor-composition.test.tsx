@@ -217,7 +217,7 @@ describe('useEditorCommand', () => {
     let binding: EditorCommandState | null = null;
     let instance: DocxEditorInstance | null = null;
     function Probe() {
-      binding = useEditorCommand('insert.sectionBreakContinuous');
+      binding = useEditorCommand('zoom.level');
       return null;
     }
     render(

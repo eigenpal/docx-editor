@@ -90,6 +90,8 @@ import {
   PARAGRAPH_VOCABULARY,
   RUN_VOCABULARY,
   mergedPropertyChildren,
+  propertyElement,
+  schemaInsertIndex,
 } from './tree-op-properties.ts';
 import {
   applySetListLevel,
@@ -367,7 +369,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     return applySetContentControlValue(part, op.controlId, op.value, options);
   }
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
-  if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
+  if (op.op === 'setSectionMark') return applySetSectionMark(part, op, options);
   // Package-lifecycle / note-part ops are refused by validateTreeOp; this arm narrows the
   // union so the story appliers below can address paragraphId safely.
   if (
@@ -498,7 +500,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       return applyProposeParagraphMerge(part, paragraph, op.revision, options);
     }
     case 'splitParagraph':
-      return applySplit(part, paragraph, op.offset, options);
+      return applySplit(part, paragraph, op.offset, options, op.tailStyleId);
     case 'splitParagraphMany': {
       const split = applySplitMany(part, paragraph, op.offsets, options);
       if (!op.revision || !split.ok) return split;
@@ -2518,11 +2520,53 @@ function withChildren(
   return { ...node, ...(nextId ? { id: nextId() } : {}), children } as OoxmlNode;
 }
 
+/**
+ * The tail's `w:pPr`: a clone of the head's, with `w:pStyle` restated when the caller named
+ * one.
+ *
+ * The clone is the default because every other paragraph property survives an Enter in Word
+ * — centring, spacing, borders. Only the style is a decision the paragraph mark makes anew.
+ * A tail left with nothing in its `w:pPr` drops the container rather than serializing an
+ * empty one, so a paragraph whose only property was its style digests like one that never
+ * had any.
+ */
+function withTailStyle(
+  pPr: OoxmlElement | undefined,
+  tailStyleId: string | null | undefined,
+  nextId: () => string
+): OoxmlNode | undefined {
+  if (tailStyleId === undefined) return pPr ? cloneWithNewIds(pPr, nextId) : undefined;
+  const kept = (pPr?.children ?? []).filter(
+    (child) => child.kind === 'textValue' || child.localName !== 'pStyle'
+  );
+  const children = kept.map((child) => cloneWithNewIds(child, nextId));
+  if (tailStyleId !== null) {
+    children.splice(
+      schemaInsertIndex(children, PARAGRAPH_VOCABULARY.sequence, 'pStyle'),
+      0,
+      propertyElement({ localName: 'pStyle', attributes: { val: tailStyleId } }, nextId())
+    );
+  }
+  if (children.length === 0) return undefined;
+  if (pPr) return { ...pPr, id: nextId(), children } as unknown as OoxmlNode;
+  return {
+    id: nextId(),
+    kind: 'paragraphProperties',
+    namespaceUri: WML_NAMESPACE_URI,
+    localName: 'pPr',
+    prefix: 'w',
+    namespaceBindings: [],
+    attributes: [],
+    children,
+  } as unknown as OoxmlNode;
+}
+
 function applySplit(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   offset: number,
-  options?: EditOptions
+  options?: EditOptions,
+  tailStyleId?: string | null
 ): TreeOpResult {
   const nextId = createNodeIdAllocator(part);
   const segments = segmentsOf(paragraph);
@@ -2588,7 +2632,10 @@ function applySplit(
           mintParaId(`${identity.headId}:${offset}`, usedParaIds(part.root))
         )
       : [],
-    children: pPr ? [cloneWithNewIds(pPr, nextId), ...tailChildren] : tailChildren,
+    children: (() => {
+      const tailPPr = withTailStyle(pPr, tailStyleId, nextId);
+      return tailPPr ? [tailPPr, ...tailChildren] : tailChildren;
+    })(),
   } as unknown as OoxmlNode;
 
   const effect: TreeOpEffect = {

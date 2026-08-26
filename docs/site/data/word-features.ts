@@ -239,7 +239,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The style picker applies document styles, including custom styles with their numbering and indents. Defining a new style in the UI is not supported yet.',
+      'The style picker applies document styles, including custom styles with their numbering and indents. Pressing Enter at the end of a paragraph starts the next one in the style that the current style names as its follower (w:next), so a heading is followed by body text. Defining a new style in the UI is not supported yet.',
   },
   {
     id: 'paragraphs.borders',
@@ -635,7 +635,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page size, orientation, and margins are editable per section or for the whole document, from the Page Setup dialog or a ruler drag. Each section paginates against its own geometry, so a mixed portrait and landscape document renders as Word shows it. You can insert a section break. Even and odd page break parity and per-section columns are not modelled yet.',
+      'Page size, orientation, and margins are editable per section or for the whole document, from the Page Setup dialog or a ruler drag. Each section paginates against its own geometry, so a mixed portrait and landscape document renders as Word shows it. You can insert a next-page or a continuous section break; a continuous one keeps the new section on the sheet the previous section ended. Even and odd page break parity and per-section columns are not modelled yet.',
   },
   {
     id: 'layout.headers-footers',

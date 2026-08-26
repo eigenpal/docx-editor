@@ -4114,6 +4114,7 @@ export type TreeDocOp = {
     readonly offset: number;
     readonly op: 'splitParagraph';
     readonly paragraphId: string;
+    readonly tailStyleId?: string | null;
 } | {
     readonly offsets: readonly number[];
     readonly op: 'splitParagraphMany';
@@ -4147,6 +4148,7 @@ export type TreeDocOp = {
     readonly pageHeightTwips?: number;
     readonly pageWidthTwips?: number;
 } | {
+    readonly breakType?: 'nextPage' | 'continuous';
     readonly op: 'setSectionMark';
     readonly paragraphId: string;
 } | {

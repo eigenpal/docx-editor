@@ -9,6 +9,7 @@ import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-
 import { findNode } from '../package/ooxml-edit.ts';
 import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equation.ts';
 import { isValidXmlText } from '../package/sinks.ts';
+import { isDangerousKey } from '../package/safe-record.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import {
@@ -42,9 +43,11 @@ import {
 } from './tree-op-tables.ts';
 import {
   bodyNodeOf,
+  governingSectionOwnerId,
   isTableNested,
   metricsOfSection,
   plannedSectionDimensions,
+  sectionBreakTypeOf,
   sectionChild,
   targetSectionNodes,
 } from './tree-op-section-address.ts';
@@ -103,6 +106,33 @@ function validateProperties(
 
 /** Longest `r:id`, `w:anchor` or `w:tooltip` an op may write. */
 const MAX_HYPERLINK_ATTRIBUTE_LENGTH = 512;
+
+/** Longest `w:pStyle` value an op may write — the same ceiling the styles reader applies. */
+const MAX_STYLE_ID_LENGTH = 128;
+
+/** Control characters, which no attribute value may carry into the saved XML. */
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
+
+/**
+ * A style id an op may name.
+ *
+ * The layout lane refuses the same three things over `styles.xml` — over-long, control
+ * bearing, or a dangerous object key — and cannot be borrowed here, because `store` does
+ * not depend on `layout`. Those three must not diverge: a value one side accepts and the
+ * other drops writes a `w:pStyle` that resolves nowhere, so the paragraph reports a style
+ * it does not render in. The fourth, `isValidXmlText`, is the store's alone and is meant to
+ * be: this side is the one that serializes, and a caller hand-building a `TreeDocOp` is not
+ * bounded by what an XML parser could have produced.
+ */
+function isStyleId(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= MAX_STYLE_ID_LENGTH &&
+    !CONTROL_CHARACTERS.test(value) &&
+    !isDangerousKey(value) &&
+    isValidXmlText(value)
+  );
+}
 
 function rangePartiallyOverlapsDrawing(
   paragraph: OoxmlParagraphNode,
@@ -683,6 +713,11 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (!Number.isInteger(op.offset) || op.offset < 0 || op.offset > length) {
         return 'offset-out-of-range';
       }
+      // A style id becomes a `w:pStyle` attribute. Bound and character-check it here rather
+      // than at the writer: `TreeDocOp` is public, so the op is a trust boundary of its own.
+      if (op.tailStyleId !== undefined && op.tailStyleId !== null && !isStyleId(op.tailStyleId)) {
+        return 'invalid-property-value';
+      }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
       if (rangePartiallyOverlapsDrawing(paragraph, op.offset, op.offset + 1)) {
         return 'invalid-range';
@@ -792,6 +827,13 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return validateHyperlinkTarget(op);
     }
     case 'setSectionMark': {
+      if (
+        op.breakType !== undefined &&
+        op.breakType !== 'nextPage' &&
+        op.breakType !== 'continuous'
+      ) {
+        return 'invalid-property-value';
+      }
       const pPr = paragraphPropertiesNodeOf(paragraph);
       // A paragraph already ending a section cannot end two.
       if (pPr && sectionChild(pPr, 'sectPr')) return 'invalid-property-value';
@@ -800,6 +842,22 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (isTableNested(part, op.paragraphId)) return 'invalid-property-value';
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
+      // The break type is written on the section that STARTS at the mark, which hangs on a
+      // DIFFERENT paragraph — one that can sit inside a locked or bound content control the
+      // marked paragraph is nowhere near. Guarding only `op.paragraphId` let a caret outside
+      // the control rewrite the section inside it. A body-level section has no owning
+      // paragraph and no control can wrap it, so it needs no second check.
+      if (op.breakType !== undefined) {
+        const governing = targetSectionNodes(part, op.paragraphId)[0] ?? null;
+        const owner =
+          sectionBreakTypeOf(governing) === op.breakType
+            ? null
+            : governingSectionOwnerId(part, op.paragraphId);
+        if (owner !== null) {
+          if (isBoundAt(part, owner)) return 'bound';
+          if (effectiveContentLockAt(part, owner).content) return 'locked';
+        }
+      }
       return null;
     }
     default:

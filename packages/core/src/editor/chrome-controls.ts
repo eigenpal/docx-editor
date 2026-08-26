@@ -667,11 +667,8 @@ export const CHROME_GROUPS = [
         state: { kind: 'command' },
       },
       {
-        // Wired in the chrome, not in the engine: `insertBreak` models `page`, `column`,
-        // `line` and `section`, and a CONTINUOUS section is not one of them — a section
-        // break that does not start a new page needs the same-page section flow layout
-        // does not own. The slot exists so the menu shows Word's three break choices, and
-        // it reports the engine's own refusal until that lands.
+        // The section that starts here keeps the sheet the previous one ended, which is
+        // how Word authors a mid-page column or margin change.
         id: 'sectionBreakContinuous',
         labelKey: 'toolbar.sectionBreakContinuous',
         paths: GENERATED_ICON_PATHS['border_horizontal'],

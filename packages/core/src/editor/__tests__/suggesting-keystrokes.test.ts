@@ -794,3 +794,39 @@ describe('typing over a cell rectangle, in suggesting mode', () => {
     });
   });
 });
+
+describe('a section break that retypes the following section cannot be suggested', () => {
+  // `w:type` lands on the section that STARTS at the mark, which hangs on a paragraph the
+  // break does not touch. Word records that as `w:sectPrChange`; this engine refuses
+  // `sectPrChange` in accept and reject, so writing it here would leave a layout change no
+  // reviewer could undo — the split would come back out and the retype would stay.
+  const WITH_ODD_PAGE =
+    '<w:p><w:r><w:t xml:space="preserve">Alpha one</w:t></w:r></w:p>' +
+    '<w:sectPr><w:type w:val="oddPage"/><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  test('a continuous break is refused, and writes nothing', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      selectIn(surface, 0, 5, 5);
+      const before = serializeOoxmlPart(surface.session.part());
+      expect(surface.insertSectionBreak('continuous')).toBe(false);
+      expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+    });
+  });
+
+  test('a next-page break that would REMOVE an authored type is refused too', () => {
+    withSurface(WITH_ODD_PAGE, (surface) => {
+      selectIn(surface, 0, 5, 5);
+      expect(surface.insertSectionBreak('nextPage')).toBe(false);
+      expect(serializeOoxmlPart(surface.session.part())).toContain('<w:type w:val="oddPage"/>');
+    });
+  });
+
+  test('the ordinary next-page break still works: it retypes nothing', () => {
+    withSurface(plainParagraph('Alpha one'), (surface) => {
+      selectIn(surface, 0, 5, 5);
+      expect(surface.insertSectionBreak()).toBe(true);
+      expect(surface.state().lastRejection).toBeNull();
+      expect(paragraphTexts(surface)).toEqual(['Alpha', ' one']);
+    });
+  });
+});

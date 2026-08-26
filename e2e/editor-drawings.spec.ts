@@ -4,6 +4,7 @@
 // moves and resizes by keyboard, undo/redo, then save/reopen via download + file input.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -32,7 +33,7 @@ interface SelectedImageSnapshot {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 });
 
 async function settle(page: Page): Promise<void> {
@@ -184,7 +185,12 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
     .locator('input[type="file"][accept*=".docx"]')
     .first()
     .setInputFiles(savedPath);
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  // Unlike the first open, this gate does NOT prove the reopen landed: `load()` keeps the
+  // outgoing document's pages mounted while the new bytes parse, and those pages match
+  // `PAINTED_PAGE` too. The `settle` + `materializeDocument` below are what make the
+  // assertions honest here. Left in place because it costs nothing and still excludes the
+  // skeleton; a real reopen gate needs a signal the painted DOM does not carry.
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
   await settle(page);
   await materializeDocument(page);
 

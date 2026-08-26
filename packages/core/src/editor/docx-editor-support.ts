@@ -511,9 +511,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
         ? { supported: true, mutating: true }
         : { supported: false, reason: `indent direction '${command.direction}' is not supported` };
     case 'insertBreak':
-      // Line, hard page, and next-page section breaks are wired. `column` belongs to the
+      // Line, hard page, and both section breaks are wired. `column` belongs to the
       // multi-column lane, which layout does not own yet.
-      return command.kind === 'line' || command.kind === 'page' || command.kind === 'section'
+      return command.kind === 'line' ||
+        command.kind === 'page' ||
+        command.kind === 'section' ||
+        command.kind === 'sectionContinuous'
         ? { supported: true, mutating: true }
         : { supported: false, reason: `break kind '${command.kind}' is not supported` };
     case 'insertText':

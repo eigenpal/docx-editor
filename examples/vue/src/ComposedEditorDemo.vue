@@ -3,8 +3,22 @@
     :class="['docx-editor', 'demo-app', colorMode === 'dark' ? 'dark' : '']"
     data-testid="composed-mount"
   >
+    <!-- A failed fetch is NOT a loading state: it is terminal, and routing it through
+         the polite live region would announce it as progress. Its own assertive region. -->
+    <div v-if="loadError" class="demo-loading" role="alert">
+      {{ `Could not load the document: ${loadError.message}` }}
+    </div>
+    <!-- The Root mounts BEFORE the bytes arrive, so the visitor sees the real chrome with
+         the library's own loading overlay over it instead of a bare spinner on an empty
+         page. `document` stays undefined until the fetch settles, which mounts NO document
+         (not an empty one), and the Root builds a fresh editor when `document` or `fonts`
+         changes identity. The React demo does the same, so both open the same way.
+
+         Authoring is ambient: comments and tracked changes take their `@w:author` from
+         `author`, the way the Office JS API sources it from context. A real app supplies
+         the signed-in user; a demo supplies a name so replies can be written at all. -->
     <DocxEditorRoot
-      v-if="bytes"
+      v-else
       :document="bytes"
       author="Demo Reviewer"
       mode="edit"
@@ -40,21 +54,16 @@
           <DocxEditorReview :card="{ className: 'demo-review-card' }" />
         </DocxEditorViewport>
         <DocxEditorPageNumber />
-        <DocxEditorLoading overlay>
-          <DocxEditorLoadingSpinner />
-          <span>Loading document…</span>
-        </DocxEditorLoading>
+        <!-- The library's loading overlay, pinned over the workspace (`.demo-main` is the
+             positioned ancestor). Zero conditions wired here: the engine reports both the
+             first open and a later one, so picking a large document through Open DOCX
+             shows this screen instead of freezing on the old one. It renders nothing while
+             the document is on screen. -->
+        <DocxEditorLoading overlay />
         <PerfHud />
         <CitationDialog :form="citationForm" @close="citationForm = null" />
       </div>
     </DocxEditorRoot>
-    <div v-else-if="loadError" class="demo-loading" role="alert">
-      {{ `Could not load the document: ${loadError.message}` }}
-    </div>
-    <DocxEditorLoading v-else class="demo-loading">
-      <DocxEditorLoadingSpinner />
-      <span>Loading document…</span>
-    </DocxEditorLoading>
   </div>
 </template>
 
@@ -77,11 +86,7 @@ import {
   DocxEditorLoading,
   useDocxSource,
 } from '@docx-editor.dev/vue';
-import {
-  customNodesModule,
-  reviewModule,
-  type ActivatedCustomNode,
-} from '@docx-editor.dev/pro';
+import { customNodesModule, reviewModule, type ActivatedCustomNode } from '@docx-editor.dev/pro';
 import {
   CustomNodeChrome,
   CustomNodeContextMenu,
@@ -91,10 +96,7 @@ import { defaultFonts } from '@docx-editor.dev/fonts';
 import EditorChrome from './EditorChrome.vue';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
-import {
-  DEMO_CITATION,
-  type CitationFormState,
-} from './demoCitation';
+import { DEMO_CITATION, type CitationFormState } from './demoCitation';
 
 void DocxEditorToolbar;
 void DocxEditorMenu;
@@ -115,12 +117,19 @@ const proModules = [
 ];
 
 const title = ref(
-  props.fixtureUrl.split('/').pop()?.replace(/\.docx$/i, '') ?? 'Document'
+  props.fixtureUrl
+    .split('/')
+    .pop()
+    ?.replace(/\.docx$/i, '') ?? 'Document'
 );
 const colorMode = ref<'light' | 'dark'>('light');
 const citationForm = ref<CitationFormState | null>(null);
 
-const { document: bytes, fonts, error: loadError } = useDocxSource(props.fixtureUrl, {
+const {
+  document: bytes,
+  fonts,
+  error: loadError,
+} = useDocxSource(props.fixtureUrl, {
   fonts: defaultFonts,
 });
 
@@ -136,6 +145,4 @@ function editCitation(node: ActivatedCustomNode): void {
     ...(node.data === undefined ? {} : { data: node.data }),
   };
 }
-
-const DocxEditorLoadingSpinner = DocxEditorLoading.Spinner;
 </script>

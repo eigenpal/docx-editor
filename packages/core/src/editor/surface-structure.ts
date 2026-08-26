@@ -51,6 +51,13 @@ const PARAGRAPH_FLAG_PROPERTIES = [
   ['pageBreakBefore', 'pageBreakBefore'],
 ] as const satisfies readonly (readonly [keyof SurfaceParagraphFormat, string])[];
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
+import {
+  LOCKED_CONTENT_BREAK_REFUSAL,
+  TABLE_CELL_BREAK_REFUSAL,
+  landedBreakRefusal,
+  sectionBreakGate,
+  sectionBreakLanding,
+} from './surface-section-breaks.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
 export interface SurfaceStructureDeps {
@@ -86,6 +93,34 @@ export interface SurfaceStructureDeps {
   /** Paragraph ids in reading order for the active scope. */
   paragraphOrder(): readonly string[];
   /**
+   * The surface's editing mode, for the one write here that cannot be PROPOSED.
+   *
+   * A section break's type lands on the section that starts at the mark, which hangs on a
+   * different paragraph than the one the break splits. Word records that as `w:sectPrChange`;
+   * this engine refuses `sectPrChange` in accept and reject (`REFUSED_REVISION_NAMES`), so
+   * the write can only go in untracked — and an untracked write bundled into a tracked
+   * gesture survives the reject that removes everything else the gesture did.
+   */
+  editingMode?(): 'edit' | 'suggest' | 'view';
+  /**
+   * The paragraph a COLLAPSED caret is in, or `null` for a range — read raw, without
+   * ordering the selection or flushing pending input.
+   *
+   * `orderedRange()` flushes, and `sectionBreakRefusal` runs on every toolbar derivation:
+   * asking it just to find out whether the caret is in a table cell would commit the user's
+   * queued keystrokes from a read. Pending typing cannot move a caret across a table
+   * boundary, so the raw value answers that question exactly.
+   */
+  caretParagraphId?(): string | null;
+  /**
+   * Record why a write refused, for `state().lastRejection`.
+   *
+   * The gate BOUNDS how far it will plan, so past that bound it answers "allowed" and the
+   * press is where the refusal is found. Without this the press reported the store's
+   * rejection enum instead of the lane's own reason.
+   */
+  publishRefusal?(reason: string): void;
+  /**
    * The cells a RECTANGLE selection covers, when there is one.
    *
    * A rectangle is not the range it stands in for: read as a range, a selected column runs
@@ -114,6 +149,7 @@ type StructureMethods = Pick<
   | 'sectionAnchorParagraphAt'
   | 'setSectionProperties'
   | 'insertSectionBreak'
+  | 'sectionBreakRefusal'
 >;
 
 /**
@@ -212,6 +248,14 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   const { session, commit, orderedStart, orderedRange, selectionMark, collapsedAt } = deps;
   const deleteSelectionPlan = deps.deleteSelectionPlan;
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
+
+  /**
+   * Every refusal a break at ONE KNOWN LANDING carries, or null.
+   *
+   * Both are about the section that STARTS at the mark, so both are questions only a landing
+   * can answer, and neither arises unless the break would actually retype that section. The
+   * editing mode is read LIVE — see `sectionBreakRefusal` on the surface contract.
+   */
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
@@ -812,21 +856,42 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       return committed;
     },
 
-    insertSectionBreak() {
+    sectionBreakRefusal(breakType = 'nextPage' as const) {
+      if (deps.storyScope().kind !== 'body') return null;
+      return sectionBreakGate({
+        part: () => session.part(),
+        breakType,
+        suggesting: deps.editingMode?.() === 'suggest',
+        cellRectangle: (deps.selectedCells?.()?.length ?? 0) > 0,
+        caretParagraphId: deps.caretParagraphId?.() ?? null,
+        orderedRange,
+        paragraphOrder: orderOf,
+        deleteSelectionPlan,
+      });
+    },
+
+    insertSectionBreak(breakType = 'nextPage' as const) {
       // Section breaks are body-only; refuse while a furniture scope is open.
       if (deps.storyScope().kind !== 'body') return false;
       const plan = deleteSelectionPlan();
-      // The plan's `replaceAt`, like the tab and break lanes: in suggesting mode the struck
-      // words stay, and a split at the range START cut the paragraph in FRONT of them — the
-      // break and the strike read as two unrelated edits. EXCEPT when the landing sits in a
-      // table cell: a section mark cannot be minted there (the store refuses it, and one
-      // refused op vetoes the strike with it), so the break falls back to `collapseTo`.
-      // That only saves the gesture when the range STARTS outside the table — a selection
-      // wholly inside one is still refused by the store, as it always was.
-      const landing = plan.replaceAt ?? plan.collapseTo;
-      const start = isTableNested(session.part(), landing.paragraphId) ? plan.collapseTo : landing;
+      const start = sectionBreakLanding(session.part(), plan);
+      // The write is EXACT, whatever the gate's bound let it answer, and it publishes its own
+      // reason rather than leaving the press to report the store's rejection enum.
+      const refusal =
+        (isTableNested(session.part(), start.paragraphId) ? TABLE_CELL_BREAK_REFUSAL : null) ??
+        landedBreakRefusal(
+          session.part(),
+          start.paragraphId,
+          breakType,
+          deps.editingMode?.() === 'suggest'
+        );
+      if (refusal !== null) {
+        deps.publishRefusal?.(refusal);
+        return false;
+      }
       const before = new Set(session.paragraphIds());
       let committed = false;
+      let heldRejection = false;
       commit(
         () => {
           const result = session.applyTreeOps(
@@ -836,13 +901,16 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
               { op: 'splitParagraph', paragraphId: start.paragraphId, offset: start.offset },
               // The HEAD keeps the original id; it ends the new section, cloning the
               // governing setup so the break changes where pages break, not how they look.
-              { op: 'setSectionMark', paragraphId: start.paragraphId },
+              // `breakType` lands on the section that STARTS here, which is the governing
+              // one — see the op's own note.
+              { op: 'setSectionMark', paragraphId: start.paragraphId, breakType },
             ],
             selectionMark(),
             undefined,
             { kind: 'body' }
           );
           committed = result.committed;
+          heldRejection = result.reason === 'locked' || result.reason === 'bound';
           return result;
         },
         () => {
@@ -852,6 +920,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
         }
       );
+      // AFTER the commit, which records its own `lastRejection` and would overwrite this.
+      // The DELETION the break replaces the selection with can cross content a control holds,
+      // which the landing alone never sees; the store answers that exactly, and its answer is
+      // `locked` / `bound` — a diagnostic, not chrome. Said in the lane's words instead, so
+      // the press does not surface an enum no locale can translate.
+      if (!committed && heldRejection) deps.publishRefusal?.(LOCKED_CONTENT_BREAK_REFUSAL);
       return committed;
     },
   };

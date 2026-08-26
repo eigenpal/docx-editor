@@ -1126,9 +1126,9 @@ export interface EditorCommands
   };
 
   // Page/section breaks go through the inherited `insertBreak`. The Office JS
-  // API we intend to expose has a single insertBreak(breakType); section
-  // subtypes (continuous / next-page / even / odd) ride that open breakType
-  // when it lands, not a separate command here.
+  // API we intend to expose has a single insertBreak(breakType); the section
+  // subtypes ride that open breakType — `section` and `sectionContinuous` are
+  // there now, even / odd join them when layout skips their blank sheet.
   /**
    * Section-level page setup: the fields Word's Page Setup dialog and the rulers'
    * margin drags change. Twips throughout, matching OOXML. Every field is optional —

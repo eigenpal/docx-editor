@@ -5,12 +5,13 @@
 // would silently swallow.
 
 import { expect, test } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const DEMO_URL = 'http://localhost:5273/?fixture=border-overlay-layout-demo.docx';
 
 test.beforeEach(async ({ page }) => {
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 });
 
 test('embedded SVG drawings render at the authored extent', async ({ page }) => {

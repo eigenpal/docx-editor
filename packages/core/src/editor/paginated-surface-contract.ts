@@ -376,6 +376,17 @@ export interface ContentControlSurfaceState {
 }
 
 /**
+ * Where the section after an inserted break begins — Word's Layout > Breaks menu.
+ *
+ * The two the engine paginates. `evenPage` / `oddPage` are readable in a file but not
+ * offered here, because layout does not skip the blank sheet they need yet, and a menu
+ * entry that silently behaves like `nextPage` is the lie this vocabulary exists to avoid.
+ *
+ * @public
+ */
+export type SectionBreakInsertType = 'nextPage' | 'continuous';
+
+/**
  * The mounted, painted, editable document — the layer `createDocxEditor` builds its contract on.
  *
  * The painted pages ARE the editable surface: they are `contenteditable`, but the DOM is a
@@ -679,11 +690,33 @@ export interface PaginatedSurface {
     readonly anchorParagraphId?: string;
   }): boolean;
   /**
-   * Insert a next-page section break at the caret: the paragraph splits, and the head
-   * ends a new section cloning the governing section's page setup — Word's Layout >
-   * Breaks > Next Page. One undoable step. Returns whether the break committed.
+   * Insert a section break at the caret: the paragraph splits, and the head ends a new
+   * section cloning the governing section's page setup — Word's Layout > Breaks. One
+   * undoable step. Returns whether the break committed.
+   *
+   * `breakType` says where the section AFTER the break begins: `'nextPage'` (the default,
+   * Word's Next Page) starts a new sheet, `'continuous'` keeps it on the sheet the
+   * previous section ended, which is how a mid-page column or margin change is authored.
    */
-  insertSectionBreak(): boolean;
+  insertSectionBreak(breakType?: SectionBreakInsertType): boolean;
+  /**
+   * Why {@link insertSectionBreak} would refuse this kind right now, or `null`.
+   *
+   * THE authority for the BREAK's own questions, so `Editor.can` and the write cannot answer
+   * those differently. Both halves are things only the surface knows: the LIVE editing mode
+   * (a document that declares `w:trackRevisions` opens suggesting without anyone passing a
+   * mode, and Review > Track Changes moves it again afterwards), and the paragraph the break
+   * would actually land in — which for a range in suggesting mode is past the struck words,
+   * not the selection's head.
+   *
+   * NOT the deletion's questions. A break replaces the selection first, and that deletion can
+   * cross content a control holds or a region protected some other way; only the store sees
+   * that, and it sees it at write time. So a range whose landing is fine while its deletion
+   * is not answers `null` here and refuses at the press — as every other replacing command in
+   * the engine does, less loudly. Story scope is gated separately again, because a caret in a
+   * header refuses every break kind for a different reason.
+   */
+  sectionBreakRefusal(breakType?: SectionBreakInsertType): string | null;
   /** The layout session, so a host or a test can see how much work a pass actually did. */
   layoutSession(): {
     readonly stats: {

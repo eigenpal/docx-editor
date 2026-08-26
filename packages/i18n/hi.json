@@ -726,7 +726,11 @@
     "bodyOnlyNote": null,
     "bodyOnlySectionBreak": null,
     "bodyOnlyToc": null,
-    "furnitureOnlyPageField": null
+    "furnitureOnlyPageField": null,
+    "suggestingSectionBreak": null,
+    "tableCellSectionBreak": null,
+    "lockedSectionBreak": null,
+    "lockedContentBreak": null
   },
   "equationPopup": {
     "apply": null,
