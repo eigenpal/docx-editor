@@ -4,6 +4,17 @@
 
 ```ts
 
+import { WebrtcProvider } from 'y-webrtc';
+import * as Y from 'yjs';
+
+// @public
+export interface CollaborationIdentityUpdate {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
 // @public
 export interface CollaborationSession {
     // (undocumented)
@@ -21,6 +32,7 @@ export interface CollaborationSession {
     // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
     readonly sessionId: string;
+    setIdentity?(update: CollaborationIdentityUpdate): void;
     // (undocumented)
     status(): CollaborationStatus;
     statusSnapshot(): CollaborationStatusSnapshot;
@@ -70,13 +82,16 @@ export interface UseWebrtcCollaborationReturn {
     readonly document: Uint8Array | null;
     // (undocumented)
     readonly error: CollaborationFailure | null;
-    readonly leave: (nextDocument?: Uint8Array) => void;
+    readonly leave: (nextDocument: Uint8Array) => void;
     // (undocumented)
     readonly modules: readonly EditorModule[];
     // (undocumented)
     readonly pending: boolean;
+    readonly provider: WebrtcProvider | null;
+    readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
     // (undocumented)
     readonly session: CollaborationSession | null;
+    readonly ydoc: Y.Doc | null;
 }
 
 // (No @packageDocumentation comment for this package)

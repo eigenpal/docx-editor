@@ -16,11 +16,11 @@ import type {
   CollaborationParagraph,
 } from '@docx-editor.dev/core/collaboration';
 
-/** Collaboration protocol version used by this proof. @public */
+/** Wire protocol version a replica writes into shared metadata and refuses to mismatch. @public */
 export const PROTOCOL_VERSION = 1;
-/** Shared Yjs schema version used by this proof. @public */
+/** Shared Yjs schema version a replica writes into shared metadata and refuses to mismatch. @public */
 export const SCHEMA_VERSION = 1;
-/** Maximum accepted creator baseline size. @public */
+/** Maximum accepted creator baseline size in bytes. @public */
 export const MAX_BASELINE_BYTES = 20 * 1024 * 1024;
 export const ROOT_KEY = 'docx-collaboration-v1';
 export const PARAGRAPHS_KEY = 'docx-body-paragraphs-v1';

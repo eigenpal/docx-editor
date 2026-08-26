@@ -72,3 +72,16 @@ export {
   useCollaborationStatus,
   type UseCollaborationStatusReturn,
 } from './useCollaborationStatus.ts';
+export { useCollaborationParticipants } from './useCollaborationParticipants.ts';
+export {
+  useDocumentCollaboration,
+  type UseDocumentCollaborationConnectOptions,
+  type UseDocumentCollaborationOptions,
+  type UseDocumentCollaborationReturn,
+} from './useDocumentCollaboration.ts';
+export type {
+  CollaborationIdentity,
+  CollaborationParticipant,
+} from '@docx-editor.dev/core/collaboration';
+export type { CollaborationBootstrap } from '../collaboration/session.ts';
+export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';

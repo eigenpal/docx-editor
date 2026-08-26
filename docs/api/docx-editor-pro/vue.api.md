@@ -4,6 +4,7 @@
 
 ```ts
 
+import { Awareness } from 'y-protocols/awareness';
 import { ComputedRef } from 'vue';
 import { MaybeRefOrGetter } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from '@docx-editor.dev/vue';
@@ -13,9 +14,32 @@ import { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import { VNode } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
+import * as Y from 'yjs';
 
 // @public
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
+
+// @public
+export type CollaborationBootstrap = {
+    readonly document: Uint8Array;
+    readonly kind: 'create';
+} | {
+    readonly kind: 'join';
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+};
+
+// @public
+export interface CollaborationIdentity {
+    // (undocumented)
+    readonly actorId: string;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly role?: 'human' | 'agent';
+}
 
 // @public
 export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
@@ -24,6 +48,27 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 export interface CollaborationModuleOptions extends ProLicenseOptions {
     // (undocumented)
     readonly session: EditorCollaborationSession;
+}
+
+// @public
+export interface CollaborationParticipant extends CollaborationIdentity {
+    // (undocumented)
+    readonly isLocal: boolean;
+}
+
+// @public
+export interface CreateDocumentCollaborationOptions {
+    // (undocumented)
+    readonly awareness: Awareness;
+    // (undocumented)
+    readonly bootstrap: CollaborationBootstrap;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    readonly sessionId?: string;
+    // (undocumented)
+    readonly ydoc: Y.Doc;
 }
 
 // @public
@@ -767,6 +812,15 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
+export function useCollaborationParticipants(session: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationParticipantsReturn;
+
+// @public
+export interface UseCollaborationParticipantsReturn {
+    // (undocumented)
+    readonly participants: Readonly<Ref<readonly CollaborationParticipant[]>>;
+}
+
+// @public
 export function useCollaborationStatus(session: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationStatusReturn;
 
 // @public
@@ -781,6 +835,35 @@ export interface UseCollaborationStatusReturn {
 
 // @public
 export function useCustomNodeDefinitions(nodes?: MaybeRefOrGetter<readonly AnyCustomNodeDefinition[] | undefined>): ComputedRef<readonly AnyCustomNodeDefinition[]>;
+
+// @public
+export function useDocumentCollaboration(options?: MaybeRefOrGetter<UseDocumentCollaborationOptions | null>): UseDocumentCollaborationReturn;
+
+// @public
+export type UseDocumentCollaborationConnectOptions = CreateDocumentCollaborationOptions;
+
+// @public
+export interface UseDocumentCollaborationOptions {
+    readonly modules?: readonly EditorModule[];
+    readonly room?: UseDocumentCollaborationConnectOptions | null;
+}
+
+// @public
+export interface UseDocumentCollaborationReturn {
+    // (undocumented)
+    readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<void>;
+    // (undocumented)
+    readonly document: Readonly<Ref<Uint8Array | null>>;
+    // (undocumented)
+    readonly error: Readonly<Ref<CollaborationFailure | null>>;
+    readonly leave: (nextDocument: Uint8Array) => void;
+    // (undocumented)
+    readonly modules: Readonly<Ref<readonly EditorModule[]>>;
+    // (undocumented)
+    readonly pending: Readonly<Ref<boolean>>;
+    // (undocumented)
+    readonly session: Readonly<Ref<CollaborationSession | null>>;
+}
 
 // @public (undocumented)
 export function useReview(query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;

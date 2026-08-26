@@ -6,6 +6,16 @@
 
 import { MaybeRefOrGetter } from 'vue';
 import { Ref } from 'vue';
+import { WebrtcProvider } from 'y-webrtc';
+import * as Y from 'yjs';
+
+// @public
+export interface CollaborationIdentityUpdate {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name?: string;
+}
 
 // @public
 export interface CollaborationSession {
@@ -24,6 +34,7 @@ export interface CollaborationSession {
     // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
     readonly sessionId: string;
+    setIdentity?(update: CollaborationIdentityUpdate): void;
     // (undocumented)
     status(): CollaborationStatus;
     statusSnapshot(): CollaborationStatusSnapshot;
@@ -73,13 +84,16 @@ export interface UseWebrtcCollaborationReturn {
     readonly document: Readonly<Ref<Uint8Array | null>>;
     // (undocumented)
     readonly error: Readonly<Ref<CollaborationFailure | null>>;
-    readonly leave: (nextDocument?: Uint8Array) => void;
+    readonly leave: (nextDocument: Uint8Array) => void;
     // (undocumented)
     readonly modules: Readonly<Ref<readonly EditorModule[]>>;
     // (undocumented)
     readonly pending: Readonly<Ref<boolean>>;
+    readonly provider: Readonly<Ref<WebrtcProvider | null>>;
+    readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
     // (undocumented)
     readonly session: Readonly<Ref<CollaborationSession | null>>;
+    readonly ydoc: Readonly<Ref<Y.Doc | null>>;
 }
 
 // (No @packageDocumentation comment for this package)

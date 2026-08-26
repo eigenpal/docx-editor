@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useDocxEditor } from '@docx-editor.dev/react';
-import type {
-  CollaborationParticipant,
-  CollaborationStatus,
-} from '@docx-editor.dev/core/collaboration';
+import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
+import { useCollaborationParticipants, useCollaborationStatus } from '@docx-editor.dev/pro/react';
 import { createT, en } from '@docx-editor.dev/i18n';
 import {
   createCollaborationRoomId,
@@ -161,7 +159,7 @@ export interface CollaborationControlProps {
   readonly session: CollaborationSession | null;
   readonly pending: boolean;
   readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
-  readonly leave: (nextDocument?: Uint8Array) => void;
+  readonly leave: (nextDocument: Uint8Array) => void;
 }
 
 export function CollaborationControl({
@@ -181,30 +179,12 @@ export function CollaborationControl({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [participants, setParticipants] = useState<readonly CollaborationParticipant[]>([]);
-  const [status, setStatus] = useState<CollaborationStatus>('initializing');
   const nameRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (!session) {
-      setParticipants([]);
-      return;
-    }
-    const update = () => setParticipants(session.participants());
-    update();
-    return session.subscribeParticipants(update);
-  }, [session]);
-
+  const participants = useCollaborationParticipants(session);
   // The session reports transport health. Reading it keeps the dialog from claiming
   // "Connected" over a session that refuses every write.
-  useEffect(() => {
-    if (!session) {
-      setStatus('initializing');
-      return;
-    }
-    setStatus(session.status());
-    return session.subscribeStatus((next) => setStatus(next));
-  }, [session]);
+  const { status } = useCollaborationStatus(session);
 
   // `error` and `destroyed` are NOT "reconnecting". A replica reaches them by refusing an update
   // and keeping the copy it already had, so this peer is now editing a document the others do not
@@ -277,7 +257,8 @@ export function CollaborationControl({
     setBusy(true);
     setError(null);
     try {
-      // `leave()` keeps the last room document. Pass saved bytes so live edits survive the remount.
+      // `leave` requires the current bytes: the hook cannot read them itself, and anything
+      // else would drop what the room typed. Saved bytes survive the remount.
       leave(new Uint8Array(await editor.save()));
       const url = new URL(location.href);
       url.searchParams.delete('room');

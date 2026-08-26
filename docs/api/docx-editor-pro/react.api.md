@@ -4,13 +4,37 @@
 
 ```ts
 
+import { Awareness } from 'y-protocols/awareness';
 import * as react from 'react';
 import { ReactNode } from 'react';
 import { ReviewAuthorInfo } from '@docx-editor.dev/react';
 import { ToolbarTranslate } from '@docx-editor.dev/react';
+import * as Y from 'yjs';
 
 // @public
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
+
+// @public
+export type CollaborationBootstrap = {
+    readonly document: Uint8Array;
+    readonly kind: 'create';
+} | {
+    readonly kind: 'join';
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+};
+
+// @public
+export interface CollaborationIdentity {
+    // (undocumented)
+    readonly actorId: string;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly role?: 'human' | 'agent';
+}
 
 // @public
 export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
@@ -19,6 +43,27 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 export interface CollaborationModuleOptions extends ProLicenseOptions {
     // (undocumented)
     readonly session: EditorCollaborationSession;
+}
+
+// @public
+export interface CollaborationParticipant extends CollaborationIdentity {
+    // (undocumented)
+    readonly isLocal: boolean;
+}
+
+// @public
+export interface CreateDocumentCollaborationOptions {
+    // (undocumented)
+    readonly awareness: Awareness;
+    // (undocumented)
+    readonly bootstrap: CollaborationBootstrap;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    readonly sessionId?: string;
+    // (undocumented)
+    readonly ydoc: Y.Doc;
 }
 
 // @public
@@ -169,6 +214,9 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
+export function useCollaborationParticipants(session: CollaborationSession | null): readonly CollaborationParticipant[];
+
+// @public
 export function useCollaborationStatus(session: CollaborationSession | null): UseCollaborationStatusReturn;
 
 // @public
@@ -183,6 +231,35 @@ export interface UseCollaborationStatusReturn {
 
 // @public
 export function useCustomNodeDefinitions(nodes: readonly AnyCustomNodeDefinition[] | undefined): readonly AnyCustomNodeDefinition[];
+
+// @public
+export function useDocumentCollaboration(options?: UseDocumentCollaborationOptions): UseDocumentCollaborationReturn;
+
+// @public
+export type UseDocumentCollaborationConnectOptions = CreateDocumentCollaborationOptions;
+
+// @public
+export interface UseDocumentCollaborationOptions {
+    readonly modules?: readonly EditorModule[];
+    readonly room?: UseDocumentCollaborationConnectOptions | null;
+}
+
+// @public
+export interface UseDocumentCollaborationReturn {
+    // (undocumented)
+    readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<void>;
+    // (undocumented)
+    readonly document: Uint8Array | null;
+    // (undocumented)
+    readonly error: CollaborationFailure | null;
+    readonly leave: (nextDocument: Uint8Array) => void;
+    // (undocumented)
+    readonly modules: readonly EditorModule[];
+    // (undocumented)
+    readonly pending: boolean;
+    // (undocumented)
+    readonly session: CollaborationSession | null;
+}
 
 // @public
 export function useReview(query?: ReviewItemQuery): UseReviewReturn;

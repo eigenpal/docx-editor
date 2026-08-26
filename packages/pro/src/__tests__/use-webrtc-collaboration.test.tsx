@@ -13,6 +13,8 @@ import { StrictMode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type * as Y from 'yjs';
+import type { WebrtcProvider } from 'y-webrtc';
 import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { collaborationModule } from '../collaboration/collaboration-module.ts';
 import {
@@ -50,6 +52,8 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
 interface StubRoom {
   readonly document: Uint8Array;
   readonly session: EditorCollaborationSession;
+  readonly ydoc?: Y.Doc;
+  readonly provider?: WebrtcProvider;
   destroy(): void;
   readonly destroyed: boolean;
 }
@@ -61,6 +65,8 @@ function fakeRoom(documentId = 'room-1'): StubRoom {
   return {
     document: bytes,
     session,
+    ydoc: { stub: 'ydoc' } as unknown as Y.Doc,
+    provider: { stub: 'provider' } as unknown as WebrtcProvider,
     destroy() {
       destroyed = true;
     },
@@ -143,7 +149,9 @@ describe('useWebrtcCollaboration', () => {
     expect(latest?.document).toBe(leftover);
   });
 
-  test('leave without bytes keeps the room document for local editing', async () => {
+  test('leave refuses to run without the current document bytes', async () => {
+    // A bare leave used to fall back to the bytes the room STARTED from, silently dropping
+    // every edit made in the room. The argument is now required and validated.
     const created: StubRoom[] = [];
     const createRoom = async () => {
       const room = fakeRoom();
@@ -155,15 +163,97 @@ describe('useWebrtcCollaboration', () => {
       render(<Probe createRoom={createRoom} onState={(value) => (latest = value)} />);
       await Promise.resolve();
     });
-    const kept = created[0]?.document;
-    expect(kept).toBeDefined();
+    expect(() => (latest?.leave as unknown as () => void)()).toThrow(/await editor\.save\(\)/);
+    expect(created[0]?.destroyed).toBe(false);
+    expect(latest?.session).not.toBeNull();
+  });
+
+  test('the room ydoc and provider are exposed while connected and null after leave', async () => {
+    const created: StubRoom[] = [];
+    const createRoom = async () => {
+      const room = fakeRoom();
+      created.push(room);
+      return room;
+    };
+    let latest: UseWebrtcCollaborationReturn | undefined;
     await act(async () => {
-      latest?.leave();
+      render(<Probe createRoom={createRoom} onState={(value) => (latest = value)} />);
+      await Promise.resolve();
+    });
+    expect(latest?.ydoc).toBe(created[0]!.ydoc!);
+    expect(latest?.provider).toBe(created[0]!.provider!);
+    await act(async () => {
+      latest?.leave(new Uint8Array([9]));
+    });
+    expect(latest?.ydoc).toBeNull();
+    expect(latest?.provider).toBeNull();
+  });
+
+  test('rejoin leaves with the passed bytes and reconnects with bootstrap join', async () => {
+    const created: StubRoom[] = [];
+    const seenOptions: UseWebrtcCollaborationConnectOptions[] = [];
+    const createRoom = async (options: UseWebrtcCollaborationConnectOptions) => {
+      seenOptions.push(options);
+      const room = fakeRoom(`room-${created.length}`);
+      created.push(room);
+      return room;
+    };
+    let latest: UseWebrtcCollaborationReturn | undefined;
+    await act(async () => {
+      render(<Probe autoConnect={false} createRoom={createRoom} onState={(v) => (latest = v)} />);
+    });
+    const create: UseWebrtcCollaborationConnectOptions = {
+      ...CONNECT,
+      bootstrap: { kind: 'create', document: new Uint8Array([1]) },
+    };
+    await act(async () => {
+      await latest?.connect(create);
+    });
+    const saved = new Uint8Array([42]);
+    await act(async () => {
+      await latest?.rejoin(saved);
     });
     expect(created[0]?.destroyed).toBe(true);
+    expect(created[1]?.destroyed).toBe(false);
+    expect(latest?.session).toBe(created[1]!.session);
+    // The room still exists on peers, so a rejoin never re-creates it from local bytes.
+    expect(seenOptions[1]).toMatchObject({
+      roomId: CONNECT.roomId,
+      identity: CONNECT.identity,
+      bootstrap: { kind: 'join' },
+    });
+  });
+
+  test('a failed rejoin keeps the saved bytes mounted and surfaces the typed error', async () => {
+    let calls = 0;
+    const first = fakeRoom();
+    const createRoom = async () => {
+      calls += 1;
+      if (calls === 1) return first;
+      throw Object.assign(new Error('initialization-timeout'), {
+        code: 'initialization-timeout',
+      });
+    };
+    let latest: UseWebrtcCollaborationReturn | undefined;
+    await act(async () => {
+      render(<Probe autoConnect={false} createRoom={createRoom} onState={(v) => (latest = v)} />);
+    });
+    await act(async () => {
+      await latest?.connect(CONNECT);
+    });
+    const saved = new Uint8Array([7]);
+    let thrown: unknown;
+    await act(async () => {
+      try {
+        await latest?.rejoin(saved);
+      } catch (cause) {
+        thrown = cause;
+      }
+    });
+    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
+    expect(latest?.error).toEqual({ code: 'initialization-timeout' });
     expect(latest?.session).toBeNull();
-    expect(latest?.document).toBe(kept);
-    expect(latest?.document).not.toBeNull();
+    expect(latest?.document).toBe(saved);
   });
 
   test('throws when host modules already include a collaboration contribution', () => {

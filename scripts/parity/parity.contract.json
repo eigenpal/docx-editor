@@ -54,7 +54,15 @@
   },
   "ref": {
     "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters.",
-    "paired": ["exec", "focus", "getDocumentHandle", "getEditor", "load", "save", "snapshot"],
+    "paired": [
+      "exec",
+      "focus",
+      "getDocumentHandle",
+      "getEditor",
+      "load",
+      "save",
+      "snapshot"
+    ],
     "pairedViaInheritance": {},
     "vueExclusive": {}
   },
@@ -67,13 +75,19 @@
         "UseWebrtcCollaborationConnectOptions",
         "UseWebrtcCollaborationOptions",
         "UseWebrtcCollaborationReturn",
-        "useWebrtcCollaboration"
+        "useWebrtcCollaboration",
+        "CollaborationIdentityUpdate"
       ],
       "deferredInVue": {},
       "vueExclusive": {}
     },
     "exports": {
       "paired": [
+        "CollaborationBootstrap",
+        "CollaborationIdentity",
+        "CollaborationModuleOptions",
+        "CollaborationParticipant",
+        "CreateDocumentCollaborationOptions",
         "CustomNodeChrome",
         "CustomNodeChromeProps",
         "CustomNodeContextMenu",
@@ -89,23 +103,29 @@
         "ReviewModuleOptions",
         "ReviewPartProps",
         "ReviewProps",
+        "UseCollaborationStatusReturn",
+        "UseDocumentCollaborationConnectOptions",
+        "UseDocumentCollaborationOptions",
+        "UseDocumentCollaborationReturn",
         "UseReviewReturn",
         "activatedCustomNodeOf",
+        "collaborationModule",
         "resolveCustomNodeActivation",
         "reviewModule",
+        "useCollaborationParticipants",
+        "useCollaborationStatus",
         "useCustomNodeDefinitions",
+        "useDocumentCollaboration",
         "useReview",
         "useReviewAuthor",
         "useReviewItem",
         "useReviewOf",
-        "useStackedReviewPositions",
-        "collaborationModule",
-        "CollaborationModuleOptions",
-        "useCollaborationStatus",
-        "UseCollaborationStatusReturn"
+        "useStackedReviewPositions"
       ],
       "deferredInVue": {},
-      "vueExclusive": {}
+      "vueExclusive": {
+        "UseCollaborationParticipantsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the participants array directly, so only Vue exports this type."
+      }
     },
     "reviewParts": {
       "paired": [
@@ -132,6 +152,11 @@
       "vueExclusive": {}
     },
     "memberCheckedInterfaces": [
+      "CollaborationBootstrap",
+      "CollaborationIdentity",
+      "CollaborationModuleOptions",
+      "CollaborationParticipant",
+      "CreateDocumentCollaborationOptions",
       "CustomNodeChromeProps",
       "CustomNodeContextMenuProps",
       "ProLicenseOptions",
@@ -142,13 +167,17 @@
       "ReviewModuleOptions",
       "ReviewPartProps",
       "ReviewProps",
-      "UseReviewReturn",
-      "CollaborationModuleOptions",
-      "UseCollaborationStatusReturn"
+      "UseCollaborationStatusReturn",
+      "UseDocumentCollaborationOptions",
+      "UseDocumentCollaborationReturn",
+      "UseReviewReturn"
     ],
     "interfaceMemberExceptions": {
       "ReviewMarkersProps": {
-        "vueOnly": ["asChild", "children"],
+        "vueOnly": [
+          "asChild",
+          "children"
+        ],
         "reason": "Vue declares ReviewMarkersProps as extending ReviewPartProps, so asChild and children appear in the type although the markers part does not wire them. React declares only the wired members."
       }
     }

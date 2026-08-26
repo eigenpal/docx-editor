@@ -4,26 +4,26 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import {
+  computed,
   getCurrentInstance,
-  onMounted,
-  onUnmounted,
   readonly,
-  shallowRef,
   toValue,
-  watch,
   type MaybeRefOrGetter,
   type Ref,
 } from 'vue';
-import {
-  isCollaborationFailureCode,
-  type CollaborationFailure,
-  type CollaborationIdentity,
-  type EditorCollaborationSession,
+import type * as Y from 'yjs';
+import type { WebrtcProvider } from 'y-webrtc';
+import type {
+  CollaborationFailure,
+  CollaborationIdentity,
 } from '@docx-editor.dev/core/collaboration';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
 import type { CollaborationBootstrap, CollaborationSession } from '../collaboration/session.ts';
-import { collaborationModule } from '../collaboration/collaboration-module.ts';
-import { webrtcRoomOwnerFor } from './webrtc-room-owner.ts';
+import {
+  EMPTY_MODULES,
+  useCollaborationRoom,
+  type CollaborationRoomHandle,
+} from './collaboration-room.ts';
 
 export type { CollaborationSession };
 
@@ -40,10 +40,9 @@ export interface UseWebrtcCollaborationConnectOptions {
   readonly password?: string;
 }
 
-interface WebrtcRoomHandle {
-  readonly document: Uint8Array;
-  readonly session: EditorCollaborationSession;
-  destroy(): void;
+interface WebrtcRoomHandle extends CollaborationRoomHandle {
+  readonly ydoc?: Y.Doc;
+  readonly provider?: WebrtcProvider;
 }
 
 type WebrtcCreateRoom = (
@@ -82,46 +81,42 @@ export interface UseWebrtcCollaborationReturn {
   readonly document: Readonly<Ref<Uint8Array | null>>;
   readonly modules: Readonly<Ref<readonly EditorModule[]>>;
   readonly session: Readonly<Ref<CollaborationSession | null>>;
+  /**
+   * The room's shared Yjs document, owned by the composable. Null while no room is
+   * connected.
+   *
+   * Read-only escape hatch: observe it or wire additional providers, but leave teardown to
+   * the composable.
+   */
+  readonly ydoc: Readonly<Ref<Y.Doc | null>>;
+  /**
+   * The owned `y-webrtc` provider. Null while no room is connected.
+   *
+   * Read-only escape hatch for transport-level access (`disconnect()`/`connect()`, peer
+   * introspection). The composable destroys it on leave and unmount.
+   */
+  readonly provider: Readonly<Ref<WebrtcProvider | null>>;
   readonly pending: Readonly<Ref<boolean>>;
   readonly error: Readonly<Ref<CollaborationFailure | null>>;
   readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
   /**
    * Destroy the room and carry on editing locally.
    *
-   * Called with no argument, `document` falls back to the bytes this room STARTED from, so
-   * whatever the room typed is lost. The hook cannot do better alone — the current bytes live
-   * in the editor, not here. Pass `await editor.save()` to keep the session's edits.
+   * The current bytes live in the editor, not in this composable, so the argument is
+   * required: pass `await editor.save()` to keep what the room typed. The host remounts the
+   * editor from exactly these bytes.
    */
-  readonly leave: (nextDocument?: Uint8Array) => void;
-}
-
-const EMPTY_MODULES: readonly EditorModule[] = Object.freeze([]);
-
-const HOST_COLLABORATION_CONFLICT =
-  'useWebrtcCollaboration: host `modules` already include a collaboration contribution. This hook supplies `collaborationModule({ session })`. Pass review and custom-node modules only.';
-
-function assertHostModulesHaveNoCollaboration(modules: readonly EditorModule[]): void {
-  for (const module of modules) {
-    if (module.collaboration) throw new Error(HOST_COLLABORATION_CONFLICT);
-  }
-}
-
-function collaborationFailureOf(cause: unknown): CollaborationFailure {
-  if (typeof cause === 'object' && cause !== null && 'code' in cause) {
-    const code = (cause as { code: unknown }).code;
-    if (typeof code === 'string' && isCollaborationFailureCode(code)) {
-      const detail = (cause as { detail?: unknown }).detail;
-      return typeof detail === 'string' && detail.length > 0 ? { code, detail } : { code };
-    }
-  }
-  if (cause instanceof Error && cause.message.length > 0) {
-    return { code: 'transport', detail: cause.message };
-  }
-  return { code: 'transport' };
-}
-
-function throwCollaborationFailure(failure: CollaborationFailure): never {
-  throw Object.assign(new Error(failure.detail ?? failure.code), failure);
+  readonly leave: (nextDocument: Uint8Array) => void;
+  /**
+   * Recover a session that reached status `error`: leave with `nextDocument`, then connect
+   * again to the same room with the same identity, signaling, and password.
+   *
+   * The reconnect always uses bootstrap `{ kind: 'join' }`, because an active room still
+   * exists on the other peers. When no peer holds the room any more, the join rejects with
+   * `initialization-timeout` — nothing is lost, because `nextDocument` (your saved bytes)
+   * stays mounted locally.
+   */
+  readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
 }
 
 function roomKeyOf(room: UseWebrtcCollaborationConnectOptions | null | undefined): string {
@@ -144,15 +139,6 @@ function createRoomOf(options: UseWebrtcCollaborationOptions | null | undefined)
   );
 }
 
-function modulesFor(
-  hostModules: readonly EditorModule[],
-  session: EditorCollaborationSession | null
-): readonly EditorModule[] {
-  assertHostModulesHaveNoCollaboration(hostModules);
-  if (!session) return hostModules;
-  return Object.freeze([...hostModules, collaborationModule({ session })]);
-}
-
 /**
  * Own a WebRTC collaboration room for a Vue host.
  *
@@ -166,108 +152,26 @@ export function useWebrtcCollaboration(
   options?: MaybeRefOrGetter<UseWebrtcCollaborationOptions | null>
 ): UseWebrtcCollaborationReturn {
   const instance = getCurrentInstance();
-  const owner = webrtcRoomOwnerFor<WebrtcRoomHandle>(`vue:${String(instance?.uid ?? 'anonymous')}`);
-  const held = owner.current();
-  const document = shallowRef<Uint8Array | null>(held?.document ?? null);
-  const session = shallowRef<EditorCollaborationSession | null>(held?.session ?? null);
-  const pending = shallowRef(Boolean(toValue(options)?.room) && held === null);
-  const error = shallowRef<CollaborationFailure | null>(null);
-  const modules = shallowRef<readonly EditorModule[]>(
-    modulesFor(toValue(options)?.modules ?? EMPTY_MODULES, held?.session ?? null)
-  );
-
-  let generation = 0;
-  let createRoom = createRoomOf(toValue(options));
-
-  const publish = (room: WebrtcRoomHandle | null): void => {
-    document.value = room?.document ?? null;
-    session.value = room?.session ?? null;
-    modules.value = modulesFor(toValue(options)?.modules ?? EMPTY_MODULES, room?.session ?? null);
-  };
-
-  const connect = async (next: UseWebrtcCollaborationConnectOptions): Promise<void> => {
-    const token = ++generation;
-    pending.value = true;
-    error.value = null;
-    try {
-      const room = await createRoom(next);
-      if (token !== generation) {
-        room.destroy();
-        return;
-      }
-      owner.adopt(room);
-      publish(room);
-    } catch (cause) {
-      if (token !== generation) return;
-      const failure = collaborationFailureOf(cause);
-      error.value = failure;
-      throwCollaborationFailure(failure);
-    } finally {
-      if (token === generation) pending.value = false;
-    }
-  };
-
-  const leave = (nextDocument?: Uint8Array): void => {
-    generation += 1;
-    const preserved = nextDocument ?? owner.current()?.document ?? document.value;
-    owner.leave();
-    session.value = null;
-    document.value = preserved;
-    pending.value = false;
-    error.value = null;
-    modules.value = toValue(options)?.modules ?? EMPTY_MODULES;
-  };
-
-  watch(
-    () => createRoomOf(toValue(options)),
-    (next) => {
-      createRoom = next;
-    },
-    { immediate: true }
-  );
-
-  watch(
-    () => toValue(options)?.modules ?? EMPTY_MODULES,
-    (hostModules) => {
-      modules.value = modulesFor(hostModules, session.value);
-    }
-  );
-
-  watch(
-    () => roomKeyOf(toValue(options)?.room),
-    (key) => {
-      const room = toValue(options)?.room ?? null;
-      if (!key || !room) return;
-      if (owner.current()) {
-        publish(owner.current());
-        return;
-      }
-      pending.value = true;
-      // `connect` rejects so that an awaiting caller can branch on the failure. This path has
-      // no caller, and the failure already reaches the host through `error`, so swallow it
-      // rather than raise an unhandled rejection for a room the host already renders as failed.
-      void connect(room).catch(() => {});
-    },
-    { immediate: true }
-  );
-
-  onMounted(() => {
-    owner.reclaimOwner();
-    const current = owner.current();
-    if (current) publish(current);
-  });
-  onUnmounted(() => {
-    generation += 1;
-    owner.disposeOwner();
+  const state = useCollaborationRoom<UseWebrtcCollaborationConnectOptions, WebrtcRoomHandle>({
+    ownerKey: `vue:${String(instance?.uid ?? 'anonymous')}`,
+    hookName: 'useWebrtcCollaboration',
+    createRoomOf: () => createRoomOf(toValue(options)),
+    hostModulesOf: () => toValue(options)?.modules ?? EMPTY_MODULES,
+    autoRoomOf: () => toValue(options)?.room ?? null,
+    autoKeyOf: () => roomKeyOf(toValue(options)?.room),
+    rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
   });
 
   return {
-    document: readonly(document),
-    modules: readonly(modules),
-    session: readonly(session),
-    pending: readonly(pending),
-    error: readonly(error),
-    connect,
-    leave,
+    document: readonly(state.document),
+    modules: readonly(state.modules),
+    session: readonly(state.session),
+    ydoc: computed(() => state.room.value?.ydoc ?? null),
+    provider: computed(() => state.room.value?.provider ?? null),
+    pending: readonly(state.pending),
+    error: readonly(state.error),
+    connect: state.connect,
+    leave: state.leave,
+    rejoin: state.rejoin,
   };
 }

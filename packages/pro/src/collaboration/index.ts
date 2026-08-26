@@ -18,6 +18,7 @@ export {
   createTextCollaboration,
   type CollaborationBootstrap,
   type CollaborationHandle,
+  type CollaborationIdentityUpdate,
   type CollaborationSession,
   type CreateTextCollaborationOptions,
   type TextCollaborationHandle,

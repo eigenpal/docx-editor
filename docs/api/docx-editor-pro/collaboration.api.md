@@ -28,6 +28,14 @@ export interface CollaborationHandle<TSession extends CollaborationSession> {
 }
 
 // @public
+export interface CollaborationIdentityUpdate {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public
 export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
 
 // @public
@@ -62,6 +70,7 @@ export interface CollaborationSession {
     // (undocumented)
     remoteSelections(): readonly CollaborationRemoteSelection[];
     readonly sessionId: string;
+    setIdentity?(update: CollaborationIdentityUpdate): void;
     // (undocumented)
     status(): CollaborationStatus;
     statusSnapshot(): CollaborationStatusSnapshot;
@@ -93,10 +102,10 @@ export interface CreateDocumentCollaborationOptions {
     readonly ydoc: Y.Doc;
 }
 
-// @public
+// @beta
 export function createTextCollaboration(options: CreateTextCollaborationOptions): Promise<TextCollaborationHandle>;
 
-// @public
+// @beta
 export interface CreateTextCollaborationOptions {
     // (undocumented)
     readonly awareness: Awareness;
@@ -115,7 +124,9 @@ export interface CreateTextCollaborationOptions {
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
 
 // @public
-export type DocumentCollaborationSession = TextCollaborationSession;
+export interface DocumentCollaborationSession extends TextCollaborationSession {
+    setIdentity(update: CollaborationIdentityUpdate): void;
+}
 
 // @public
 export const MAX_BASELINE_BYTES: number;
@@ -126,7 +137,7 @@ export const PROTOCOL_VERSION = 1;
 // @public
 export const SCHEMA_VERSION = 1;
 
-// @public
+// @beta
 export type TextCollaborationHandle = CollaborationHandle<TextCollaborationSession>;
 
 // @public

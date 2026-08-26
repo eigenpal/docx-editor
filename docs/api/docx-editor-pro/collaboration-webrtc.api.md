@@ -32,6 +32,9 @@ export interface CreateWebrtcCollaborationOptions {
 export const DEMO_SIGNALING_ENDPOINTS: readonly string[];
 
 // @internal
+export function resetDemoSignalingWarningForTests(): void;
+
+// @internal
 export function resolveWebrtcRoomPassword(options: {
     readonly href?: string;
     readonly password?: string;
@@ -39,6 +42,9 @@ export function resolveWebrtcRoomPassword(options: {
 
 // @public
 export function validateRoomId(value: string): string;
+
+// @internal
+export function warnOnDemoSignalingFallback(signaling: readonly string[] | undefined): void;
 
 // @public
 export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {

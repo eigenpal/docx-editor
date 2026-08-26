@@ -10,6 +10,8 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createApp, defineComponent, h, nextTick } from 'vue';
+import type * as Y from 'yjs';
+import type { WebrtcProvider } from 'y-webrtc';
 import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { collaborationModule } from '../collaboration/collaboration-module.ts';
 import {
@@ -47,6 +49,8 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
 interface StubRoom {
   readonly document: Uint8Array;
   readonly session: EditorCollaborationSession;
+  readonly ydoc?: Y.Doc;
+  readonly provider?: WebrtcProvider;
   destroy(): void;
   readonly destroyed: boolean;
 }
@@ -57,6 +61,8 @@ function fakeRoom(documentId = 'room-1'): StubRoom {
   return {
     document: bytes,
     session: stubSession(documentId),
+    ydoc: { stub: 'ydoc' } as unknown as Y.Doc,
+    provider: { stub: 'provider' } as unknown as WebrtcProvider,
     destroy() {
       destroyed = true;
     },
@@ -124,7 +130,9 @@ describe('useWebrtcCollaboration (Vue)', () => {
     mounted.unmount();
   });
 
-  test('leave without bytes keeps the room document for local editing', async () => {
+  test('leave refuses to run without the current document bytes', async () => {
+    // A bare leave used to fall back to the bytes the room STARTED from, silently dropping
+    // every edit made in the room. The argument is now required and validated.
     const created: StubRoom[] = [];
     const mounted = mountHook(async () => {
       const room = fakeRoom();
@@ -133,13 +141,56 @@ describe('useWebrtcCollaboration (Vue)', () => {
     });
     await Promise.resolve();
     await nextTick();
-    const kept = created[0]?.document;
-    expect(kept).toBeDefined();
-    mounted.latest()?.leave();
+    expect(() => (mounted.latest()?.leave as unknown as () => void)()).toThrow(
+      /await editor\.save\(\)/
+    );
+    expect(created[0]?.destroyed).toBe(false);
+    expect(mounted.latest()?.session.value).not.toBeNull();
+    mounted.unmount();
+  });
+
+  test('the room ydoc and provider are exposed while connected and null after leave', async () => {
+    const created: StubRoom[] = [];
+    const mounted = mountHook(async () => {
+      const room = fakeRoom();
+      created.push(room);
+      return room;
+    });
+    await Promise.resolve();
+    await nextTick();
+    expect(mounted.latest()?.ydoc.value).toBe(created[0]!.ydoc!);
+    expect(mounted.latest()?.provider.value).toBe(created[0]!.provider!);
+    mounted.latest()?.leave(new Uint8Array([9]));
+    expect(mounted.latest()?.ydoc.value).toBeNull();
+    expect(mounted.latest()?.provider.value).toBeNull();
+    mounted.unmount();
+  });
+
+  test('rejoin leaves with the passed bytes and reconnects with bootstrap join', async () => {
+    const created: StubRoom[] = [];
+    const seenOptions: UseWebrtcCollaborationConnectOptions[] = [];
+    const mounted = mountHook(async (options) => {
+      seenOptions.push(options);
+      const room = fakeRoom(`room-${created.length}`);
+      created.push(room);
+      return room;
+    }, false);
+    await nextTick();
+    await mounted.latest()?.connect({
+      ...CONNECT,
+      bootstrap: { kind: 'create', document: new Uint8Array([1]) },
+    });
+    await mounted.latest()?.rejoin(new Uint8Array([42]));
     expect(created[0]?.destroyed).toBe(true);
-    expect(mounted.latest()?.session.value).toBeNull();
-    expect(mounted.latest()?.document.value).toBe(kept);
-    expect(mounted.latest()?.document.value).not.toBeNull();
+    expect(created[1]?.destroyed).toBe(false);
+    // `readonly()` wraps the session in a proxy, so compare by identity field.
+    expect(mounted.latest()?.session.value?.documentId).toBe('room-1');
+    // The room still exists on peers, so a rejoin never re-creates it from local bytes.
+    expect(seenOptions[1]).toMatchObject({
+      roomId: CONNECT.roomId,
+      identity: CONNECT.identity,
+      bootstrap: { kind: 'join' },
+    });
     mounted.unmount();
   });
 

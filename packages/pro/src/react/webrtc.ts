@@ -21,3 +21,4 @@ export {
   type UseWebrtcCollaborationOptions,
   type UseWebrtcCollaborationReturn,
 } from './useWebrtcCollaboration.ts';
+export type { CollaborationIdentityUpdate } from '../collaboration/session.ts';

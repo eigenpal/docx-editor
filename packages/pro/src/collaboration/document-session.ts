@@ -36,7 +36,10 @@ import type {
   CollaborationStatus,
   CollaborationStatusSnapshot,
 } from '@docx-editor.dev/core/collaboration';
-import { createCollaborationStatusTracker } from '@docx-editor.dev/core/collaboration';
+import {
+  createCollaborationStatusTracker,
+  safeParticipantColor,
+} from '@docx-editor.dev/core/collaboration';
 import {
   DocumentRegistry,
   PackageMaterializer,
@@ -56,6 +59,7 @@ import { CollaborationSchemaError } from './schema.ts';
 import type {
   CollaborationBootstrap,
   CollaborationHandle,
+  CollaborationIdentityUpdate,
   TextCollaborationSession,
 } from './session.ts';
 
@@ -69,6 +73,18 @@ const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
 const MAX_REFUSALS_IN_A_ROW = 3;
 /** Local journals inside this window share one actor undo item. */
 const UNDO_CAPTURE_TIMEOUT_MS = 5_000;
+/** After this long with no attached document port, the session warns that nothing replicates. */
+const ATTACH_WATCHDOG_MS = 2_000;
+
+/**
+ * Test-only override for the attach watchdog delay. Not re-exported from
+ * `@docx-editor.dev/pro/collaboration`.
+ *
+ * @internal
+ */
+export const ATTACH_WATCHDOG_MS_FOR_TESTS: unique symbol = Symbol(
+  'createDocumentCollaboration.attachWatchdogMs'
+);
 
 interface EncodedSelectionAddress {
   readonly paragraphId: string;
@@ -209,7 +225,9 @@ function awarenessPayload(value: unknown): AwarenessPayload | null {
 class DocumentSession implements DocumentCollaborationSession {
   readonly documentId: string;
   readonly sessionId: string;
-  readonly identity: CollaborationIdentity;
+  private currentIdentity: CollaborationIdentity;
+  private currentSelection: EncodedSelection | undefined;
+  private attachWatchdog: ReturnType<typeof setTimeout> | null = null;
   private readonly statusState = createCollaborationStatusTracker();
   private readonly statusListeners = new Set<
     (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void
@@ -240,11 +258,12 @@ class DocumentSession implements DocumentCollaborationSession {
     private readonly registry: DocumentRegistry,
     private readonly materializer: PackageMaterializer,
     private readonly identityMap: LogicalIdentityMap,
-    private readonly blobs: SharedBlobStore
+    private readonly blobs: SharedBlobStore,
+    attachWatchdogMs: number
   ) {
     this.documentId = documentId;
     this.sessionId = sessionId;
-    this.identity = identity;
+    this.currentIdentity = identity;
     this.undoManager = new Y.UndoManager([...registry.trackedTypes()], {
       trackedOrigins: new Set([this.localOrigin]),
       captureTimeout: UNDO_CAPTURE_TIMEOUT_MS,
@@ -258,6 +277,34 @@ class DocumentSession implements DocumentCollaborationSession {
     });
     this.publishAwareness();
     this.setStatus('ready');
+    // A session that is never attached still reports `ready`, and in the connect-later flow a
+    // missed `key` remount silently stops replication. The failure codes are a closed core
+    // union with only terminal statuses, so this cannot be a typed non-fatal warning; a
+    // one-shot console.warn is the honest surface. Cleared on attach and on destroy.
+    this.attachWatchdog = setTimeout(() => {
+      this.attachWatchdog = null;
+      if (this.destroyed || this.port) return;
+      console.warn(
+        `[docx-editor] The collaboration session for "${this.documentId}" was created ` +
+          `${attachWatchdogMs}ms ago and no editor attached its document port. The session ` +
+          `reports "ready" but no edits replicate. Remount the editor when the session ` +
+          `appears — for example pass key={session.sessionId} — so ` +
+          `collaborationModule({ session }) attaches it.`
+      );
+    }, attachWatchdogMs);
+    // Browsers have no unref; destroy clears the timer. Guarded unref keeps a short-lived
+    // Node host from waiting on the watchdog.
+    (this.attachWatchdog as { unref?: () => void }).unref?.();
+  }
+
+  get identity(): CollaborationIdentity {
+    return this.currentIdentity;
+  }
+
+  private clearAttachWatchdog(): void {
+    if (this.attachWatchdog === null) return;
+    clearTimeout(this.attachWatchdog);
+    this.attachWatchdog = null;
   }
 
   status(): CollaborationStatus {
@@ -294,6 +341,7 @@ class DocumentSession implements DocumentCollaborationSession {
     // leaving it mounted on the degraded status the host already renders.
     const refused = this.refuseAttach(port);
     if (refused) return refused;
+    this.clearAttachWatchdog();
     this.port = port;
     this.publishSharedToPort();
     const stopJournal = port.observePrimitiveJournal((journal) => {
@@ -472,8 +520,35 @@ class DocumentSession implements DocumentCollaborationSession {
     return () => this.selectionListeners.delete(listener);
   }
 
+  setIdentity(update: CollaborationIdentityUpdate): void {
+    if (this.destroyed) return;
+    const name = update.name === undefined ? this.currentIdentity.name : update.name.trim();
+    if (name.length === 0 || name.length > MAX_IDENTITY_LENGTH) {
+      throw new CollaborationSchemaError('invalid-identity');
+    }
+    let color = this.currentIdentity.color;
+    if (update.color !== undefined) {
+      if (update.color.length > 64) {
+        throw new CollaborationSchemaError('invalid-identity-color');
+      }
+      // The same gate the painter applies. An unsafe value is dropped, not thrown, so a
+      // rejected color degrades to the accent fallback instead of blocking the rename.
+      color = safeParticipantColor(update.color);
+    }
+    // `actorId` and `role` are attribution, not presentation. A partial cannot name them, and
+    // any extra runtime property is ignored.
+    this.currentIdentity = Object.freeze({
+      actorId: this.currentIdentity.actorId,
+      name,
+      ...(color ? { color } : {}),
+      role: this.currentIdentity.role ?? 'human',
+    });
+    this.publishAwareness(this.currentSelection);
+  }
+
   destroy(): void {
     if (this.destroyed) return;
+    this.clearAttachWatchdog();
     this.flushPendingJournals();
     this.detachPort?.();
     this.destroyed = true;
@@ -671,6 +746,7 @@ class DocumentSession implements DocumentCollaborationSession {
   };
 
   private publishAwareness(selection?: EncodedSelection): void {
+    this.currentSelection = selection;
     const payload: AwarenessPayload = {
       actorId: this.identity.actorId,
       name: this.identity.name,
@@ -753,10 +829,21 @@ function waitForSharedInitialization(
 /**
  * Full-document collaboration session.
  *
- * The public seam matches {@link TextCollaborationSession}.
+ * The seam matches {@link TextCollaborationSession}, plus a live display-identity update.
  * @public
  */
-export type DocumentCollaborationSession = TextCollaborationSession;
+export interface DocumentCollaborationSession extends TextCollaborationSession {
+  /**
+   * Update the display identity for the rest of this session and republish presence.
+   *
+   * `name` revalidates with the construction rules (trimmed, 1 to 256 characters) and an
+   * invalid value throws. `color` longer than 64 characters throws; a color
+   * `safeParticipantColor` refuses is dropped, so peers fall back to the accent color.
+   * `actorId` and `role` are immutable — the update type cannot name them, and any extra
+   * runtime property is ignored.
+   */
+  setIdentity(update: CollaborationIdentityUpdate): void;
+}
 
 /** Owned full-document collaboration replica. @public */
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
@@ -786,6 +873,10 @@ export interface CreateDocumentCollaborationOptions {
 export async function createDocumentCollaboration(
   options: CreateDocumentCollaborationOptions
 ): Promise<DocumentCollaborationHandle> {
+  const attachWatchdogMs =
+    (options as { readonly [ATTACH_WATCHDOG_MS_FOR_TESTS]?: number })[
+      ATTACH_WATCHDOG_MS_FOR_TESTS
+    ] ?? ATTACH_WATCHDOG_MS;
   const documentId = validateDocumentId(options.documentId);
   const sessionId = sessionIdentity(options.sessionId);
   const identity = validateIdentity(options.identity);
@@ -847,7 +938,8 @@ export async function createDocumentCollaboration(
     registry,
     materializer,
     identityMap,
-    blobs
+    blobs,
+    attachWatchdogMs
   );
   return Object.freeze({
     document: writeOoxmlPackage(materialized.package),

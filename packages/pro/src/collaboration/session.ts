@@ -50,6 +50,18 @@ export type CollaborationBootstrap =
   | { readonly kind: 'join'; readonly timeoutMs?: number; readonly signal?: AbortSignal };
 
 /**
+ * Display-identity fields a live session can update.
+ *
+ * `actorId` and `role` are attribution and stay immutable for the session lifetime, so this
+ * type cannot name them.
+ * @public
+ */
+export interface CollaborationIdentityUpdate {
+  readonly name?: string;
+  readonly color?: string;
+}
+
+/**
  * Host-facing collaboration session.
  *
  * A host reads identity, status, presence, and undo. The editor attaches
@@ -61,6 +73,13 @@ export interface CollaborationSession {
   /** Unique identity for this attachment lifetime. */
   readonly sessionId: string;
   readonly identity: CollaborationIdentity;
+  /**
+   * Update the display name and color mid-session, when the replica supports it.
+   *
+   * Full-document sessions implement this and republish presence at once. A replica that
+   * freezes identity for its lifetime omits it.
+   */
+  setIdentity?(update: CollaborationIdentityUpdate): void;
   status(): CollaborationStatus;
   /**
    * Cached status, current reason, and last failure.
@@ -90,10 +109,10 @@ export interface CollaborationSession {
 }
 
 /**
- * Options for a paragraph-text collaboration replica.
+ * Options for the experimental paragraph-text replica of {@link createTextCollaboration}.
  *
  * The caller owns `ydoc`.
- * @public
+ * @beta
  */
 export interface CreateTextCollaborationOptions {
   readonly ydoc: Y.Doc;
@@ -129,7 +148,7 @@ export interface CollaborationHandle<TSession extends CollaborationSession> {
   destroy(): void;
 }
 
-/** Owned paragraph-text collaboration replica. @public */
+/** Owned replica of the experimental {@link createTextCollaboration} factory. @beta */
 export type TextCollaborationHandle = CollaborationHandle<TextCollaborationSession>;
 
 interface EncodedPosition {
@@ -772,10 +791,13 @@ async function bootstrap(
 }
 
 /**
- * Create or join one paragraph-text collaboration replica.
+ * Create or join one experimental paragraph-text collaboration replica.
  *
- * The caller owns `ydoc`.
- * @public
+ * This replica shares only the body paragraph text of an unchanging paragraph set: no
+ * formatting, no structure, no images. Use {@link createDocumentCollaboration} for
+ * full-document collaboration; this factory remains for hosts that want to replicate plain
+ * paragraph text and nothing else. The caller owns `ydoc`.
+ * @beta
  */
 export async function createTextCollaboration(
   options: CreateTextCollaborationOptions

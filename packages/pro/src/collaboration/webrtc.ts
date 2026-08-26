@@ -4,7 +4,8 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 /**
- * Peer-to-peer convenience wrapper for the experimental collaboration proof.
+ * Peer-to-peer convenience wrapper: one owned `y-webrtc` room over the
+ * full-document collaboration replica.
  *
  * @packageDocumentation
  * @public
@@ -29,6 +30,33 @@ import type { CollaborationBootstrap } from './session.ts';
  * @public
  */
 export const DEMO_SIGNALING_ENDPOINTS = Object.freeze(['wss://turn.0docker.com/ws']);
+
+let warnedDemoSignalingFallback = false;
+
+/**
+ * Warn once per process when a room silently falls back to the demo signaling endpoints.
+ *
+ * Passing `signaling: DEMO_SIGNALING_ENDPOINTS` is a deliberate choice and never warns —
+ * only an omitted `signaling` does.
+ *
+ * @internal
+ */
+export function warnOnDemoSignalingFallback(signaling: readonly string[] | undefined): void {
+  if (signaling !== undefined) return;
+  if (warnedDemoSignalingFallback) return;
+  warnedDemoSignalingFallback = true;
+  console.warn(
+    '[docx-editor] createWebrtcCollaboration was called without `signaling`, so it uses the ' +
+      'public demo endpoints. They are shared, unauthenticated, and can go away. Pass your ' +
+      'own `signaling` URLs (and TURN `iceServers`) in production, or pass ' +
+      '`signaling: DEMO_SIGNALING_ENDPOINTS` explicitly to accept the demo endpoints.'
+  );
+}
+
+/** Test-only reset for the once-per-process demo signaling warning. @internal */
+export function resetDemoSignalingWarningForTests(): void {
+  warnedDemoSignalingFallback = false;
+}
 
 /** Options for the owned WebRTC collaboration convenience wrapper. @public */
 export interface CreateWebrtcCollaborationOptions {
@@ -157,6 +185,7 @@ export async function createWebrtcCollaboration(
   options: CreateWebrtcCollaborationOptions
 ): Promise<WebrtcCollaborationHandle> {
   const roomId = validateRoomId(options.roomId);
+  warnOnDemoSignalingFallback(options.signaling);
   const password = resolveWebrtcRoomPassword({ password: options.password });
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
