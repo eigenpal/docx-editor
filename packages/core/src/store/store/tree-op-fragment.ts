@@ -21,12 +21,7 @@ import {
   replaceChildren,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import {
-  isValidParaId,
-  mintParaId,
-  mintedParagraphIdentityAttributes,
-  usedParaIds,
-} from '../package/para-id.ts';
+import { mintParaId, mintedParagraphIdentityAttributes, usedParaIds } from '../package/para-id.ts';
 import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import {
   cloneWithNewIds,
@@ -117,7 +112,10 @@ function withFreshParaIds(
       (attribute) =>
         attribute.namespaceUri === W14_NAMESPACE_URI && attribute.localName === 'paraId'
     );
-    if (identity && isValidParaId(identity.value)) {
+    // Re-mint whenever a `w14:paraId` is present, valid or not: a crafted fragment can
+    // carry a syntactically INVALID id shared across paragraphs, which would plant
+    // duplicate identities in the host. A fresh valid id replaces it either way.
+    if (identity) {
       const minted = mintParaId(`${seedBase}:${counter.value}`, used);
       counter.value += 1;
       used.add(minted);

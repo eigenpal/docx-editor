@@ -521,27 +521,29 @@ export function extractFragmentPackage(
 
   // Trim the edges through the ordinary op machinery, so runs split, wrappers divide and
   // atoms hold exactly as they do for every other range gesture.
+  // `deferValidation`: the trimmed part is only serialized into the fragment zip, and the
+  // paste side re-validates through `readOoxmlPackage` + `validateInsertFragment` + commit.
+  // A full-part revalidation per trim made every copy O(document), the copy floor for a
+  // small drag in a large doc.
   let part = sourcePart;
   const lastParagraph = findParagraph(part.root, lastId);
   if (!lastParagraph) return { ok: false, reason: 'empty-range' };
   const lastLength = paragraphLength(lastParagraph as never);
   if (coverage.endOffset < lastLength) {
-    const trimmed = applyTreeOp(part, {
-      op: 'deleteText',
-      paragraphId: lastId,
-      start: coverage.endOffset,
-      end: lastLength,
-    });
+    const trimmed = applyTreeOp(
+      part,
+      { op: 'deleteText', paragraphId: lastId, start: coverage.endOffset, end: lastLength },
+      { deferValidation: true }
+    );
     if (!trimmed.ok) return { ok: false, reason: 'trim-refused' };
     part = trimmed.part;
   }
   if (coverage.startOffset > 0) {
-    const trimmed = applyTreeOp(part, {
-      op: 'deleteText',
-      paragraphId: firstId,
-      start: 0,
-      end: coverage.startOffset,
-    });
+    const trimmed = applyTreeOp(
+      part,
+      { op: 'deleteText', paragraphId: firstId, start: 0, end: coverage.startOffset },
+      { deferValidation: true }
+    );
     if (!trimmed.ok) return { ok: false, reason: 'trim-refused' };
     part = trimmed.part;
   }

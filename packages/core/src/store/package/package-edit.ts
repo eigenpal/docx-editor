@@ -335,6 +335,113 @@ export function withContentTypeOverride(
   });
 }
 
+/**
+ * Declare content types for MANY parts in one content-types tree edit — the batched twin
+ * of {@link withContentTypeOverride}. A per-part call re-parses and re-serializes the whole
+ * `[Content_Types].xml` each time, which is quadratic when a paste installs thousands of
+ * media parts; this parses and serializes once.
+ */
+export function withContentTypeOverrides(
+  pkg: OoxmlPackage,
+  entries: ReadonlyArray<readonly [partName: string, contentType: string]>
+): OoxmlPackage {
+  if (entries.length === 0) return pkg;
+  const contentTypesEntry = contentTypesEntryOf(pkg.partBytes);
+  if (contentTypesEntry === null) return pkg;
+  const parsed = readOoxmlPart(new TextDecoder().decode(contentTypesEntry.bytes), {
+    name: CONTENT_TYPES_PART,
+    contentType: 'application/xml',
+  });
+  if (!parsed.ok) return pkg;
+
+  let part = parsed.part;
+  const overrides = new Map(pkg.contentTypes.overrides);
+  let changed = false;
+  for (const [partName, contentType] of entries) {
+    const canonical = writablePartName(partName);
+    if (canonical === null) continue;
+    const upserted = upsertContentTypeOverrideChildren(part, canonical, contentType);
+    if (!upserted.changed) continue;
+    part = upserted.part;
+    overrides.set(partNameKey(canonical), contentType);
+    changed = true;
+  }
+  if (!changed) return pkg;
+
+  const partBytes = new Map(pkg.partBytes);
+  partBytes.set(contentTypesEntry.storageKey, new TextEncoder().encode(serializeOoxmlPart(part)));
+  return Object.freeze({
+    ...pkg,
+    partBytes,
+    contentTypes: { defaults: pkg.contentTypes.defaults, overrides } satisfies ContentTypeIndex,
+  });
+}
+
+/**
+ * Append MANY relationships to one owner part in a single `.rels` tree edit — the batched
+ * twin of {@link withRelationship}. Returns the fresh ids in request order.
+ */
+export function withRelationships(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  requests: ReadonlyArray<readonly [type: string, rawTarget: string]>
+): { readonly pkg: OoxmlPackage; readonly ids: readonly string[]; readonly ok: boolean } {
+  if (requests.length === 0) return { pkg, ids: [], ok: true };
+  const relsName = relsPartNameFor(ownerPart);
+  const relsPart = pkg.parts.get(relsName);
+  if (!relsPart) return { pkg, ids: [], ok: false };
+
+  const used = new Set(relationshipIdsForOwner(pkg, ownerPart));
+  let next = 1;
+  for (const id of used) {
+    const match = /^rId(\d+)$/.exec(id);
+    if (match) next = Math.max(next, Number(match[1]) + 1);
+  }
+  const existing = relationshipsOf(pkg, ownerPart);
+  const ids: string[] = [];
+  const records: OoxmlNode[] = [];
+  const added: RelationshipRecord[] = [];
+  requests.forEach(([type, rawTarget], index) => {
+    let id = `rId${next++}`;
+    while (used.has(id)) id = `rId${next++}`;
+    used.add(id);
+    ids.push(id);
+    records.push(
+      element(mintedId(relsPart, `${id}-${index}`), RELATIONSHIPS_NAMESPACE, 'Relationship', {
+        Id: id,
+        Type: type,
+        Target: rawTarget,
+      })
+    );
+    added.push({
+      ownerPart,
+      id,
+      type,
+      rawTarget,
+      targetMode: 'Internal',
+      order: existing.length + index,
+    });
+  });
+
+  const appended = insertChildren(
+    relsPart,
+    relsPart.root.id,
+    relsPart.root.children.length,
+    records,
+    {
+      deferValidation: true,
+    }
+  );
+  if (!appended.ok) return { pkg, ids: [], ok: false };
+  const relationships = new Map(pkg.relationships);
+  relationships.set(ownerPart, [...existing, ...added]);
+  return {
+    pkg: Object.freeze({ ...withPart(pkg, appended.part), relationships }),
+    ids,
+    ok: true,
+  };
+}
+
 /** What {@link withoutPart} answers: `ok: false` leaves the package exactly as it was. */
 export interface WithoutPartResult {
   readonly pkg: OoxmlPackage;

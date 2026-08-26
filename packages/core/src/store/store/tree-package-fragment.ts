@@ -31,26 +31,41 @@ export type FragmentPasteResult =
   | (Extract<PackageTransactResult, { ok: true }> & { readonly blockCount: number })
   | Extract<PackageTransactResult, { ok: false }>;
 
-/** One early-exit walk over the fragment body against the insertFragment budgets. */
+/**
+ * One early-exit walk over the fragment against the insertFragment budgets.
+ *
+ * Bounds the BODY blocks/nodes/depth AND the total node count across the resource parts
+ * (styles, numbering, notes) the merge walks and re-serializes. A body-only budget let a
+ * fragment ship a near-max styles.xml under a one-block body — the merge then paid a
+ * multi-second linear pass no cap rejected.
+ */
 function withinFragmentBudget(fragment: OoxmlPackage): boolean {
   const doc = fragment.parts.get(fragment.mainDocumentPart);
   if (!doc || doc.root.kind !== 'document') return false;
   const body = doc.root.children.find((child) => child.kind === 'body');
   if (!body || body.kind !== 'body') return false;
   if (body.children.length > MAX_FRAGMENT_INSERT_BLOCKS) return false;
-  let nodes = 0;
-  const walk = (node: OoxmlNode, depth: number): boolean => {
-    if (depth > MAX_FRAGMENT_DEPTH) return false;
-    nodes += 1;
-    if (nodes > MAX_FRAGMENT_NODES) return false;
+
+  let total = 0;
+  const walk = (node: OoxmlNode, depth: number, maxDepth: number): boolean => {
+    if (depth > maxDepth) return false;
+    total += 1;
+    if (total > MAX_FRAGMENT_NODES) return false;
     if (node.kind === 'textValue') return true;
     for (const child of node.children) {
-      if (!walk(child, depth + 1)) return false;
+      if (!walk(child, depth + 1, maxDepth)) return false;
     }
     return true;
   };
   for (const block of body.children) {
-    if (!walk(block, 1)) return false;
+    if (!walk(block, 1, MAX_FRAGMENT_DEPTH)) return false;
+  }
+  // The resource parts share the same total-node budget (a deeper structural cap since a
+  // styles/numbering tree is legitimately deeper than body blocks).
+  for (const [name, part] of fragment.parts) {
+    if (name === fragment.mainDocumentPart) continue;
+    if (!/\/(styles|numbering|footnotes|endnotes)\.xml$/.test(name)) continue;
+    if (!walk(part.root, 1, MAX_FRAGMENT_DEPTH * 4)) return false;
   }
   return true;
 }

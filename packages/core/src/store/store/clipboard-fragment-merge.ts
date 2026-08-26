@@ -12,7 +12,6 @@
 
 import {
   WML_NAMESPACE_URI,
-  type OoxmlAttribute,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
@@ -24,10 +23,11 @@ import {
   resolveContentTypeOf,
   withNewPart,
   withRelationship,
+  withRelationships,
   withRelationshipsPartFor,
 } from '../package/package-edit.ts';
 import {
-  withBinaryPart,
+  withBinaryParts,
   allocateDrawingPropertyId,
   validateEmbeddedImageBytes,
 } from '../package/drawing-package-edit.ts';
@@ -37,7 +37,7 @@ import { ensureNotesPart } from '../package/note-lifecycle.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { resolveInternalTarget } from '../package/opc-names.ts';
 import { readOoxmlPart } from '../package/ooxml-tree.ts';
-import { createNodeIdAllocator, insertChildren, removeNode } from '../package/ooxml-edit.ts';
+import { createNodeIdAllocator, insertChildren } from '../package/ooxml-edit.ts';
 import { sha256FontBytes } from '../package/sha256.ts';
 import { attributeValueOf, cloneWithNewIds } from './tree-op-nodes.ts';
 import {
@@ -50,6 +50,14 @@ import {
   walkAll,
 } from './clipboard-fragment-defaults.ts';
 import { withRequiredNamespaceBindings } from './tree-op-fragment.ts';
+import { sanitizeFragmentBlocks } from './clipboard-fragment-sanitize.ts';
+import {
+  REVISION_KINDS,
+  freshUniqueId,
+  freshUniqueName,
+  rewriteIdentifiers,
+  withRewrittenAttribute,
+} from './clipboard-fragment-identifiers.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const HYPERLINK_REL = `${R_NS}/hyperlink`;
@@ -87,138 +95,6 @@ function relatedPart(
   return pkg.parts.get(fallback) ?? null;
 }
 
-function withRewrittenAttribute(
-  node: OoxmlElement,
-  namespaceUri: string,
-  localName: string,
-  value: string
-): OoxmlElement {
-  return {
-    ...node,
-    attributes: node.attributes.map((attribute) =>
-      attribute.localName === localName && attribute.namespaceUri === namespaceUri
-        ? ({ ...attribute, value } as OoxmlAttribute)
-        : attribute
-    ),
-  } as OoxmlElement;
-}
-
-// `styleLink`/`numStyleLink` included: numbering definitions reference numbering STYLES,
-// and an import under a fresh style id must rewrite those references too.
-const STYLE_REF_NAMES = new Set([
-  'pStyle',
-  'rStyle',
-  'tblStyle',
-  'basedOn',
-  'link',
-  'next',
-  'styleLink',
-  'numStyleLink',
-]);
-
-const REVISION_KINDS = new Set([
-  'revisionInsert',
-  'revisionDelete',
-  'revisionMoveFrom',
-  'revisionMoveTo',
-]);
-
-interface RewriteMaps {
-  readonly styleIds?: ReadonlyMap<string, string>;
-  readonly numIds?: ReadonlyMap<string, string>;
-  readonly relIds?: ReadonlyMap<string, string>;
-  readonly footnoteIds?: ReadonlyMap<string, string>;
-  readonly endnoteIds?: ReadonlyMap<string, string>;
-  readonly bookmarkIds?: ReadonlyMap<string, string>;
-  readonly sdtIds?: ReadonlyMap<string, string>;
-  readonly revisionIds?: ReadonlyMap<string, string>;
-  readonly docPrIds?: ReadonlyMap<string, string>;
-}
-
-const EMPTY_MAP: ReadonlyMap<string, string> = new Map();
-
-function rewriteIdentifiers(node: OoxmlNode, maps: RewriteMaps): OoxmlNode {
-  const styleIds = maps.styleIds ?? EMPTY_MAP;
-  const numIds = maps.numIds ?? EMPTY_MAP;
-  const relIds = maps.relIds ?? EMPTY_MAP;
-  const footnoteIds = maps.footnoteIds ?? EMPTY_MAP;
-  const endnoteIds = maps.endnoteIds ?? EMPTY_MAP;
-  const bookmarkIds = maps.bookmarkIds ?? EMPTY_MAP;
-  const sdtIds = maps.sdtIds ?? EMPTY_MAP;
-  const revisionIds = maps.revisionIds ?? EMPTY_MAP;
-  const docPrIds = maps.docPrIds ?? EMPTY_MAP;
-
-  const walk = (current: OoxmlNode, parentLocal: string): OoxmlNode => {
-    if (current.kind === 'textValue') return current;
-    let next: OoxmlElement = current;
-
-    if (current.namespaceUri === WML_NAMESPACE_URI && STYLE_REF_NAMES.has(current.localName)) {
-      const value = attributeValueOf(current, 'val');
-      const mapped = value !== undefined ? styleIds.get(value) : undefined;
-      if (mapped !== undefined)
-        next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'val', mapped);
-    }
-    if (isWml(current, 'numId')) {
-      const value = attributeValueOf(current, 'val');
-      const mapped = value !== undefined ? numIds.get(value) : undefined;
-      if (mapped !== undefined)
-        next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'val', mapped);
-    }
-    if (current.kind === 'noteReference') {
-      // Footnote and endnote ids are SEPARATE namespaces; each reference kind resolves
-      // through its own map, never a shared one.
-      const kindMap = current.localName === 'footnoteReference' ? footnoteIds : endnoteIds;
-      const value = attributeValueOf(current, 'id');
-      const mapped = value !== undefined ? kindMap.get(value) : undefined;
-      if (mapped !== undefined)
-        next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'id', mapped);
-    }
-    if (current.kind === 'bookmarkStart' || current.kind === 'bookmarkEnd') {
-      const value = attributeValueOf(current, 'id');
-      const mapped = value !== undefined ? bookmarkIds.get(value) : undefined;
-      if (mapped !== undefined)
-        next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'id', mapped);
-    }
-    // `w:id` rewrites ONLY under `w:sdtPr` — an unrelated `w:id` element elsewhere with a
-    // colliding value must stay untouched.
-    if (isWml(current, 'id') && parentLocal === 'sdtPr') {
-      const value = attributeValueOf(current, 'val');
-      const mapped = value !== undefined ? sdtIds.get(value) : undefined;
-      if (mapped !== undefined)
-        next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'val', mapped);
-    }
-    if (REVISION_KINDS.has(current.kind)) {
-      const value = attributeValueOf(current, 'id');
-      const mapped = value !== undefined ? revisionIds.get(value) : undefined;
-      if (mapped !== undefined)
-        next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'id', mapped);
-    }
-    if (current.kind === 'drawingDocPr') {
-      const value = current.attributes.find(
-        (attribute) => attribute.localName === 'id' && attribute.namespaceUri === ''
-      )?.value;
-      const mapped = value !== undefined ? docPrIds.get(value) : undefined;
-      if (mapped !== undefined) next = withRewrittenAttribute(next, '', 'id', mapped);
-    }
-    // Relationship references (r:id, r:embed, r:link).
-    for (const attribute of next.attributes) {
-      if (attribute.namespaceUri !== R_NS) continue;
-      const mapped = relIds.get(attribute.value);
-      if (mapped !== undefined && mapped !== attribute.value) {
-        next = withRewrittenAttribute(next, R_NS, attribute.localName, mapped);
-      }
-    }
-
-    const parentForChildren = current.localName;
-    const children = next.children.map((child) => walk(child, parentForChildren));
-    const changed =
-      next !== current || children.some((child, index) => child !== next.children[index]);
-    return changed ? ({ ...next, children } as OoxmlNode) : current;
-  };
-  return walk(node, '');
-}
-
-/** Numeric max over an attribute across a part, for fresh-id allocation. */
 function maxNumericAttribute(
   root: OoxmlNode,
   match: (node: OoxmlNode) => string | undefined
@@ -263,13 +139,18 @@ function relationshipIdsIn(nodes: readonly OoxmlNode[]): Set<string> {
   return ids;
 }
 
-/** Drop drawings whose relationship could not merge, rather than shipping them dangling. */
+/**
+ * Resolve references to relationships that could not merge: a drawing whose media rel was
+ * dropped is removed; a `w:hyperlink` whose `r:id` was dropped (a refused `javascript:`
+ * target, say) is UNWRAPPED to its runs, so the text survives without a dangling — or
+ * worse, accidentally re-resolving — relationship id.
+ */
 function withoutDanglingDrawings(
   nodes: readonly OoxmlNode[],
   dropRelIds: ReadonlySet<string>
 ): OoxmlNode[] {
   if (dropRelIds.size === 0) return [...nodes];
-  const drop = (node: OoxmlNode): OoxmlNode | null => {
+  const rewrite = (node: OoxmlNode): OoxmlNode | OoxmlNode[] | null => {
     if (node.kind === 'textValue') return node;
     if (node.kind === 'drawing') {
       let dangling = false;
@@ -281,20 +162,30 @@ function withoutDanglingDrawings(
       });
       return dangling ? null : node;
     }
-    const children: OoxmlNode[] = [];
-    let changed = false;
-    for (const child of node.children) {
-      const kept = drop(child);
-      if (kept === null) {
-        changed = true;
-        continue;
+    if (node.kind === 'hyperlink') {
+      const relId = node.attributes.find((attribute) => attribute.namespaceUri === R_NS)?.value;
+      if (relId !== undefined && dropRelIds.has(relId)) {
+        // Unwrap: lift the link's (rewritten) children into the parent, drop the wrapper.
+        return rewriteChildren(node.children);
       }
-      if (kept !== child) changed = true;
-      children.push(kept);
     }
-    return changed ? ({ ...node, children } as OoxmlNode) : node;
+    const children = rewriteChildren(node.children);
+    return children.length === node.children.length &&
+      children.every((child, index) => child === node.children[index])
+      ? node
+      : ({ ...node, children } as OoxmlNode);
   };
-  return nodes.map((node) => drop(node)).filter((node): node is OoxmlNode => node !== null);
+  function rewriteChildren(children: readonly OoxmlNode[]): OoxmlNode[] {
+    const out: OoxmlNode[] = [];
+    for (const child of children) {
+      const kept = rewrite(child);
+      if (kept === null) continue;
+      if (Array.isArray(kept)) out.push(...kept);
+      else out.push(kept);
+    }
+    return out;
+  }
+  return rewriteChildren(nodes);
 }
 
 const SUPPORTED_RASTER_MIMES: ReadonlySet<string> = new Set([
@@ -359,9 +250,15 @@ export function mergeFragmentIntoPackage(
   if (!fragmentBody || !isElementNode(fragmentBody)) {
     return { ok: false, reason: 'no-fragment-document' };
   }
-  let blocks: OoxmlNode[] = fragmentBody.children.filter(
-    (child) =>
-      child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'contentControl'
+  // Sanitize at the trust boundary: a crafted `data-docx-fragment` reaches here without
+  // passing through the extractor, so sections, comments, external-content imports, and
+  // dangerous field instructions (DDE/INCLUDE*) are neutralized regardless of who authored
+  // the fragment. Idempotent on our own extractor-cleaned payloads.
+  let blocks: OoxmlNode[] = sanitizeFragmentBlocks(
+    fragmentBody.children.filter(
+      (child) =>
+        child.kind === 'paragraph' || child.kind === 'table' || child.kind === 'contentControl'
+    )
   );
   if (blocks.length === 0) return { ok: false, reason: 'no-fragment-document' };
 
@@ -504,8 +401,22 @@ export function mergeFragmentIntoPackage(
   const stylesToImport: OoxmlElement[] = [];
   const takenIds = new Set(targetStyles.byId.keys());
   const takenNames = new Set(targetStyles.names);
+  // Next unused suffix per base, so N colliding `Normal` styles rename in O(N) rather than
+  // O(N^2): a fresh-id search that restarts from 2 each time is quadratic.
+  const idSuffixes = new Map<string, number>();
+  const nameSuffixes = new Map<string, number>();
+  // Target style signatures computed LAZILY, only for an id the fragment actually reuses:
+  // fingerprinting every target style up front is O(styles.xml) on a paste that collides
+  // with none of them.
   const targetSignatures = new Map<string, string>();
-  for (const [id, style] of targetStyles.byId) targetSignatures.set(id, styleSignature(style));
+  const targetSignatureOf = (id: string, style: OoxmlElement): string => {
+    let signature = targetSignatures.get(id);
+    if (signature === undefined) {
+      signature = styleSignature(style);
+      targetSignatures.set(id, signature);
+    }
+    return signature;
+  };
 
   /**
    * An imported style must NEVER become the target's default: the cascade is last-wins
@@ -530,7 +441,7 @@ export function mergeFragmentIntoPackage(
     const comparable = styleSignature(
       rewriteIdentifiers(style, { styleIds: styleIdMap, numIds: numIdMap }) as OoxmlElement
     );
-    if (existing && targetSignatures.get(id) === comparable) {
+    if (existing && targetSignatureOf(id, existing) === comparable) {
       styleIdMap.set(id, id);
       continue;
     }
@@ -540,9 +451,7 @@ export function mergeFragmentIntoPackage(
       stylesToImport.push(withoutDefaultFlag(style));
       continue;
     }
-    let fresh = `${id}Pasted`;
-    let suffix = 2;
-    while (takenIds.has(fresh)) fresh = `${id}Pasted${suffix++}`;
+    const fresh = freshUniqueId(`${id}Pasted`, takenIds, idSuffixes);
     takenIds.add(fresh);
     styleIdMap.set(id, fresh);
     stylesToImport.push(
@@ -557,9 +466,7 @@ export function mergeFragmentIntoPackage(
       if (name) takenNames.add(name);
       return style;
     }
-    let fresh = `${name} (pasted)`;
-    let suffix = 2;
-    while (takenNames.has(fresh)) fresh = `${name} (pasted ${suffix++})`;
+    const fresh = freshUniqueName(name, takenNames, nameSuffixes);
     takenNames.add(fresh);
     const children = style.children.map((inner) =>
       isWml(inner, 'name')
@@ -574,12 +481,49 @@ export function mergeFragmentIntoPackage(
   // in `footnotes.xml.rels` are different relationships, so each story rewrites through
   // its own map and its own drop set.
   // ------------------------------------------------------------------
-  const targetMediaByHash = new Map<string, string>();
-  for (const [name, bytes] of pkg.partBytes) {
-    const canonical = name.startsWith('/') ? name : `/${name}`;
-    if (!canonical.startsWith('/word/media/')) continue;
-    targetMediaByHash.set(sha256FontBytes(bytes), canonical);
-  }
+  // Built LAZILY on the first admitted fragment image: a fragment with no media must not
+  // pay for hashing every `/word/media/*` part in the target (linear in the target's image
+  // bytes — expensive on an image-heavy host, useless when nothing dedupes against it).
+  let targetMediaByHash: Map<string, string> | null = null;
+  let nextMediaIndex = 1;
+  const mediaHashIndex = (): Map<string, string> => {
+    if (targetMediaByHash) return targetMediaByHash;
+    const index = new Map<string, string>();
+    for (const [name, bytes] of pkg.partBytes) {
+      const canonical = name.startsWith('/') ? name : `/${name}`;
+      if (!canonical.startsWith('/word/media/')) continue;
+      index.set(sha256FontBytes(bytes), canonical);
+      const match = /\/image(\d+)\./.exec(canonical);
+      if (match) nextMediaIndex = Math.max(nextMediaIndex, Number(match[1]) + 1);
+    }
+    targetMediaByHash = index;
+    return index;
+  };
+
+  // Media part → the image relationship already pointing at it, per owner, so the
+  // existing-rel check is a Map lookup rather than an O(rels) scan inside the media loop.
+  const imageRelByMediaPart = new Map<string, Map<string, string>>();
+  const imageRelIndexFor = (owner: string): Map<string, string> => {
+    let index = imageRelByMediaPart.get(owner);
+    if (!index) {
+      index = new Map();
+      for (const entry of relationshipsOf(pkg, owner)) {
+        if (entry.targetMode === 'External' || entry.type !== IMAGE_REL) continue;
+        const resolved = resolveInternalTarget(entry.ownerPart, entry.rawTarget);
+        if (resolved.ok) index.set(resolved.partName, entry.id);
+      }
+      imageRelByMediaPart.set(owner, index);
+    }
+    return index;
+  };
+
+  /** A media extension constrained to a safe token, or a mime-derived fallback. */
+  const safeMediaExtension = (partName: string, mime: string): string => {
+    const dot = partName.lastIndexOf('.');
+    const raw = dot === -1 ? '' : partName.slice(dot + 1);
+    if (/^[A-Za-z0-9]{1,8}$/.test(raw)) return raw.toLowerCase();
+    return mime === 'image/jpeg' ? 'jpeg' : mime === 'image/gif' ? 'gif' : 'png';
+  };
 
   const mergeRels = (
     fragmentOwner: string,
@@ -588,6 +532,18 @@ export function mergeFragmentIntoPackage(
   ): { readonly relIdMap: Map<string, string>; readonly dropRelIds: Set<string> } => {
     const relIdMap = new Map<string, string>();
     const dropRelIds = new Set<string>();
+    const relIndex = imageRelIndexFor(targetOwner);
+    // Media writes are BATCHED and flushed once at the end of this call: a `withBinaryPart`
+    // + `withRelationship` per image each copy the whole package, so a fragment with
+    // thousands of distinct images was O(images^2). New media parts and new image
+    // relationships accumulate here; each pending rel is keyed by its media part so many
+    // records to the same new image share one relationship.
+    const pendingBinary: Array<{ partName: string; bytes: Uint8Array; contentType: string }> = [];
+    const pendingPartNames = new Set<string>();
+    const pendingRelTargets: string[] = [];
+    const pendingRelMediaParts: string[] = [];
+    const pendingRelByMediaPart = new Map<string, number>();
+    const recordPending: Array<{ recordId: string; index: number }> = [];
     const records = fragment.relationships.get(fragmentOwner) ?? [];
     for (const record of records) {
       if (!usedIds.has(record.id)) continue;
@@ -629,45 +585,65 @@ export function mergeFragmentIntoPackage(
         continue;
       }
       const contentType = mediaMime;
+      const hashIndex = mediaHashIndex();
       const hash = sha256FontBytes(bytes);
-      let mediaPart = targetMediaByHash.get(hash);
+      let mediaPart = hashIndex.get(hash);
       if (!mediaPart) {
-        // Allocate a free media name in the target.
-        const ext = resolved.partName.slice(resolved.partName.lastIndexOf('.') + 1);
-        let index = 1;
-        const taken = (candidate: string): boolean =>
+        const ext = safeMediaExtension(resolved.partName, contentType);
+        const isPendingOrPresent = (candidate: string): boolean =>
           pkg.partBytes.has(candidate) ||
           pkg.partBytes.has(candidate.slice(1)) ||
-          pkg.parts.has(candidate);
-        while (taken(`/word/media/image${index}.${ext}`)) index += 1;
-        mediaPart = `/word/media/image${index}.${ext}`;
-        pkg = withBinaryPart(pkg, mediaPart, bytes, contentType);
-        targetMediaByHash.set(hash, mediaPart);
+          pkg.parts.has(candidate) ||
+          pendingPartNames.has(candidate);
+        let candidate = `/word/media/image${nextMediaIndex}.${ext}`;
+        while (isPendingOrPresent(candidate)) {
+          nextMediaIndex += 1;
+          candidate = `/word/media/image${nextMediaIndex}.${ext}`;
+        }
+        nextMediaIndex += 1;
+        mediaPart = candidate;
+        pendingBinary.push({ partName: mediaPart, bytes, contentType });
+        pendingPartNames.add(mediaPart);
+        hashIndex.set(hash, mediaPart);
       }
       const relTarget = mediaPart.startsWith('/word/')
         ? mediaPart.slice('/word/'.length)
         : mediaPart;
-      const existing = relationshipsOf(pkg, targetOwner).find((entry) => {
-        if (entry.targetMode === 'External' || entry.type !== IMAGE_REL) return false;
-        const entryTarget = resolveInternalTarget(entry.ownerPart, entry.rawTarget);
-        return entryTarget.ok && entryTarget.partName === mediaPart;
-      });
-      if (existing) {
-        relIdMap.set(record.id, existing.id);
+      const existingRelId = relIndex.get(mediaPart);
+      if (existingRelId !== undefined) {
+        relIdMap.set(record.id, existingRelId);
         continue;
       }
-      const related = withRelationship(
+      // Reserve one pending rel per NEW media part; many records to it share the rel.
+      let pendingIndex = pendingRelByMediaPart.get(mediaPart);
+      if (pendingIndex === undefined) {
+        pendingIndex = pendingRelTargets.length;
+        pendingRelByMediaPart.set(mediaPart, pendingIndex);
+        pendingRelTargets.push(relTarget);
+        pendingRelMediaParts.push(mediaPart);
+      }
+      recordPending.push({ recordId: record.id, index: pendingIndex });
+    }
+
+    // Flush: all media bytes + content types in one package edit, all relationships in one.
+    if (pendingBinary.length > 0) pkg = withBinaryParts(pkg, pendingBinary);
+    if (pendingRelTargets.length > 0) {
+      const withRels = withRelationships(
         withRelationshipsPartFor(pkg, targetOwner),
         targetOwner,
-        IMAGE_REL,
-        relTarget
+        pendingRelTargets.map((target) => [IMAGE_REL, target] as const)
       );
-      if (!related.ok) {
-        dropRelIds.add(record.id);
-        continue;
+      if (!withRels.ok) {
+        for (const entry of recordPending) dropRelIds.add(entry.recordId);
+      } else {
+        pkg = withRels.pkg;
+        withRels.ids.forEach((relId, index) => {
+          relIndex.set(pendingRelMediaParts[index]!, relId);
+        });
+        for (const entry of recordPending) {
+          relIdMap.set(entry.recordId, withRels.ids[entry.index]!);
+        }
       }
-      pkg = related.pkg;
-      relIdMap.set(record.id, related.relationshipId);
     }
     return { relIdMap, dropRelIds };
   };
@@ -726,7 +702,12 @@ export function mergeFragmentIntoPackage(
       bodies.push(withRewrittenAttribute(child, WML_NAMESPACE_URI, 'id', fresh));
     }
     if (bodies.length > 0) {
-      transplants.push({ kind: noteKind, fragmentPartName: fragmentNotes.name, bodies });
+      // Note bodies are crafted-fragment content too: sanitize before transplant.
+      transplants.push({
+        kind: noteKind,
+        fragmentPartName: fragmentNotes.name,
+        bodies: sanitizeFragmentBlocks(bodies),
+      });
     }
   }
 
@@ -738,43 +719,72 @@ export function mergeFragmentIntoPackage(
   const ownerPart = pkg.parts.get(ownerPartName)!;
   const allTravelling: OoxmlNode[] = [...blocks, ...transplants.flatMap((entry) => entry.bodies)];
 
-  const bookmarkIdMap = new Map<string, string>();
-  let nextBookmarkId =
-    maxNumericAttribute(ownerPart.root, (node) =>
-      node.kind !== 'textValue' && node.kind === 'bookmarkStart'
-        ? attributeValueOf(node, 'id')
-        : undefined
-    ) + 1;
-  for (const transplant of transplants) {
-    const notesPart = resolveNotesPart(pkg, transplant.kind);
-    if (!notesPart) continue;
-    nextBookmarkId = Math.max(
-      nextBookmarkId,
-      maxNumericAttribute(notesPart.root, (node) =>
-        node.kind !== 'textValue' && node.kind === 'bookmarkStart'
-          ? attributeValueOf(node, 'id')
-          : undefined
-      ) + 1
-    );
-  }
+  // Collect the fragment-side id/name occurrences ONCE, so the target scans below run only
+  // for namespaces the fragment actually carries — a plain paste pays for none of them.
+  const fragmentBookmarkIds: string[] = [];
   const pastedBookmarkNames = new Set<string>();
+  let fragmentHasRevision = false;
+  let fragmentHasDocPr = false;
+  const sdtIdMap = new Map<string, string>();
   walkAll(allTravelling, (node) => {
     if (node.kind === 'textValue') return;
-    if (node.kind === 'bookmarkStart') {
+    if (node.kind === 'bookmarkStart' || node.kind === 'bookmarkEnd') {
       const id = attributeValueOf(node, 'id');
-      const name = attributeValueOf(node, 'name');
-      if (id !== undefined && !bookmarkIdMap.has(id)) {
-        bookmarkIdMap.set(id, String(nextBookmarkId++));
+      if (id !== undefined) fragmentBookmarkIds.push(id);
+      if (node.kind === 'bookmarkStart') {
+        const name = attributeValueOf(node, 'name');
+        if (name) pastedBookmarkNames.add(name);
       }
-      if (name) pastedBookmarkNames.add(name);
+      return;
     }
-    if (node.kind === 'bookmarkEnd') {
-      const id = attributeValueOf(node, 'id');
-      if (id !== undefined && !bookmarkIdMap.has(id)) {
-        bookmarkIdMap.set(id, String(nextBookmarkId++));
+    if (REVISION_KINDS.has(node.kind)) {
+      fragmentHasRevision = true;
+      return;
+    }
+    if (node.kind === 'drawingDocPr') {
+      fragmentHasDocPr = true;
+      return;
+    }
+    if (node.kind === 'contentControlProperties') {
+      for (const child of node.children) {
+        if (!isWml(child, 'id')) continue;
+        const value = attributeValueOf(child, 'val');
+        if (value !== undefined && !sdtIdMap.has(value)) {
+          let seed = 0;
+          const basis = `${value}:${sdtIdMap.size}`;
+          for (let index = 0; index < basis.length; index += 1) {
+            seed = (seed * 31 + basis.charCodeAt(index)) >>> 0;
+          }
+          sdtIdMap.set(value, String(seed % 2147483647 || 1));
+        }
       }
     }
   });
+
+  const bookmarkIdMap = new Map<string, string>();
+  if (fragmentBookmarkIds.length > 0) {
+    let nextBookmarkId =
+      maxNumericAttribute(ownerPart.root, (node) =>
+        node.kind !== 'textValue' && node.kind === 'bookmarkStart'
+          ? attributeValueOf(node, 'id')
+          : undefined
+      ) + 1;
+    for (const transplant of transplants) {
+      const notesPart = resolveNotesPart(pkg, transplant.kind);
+      if (!notesPart) continue;
+      nextBookmarkId = Math.max(
+        nextBookmarkId,
+        maxNumericAttribute(notesPart.root, (node) =>
+          node.kind !== 'textValue' && node.kind === 'bookmarkStart'
+            ? attributeValueOf(node, 'id')
+            : undefined
+        ) + 1
+      );
+    }
+    for (const id of fragmentBookmarkIds) {
+      if (!bookmarkIdMap.has(id)) bookmarkIdMap.set(id, String(nextBookmarkId++));
+    }
+  }
 
   // Pasted bookmark wins a name collision: the target's same-name markers go.
   if (pastedBookmarkNames.size > 0) {
@@ -788,70 +798,64 @@ export function mergeFragmentIntoPackage(
       }
     });
     if (collidingIds.size > 0) {
-      let currentPart = ownerPart;
-      const markerNodeIds: string[] = [];
-      walkAll([currentPart.root], (node) => {
-        if (node.kind === 'textValue') return;
-        if (node.kind !== 'bookmarkStart' && node.kind !== 'bookmarkEnd') return;
-        const id = attributeValueOf(node, 'id');
-        if (id !== undefined && collidingIds.has(id)) markerNodeIds.push(node.id);
-      });
-      for (const nodeId of markerNodeIds) {
-        const removed = removeNode(currentPart, nodeId, { deferValidation: true });
-        if (removed.ok) currentPart = removed.part;
+      // One tree rebuild that drops every colliding marker, not a removeNode per marker
+      // (each of which rebuilds the whole owner part — quadratic on a bookmark-heavy host).
+      const dropCollidingMarkers = (node: OoxmlNode): OoxmlNode => {
+        if (node.kind === 'textValue') return node;
+        const children: OoxmlNode[] = [];
+        let changed = false;
+        for (const child of node.children) {
+          if (
+            (child.kind === 'bookmarkStart' || child.kind === 'bookmarkEnd') &&
+            collidingIds.has(attributeValueOf(child, 'id') ?? '')
+          ) {
+            changed = true;
+            continue;
+          }
+          const next = dropCollidingMarkers(child);
+          if (next !== child) changed = true;
+          children.push(next);
+        }
+        return changed ? ({ ...node, children } as OoxmlNode) : node;
+      };
+      const nextRoot = dropCollidingMarkers(ownerPart.root) as OoxmlElement;
+      if (nextRoot !== ownerPart.root) {
+        pkg = withPart(pkg, { ...ownerPart, root: nextRoot });
       }
-      pkg = withPart(pkg, currentPart);
     }
   }
 
-  const sdtIdMap = new Map<string, string>();
-  walkAll(allTravelling, (node) => {
-    if (node.kind === 'textValue') return;
-    if (node.kind !== 'contentControlProperties') return;
-    for (const child of node.children) {
-      if (!isWml(child, 'id')) continue;
-      const value = attributeValueOf(child, 'val');
-      if (value !== undefined && !sdtIdMap.has(value)) {
-        // Deterministic fresh 32-bit-ish id derived from the old one.
-        let seed = 0;
-        const basis = `${value}:${sdtIdMap.size}`;
-        for (let index = 0; index < basis.length; index += 1) {
-          seed = (seed * 31 + basis.charCodeAt(index)) >>> 0;
-        }
-        sdtIdMap.set(value, String(seed % 2147483647 || 1));
-      }
-    }
-  });
-
   const revisionIdMap = new Map<string, string>();
-  let nextRevisionId =
-    maxNumericAttribute(ownerPart.root, (node) =>
-      node.kind !== 'textValue' && REVISION_KINDS.has(node.kind)
-        ? attributeValueOf(node, 'id')
-        : undefined
-    ) + 1;
-  walkAll(allTravelling, (node) => {
-    if (node.kind === 'textValue') return;
-    if (REVISION_KINDS.has(node.kind)) {
+  if (fragmentHasRevision) {
+    let nextRevisionId =
+      maxNumericAttribute(ownerPart.root, (node) =>
+        node.kind !== 'textValue' && REVISION_KINDS.has(node.kind)
+          ? attributeValueOf(node, 'id')
+          : undefined
+      ) + 1;
+    walkAll(allTravelling, (node) => {
+      if (node.kind === 'textValue' || !REVISION_KINDS.has(node.kind)) return;
       const id = attributeValueOf(node, 'id');
       if (id !== undefined && !revisionIdMap.has(id)) {
         revisionIdMap.set(id, String(nextRevisionId++));
       }
-    }
-  });
+    });
+  }
 
   const docPrIdMap = new Map<string, string>();
-  const allocated = allocateDrawingPropertyId(pkg);
-  let nextDocPrId = allocated.ok ? allocated.id : 100_000;
-  walkAll(allTravelling, (node) => {
-    if (node.kind === 'textValue' || node.kind !== 'drawingDocPr') return;
-    const value = node.attributes.find(
-      (attribute) => attribute.localName === 'id' && attribute.namespaceUri === ''
-    )?.value;
-    if (value !== undefined && !docPrIdMap.has(value)) {
-      docPrIdMap.set(value, String(nextDocPrId++));
-    }
-  });
+  if (fragmentHasDocPr) {
+    const allocated = allocateDrawingPropertyId(pkg);
+    let nextDocPrId = allocated.ok ? allocated.id : 100_000;
+    walkAll(allTravelling, (node) => {
+      if (node.kind === 'textValue' || node.kind !== 'drawingDocPr') return;
+      const value = node.attributes.find(
+        (attribute) => attribute.localName === 'id' && attribute.namespaceUri === ''
+      )?.value;
+      if (value !== undefined && !docPrIdMap.has(value)) {
+        docPrIdMap.set(value, String(nextDocPrId++));
+      }
+    });
+  }
 
   // ------------------------------------------------------------------
   // Transplant note bodies: per-owner rels, full identifier rewrite, drop dangling

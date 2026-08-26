@@ -24,6 +24,7 @@ import type { OoxmlPackage } from './ooxml-package.ts';
 import {
   relsPartNameFor,
   withContentTypeOverride,
+  withContentTypeOverrides,
   withRelationship,
   withRelationshipsPartFor,
 } from './package-edit.ts';
@@ -409,6 +410,41 @@ export function withEmbeddedImage(
     relationshipId: related.relationshipId,
     docPrId: allocatedId.id,
   });
+}
+
+/**
+ * Store MANY binary parts and declare their content types in ONE package rebuild — the
+ * batched twin of {@link withBinaryPart}. A per-part call copies the whole `partBytes` map
+ * and re-serializes `[Content_Types].xml`, which is quadratic when a clipboard paste
+ * installs thousands of distinct media parts; this copies and serializes once.
+ */
+export function withBinaryParts(
+  pkg: OoxmlPackage,
+  additions: ReadonlyArray<{
+    readonly partName: string;
+    readonly bytes: Uint8Array;
+    readonly contentType: string;
+  }>
+): OoxmlPackage {
+  if (additions.length === 0) return pkg;
+  const partBytes = new Map(pkg.partBytes);
+  const parts = new Map(pkg.parts);
+  const overrides: Array<readonly [string, string]> = [];
+  for (const addition of additions) {
+    const normalized = normalizePartName(addition.partName);
+    if (!normalized.ok) continue;
+    const storedName = storagePartName(normalized.partName, pkg);
+    partBytes.set(storedName, snapshotPartBytes(addition.bytes));
+    const storedKey = canonicalPartKey(storedName);
+    if (storedKey !== null) {
+      for (const name of [...parts.keys()]) {
+        if (canonicalPartKey(name) === storedKey) parts.delete(name);
+      }
+    }
+    overrides.push([normalized.partName, addition.contentType]);
+  }
+  const withBytes = Object.freeze({ ...pkg, partBytes, parts });
+  return withContentTypeOverrides(withBytes, overrides);
 }
 
 /** English typographic points → EMUs (914400 EMU per inch, 72 pt per inch). */
