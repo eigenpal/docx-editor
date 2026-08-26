@@ -139,13 +139,6 @@ export interface OoxmlProperty {
   readonly attributes?: Readonly<Record<string, string>>;
 }
 
-/**
- * The identity of one revision WITHIN a part: `@w:id`, `@w:author` and `@w:date` together.
- *
- * `@w:id` is not unique and not author-scoped, so `(part, id)` alone would merge two authors'
- * distinct revisions; and one logical revision — a tracked row insertion — is deliberately
- * many elements sharing an id, which a uniqueness rule could not express at all.
- */
 import type { RevisionAddress, RevisionAttributionInput } from './tree-op-revision-attribution.ts';
 export {
   invalidRevisionAttribution,

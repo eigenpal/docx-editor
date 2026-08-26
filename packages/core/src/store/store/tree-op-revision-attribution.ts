@@ -5,10 +5,14 @@
 // from there, so every existing importer keeps its path.
 
 /**
- * How a tracked change is addressed: its numeric id plus the PART it lives in.
+ * How a tracked change is addressed: `@w:id`, `@w:author` and `@w:date` together, within a
+ * part.
  *
- * Both, always — `@w:id` is unique only within a part, so an id alone names two revisions in any
- * package with a header or a comments part.
+ * All of them, always. `@w:id` is unique only within a part, so an id alone names two
+ * revisions in any package with a header or a comments part — and it is not author-scoped
+ * either, so `(part, id)` would merge two authors' distinct revisions. One logical revision is
+ * also deliberately many elements sharing an id, as a tracked row insertion is, which no
+ * uniqueness rule could express.
  */
 export interface RevisionAddress {
   readonly id: string;
