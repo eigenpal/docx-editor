@@ -28,9 +28,13 @@ import {
   type DocumentSection,
   type SectionColumns,
 } from './section-properties.ts';
-import type { PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
+import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
-import { registerPageContentInsets, type PageContentInsets } from './page-furniture-insets.ts';
+import {
+  registerOverflowPageShell,
+  type OverflowPageShell,
+  type PageContentInsets,
+} from './page-furniture-insets.ts';
 
 export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
@@ -42,8 +46,8 @@ export interface SectionLayoutResult {
   readonly endSpaceAfter: number;
   /** Whether the last page is still open, or was closed by a trailing page break. */
   readonly endsOpenPage: boolean;
-  /** The content box a page at a DOCUMENT index resolves to under this section's variants. */
-  readonly contentInsetsAt: (documentPageIndex: number) => PageContentInsets;
+  /** The shell a sheet minted at a DOCUMENT index resolves to under this section's variants. */
+  readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
 }
 
 export type LayoutSectionFn = (
@@ -58,6 +62,7 @@ export type LayoutSectionFn = (
     readonly pageIndexStart?: number;
     readonly balanceColumns?: boolean;
     readonly continuedPageInsets?: PageContentInsets;
+    readonly bodyPageNumberFormat?: string;
   }
 ) => SectionLayoutResult;
 
@@ -370,10 +375,10 @@ export function layoutMultiSectionDocument(
   let flowCursorY = 0;
   let flowSpaceAfter = 0;
   let flowOpenPage = true;
-  /** Each section's document-index inset resolver, for a sheet minted after layout. */
-  const sectionInsets: {
+  /** Each section's shell resolver, for a sheet minted after layout. */
+  const sectionShells: {
     readonly startIndex: number;
-    readonly at: (index: number) => PageContentInsets;
+    readonly at: (index: number, box: LayoutBox) => OverflowPageShell;
   }[] = [];
   let previousGeometry: PageGeometry | null = null;
   let previousFurnitureKey = '';
@@ -450,9 +455,14 @@ export function layoutMultiSectionDocument(
       pageIndexStart: continues ? startIndex - 1 : startIndex,
       ...(continues ? { flowStartY: flowCursorY, spaceBeforeCarry: flowSpaceAfter } : {}),
       ...(continuedPageInsets ? { continuedPageInsets } : {}),
+      // The section's own page-number format, so a body page-field placeholder is measured
+      // the way the value that replaces it will be rendered.
+      ...(section.properties.pageNumbering?.fmt
+        ? { bodyPageNumberFormat: section.properties.pageNumbering.fmt }
+        : {}),
       ...(sectionSession ? { session: sectionSession } : {}),
     });
-    sectionInsets.push({ startIndex, at: laid.contentInsetsAt });
+    sectionShells.push({ startIndex, at: laid.overflowShellAt });
     lineCounter = laid.lineCounter;
     flowCursorY = laid.endCursorY;
     flowSpaceAfter = laid.endSpaceAfter;
@@ -589,7 +599,9 @@ export function layoutMultiSectionDocument(
     });
     retainOnce();
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });
-    registerPageContentInsets(finalized, laid.contentInsetsAt);
+    registerOverflowPageShell(finalized, (anchorIndex, offset, box) =>
+      laid.overflowShellAt(anchorIndex + offset, box)
+    );
     if (multi) {
       multi.spans = [];
       multi.previousRemapped = laid.pages;
@@ -645,14 +657,18 @@ export function layoutMultiSectionDocument(
     };
   }
 
-  // A note-overflow sheet lands in the section that owns the page before it, so dispatch on
-  // the last span that starts at or before the index; past the end, the final section answers.
-  registerPageContentInsets(finalized, (documentPageIndex) => {
-    let chosen = sectionInsets[0];
-    for (const span of sectionInsets) {
-      if (span.startIndex <= documentPageIndex) chosen = span;
+  // Dispatch on the ANCHOR, never on where the sheet lands. A sectEnd overflow sheet is
+  // inserted at the first page of the NEXT section, so the landing index selects the section
+  // after the one the sheet belongs to — which would pair the previous section's sheet box
+  // with the next section's content box. The anchor is a page of the owning section, and the
+  // offset walks that section's own resolver past its last page.
+  registerOverflowPageShell(finalized, (anchorIndex, offset, box) => {
+    let chosen = sectionShells[0];
+    for (const span of sectionShells) {
+      if (span.startIndex <= anchorIndex) chosen = span;
     }
-    return (chosen ?? sectionInsets[sectionInsets.length - 1])!.at(documentPageIndex);
+    const owner = chosen ?? sectionShells[sectionShells.length - 1];
+    return owner?.at(anchorIndex + offset, box);
   });
 
   retainOnce();

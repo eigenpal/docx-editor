@@ -224,7 +224,7 @@ export interface TableFlowDeps {
    * Propagates to every cell paragraph so a body-table PAGE field paints a placeholder; a table
    * in a header/footer keeps this false and its own live page path.
    */
-  readonly bodyPageFields?: boolean;
+  readonly bodyPageFields?: import('./field-page-furniture.ts').BodyPageFieldContext | false;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
   readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
@@ -668,7 +668,7 @@ function placeCellParagraph(
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
       ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
-      ...(deps.bodyPageFields ? { bodyPageFields: true } : {}),
+      ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
       displayMode: deps.displayMode,
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
       ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),

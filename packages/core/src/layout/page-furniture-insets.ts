@@ -10,7 +10,7 @@
 // shrink the content column to nothing, because pagination into a zero-height column never ends.
 
 import type { HeaderFooterStoryLayout } from './hf-layout.ts';
-import type { SemanticLayout } from './semantic-records.ts';
+import type { HeaderFooterStoryRecord, LayoutBox, SemanticLayout } from './semantic-records.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
 export type HeaderFooterVariantName = 'default' | 'first' | 'even';
@@ -124,36 +124,61 @@ export function createPageContentInsets(
 }
 
 /**
- * The content box a page at a DOCUMENT index resolves to, published per finished layout.
+ * The whole shell a sheet minted AFTER layout should carry: its content box and its furniture.
  *
- * A page record carries the box it was built with, and a pass that MINTS a new sheet from an
- * existing one — note overflow does exactly that — used to copy that box verbatim. That was
- * right while every page in a section shared one, and wrong once each page derives its own:
- * an overflow sheet cloned from a title page inherits a box its own variant never resolves
- * to, and lays its notes against it.
+ * A page record carries the box and the header/footer records it was built with, and a pass
+ * that MINTS a new sheet from an existing one — note overflow does exactly that — used to copy
+ * both verbatim. That was right while every page in a section shared one box and one variant,
+ * and wrong once each page derives its own: a sheet cloned from a title page inherits a box
+ * AND furniture its own variant never resolves to, and lays its notes against them.
+ */
+export interface OverflowPageShell {
+  readonly insets: PageContentInsets;
+  readonly header?: HeaderFooterStoryRecord;
+  readonly footer?: HeaderFooterStoryRecord;
+}
+
+/**
+ * Resolve the shell for a sheet minted `offset` sheets after the page at `anchorIndex`.
  *
+ * ANCHOR-AND-OFFSET, not the new sheet's own index, for two reasons the note pass makes
+ * unavoidable. The new sheet belongs to the section that owns the page BEFORE it — at a section
+ * boundary its insertion index is the next section's first page, and dispatching on that index
+ * picks the wrong section. And the notes pass mutates its page array in place, reindexing only
+ * at the end, so an insertion position stops matching the layout's index space as soon as one
+ * sheet has been inserted. An anchor is a page whose `index` still reads in the original space,
+ * and the offset counts sheets within the run.
+ *
+ * `box` is the sheet the new page occupies, which furniture is positioned against.
+ */
+export type OverflowPageShellResolver = (
+  anchorIndex: number,
+  offset: number,
+  box: LayoutBox
+) => OverflowPageShell | undefined;
+
+/**
  * Keyed by the finished layout rather than by a page, because every published page is a fresh
  * object (page-field sources, projection finalize, boundary attachment all rebuild them) while
  * the layout the notes pass receives is exactly the one the body pass returned. Absent — a
- * caller that assembled a layout some other way — degrades to the template's own box.
+ * caller that assembled a layout some other way — degrades to cloning the template.
  */
-const layoutContentInsets = new WeakMap<
-  SemanticLayout,
-  (documentPageIndex: number) => PageContentInsets
->();
+const layoutOverflowShells = new WeakMap<SemanticLayout, OverflowPageShellResolver>();
 
-/** Publish `resolve` for `layout`; see {@link pageContentInsetsAt}. */
-export function registerPageContentInsets(
+/** Publish `resolve` for `layout`; see {@link overflowPageShellAt}. */
+export function registerOverflowPageShell(
   layout: SemanticLayout,
-  resolve: (documentPageIndex: number) => PageContentInsets
+  resolve: OverflowPageShellResolver
 ): void {
-  layoutContentInsets.set(layout, resolve);
+  layoutOverflowShells.set(layout, resolve);
 }
 
-/** The insets a page at `documentPageIndex` resolves to, or undefined when unpublished. */
-export function pageContentInsetsAt(
+/** The shell a minted sheet resolves to, or undefined when the layout published none. */
+export function overflowPageShellAt(
   layout: SemanticLayout,
-  documentPageIndex: number
-): PageContentInsets | undefined {
-  return layoutContentInsets.get(layout)?.(documentPageIndex);
+  anchorIndex: number,
+  offset: number,
+  box: LayoutBox
+): OverflowPageShell | undefined {
+  return layoutOverflowShells.get(layout)?.(anchorIndex, offset, box);
 }

@@ -63,6 +63,7 @@ import {
   storyNeedsPageFields,
   summarizeFlushedPage,
   withPageFieldSources,
+  type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
 import { projectSimpleFieldResult } from './field-simple-result.ts';
@@ -180,7 +181,7 @@ export function piecesOfParagraph(
   themeFonts?: ThemeFonts,
   projectFieldLink?: FieldLinkProjector,
   documentProperties?: DocumentProperties,
-  bodyPageFields = false
+  bodyPageFields: BodyPageFieldContext | false = false
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];

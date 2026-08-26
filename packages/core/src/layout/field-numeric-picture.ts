@@ -23,7 +23,8 @@ export const MAX_NUMERIC_PICTURE_CHARS = 64;
  *   - `#` — a digit position; an unfilled one paints a SPACE, which is what Word does
  *     (`{ = 9 + 6 \# $### }` renders `$ 15`) and what keeps every value the field can hold
  *     the same width as the placeholder it was measured at.
- *   - `,` — a grouping separator, painted only when a digit still remains to its left.
+ *   - `,` — a grouping separator, painted only when a digit lands to its left: either a value
+ *     digit the walk has not placed yet, or a required `0` position that paints one anyway.
  *   - anything else — a literal, painted as authored.
  *
  * A value with more digits than the picture has positions keeps every digit: the overflow is
@@ -42,6 +43,14 @@ export function formatNumericPicture(value: number, picture: string): string | n
   if (picture.length === 0 || picture.length > MAX_NUMERIC_PICTURE_CHARS) return null;
   if (picture.includes('.')) return null;
   const digits = String(Math.floor(value));
+  // Whether any REQUIRED position sits left of each index. A `0` there paints a digit even
+  // when the value has run out, so the separator before it is still Word's `0,005`, not `0005`.
+  const requiredToLeft: boolean[] = [];
+  let seenRequired = false;
+  for (let index = 0; index < picture.length; index += 1) {
+    requiredToLeft.push(seenRequired);
+    if (picture[index] === '0') seenRequired = true;
+  }
   let remaining = digits.length;
   let sawPosition = false;
   /** Digit positions since the picture's last `,`, which sets the group width for overflow. */
@@ -65,7 +74,7 @@ export function formatNumericPicture(value: number, picture: string): string | n
       // The first separator the walk meets fixes the interval every overflow group repeats.
       if (groupWidth === 0) groupWidth = sinceGroup;
       sinceGroup = 0;
-      if (remaining > 0) out.push(',');
+      if (remaining > 0 || requiredToLeft[index]) out.push(',');
       continue;
     }
     out.push(glyph);

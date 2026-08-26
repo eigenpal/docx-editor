@@ -126,6 +126,11 @@ describe('note overflow sheets on a title-page section', () => {
     const drain = layout.pages.filter((page) => page.noteStream === 'footnote-drain');
     expect(drain.length).toBeGreaterThan(0);
     for (const page of drain) {
+      // The box AND the furniture come from the same variant. Taking one without the other
+      // paints an empty band exactly a header high.
+      expect(page.header?.variant).toBe('default');
+      expect(page.header!.box.height).toBeCloseTo(headerFlow, 6);
+      expect(page.header!.box.y - page.box.y).toBeCloseTo(geometry.headerDistance ?? 36, 6);
       expect(page.contentBox.y - page.box.y).toBeCloseTo(defaultTop, 6);
       expect(page.contentBox.height).toBeCloseTo(
         geometry.height - defaultTop - geometry.margin.bottom,
@@ -133,6 +138,157 @@ describe('note overflow sheets on a title-page section', () => {
       );
       // The notes it carries start inside that box, not in the band above it.
       expect(page.footnotes!.box.y).toBeGreaterThanOrEqual(page.contentBox.y - 0.001);
+    }
+  });
+});
+
+describe('note overflow sheets at a section boundary', () => {
+  /**
+   * Two sections that disagree about sheet height and header height, with section 1's
+   * `sectEnd` endnotes long enough to need several overflow sheets.
+   *
+   * A `sectEnd` sheet is inserted at the first page of the NEXT section, so the index it lands
+   * at names the wrong section, and the pass reindexes only at the end, so the second and later
+   * insertions no longer line up with the layout's index space either. Both would hand a sheet
+   * one section's page box and another's content box.
+   */
+  function boundaryDoc(): Uint8Array {
+    const endParas = Array.from(
+      { length: 90 },
+      (_, i) => `<w:p><w:r><w:t>Sect endnote ${i} ${'z'.repeat(60)}</w:t></w:r></w:p>`
+    ).join('');
+    const sectOne =
+      '<w:sectPr>' +
+      '<w:headerReference w:type="default" r:id="rIdH1"/>' +
+      '<w:pgSz w:w="12240" w:h="7200"/>' +
+      '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="360" w:footer="360"/>' +
+      '<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr>' +
+      '</w:sectPr>';
+    const sectTwo =
+      '<w:sectPr>' +
+      '<w:headerReference w:type="default" r:id="rIdH2"/>' +
+      '<w:type w:val="nextPage"/>' +
+      // A DIFFERENT sheet height and a taller header: picking this section for a sheet that
+      // belongs to the one before it puts a content box on a page box that cannot hold it.
+      '<w:pgSz w:w="12240" w:h="10800"/>' +
+      '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="360" w:footer="360"/>' +
+      '</w:sectPr>';
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}">` +
+          `<Relationship Id="rIdH1" Type="${R}/header" Target="header1.xml"/>` +
+          `<Relationship Id="rIdH2" Type="${R}/header" Target="header2.xml"/>` +
+          `<Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/>` +
+          '</Relationships>'
+      ),
+      'word/header1.xml': strToU8(
+        `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>One</w:t></w:r></w:p></w:hdr>`
+      ),
+      'word/header2.xml': strToU8(
+        `<w:hdr xmlns:w="${W}">` +
+          '<w:p><w:r><w:t>Two a</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Two b</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Two c</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Two d</w:t></w:r></w:p>' +
+          '</w:hdr>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          '<w:p><w:r><w:t>Section one body</w:t><w:endnoteReference w:id="1"/></w:r></w:p>' +
+          `<w:p><w:pPr>${sectOne}</w:pPr></w:p>` +
+          '<w:p><w:r><w:t>Section two body</w:t></w:r></w:p>' +
+          sectTwo +
+          '</w:body></w:document>'
+      ),
+      'word/endnotes.xml': strToU8(
+        `<w:endnotes xmlns:w="${W}">` +
+          '<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>' +
+          '<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>' +
+          `<w:endnote w:id="1">${endParas}</w:endnote>` +
+          '</w:endnotes>'
+      ),
+    });
+  }
+
+  test('an overflow sheet keeps its own section, at every insertion in the run', () => {
+    const loaded = readOoxmlPackage(boundaryDoc());
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const notes: NotesLayoutInput = {
+      footnotesPart: null,
+      endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
+      footnotePropsBySection: [documentFootnoteProps, documentFootnoteProps],
+      endnotePropsBySection: [sectEnd, sectEnd],
+      documentFootnoteProps,
+      documentEndnoteProps: sectEnd,
+      measurer,
+      producer: 'boundary',
+    };
+    const sections = enumerateDocumentSections(part);
+    expect(sections.length).toBe(2);
+    const bySection = resolveHeaderFooterPartsBySection(loaded.package);
+    const furniture = sections.map((section, index) => {
+      const parts = bySection[index]!;
+      const geometry = geometryOfSection(section.properties);
+      const width = geometry.width - geometry.margin.left - geometry.margin.right;
+      const headers = new Map();
+      for (const [variant, hfPart] of parts.headers) {
+        headers.set(variant, layoutHeaderFooterStory(hfPart, width, measurer, 'boundary'));
+      }
+      return {
+        titlePage: parts.titlePage,
+        evenAndOddHeaders: parts.evenAndOddHeaders,
+        headers,
+        footers: new Map(),
+      };
+    });
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      notes,
+      producer: 'boundary',
+      sectionFurniture: furniture,
+    });
+
+    const geometryOne = geometryOfSection(sections[0]!.properties);
+    const geometryTwo = geometryOfSection(sections[1]!.properties);
+    expect(geometryOne.height).not.toBe(geometryTwo.height);
+    const headerOne = furniture[0]!.headers.get('default')!.flowHeight;
+    const headerTwo = furniture[1]!.headers.get('default')!.flowHeight;
+    expect(headerOne).not.toBe(headerTwo);
+    const topOne = Math.max(geometryOne.margin.top, (geometryOne.headerDistance ?? 36) + headerOne);
+
+    const overflow = layout.pages.filter((page) => page.noteStream === 'endnote-overflow');
+    // Several insertions in one run: the second and later ones are where an index-space drift
+    // shows up.
+    expect(overflow.length).toBeGreaterThan(1);
+    for (const page of overflow) {
+      // Section 1's sheet, section 1's header, section 1's content box.
+      expect(page.box.height).toBe(geometryOne.height);
+      expect(page.header?.box.height).toBeCloseTo(headerOne, 6);
+      expect(page.contentBox.y - page.box.y).toBeCloseTo(topOne, 6);
+      expect(page.contentBox.height).toBeCloseTo(
+        geometryOne.height - topOne - geometryOne.margin.bottom,
+        6
+      );
+      // And whatever it resolved has to fit on the sheet it sits on.
+      expect(page.contentBox.y).toBeGreaterThanOrEqual(page.box.y - 0.001);
+      expect(page.contentBox.y + page.contentBox.height).toBeLessThanOrEqual(
+        page.box.y + page.box.height + 0.001
+      );
     }
   });
 });

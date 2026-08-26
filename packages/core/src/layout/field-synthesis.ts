@@ -21,6 +21,7 @@ import { formFieldResult } from './field-form.ts';
 import {
   pageFieldPlaceholder,
   projectPageFieldValue,
+  type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
@@ -55,7 +56,7 @@ export interface AtomicSynthesisContext {
    * document finalize to substitute. Absent/false in headers, footers, notes and text boxes,
    * which keep their live path or deferral — a placeholder there would never be substituted.
    */
-  readonly bodyPageFields?: boolean;
+  readonly bodyPageFields?: BodyPageFieldContext | false;
 }
 
 /**
@@ -97,7 +98,7 @@ export function synthesizeAtomicField(
     if (pending.kind && ctx.bodyPageFields) {
       const picture = pending.picture ?? undefined;
       return {
-        text: pageFieldPlaceholder(picture),
+        text: pageFieldPlaceholder(picture, ctx.bodyPageFields.format),
         props: pending.props,
         style: pending.style,
         pageField: {

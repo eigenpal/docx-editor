@@ -41,6 +41,29 @@ import type {
 export const PAGE_FIELD_PLACEHOLDER = '0';
 
 /**
+ * What the BODY flow knows about page numbering while it MEASURES a page-field placeholder.
+ *
+ * Carried instead of a bare boolean because the placeholder and the value it is replaced by
+ * have to agree about whether the picture applies at all, and only the section knows that.
+ */
+export interface BodyPageFieldContext {
+  /** The section's `w:pgNumType/@w:fmt`; absent when the section authors none. */
+  readonly format?: string;
+}
+
+/**
+ * Whether a `\#` picture renders a PAGE value under `format`.
+ *
+ * ONE decision, read by the placeholder and by the value, or the two disagree about how wide
+ * the field is: a non-decimal page format has no digits for a numeric picture to place, and a
+ * placeholder measured through the picture would then reserve a width the roman numeral that
+ * replaces it never fills.
+ */
+export function numericPictureApplies(format: string | undefined): boolean {
+  return !format || format === 'decimal';
+}
+
+/**
  * The placeholder a body page field with `picture` should be MEASURED at.
  *
  * A picture decides how wide the substituted value is, and finalize swaps the text in without
@@ -49,8 +72,8 @@ export const PAGE_FIELD_PLACEHOLDER = '0';
  * placeholder the same shape as every value it can be replaced by — `0#` measures `00`, the
  * width of `02` — while a pictureless field keeps the historical single digit.
  */
-export function pageFieldPlaceholder(picture: string | undefined): string {
-  if (picture === undefined) return PAGE_FIELD_PLACEHOLDER;
+export function pageFieldPlaceholder(picture: string | undefined, format?: string): string {
+  if (picture === undefined || !numericPictureApplies(format)) return PAGE_FIELD_PLACEHOLDER;
   return formatNumericPicture(0, picture) ?? PAGE_FIELD_PLACEHOLDER;
 }
 
@@ -104,7 +127,7 @@ export function projectPageFieldValue(
   picture?: string
 ): string {
   if (kind === 'PAGE') {
-    if (picture !== undefined && (!context.format || context.format === 'decimal')) {
+    if (picture !== undefined && numericPictureApplies(context.format)) {
       const painted = formatNumericPicture(context.pageNumber, picture);
       if (painted !== null) return painted;
     }

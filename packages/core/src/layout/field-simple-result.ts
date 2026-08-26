@@ -45,6 +45,7 @@ import { createNestedPageTracker } from './field-nested-page.ts';
 import {
   pageFieldPlaceholder,
   projectPageFieldValue,
+  type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
@@ -298,7 +299,7 @@ export function projectSimpleFieldResult(args: {
   /** Parsed document properties, for a TITLE / AUTHOR / … / DOCPROPERTY simple field. */
   readonly documentProperties?: DocumentProperties;
   /** True in BODY flow: an empty-cache page field paints a placeholder for finalize to fill. */
-  readonly bodyPageFields?: boolean;
+  readonly bodyPageFields?: BodyPageFieldContext | false;
 }): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
@@ -328,7 +329,7 @@ export function projectSimpleFieldResult(args: {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
     return {
-      text: pageFieldPlaceholder(pageField.picture),
+      text: pageFieldPlaceholder(pageField.picture, args.bodyPageFields.format),
       props,
       style,
       pageField:

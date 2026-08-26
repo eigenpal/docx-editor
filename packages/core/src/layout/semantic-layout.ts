@@ -19,7 +19,6 @@ import type {
 import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
 import {
   finalizePageFieldProjection,
-  storyNeedsPageFields,
   summarizeFlushedPage,
   withPageFieldSources,
   type FieldLinkProjector,
@@ -138,12 +137,13 @@ import {
   emptyTocSuppressedResultParagraphIds,
   tocFieldChromeParagraphIds,
 } from './toc-layout.ts';
-import { furnitureLayoutContext, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
+import { furnitureLayoutContext, remapPage } from './hf-layout.ts';
+import type { BodyPageFieldContext } from './field-page-furniture.ts';
+import { createSectionPageFurniture } from './section-page-furniture.ts';
+import type { OverflowPageShell } from './page-furniture-insets.ts';
 import {
   createPageContentInsets,
-  headerFooterVariantFor,
-  registerPageContentInsets,
-  type HeaderFooterVariantName,
+  registerOverflowPageShell,
   type PageContentInsets,
   type PageFurniture,
 } from './page-furniture-insets.ts';
@@ -170,7 +170,6 @@ import { passProducerOf, producerWithControlContext } from './pass-producer.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   type BlockFragmentRecord,
-  type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
   type PageGeometry,
@@ -623,13 +622,15 @@ export function layoutSemanticDocument(
     const geometry =
       opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
     const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
+    const sectionNumbering = section?.properties.pageNumbering;
     const laid = layoutBlocksWithGeometry(blocks, revision, {
       ...opts,
       geometry,
       furniture,
       sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
+      ...(sectionNumbering?.fmt ? { bodyPageNumberFormat: sectionNumbering.fmt } : {}),
     });
-    const numbering = section?.properties.pageNumbering;
+    const numbering = sectionNumbering;
     // Carry boundary metadata through field annotation so a no-change resume still early-exits
     // in `attachContentControlBoundaries` instead of allocating a fresh `pages` array.
     const annotated: SemanticLayout = withContentControlMetadata(
@@ -646,7 +647,9 @@ export function layoutSemanticDocument(
     );
     const finalized = finalizePageFieldProjection(annotated);
     // The notes pass mints overflow sheets from this layout; publish what index they land at.
-    registerPageContentInsets(finalized, laid.contentInsetsAt);
+    registerOverflowPageShell(finalized, (_anchorIndex, offset, box) =>
+      laid.overflowShellAt(_anchorIndex + offset, box)
+    );
     if (opts.session) {
       opts.session.multi = null;
       opts.session.previous = finalized;
@@ -696,13 +699,14 @@ interface BlockLayoutResult {
    */
   readonly endsOpenPage: boolean;
   /**
-   * The content box a page at a DOCUMENT index resolves to under this section's variants.
+   * The content box AND furniture a page at a DOCUMENT index resolves to under this section's
+   * variants, for a sheet placed on `box`.
    *
    * Published so a pass that MINTS a sheet after layout — note overflow — can resolve the new
-   * index's box instead of copying whichever page it cloned from. Defined past the section's
+   * index's shell instead of copying whichever page it cloned from. Defined past the section's
    * own last page, which is exactly where an overflow sheet lands.
    */
-  readonly contentInsetsAt: (documentPageIndex: number) => PageContentInsets;
+  readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
 }
 
 type BlockLayoutOptions = SemanticLayoutOptions & {
@@ -731,6 +735,14 @@ type BlockLayoutOptions = SemanticLayoutOptions & {
    * an over-tall block always makes progress exactly as it does today.
    */
   readonly columnRegionBottom?: number;
+  /**
+   * The section's `w:pgNumType/@w:fmt`, for measuring body page-field placeholders.
+   *
+   * Absent means the section authors none, which is decimal. The placeholder and the value
+   * that replaces it must agree about whether a `\#` picture applies, and only the section
+   * knows the format — see {@link numericPictureApplies}.
+   */
+  readonly bodyPageNumberFormat?: string;
 };
 
 /**
@@ -965,8 +977,17 @@ function layoutBlocksPass(
    * translation is exact after `remapPage` too, because the orchestrator publishes each
    * section at the `pageIndexStart` it laid out with.
    */
-  const contentInsetsAt = (documentPageIndex: number): PageContentInsets =>
-    insetsFor(documentPageIndex - pageIndexStart);
+  /**
+   * What the body flow measures a page-field placeholder against.
+   *
+   * The section's `w:pgNumType/@w:fmt` rides along because the placeholder and the value that
+   * replaces it have to agree about whether a `\#` picture applies — see
+   * {@link numericPictureApplies}. A section is one format, so this is fixed for the pass.
+   */
+  const bodyPageFieldContext: BodyPageFieldContext = Object.freeze(
+    options.bodyPageNumberFormat !== undefined ? { format: options.bodyPageNumberFormat } : {}
+  );
+
   // Only the reserve entries THIS pass can read belong in its context key. The pass reads
   // reserves at `pageIndexStart` plus consecutive local page slots as it opens pages, so a
   // bound of "the page count the previous pass produced, plus one" covers every slot an
@@ -991,8 +1012,13 @@ function layoutBlocksPass(
   const continuedContext = continuedInsets
     ? `|cont:${continuedInsets.top},${continuedInsets.height}`
     : '';
+  // The page-number format decides how wide a body page-field placeholder measures, so a
+  // `w:pgNumType/@w:fmt` edit moves breaks and must not resume a flow measured under the old.
+  const pageNumberFormatContext = options.bodyPageNumberFormat
+    ? `|pnf:${options.bodyPageNumberFormat}`
+    : '';
   const contextFor = (notesReserveKey: string): string =>
-    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${furnitureContext}${notesReserveKey}${columnsContext}`;
+    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${pageNumberFormatContext}${furnitureContext}${notesReserveKey}${columnsContext}`;
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
   );
@@ -1006,6 +1032,22 @@ function layoutBlocksPass(
   };
 
   const pages: PageRecord[] = [];
+  // Built HERE, above the unchanged-pass early return below, not beside the flow that uses it.
+  // `overflowShellAt` is handed to the notes pass by that return, and a closure over a `const`
+  // declared after it would sit in its temporal dead zone forever — the body's later statements
+  // never run on that path.
+  const sectionFurniture = createSectionPageFurniture({
+    ...(furniture ? { furniture } : {}),
+    geometry,
+    headerDistance,
+    footerDistance,
+    pageIndexStart,
+    contentWidth: contentWidthForReflow,
+    insetsFor,
+    pageCount: () => pages.length,
+  });
+  const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
+
   /**
    * Available body height on the page currently being filled (`pages.length`).
    *
@@ -1353,7 +1395,7 @@ function layoutBlocksPass(
       endCursorY: session.endCursorY,
       endSpaceAfter: session.endSpaceAfter,
       endsOpenPage: session.endsOpenPage,
-      contentInsetsAt,
+      overflowShellAt,
     };
   }
 
@@ -1428,68 +1470,6 @@ function layoutBlocksPass(
     reusedPages = pages.length;
     checkpoints.push(...session.checkpoints.slice(0, firstChanged));
   }
-
-  const pageBox = (index: number): LayoutBox => ({
-    x: 0,
-    y: index * (geometry.height + 24), // 24pt gutter between sheets, for the scroll surface
-    width: geometry.width,
-    height: geometry.height,
-  });
-
-  /** The variant page `index` shows — the same resolution its content box was derived from. */
-  const variantFor = (index: number): HeaderFooterVariantName =>
-    headerFooterVariantFor(furniture, pageIndexStart, index);
-
-  const furnitureFor = (
-    kind: 'header' | 'footer',
-    index: number,
-    box: LayoutBox
-  ): HeaderFooterStoryRecord | undefined => {
-    if (!furniture) return undefined;
-    const variant = variantFor(index);
-    const story = (kind === 'header' ? furniture.headers : furniture.footers).get(variant);
-    // An absent variant shows nothing — Word falls back to blank, not to `default`.
-    if (!story) return undefined;
-    const place = (laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord => {
-      const y =
-        kind === 'header'
-          ? box.y + headerDistance
-          : box.y + geometry.height - footerDistance - laid.flowHeight;
-      return {
-        kind,
-        variant,
-        partName: laid.partName,
-        ...(laid.part ? { part: laid.part } : {}),
-        ...(laid.rId ? { rId: laid.rId } : {}),
-        box: {
-          x: box.x + geometry.margin.left,
-          y,
-          width: contentWidthForReflow,
-          height: laid.flowHeight,
-        },
-        fragments: laid.fragments,
-        ...(laid.anchoredDrawings ? { anchoredDrawings: laid.anchoredDrawings } : {}),
-      };
-    };
-    const pageNumber = pageIndexStart + index + 1;
-    const pageContext: import('./field-projection.ts').FieldPageContext = {
-      pageNumber,
-      pageCount: Math.max(pageNumber, pages.length + 1),
-      sectionPageCount: index + 1,
-    };
-    const needs = story.pageFieldNeeds;
-    const needsPerPageLayout =
-      storyNeedsPageFields(needs) || (story.anchoredDrawings?.length ?? 0) > 0;
-    const laid = needsPerPageLayout ? story.withPageContext(pageContext) : story;
-    const placed = place(laid);
-    if (storyNeedsPageFields(needs)) {
-      return {
-        ...placed,
-        pageFieldProjector: (context) => place(story.withPageContext(context)),
-      };
-    }
-    return placed;
-  };
 
   const columnCount = columns.count;
   const columnOffsetX = columnLeft;
@@ -1707,7 +1687,7 @@ function layoutBlocksPass(
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     // Body flow: page fields in table cells paint a placeholder for document finalize to fill.
-    bodyPageFields: true,
+    bodyPageFields: bodyPageFieldContext,
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
@@ -1835,7 +1815,7 @@ function layoutBlocksPass(
         ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
         ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
         // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
-        bodyPageFields: true,
+        bodyPageFields: bodyPageFieldContext,
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout
@@ -3102,7 +3082,7 @@ function layoutBlocksPass(
     endCursorY,
     endSpaceAfter,
     endsOpenPage,
-    contentInsetsAt,
+    overflowShellAt,
   };
 }
 

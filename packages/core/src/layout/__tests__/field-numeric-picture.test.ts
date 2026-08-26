@@ -6,6 +6,7 @@ import { createFixedMeasurer, layoutSemanticDocument } from '../index.ts';
 import { formatNumericPicture, MAX_NUMERIC_PICTURE_CHARS } from '../field-numeric-picture.ts';
 import { allowlistedPageField, matchAllowlistedPageField } from '../field-instruction.ts';
 import {
+  numericPictureApplies,
   pageFieldPlaceholder,
   projectPageFieldValue,
   PAGE_FIELD_PLACEHOLDER,
@@ -27,6 +28,15 @@ describe('numeric picture rendering', () => {
     // Overflow digits repeat the interval the picture's separator established, as Word does.
     expect(formatNumericPicture(1234567, '#,###')).toBe('1,234,567');
     expect(formatNumericPicture(1234567, '#,##0')).toBe('1,234,567');
+  });
+
+  test('paints a grouping comma when a required position fills to its left', () => {
+    // `0` paints a digit even where the value ran out, so the separator before it stays.
+    expect(formatNumericPicture(5, '0,000')).toBe('0,005');
+    expect(formatNumericPicture(12, '00,000')).toBe('00,012');
+    expect(formatNumericPicture(0, '0,000')).toBe('0,000');
+    // `#` paints nothing there, so the separator goes with it.
+    expect(formatNumericPicture(5, '#,##0')).toBe('   5');
   });
 
   test('paints literals, and a grouping comma only with a digit to its left', () => {
@@ -100,6 +110,14 @@ describe('page-field instructions carrying a picture', () => {
     expect(pageFieldPlaceholder('Page 0 of')).toBe('Page 0 of');
     // An unusable picture paints the plain number, so its placeholder is the plain digit.
     expect(pageFieldPlaceholder('Page')).toBe(PAGE_FIELD_PLACEHOLDER);
+    // And a non-decimal page format wins over the picture, so the placeholder drops it too —
+    // measuring `Page 0 of` for a value the section renders as `III` reserves 9 for 3.
+    expect(pageFieldPlaceholder('Page 0 of', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder('0#', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder('0#', 'decimal')).toBe('00');
+    expect(numericPictureApplies(undefined)).toBe(true);
+    expect(numericPictureApplies('decimal')).toBe(true);
+    expect(numericPictureApplies('upperRoman')).toBe(false);
   });
 });
 
@@ -109,7 +127,7 @@ const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 /** A two-page body whose last paragraph is a PAGE field, followed by text on the same line. */
-function bodyPageFieldDoc(instruction: string): Uint8Array {
+function bodyPageFieldDoc(instruction: string, pageNumberFormat?: string): Uint8Array {
   const filler = Array.from(
     { length: 60 },
     (_unused, index) => `<w:p><w:r><w:t>Line ${index + 1}</w:t></w:r></w:p>`
@@ -134,7 +152,9 @@ function bodyPageFieldDoc(instruction: string): Uint8Array {
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${filler}${field}` +
-        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>' +
+        '<w:sectPr>' +
+        (pageNumberFormat ? `<w:pgNumType w:fmt="${pageNumberFormat}"/>` : '') +
+        '<w:pgSz w:w="12240" w:h="15840"/>' +
         '<w:pgMar w:top="1080" w:right="720" w:bottom="1080" w:left="720"/></w:sectPr>' +
         '</w:body></w:document>'
     ),
@@ -149,8 +169,11 @@ describe('a body page field carrying a picture', () => {
    * advance scales with the resolved font size, and the point of the assertion is that the gap
    * and the painted text agree — not what either is in absolute points.
    */
-  function fieldLine(instruction: string): { field: string; gap: number; charWidth: number } {
-    const loaded = readOoxmlPackage(bodyPageFieldDoc(instruction));
+  function fieldLine(
+    instruction: string,
+    pageNumberFormat?: string
+  ): { field: string; gap: number; charWidth: number } {
+    const loaded = readOoxmlPackage(bodyPageFieldDoc(instruction, pageNumberFormat));
     if (!loaded.ok) throw new Error('load failed');
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const layout = layoutSemanticDocument(part, 1, {
@@ -186,6 +209,17 @@ describe('a body page field carrying a picture', () => {
   test('keeps the one-digit measurement for a field with no picture', () => {
     const line = fieldLine('PAGE');
     expect(line.field).toBe('2');
+    expect(line.gap).toBeCloseTo(line.charWidth, 6);
+  });
+
+  test('measures the format, not the picture, when the section is not decimal', () => {
+    // `w:pgNumType w:fmt="upperRoman"` wins over the picture, so the placeholder must drop it
+    // too: measuring `Page 0 of` and painting `II` leaves following text at the wrong x.
+    const line = fieldLine('PAGE \\# "Page 0 of"', 'upperRoman');
+    expect(line.field).toBe('II');
+    // One character, the plain-number placeholder — nine would be the picture's width, which
+    // nothing on this page ever paints. `II` still overruns by one, exactly as an unpictured
+    // multi-digit value does; what must not happen is reserving a width the format never uses.
     expect(line.gap).toBeCloseTo(line.charWidth, 6);
   });
 });

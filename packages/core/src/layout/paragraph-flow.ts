@@ -139,7 +139,7 @@ export interface ParagraphFlowOptions {
    * paint a placeholder digit; headers/footers, notes and text boxes leave it blank, keeping
    * their own live path or their deferral, so a placeholder is never stranded unsubstituted.
    */
-  readonly bodyPageFields?: boolean;
+  readonly bodyPageFields?: import('./field-page-furniture.ts').BodyPageFieldContext | false;
   /**
    * Which revisions this break resolves away.
    *
