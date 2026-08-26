@@ -101,7 +101,7 @@ The default Pro entry re-exports `collaborationModule` and does not import a net
 
 ## Use your own signaling
 
-`DEFAULT_SIGNALING_ENDPOINTS` is a public demo signaling endpoint. It is not a production service.
+`DEMO_SIGNALING_ENDPOINTS` is a public demo signaling service. Production deployments must supply their own signaling and TURN servers.
 
 For production, pass your own `signaling` URLs to `connect` or to the `room` option. You also need your own TURN servers. WebRTC peers cannot connect across many networks without TURN.
 
@@ -110,8 +110,6 @@ For production, pass your own `signaling` URLs to `connect` or to the `room` opt
 If you already own a `Y.Doc` and awareness instance, call `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It replicates the whole canonical package, which is what the WebRTC wrapper and the module use. You destroy those resources.
 
 The same entry exports `createTextCollaboration`, which replicates paragraph text alone. Use `createDocumentCollaboration` unless you want that narrower scope.
-
-`createYjsCollaboration` is a deprecated alias of `createTextCollaboration`. The old name does not say that the factory is text-only.
 
 ## Headless replica
 
@@ -214,7 +212,11 @@ Do not destroy the room from an effect that lists the room object as a dependenc
 
 Peers connect directly over WebRTC when you use the WebRTC helper. A room lasts only as long as one peer stays open.
 
-Comment writes and custom-node writes are refused while a replica is attached.
+Comments, tracked-change decisions, tables of contents, and custom nodes replicate while a replica is attached. Each named review write intent is admitted: add, reply, resolve, and delete comments; resolve tracked changes; and package-scoped writes such as tables of contents and custom nodes.
+
+Two write paths stay refused while a replica is attached. Applying an edited ProseMirror document is refused because no host exercises that derivation under replication. A review write without a named intent is also refused.
+
+Tree edits are refused when the session is destroyed, not ready, or not attached to the document port.
 
 A typing run undoes as one step through the session undo manager.
 

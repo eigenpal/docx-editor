@@ -29,7 +29,14 @@ export type FeatureStatus =
   | 'planned'
   | 'none';
 
-export type FeatureTier = 'community' | 'premium';
+/**
+ * The tiers, as values rather than a bare union, so the test beside this file can check every
+ * row at runtime. An invalid tier shipped once because nothing typechecked this file; one source
+ * of truth means the suite catches it even where a type gate does not reach.
+ */
+export const FEATURE_TIERS = ['community', 'premium'] as const;
+
+export type FeatureTier = (typeof FEATURE_TIERS)[number];
 
 export type FeatureCategory =
   | 'text'
@@ -977,7 +984,7 @@ export const wordFeatures: WordFeature[] = [
     editing: 'partial',
     rendering: 'partial',
     roundTrip: 'preserved',
-    tier: 'pro',
+    tier: 'premium',
     docsLink: '/docs/2.x/pro/collaboration',
     notes:
       'Experimental Yjs replication covers the whole canonical package: text, structure, formatting, tables, headers, footers, notes, drawings, relationships, and embedded parts, with presence, remote selections that can span paragraphs, and actor-local undo. Comments, tracked-change decisions, tables of contents, and custom nodes all replicate, and ids that two peers can mint at the same time are allocated per actor so they cannot collide. Peers connect directly over WebRTC, so a room lasts only as long as one peer stays open. One write path is refused while a replica is attached: applying an edited ProseMirror document.',

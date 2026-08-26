@@ -112,7 +112,7 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
   layout: {
     directory: 'src/layout',
     package: null,
-    mayImport: ['store', 'collaboration'],
+    mayImport: ['store'],
     environment: 'neutral',
     subpath: './layout',
   },

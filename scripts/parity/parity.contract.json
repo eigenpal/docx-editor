@@ -66,7 +66,6 @@
         "UseWebrtcCollaborationConnectOptions",
         "UseWebrtcCollaborationOptions",
         "UseWebrtcCollaborationReturn",
-        "UseWebrtcCollaborationRoomHandle",
         "useWebrtcCollaboration"
       ],
       "deferredInVue": {},

@@ -257,7 +257,7 @@ flowchart TD
   host --> proReact["@docx-editor.dev/pro/react"]
   host --> proVue["@docx-editor.dev/pro/vue"]
   proMain --> factory["collaborationModule()"]
-  collabSub --> yjsImpl["createDocumentCollaboration / createYjsCollaboration"]
+  collabSub --> yjsImpl["createDocumentCollaboration / createTextCollaboration"]
   webrtcSub --> webrtcImpl["createWebrtcCollaboration"]
   factory --> modules["createDocxEditor({ modules })"]
   yjsImpl --> session["EditorCollaborationSession"]

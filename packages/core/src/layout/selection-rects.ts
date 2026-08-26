@@ -266,21 +266,81 @@ export function storyContentOffset(
   return { x: 0, y: 0 };
 }
 
+let presenceWalkPages = 0;
+let presenceWalkLines = 0;
+
+/**
+ * @internal Warm-path recorder for remote-presence geometry walks.
+ *
+ * Presence highlights must not scan every line of the document per paint. Tests assert
+ * the walk stays bounded to the pages the caller names.
+ */
+export function presenceWalkRecorder(): {
+  readonly pages: number;
+  readonly lines: number;
+  reset(): void;
+} {
+  return {
+    get pages() {
+      return presenceWalkPages;
+    },
+    get lines() {
+      return presenceWalkLines;
+    },
+    reset() {
+      presenceWalkPages = 0;
+      presenceWalkLines = 0;
+    },
+  };
+}
+
 /**
  * Selection rectangles in page-content coordinates, every story included.
  *
  * {@link selectionRects} stays body-only: feeding header coordinates into that walk without
  * an origin painted a band on every page at the top of the body. This walk carries the story
  * box, so a remote caret in a header lands in the header.
+ *
+ * Pass `pages` to measure only those sheets. A band that is not on screen is not painted, so
+ * measuring it is pure cost — and it is cost paid per keystroke, because an edit republishes
+ * the layout. Bounding this to the materialized pages is what keeps typing beside a large
+ * remote selection as fast as typing beside a caret.
  */
 export function presenceSelectionRects(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  order: readonly string[]
+  order: readonly string[],
+  pages?: ReadonlySet<number>
 ): SelectionRect[] {
-  const ordered = orderPositions(selection, order);
-  if (!ordered) return [];
-  const rects: SelectionRect[] = [];
+  return (
+    presenceRangeRects(
+      layout,
+      [{ key: 'selection', from: selection.anchor, to: selection.head }],
+      order,
+      pages
+    ).get('selection') ?? []
+  );
+}
+
+/**
+ * Rectangles for MANY presence ranges in ONE pass over the named pages.
+ *
+ * Not {@link presenceSelectionRects} in a loop. That walks every page, fragment and line per
+ * range, and a room with several remote selections would re-walk the document once each.
+ */
+export function presenceRangeRects(
+  layout: SemanticLayout,
+  ranges: readonly KeyedRange[],
+  order: readonly string[],
+  pages?: ReadonlySet<number>
+): Map<string, SelectionRect[]> {
+  const found = new Map<string, SelectionRect[]>();
+  const ordered: { key: string; from: SemanticPosition; to: SemanticPosition }[] = [];
+  for (const range of ranges) {
+    const pair = orderPositions({ anchor: range.from, head: range.to }, order);
+    if (pair) ordered.push({ key: range.key, from: pair.from, to: pair.to });
+  }
+  if (ordered.length === 0) return found;
   const take = (
     blocks: readonly BlockFragmentRecord[],
     pageIndex: number,
@@ -289,23 +349,30 @@ export function presenceSelectionRects(
   ): void => {
     for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
       for (const line of fragment.lines) {
+        presenceWalkLines += 1;
         for (const segment of lineSegments(line)) {
-          const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
-          if (!overlap) continue;
-          const startX = xWithinLine(line, overlap.start, undefined, segment);
-          const endX = xWithinLine(line, overlap.end, undefined, segment);
-          rects.push({
-            pageIndex,
-            x: Math.min(startX, endX) + offsetX,
-            y: line.box.y + offsetY,
-            width: Math.abs(endX - startX),
-            height: line.box.height,
-          });
+          for (const range of ordered) {
+            const overlap = segmentOverlap(layout, segment, range.from, range.to);
+            if (!overlap) continue;
+            const startX = xWithinLine(line, overlap.start, undefined, segment);
+            const endX = xWithinLine(line, overlap.end, undefined, segment);
+            const rects = found.get(range.key) ?? [];
+            rects.push({
+              pageIndex,
+              x: Math.min(startX, endX) + offsetX,
+              y: line.box.y + offsetY,
+              width: Math.abs(endX - startX),
+              height: line.box.height,
+            });
+            found.set(range.key, rects);
+          }
         }
       }
     }
   };
   for (const page of layout.pages) {
+    if (pages && !pages.has(page.index)) continue;
+    presenceWalkPages += 1;
     take(page.fragments, page.index, 0, 0);
     for (const story of [page.header, page.footer]) {
       if (!story) continue;
@@ -328,5 +395,5 @@ export function presenceSelectionRects(
       }
     }
   }
-  return rects;
+  return found;
 }

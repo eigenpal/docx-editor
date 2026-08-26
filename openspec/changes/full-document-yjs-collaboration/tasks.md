@@ -79,7 +79,7 @@
 - [ ] 4.12 Derive package dirty sets, changed logical IDs, and layout dependency keys from selected-backend events.
 - [x] 4.13 Keep layout, paint, automation reads, and serialization isolated from mutable Yjs types.
 - [x] 4.14 Add duplicate and no-change update tests that preserve canonical revision and page identity.
-- [x] 4.15 Export `createDocumentCollaboration` from `packages/collaboration-yjs/src/document-session.ts`. Call it from `packages/collaboration-yjs/src/webrtc.ts` instead of paragraph-only `createYjsCollaboration`.
+- [x] 4.15 Export `createDocumentCollaboration` from `packages/collaboration-yjs/src/document-session.ts`. Call it from `packages/collaboration-yjs/src/webrtc.ts` instead of paragraph-only `createTextCollaboration`.
 - [x] 4.16 Admit every authorable mutation in `gateOperations`. Refuse only an unready, unattached, or destroyed session.
 - [x] 4.17 If `applyPrimitiveJournal` refuses a local journal, set status `error` and republish shared state over the local store. Shared state is the authority.
 - [x] 4.18 Track one `Y.UndoManager` over the registry's tracked types with the local origin.

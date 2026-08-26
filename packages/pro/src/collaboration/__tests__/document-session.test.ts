@@ -30,8 +30,10 @@ import {
   type CanonicalPrimitiveJournal,
   type CollaborationDocumentPort,
 } from '@docx-editor.dev/core/collaboration';
-import { createDocumentCollaboration } from '../document-session.ts';
-import type { YjsCollaborationRoom } from '../session.ts';
+import {
+  createDocumentCollaboration,
+  type DocumentCollaborationHandle,
+} from '../document-session.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 const DOCUMENT_ID = 'full-document-room';
@@ -129,7 +131,7 @@ function footnoteBytes(): Uint8Array {
 interface Peer {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
-  readonly room: YjsCollaborationRoom;
+  readonly room: DocumentCollaborationHandle;
   readonly store: TreePackageStore;
   readonly port: CollaborationDocumentPort;
   readonly detach: () => void;
@@ -229,7 +231,7 @@ function emitJournal(peer: Peer, journal: CanonicalPrimitiveJournal): void {
 function attachPeer(
   ydoc: Y.Doc,
   awareness: Awareness,
-  room: YjsCollaborationRoom,
+  room: DocumentCollaborationHandle,
   wrap?: (port: CollaborationDocumentPort) => CollaborationDocumentPort
 ): Peer {
   const store = storeFrom(room.document);
@@ -461,7 +463,7 @@ describe('full-document collaboration replicates every authorable change class',
     expectConverged(alice, bob);
   });
 
-  test('deferred format over a two-run Date line keeps text once on both replicas', async () => {
+  test('a multi-run format over a Date line keeps text once on both replicas', async () => {
     const { alice, bob } = await pair(TWO_RUN_DATE);
     const paragraphId = paragraphIdAt(alice, 0);
     const edits = runPropertyEdits(alice.store.bodyStore().part, paragraphId, 5, 18, {
@@ -481,20 +483,19 @@ describe('full-document collaboration replicates every authorable change class',
       }
     });
     if (!queued.ok) throw new Error(queued.detail ?? queued.reason);
-    expect(alice.port.hasPendingJournals()).toBe(true);
+    expect(alice.port.hasPendingJournals()).toBe(false);
     expect(paragraphTexts(alice)[0]).toBe('Date: March 2 2026');
     apply(bob, [{ op: 'insertText', paragraphId: paragraphIdAt(bob, 1), offset: 5, text: '-B' }]);
-    alice.port.flushPendingJournals();
     expect(paragraphTexts(alice)[0]).toBe('Date: March 2 2026');
     expect(paragraphTexts(bob)[0]).toBe('Date: March 2 2026');
     expect(paragraphTexts(alice)[1]).toBe('Other-B');
     expect(paragraphTexts(bob)[1]).toBe('Other-B');
   });
 
-  test('a remote update does not strand a queued local edit', async () => {
+  test('a remote update cannot strand or restate a local edit', async () => {
     const { alice, bob } = await pair(PROSE);
-    // No flush: this is what a held key looks like between the keystroke and the deferred publish.
-    const queued = alice.store.transact(BODY, (context) => {
+    // A bare transact with no explicit publish is what a keystroke looks like.
+    const committed = alice.store.transact(BODY, (context) => {
       context.apply({
         op: 'insertText',
         paragraphId: paragraphIdAt(alice, 0),
@@ -502,10 +503,10 @@ describe('full-document collaboration replicates every authorable change class',
         text: '-A',
       });
     });
-    if (!queued.ok) throw new Error(queued.detail ?? queued.reason);
-    expect(alice.port.hasPendingJournals()).toBe(true);
+    if (!committed.ok) throw new Error(committed.detail ?? committed.reason);
+    expect(alice.port.hasPendingJournals()).toBe(false);
 
-    // Bob's edit lands in alice's Y.Doc while her own edit is still queued.
+    // Bob's edit lands in alice's Y.Doc after hers is already shared.
     apply(bob, [{ op: 'insertText', paragraphId: paragraphIdAt(bob, 1), offset: 5, text: '-B' }]);
 
     alice.port.flushPendingJournals();
@@ -860,7 +861,7 @@ describe('full-document collaboration replicates every authorable change class',
     expectConverged(alice, bob);
   });
 
-  test('a local transact does not write Yjs until flushPendingJournals', async () => {
+  test('a local transact writes Yjs before it returns', async () => {
     const alice = await createPeer(PROSE, 'alice');
     const before = Y.encodeStateAsUpdate(alice.ydoc);
     const result = alice.store.transact(BODY, (context) => {
@@ -872,31 +873,30 @@ describe('full-document collaboration replicates every authorable change class',
       });
     });
     if (!result.ok) throw new Error(result.detail ?? result.reason);
-    expect(alice.port.hasPendingJournals()).toBe(true);
-    expect(Y.encodeStateAsUpdate(alice.ydoc)).toEqual(before);
-    alice.room.session.flushPendingJournals();
     expect(alice.port.hasPendingJournals()).toBe(false);
-    expect(Y.encodeStateAsUpdate(alice.ydoc)).not.toEqual(before);
+    const afterCommit = Y.encodeStateAsUpdate(alice.ydoc);
+    expect(afterCommit).not.toEqual(before);
+    alice.room.session.flushPendingJournals();
+    expect(Y.encodeStateAsUpdate(alice.ydoc)).toEqual(afterCommit);
   });
 
-  test('queued journals keep production order across one flush', async () => {
+  test('two journals keep production order', async () => {
     const { alice, bob } = await pair(PROSE);
     const paragraphId = paragraphIdAt(alice, 0);
     const first = alice.store.transact(BODY, (context) => {
       context.apply({ op: 'insertText', paragraphId, offset: 5, text: '-1' });
     });
+    expect(textOf(bob)).toContain('Alpha-1');
     const second = alice.store.transact(BODY, (context) => {
       context.apply({ op: 'insertText', paragraphId, offset: 7, text: '-2' });
     });
     if (!first.ok) throw new Error(first.detail ?? first.reason);
     if (!second.ok) throw new Error(second.detail ?? second.reason);
-    expect(textOf(bob)).not.toContain('-1');
-    alice.room.session.flushPendingJournals();
     expect(textOf(bob)).toContain('Alpha-1-2');
     expectConverged(alice, bob);
   });
 
-  test('destroy publishes a queued journal instead of dropping it', async () => {
+  test('destroy after a commit leaves the shared document intact', async () => {
     const { alice, bob } = await pair(PROSE);
     const result = alice.store.transact(BODY, (context) => {
       context.apply({
@@ -907,13 +907,12 @@ describe('full-document collaboration replicates every authorable change class',
       });
     });
     if (!result.ok) throw new Error(result.detail ?? result.reason);
-    expect(textOf(bob)).not.toContain('Alpha!');
+    expect(textOf(bob)).toContain('Alpha!');
     alice.room.destroy();
     expect(textOf(bob)).toContain('Alpha!');
-    expectConverged(alice, bob);
   });
 
-  test('undo of an unflushed typing run reverts the whole run', async () => {
+  test('undo of a typing run reverts the whole run', async () => {
     const { alice, bob } = await pair(PROSE);
     const paragraphId = paragraphIdAt(alice, 0);
     const before = textOf(alice);

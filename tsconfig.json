@@ -25,6 +25,16 @@
       "@docx-editor.dev/react": ["./packages/react/src/index.ts"]
     }
   },
-  "include": ["src", "packages/react/src", "examples/shared", "examples/vite", "examples/plugins"],
+  // `docs/site/data` holds the typed feature matrix that CLAUDE.md makes the single source of
+  // feature-support claims. It sat outside every typecheck project, so an invalid `tier` value
+  // shipped: a matrix nothing typechecks is documentation with extra syntax.
+  "include": [
+    "src",
+    "packages/react/src",
+    "examples/shared",
+    "examples/vite",
+    "examples/plugins",
+    "docs/site/data"
+  ],
   "exclude": ["node_modules", "dist", "examples/nextjs", "examples/remix", "examples/astro"]
 }

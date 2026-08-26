@@ -39,8 +39,10 @@ import {
   createCollaborationDocumentPort,
   type CollaborationDocumentPort,
 } from '@docx-editor.dev/core/collaboration';
-import { createDocumentCollaboration } from '../document-session.ts';
-import type { YjsCollaborationRoom } from '../session.ts';
+import {
+  createDocumentCollaboration,
+  type DocumentCollaborationHandle,
+} from '../document-session.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 const DOCUMENT_ID = 'actor-scoped-id-room';
@@ -86,7 +88,7 @@ const PROSE = documentBytes(
 interface Peer {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
-  readonly room: YjsCollaborationRoom;
+  readonly room: DocumentCollaborationHandle;
   readonly store: TreePackageStore;
   readonly port: CollaborationDocumentPort;
   readonly detach: () => void;
@@ -150,7 +152,7 @@ function wireOf(peer: Peer): Relay {
   return wire;
 }
 
-function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: YjsCollaborationRoom): Peer {
+function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: DocumentCollaborationHandle): Peer {
   const store = storeFrom(room.document);
   const port = createCollaborationDocumentPort(store, { documentId: DOCUMENT_ID });
   const detach = room.session.attach(port);

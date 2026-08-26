@@ -27,26 +27,41 @@ export interface UseWebrtcCollaborationConnectOptions {
   readonly password?: string;
 }
 
-/** Room handle the hook can own. Tests pass a stub. @public */
-export interface UseWebrtcCollaborationRoomHandle {
+interface WebrtcRoomHandle {
   readonly document: Uint8Array;
   readonly session: EditorCollaborationSession;
   destroy(): void;
 }
 
+type WebrtcCreateRoom = (
+  options: UseWebrtcCollaborationConnectOptions
+) => Promise<WebrtcRoomHandle>;
+
+/**
+ * Test-only room factory. Not re-exported from `@docx-editor.dev/pro/react/webrtc`.
+ *
+ * @internal
+ */
+export const WEBRTC_CREATE_ROOM_FOR_TESTS: unique symbol = Symbol(
+  'useWebrtcCollaboration.createRoom'
+);
+
+interface InjectedWebrtcCollaborationOptions extends UseWebrtcCollaborationOptions {
+  readonly [WEBRTC_CREATE_ROOM_FOR_TESTS]?: WebrtcCreateRoom;
+}
+
 /** Input for {@link useWebrtcCollaboration}. @public */
 export interface UseWebrtcCollaborationOptions {
-  /** Host modules. The hook appends `collaborationModule` when a room is ready. */
+  /**
+   * Host modules. The hook adds `collaborationModule` when a room is ready.
+   * A host collaboration contribution is a configuration error and throws.
+   */
   readonly modules?: readonly EditorModule[];
   /**
    * Connect this room on mount. Omit it and call
    * {@link UseWebrtcCollaborationReturn.connect} after the user chooses a room.
    */
   readonly room?: UseWebrtcCollaborationConnectOptions | null;
-  /** Defaults to `createWebrtcCollaboration`. Pass a stub in tests. */
-  readonly createRoom?: (
-    options: UseWebrtcCollaborationConnectOptions
-  ) => Promise<UseWebrtcCollaborationRoomHandle>;
 }
 
 /** Values {@link useWebrtcCollaboration} returns. @public */
@@ -57,10 +72,26 @@ export interface UseWebrtcCollaborationReturn {
   readonly pending: boolean;
   readonly error: Error | null;
   readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
+  /**
+   * Destroy the room and carry on editing locally.
+   *
+   * Called with no argument, `document` falls back to the bytes this room STARTED from, so
+   * whatever the room typed is lost. The hook cannot do better alone — the current bytes live
+   * in the editor, not here. Pass `await editor.save()` to keep the session's edits.
+   */
   readonly leave: (nextDocument?: Uint8Array) => void;
 }
 
 const EMPTY_MODULES: readonly EditorModule[] = Object.freeze([]);
+
+const HOST_COLLABORATION_CONFLICT =
+  'useWebrtcCollaboration: host `modules` already include a collaboration contribution. This hook supplies `collaborationModule({ session })`. Pass review and custom-node modules only.';
+
+function assertHostModulesHaveNoCollaboration(modules: readonly EditorModule[]): void {
+  for (const module of modules) {
+    if (module.collaboration) throw new Error(HOST_COLLABORATION_CONFLICT);
+  }
+}
 
 function roomKeyOf(room: UseWebrtcCollaborationConnectOptions | null | undefined): string {
   if (!room) return '';
@@ -69,9 +100,16 @@ function roomKeyOf(room: UseWebrtcCollaborationConnectOptions | null | undefined
 
 async function defaultCreateRoom(
   options: UseWebrtcCollaborationConnectOptions
-): Promise<UseWebrtcCollaborationRoomHandle> {
+): Promise<WebrtcRoomHandle> {
   const { createWebrtcCollaboration } = await import('../collaboration/webrtc.ts');
   return createWebrtcCollaboration(options);
+}
+
+function createRoomOf(options: UseWebrtcCollaborationOptions): WebrtcCreateRoom {
+  return (
+    (options as InjectedWebrtcCollaborationOptions)[WEBRTC_CREATE_ROOM_FOR_TESTS] ??
+    defaultCreateRoom
+  );
 }
 
 /**
@@ -87,10 +125,11 @@ export function useWebrtcCollaboration(
   options: UseWebrtcCollaborationOptions = {}
 ): UseWebrtcCollaborationReturn {
   const id = useId();
-  const owner = webrtcRoomOwnerFor<UseWebrtcCollaborationRoomHandle>(`react:${id}`);
-  const createRoomRef = useRef(options.createRoom ?? defaultCreateRoom);
-  createRoomRef.current = options.createRoom ?? defaultCreateRoom;
+  const owner = webrtcRoomOwnerFor<WebrtcRoomHandle>(`react:${id}`);
+  const createRoomRef = useRef(createRoomOf(options));
+  createRoomRef.current = createRoomOf(options);
   const hostModules = options.modules ?? EMPTY_MODULES;
+  assertHostModulesHaveNoCollaboration(hostModules);
   const autoRoom = options.room ?? null;
   const autoKey = roomKeyOf(autoRoom);
   const autoRoomRef = useRef(autoRoom);
@@ -106,7 +145,7 @@ export function useWebrtcCollaboration(
   const [pending, setPending] = useState(() => autoRoom !== null && owner.current() === null);
   const [error, setError] = useState<Error | null>(null);
 
-  const publish = useCallback((room: UseWebrtcCollaborationRoomHandle | null) => {
+  const publish = useCallback((room: WebrtcRoomHandle | null) => {
     setDocument(room?.document ?? null);
     setSession(room?.session ?? null);
   }, []);
@@ -139,13 +178,14 @@ export function useWebrtcCollaboration(
   const leave = useCallback(
     (nextDocument?: Uint8Array) => {
       generationRef.current += 1;
+      const preserved = nextDocument ?? owner.current()?.document ?? document;
       owner.leave();
       setSession(null);
-      setDocument(nextDocument ?? null);
+      setDocument(preserved);
       setPending(false);
       setError(null);
     },
-    [owner]
+    [document, owner]
   );
 
   useEffect(() => {

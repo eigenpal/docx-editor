@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { createYjsCollaboration } from '../session.ts';
+import { createTextCollaboration } from '../session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { collaborationDocx } from './support.ts';
 
@@ -26,7 +26,7 @@ describe('browser collaboration attachment', () => {
     const { createDocxEditor } = await import('@docx-editor.dev/core/editor');
     const ydoc = new Y.Doc();
     const awareness = new Awareness(ydoc);
-    const room = await createYjsCollaboration({
+    const room = await createTextCollaboration({
       ydoc,
       awareness,
       documentId: 'browser-attachment-room',

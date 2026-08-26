@@ -12,9 +12,9 @@ import {
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import {
-  createYjsCollaboration,
-  type YjsCollaborationRoom,
-  type YjsCollaborationSession,
+  createTextCollaboration,
+  type TextCollaborationHandle,
+  type TextCollaborationSession,
 } from '../session.ts';
 import { collaborationDocx, storeAndPort } from './support.ts';
 
@@ -23,8 +23,8 @@ const ROOM = 'collaboration-conformance-room';
 interface Replica {
   readonly doc: Y.Doc;
   readonly awareness: Awareness;
-  readonly room: YjsCollaborationRoom;
-  readonly session: YjsCollaborationSession;
+  readonly room: TextCollaborationHandle;
+  readonly session: TextCollaborationSession;
   readonly canonical: ReturnType<typeof storeAndPort>;
   readonly detach: () => void;
 }
@@ -37,7 +37,7 @@ async function joinReplica(
   const doc = new Y.Doc();
   Y.applyUpdate(doc, initialUpdate, 'initial-state');
   const awareness = new Awareness(doc);
-  const room = await createYjsCollaboration({
+  const room = await createTextCollaboration({
     ydoc: doc,
     awareness,
     documentId: ROOM,
@@ -86,7 +86,7 @@ describe('paragraph collaboration conformance', () => {
   test('reordered, duplicated, and disconnected deliveries converge without replay changes', async () => {
     const leftDoc = new Y.Doc();
     const leftAwareness = new Awareness(leftDoc);
-    const leftRoom = await createYjsCollaboration({
+    const leftRoom = await createTextCollaboration({
       ydoc: leftDoc,
       awareness: leftAwareness,
       documentId: ROOM,

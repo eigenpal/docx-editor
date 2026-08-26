@@ -243,17 +243,19 @@ describe('canonical primitive journal (task 3.5)', () => {
     expect(journals[0]).not.toBe(journals[1]);
   });
 
-  test('a committed journal is not frozen or delivered until flushPendingCanonicalJournals', () => {
+  test('a committed journal is frozen and delivered before transact returns', () => {
+    // Positions in a journal are absolute against the tree this transaction just committed,
+    // so delivery cannot wait for a later task: anything that moves the tree first invalidates
+    // them, in bounds and without an error.
     const store = openStore();
     const journals: CanonicalPrimitiveJournal[] = [];
     observeCanonicalPrimitiveJournal(store, (journal) => journals.push(journal));
     insertHello(store);
-    expect(journals).toHaveLength(0);
-    expect(storeHasPendingCanonicalJournals(store)).toBe(true);
-    flushPendingCanonicalJournals(store);
-    expect(storeHasPendingCanonicalJournals(store)).toBe(false);
     expect(journals).toHaveLength(1);
     expect(Object.isFrozen(journals[0])).toBe(true);
+    expect(storeHasPendingCanonicalJournals(store)).toBe(false);
+    flushPendingCanonicalJournals(store);
+    expect(journals).toHaveLength(1);
   });
 
   test('a rejected transaction emits no journal and does not move revision or history', () => {

@@ -1,4 +1,8 @@
-// Deferred journal publication (input-pressure scheduling).
+// Immediate journal publication.
+//
+// A journal carries absolute positions against the tree its transaction committed against, so
+// it must reach its listener before anything else can move that tree. Publication is therefore
+// part of the commit, not a later task.
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import {
@@ -16,52 +20,28 @@ afterEach(() => {
   flushPendingCanonicalJournals();
 });
 
-function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function stubInputPending(): () => void {
-  const current = (globalThis as { navigator?: unknown }).navigator;
-  Object.defineProperty(globalThis, 'navigator', {
-    configurable: true,
-    value: { scheduling: { isInputPending: () => true } },
-  });
-  return () => {
-    if (current === undefined) {
-      delete (globalThis as { navigator?: unknown }).navigator;
-      return;
-    }
-    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: current });
-  };
+function commit(host: object, id: string): void {
+  runObservedStoreTransaction(
+    host,
+    () => {
+      recordMoveNode(id, 'parent', 0);
+      return { ok: true, change: true };
+    },
+    packageTransactionPublished
+  );
 }
 
 describe('canonical primitive journal publication', () => {
-  test('discrete input pending keeps freeze and notify off the current turn', async () => {
+  test('a committed transaction publishes before it returns', () => {
     const host = {};
     const journals: unknown[] = [];
     observeCanonicalPrimitiveJournal(host, (journal) => journals.push(journal));
-    const restore = stubInputPending();
-    try {
-      runObservedStoreTransaction(
-        host,
-        () => {
-          recordMoveNode('n1', 'parent', 0);
-          return { ok: true, change: true };
-        },
-        packageTransactionPublished
-      );
-      expect(storeHasPendingCanonicalJournals(host)).toBe(true);
-      await tick();
-      await tick();
-      expect(journals).toHaveLength(0);
-      flushPendingCanonicalJournals(host);
-      expect(journals).toHaveLength(1);
-    } finally {
-      restore();
-    }
+    commit(host, 'n1');
+    expect(journals).toHaveLength(1);
+    expect(storeHasPendingCanonicalJournals(host)).toBe(false);
   });
 
-  test('without observers a committed transaction schedules nothing', () => {
+  test('without observers a committed transaction publishes nothing', () => {
     const host = {};
     runObservedStoreTransaction(
       host,
@@ -71,6 +51,37 @@ describe('canonical primitive journal publication', () => {
       },
       packageTransactionPublished
     );
+    expect(storeHasPendingCanonicalJournals(host)).toBe(false);
+  });
+
+  test('two journals reach one listener in the order they committed', () => {
+    const host = {};
+    const seen: string[] = [];
+    observeCanonicalPrimitiveJournal(host, (journal) => {
+      const effect = journal.effects[0];
+      seen.push(effect?.kind === 'moveNode' ? effect.logicalId : 'other');
+    });
+    commit(host, 'first');
+    commit(host, 'second');
+    expect(seen).toEqual(['first', 'second']);
+  });
+
+  test('a listener that edits the store it is publishing keeps its own journal', () => {
+    // The nested commit cannot publish from inside the outer notify, so it waits in the FIFO.
+    // Stranding it there would drop an edit with no error, which is what the drain loop in
+    // `publishStore` exists to prevent.
+    const host = {};
+    const seen: string[] = [];
+    let nested = false;
+    observeCanonicalPrimitiveJournal(host, (journal) => {
+      const effect = journal.effects[0];
+      seen.push(effect?.kind === 'moveNode' ? effect.logicalId : 'other');
+      if (nested) return;
+      nested = true;
+      commit(host, 'from-listener');
+    });
+    commit(host, 'outer');
+    expect(seen).toEqual(['outer', 'from-listener']);
     expect(storeHasPendingCanonicalJournals(host)).toBe(false);
   });
 });

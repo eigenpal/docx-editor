@@ -165,8 +165,8 @@ export const PACKAGES = [
         ],
         'collaboration-webrtc': [
           'CollaborationIdentity',
-          'YjsCollaborationBootstrap',
-          'YjsCollaborationRoom',
+          'TextCollaborationBootstrap',
+          'DocumentCollaborationHandle',
         ],
         // The WebRTC hook entries take an identity, hand back a session, and append a
         // module. All three are core's, and a host already depends on core to mount an

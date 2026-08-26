@@ -24,6 +24,11 @@ import {
   writeOoxmlPackage,
   type OoxmlPackage,
 } from '../package/ooxml-package.ts';
+import {
+  ACTOR_ID_STRIPE,
+  actorStripe,
+  runWithTransactionActor,
+} from '../package/actor-scoped-ids.ts';
 import { ensureListDefinition, type ListKind } from '../package/numbering-part.ts';
 import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlNode } from '../package/ooxml-tree.ts';
@@ -516,3 +521,21 @@ describe('the minted definition carries the content CT_AbstractNum/CT_Num requir
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+describe('an attached actor stripes numbering ids', () => {
+  test('two actors mint different numIds from the same empty numbering snapshot', () => {
+    const start = load();
+    const left = runWithTransactionActor('alice', () => ensureListDefinition(start, 'bullet'));
+    const right = runWithTransactionActor('bob', () => ensureListDefinition(start, 'bullet'));
+    if (!left || !right) throw new Error('ensureListDefinition refused');
+    expect(left.numId).not.toBe(right.numId);
+    expect(left.numId).toBe(stripedNumberingId('alice'));
+    expect(right.numId).toBe(stripedNumberingId('bob'));
+  });
+});
+
+/** `w:numId` 0 is Word's "no numbering" sentinel, so stripe 0 advances one class. */
+function stripedNumberingId(actorId: string): string {
+  const stripe = actorStripe(actorId);
+  return String(stripe === 0 ? ACTOR_ID_STRIPE : stripe);
+}

@@ -12,9 +12,14 @@ import {
 } from '@docx-editor.dev/core/layout';
 import type { SemanticLayout, SemanticSelection } from '@docx-editor.dev/core/layout';
 import { cellAddressAt } from '../layout/semantic-cell-selection.ts';
-import { presenceSelectionRects, storyContentOffset } from '../layout/selection-rects.ts';
+import {
+  presenceRangeRects,
+  storyContentOffset,
+  type KeyedRange,
+} from '../layout/selection-rects.ts';
 import { findNode, isValidParaId, paraIdOf, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
+import { safeParticipantColor } from '../collaboration/participant-color.ts';
 import type {
   CollaborationLocalSelection,
   CollaborationParagraph,
@@ -53,6 +58,70 @@ export function collaborationParagraphAt(
 export interface RemoteSelectionPaintOptions {
   readonly scale: number;
   readonly pageOffsetX?: ReadonlyMap<number, number>;
+  /**
+   * Pages to measure, or every page when absent.
+   *
+   * Same bound `keyedRangeRects` takes: a remote selection that is not on a built page is
+   * not painted, so measuring it is cost paid on every local keystroke.
+   */
+  readonly pages?: ReadonlySet<number>;
+}
+
+interface LastRemotePaint {
+  readonly layout: SemanticLayout;
+  readonly fingerprint: string;
+  readonly pagesKey: string;
+  readonly scale: number;
+  readonly offsetKey: string;
+  /**
+   * What the skip asserts is still on screen. Callers empty this layer on their own (a surface
+   * with no replica paints nothing), and equal inputs after such a clear would otherwise skip
+   * onto an empty overlay and drop every remote caret until some input happened to change.
+   */
+  readonly childCount: number;
+}
+
+const lastRemotePaint = new WeakMap<HTMLElement, LastRemotePaint>();
+
+function selectionFingerprint(selections: readonly CollaborationRemoteSelection[]): string {
+  let out = '';
+  for (const remote of selections) {
+    out += `${remote.actorId}\t${remote.name}\t${remote.color ?? ''}\t${remote.kind ?? ''}\t`;
+    out += `${remote.anchor.nodeId}:${remote.anchor.offset}\t`;
+    out += `${remote.head.nodeId}:${remote.head.offset}\n`;
+  }
+  return out;
+}
+
+function pagesKey(pages?: ReadonlySet<number>): string {
+  if (!pages) return '*';
+  const indexes: number[] = [];
+  for (const index of pages) indexes.push(index);
+  indexes.sort((a, b) => a - b);
+  return indexes.join(',');
+}
+
+function offsetKey(offsets?: ReadonlyMap<number, number>): string {
+  if (!offsets || offsets.size === 0) return '';
+  const parts: string[] = [];
+  for (const [page, x] of offsets) parts.push(`${page}:${x}`);
+  parts.sort();
+  return parts.join(',');
+}
+
+function sameRemotePaint(
+  previous: LastRemotePaint,
+  layer: HTMLElement,
+  next: Omit<LastRemotePaint, 'childCount'>
+): boolean {
+  return (
+    previous.layout === next.layout &&
+    previous.fingerprint === next.fingerprint &&
+    previous.pagesKey === next.pagesKey &&
+    previous.scale === next.scale &&
+    previous.offsetKey === next.offsetKey &&
+    previous.childCount === layer.childElementCount
+  );
 }
 
 function isCollapsed(remote: CollaborationRemoteSelection): boolean {
@@ -84,8 +153,19 @@ export function paintRemoteSelections(
   selections: readonly CollaborationRemoteSelection[],
   options: RemoteSelectionPaintOptions
 ): void {
-  const { scale, pageOffsetX } = options;
-  const order = everyStoryOrder(layout);
+  const { scale, pageOffsetX, pages } = options;
+  const paintKey = {
+    layout,
+    fingerprint: selectionFingerprint(selections),
+    pagesKey: pagesKey(pages),
+    scale,
+    offsetKey: offsetKey(pageOffsetX),
+  };
+  const previous = lastRemotePaint.get(layer);
+  if (previous && sameRemotePaint(previous, layer, paintKey)) return;
+  // Recorded after the paint below, because the child count is its result.
+  lastRemotePaint.delete(layer);
+
   const rects: OverlayRect[] = [];
   const rectColors: (string | undefined)[] = [];
   const labels: {
@@ -95,7 +175,20 @@ export function paintRemoteSelections(
     readonly x: number;
     readonly y: number;
   }[] = [];
-  for (const remote of selections) {
+  const textRanges: KeyedRange[] = [];
+  for (const [index, remote] of selections.entries()) {
+    if (remote.kind === 'cells' || isCollapsed(remote)) continue;
+    textRanges.push({
+      key: String(index),
+      from: { paragraphId: remote.anchor.nodeId, offset: remote.anchor.offset },
+      to: { paragraphId: remote.head.nodeId, offset: remote.head.offset },
+    });
+  }
+  const textRects =
+    textRanges.length > 0
+      ? presenceRangeRects(layout, textRanges, everyStoryOrder(layout), pages)
+      : null;
+  for (const [index, remote] of selections.entries()) {
     const labelGeometry = caretAt(layout, {
       paragraphId: remote.head.nodeId,
       offset: remote.head.offset,
@@ -138,18 +231,16 @@ export function paintRemoteSelections(
       rectColors.push(remote.color);
       continue;
     }
-    const selection: SemanticSelection = {
-      anchor: { paragraphId: remote.anchor.nodeId, offset: remote.anchor.offset },
-      head: { paragraphId: remote.head.nodeId, offset: remote.head.offset },
-    };
-    for (const rect of presenceSelectionRects(layout, selection, order)) {
+    const painted = textRects?.get(String(index));
+    if (!painted) continue;
+    for (const rect of painted) {
       rects.push({ ...rect, className: 'docx-remote-selection-rect' });
       rectColors.push(remote.color);
     }
   }
   paintSelectionOverlay(layer, layout, rects, { scale, pageOffsetX });
   [...layer.children].forEach((element, index) => {
-    const color = rectColors[index];
+    const color = safeParticipantColor(rectColors[index]);
     if (!color || !(element instanceof HTMLElement)) return;
     element.style.setProperty('--doc-remote-color', color);
   });
@@ -164,7 +255,9 @@ export function paintRemoteSelections(
       (page.contentBox.x + label.x + (pageOffsetX?.get(label.pageIndex) ?? 0)) * scale
     }px`;
     element.style.top = `${(page.contentBox.y + label.y) * scale}px`;
-    if (label.color) element.style.setProperty('--doc-remote-color', label.color);
+    const labelColor = safeParticipantColor(label.color);
+    if (labelColor) element.style.setProperty('--doc-remote-color', labelColor);
     layer.append(element);
   }
+  lastRemotePaint.set(layer, { ...paintKey, childCount: layer.childElementCount });
 }

@@ -63,7 +63,10 @@ function extractVueDocxEditorForms(source) {
  * The name stays in the string — paired members share it by definition.
  */
 function normalizeMemberLine(line) {
-  return line.trim().replace(/^readonly\s+/, '').replace(/\s+/g, ' ');
+  return line
+    .trim()
+    .replace(/^readonly\s+/, '')
+    .replace(/\s+/g, ' ');
 }
 
 /**
@@ -337,12 +340,16 @@ function applyProBuckets(kind, section, reactSet, vueSet, issues) {
     if (!vueSet.has(k)) issues.push(`${kind} paired '${k}' missing from Vue`);
   }
   for (const k of deferred) {
-    if (!reactSet.has(k)) issues.push(`${kind} deferred '${k}' missing from React (contract stale)`);
-    if (vueSet.has(k)) issues.push(`${kind} '${k}' has shipped in Vue — move from deferredInVue to paired`);
+    if (!reactSet.has(k))
+      issues.push(`${kind} deferred '${k}' missing from React (contract stale)`);
+    if (vueSet.has(k))
+      issues.push(`${kind} '${k}' has shipped in Vue — move from deferredInVue to paired`);
   }
   for (const k of vueOnly) {
-    if (!vueSet.has(k)) issues.push(`${kind} vueExclusive '${k}' missing from Vue (contract stale)`);
-    if (reactSet.has(k)) issues.push(`${kind} '${k}' has shipped in React — move from vueExclusive to paired`);
+    if (!vueSet.has(k))
+      issues.push(`${kind} vueExclusive '${k}' missing from Vue (contract stale)`);
+    if (reactSet.has(k))
+      issues.push(`${kind} '${k}' has shipped in React — move from vueExclusive to paired`);
   }
   for (const k of reactSet) {
     if (!paired.includes(k) && !deferred.includes(k) && !vueOnly.includes(k)) {
@@ -377,13 +384,21 @@ function validateProShape(pro) {
         errors.push(`contract.pro.${sub}.${bucket} is required`);
         continue;
       }
-      const ok = type === 'array' ? Array.isArray(value) : typeof value === 'object' && !Array.isArray(value);
+      const ok =
+        type === 'array'
+          ? Array.isArray(value)
+          : typeof value === 'object' && !Array.isArray(value);
       if (!ok) {
-        errors.push(`contract.pro.${sub}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`);
+        errors.push(
+          `contract.pro.${sub}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`
+        );
         continue;
       }
       for (const k of Array.isArray(value) ? value : Object.keys(value)) {
-        if (seen.has(k)) errors.push(`contract.pro.${sub}: '${k}' appears in multiple buckets — must be in exactly one`);
+        if (seen.has(k))
+          errors.push(
+            `contract.pro.${sub}: '${k}' appears in multiple buckets — must be in exactly one`
+          );
         seen.add(k);
       }
     }
@@ -436,8 +451,61 @@ function checkProWebrtcParity(contract, reactSnapshot, vueSnapshot, issues) {
     );
     process.exit(1);
   }
-  applyProBuckets('PRO WEBRTC EXPORT', contract.pro.webrtcExports, reactExports, vueExports, issues);
-  return { reactExports: reactExports.size, vueExports: vueExports.size };
+  applyProBuckets(
+    'PRO WEBRTC EXPORT',
+    contract.pro.webrtcExports,
+    reactExports,
+    vueExports,
+    issues
+  );
+
+  // Name parity alone would pass a React-only field added to a shared interface, which is the
+  // likelier drift than a whole missing export. Every interface both entries declare is
+  // compared by member name, derived rather than listed so this cannot go stale.
+  const reactDecls = extractInterfaceDecls(reactSnapshot);
+  const vueDecls = extractInterfaceDecls(vueSnapshot);
+  let memberChecks = 0;
+  let comparedInterfaces = 0;
+  for (const name of [...reactDecls.keys()].sort()) {
+    if (!vueDecls.has(name)) continue;
+    const reactFields = effectiveInterfaceFields(reactSnapshot, reactDecls, name);
+    const vueFields = effectiveInterfaceFields(vueSnapshot, vueDecls, name);
+    if (reactFields.size === 0 || vueFields.size === 0) {
+      const sides = [reactFields.size === 0 && 'React', vueFields.size === 0 && 'Vue']
+        .filter(Boolean)
+        .join(' and ');
+      issues.push(
+        `PRO WEBRTC INTERFACE '${name}' resolved to zero members in the ${sides} snapshot — declaration form is unparseable`
+      );
+      continue;
+    }
+    comparedInterfaces++;
+    for (const k of reactFields) {
+      memberChecks++;
+      if (!vueFields.has(k)) {
+        issues.push(`PRO WEBRTC INTERFACE '${name}': member '${k}' missing from Vue`);
+      }
+    }
+    for (const k of vueFields) {
+      if (!reactFields.has(k)) {
+        issues.push(`PRO WEBRTC INTERFACE '${name}': member '${k}' missing from React`);
+      }
+    }
+  }
+  // Vacuity guard: ConnectOptions, Options, and Return must stay comparable.
+  // The test room handle is internal and is not a public webrtc export.
+  if (comparedInterfaces < 3) {
+    console.error(
+      `Pro WebRTC parity gate misconfigured: expected at least 3 comparable shared interfaces, compared ${comparedInterfaces}.`
+    );
+    process.exit(1);
+  }
+  return {
+    reactExports: reactExports.size,
+    vueExports: vueExports.size,
+    comparedInterfaces,
+    memberChecks,
+  };
 }
 
 function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
@@ -525,12 +593,16 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     const vueAllowed = new Set(exception?.vueOnly ?? []);
     for (const k of reactAllowed) {
       if (!reactFields.has(k) || vueFields.has(k)) {
-        issues.push(`PRO INTERFACE '${name}': stale reactOnly exception '${k}' — remove it from the contract`);
+        issues.push(
+          `PRO INTERFACE '${name}': stale reactOnly exception '${k}' — remove it from the contract`
+        );
       }
     }
     for (const k of vueAllowed) {
       if (!vueFields.has(k) || reactFields.has(k)) {
-        issues.push(`PRO INTERFACE '${name}': stale vueOnly exception '${k}' — remove it from the contract`);
+        issues.push(
+          `PRO INTERFACE '${name}': stale vueOnly exception '${k}' — remove it from the contract`
+        );
       }
     }
     for (const k of reactFields) {
@@ -616,8 +688,14 @@ function validateContractShape(contract) {
         if (!optional) errors.push(`contract.${top}.${bucket} is required`);
         continue;
       }
-      const ok = type === 'array' ? Array.isArray(value) : typeof value === 'object' && !Array.isArray(value);
-      if (!ok) errors.push(`contract.${top}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`);
+      const ok =
+        type === 'array'
+          ? Array.isArray(value)
+          : typeof value === 'object' && !Array.isArray(value);
+      if (!ok)
+        errors.push(
+          `contract.${top}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`
+        );
     }
     // Within each section, every member must appear in exactly one bucket.
     const seen = new Set();
@@ -720,8 +798,7 @@ function main() {
   }
   for (const k of callbackEmits) {
     if (!reactProps.has(k)) issues.push(`PROP reactCallbacksAsVueEmits '${k}' missing from React`);
-    if (vueProps.has(k))
-      issues.push(`PROP '${k}' must be a Vue emit, not a DocxEditorProps field`);
+    if (vueProps.has(k)) issues.push(`PROP '${k}' must be a Vue emit, not a DocxEditorProps field`);
     const emitName = contract.props.reactCallbacksAsVueEmits[k];
     if (vueForms && !vueForms.emits.has(emitName)) {
       issues.push(`PROP '${k}' maps to missing Vue emit '${emitName}'`);
@@ -736,9 +813,9 @@ function main() {
     }
   }
   for (const k of renderSlots) {
-    if (!reactProps.has(k)) issues.push(`PROP reactRenderPropsAsVueSlots '${k}' missing from React`);
-    if (vueProps.has(k))
-      issues.push(`PROP '${k}' must be a Vue slot, not a DocxEditorProps field`);
+    if (!reactProps.has(k))
+      issues.push(`PROP reactRenderPropsAsVueSlots '${k}' missing from React`);
+    if (vueProps.has(k)) issues.push(`PROP '${k}' must be a Vue slot, not a DocxEditorProps field`);
     const slotName = contract.props.reactRenderPropsAsVueSlots[k];
     if (vueForms && !vueForms.slots.has(slotName)) {
       issues.push(`PROP '${k}' maps to missing Vue slot '${slotName}'`);
@@ -755,7 +832,9 @@ function main() {
   for (const k of classFallthrough) {
     if (!reactProps.has(k)) issues.push(`PROP reactClassNameAsVueClass '${k}' missing from React`);
     if (vueProps.has(k))
-      issues.push(`PROP '${k}' must fall through as Vue \`class\`, not appear under the React name`);
+      issues.push(
+        `PROP '${k}' must fall through as Vue \`class\`, not appear under the React name`
+      );
   }
   for (const k of vueOnly) {
     if (!vueProps.has(k)) issues.push(`PROP vueExclusive '${k}' missing from Vue (contract stale)`);
@@ -856,9 +935,14 @@ function main() {
   console.log(`  Paired ref members:    ${refPaired.length}`);
   console.log(`  Inherited via EditorRefLike: ${refInherited.length}`);
   console.log(`  Vue-exclusive refs:    ${refVueOnly.length}`);
-  console.log(`  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`);
+  console.log(
+    `  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`
+  );
   console.log(
     `  Pro webrtc exports:    React ${webrtcStats.reactExports} / Vue ${webrtcStats.vueExports}`
+  );
+  console.log(
+    `  Pro webrtc interfaces: ${webrtcStats.comparedInterfaces} (${webrtcStats.memberChecks} member checks)`
   );
   console.log(`  Pro review parts:      ${proStats.reviewParts}`);
   console.log(

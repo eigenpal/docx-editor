@@ -7,13 +7,16 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createApp, defineComponent, h, nextTick } from 'vue';
 import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { collaborationModule } from '../collaboration/collaboration-module.ts';
 import {
   useWebrtcCollaboration,
+  WEBRTC_CREATE_ROOM_FOR_TESTS,
   type UseWebrtcCollaborationConnectOptions,
   type UseWebrtcCollaborationReturn,
-  type UseWebrtcCollaborationRoomHandle,
 } from '../vue/useWebrtcCollaboration.ts';
 
 function stubSession(documentId = 'room-1'): EditorCollaborationSession {
@@ -41,12 +44,18 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
   };
 }
 
-function fakeRoom(documentId = 'room-1'): UseWebrtcCollaborationRoomHandle & {
+interface StubRoom {
+  readonly document: Uint8Array;
+  readonly session: EditorCollaborationSession;
+  destroy(): void;
   readonly destroyed: boolean;
-} {
+}
+
+function fakeRoom(documentId = 'room-1'): StubRoom {
   let destroyed = false;
+  const bytes = new Uint8Array([1, 2, 3]);
   return {
-    document: new Uint8Array([1, 2, 3]),
+    document: bytes,
     session: stubSession(documentId),
     destroy() {
       destroyed = true;
@@ -64,19 +73,18 @@ const CONNECT: UseWebrtcCollaborationConnectOptions = {
 };
 
 function mountHook(
-  createRoom: (
-    options: UseWebrtcCollaborationConnectOptions
-  ) => Promise<UseWebrtcCollaborationRoomHandle>,
+  createRoom: (options: UseWebrtcCollaborationConnectOptions) => Promise<StubRoom>,
   autoConnect = true
 ): { latest: () => UseWebrtcCollaborationReturn | null; unmount: () => void } {
   let latest: UseWebrtcCollaborationReturn | null = null;
   const app = createApp(
     defineComponent({
       setup() {
-        latest = useWebrtcCollaboration({
+        const options = {
           room: autoConnect ? CONNECT : null,
-          createRoom,
-        });
+          [WEBRTC_CREATE_ROOM_FOR_TESTS]: createRoom,
+        };
+        latest = useWebrtcCollaboration(options);
         return () => h('div');
       },
     })
@@ -99,7 +107,7 @@ afterEach(() => {
 
 describe('useWebrtcCollaboration (Vue)', () => {
   test('leave destroys the room and clears the session', async () => {
-    const created: Array<ReturnType<typeof fakeRoom>> = [];
+    const created: StubRoom[] = [];
     const mounted = mountHook(async () => {
       const room = fakeRoom();
       created.push(room);
@@ -116,8 +124,44 @@ describe('useWebrtcCollaboration (Vue)', () => {
     mounted.unmount();
   });
 
+  test('leave without bytes keeps the room document for local editing', async () => {
+    const created: StubRoom[] = [];
+    const mounted = mountHook(async () => {
+      const room = fakeRoom();
+      created.push(room);
+      return room;
+    });
+    await Promise.resolve();
+    await nextTick();
+    const kept = created[0]?.document;
+    expect(kept).toBeDefined();
+    mounted.latest()?.leave();
+    expect(created[0]?.destroyed).toBe(true);
+    expect(mounted.latest()?.session.value).toBeNull();
+    expect(mounted.latest()?.document.value).toBe(kept);
+    expect(mounted.latest()?.document.value).not.toBeNull();
+    mounted.unmount();
+  });
+
+  test('throws when host modules already include a collaboration contribution', () => {
+    const modules = [collaborationModule({ session: stubSession('host') })];
+    expect(() => {
+      const app = createApp(
+        defineComponent({
+          setup() {
+            useWebrtcCollaboration({ modules });
+            return () => h('div');
+          },
+        })
+      );
+      const el = document.createElement('div');
+      document.body.append(el);
+      app.mount(el);
+    }).toThrow(/already include a collaboration contribution/);
+  });
+
   test('unmount destroys the room after the remount window', async () => {
-    const created: Array<ReturnType<typeof fakeRoom>> = [];
+    const created: StubRoom[] = [];
     const mounted = mountHook(async () => {
       const room = fakeRoom();
       created.push(room);
@@ -133,10 +177,10 @@ describe('useWebrtcCollaboration (Vue)', () => {
   });
 
   test('pending is true until createRoom resolves', async () => {
-    let finish: ((room: UseWebrtcCollaborationRoomHandle) => void) | undefined;
+    let finish: ((room: StubRoom) => void) | undefined;
     const mounted = mountHook(
       () =>
-        new Promise<UseWebrtcCollaborationRoomHandle>((resolve) => {
+        new Promise<StubRoom>((resolve) => {
           finish = resolve;
         })
     );
@@ -148,5 +192,12 @@ describe('useWebrtcCollaboration (Vue)', () => {
     expect(mounted.latest()?.pending.value).toBe(false);
     expect(mounted.latest()?.session.value).not.toBeNull();
     mounted.unmount();
+  });
+
+  test('the public webrtc entry does not export the test room factory', () => {
+    const source = readFileSync(join(import.meta.dir, '..', 'vue', 'webrtc.ts'), 'utf8');
+    expect(source).not.toContain('WEBRTC_CREATE_ROOM_FOR_TESTS');
+    expect(source).not.toContain('UseWebrtcCollaborationRoomHandle');
+    expect(source).not.toContain('createRoom');
   });
 });

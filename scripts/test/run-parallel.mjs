@@ -26,7 +26,16 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // `scripts/` as well as `packages/`: the checks that guard the published manifests and the
 // docs surface live next to the scripts they cover, and a suite that only walks `packages`
 // leaves them sitting there passing locally and running nowhere.
-const SEARCH_ROOTS = [join(ROOT, 'packages'), join(ROOT, 'scripts')];
+//
+// `docs/` and `examples/` for the same reason, learned the hard way: the typed feature matrix
+// has a test beside it, and it never ran here, so a plain type error in that file survived
+// review. A test the suite does not walk is worth nothing.
+const SEARCH_ROOTS = [
+  join(ROOT, 'packages'),
+  join(ROOT, 'scripts'),
+  join(ROOT, 'docs'),
+  join(ROOT, 'examples'),
+];
 const CACHE_FILE = join(ROOT, 'node_modules', '.cache', 'docx-editor', 'test-durations.json');
 
 /** Directories that hold build output or dependencies, never sources to run. */
@@ -139,7 +148,7 @@ async function main() {
   const { jobs, passthrough } = parseArguments(process.argv.slice(2));
   const files = SEARCH_ROOTS.flatMap((searchRoot) => discover(searchRoot));
   if (files.length === 0) {
-    console.error('no test files found under packages/ or scripts/');
+    console.error('no test files found under packages/, scripts/, docs/ or examples/');
     process.exit(1);
   }
 

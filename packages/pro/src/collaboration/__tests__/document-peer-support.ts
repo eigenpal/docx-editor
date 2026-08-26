@@ -25,8 +25,10 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
-import { createDocumentCollaboration } from '../document-session.ts';
-import type { YjsCollaborationRoom } from '../session.ts';
+import {
+  createDocumentCollaboration,
+  type DocumentCollaborationHandle,
+} from '../document-session.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 export const BODY: StoryScope = { kind: 'body' };
@@ -72,7 +74,7 @@ export function zipDocument(
 export interface Peer {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
-  readonly room: YjsCollaborationRoom;
+  readonly room: DocumentCollaborationHandle;
   readonly store: TreePackageStore;
   readonly port: ReturnType<typeof createCollaborationDocumentPort>;
   readonly detach: () => void;
@@ -159,7 +161,7 @@ export function createPeerHarness(documentId: string): {
     return new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
   }
 
-  function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: YjsCollaborationRoom): Peer {
+  function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: DocumentCollaborationHandle): Peer {
     const store = storeFrom(room.document);
     const port = createCollaborationDocumentPort(store, { documentId });
     const detach = room.session.attach(port);

@@ -22,8 +22,10 @@ import type {
   CollaborationDocumentPort,
   CollaborationLocalSelection,
 } from '@docx-editor.dev/core/collaboration';
-import { createDocumentCollaboration } from '../document-session.ts';
-import type { YjsCollaborationRoom } from '../session.ts';
+import {
+  createDocumentCollaboration,
+  type DocumentCollaborationHandle,
+} from '../document-session.ts';
 
 const DOCUMENT_ID = 'presence-room';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -60,7 +62,7 @@ const PROSE = documentBytes(
 interface Peer {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
-  readonly room: YjsCollaborationRoom;
+  readonly room: DocumentCollaborationHandle;
   readonly store: TreePackageStore;
   readonly port: CollaborationDocumentPort;
   readonly detach: () => void;
@@ -85,7 +87,7 @@ function storeFrom(bytes: Uint8Array): TreePackageStore {
   return new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
 }
 
-function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: YjsCollaborationRoom): Peer {
+function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: DocumentCollaborationHandle): Peer {
   const store = storeFrom(room.document);
   const port = createCollaborationDocumentPort(store, { documentId: DOCUMENT_ID });
   const detach = room.session.attach(port);

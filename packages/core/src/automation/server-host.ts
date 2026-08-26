@@ -189,8 +189,13 @@ function mintExternalTarget(
  * `apply` is one `transact` call for the whole batch — that is where atomicity comes from,
  * not from anything the host layer does: the store stages ops against a working package and
  * publishes nothing until every one of them has been accepted.
+ *
+ * Exported so tests can reach `applyLifecycle` without going through the protocol planner,
+ * which has no furniture-create command.
+ *
+ * @internal
  */
-function packageStorePort(
+export function packageStorePort(
   store: TreePackageStore,
   collaboration?: EditorCollaborationSession,
   detachCollaboration: () => void = () => {}
@@ -210,13 +215,10 @@ function packageStorePort(
       recordsHistory: false,
     };
   };
-  // AN AUTOMATION BATCH IS NOT A KEYSTROKE. Publication is deferred so that holding a key down
-  // never waits on encoding, which is latency the browser needs and this host cannot use: no
-  // frame is pending, and the caller's very next line may read a peer. Left deferred, a script
-  // that awaited `sync()` saw a replica that had not received the edit yet — the edit arrived
-  // later, so nothing was lost, but "committed" and "replicated" disagreed for long enough to
-  // read as data loss. Every mutating return goes through here, so a method added later
-  // publishes by default instead of inheriting the browser's timing.
+  // Publication now happens on the commit itself, so this drain finds nothing to do. It stays as
+  // the seam that makes that a fact rather than an assumption: every mutating return goes through
+  // here, so a method added later cannot start replicating late. What it used to fix — a script
+  // that awaited `sync()` and read a peer that had not received the edit — is structurally gone.
   const published = <T>(result: T): T => {
     collaboration?.flushPendingJournals();
     return result;
@@ -266,7 +268,12 @@ function packageStorePort(
       // The store's own package transaction: parts, relationships, content types and settings
       // restored together on undo. Routed here rather than through `transact` because a story
       // transaction cannot carry a part it does not own.
-      const result = store.applyLifecycleOp(op);
+      // Bound to the collaboration actor: furniture and note lifecycle mint `rId`s on the
+      // package shell, and this path does not go through `transact`. The browser twin wraps
+      // the same op class in `commitSessionTreeOps`.
+      const result = runWithTransactionActor(collaboration?.identity.actorId, () =>
+        store.applyLifecycleOp(op)
+      );
       if (!result.ok) {
         return {
           ok: false,

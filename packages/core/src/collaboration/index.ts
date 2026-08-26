@@ -14,6 +14,7 @@ import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { CanonicalPrimitiveJournal } from './primitive-journal.ts';
 
+export { safeParticipantColor } from './participant-color.ts';
 export {
   createCollaborationStatusTracker,
   isCollaborationFailureCode,

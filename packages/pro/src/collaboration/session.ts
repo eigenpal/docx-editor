@@ -39,34 +39,52 @@ const MAX_AWARENESS_STATES = 256;
 const MAX_SHARED_PARAGRAPH_TEXT = 1_000_000;
 const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
 
-/** Baseline initialization mode for one Yjs collaboration replica. @public */
-export type YjsCollaborationBootstrap =
+/**
+ * Create or join bootstrap for one collaboration replica.
+ *
+ * Text and document factories share this union.
+ * @public
+ */
+export type TextCollaborationBootstrap =
   | { readonly kind: 'create'; readonly document: Uint8Array }
   | { readonly kind: 'join'; readonly timeoutMs?: number; readonly signal?: AbortSignal };
 
-/** Options for a provider-neutral Yjs collaboration replica. @public */
-export interface CreateYjsCollaborationOptions {
+/**
+ * Options for a paragraph-text collaboration replica.
+ *
+ * The caller owns `ydoc`.
+ * @public
+ */
+export interface CreateTextCollaborationOptions {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
   readonly documentId: string;
   /** Unique attachment identity. Omit it to generate a new identity for this session. */
   readonly sessionId?: string;
   readonly identity: CollaborationIdentity;
-  readonly bootstrap: YjsCollaborationBootstrap;
+  readonly bootstrap: TextCollaborationBootstrap;
 }
 
-/** Yjs collaboration session with transport status integration. @public */
-export interface YjsCollaborationSession extends EditorCollaborationSession {
+/** Paragraph-text collaboration session with transport status integration. @public */
+export interface TextCollaborationSession extends EditorCollaborationSession {
   /** Provider convenience seam. Low-level consumers normally leave the session ready. */
   setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void;
 }
 
-/** Owned provider-neutral Yjs room resources. @public */
-export interface YjsCollaborationRoom {
+/**
+ * Owned collaboration replica: document bytes, session, and teardown.
+ *
+ * Text and document factories share this shape. The session type names the engine.
+ * @public
+ */
+export interface CollaborationHandle<TSession extends EditorCollaborationSession> {
   readonly document: Uint8Array;
-  readonly session: YjsCollaborationSession;
+  readonly session: TSession;
   destroy(): void;
 }
+
+/** Owned paragraph-text collaboration replica. @public */
+export type TextCollaborationHandle = CollaborationHandle<TextCollaborationSession>;
 
 interface EncodedPosition {
   readonly paragraphId: string;
@@ -230,7 +248,7 @@ function decodeBytes(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-class Session implements YjsCollaborationSession {
+class Session implements TextCollaborationSession {
   readonly documentId: string;
   readonly sessionId: string;
   readonly identity: CollaborationIdentity;
@@ -690,7 +708,7 @@ class Session implements YjsCollaborationSession {
 }
 
 async function bootstrap(
-  options: CreateYjsCollaborationOptions,
+  options: CreateTextCollaborationOptions,
   documentId: string,
   identity: CollaborationIdentity
 ): Promise<OpenedBaseline> {
@@ -707,10 +725,15 @@ async function bootstrap(
   return validateInitializedSchema(options.ydoc, documentId);
 }
 
-/** Create or join one provider-neutral Yjs collaboration replica. @public */
-export async function createYjsCollaboration(
-  options: CreateYjsCollaborationOptions
-): Promise<YjsCollaborationRoom> {
+/**
+ * Create or join one paragraph-text collaboration replica.
+ *
+ * The caller owns `ydoc`.
+ * @public
+ */
+export async function createTextCollaboration(
+  options: CreateTextCollaborationOptions
+): Promise<TextCollaborationHandle> {
   const documentId = validateDocumentId(options.documentId);
   const sessionId = sessionIdentity(options.sessionId);
   const identity = validateIdentity(options.identity);

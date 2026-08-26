@@ -873,6 +873,13 @@ export function mountPaginatedSurface(
     // header every page-setup write was refused as `tree-invariant`: the ruler snapped back and
     // Page Setup's Apply did nothing, with the dialog still reading the right section.
     applyTreeOps: (ops, before, after, scope) => applyOps(ops, before, after, scope),
+    // List definitions mint `numId` on the package before the paragraph op names it, so
+    // the typing transaction never binds an actor for that scan. Same wrap the hyperlink
+    // mint uses.
+    ensureListDefinition: (kind) =>
+      runWithTransactionActor(collaborationSession?.identity.actorId, () =>
+        session.ensureListDefinition(kind)
+      ),
     applyPmDoc: (doc) => {
       if (editingMode === 'view') {
         return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
@@ -2852,6 +2859,28 @@ export function mountPaginatedSurface(
     flushTypeBuffer();
     const refusal = writeRefusal(ops.some(isDocumentEdit), ops, checkSelection);
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
+    // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
+    // header, a footer or a note is applied to that story rather than to the body.
+    const attributed = trackedOps(ops);
+    const result = applyJournaledOps(attributed, selectionBefore, selectionAfter, scope);
+    if (result.committed && attributed.some(isTrackedEdit)) {
+      runtimeOptions.onTrackedChange?.();
+    }
+    return result;
+  }
+
+  /**
+   * Gate and attribute a write the way typing does, without the TOC-read-only rule.
+   *
+   * Refresh rewrites TOC result paragraphs, so `applyOps` would refuse the write that
+   * exists to update them. The collaboration gate and the actor still apply.
+   */
+  function applyJournaledOps(
+    ops: readonly TreeDocOp[],
+    selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
+    selectionAfter?: Parameters<TreeDocxSession['applyTreeOps']>[2],
+    scope: StoryScope = storyScope()
+  ): ReturnType<TreeDocxSession['applyTreeOps']> {
     const collaborationRefusal = collaborationSession?.gateOperations(ops, scope);
     if (collaborationRefusal) {
       return {
@@ -2861,13 +2890,9 @@ export function mountPaginatedSurface(
         reason: collaborationRefusal,
       };
     }
-
-    // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
-    // header, a footer or a note is applied to that story rather than to the body.
-    const attributed = trackedOps(ops);
     collaborationOperationCounter += 1;
-    const result = session.applyTreeOps(
-      attributed,
+    return session.applyTreeOps(
+      ops,
       selectionBefore,
       selectionAfter,
       scope,
@@ -2880,10 +2905,6 @@ export function mountPaginatedSurface(
           }
         : undefined
     );
-    if (result.committed && attributed.some(isTrackedEdit)) {
-      runtimeOptions.onTrackedChange?.();
-    }
-    return result;
   }
 
   /**
@@ -4078,6 +4099,7 @@ export function mountPaginatedSurface(
     paintRemoteSelections(remoteSelectionLayer, currentLayout, collaboration.remoteSelections(), {
       scale,
       pageOffsetX: materializedExtent?.pageOffsetX,
+      ...(materializedSet ? { pages: materializedSet } : {}),
     });
   }
 
@@ -4306,7 +4328,7 @@ export function mountPaginatedSurface(
     const op = insertTocOp();
     if (!op) return false;
     const existing = new Set(detectBodyTocs(session.part()).map((toc) => toc.id));
-    const inserted = session.applyTreeOps([op]);
+    const inserted = applyJournaledOps([op], undefined, undefined, BODY_STORY);
     if (!inserted.committed) {
       lastRejection = inserted.reason ?? 'the table of contents could not be inserted';
       return false;
@@ -4332,14 +4354,19 @@ export function mountPaginatedSurface(
         tocRegionOf(toc),
         collaborationSession?.identity.actorId
       );
-      const replaced = session.applyTreeOps([
-        {
-          op: 'replaceTocResult',
-          tocId: toc.id,
-          entries: plan.entries,
-          bookmarksToCreate: plan.bookmarksToCreate,
-        },
-      ]);
+      const replaced = applyJournaledOps(
+        [
+          {
+            op: 'replaceTocResult',
+            tocId: toc.id,
+            entries: plan.entries,
+            bookmarksToCreate: plan.bookmarksToCreate,
+          },
+        ],
+        undefined,
+        undefined,
+        BODY_STORY
+      );
       if (!replaced.committed) {
         lastRejection = replaced.reason ?? 'the table of contents could not be refreshed';
         return false;
@@ -4369,9 +4396,12 @@ export function mountPaginatedSurface(
         .join('\u0001');
       if (signature === previousSignature) break;
       previousSignature = signature;
-      const rewritten = session.applyTreeOps([
-        { op: 'rewriteTocPageNumbers', tocId: toc.id, updates },
-      ]);
+      const rewritten = applyJournaledOps(
+        [{ op: 'rewriteTocPageNumbers', tocId: toc.id, updates }],
+        undefined,
+        undefined,
+        BODY_STORY
+      );
       if (!rewritten.committed) {
         if (rewritten.rejected) {
           lastRejection = rewritten.reason ?? 'the table of contents page numbers were refused';
@@ -5051,7 +5081,10 @@ export function mountPaginatedSurface(
               reason: 'experimental-collaboration-body-text-only',
             };
           }
-          const result = run();
+          // Bound to the collaboration actor: review writes mint comment and content-control
+          // ids outside `applyOps`, so nothing else would bind one. Two peers commenting on
+          // the same snapshot would otherwise both take `w:id="${highest + 1}"`.
+          const result = runWithTransactionActor(collaborationSession?.identity.actorId, run);
           return {
             committed: result.committed,
             rejected: !result.committed,

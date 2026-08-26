@@ -14,13 +14,13 @@ import { act, cleanup, render } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { collaborationModule } from '../collaboration/collaboration-module.ts';
 import {
   useWebrtcCollaboration,
+  WEBRTC_CREATE_ROOM_FOR_TESTS,
   type UseWebrtcCollaborationConnectOptions,
   type UseWebrtcCollaborationReturn,
-  type UseWebrtcCollaborationRoomHandle,
 } from '../react/useWebrtcCollaboration.ts';
-import { createTextCollaboration, createYjsCollaboration } from '../collaboration/index.ts';
 
 function stubSession(documentId = 'room-1'): EditorCollaborationSession {
   return {
@@ -47,9 +47,14 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
   };
 }
 
-function fakeRoom(documentId = 'room-1'): UseWebrtcCollaborationRoomHandle & {
+interface StubRoom {
+  readonly document: Uint8Array;
+  readonly session: EditorCollaborationSession;
+  destroy(): void;
   readonly destroyed: boolean;
-} {
+}
+
+function fakeRoom(documentId = 'room-1'): StubRoom {
   let destroyed = false;
   const bytes = new Uint8Array([1, 2, 3]);
   const session = stubSession(documentId);
@@ -78,23 +83,22 @@ function Probe({
   autoConnect = true,
   onState,
 }: {
-  createRoom: (
-    options: UseWebrtcCollaborationConnectOptions
-  ) => Promise<UseWebrtcCollaborationRoomHandle>;
+  createRoom: (options: UseWebrtcCollaborationConnectOptions) => Promise<StubRoom>;
   autoConnect?: boolean;
   onState: (value: UseWebrtcCollaborationReturn) => void;
 }) {
-  const value = useWebrtcCollaboration({
+  const options = {
     room: autoConnect ? CONNECT : null,
-    createRoom,
-  });
+    [WEBRTC_CREATE_ROOM_FOR_TESTS]: createRoom,
+  };
+  const value = useWebrtcCollaboration(options);
   onState(value);
   return null;
 }
 
 describe('useWebrtcCollaboration', () => {
   test('StrictMode remount keeps a live room', async () => {
-    const created: Array<ReturnType<typeof fakeRoom>> = [];
+    const created: StubRoom[] = [];
     const createRoom = async () => {
       await Promise.resolve();
       const room = fakeRoom(`room-${created.length}`);
@@ -118,7 +122,7 @@ describe('useWebrtcCollaboration', () => {
   });
 
   test('leave destroys the room and clears the session', async () => {
-    const created: Array<ReturnType<typeof fakeRoom>> = [];
+    const created: StubRoom[] = [];
     const createRoom = async () => {
       const room = fakeRoom();
       created.push(room);
@@ -139,10 +143,44 @@ describe('useWebrtcCollaboration', () => {
     expect(latest?.document).toBe(leftover);
   });
 
+  test('leave without bytes keeps the room document for local editing', async () => {
+    const created: StubRoom[] = [];
+    const createRoom = async () => {
+      const room = fakeRoom();
+      created.push(room);
+      return room;
+    };
+    let latest: UseWebrtcCollaborationReturn | undefined;
+    await act(async () => {
+      render(<Probe createRoom={createRoom} onState={(value) => (latest = value)} />);
+      await Promise.resolve();
+    });
+    const kept = created[0]?.document;
+    expect(kept).toBeDefined();
+    await act(async () => {
+      latest?.leave();
+    });
+    expect(created[0]?.destroyed).toBe(true);
+    expect(latest?.session).toBeNull();
+    expect(latest?.document).toBe(kept);
+    expect(latest?.document).not.toBeNull();
+  });
+
+  test('throws when host modules already include a collaboration contribution', () => {
+    const modules = [collaborationModule({ session: stubSession('host') })];
+    expect(() => {
+      function Conflict() {
+        useWebrtcCollaboration({ modules });
+        return null;
+      }
+      render(<Conflict />);
+    }).toThrow(/already include a collaboration contribution/);
+  });
+
   test('pending is true until createRoom resolves', async () => {
-    let finish: ((room: UseWebrtcCollaborationRoomHandle) => void) | undefined;
+    let finish: ((room: StubRoom) => void) | undefined;
     const createRoom = () =>
-      new Promise<UseWebrtcCollaborationRoomHandle>((resolve) => {
+      new Promise<StubRoom>((resolve) => {
         finish = resolve;
       });
     let latest: UseWebrtcCollaborationReturn | undefined;
@@ -225,15 +263,18 @@ describe('useWebrtcCollaboration', () => {
 });
 
 describe('collaboration factory names', () => {
-  test('createTextCollaboration is the paragraph-text factory', () => {
-    expect(createTextCollaboration).toBe(createYjsCollaboration);
-  });
-
   test('the default React entry does not import the WebRTC hook', () => {
     const source = readFileSync(join(import.meta.dir, '..', 'react', 'index.ts'), 'utf8');
     expect(source).not.toContain('useWebrtcCollaboration');
     expect(source).not.toContain('y-webrtc');
     expect(source).not.toContain('collaboration/webrtc');
+  });
+
+  test('the public webrtc entry does not export the test room factory', () => {
+    const source = readFileSync(join(import.meta.dir, '..', 'react', 'webrtc.ts'), 'utf8');
+    expect(source).not.toContain('WEBRTC_CREATE_ROOM_FOR_TESTS');
+    expect(source).not.toContain('UseWebrtcCollaborationRoomHandle');
+    expect(source).not.toContain('createRoom');
   });
 
   test('ComposedEditorDemo uses the hook instead of a private owner', () => {

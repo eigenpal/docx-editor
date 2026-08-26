@@ -7,7 +7,7 @@ import { collaborationModule } from '@docx-editor.dev/pro';
 import {
   createCollaborationRoomId,
   createWebrtcCollaboration,
-  type WebrtcCollaborationRoom,
+  type WebrtcCollaborationHandle,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { demoDocumentBytes } from './demo-document';
 
@@ -126,7 +126,7 @@ function download(bytes: Uint8Array): void {
 
 function renderRoom(
   roomId: string,
-  room: WebrtcCollaborationRoom,
+  room: WebrtcCollaborationHandle,
   editor: DocxEditorInstance
 ): () => void {
   const shell = element('main', 'room-shell');

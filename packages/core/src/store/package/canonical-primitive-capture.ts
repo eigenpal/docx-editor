@@ -15,7 +15,7 @@ import type {
 } from './canonical-primitive-journal.ts';
 import {
   bindCanonicalPrimitiveJournalListeners,
-  enqueuePendingCanonicalJournal,
+  publishCanonicalPrimitiveJournal,
 } from './canonical-primitive-publish.ts';
 import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
@@ -92,8 +92,9 @@ function popFrame(): CaptureFrame | undefined {
 /**
  * Run one store transaction. Capture is armed only when that store has observers.
  *
- * A rejected or identity result discards the journal and notifies nobody. Freeze and
- * observer notify run after the keystroke, through `flushPendingCanonicalJournals`.
+ * A rejected or identity result discards the journal and notifies nobody. A committed one
+ * publishes here, in this frame: the journal's positions describe the tree this transaction
+ * just left behind, and nothing else may move that tree first.
  */
 export function runObservedStoreTransaction<T>(
   store: object,
@@ -106,7 +107,7 @@ export function runObservedStoreTransaction<T>(
     const result = run();
     const frame = popFrame();
     if (observed && frame?.effects && committed(result)) {
-      enqueuePendingCanonicalJournal(store, frame.effects);
+      publishCanonicalPrimitiveJournal(store, frame.effects);
     }
     return result;
   } catch (error) {

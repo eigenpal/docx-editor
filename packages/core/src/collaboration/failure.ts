@@ -6,8 +6,9 @@
  *
  * - `initializing` — joining. Edits are refused. Recovers on its own.
  * - `ready` — replicating. The only state that accepts edits.
- * - `disconnected` — the transport dropped. Local edits still apply and replicate on
- *   reconnect, so wait rather than reload.
+ * - `disconnected` — the transport dropped. The replica is intact and recovers on its own,
+ *   so wait rather than reload, but edits are refused until it does: `gateOperations`
+ *   admits `ready` only. A host that wants offline editing cannot get it from this state.
  * - `error` — this replica no longer agrees with the room. It does not recover: only a
  *   reload rejoins. {@link CollaborationStatusSnapshot.reason} says why.
  * - `destroyed` — torn down. Terminal.

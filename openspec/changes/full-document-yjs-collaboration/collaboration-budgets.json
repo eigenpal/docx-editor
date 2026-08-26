@@ -234,8 +234,16 @@
     "bothRepresentationsFail": "stop-no-editor-integration"
   },
   "keystrokePath": {
-    "replicationInsideTransact": false,
-    "yjsUpdatesDuringLocalTransactMustBe": 0,
-    "flushSeam": "CollaborationDocumentPort.flushPendingJournals"
+    "replicationInsideTransact": true,
+    "pendingJournalsAfterLocalTransactMustBe": 0,
+    "flushSeam": "CollaborationDocumentPort.flushPendingJournals",
+    "why": "A journal carries absolute spliceText and spliceChildren positions against the tree it was diffed against. Holding one past the commit lets a remote update move that tree first, and an interior stale position stays in bounds, so validation admits it and every replica agrees on content nobody authored. Replication is therefore part of the commit. The transaction timings above are measured with the Yjs write included.",
+    "measuredCostMs": {
+      "fixture": "e2e/fixtures/synthetic-long-edit.docx",
+      "deferredTransactMedian": 2.249,
+      "deferredFlushMedian": 2.201,
+      "synchronousTransactMedian": 4.901,
+      "synchronousFlushMedian": 0.0003
+    }
   }
 }

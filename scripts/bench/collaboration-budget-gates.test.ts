@@ -158,8 +158,9 @@ interface Budgets {
   };
   readonly keystrokePath: {
     readonly replicationInsideTransact: boolean;
-    readonly yjsUpdatesDuringLocalTransactMustBe: number;
+    readonly pendingJournalsAfterLocalTransactMustBe: number;
     readonly flushSeam: string;
+    readonly why: string;
   };
 }
 
@@ -311,11 +312,15 @@ describe('collaboration budget artifact', () => {
     });
   });
 
-  test('pins collaboration replication off the local transact path', () => {
-    expect(budgets.keystrokePath).toEqual({
-      replicationInsideTransact: false,
-      yjsUpdatesDuringLocalTransactMustBe: 0,
-      flushSeam: 'CollaborationDocumentPort.flushPendingJournals',
-    });
+  test('pins collaboration replication onto the local transact path', () => {
+    // Replication belongs to the commit. A queued journal holds absolute positions that the
+    // next remote update invalidates in bounds, so an empty queue after transact is a
+    // correctness gate, not a throughput one.
+    expect(budgets.keystrokePath.replicationInsideTransact).toBe(true);
+    expect(budgets.keystrokePath.pendingJournalsAfterLocalTransactMustBe).toBe(0);
+    expect(budgets.keystrokePath.flushSeam).toBe(
+      'CollaborationDocumentPort.flushPendingJournals'
+    );
+    expect(budgets.keystrokePath.why.length).toBeGreaterThan(0);
   });
 });

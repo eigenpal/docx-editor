@@ -3,7 +3,11 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Page hide must publish queued journals. Losing an edit is worse than sending it late.
+// An edit reaches shared state inside its own commit, so page hide has nothing left to publish.
+//
+// Publishing at page hide only ever mattered while journals waited in a queue, and a queued
+// journal carries absolute positions against a tree any remote update can move. The queue was
+// the defect, so the recovery went with it.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -19,8 +23,10 @@ import {
   type StoryScope,
 } from '@docx-editor.dev/core/store';
 import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
-import { createDocumentCollaboration } from '../document-session.ts';
-import type { YjsCollaborationRoom } from '../session.ts';
+import {
+  createDocumentCollaboration,
+  type DocumentCollaborationHandle,
+} from '../document-session.ts';
 
 const DOCUMENT_ID = 'pagehide-room';
 const BODY: StoryScope = { kind: 'body' };
@@ -50,7 +56,7 @@ function proseBytes(): Uint8Array {
 describe('collaboration journal page lifecycle', () => {
   let ydoc: Y.Doc | undefined;
   let awareness: Awareness | undefined;
-  let room: YjsCollaborationRoom | undefined;
+  let room: DocumentCollaborationHandle | undefined;
 
   afterEach(() => {
     room?.destroy();
@@ -61,7 +67,7 @@ describe('collaboration journal page lifecycle', () => {
     ydoc = undefined;
   });
 
-  test('pagehide publishes a queued journal', async () => {
+  test('a commit reaches the Y.Doc before transact returns, so pagehide has nothing to send', async () => {
     ydoc = new Y.Doc();
     awareness = new Awareness(ydoc);
     const bytes = proseBytes();
@@ -93,10 +99,12 @@ describe('collaboration journal page lifecycle', () => {
       context.apply({ op: 'insertText', paragraphId, offset: 5, text: '!' });
     });
     if (!result.ok) throw new Error(result.detail ?? result.reason);
-    expect(port.hasPendingJournals()).toBe(true);
-    expect(Y.encodeStateAsUpdate(ydoc)).toEqual(before);
+    expect(port.hasPendingJournals()).toBe(false);
+    const afterCommit = Y.encodeStateAsUpdate(ydoc);
+    expect(afterCommit).not.toEqual(before);
+    // No page-hide listener remains, and nothing may reintroduce one that applies a second time.
     window.dispatchEvent(new Event('pagehide'));
     expect(port.hasPendingJournals()).toBe(false);
-    expect(Y.encodeStateAsUpdate(ydoc)).not.toEqual(before);
+    expect(Y.encodeStateAsUpdate(ydoc)).toEqual(afterCommit);
   });
 });

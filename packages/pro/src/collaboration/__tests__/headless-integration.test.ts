@@ -19,7 +19,7 @@ import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { DocxEditor, isDocxEditorError } from '@docx-editor.dev/editor-api';
 import type { DocxEditorRuntime, DocxEditorServerRuntime } from '@docx-editor.dev/editor-api';
-import { createYjsCollaboration, type YjsCollaborationRoom } from '../session.ts';
+import { createTextCollaboration, type TextCollaborationHandle } from '../session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { collaborationDocx } from './support.ts';
 
@@ -77,13 +77,13 @@ function observeOperations(
 interface Replicas {
   readonly browserDoc: Y.Doc;
   readonly browserAwareness: Awareness;
-  readonly browserRoom: YjsCollaborationRoom;
+  readonly browserRoom: TextCollaborationHandle;
   readonly browserEditor: ReturnType<typeof createDocxEditor>;
   readonly browserContainer: HTMLElement;
   readonly agentDoc: Y.Doc;
   readonly agentAwareness: Awareness;
   readonly agentOperations: string[];
-  agentRoom: YjsCollaborationRoom;
+  agentRoom: TextCollaborationHandle;
   agentRuntime: DocxEditorServerRuntime;
   destroy(): void;
 }
@@ -91,7 +91,7 @@ interface Replicas {
 async function replicas(): Promise<Replicas> {
   const browserDoc = new Y.Doc();
   const browserAwareness = new Awareness(browserDoc);
-  const browserRoom = await createYjsCollaboration({
+  const browserRoom = await createTextCollaboration({
     ydoc: browserDoc,
     awareness: browserAwareness,
     documentId: ROOM,
@@ -103,7 +103,7 @@ async function replicas(): Promise<Replicas> {
   const agentDoc = new Y.Doc();
   Y.applyUpdate(agentDoc, Y.encodeStateAsUpdate(browserDoc), 'initial-state');
   const agentAwareness = new Awareness(agentDoc);
-  const agentRoom = await createYjsCollaboration({
+  const agentRoom = await createTextCollaboration({
     ydoc: agentDoc,
     awareness: agentAwareness,
     documentId: ROOM,
@@ -241,7 +241,7 @@ describe('DocxEditor.createCollaborative integration', () => {
       state.agentRoom.destroy();
       expect(state.agentDoc.isDestroyed).toBe(false);
 
-      state.agentRoom = await createYjsCollaboration({
+      state.agentRoom = await createTextCollaboration({
         ydoc: state.agentDoc,
         awareness: state.agentAwareness,
         documentId: ROOM,

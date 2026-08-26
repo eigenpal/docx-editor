@@ -36,8 +36,10 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
-import { createDocumentCollaboration } from '../document-session.ts';
-import type { YjsCollaborationRoom } from '../session.ts';
+import {
+  createDocumentCollaboration,
+  type DocumentCollaborationHandle,
+} from '../document-session.ts';
 import { findText, nodeText, packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 const DOCUMENT_ID = 'comment-replication-room';
@@ -93,7 +95,7 @@ const WITH_COMMENTS = documentBytes(
 interface Peer {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
-  readonly room: YjsCollaborationRoom;
+  readonly room: DocumentCollaborationHandle;
   readonly store: TreePackageStore;
   readonly port: ReturnType<typeof createCollaborationDocumentPort>;
   readonly detach: () => void;
@@ -150,7 +152,7 @@ async function joinPeer(host: Peer, name: string): Promise<Peer> {
   return peer;
 }
 
-function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: YjsCollaborationRoom): Peer {
+function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: DocumentCollaborationHandle): Peer {
   const store = storeFrom(room.document);
   const port = createCollaborationDocumentPort(store, { documentId: DOCUMENT_ID });
   const detach = room.session.attach(port);

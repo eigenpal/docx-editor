@@ -47,9 +47,9 @@ import {
 import { LogicalIdentityMap } from './document-identity.ts';
 import { CollaborationSchemaError } from './schema.ts';
 import type {
-  YjsCollaborationBootstrap,
-  YjsCollaborationRoom,
-  YjsCollaborationSession,
+  CollaborationHandle,
+  TextCollaborationBootstrap,
+  TextCollaborationSession,
 } from './session.ts';
 
 const AWARENESS_FIELD = 'docxEditor';
@@ -63,24 +63,6 @@ const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
 const MAX_REFUSALS_IN_A_ROW = 3;
 /** Local journals inside this window share one actor undo item. */
 const UNDO_CAPTURE_TIMEOUT_MS = 5_000;
-
-function bindPageLifecycleFlush(flush: () => void): () => void {
-  const doc = typeof document === 'undefined' ? undefined : document;
-  const view = typeof window === 'undefined' ? undefined : window;
-  if (!doc || !view) return () => {};
-  const onVisibilityChange = (): void => {
-    if (doc.visibilityState === 'hidden') flush();
-  };
-  const onPageHide = (): void => {
-    flush();
-  };
-  doc.addEventListener('visibilitychange', onVisibilityChange);
-  view.addEventListener('pagehide', onPageHide);
-  return () => {
-    doc.removeEventListener('visibilitychange', onVisibilityChange);
-    view.removeEventListener('pagehide', onPageHide);
-  };
-}
 
 interface EncodedSelectionAddress {
   readonly paragraphId: string;
@@ -258,7 +240,7 @@ function awarenessPayload(value: unknown): AwarenessPayload | null {
   return selection ? { ...base, selection } : base;
 }
 
-class DocumentSession implements YjsCollaborationSession {
+class DocumentSession implements DocumentCollaborationSession {
   readonly documentId: string;
   readonly sessionId: string;
   readonly identity: CollaborationIdentity;
@@ -281,7 +263,6 @@ class DocumentSession implements YjsCollaborationSession {
   private remoteCounter = 0;
   private destroyed = false;
   private refusedInARow = 0;
-  private unbindPageLifecycle: (() => void) | null = null;
 
   constructor(
     private readonly ydoc: Y.Doc,
@@ -303,7 +284,6 @@ class DocumentSession implements YjsCollaborationSession {
     });
     ydoc.on('afterTransaction', this.onYjsTransaction);
     awareness.on('change', this.onAwarenessChange);
-    this.unbindPageLifecycle = bindPageLifecycleFlush(() => this.flushPendingJournals());
     this.publishAwareness();
     this.setStatus('ready');
   }
@@ -354,6 +334,12 @@ class DocumentSession implements YjsCollaborationSession {
       this.applyJournal(journal);
     });
     this.detachPort = () => {
+      // Detach runs from an unmount, which is a task boundary: a remote update can have landed
+      // since the last commit. While publication was deferred, that made this the second place
+      // a journal could reach shared state against a tree it was not diffed against. Commits
+      // now publish before `transact` returns, so there is nothing here to go stale. The drain
+      // stays for the one case that can still leave an item queued — a journal listener that
+      // transacts on the store it is publishing.
       this.flushPendingJournals();
       stopJournal();
       if (this.port === port) this.port = null;
@@ -415,6 +401,14 @@ class DocumentSession implements YjsCollaborationSession {
     return true;
   }
 
+  /**
+   * Drain anything still queued.
+   *
+   * A commit publishes before `transact` returns, so this is a no-op on the ordinary path. It
+   * stays public because headless hosts call it after every batch, and because a journal
+   * listener that transacts on the store it is publishing is the one case that can leave an
+   * item queued for a moment.
+   */
   flushPendingJournals(): void {
     this.port?.flushPendingJournals();
   }
@@ -509,8 +503,6 @@ class DocumentSession implements YjsCollaborationSession {
   destroy(): void {
     if (this.destroyed) return;
     this.flushPendingJournals();
-    this.unbindPageLifecycle?.();
-    this.unbindPageLifecycle = null;
     this.detachPort?.();
     this.destroyed = true;
     this.ydoc.off('afterTransaction', this.onYjsTransaction);
@@ -610,14 +602,12 @@ class DocumentSession implements YjsCollaborationSession {
     // The canonical store already holds a local commit. Materializing it back would rebuild
     // the package for an edit the store authored.
     if (transaction.origin === this.localOrigin) return;
-    // A QUEUED local journal describes the tree as it stood before this remote update. Publishing
-    // shared state first replaces that tree and resets the identity map underneath the queue, so
-    // the edit would refuse, or land against a node it no longer addresses. Publication is
-    // deferred and reschedules itself while `isInputPending` is true, so the window is widest
-    // exactly when the author holds a key down — the case that loses the most work. Yjs runs a
-    // transaction opened from this handler after the current cleanup instead of nesting it, so
-    // flushing here is safe.
-    this.flushPendingJournals();
+    // Nothing is published from here. A journal describes the tree as it stood when its
+    // transaction committed, and its `spliceText` / `spliceChildren` positions are absolute.
+    // This update has already integrated, so applying a journal now would address the wrong
+    // offset or the wrong sibling — inside bounds, so admitted, so agreed on by every replica.
+    // Journals reach shared state in the frame that commits them instead, which is why there
+    // is nothing left to publish at this point.
     this.publishSharedToPort();
   };
 
@@ -730,7 +720,23 @@ function waitForSharedInitialization(
   });
 }
 
-/** Options for one full-document Yjs collaboration replica. @public */
+/**
+ * Full-document collaboration session.
+ *
+ * The public seam matches {@link TextCollaborationSession}.
+ * @public
+ */
+export type DocumentCollaborationSession = TextCollaborationSession;
+
+/** Owned full-document collaboration replica. @public */
+export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
+
+/**
+ * Options for one full-document collaboration replica.
+ *
+ * The caller owns `ydoc`.
+ * @public
+ */
 export interface CreateDocumentCollaborationOptions {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
@@ -738,13 +744,18 @@ export interface CreateDocumentCollaborationOptions {
   /** Unique attachment identity. Omit it to generate a new identity for this session. */
   readonly sessionId?: string;
   readonly identity: CollaborationIdentity;
-  readonly bootstrap: YjsCollaborationBootstrap;
+  readonly bootstrap: TextCollaborationBootstrap;
 }
 
-/** Create or join one full-document Yjs collaboration replica. @public */
+/**
+ * Create or join one full-document collaboration replica.
+ *
+ * The caller owns `ydoc`.
+ * @public
+ */
 export async function createDocumentCollaboration(
   options: CreateDocumentCollaborationOptions
-): Promise<YjsCollaborationRoom> {
+): Promise<DocumentCollaborationHandle> {
   const documentId = validateDocumentId(options.documentId);
   const sessionId = sessionIdentity(options.sessionId);
   const identity = validateIdentity(options.identity);

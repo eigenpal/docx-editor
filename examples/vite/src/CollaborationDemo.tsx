@@ -126,7 +126,7 @@ export interface CollaborationControlProps {
   readonly session: EditorCollaborationSession | null;
   readonly pending: boolean;
   readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
-  readonly leave: (document: Uint8Array) => void;
+  readonly leave: (nextDocument?: Uint8Array) => void;
 }
 
 export function CollaborationControl({
@@ -236,6 +236,7 @@ export function CollaborationControl({
     setBusy(true);
     setError(null);
     try {
+      // `leave()` keeps the last room document. Pass saved bytes so live edits survive the remount.
       leave(new Uint8Array(await editor.save()));
       const url = new URL(location.href);
       url.searchParams.delete('room');

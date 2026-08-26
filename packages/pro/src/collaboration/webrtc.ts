@@ -14,29 +14,34 @@ import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { WebrtcProvider } from 'y-webrtc';
 import type { CollaborationIdentity } from '@docx-editor.dev/core/collaboration';
-import { createDocumentCollaboration } from './document-session.ts';
+import {
+  createDocumentCollaboration,
+  type DocumentCollaborationHandle,
+} from './document-session.ts';
 import { installChunkedFraming, type ChunkablePeer } from './webrtc-chunking.ts';
-import type {
-  YjsCollaborationBootstrap,
-  YjsCollaborationRoom,
-  YjsCollaborationSession,
-} from './session.ts';
+import type { TextCollaborationBootstrap } from './session.ts';
 
-/** Default public signaling endpoint for the local proof. @public */
-export const DEFAULT_SIGNALING_ENDPOINTS = Object.freeze(['wss://turn.0docker.com/ws']);
+/**
+ * Public demo signaling endpoints. Use these endpoints for demos only.
+ *
+ * Production deployments must pass their own `signaling` URLs and TURN
+ * servers. WebRTC peers cannot connect across many networks without TURN.
+ * @public
+ */
+export const DEMO_SIGNALING_ENDPOINTS = Object.freeze(['wss://turn.0docker.com/ws']);
 
 /** Options for the owned WebRTC collaboration convenience wrapper. @public */
 export interface CreateWebrtcCollaborationOptions {
   readonly roomId: string;
   readonly identity: CollaborationIdentity;
-  readonly bootstrap: YjsCollaborationBootstrap;
+  readonly bootstrap: TextCollaborationBootstrap;
   readonly signaling?: readonly string[];
   readonly iceServers?: readonly RTCIceServer[];
   readonly password?: string;
 }
 
 /** Owned WebRTC provider and provider-neutral collaboration resources. @public */
-export interface WebrtcCollaborationRoom extends YjsCollaborationRoom {
+export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {
   readonly ydoc: Y.Doc;
   readonly provider: WebrtcProvider;
 }
@@ -87,7 +92,7 @@ const installChunkedTransport = (provider: WebrtcProvider): void => {
 /** Create one owned `y-webrtc` room and provider-neutral collaboration session. @public */
 export async function createWebrtcCollaboration(
   options: CreateWebrtcCollaborationOptions
-): Promise<WebrtcCollaborationRoom> {
+): Promise<WebrtcCollaborationHandle> {
   const roomId = validateRoomId(options.roomId);
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
@@ -95,7 +100,7 @@ export async function createWebrtcCollaboration(
   const connectProvider = (): WebrtcProvider => {
     const created = new WebrtcProvider(roomId, ydoc, {
       awareness,
-      signaling: [...(options.signaling ?? DEFAULT_SIGNALING_ENDPOINTS)],
+      signaling: [...(options.signaling ?? DEMO_SIGNALING_ENDPOINTS)],
       password: options.password ?? roomId,
       ...(options.iceServers
         ? {
@@ -110,10 +115,10 @@ export async function createWebrtcCollaboration(
     installChunkedTransport(created);
     return created;
   };
-  let room: YjsCollaborationRoom;
+  let handle: DocumentCollaborationHandle;
   try {
     if (options.bootstrap.kind === 'join') provider = connectProvider();
-    room = await createDocumentCollaboration({
+    handle = await createDocumentCollaboration({
       ydoc,
       awareness,
       documentId: roomId,
@@ -128,14 +133,14 @@ export async function createWebrtcCollaboration(
     throw error;
   }
   if (!provider) {
-    room.destroy();
+    handle.destroy();
     awareness.destroy();
     ydoc.destroy();
     throw new Error('WebRTC provider did not initialize');
   }
   const connectedProvider = provider;
 
-  const session = room.session as YjsCollaborationSession;
+  const session = handle.session;
   const onStatus = (event: { readonly connected: boolean }): void => {
     session.setTransportStatus(
       event.connected ? 'ready' : 'disconnected',
@@ -146,7 +151,7 @@ export async function createWebrtcCollaboration(
 
   let destroyed = false;
   return Object.freeze({
-    document: room.document,
+    document: handle.document,
     session,
     ydoc,
     provider: connectedProvider,
@@ -154,7 +159,7 @@ export async function createWebrtcCollaboration(
       if (destroyed) return;
       destroyed = true;
       connectedProvider.off('status', onStatus);
-      room.destroy();
+      handle.destroy();
       connectedProvider.destroy();
       ydoc.destroy();
     },

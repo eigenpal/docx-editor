@@ -19,5 +19,4 @@ export {
   type UseWebrtcCollaborationConnectOptions,
   type UseWebrtcCollaborationOptions,
   type UseWebrtcCollaborationReturn,
-  type UseWebrtcCollaborationRoomHandle,
 } from './useWebrtcCollaboration.ts';

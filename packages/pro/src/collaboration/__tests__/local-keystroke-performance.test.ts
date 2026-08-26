@@ -10,8 +10,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Local keystroke cost with and without an attached replica.
 //
-// Timings are hardware-sensitive. The hard gates are: no Yjs update inside transact,
-// a drained publish queue after idle, and bounded awareness / registry growth.
+// Timings are hardware-sensitive. The hard gates are: the publish queue is empty the moment
+// transact returns, the Yjs write happens on that same commit, and awareness and registry
+// growth stay bounded.
+//
+// A journal carries absolute positions against the tree its transaction was diffed against.
+// A queue depth above zero is therefore a correctness gate, not a throughput one: the next
+// remote update moves that tree, and the stale position stays in bounds. `transactMs` below
+// includes the Yjs write for exactly that reason, and is what the recorded transact budget
+// is compared against.
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -212,7 +219,7 @@ async function soloStore(bytes: Uint8Array) {
 }
 
 describe('local keystroke path with a replica attached', () => {
-  test('transact stays off the Yjs path and within 2x solo', async () => {
+  test('transact replicates on the commit and stays within 2x solo', async () => {
     const bytes = proseBytes();
     harness.cleanup();
     const soloPeer = await soloStore(bytes);
@@ -305,13 +312,16 @@ describe('local keystroke path with a replica attached', () => {
     ];
 
     const rows: string[] = [];
+    const stranded: string[] = [];
+    const silent: string[] = [];
     let insertAttached = solo;
     for (const item of gestures) {
       const measured = await measure(item.bytes, item.gesture, {
         peerEdits: item.peerEdits === true,
       });
       if (item.name === 'insert-text') insertAttached = measured.transact;
-      expect(measured.yUpdatesDuringTransact).toBe(0);
+      if (measured.peakPending !== 0) stranded.push(item.name);
+      if (measured.yUpdatesDuringTransact === 0) silent.push(item.name);
       rows.push(
         [
           item.name,
@@ -325,7 +335,7 @@ describe('local keystroke path with a replica attached', () => {
       );
     }
 
-    // Keep the table in the test output so a later capture can compare to the 1.7 budgets.
+    // Log before the gates: a gate that fails without its measurement is not diagnosable.
     console.log(
       JSON.stringify({
         soloInsert: solo,
@@ -334,6 +344,9 @@ describe('local keystroke path with a replica attached', () => {
         rows,
       })
     );
+    // No gesture may leave a journal waiting, and every gesture must reach Yjs on its commit.
+    expect(stranded).toEqual([]);
+    expect(silent).toEqual([]);
     expect(ratioPass(solo, insertAttached)).toBe(true);
     expect(rows.length).toBe(gestures.length);
   });
@@ -344,12 +357,13 @@ describe('local keystroke path with a replica attached', () => {
     const startNodes = nodes();
     const startAwareness = alice.awareness.getStates().size;
     const pendingSamples: number[] = [];
+    let yUpdates = 0;
     for (let edit = 0; edit < LEAK_EDITS; edit += 1) {
       const live = firstTextParagraph(alice);
       const sample = runOps(alice, [
         { op: 'insertText', paragraphId: live.id, offset: live.length, text: 'x' },
       ]);
-      expect(sample.yUpdatesDuringTransact).toBe(0);
+      yUpdates += sample.yUpdatesDuringTransact;
       pendingSamples.push(sample.pendingAfterTransact);
       alice.room.session.setLocalSelection({
         anchor: { paragraphId: '00000001', offset: 0 },
@@ -365,6 +379,7 @@ describe('local keystroke path with a replica attached', () => {
           edits: LEAK_EDITS,
           pendingAfterIdle: pendingCanonicalJournalCount(alice.store),
           peakPending: Math.max(...pendingSamples),
+          yUpdatesDuringTransact: yUpdates,
           nodeDelta,
           awarenessStart: startAwareness,
           awarenessEnd: alice.awareness.getStates().size,
@@ -373,7 +388,8 @@ describe('local keystroke path with a replica attached', () => {
     );
     expect(pendingCanonicalJournalCount(alice.store)).toBe(0);
     expect(alice.awareness.getStates().size).toBe(startAwareness);
-    expect(Math.max(...pendingSamples)).toBeLessThan(LEAK_EDITS);
+    expect(Math.max(...pendingSamples)).toBe(0);
+    expect(yUpdates).toBe(LEAK_EDITS);
     expect(nodeDelta).toBeLessThan(LEAK_EDITS * 4);
   });
 
@@ -470,8 +486,9 @@ describe('local keystroke path with a replica attached', () => {
           p95BudgetMs: TRANSACTION_P95_MAX_MS,
         })
       );
-      expect(yUpdatesDuringTransact).toBe(0);
+      expect(yUpdatesDuringTransact).toBeGreaterThan(0);
       expect(attached.medianMs).toBeLessThanOrEqual(TRANSACTION_MEDIAN_MAX_MS);
+      expect(attached.p95Ms).toBeLessThanOrEqual(TRANSACTION_P95_MAX_MS);
       detach();
       room.destroy();
       awareness.destroy();

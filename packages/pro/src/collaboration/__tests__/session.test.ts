@@ -12,7 +12,7 @@ import {
   semanticDigest,
 } from '@docx-editor.dev/core/store';
 import { strFromU8, unzipSync } from 'fflate';
-import { createYjsCollaboration } from '../session.ts';
+import { createTextCollaboration } from '../session.ts';
 import { MAX_BASELINE_BYTES, schemaOf } from '../schema.ts';
 import { applyLocal, collaborationDocx, storeAndPort } from './support.ts';
 
@@ -26,7 +26,7 @@ function sync(source: Y.Doc, target: Y.Doc): void {
 async function replicas() {
   const leftDoc = new Y.Doc();
   const leftAwareness = new Awareness(leftDoc);
-  const left = await createYjsCollaboration({
+  const left = await createTextCollaboration({
     ydoc: leftDoc,
     awareness: leftAwareness,
     documentId: ROOM,
@@ -37,7 +37,7 @@ async function replicas() {
   const rightDoc = new Y.Doc();
   Y.applyUpdate(rightDoc, Y.encodeStateAsUpdate(leftDoc), 'test-provider');
   const rightAwareness = new Awareness(rightDoc);
-  const right = await createYjsCollaboration({
+  const right = await createTextCollaboration({
     ydoc: rightDoc,
     awareness: rightAwareness,
     documentId: ROOM,
@@ -89,7 +89,7 @@ describe('provider-neutral Yjs collaboration', () => {
   test('a local canonical edit is not rematerialized through every shared paragraph', async () => {
     const ydoc = new Y.Doc();
     const awareness = new Awareness(ydoc);
-    const room = await createYjsCollaboration({
+    const room = await createTextCollaboration({
       ydoc,
       awareness,
       documentId: ROOM,
@@ -261,7 +261,7 @@ describe('provider-neutral Yjs collaboration', () => {
     const thirdDoc = new Y.Doc();
     Y.applyUpdate(thirdDoc, Y.encodeStateAsUpdate(state.leftDoc), 'test-provider');
     const thirdAwareness = new Awareness(thirdDoc);
-    const third = await createYjsCollaboration({
+    const third = await createTextCollaboration({
       ydoc: thirdDoc,
       awareness: thirdAwareness,
       documentId: ROOM,
@@ -373,7 +373,7 @@ describe('provider-neutral Yjs collaboration', () => {
   test('transport status transitions are observable and destroy is terminal', async () => {
     const ydoc = new Y.Doc();
     const awareness = new Awareness(ydoc);
-    const room = await createYjsCollaboration({
+    const room = await createTextCollaboration({
       ydoc,
       awareness,
       documentId: ROOM,
@@ -395,7 +395,7 @@ describe('provider-neutral Yjs collaboration', () => {
   test('a refused attachment does not wedge the session', async () => {
     const ydoc = new Y.Doc();
     const awareness = new Awareness(ydoc);
-    const room = await createYjsCollaboration({
+    const room = await createTextCollaboration({
       ydoc,
       awareness,
       documentId: ROOM,
@@ -465,7 +465,7 @@ describe('provider-neutral Yjs collaboration', () => {
     const oversizedDoc = new Y.Doc();
     const oversizedAwareness = new Awareness(oversizedDoc);
     await expect(
-      createYjsCollaboration({
+      createTextCollaboration({
         ydoc: oversizedDoc,
         awareness: oversizedAwareness,
         documentId: ROOM,
@@ -481,7 +481,7 @@ describe('provider-neutral Yjs collaboration', () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      createYjsCollaboration({
+      createTextCollaboration({
         ydoc: abortedDoc,
         awareness: abortedAwareness,
         documentId: ROOM,
@@ -494,7 +494,7 @@ describe('provider-neutral Yjs collaboration', () => {
 
     const ydoc = new Y.Doc();
     const firstAwareness = new Awareness(ydoc);
-    const first = await createYjsCollaboration({
+    const first = await createTextCollaboration({
       ydoc,
       awareness: firstAwareness,
       documentId: ROOM,
@@ -503,7 +503,7 @@ describe('provider-neutral Yjs collaboration', () => {
     });
     const secondAwareness = new Awareness(ydoc);
     await expect(
-      createYjsCollaboration({
+      createTextCollaboration({
         ydoc,
         awareness: secondAwareness,
         documentId: ROOM,
@@ -522,14 +522,14 @@ describe('provider-neutral Yjs collaboration', () => {
     const rightDoc = new Y.Doc();
     const leftAwareness = new Awareness(leftDoc);
     const rightAwareness = new Awareness(rightDoc);
-    const left = await createYjsCollaboration({
+    const left = await createTextCollaboration({
       ydoc: leftDoc,
       awareness: leftAwareness,
       documentId: ROOM,
       identity: { actorId: 'left-creator', name: 'Left creator' },
       bootstrap: { kind: 'create', document: collaborationDocx() },
     });
-    const right = await createYjsCollaboration({
+    const right = await createTextCollaboration({
       ydoc: rightDoc,
       awareness: rightAwareness,
       documentId: ROOM,

@@ -18,7 +18,12 @@ import { withPart, type OoxmlPackage } from './ooxml-package.ts';
 import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
-import { freePackageRelationshipId } from './actor-scoped-ids.ts';
+import {
+  MAX_RELATIONSHIP_NUMBER,
+  freePackageRelationshipId,
+  nextStripedDecimalId,
+  resolveAllocationActor,
+} from './actor-scoped-ids.ts';
 import {
   recordPutContentTypeOverride,
   recordPutRelationship,
@@ -219,15 +224,27 @@ function sequenceInsertIndex(
   return at;
 }
 
-/** The largest existing id in a set, so a new one cannot collide. */
+/**
+ * Next unused `w:numId` / `w:abstractNumId`.
+ *
+ * No actor: one past the highest, the sequence this file minted before striping. `w:numId`
+ * 0 is Word's "no numbering" sentinel, so even a stripe that lands on 0 advances one class.
+ * An attached actor takes the next unused id in its residue, so two peers creating lists
+ * from the same snapshot cannot weld `numbering.xml` onto one shared `numId`.
+ */
 function nextFreeId(nodes: readonly OoxmlElement[], attributeName: string): number {
+  const used = new Set<string>(['0']);
   let max = 0;
   for (const node of nodes) {
     const raw = attribute(node, attributeName);
     if (!raw || !/^\d{1,9}$/.test(raw)) continue;
-    max = Math.max(max, Number(raw));
+    const value = Number(raw);
+    used.add(String(value));
+    max = Math.max(max, value);
   }
-  return max + 1;
+  const actor = resolveAllocationActor();
+  if (!actor) return max + 1;
+  return Number(nextStripedDecimalId(used, actor, MAX_RELATIONSHIP_NUMBER));
 }
 
 export interface EnsuredListDefinition {

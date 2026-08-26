@@ -48,7 +48,7 @@ Proposed low-level browser API:
 ```ts
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { createYjsCollaboration } from '@docx-editor.dev/collaboration-yjs';
+import { createTextCollaboration } from '@docx-editor.dev/collaboration-yjs';
 
 const ydoc = new Y.Doc();
 const provider = new WebrtcProvider(roomId, ydoc, {
@@ -60,7 +60,7 @@ const provider = new WebrtcProvider(roomId, ydoc, {
   },
 });
 
-const room = await createYjsCollaboration({
+const room = await createTextCollaboration({
   ydoc,
   awareness: provider.awareness,
   identity: { actorId: user.id, name: user.name, color: user.color },
@@ -202,7 +202,7 @@ Awareness never enters canonical transactions, history, snapshots, baseline, or 
 ```ts
 import * as Y from 'yjs';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { createYjsCollaboration } from '@docx-editor.dev/collaboration-yjs';
+import { createTextCollaboration } from '@docx-editor.dev/collaboration-yjs';
 import { DocxEditor } from '@docx-editor.dev/editor-api';
 
 const ydoc = new Y.Doc();
@@ -213,7 +213,7 @@ const provider = new HocuspocusProvider({
   token: process.env.COLLAB_TOKEN!,
 });
 
-const room = await createYjsCollaboration({
+const room = await createTextCollaboration({
   ydoc,
   awareness: provider.awareness,
   identity: {

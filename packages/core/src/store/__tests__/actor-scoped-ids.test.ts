@@ -197,6 +197,29 @@ describe('actor stripes are disjoint', () => {
     const bobStripe = actorStripe('bob');
     for (const id of bob) expect(Number(id) % ACTOR_ID_STRIPE).toBe(bobStripe);
   });
+
+  test('the stripe space is wide enough that a real room rarely shares a class', () => {
+    // Same-stripe actors mint the SAME id, so the count is a birthday problem, not a style
+    // choice. This was 16, where a five-person room collided half the time. The bound below is
+    // what keeps that from being reintroduced as a "keep ids small" tidy-up.
+    const room = 8;
+    const pairs = (room * (room - 1)) / 2;
+    // Rough birthday bound: expected colliding pairs is pairs / classes. At 16 this was 1.75.
+    expect(pairs / ACTOR_ID_STRIPE).toBeLessThan(0.005);
+  });
+
+  test('actor ids of the shape hosts mint spread across the space', () => {
+    // Deterministic sample, so this measures our modulus rather than the platform's RNG.
+    const stripes = new Set<number>();
+    for (let index = 0; index < 200; index += 1) {
+      stripes.add(
+        actorStripe(`Reviewer ${index}:0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f${index % 10}`)
+      );
+    }
+    // At 65,536 classes, 200 draws expect ~0.3 collisions; demanding near-perfect spread here
+    // would be testing FNV, so this only catches a modulus that collapses the space.
+    expect(stripes.size).toBeGreaterThan(190);
+  });
 });
 
 describe('solo allocation stays Word-like', () => {

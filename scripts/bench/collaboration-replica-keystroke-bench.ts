@@ -2,7 +2,11 @@
 // Isolated keystroke-path timing with and without an attached full-document replica.
 //
 // Comparable to openspec/changes/full-document-yjs-collaboration/local-edit-baseline.json
-// (task 1.7) and collaboration-budgets.json (2x local transact, 0 Yjs updates in transact).
+// (task 1.7) and collaboration-budgets.json (2x local transact, empty queue after transact).
+//
+// `transactMs` includes the Yjs write: a journal carries absolute positions against the tree
+// it was diffed against, so it is published on the commit rather than held for a later task.
+// `flushMs` is therefore near zero, and `pending` must read 0.
 //
 // Run in isolation: bun scripts/bench/collaboration-replica-keystroke-bench.ts
 
@@ -304,7 +308,8 @@ const leak = {
 console.log(JSON.stringify({ label: 'leak', ...leak }));
 
 const insertPass =
-  attachedInsert.yUpdates === 0 &&
+  attachedInsert.yUpdates > 0 &&
+  attachedInsert.peakPending === 0 &&
   attachedInsert.transact.medianMs <= TRANSACTION_MEDIAN_MAX_MS &&
   attachedInsert.transact.p95Ms <= TRANSACTION_P95_MAX_MS &&
   attachedInsert.transact.medianMs <= solo.transact.medianMs * 2 + 2 &&
@@ -322,7 +327,7 @@ console.log(
       transactionMedianMaxMs: TRANSACTION_MEDIAN_MAX_MS,
       transactionP95MaxMs: TRANSACTION_P95_MAX_MS,
       ratio: 2,
-      yjsUpdatesDuringLocalTransactMustBe: 0,
+      pendingJournalsAfterLocalTransactMustBe: 0,
     },
     leak,
   })

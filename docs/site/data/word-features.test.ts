@@ -1,11 +1,28 @@
 import { describe, expect, test } from 'bun:test';
-import { wordFeatures } from './word-features.ts';
+import { FEATURE_TIERS, wordFeatures } from './word-features.ts';
 
 function feature(id: string) {
   const row = wordFeatures.find((f) => f.id === id);
   if (!row) throw new Error(`missing feature row: ${id}`);
   return row;
 }
+
+describe('word-features — the matrix itself', () => {
+  test('every row declares a tier this site can render', () => {
+    // A `tier: 'pro'` shipped here because no typecheck project included this file. The union
+    // is the type gate; this is the one the suite runs.
+    const tiers = new Set<string>(FEATURE_TIERS);
+    const invalid = wordFeatures
+      .filter((row) => !tiers.has(row.tier))
+      .map((row) => `${row.id}: ${String(row.tier)}`);
+    expect(invalid).toEqual([]);
+  });
+
+  test('every row has a unique id, so `feature()` cannot silently read the wrong row', () => {
+    const ids = wordFeatures.map((row) => row.id);
+    expect(ids.length).toBe(new Set(ids).size);
+  });
+});
 
 describe('word-features — images lane honesty', () => {
   test('inline and anchored editing is partial in both adapters', () => {
