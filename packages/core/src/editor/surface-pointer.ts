@@ -26,6 +26,7 @@ import {
 } from '../layout/semantic-hit-test.ts';
 import {
   documentOrder,
+  deletedTextBoundaries,
   paragraphTextFromLayout,
   wordBoundary,
   type SemanticPosition,
@@ -577,9 +578,12 @@ export function createPointerController(
       if (from === to && to < text.length) to += 1;
       return { from: { paragraphId: id, offset: from }, to: { paragraphId: id, offset: to } };
     }
+    // A word stops at a struck half's edge: a replacement paints the old text and the new
+    // with nothing between them, so without this a double-click on either took both.
+    const stops = deletedTextBoundaries(layout, id);
     return {
-      from: { paragraphId: id, offset: wordBoundary(text, anchor + 1, -1) },
-      to: { paragraphId: id, offset: wordBoundary(text, anchor, 1) },
+      from: { paragraphId: id, offset: wordBoundary(text, anchor + 1, -1, stops) },
+      to: { paragraphId: id, offset: wordBoundary(text, anchor, 1, stops) },
     };
   }
 

@@ -537,6 +537,7 @@ export {
   keyedRangeRects,
   selectionRects,
   spansInSelection,
+  deletedTextBoundaries,
   wordBoundary,
   type CaretAtOptions,
   type CaretGeometry,

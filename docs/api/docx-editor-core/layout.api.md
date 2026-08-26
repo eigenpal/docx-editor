@@ -534,6 +534,9 @@ export function defaultNoteSeparatorRuleStyle(_noteKind: NoteKind, _kind: 'separ
 export function defaultTabIntervalFromSettings(settings: OoxmlNode | null | undefined): number;
 
 // @public
+export function deletedTextBoundaries(layout: SemanticLayout, paragraphId: string): ReadonlySet<number>;
+
+// @public
 export function deriveNoteDisplayMarks(noteKind: NoteKind, references: readonly NoteReferenceSite[], properties: ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
@@ -3368,7 +3371,7 @@ export interface WordBoundary {
 }
 
 // @public
-export function wordBoundary(text: string, offset: number, direction: -1 | 1): number;
+export function wordBoundary(text: string, offset: number, direction: -1 | 1, stops?: ReadonlySet<number>): number;
 
 // @public
 export interface WordBoundaryResolverDeps {

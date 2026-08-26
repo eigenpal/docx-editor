@@ -660,6 +660,44 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
   return text;
 }
 
+/**
+ * Paragraph offsets a WORD may not run through: the edges of every struck half on screen.
+ *
+ * Deleted text is the one thing a view paints that does not exist in the document the reader
+ * is heading towards — it is the OTHER version, spliced in beside the proposal so the two can
+ * be compared. Its characters are therefore not adjacent to their neighbours in any single
+ * version, however adjacent they look.
+ *
+ * A replacement is where that stops being pedantic. Word writes one as a deletion immediately
+ * followed by an insertion, with no separator between them, so `ALL CAPS` struck and `fsdfsd`
+ * added read as the single word `CAPSfsdfsd`: a double-click on the old text selected the new
+ * text with it, across a decision the reader had not taken. Feeding these to `wordBoundary`
+ * makes each half its own word.
+ *
+ * Only the halves this view actually renders contribute. `proposed` paints no deletion, so it
+ * has no seams and this answers empty — which is also why the walk reads the LAYOUT rather
+ * than the tree.
+ */
+export function deletedTextBoundaries(
+  layout: SemanticLayout,
+  paragraphId: string
+): ReadonlySet<number> {
+  const stops = new Set<number>();
+  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+    const segment = lineSegmentFor(line, paragraphId);
+    if (!segment) continue;
+    for (const span of segment.spans) {
+      if (span.range.end === span.range.start) continue;
+      if (!span.revisions?.some((entry) => entry.kind === 'delete' || entry.kind === 'moveFrom')) {
+        continue;
+      }
+      stops.add(span.range.start);
+      stops.add(span.range.end);
+    }
+  }
+  return stops;
+}
+
 /** Story-scoped stops are required when navigating inside an open header or footer. */
 export interface MoveCaretOptions {
   /** Precomputed active-story stops; body navigation keeps the indexed default. */
@@ -697,7 +735,8 @@ export function moveCaret(
     const target = wordBoundary(
       paragraphTextFromLayout(layout, position.paragraphId),
       position.offset,
-      direction
+      direction,
+      deletedTextBoundaries(layout, position.paragraphId)
     );
     return target === position.offset
       ? moveHorizontalCaret(layout, position, direction, options.measurer)
@@ -779,7 +818,12 @@ export function moveCaret(
     case 'wordRight': {
       const text = paragraphTextFromLayout(layout, position.paragraphId);
       const direction = command === 'wordLeft' ? -1 : 1;
-      const target = wordBoundary(text, position.offset, direction);
+      const target = wordBoundary(
+        text,
+        position.offset,
+        direction,
+        deletedTextBoundaries(layout, position.paragraphId)
+      );
       // Already at the paragraph edge: step into the neighbouring paragraph the way a plain
       // arrow would, so the key is never a dead press at a boundary.
       if (target === position.offset) {
