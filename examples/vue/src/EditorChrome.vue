@@ -4,6 +4,7 @@
       <div class="demo-header__left">
         <BrandLogo />
         <AdapterSwitcher v-if="showAdapterSwitcher" current="vue" />
+        <SourceLink current="vue" />
       </div>
 
       <div class="demo-header__title-block">
@@ -113,6 +114,7 @@ import {
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import BrandLogo from '../../shared/BrandLogo.vue';
 import AdapterSwitcher from './AdapterSwitcher.vue';
+import SourceLink from './SourceLink.vue';
 import ThemeToggle from './ThemeToggle.vue';
 import FontPreviewItems from './FontPreviewItems.vue';
 import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';

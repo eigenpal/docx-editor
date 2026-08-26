@@ -7,10 +7,16 @@ const CLEAN_URL = `${VUE_URL}?fixture=review-clean-demo.docx`;
 const COMMENTED_URL = `${VUE_URL}?fixture=review-nav-demo.docx`;
 const SCROLLER = '.docx-editor__scroll-container';
 
+// The demo mounts the editor Root BEFORE the document bytes arrive, so the packaged
+// loading overlay paints a skeleton sheet that also carries `.docx-page`. Waiting on the
+// bare class clears the gate on that placeholder and measures an 816px default sheet.
+// Every wait below excludes it, so the gate means "the real document is painted".
+const PAINTED_PAGE = '.docx-page:not(.docx-editor__loading-page)';
+
 async function waitForEditor(page: Page, url = VUE_URL): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('composed-mount')).toBeVisible();
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 }
 
 async function openContextMenu(page: Page): Promise<{ x: number; y: number }> {
@@ -69,7 +75,7 @@ test.describe('Vue review chrome', () => {
 
   test('rulers match the page and Page Setup stays a dialog', async ({ page }) => {
     await waitForEditor(page, CLEAN_URL);
-    const pageBox = await page.locator('.docx-page').first().boundingBox();
+    const pageBox = await page.locator(PAINTED_PAGE).first().boundingBox();
     const horizontal = await page.locator('.docx-horizontal-ruler').boundingBox();
     const vertical = await page.locator('.docx-vertical-ruler').boundingBox();
     expect(pageBox).not.toBeNull();
@@ -97,7 +103,7 @@ test.describe('Vue review chrome', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
     const headerBand = page.locator('[data-docx-hf="header"]').first();
     await headerBand.dblclick();
     const chrome = page.locator('[data-testid="docx-hf-chrome"]');
@@ -116,7 +122,7 @@ test.describe('Vue review chrome', () => {
   test('commented fixture renders existing review cards', async ({ page }) => {
     await page.goto(COMMENTED_URL, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
     await expect(page.locator('[data-testid="review-card"]')).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator('[data-testid="review-rail"]')).toContainText('Check this.');
   });

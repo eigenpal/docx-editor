@@ -2,13 +2,19 @@ import { expect, test } from '@playwright/test';
 
 const VUE_URL = 'http://localhost:5274/';
 
+// The demo mounts the editor Root BEFORE the document bytes arrive, so the packaged
+// loading overlay paints a skeleton sheet that also carries `.docx-page`. Waiting on the
+// bare class clears the gate on that placeholder and measures an 816px default sheet.
+// Every wait below excludes it, so the gate means "the real document is painted".
+const PAINTED_PAGE = '.docx-page:not(.docx-editor__loading-page)';
+
 test.describe('Vue contextual interactions', () => {
   test('editing mode moves focus into its open menu', async ({ page }) => {
     await page.goto(`${VUE_URL}?fixture=review-clean-demo.docx`, {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     await page.getByTestId('editing-mode-trigger').click();
     const checked = page.locator('[role="menuitemradio"][aria-checked="true"]');
@@ -21,7 +27,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     const trigger = page.locator('[data-slot="toolbar.more"]');
     await expect(trigger).toBeVisible();
@@ -37,7 +43,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     await page.locator('.docx-table-cell').first().click();
     const root = page.locator('[data-slot="table.borderTarget"]').first();
@@ -67,7 +73,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     await page.getByRole('menuitem', { name: 'Insert', exact: true }).click();
     const breakRow = page.getByRole('menuitem', { name: 'Break', exact: true });
@@ -84,7 +90,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     const link = page.locator('.docx-hyperlink').filter({ hasText: 'Example' });
     await expect(link).toBeVisible();
@@ -105,7 +111,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     const link = page.locator('.docx-hyperlink').filter({ hasText: 'Example' });
     await link.click();

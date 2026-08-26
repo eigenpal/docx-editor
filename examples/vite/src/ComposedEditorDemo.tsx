@@ -32,6 +32,7 @@ import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
+import { SourceLink } from '../../shared/SourceLink';
 import { ThemeToggle } from './ThemeToggle';
 import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoButtons';
@@ -411,6 +412,7 @@ function EditorChrome({
         <div className="demo-header__left">
           <BrandLogo />
           {showAdapterSwitcher ? <AdapterSwitcher current="react" /> : null}
+          <SourceLink current="react" />
         </div>
 
         {/* Title with the LIBRARY menu bar beneath, Docs-style.
