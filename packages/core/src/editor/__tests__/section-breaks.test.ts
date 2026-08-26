@@ -698,3 +698,108 @@ describe('a caret answers without writing anything', () => {
     }
   });
 });
+
+describe('the lock pre-check reads WML locks, not every element named lock', () => {
+  // It matched on the local name alone, so VML's `o:lock` — which Word writes inside
+  // `v:shapetype` for every legacy picture — turned it true. One stray shape then cost the
+  // gate its cheap exact answers: past the span bound it answered "allowed" for a break it
+  // already knew would refuse, and ordering the selection flushed pending input on the way.
+  // Long enough to be past the span bound, and UNIFORM, so the cheap short-circuits settle
+  // it: every section starts nextPage, a continuous break retypes, suggesting refuses.
+  const LONG = (extra: string) =>
+    Array.from({ length: 200 }, (_, i) => p(`a ${i}`)).join('') +
+    extra +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+  const VML_SHAPE =
+    '<w:p><w:r><w:pict><v:shapetype xmlns:v="urn:schemas-microsoft-com:vml" ' +
+    'xmlns:o="urn:schemas-microsoft-com:office:office" id="_x0000_t75">' +
+    '<o:lock v:ext="edit" aspectratio="t"/></v:shapetype></w:pict></w:r></w:p>';
+  const SDT_LOCKED_SHELL =
+    '<w:sdt><w:sdtPr><w:lock w:val="sdtLocked"/></w:sdtPr>' +
+    `<w:sdtContent>${p('shell')}</w:sdtContent></w:sdt>`;
+
+  test.each([
+    ['a VML o:lock', VML_SHAPE],
+    ['an sdtLocked shell, which leaves content editable', SDT_LOCKED_SHELL],
+    ['nothing', ''],
+  ])('%s does not cost the exact answer', (_label, extra) => {
+    const editor = mount(LONG(extra), 'suggesting');
+    editor.surface!.selectAll();
+    // Past the span bound, so only the cheap short-circuits can answer — and they must run.
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toMatchObject({
+      ok: false,
+    });
+    expect(editor.surface!.insertSectionBreak('continuous')).toBe(false);
+  });
+
+  test('and it still answers for a control that really does hold content', () => {
+    const editor = mount(
+      p('Alpha') +
+        '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+        p('Inside') +
+        '</w:sdtContent></w:sdt>' +
+        p('Beta') +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    const inside = editor.surface!.session.paragraphIds()[1]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: inside, offset: 0 },
+      head: { paragraphId: inside, offset: 3 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toMatchObject({
+      ok: false,
+      reason: 'a section break cannot be inserted in locked or linked content',
+    });
+  });
+});
+
+describe('locks are reported before suggesting', () => {
+  // "Turn off suggesting to insert it" is only worth saying when doing so would let the break
+  // through. With a locked section owner it would not, so the lock is the honest answer.
+  test('a locked owner in suggesting mode names the lock, not the mode', () => {
+    const body =
+      p('Alpha') +
+      '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+      '<w:p><w:pPr><w:sectPr><w:type w:val="oddPage"/><w:pgSz w:w="12240" w:h="15840"/>' +
+      '</w:sectPr></w:pPr><w:r><w:t>Inside</w:t></w:r></w:p>' +
+      '</w:sdtContent></w:sdt>' +
+      p('Beta') +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+    const editor = mount(body, 'suggesting');
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 3 },
+      head: { paragraphId: first, offset: 3 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toMatchObject({
+      ok: false,
+      reason:
+        'a section break cannot change a section that a locked or linked content control holds',
+    });
+  });
+});
+
+describe('a deletion that crosses held content reports the lane, not the store enum', () => {
+  test('a range spanning a locked control refuses in words a locale can carry', () => {
+    // The landing alone never sees this: it is the DELETION the break replaces the selection
+    // with that crosses the control. Only the store knows, and its answer is `locked`.
+    const editor = mount(
+      p('Alpha') +
+        '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+        p('Inside') +
+        '</w:sdtContent></w:sdt>' +
+        p('Omega') +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 1 },
+      head: { paragraphId: ids[2]!, offset: 1 },
+    });
+    expect(editor.exec({ type: 'insertBreak', kind: 'section' } as never)).toMatchObject({
+      ok: false,
+      reason: 'a section break cannot be inserted in locked or linked content',
+    });
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(3);
+  });
+});

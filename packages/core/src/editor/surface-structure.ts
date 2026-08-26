@@ -17,11 +17,7 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
-import {
-  isTableNested,
-  sectionBreakTypeOf,
-  targetSectionNodes,
-} from '../store/store/tree-op-section-address.ts';
+import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
 import { paragraphTabStopsOf } from './surface-formatting.ts';
@@ -56,13 +52,11 @@ const PARAGRAPH_FLAG_PROPERTIES = [
 ] as const satisfies readonly (readonly [keyof SurfaceParagraphFormat, string])[];
 import type { RangeDeletionPlan } from './surface-selection-ops.ts';
 import {
-  MAX_GATED_BREAK_SPAN,
-  SUGGESTED_BREAK_REFUSAL,
+  LOCKED_CONTENT_BREAK_REFUSAL,
   TABLE_CELL_BREAK_REFUSAL,
   landedBreakRefusal,
-  partDeclaresContentControlLocks,
+  sectionBreakGate,
   sectionBreakLanding,
-  uniformSectionBreakType,
 } from './surface-section-breaks.ts';
 
 /** What the composition root lends this lane: its session, its layout, and its commit. */
@@ -863,86 +857,17 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     },
 
     sectionBreakRefusal(breakType = 'nextPage' as const) {
-      // Cheap questions first, because `can` runs this on every toolbar derivation while the
-      // Insert menu is open — twice, once per section-break row — and the landing below costs
-      // a range-deletion plan that scales with the SELECTION. Asking it eagerly made
-      // `can(insertBreak)` take seconds on a select-all in a long document, on the next-page
-      // row that had no gate at all before this feature as well as on the new one.
       if (deps.storyScope().kind !== 'body') return null;
-      // In a table cell a section cannot end at all: Word never writes one there, and the
-      // read side would ignore it. Refused whatever the mode, from the two selections that
-      // say so without ordering anything. A RECTANGLE is by construction inside a table —
-      // it IS the table gesture, and leaving it out left both rows enabled and always
-      // failing. A caret answers for itself. A plain RANGE that starts in a table is the one
-      // shape still left to `exec`, because only the landing settles it.
-      if (deps.selectedCells?.()?.length) return TABLE_CELL_BREAK_REFUSAL;
-      const caret = deps.caretParagraphId?.() ?? null;
-      if (caret !== null) {
-        // A CARET is its own landing, so it settles every question here with no ordering, no
-        // flush and one walk — and a caret is what a toolbar derives against nearly always.
-        // `orderedRange()` flushes pending input, which is a write, and this is a read that
-        // React runs during its render phase.
-        if (isTableNested(session.part(), caret)) return TABLE_CELL_BREAK_REFUSAL;
-        return landedBreakRefusal(
-          session.part(),
-          caret,
-          breakType,
-          deps.editingMode?.() === 'suggest'
-        );
-      }
-      // A RANGE has two questions left, and each needs a reason to exist: the suggesting one
-      // needs suggesting, and the lock one needs a control that declares a lock or a binding.
-      // Neither, and there is nothing to work out — which is nearly every document, and one
-      // walk is what it costs to know that without ordering the selection.
-      const suggesting = deps.editingMode?.() === 'suggest';
-      const mayHold = partDeclaresContentControlLocks(session.part());
-      if (!suggesting && !mayHold) return null;
-      // AFTER the flush `orderedRange` runs, so the tree the sections are read from is the
-      // one the plan below would be built against.
-      const { from, to } = orderedRange();
-      const part = session.part();
-      // Two exact short-circuits, so nearly every answer costs no deletion plan. The landing
-      // is somewhere in `[from, to]` — `replacementTarget` walks it BACK from `to` through the
-      // author's own pending paragraph marks — so any rule that holds for EVERY paragraph in
-      // that span holds for the landing.
-      //
-      // First: the same governing NODE at both ends. The governing section is the first
-      // `w:sectPr` at or after a paragraph, which only moves forward, so one node at both ends
-      // means that node governs everything between them. Comparing the resolved TYPE here
-      // instead of the node was wrong — two different sections share a type routinely, and an
-      // intermediate landing could then carry a third.
-      //
-      // They answer the SUGGESTING question only. A lock is about one specific paragraph, so
-      // a document that declares one always needs the landing itself.
-      if (!mayHold) {
-        const atStart = targetSectionNodes(part, from.paragraphId)[0] ?? null;
-        const atEnd = targetSectionNodes(part, to.paragraphId)[0] ?? null;
-        // Second: every section in the document starts the same way. Then the landing's
-        // section does too, whichever it is — which answers a selection spanning sections.
-        const settled =
-          atStart === atEnd ? sectionBreakTypeOf(atStart) : uniformSectionBreakType(part);
-        if (settled !== null) return settled === breakType ? null : SUGGESTED_BREAK_REFUSAL;
-      }
-      // Sections that disagree AND a span reaching more than one of them: only the plan says
-      // which one the break lands in, and planning a deletion is superlinear in the SELECTION
-      // — seconds on a select-all in a long document, which is not a price a read may charge.
-      //
-      // So the plan is BOUNDED by how much it would have to walk. Up to a few hundred
-      // paragraphs it is milliseconds and the gate stays exact, which covers a caret and
-      // every ordinary drag. Past that the control stays enabled and the press reports the
-      // same refusal exactly, from `exec`, which has already paid for a write. That leaves a
-      // narrow honesty gap — suggesting mode, sections that start differently, and a range
-      // spanning them that is longer than the bound — and it is the better half of the trade
-      // against stopping the main thread on every toolbar derivation.
-      const order = orderOf();
-      const span = order.indexOf(to.paragraphId) - order.indexOf(from.paragraphId);
-      if (span > MAX_GATED_BREAK_SPAN) return null;
-      return landedBreakRefusal(
-        part,
-        sectionBreakLanding(part, deleteSelectionPlan()).paragraphId,
+      return sectionBreakGate({
+        part: () => session.part(),
         breakType,
-        suggesting
-      );
+        suggesting: deps.editingMode?.() === 'suggest',
+        cellRectangle: (deps.selectedCells?.()?.length ?? 0) > 0,
+        caretParagraphId: deps.caretParagraphId?.() ?? null,
+        orderedRange,
+        paragraphOrder: orderOf,
+        deleteSelectionPlan,
+      });
     },
 
     insertSectionBreak(breakType = 'nextPage' as const) {
@@ -966,6 +891,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       }
       const before = new Set(session.paragraphIds());
       let committed = false;
+      let heldRejection = false;
       commit(
         () => {
           const result = session.applyTreeOps(
@@ -984,6 +910,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
             { kind: 'body' }
           );
           committed = result.committed;
+          heldRejection = result.reason === 'locked' || result.reason === 'bound';
           return result;
         },
         () => {
@@ -993,6 +920,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           return tail ? collapsedAt({ paragraphId: tail, offset: 0 }) : null;
         }
       );
+      // AFTER the commit, which records its own `lastRejection` and would overwrite this.
+      // The DELETION the break replaces the selection with can cross content a control holds,
+      // which the landing alone never sees; the store answers that exactly, and its answer is
+      // `locked` / `bound` — a diagnostic, not chrome. Said in the lane's words instead, so
+      // the press does not surface an enum no locale can translate.
+      if (!committed && heldRejection) deps.publishRefusal?.(LOCKED_CONTENT_BREAK_REFUSAL);
       return committed;
     },
   };
