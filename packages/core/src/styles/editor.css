@@ -2770,6 +2770,13 @@ a.docx-hyperlink:focus-visible {
 
 /* The engine-owned paginated surface: painted pages plus a semantic caret and selection.
  * Geometry comes entirely from the layout records; these rules only supply appearance. */
+/* Overlay chrome portals here. It must be the containing block, or the
+ * selection frame resolves against the scroll viewport and lands at the top of
+ * the window instead of on the drawing — especially on a page past the first. */
+.docx-content-mount {
+  position: relative;
+}
+
 .docx-paginated-surface {
   position: relative;
   outline: none;

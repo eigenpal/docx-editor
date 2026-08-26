@@ -1,4 +1,8 @@
-import type { DocumentEditingMode, ReviewItemPlacement } from '../contracts/editor.ts';
+import type {
+  DocumentEditingMode,
+  ReviewItemPlacement,
+  SemanticPosition,
+} from '../contracts/editor.ts';
 import type { ExecResult } from '../contracts/types.ts';
 import type { ReviewCommentItem, ReviewItem } from '../layout/index.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -14,6 +18,57 @@ interface CommentResolutionDeps {
 
 function isCommentItem(item: ReviewItem): item is ReviewCommentItem {
   return item.kind === 'comment';
+}
+
+/** What resolving a comment range needs from the facade: the surface and two paragraph orders. */
+export interface CommentRangeDeps {
+  readonly surface: PaginatedSurface | null;
+  /** Body layout order, memoized — this runs on every snapshot read. */
+  readonly bodyOrder: () => ReadonlyMap<string, number>;
+  /** Order of the story the reader has open, which is the ruler inside a header or a note. */
+  readonly openStoryOrder: () => ReadonlyMap<string, number>;
+}
+
+/**
+ * The range a new comment would cover: the RETAINED pin when a panel took focus, else the
+ * live selection. Null when nothing is selected, or the selection is a caret.
+ *
+ * A READ, and deliberately flush-free. `useReview` polls it through `getReviewRevision` /
+ * `getSelectionPlacement` as a `useSyncExternalStore` snapshot, so flushing here committed
+ * queued typing and layout during React render: Chrome updated while the rail was rendering,
+ * and consecutive snapshot reads returned different ticks. A caller that WRITES the range
+ * flushes before it reads.
+ */
+export function commentTargetRangeOf(
+  deps: CommentRangeDeps
+): { from: SemanticPosition; to: SemanticPosition } | null {
+  const { surface } = deps;
+  const selection = surface?.retainedSelection() ?? surface?.state().selection ?? null;
+  if (!selection) return null;
+  const { anchor, head } = selection;
+  if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) return null;
+  if (!surface?.publishedLayout()) return null;
+  // Document order, not the order the user swept in: a backwards drag has its head first.
+  // Through the memoized INDEX, not `indexOf` over the id list — this runs on every
+  // snapshot read, and a linear scan of a 2432-paragraph document twice per read is the
+  // kind of cost that only shows up on the documents that can least afford it.
+  const order = deps.bodyOrder();
+  let anchorIndex = order.get(anchor.paragraphId) ?? -1;
+  let headIndex = order.get(head.paragraphId) ?? -1;
+  if (anchorIndex === -1 || headIndex === -1) {
+    // The body layout order only knows body paragraphs, so a range selected inside a
+    // header, footer or note resolved to nothing: `selectionAnchorY` came back null, the
+    // "comment on this" affordance never appeared, and `addComment` reported that a
+    // comment needs a selected range while one was plainly on screen. The open story
+    // publishes its own order, and that is the ruler for a selection inside it.
+    const scoped = deps.openStoryOrder();
+    anchorIndex = scoped.get(anchor.paragraphId) ?? -1;
+    headIndex = scoped.get(head.paragraphId) ?? -1;
+  }
+  if (anchorIndex === -1 || headIndex === -1) return null;
+  const forwards =
+    anchorIndex < headIndex || (anchorIndex === headIndex && anchor.offset <= head.offset);
+  return forwards ? { from: anchor, to: head } : { from: head, to: anchor };
 }
 
 /**

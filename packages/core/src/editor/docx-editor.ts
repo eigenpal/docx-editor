@@ -141,7 +141,10 @@ import {
   tableContextOf,
   selectedTableOf,
 } from './docx-editor-derive.ts';
-import { setReviewCommentResolved } from './docx-editor-comment-resolution.ts';
+import {
+  commentTargetRangeOf,
+  setReviewCommentResolved,
+} from './docx-editor-comment-resolution.ts';
 import { reviewReplyRefusal } from './review-reply.ts';
 import {
   canContentControlCommand,
@@ -1379,42 +1382,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return index;
   }
 
-  /**
-   * The range a new comment would cover: the RETAINED pin when a panel took focus, else the
-   * live selection. Null when nothing is selected, or the selection is a caret.
-   */
   function commentTargetRange(): { from: SemanticPosition; to: SemanticPosition } | null {
-    // A READ. `useReview` polls this through `getReviewRevision` / `getSelectionPlacement`
-    // as a `useSyncExternalStore` snapshot, so a flush here committed queued typing
-    // and layout during React render: Chrome updated while the rail was rendering,
-    // and consecutive snapshot reads returned different ticks.
-    const selection = surface?.retainedSelection() ?? surface?.state().selection ?? null;
-    if (!selection) return null;
-    const { anchor, head } = selection;
-    if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) return null;
-    const layout = surface?.publishedLayout();
-    if (!layout) return null;
-    // Document order, not the order the user swept in: a backwards drag has its head first.
-    // Through the memoized INDEX, not `indexOf` over the id list — this runs on every
-    // snapshot read, and a linear scan of a 2432-paragraph document twice per read is the
-    // kind of cost that only shows up on the documents that can least afford it.
-    const order = paragraphOrderOf(layout);
-    let anchorIndex = order.get(anchor.paragraphId) ?? -1;
-    let headIndex = order.get(head.paragraphId) ?? -1;
-    if (anchorIndex === -1 || headIndex === -1) {
-      // The body layout order only knows body paragraphs, so a range selected inside a
-      // header, footer or note resolved to nothing: `selectionAnchorY` came back null, the
-      // "comment on this" affordance never appeared, and `addComment` reported that a
-      // comment needs a selected range while one was plainly on screen. The open story
-      // publishes its own order, and that is the ruler for a selection inside it.
-      const scoped = openStoryParagraphOrder();
-      anchorIndex = scoped.get(anchor.paragraphId) ?? -1;
-      headIndex = scoped.get(head.paragraphId) ?? -1;
-    }
-    if (anchorIndex === -1 || headIndex === -1) return null;
-    const forwards =
-      anchorIndex < headIndex || (anchorIndex === headIndex && anchor.offset <= head.offset);
-    return forwards ? { from: anchor, to: head } : { from: head, to: anchor };
+    return commentTargetRangeOf({
+      surface,
+      bodyOrder: () => {
+        const layout = surface?.publishedLayout();
+        return layout ? paragraphOrderOf(layout) : new Map();
+      },
+      openStoryOrder: openStoryParagraphOrder,
+    });
   }
 
   /** The story the reader has open, in the vocabulary the store's writes take. */

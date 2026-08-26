@@ -13,7 +13,8 @@ maintained hardware job as green from work counters alone.
 ## Sources
 
 - Baseline: `openspec/changes/full-document-yjs-collaboration/local-edit-baseline.json`
-- Captured: 2026-08-24T20:22:39.110Z
+- Captured: 2026-08-26T09:47:07.167Z
+- Measured SHA: `56848c853f5e0b5e9c1a19d6adb80f311f71424e` (`origin/main`)
 - Fixture: `e2e/fixtures/synthetic-long-edit.docx`
 - SHA-256: `ca8ee28a8d40ae7914a820303b96ddbbe8f06d37325b0fc2ae6f1140aea96321`
 - Bytes: 27897
@@ -25,11 +26,13 @@ maintained hardware job as green from work counters alone.
 
 A fixture hash mismatch fails the run before any budget comparison.
 
-After rebase onto `origin/main`, incremental layout reuses 203 of 204 page
-records for this one-character edit. The previous exact budget was 154. Higher
-reuse is better, so this change re-records the local exact row and the remote
-floors upward. New page records drop from 50 to 1. Cache hits, cache misses,
-materialized pages, and paint element reuse are unchanged.
+`LayoutSession.stats.reusedPages` is 154. That matches `edit-bench-gates`
+scenario `steady-middle-text`. Page-record object identity is a different
+counter: 203 of 204 records stay identical, and 1 page record is new. A prior
+record copied 203 into both fields. This refresh splits them. Remote
+`reusedPagesMinInclusive` follows the session counter (154). Remote
+`reusedPageRecordsMinInclusive` stays 203. This is not a loosened identity
+gate.
 
 ## Lanes
 
@@ -46,10 +49,10 @@ materialized pages, and paint element reuse are unchanged.
 counts are the allocation signal. RSS is the process-level memory signal.
 
 Happy-dom paint is not the sub-frame typing gate. Local happy-dom paint median
-is 16.126 ms. Local total median is 28.064 ms. Those numbers already sit at or
-above one 16.7 ms frame. The 16.7 / 33.4 ms budget applies to Chromium
-`beforeinput` presentation from
-`openspec/changes/sub-frame-large-document-typing/`, not to this headless paint.
+is 12.716 ms on this capture. Local total median is 21.435 ms. Those numbers
+are advisory. The 16.7 / 33.4 ms budget applies to Chromium `beforeinput`
+presentation from `openspec/changes/sub-frame-large-document-typing/`, not to
+this headless paint.
 
 ## Ratios
 
@@ -90,7 +93,7 @@ The local non-collaborative path and the local authoring path must match the
 | Created / deleted                      | 0 / 0                         |
 | Dependency keys                        | 1                             |
 | Layout placed / total                  | 13 / 3200                     |
-| Layout reused pages                    | 203                           |
+| Layout reused pages                    | 154                           |
 | Layout full passes                     | 1                             |
 | Pages before → after                   | 204 → 204                     |
 | Cache hits / misses / evictions / size | 12 / 3201 / 0 / 3201          |
@@ -112,7 +115,7 @@ Compare a warm remote apply of the same insert against the local exact row.
 | Dirty impact, ids, created, deleted, keys | exact local row     | —         | any widening                 |
 | Layout placed                             | `≤ 26`              | —         | `≥ 3200` or `fullPasses > 1` |
 | Layout total                              | 3200                | —         | other                        |
-| Reused pages                              | `≥ 203`             | —         | `< 203`                      |
+| Reused pages                              | `≥ 154`             | —         | `< 154`                      |
 | Pages                                     | 204 → 204           | —         | count change                 |
 | Cache evictions                           | 0                   | —         | `> 0`                        |
 | Cache hits                                | `≥ 12`              | —         | —                            |
@@ -163,13 +166,13 @@ budget, not a work-counter budget.
 Measured on `examples/vite/public/sample.docx` (36 KiB on disk, 12,196 registry
 nodes), Bun 1.3.14, arm64, darwin:
 
-| Shape                                                  | Total    | Per node |
-| ------------------------------------------------------ | -------- | -------- |
-| First full-document registry encoding                  | 6304 KiB | 517 B    |
-| Current registry encoding                              | 2844 KiB | 239 B    |
-| Floor: flat map, one packed string per node             | 299 KiB  | 25 B     |
-| Floor: plus one `Y.Array` per node for children         | 598 KiB  | 50 B     |
-| Floor: plus children populated                          | 886 KiB  | 74 B     |
+| Shape                                           | Total    | Per node |
+| ----------------------------------------------- | -------- | -------- |
+| First full-document registry encoding           | 6304 KiB | 517 B    |
+| Current registry encoding                       | 2844 KiB | 239 B    |
+| Floor: flat map, one packed string per node     | 299 KiB  | 25 B     |
+| Floor: plus one `Y.Array` per node for children | 598 KiB  | 50 B     |
+| Floor: plus children populated                  | 886 KiB  | 74 B     |
 
 The 74-byte row is the reachable floor. The per-node `Y.Array` is what gives
 concurrent child ordering, which the registry requires, so no encoding below
@@ -210,19 +213,19 @@ Remote warm apply ceilings are 2× the 1.7 local medians and p95s:
 
 | Timer       | Median max (ms)    | p95 max (ms)       |
 | ----------- | ------------------ | ------------------ |
-| Transaction | 18.612418000000616 | 21.630750000000262 |
-| Layout      | 6.888415999999779  | 8.620999999999185  |
-| Paint       | 32.251415999999154 | 43.493249999999534 |
-| Total       | 56.12816799999928  | 71.59799999999996  |
+| Transaction | 13.540584000000308 | 17.1298340000003   |
+| Layout      | 3.7350839999999152 | 4.730831999999737  |
+| Paint       | 25.431582000000162 | 28.795916000000034 |
+| Total       | 42.86949999999979  | 48.72099799999978  |
 
 | Memory                            | Max                                            |
 | --------------------------------- | ---------------------------------------------- |
-| RSS delta edit through paint      | 40304640 bytes                                 |
+| RSS delta edit through paint      | 39256064 bytes                                 |
 | External delta edit through paint | Record only because the local denominator is 0 |
 | Heap used delta                   | Do not gate                                    |
 
 Reconnect that applies one buffered character uses the same total ceiling
-(56.128 ms median, 71.598 ms p95). Empty reconnect timing stays informational
+(42.869 ms median, 48.721 ms p95). Empty reconnect timing stays informational
 until task 7.4. Empty reconnect must still add no layout or paint work.
 
 Browser eligible typing stays 16.7 ms median and 33.4 ms p95 on the sub-frame
@@ -258,16 +261,16 @@ document. This 200-page collaboration bench does not replace it.
   warm remote materialization and paint within 2× local.
 - The repair spec requires deterministic work counters on pull requests and
   hardware-sensitive timings plus retained memory on maintained runs.
-- `edit-bench-gates.test.ts` pins `placed = 13`, `fullPasses = 1`, and
-  `pages = 204` for `steady-middle-text`. After main's incremental layout raised
-  page-record identity reuse, this change re-records `reusedPages` to 203 of
-  204. Collaboration must not loosen those counters.
+- `edit-bench-gates.test.ts` pins `placed = 13`, `fullPasses = 1`,
+  `reusedPages = 154`, and `pages = 204` for `steady-middle-text`. Page-record
+  identity is 203 of 204. Collaboration must not mix those counters or loosen
+  the identity floor.
 - Local allocated = 6 and off-path = 0, so a whole-tree rebuild is a kill, not
   an optimize band.
 - Local incremental update = 14 bytes. A one-character update that scales with
   3200 paragraphs fails document-size independence.
-- Local RSS delta = 20152320 bytes. Heap used is not a usable Bun 1.3.14
-  signal, so hardware memory uses RSS.
+- Local RSS delta = 19628032 bytes on this capture. Heap used is not a usable
+  Bun 1.3.14 signal, so hardware memory uses RSS. RSS is advisory.
 
 ## Limitations
 

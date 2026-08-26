@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "task": "full-document-yjs-collaboration/0.6",
-  "definedAt": "2026-08-24",
+  "definedAt": "2026-08-26",
   "source": {
     "baselineTask": "full-document-yjs-collaboration/1.7",
     "baselinePath": "openspec/changes/full-document-yjs-collaboration/local-edit-baseline.json",
-    "capturedAt": "2026-08-24T20:22:39.110Z",
+    "capturedAt": "2026-08-26T09:47:07.167Z",
     "editBenchGates": "scripts/bench/edit-bench-gates.test.ts",
     "editBenchScenario": "steady-middle-text",
     "collaborationBench": "scripts/bench/collaboration-local-edit-bench.ts"
@@ -93,7 +93,7 @@
     "layout": {
       "placed": 13,
       "total": 3200,
-      "reusedPages": 203,
+      "reusedPages": 154,
       "fullPasses": 1,
       "pagesBefore": 204,
       "pagesAfter": 204,
@@ -120,14 +120,14 @@
         "paint": 0,
         "editThroughPaint": 0
       },
-      "rssDeltaMedian": { "editThroughPaint": 20152320 },
+      "rssDeltaMedian": { "editThroughPaint": 19628032 },
       "externalDeltaMedian": { "editThroughPaint": 0 }
     },
     "timings": {
-      "transaction": { "medianMs": 9.306209000000308, "p95Ms": 10.815375000000131 },
-      "layout": { "medianMs": 3.4442079999998896, "p95Ms": 4.3104999999995925 },
-      "paint": { "medianMs": 16.125707999999577, "p95Ms": 21.746624999999767 },
-      "total": { "medianMs": 28.06408399999964, "p95Ms": 35.79899999999998 }
+      "transaction": { "medianMs": 6.770292000000154, "p95Ms": 8.56491700000015 },
+      "layout": { "medianMs": 1.8675419999999576, "p95Ms": 2.3654159999998683 },
+      "paint": { "medianMs": 12.715791000000081, "p95Ms": 14.397958000000017 },
+      "total": { "medianMs": 21.434749999999894, "p95Ms": 24.36049899999989 }
     }
   },
   "pullRequest": {
@@ -156,7 +156,7 @@
       "layout": {
         "placedMaxInclusive": 26,
         "total": 3200,
-        "reusedPagesMinInclusive": 203,
+        "reusedPagesMinInclusive": 154,
         "fullPasses": 1,
         "pagesBefore": 204,
         "pagesAfter": 204,
@@ -200,12 +200,12 @@
   },
   "maintainedHardware": {
     "remoteTimingMaxInclusive": {
-      "transaction": { "medianMs": 18.612418000000616, "p95Ms": 21.630750000000262 },
-      "layout": { "medianMs": 6.888415999999779, "p95Ms": 8.620999999999185 },
-      "paint": { "medianMs": 32.251415999999154, "p95Ms": 43.493249999999534 },
-      "total": { "medianMs": 56.12816799999928, "p95Ms": 71.59799999999996 }
+      "transaction": { "medianMs": 13.540584000000308, "p95Ms": 17.1298340000003 },
+      "layout": { "medianMs": 3.7350839999999152, "p95Ms": 4.730831999999737 },
+      "paint": { "medianMs": 25.431582000000162, "p95Ms": 28.795916000000034 },
+      "total": { "medianMs": 42.86949999999979, "p95Ms": 48.72099799999978 }
     },
-    "rssDeltaMaxInclusive": { "editThroughPaint": 40304640 },
+    "rssDeltaMaxInclusive": { "editThroughPaint": 39256064 },
     "externalDeltaPolicy": "record-only-zero-local-denominator",
     "browserTyping": {
       "eligibleMedianMs": 16.7,
@@ -214,8 +214,8 @@
     },
     "reconnect": {
       "oneBufferedCharacterTotal": {
-        "medianMs": 56.12816799999928,
-        "p95Ms": 71.59799999999996
+        "medianMs": 42.86949999999979,
+        "p95Ms": 48.72099799999978
       },
       "empty": "informational until task 7.4; must not add layout or paint work"
     }

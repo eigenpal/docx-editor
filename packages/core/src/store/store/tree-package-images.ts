@@ -2,7 +2,19 @@
 //
 // Each intent runs as one story transaction promoted to a package undo unit so media bytes,
 // relationships, content types, and drawing XML commit or roll back together.
+//
+// EVERY intent here commits on the story store, so capture has to be armed on the PACKAGE
+// store the same way `applyFragmentPaste` and `addPackageComment` do. `storyStore.transact`
+// alone never entered `runObservedStoreTransaction`: an image insert moved the local document
+// and produced no primitive journal at all, so a peer kept the old page with no error. The
+// media bytes, the image relationship, the content-type override and the drawing all travel
+// off the effects the primitives record inside this frame; `putBinary` carries a digest, and
+// the session puts the payload in the shared blob map from the same journal.
 
+import {
+  packageTransactionPublished,
+  runObservedStoreTransaction,
+} from '../package/canonical-primitive-capture.ts';
 import { findNode, replaceNode } from '../package/ooxml-edit.ts';
 import { withPart } from '../package/ooxml-package.ts';
 import {
@@ -37,7 +49,7 @@ import { docPrHyperlinkRelationshipId, setDocPrHyperlinkRelationship } from './t
 import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import type { DrawingTreeDocOp, RevisionAttributionInput } from './tree-op-types.ts';
 import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree-package-store.ts';
-import type { TransactionContext, TreeDocumentStore } from './tree-store.ts';
+import type { TransactionContext, TreeDocumentStore, TreeStoryRef } from './tree-store.ts';
 
 export interface InsertImageInput {
   readonly paragraphId: string;
@@ -136,6 +148,20 @@ function transactPackageImage(
   if (blocked) return blocked;
 
   const { store: storyStore, story } = resolved;
+  return runObservedStoreTransaction(
+    store,
+    () => commitPackageImage(store, storyStore, story, build, options),
+    (outcome) => packageTransactionPublished(outcome)
+  );
+}
+
+function commitPackageImage(
+  store: TreePackageStore,
+  storyStore: TreeDocumentStore,
+  story: TreeStoryRef,
+  build: (ctx: TransactionContext, ownerPartName: string) => string | null,
+  options?: { readonly expectedPackageRevision?: number; readonly commitGuard?: () => boolean }
+): ImageIntentResult {
   const ownerPartName = story.partName;
   const beforePackage = store.currentPackage();
   const checkpoint = storyStore.checkpoint();

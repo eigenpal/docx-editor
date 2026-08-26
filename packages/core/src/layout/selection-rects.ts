@@ -6,8 +6,9 @@
 
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
-import { paragraphFragmentsOf } from './semantic-records.ts';
-import type { SemanticLayout } from './semantic-records.ts';
+import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
+import type { BlockFragmentRecord, SemanticLayout } from './semantic-records.ts';
+import { documentOrderIndex } from './document-order.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
 
@@ -221,4 +222,111 @@ export function keyedRangeRects(
     }
   }
   return found;
+}
+
+/**
+ * Content-box offset for a story-relative position.
+ *
+ * Body fragments are already in page-content space. Header, footer and note fragments are
+ * relative to their own box, so a caret or range painted against `page.contentBox` has to
+ * add this or it lands in the body.
+ */
+export function storyContentOffset(
+  layout: SemanticLayout,
+  paragraphId: string,
+  pageIndex: number
+): { readonly x: number; readonly y: number } {
+  if (documentOrderIndex(layout).has(paragraphId)) return { x: 0, y: 0 };
+  const page = layout.pages[pageIndex];
+  if (!page) return { x: 0, y: 0 };
+  const inBlocks = (blocks: readonly BlockFragmentRecord[]): boolean =>
+    paragraphFragmentsOfBlocks(blocks).some((fragment) => fragment.paragraphId === paragraphId);
+  if (page.header && inBlocks(page.header.fragments)) {
+    return {
+      x: page.header.box.x - page.contentBox.x,
+      y: page.header.box.y - page.contentBox.y,
+    };
+  }
+  if (page.footer && inBlocks(page.footer.fragments)) {
+    return {
+      x: page.footer.box.x - page.contentBox.x,
+      y: page.footer.box.y - page.contentBox.y,
+    };
+  }
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    for (const note of area.notes) {
+      if (!inBlocks(note.fragments)) continue;
+      return {
+        x: note.box.x - page.contentBox.x,
+        y: note.box.y - page.contentBox.y,
+      };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+
+/**
+ * Selection rectangles in page-content coordinates, every story included.
+ *
+ * {@link selectionRects} stays body-only: feeding header coordinates into that walk without
+ * an origin painted a band on every page at the top of the body. This walk carries the story
+ * box, so a remote caret in a header lands in the header.
+ */
+export function presenceSelectionRects(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  order: readonly string[]
+): SelectionRect[] {
+  const ordered = orderPositions(selection, order);
+  if (!ordered) return [];
+  const rects: SelectionRect[] = [];
+  const take = (
+    blocks: readonly BlockFragmentRecord[],
+    pageIndex: number,
+    offsetX: number,
+    offsetY: number
+  ): void => {
+    for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
+      for (const line of fragment.lines) {
+        for (const segment of lineSegments(line)) {
+          const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
+          if (!overlap) continue;
+          const startX = xWithinLine(line, overlap.start, undefined, segment);
+          const endX = xWithinLine(line, overlap.end, undefined, segment);
+          rects.push({
+            pageIndex,
+            x: Math.min(startX, endX) + offsetX,
+            y: line.box.y + offsetY,
+            width: Math.abs(endX - startX),
+            height: line.box.height,
+          });
+        }
+      }
+    }
+  };
+  for (const page of layout.pages) {
+    take(page.fragments, page.index, 0, 0);
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      take(
+        story.fragments,
+        page.index,
+        story.box.x - page.contentBox.x,
+        story.box.y - page.contentBox.y
+      );
+    }
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        take(
+          note.fragments,
+          page.index,
+          note.box.x - page.contentBox.x,
+          note.box.y - page.contentBox.y
+        );
+      }
+    }
+  }
+  return rects;
 }

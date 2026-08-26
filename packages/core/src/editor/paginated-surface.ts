@@ -102,7 +102,11 @@ import {
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
-import { localCollaborationSelection, paintRemoteSelections } from './surface-remote-selection.ts';
+import {
+  collaborationParagraphAt,
+  localCollaborationSelection,
+  paintRemoteSelections,
+} from './surface-remote-selection.ts';
 import type {
   ContentControlOps,
   DrawingSelectionIntent,
@@ -3276,6 +3280,21 @@ export function mountPaginatedSurface(
     return true;
   }
 
+  function publishLocalCollaborationSelection(): void {
+    collaborationSession?.setLocalSelection(
+      collaborationPort
+        ? localCollaborationSelection(
+            cellSelection?.text ?? selection,
+            (nodeId) => {
+              const part = partOfNodeId(session, nodeId) ?? session.part();
+              return collaborationParagraphAt(part, nodeId);
+            },
+            cellSelection ? 'cells' : undefined
+          )
+        : null
+    );
+  }
+
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
     // Compared BEFORE the flush below, which can itself move the caret.
     const moved = !selectionsEqual(next, selection);
@@ -3344,13 +3363,7 @@ export function mountPaginatedSurface(
     if (previousActive !== nextActive || previousToc !== nextToc) {
       render(false);
     }
-    collaborationSession?.setLocalSelection(
-      collaborationPort
-        ? localCollaborationSelection(selection, (nodeId) =>
-            collaborationPort.paragraphByNodeId(nodeId)
-          )
-        : null
-    );
+    publishLocalCollaborationSelection();
     options.onChange?.(currentState());
   }
 
@@ -3429,6 +3442,7 @@ export function mountPaginatedSurface(
       selection = next;
       cellSelection = null;
       desiredX = null;
+      publishLocalCollaborationSelection();
     },
     noteModelMoved: () => selectionSync.noteModelMoved(),
     render: () => render(),
@@ -3509,6 +3523,7 @@ export function mountPaginatedSurface(
     // The caret decides which item is OPEN, so a move re-classes the bands. The rectangles
     // themselves are cached against the layout and are not recomputed here.
     renderCommentHighlights();
+    publishLocalCollaborationSelection();
     options.onChange?.(currentState());
   }
 
@@ -4027,7 +4042,6 @@ export function mountPaginatedSurface(
     paintRemoteSelections(remoteSelectionLayer, currentLayout, collaboration.remoteSelections(), {
       scale,
       pageOffsetX: materializedExtent?.pageOffsetX,
-      paragraphOrder: paragraphOrder(),
     });
   }
 
@@ -6487,13 +6501,7 @@ export function mountPaginatedSurface(
   if (collaborationSession && collaborationPort) {
     detachCollaboration = collaborationSession.attach(collaborationPort);
   }
-  collaborationSession?.setLocalSelection(
-    collaborationPort
-      ? localCollaborationSelection(selection, (nodeId) =>
-          collaborationPort.paragraphByNodeId(nodeId)
-        )
-      : null
-  );
+  publishLocalCollaborationSelection();
   // The pages layer is created `contenteditable` unconditionally, so a surface OPENED in
   // viewing came up writable — a caret, an IME and a screen reader told the document takes
   // input. `setEditingMode` was the only path that re-derived it; opening is the other one.

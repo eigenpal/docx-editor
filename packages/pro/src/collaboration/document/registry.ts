@@ -84,6 +84,7 @@ export class DocumentRegistry {
   private attributesByNode = new Map<LogicalId, Map<string, EncodedAttribute>>();
   private bindingsByNode = new Map<LogicalId, Map<string, EncodedBinding>>();
   private bulkLoad = 0;
+  private unobservedWrites = 0;
 
   constructor(
     readonly doc: Y.Doc,
@@ -196,6 +197,48 @@ export class DocumentRegistry {
 
   adoptedChildren(survivorId: LogicalId): readonly LogicalId[] {
     return this.adoptees.get(survivorId) ?? [];
+  }
+
+  /**
+   * Every survivor that adopts children from a tombstone, and what it adopts.
+   *
+   * Adoption is DERIVED from the tombstone edge and is not a child array, so tombstoning a
+   * node dirties the tombstone alone while the survivor is the node that has to grow a
+   * child. A consumer that caches per node has to compare this index, or the adopted
+   * children silently disappear from the survivor.
+   */
+  adoptionIndex(): ReadonlyMap<LogicalId, readonly LogicalId[]> {
+    return this.adoptees;
+  }
+
+  /**
+   * True when shared state has ever interned this namespace URI.
+   *
+   * Every element and attribute interns its namespace on write, so a URI absent from the
+   * table cannot appear anywhere in the document. That answers "does this document use
+   * feature X at all" without a walk over every node.
+   */
+  hasNamespace(uri: string): boolean {
+    return this.schema.namespaces.get(namespaceIdOf(uri)) === uri;
+  }
+
+  /**
+   * Say that shared state was written through this registry.
+   *
+   * Every derived index here, and every dirty set an observer builds, is maintained from Yjs
+   * EVENTS. Yjs delivers the events of a transaction opened during another transaction's
+   * cleanup only after that cleanup finishes — which is exactly what a queued local journal
+   * flushed on arrival of a remote update does. Between the write and the delivery, shared
+   * state holds the edit and every index still describes the state before it. A consumer that
+   * trusts the indexes in that window drops the edit.
+   */
+  noteWrite(): void {
+    this.unobservedWrites += 1;
+  }
+
+  /** True while a write through this registry is waiting for its Yjs events. */
+  hasUnobservedWrites(): boolean {
+    return this.unobservedWrites > 0;
   }
 
   listingParents(logicalId: LogicalId): readonly LogicalId[] {
@@ -490,6 +533,7 @@ export class DocumentRegistry {
   }
 
   rebuildDerivedIndexes(): void {
+    this.unobservedWrites = 0;
     this.parentIndex = new Map();
     this.listings = new Map();
     this.childrenSnapshot = new Map();
@@ -536,6 +580,7 @@ export class DocumentRegistry {
   }
 
   private applyChildArrayEvents(events: Y.YEvent<Y.AbstractType<unknown>>[]): void {
+    this.unobservedWrites = 0;
     const changed = new Set<LogicalId>();
     for (const event of events) {
       // A remote applyUpdate delivers a new element record with its children already filled.
@@ -568,6 +613,7 @@ export class DocumentRegistry {
   }
 
   private applyAttributeMapEvent(event: Y.YMapEvent<string>): void {
+    this.unobservedWrites = 0;
     for (const [key, change] of event.changes.keys) {
       const parsed = parseAttributeMapKey(String(key));
       if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.localName)) {
@@ -584,6 +630,7 @@ export class DocumentRegistry {
   }
 
   private applyBindingMapEvent(event: Y.YMapEvent<string>): void {
+    this.unobservedWrites = 0;
     for (const [key, change] of event.changes.keys) {
       const parsed = parseBindingMapKey(String(key));
       if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.prefix)) {

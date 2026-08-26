@@ -446,24 +446,46 @@ export function withBinaryParts(
   }>
 ): OoxmlPackage {
   if (additions.length === 0) return pkg;
-  const partBytes = new Map(pkg.partBytes);
-  const parts = new Map(pkg.parts);
+  const capture = isCanonicalPrimitiveCaptureActive();
+  const recorded: Array<{
+    readonly storageKey: string;
+    readonly digest: string;
+    readonly size: number;
+    readonly mediaType: string;
+  }> = [];
   const overrides: Array<readonly [string, string]> = [];
-  for (const addition of additions) {
-    const normalized = normalizePartName(addition.partName);
-    if (!normalized.ok) continue;
-    const storedName = storagePartName(normalized.partName, pkg);
-    partBytes.set(storedName, snapshotPartBytes(addition.bytes));
-    const storedKey = canonicalPartKey(storedName);
-    if (storedKey !== null) {
-      for (const name of [...parts.keys()]) {
-        if (canonicalPartKey(name) === storedKey) parts.delete(name);
+  const withBytes = runWithoutJournalCapture(() => {
+    const partBytes = new Map(pkg.partBytes);
+    const parts = new Map(pkg.parts);
+    for (const addition of additions) {
+      const normalized = normalizePartName(addition.partName);
+      if (!normalized.ok) continue;
+      const storedName = storagePartName(normalized.partName, pkg);
+      const copied = snapshotPartBytes(addition.bytes);
+      partBytes.set(storedName, copied);
+      const storedKey = canonicalPartKey(storedName);
+      if (storedKey !== null) {
+        for (const name of [...parts.keys()]) {
+          if (canonicalPartKey(name) === storedKey) parts.delete(name);
+        }
+      }
+      overrides.push([normalized.partName, addition.contentType]);
+      if (capture) {
+        recorded.push({
+          storageKey: storedName,
+          digest: sha256Bytes(copied),
+          size: copied.byteLength,
+          mediaType: addition.contentType,
+        });
       }
     }
-    overrides.push([normalized.partName, addition.contentType]);
+    return Object.freeze({ ...pkg, partBytes, parts });
+  });
+  const next = withContentTypeOverrides(withBytes, overrides);
+  if (capture) {
+    for (const descriptor of recorded) recordPutBinary(descriptor);
   }
-  const withBytes = Object.freeze({ ...pkg, partBytes, parts });
-  return withContentTypeOverrides(withBytes, overrides);
+  return next;
 }
 
 /** English typographic points → EMUs (914400 EMU per inch, 72 pt per inch). */

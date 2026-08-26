@@ -252,21 +252,27 @@ function binaryEntries(pkg: OoxmlPackage): string {
   return rows.join('|');
 }
 
+/**
+ * Every relationship the package declares, keyed by what it MEANS rather than which index
+ * happens to hold it.
+ *
+ * `readOoxmlPackage` files an external relationship in BOTH `relationships` and
+ * `externalTargets`; `ensureHyperlinkRelationship` mints one into `externalTargets` alone. Two
+ * packages that resolve every `r:id` to the same target are equivalent whichever shape they
+ * took, and the trees the bytes come from are compared separately. Comparing the raw maps
+ * reported a mismatch for a locally minted hyperlink versus the same one after a reopen.
+ */
 function relationshipEntries(pkg: OoxmlPackage): string {
-  const rows: string[] = [];
-  for (const [owner, records] of [...pkg.relationships.entries()].sort((left, right) =>
-    left[0].localeCompare(right[0])
-  )) {
-    for (const record of [...records].sort((left, right) => left.id.localeCompare(right.id))) {
-      rows.push(`${owner}|${record.id}|${record.type}|${record.rawTarget}|${record.targetMode}`);
+  const rows = new Set<string>();
+  for (const [owner, records] of pkg.relationships) {
+    for (const record of records) {
+      rows.add(`${owner}|${record.id}|${record.type}|${record.rawTarget}|${record.targetMode}`);
     }
   }
-  for (const entry of [...pkg.externalTargets].sort((left, right) =>
-    `${left.ownerPart}${left.id}`.localeCompare(`${right.ownerPart}${right.id}`)
-  )) {
-    rows.push(`ext|${entry.ownerPart}|${entry.id}|${entry.rawTarget}`);
+  for (const entry of pkg.externalTargets) {
+    rows.add(`${entry.ownerPart}|${entry.id}|${entry.type}|${entry.rawTarget}|External`);
   }
-  return rows.join(';');
+  return [...rows].sort().join(';');
 }
 
 export function assertPackagesEquivalent(actual: OoxmlPackage, expected: OoxmlPackage): void {

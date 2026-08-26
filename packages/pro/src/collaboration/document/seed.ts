@@ -110,14 +110,16 @@ function visitNode(
   return null;
 }
 
-async function describeBinaries(
-  pkg: OoxmlPackage,
-  blobs: BlobBytesStore
-): Promise<
-  | { readonly ok: true; readonly descriptors: CanonicalBinaryDescriptor[] }
+async function describeBinaries(pkg: OoxmlPackage): Promise<
+  | {
+      readonly ok: true;
+      readonly descriptors: CanonicalBinaryDescriptor[];
+      readonly payloads: readonly { readonly digest: string; readonly bytes: Uint8Array }[];
+    }
   | { readonly ok: false; readonly code: LimitCode }
 > {
   const descriptors: CanonicalBinaryDescriptor[] = [];
+  const payloads: { digest: string; bytes: Uint8Array }[] = [];
   for (const [name, bytes] of pkg.partBytes) {
     if (pkg.parts.has(name)) continue;
     const resolved = pkg.contentTypes.overrides.get(name);
@@ -128,7 +130,7 @@ async function describeBinaries(
       return { ok: false, code: 'blob-too-large' };
     }
     const digest = await sha256Digest(bytes);
-    blobs.put(digest, bytes);
+    payloads.push({ digest, bytes });
     descriptors.push({
       digest,
       size: bytes.byteLength,
@@ -136,7 +138,7 @@ async function describeBinaries(
       storageKey: name,
     });
   }
-  return { ok: true, descriptors };
+  return { ok: true, descriptors, payloads };
 }
 
 /**
@@ -149,12 +151,13 @@ export async function seedPackage(
   blobs: BlobBytesStore = new MemoryBlobStore()
 ): Promise<SeedResult> {
   if (pkg.parts.size > registry.limits.maxParts) return { ok: false, code: 'too-many-parts' };
-  const binaries = await describeBinaries(pkg, blobs);
+  const binaries = await describeBinaries(pkg);
   if (!binaries.ok) return binaries;
   let error: LimitCode | null = null;
   registry.beginBulkLoad();
   try {
     registry.doc.transact(() => {
+      for (const payload of binaries.payloads) blobs.put(payload.digest, payload.bytes);
       writeSchemaVersions(registry.schema.meta);
       registry.schema.meta.set('mainDocumentPart', pkg.mainDocumentPart);
       const counts = { nodes: 0 };

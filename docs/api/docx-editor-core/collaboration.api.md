@@ -153,6 +153,7 @@ export interface CollaborationDocumentPort {
     observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
     // (undocumented)
     paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
+    paragraphByStableId(paragraphId: string): CollaborationParagraph | null;
     // (undocumented)
     paragraphs(): readonly CollaborationParagraph[];
     // (undocumented)
@@ -181,6 +182,8 @@ export interface CollaborationLocalSelection {
     readonly anchor: CollaborationSelectionAddress;
     // (undocumented)
     readonly head: CollaborationSelectionAddress;
+    // (undocumented)
+    readonly kind?: CollaborationSelectionKind;
 }
 
 // @public
@@ -230,6 +233,8 @@ export interface CollaborationRemoteSelection {
     // (undocumented)
     readonly head: CollaborationRemoteSelectionAddress;
     // (undocumented)
+    readonly kind?: CollaborationSelectionKind;
+    // (undocumented)
     readonly name: string;
 }
 
@@ -250,6 +255,9 @@ export interface CollaborationSelectionAddress {
     // (undocumented)
     readonly paragraphId: string;
 }
+
+// @public
+export type CollaborationSelectionKind = 'cells';
 
 // @public
 export type CollaborationSessionFactory = (documentId: string) => EditorCollaborationSession;

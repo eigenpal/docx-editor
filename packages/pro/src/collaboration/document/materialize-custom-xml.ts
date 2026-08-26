@@ -126,6 +126,12 @@ export function planCustomXmlStores(
   registry: DocumentRegistry,
   parts: Map<string, OoxmlPart>
 ): readonly CustomXmlStorePlan[] {
+  // Every plan pairs a data root with a props root, and a props root is only ever
+  // recognized through a `schemaRefs` child in the datastore namespace. A document that
+  // never interned that namespace therefore has no custom XML to repair, and the scan below
+  // would visit every node in the document to conclude exactly that — on every received
+  // character, for a file that has no custom XML part at all.
+  if (!registry.hasNamespace(DATASTORE_NAMESPACE_URI)) return [];
   const dataById = new Map<LogicalId, ElementRecord>();
   const propsById = new Map<LogicalId, ElementRecord>();
   for (const [name, part] of parts) {

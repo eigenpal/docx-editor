@@ -61,6 +61,27 @@ export async function revealLocator(page: Page, locator: Locator): Promise<Locat
   return locator.first();
 }
 
+/**
+ * Open the headings pane and jump to a document heading. Outline jump uses layout, so it
+ * can bring a virtualized page into view. TOC text in the document is not a heading.
+ */
+export async function jumpToHeading(page: Page, name: string | RegExp): Promise<void> {
+  const heading = page.locator('.docx-nav__heading', { hasText: name });
+  if (
+    !(await heading
+      .first()
+      .isVisible()
+      .catch(() => false))
+  ) {
+    const disc = page.getByRole('button', { name: 'Open navigation' });
+    await expect(disc).toBeVisible({ timeout: 20_000 });
+    await disc.click();
+  }
+  await expect(heading.first()).toBeVisible({ timeout: 20_000 });
+  await heading.first().click();
+  await nudgeScroller(page);
+}
+
 export async function waitForEditor(page: Page, url = ORIGIN): Promise<void> {
   await page.goto(url, { waitUntil: 'commit' });
   await expect(page.getByRole('button', { name: CONNECT })).toBeEnabled({ timeout: 180_000 });

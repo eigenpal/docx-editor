@@ -5,10 +5,10 @@
   "baseGitCommit": "45cf9fb5350af2ea70443342928376972b00ea79",
   "baseGitSubject": "feat: add peer-to-peer Yjs collaboration demo",
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
-  "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Working-tree files in this change do not add TreeDocOp kinds. Main added replaceStoryBlocks, setMathEquation, and removeMathEquation.",
+  "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 72,
-    "singlePartApply": 60,
+    "treeDocOpKinds": 73,
+    "singlePartApply": 61,
     "headerFooterLifecycle": 5,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -22,7 +22,7 @@
     "storyScopeKinds": 3,
     "namedPackageIntents": 16,
     "unsupportedRows": 16,
-    "activeOpenSpecChanges": 25
+    "activeOpenSpecChanges": 26
   },
   "storyScopes": [
     {
@@ -96,6 +96,7 @@
       "setTableCellVerticalAlignment",
       "setContentControlProperties",
       "insertContentControl",
+      "insertFragment",
       "insertDrawing",
       "replaceDrawingResource",
       "deleteDrawing",
@@ -186,6 +187,7 @@
     "setNoteProperties",
     "setContentControlProperties",
     "insertContentControl",
+    "insertFragment",
     "insertDrawing",
     "replaceDrawingResource",
     "deleteDrawing",
@@ -878,6 +880,21 @@
       "openSpec": ["typed-content-controls"]
     },
     {
+      "kind": "insertFragment",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "same",
+      "commandExposure": ["paste"],
+      "packageIntents": [
+        "withPart",
+        "withNewPart",
+        "withRelationship",
+        "withBinaryPart",
+        "withContentTypeOverride"
+      ],
+      "openSpec": ["rich-clipboard-fidelity"]
+    },
+    {
       "kind": "insertDrawing",
       "commitPath": "applyTreeOp",
       "storyScopes": ["body", "headerFooter", "notesPart"],
@@ -1357,6 +1374,11 @@
       "name": "typed-toc-refresh",
       "role": "mutation-owner",
       "notes": "TOC insert and refresh ops."
+    },
+    {
+      "name": "rich-clipboard-fidelity",
+      "role": "mutation-owner",
+      "notes": "insertFragment plus package resource merge for rich clipboard paste."
     },
     {
       "name": "mathematical-equations",

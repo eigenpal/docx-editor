@@ -27,6 +27,7 @@ import {
 } from '../store/package/ooxml-package.ts';
 import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts';
+import { runObservedStoreTransaction } from '../store/package/canonical-primitive-capture.ts';
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -171,10 +172,19 @@ function mintExternalTarget(
 ): string | null {
   const owner = store.partFor(scope);
   if (!owner) return null;
-  const minted = ensureHyperlinkRelationship(store.currentPackage(), url, owner.name);
-  if (!minted) return null;
-  store.replacePackageShell(minted.pkg);
-  return minted.relationshipId;
+  // Armed like the browser session's own mint: a shell write records no primitive effects on
+  // its own, so a server-side `insertHyperlink` used to publish an rId the peers never
+  // received a relationship for.
+  return runObservedStoreTransaction(
+    store,
+    () => {
+      const minted = ensureHyperlinkRelationship(store.currentPackage(), url, owner.name);
+      if (!minted) return null;
+      store.replacePackageShell(minted.pkg);
+      return minted.relationshipId;
+    },
+    (relationshipId) => relationshipId !== null
+  );
 }
 
 /**

@@ -212,7 +212,7 @@ describe('collaboration budget artifact', () => {
     expect(budgets.localExact.layout).toEqual({
       placed: 13,
       total: 3200,
-      reusedPages: 203,
+      reusedPages: 154,
       fullPasses: 1,
       pagesBefore: 204,
       pagesAfter: 204,

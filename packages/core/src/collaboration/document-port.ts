@@ -1,4 +1,3 @@
-import { isValidParaId, paraIdOf } from '../store/package/para-id.ts';
 import {
   findNode,
   replaceNode,
@@ -11,6 +10,11 @@ import {
 } from '../store/package/index.ts';
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { paragraphTextOf } from '../store/store/tree-op-apply.ts';
+import {
+  createParagraphAddressResolver,
+  isStoryPart,
+  paragraphSnapshot,
+} from './paragraph-addresses.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type {
@@ -33,33 +37,6 @@ const MAX_COLLABORATIVE_PARAGRAPH_TEXT = 1_000_000;
 /** Options for a canonical collaboration document port. @public */
 export interface CreateCollaborationDocumentPortOptions {
   readonly documentId: string;
-}
-
-function paragraphElements(part: OoxmlPart): OoxmlNode[] {
-  const result: OoxmlNode[] = [];
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'p') result.push(node);
-    for (const child of node.children) visit(child);
-  };
-  visit(part.root);
-  return result;
-}
-
-function paragraphSnapshot(part: OoxmlPart): readonly CollaborationParagraph[] {
-  const result: CollaborationParagraph[] = [];
-  const seen = new Set<string>();
-  for (const paragraph of paragraphElements(part)) {
-    const authoredId = paraIdOf(paragraph);
-    if (!authoredId || !isValidParaId(authoredId)) continue;
-    const paragraphId = authoredId.toUpperCase();
-    if (seen.has(paragraphId)) continue;
-    seen.add(paragraphId);
-    const text = paragraphTextOf(part, paragraph.id);
-    if (text === null) continue;
-    result.push(Object.freeze({ paragraphId, nodeId: paragraph.id, text }));
-  }
-  return Object.freeze(result);
 }
 
 function splitsSurrogate(text: string, offset: number): boolean {
@@ -218,6 +195,32 @@ export function createCollaborationDocumentPort(
   const paragraphs = (): readonly CollaborationParagraph[] =>
     paragraphSnapshot(store.bodyStore().part);
 
+  /**
+   * Story parts presence may name, body first.
+   *
+   * Memoized on the package and body part by identity, not on the revision, so a caret move
+   * allocates nothing. `currentPackage()` is itself identity-memoized, so an unchanged
+   * document returns the same tuple.
+   */
+  let storyPartsMemo:
+    | { readonly pkg: OoxmlPackage; readonly body: OoxmlPart; readonly parts: readonly OoxmlPart[] }
+    | undefined;
+
+  const storyParts = (): readonly OoxmlPart[] => {
+    const body = store.bodyStore().part;
+    const pkg = store.currentPackage();
+    if (storyPartsMemo?.pkg === pkg && storyPartsMemo.body === body) return storyPartsMemo.parts;
+    const parts: OoxmlPart[] = [body];
+    for (const part of pkg.parts.values()) {
+      if (part === body || !isStoryPart(part)) continue;
+      parts.push(part);
+    }
+    storyPartsMemo = { pkg, body, parts: Object.freeze(parts) };
+    return storyPartsMemo.parts;
+  };
+
+  const resolveAddress = createParagraphAddressResolver(storyParts);
+
   const applyParagraphTexts = (
     updates: readonly CollaborationParagraphTextUpdate[],
     mutation: CollaborationMutation
@@ -271,6 +274,14 @@ export function createCollaborationDocumentPort(
     paragraphs,
     paragraphByNodeId(nodeId: string) {
       return paragraphs().find((paragraph) => paragraph.nodeId === nodeId) ?? null;
+    },
+    paragraphByStableId(paragraphId: string) {
+      const stableId = paragraphId.toUpperCase();
+      const address = resolveAddress(stableId);
+      if (!address) return null;
+      const text = paragraphTextOf(address.part, address.nodeId);
+      if (text === null) return null;
+      return Object.freeze({ paragraphId: stableId, nodeId: address.nodeId, text });
     },
     applyParagraphText(
       paragraphId: string,

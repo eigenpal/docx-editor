@@ -71,6 +71,8 @@ export {
 } from './journal.ts';
 export {
   PackageMaterializer,
+  materializedNodeBuilds,
+  materializedNodeReads,
   replaceChildRange,
   type MaterializeFailureCode,
   type MaterializeResult,

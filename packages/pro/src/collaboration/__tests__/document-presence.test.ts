@@ -13,6 +13,7 @@ import { strToU8, zipSync } from 'fflate';
 import {
   TreePackageStore,
   normalizeParagraphIdentity,
+  paraIdOf,
   readOoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
@@ -92,7 +93,7 @@ function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: YjsCollaborationRoo
   return peer;
 }
 
-async function createPeer(name: string): Promise<Peer> {
+async function createPeer(name: string, bytes: Uint8Array = PROSE): Promise<Peer> {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   const room = await createDocumentCollaboration({
@@ -100,7 +101,7 @@ async function createPeer(name: string): Promise<Peer> {
     awareness,
     documentId: DOCUMENT_ID,
     identity: { actorId: name, name },
-    bootstrap: { kind: 'create', document: PROSE },
+    bootstrap: { kind: 'create', document: bytes },
   });
   return attachPeer(ydoc, awareness, room);
 }
@@ -255,5 +256,149 @@ describe('full-document presence selection', () => {
     expect(alice.port.revision()).toBe(beforeAlice);
     expect(bob.port.revision()).toBe(beforeBob);
     expect(alice.room.session.canUndo()).toBe(false);
+  });
+
+  test('a header selection replicates', async () => {
+    const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:w14="${W14}"><w:body>` +
+          '<w:p w14:paraId="11111111" w14:textId="11111111"><w:r><w:t>Body</w:t></w:r></w:p>' +
+          '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/></w:sectPr></w:body></w:document>'
+      ),
+      'word/header1.xml': strToU8(
+        `<w:hdr xmlns:w="${W}" xmlns:w14="${W14}">` +
+          '<w:p w14:paraId="12345678" w14:textId="12345678"><w:r><w:t>Letterhead</w:t></w:r></w:p></w:hdr>'
+      ),
+    });
+    const alice = await createPeer('alice', bytes);
+    const bob = await joinPeer(alice, 'bob');
+    expect(alice.port.paragraphs().some((paragraph) => paragraph.paragraphId === '12345678')).toBe(
+      false
+    );
+    alice.room.session.setLocalSelection(
+      range({ paragraphId: '12345678', offset: 0 }, { paragraphId: '12345678', offset: 4 })
+    );
+    syncAwareness(alice, bob);
+    expect(bob.room.session.remoteSelections()).toMatchObject([
+      {
+        actorId: 'alice',
+        anchor: { paragraphId: '12345678', offset: 0 },
+        head: { paragraphId: '12345678', offset: 4 },
+      },
+    ]);
+  });
+
+  test('a header without authored paraIds still replicates', async () => {
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          '<w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+          '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/></w:sectPr></w:body></w:document>'
+      ),
+      'word/header1.xml': strToU8(
+        `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Letterhead</w:t></w:r></w:p></w:hdr>`
+      ),
+    });
+    const alice = await createPeer('alice', bytes);
+    const bob = await joinPeer(alice, 'bob');
+    const loaded = readOoxmlPackage(alice.port.save());
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const headerPart = [...loaded.package.parts.values()].find(
+      (part) => part.root.localName === 'hdr'
+    );
+    if (!headerPart) throw new Error('missing header');
+    const identified = normalizeParagraphIdentity(headerPart);
+    const paragraph = identified.root.children.find((node) => node.kind !== 'textValue');
+    const minted = paragraph && paragraph.kind !== 'textValue' ? paraIdOf(paragraph) : null;
+    expect(minted).toMatch(/^[0-9A-Fa-f]{8}$/);
+    const paragraphId = minted!.toUpperCase();
+    alice.room.session.setLocalSelection(
+      range({ paragraphId, offset: 0 }, { paragraphId, offset: 4 })
+    );
+    syncAwareness(alice, bob);
+    expect(bob.room.session.remoteSelections()).toMatchObject([
+      {
+        actorId: 'alice',
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 4 },
+      },
+    ]);
+  });
+
+  test('a cell rectangle stays two endpoints plus a kind', async () => {
+    const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+    const cell = (id: string, text: string): string =>
+      `<w:tc><w:p w14:paraId="${id}" w14:textId="${id}"><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const tableBytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:w14="${W14}"><w:body>` +
+          `<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>` +
+          `<w:tr>${cell('11111111', 'A1')}${cell('22222222', 'B1')}</w:tr>` +
+          `<w:tr>${cell('33333333', 'A2')}${cell('44444444', 'B2')}</w:tr></w:tbl>` +
+          '<w:sectPr/></w:body></w:document>'
+      ),
+    });
+    const alice = await createPeer('alice', tableBytes);
+    const bob = await joinPeer(alice, 'bob');
+    alice.room.session.setLocalSelection({
+      anchor: { paragraphId: '11111111', offset: 0 },
+      head: { paragraphId: '44444444', offset: 2 },
+      kind: 'cells',
+    });
+    const published = (alice.awareness.getLocalState() as Record<string, unknown> | null)?.[
+      'docxEditor'
+    ] as { selection?: { kind?: string } };
+    expect(published.selection?.kind).toBe('cells');
+    expect(JSON.stringify(published.selection)).not.toContain('22222222');
+    expect(JSON.stringify(published.selection)).not.toContain('33333333');
+    syncAwareness(alice, bob);
+    expect(bob.room.session.remoteSelections()).toMatchObject([
+      {
+        actorId: 'alice',
+        kind: 'cells',
+        anchor: { paragraphId: '11111111', offset: 0 },
+        head: { paragraphId: '44444444', offset: 2 },
+      },
+    ]);
   });
 });

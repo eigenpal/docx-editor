@@ -116,7 +116,11 @@ export interface RegistryRoundWork {
   readonly remoteOffPath: number;
   readonly pagesBefore: number;
   readonly pagesAfter: number;
-  readonly reusedPages: number;
+  // Page RECORDS kept by object identity, not `LayoutSession.stats.reusedPages`. The two
+  // differ on a multi-section fixture — the session does not count the edited section's
+  // untouched pages — so the budget carries both, and a name that said only "pages" here
+  // read as the session counter and got compared against it.
+  readonly reusedPageRecords: number;
   readonly cacheHits: number;
   readonly cacheMisses: number;
   readonly reusedPaintElements: number;
@@ -153,6 +157,7 @@ describe('representation spike registry 200-page remote comparison', () => {
           cache: { hits: number; misses: number };
         };
         paint: {
+          reusedPageRecords: number;
           reusedPaintElements: number;
           rebuiltPaintElements: number;
           materializedPages: number;
@@ -249,8 +254,9 @@ describe('representation spike registry 200-page remote comparison', () => {
           remoteOffPath: remoteAlloc.offPath,
           pagesBefore: beforeLayout.pages.length,
           pagesAfter: afterLayout.pages.length,
-          reusedPages: afterLayout.pages.filter((record) => beforeLayout.pages.includes(record))
-            .length,
+          reusedPageRecords: afterLayout.pages.filter((record) =>
+            beforeLayout.pages.includes(record)
+          ).length,
           cacheHits: cache.stats.hits,
           cacheMisses: cache.stats.misses,
           reusedPaintElements,
@@ -286,7 +292,7 @@ describe('representation spike registry 200-page remote comparison', () => {
       expect(firstWork.remoteOffPath).toBe(0);
       expect(firstWork.pagesBefore).toBe(budgets.localExact.layout.pagesBefore);
       expect(firstWork.pagesAfter).toBe(budgets.localExact.layout.pagesAfter);
-      expect(firstWork.reusedPages).toBe(budgets.localExact.layout.reusedPages);
+      expect(firstWork.reusedPageRecords).toBe(budgets.localExact.paint.reusedPageRecords);
       expect(firstWork.cacheHits).toBe(budgets.localExact.layout.cache.hits);
       expect(firstWork.cacheMisses).toBe(budgets.localExact.layout.cache.misses);
       expect(firstWork.reusedPaintElements).toBe(budgets.localExact.paint.reusedPaintElements);

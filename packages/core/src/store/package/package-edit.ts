@@ -374,6 +374,7 @@ export function withContentTypeOverrides(
 
   let part = parsed.part;
   const overrides = new Map(pkg.contentTypes.overrides);
+  const recorded: Array<readonly [string, string]> = [];
   let changed = false;
   for (const [partName, contentType] of entries) {
     const canonical = writablePartName(partName);
@@ -383,16 +384,21 @@ export function withContentTypeOverrides(
     part = upserted.part;
     overrides.set(partNameKey(canonical), contentType);
     changed = true;
+    recorded.push([canonical, contentType]);
   }
   if (!changed) return pkg;
 
   const partBytes = new Map(pkg.partBytes);
   partBytes.set(contentTypesEntry.storageKey, new TextEncoder().encode(serializeOoxmlPart(part)));
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     partBytes,
     contentTypes: { defaults: pkg.contentTypes.defaults, overrides } satisfies ContentTypeIndex,
   });
+  for (const [partName, mediaType] of recorded) {
+    recordPutContentTypeOverride(partName, mediaType);
+  }
+  return next;
 }
 
 /**
@@ -441,23 +447,33 @@ export function withRelationships(
     });
   });
 
-  const appended = insertChildren(
-    relsPart,
-    relsPart.root.id,
-    relsPart.root.children.length,
-    records,
-    {
-      deferValidation: true,
+  const result = runWithoutJournalCapture(() => {
+    const appended = insertChildren(
+      relsPart,
+      relsPart.root.id,
+      relsPart.root.children.length,
+      records,
+      {
+        deferValidation: true,
+      }
+    );
+    if (!appended.ok) return { pkg, ids: [] as readonly string[], ok: false as const };
+    const relationships = new Map(pkg.relationships);
+    relationships.set(ownerPart, [...existing, ...added]);
+    return {
+      pkg: Object.freeze({ ...withPart(pkg, appended.part), relationships }),
+      ids,
+      ok: true as const,
+    };
+  });
+  if (result.ok && result.pkg !== pkg) {
+    const nextRecords = result.pkg.relationships.get(ownerPart) ?? [];
+    for (const record of added) {
+      const written = nextRecords.find((entry) => entry.id === record.id);
+      if (written) recordPutRelationship(ownerPart, written);
     }
-  );
-  if (!appended.ok) return { pkg, ids: [], ok: false };
-  const relationships = new Map(pkg.relationships);
-  relationships.set(ownerPart, [...existing, ...added]);
-  return {
-    pkg: Object.freeze({ ...withPart(pkg, appended.part), relationships }),
-    ids,
-    ok: true,
-  };
+  }
+  return result;
 }
 
 /** What {@link withoutPart} answers: `ok: false` leaves the package exactly as it was. */

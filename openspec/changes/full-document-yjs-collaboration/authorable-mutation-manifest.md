@@ -17,8 +17,8 @@ Drift test:
 | Git commit                 | `45cf9fb5350af2ea70443342928376972b00ea79`    |
 | Subject                    | feat: add peer-to-peer Yjs collaboration demo |
 | Date                       | 2026-08-24 14:45:47 +0200                     |
-| `TreeDocOp` kinds          | **72**                                        |
-| Single-part apply          | **60**                                        |
+| `TreeDocOp` kinds          | **73**                                        |
+| Single-part apply          | **61**                                        |
 | Header/footer lifecycle    | **5**                                         |
 | Note lifecycle             | **5**                                         |
 | Explicit unsupported kinds | **2**                                         |
@@ -33,13 +33,13 @@ do not add `TreeDocOp` kinds.
 
 | Path                    | Kinds | Validate                       | Commit                                                               |
 | ----------------------- | ----- | ------------------------------ | -------------------------------------------------------------------- |
-| Single-part             | 60    | `validateTreeOp`               | `applyTreeOp`                                                        |
+| Single-part             | 61    | `validateTreeOp`               | `applyTreeOp`                                                        |
 | Header/footer lifecycle | 5     | `invalidArgs` on a single part | `TreePackageStore.applyLifecycleOp` → `applyHeaderFooterLifecycleOp` |
 | Note lifecycle          | 5     | `invalidArgs` on a single part | `TreePackageStore.applyLifecycleOp` → `applyNoteLifecycleOp`         |
 | Repeating section       | 2     | `unsupported`                  | none                                                                 |
 
 `TREE_OP_REACH` is a mapped type over `TreeDocOpKind`. Reach classification
-covers all 72 kinds.
+covers all 73 kinds.
 
 ## Story scopes
 
@@ -106,6 +106,7 @@ Mutation owners that can add authorable rows:
 - `typed-drawings-and-images`
 - `typed-hyperlinks-and-bookmarks`
 - `typed-toc-refresh`
+- `rich-clipboard-fidelity`
 - `mathematical-equations`
 - `structural-block-deletion`
 - `custom-node-payload-write-lane`

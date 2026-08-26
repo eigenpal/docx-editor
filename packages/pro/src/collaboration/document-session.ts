@@ -86,6 +86,7 @@ interface EncodedSelectionAddress {
 interface EncodedSelection {
   readonly anchor: EncodedSelectionAddress;
   readonly head: EncodedSelectionAddress;
+  readonly kind?: 'cells';
 }
 
 interface AwarenessPayload {
@@ -94,6 +95,16 @@ interface AwarenessPayload {
   readonly color?: string;
   readonly role: 'human' | 'agent';
   readonly selection?: EncodedSelection;
+}
+
+function sharedBlobBytes(value: unknown): Uint8Array | null {
+  if (value instanceof Uint8Array) return new Uint8Array(value);
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) {
+    const view = value;
+    return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  }
+  return null;
 }
 
 /**
@@ -107,15 +118,19 @@ class SharedBlobStore implements BlobBytesStore {
   constructor(private readonly shared: Y.Map<Uint8Array>) {}
 
   get(digest: string): Uint8Array | null {
-    const bytes = this.shared.get(digest);
-    return bytes instanceof Uint8Array ? new Uint8Array(bytes) : null;
+    return sharedBlobBytes(this.shared.get(digest));
+  }
+
+  has(digest: string): boolean {
+    return sharedBlobBytes(this.shared.get(digest)) !== null;
   }
 
   put(digest: string, bytes: Uint8Array): void {
     if (this.shared.has(digest)) return;
     let total = bytes.byteLength;
     this.shared.forEach((value) => {
-      total += value instanceof Uint8Array ? value.byteLength : 0;
+      const blob = sharedBlobBytes(value);
+      total += blob ? blob.byteLength : 0;
     });
     if (total > MAX_SHARED_BLOB_BYTES) throw new CollaborationSchemaError('blob-store-full');
     this.shared.set(digest, new Uint8Array(bytes));
@@ -198,7 +213,9 @@ function encodedSelection(value: unknown): EncodedSelection | undefined {
   const selected = value as Record<string, unknown>;
   const anchor = encodedSelectionAddress(selected.anchor);
   const head = encodedSelectionAddress(selected.head);
-  if (anchor && head) return { anchor, head };
+  if (anchor && head) {
+    return selected.kind === 'cells' ? { anchor, head, kind: 'cells' } : { anchor, head };
+  }
   if (
     typeof selected.paragraphId === 'string' &&
     selected.paragraphId.length === 8 &&
@@ -271,7 +288,8 @@ class DocumentSession implements YjsCollaborationSession {
     identity: CollaborationIdentity,
     private readonly registry: DocumentRegistry,
     private readonly materializer: PackageMaterializer,
-    private readonly identityMap: LogicalIdentityMap
+    private readonly identityMap: LogicalIdentityMap,
+    private readonly blobs: BlobBytesStore
   ) {
     this.documentId = documentId;
     this.sessionId = sessionId;
@@ -382,6 +400,7 @@ class DocumentSession implements YjsCollaborationSession {
         paragraphId: selection.head.paragraphId.toUpperCase(),
         offset: Math.max(0, selection.head.offset),
       },
+      ...(selection.kind === 'cells' ? { kind: 'cells' as const } : {}),
     });
   }
 
@@ -412,13 +431,10 @@ class DocumentSession implements YjsCollaborationSession {
   remoteSelections(): readonly CollaborationRemoteSelection[] {
     const port = this.port;
     if (!port) return [];
-    const paragraphs = new Map(
-      port.paragraphs().map((paragraph) => [paragraph.paragraphId, paragraph])
-    );
     const resolve = (
       address: EncodedSelectionAddress
     ): CollaborationRemoteSelection['anchor'] | null => {
-      const paragraph = paragraphs.get(address.paragraphId);
+      const paragraph = port.paragraphByStableId(address.paragraphId);
       if (!paragraph) return null;
       return Object.freeze({
         paragraphId: paragraph.paragraphId,
@@ -440,6 +456,7 @@ class DocumentSession implements YjsCollaborationSession {
           actorId: payload.actorId,
           name: payload.name,
           ...(payload.color ? { color: payload.color } : {}),
+          ...(payload.selection.kind === 'cells' ? { kind: 'cells' as const } : {}),
           anchor,
           head,
         })
@@ -477,6 +494,11 @@ class DocumentSession implements YjsCollaborationSession {
     let refusal: string | null = null;
     const shared = this.identityMap.translate(journal);
     this.ydoc.transact(() => {
+      const published = this.publishJournalBlobs(journal);
+      if (published !== null) {
+        refusal = published;
+        return;
+      }
       const result = applyPrimitiveJournal(this.registry, shared);
       if (!result.ok) refusal = result.detail ? `${result.code}: ${result.detail}` : result.code;
     }, this.localOrigin);
@@ -507,6 +529,36 @@ class DocumentSession implements YjsCollaborationSession {
     ) {
       this.setStatus('ready');
     }
+  }
+
+  /**
+   * Put local binary bytes into the shared blob map before the journal names them.
+   *
+   * `putBinary` carries a digest, not the bytes. A peer that applies the descriptor
+   * without the payload fails materialize with `missing-blob` and keeps the old
+   * document — the image paste never arrives, even when the story text did.
+   */
+  private publishJournalBlobs(journal: CanonicalPrimitiveJournal): string | null {
+    const port = this.port;
+    if (!port) return 'collaboration-session-not-attached';
+    const needed = journal.effects.filter((effect) => effect.kind === 'putBinary');
+    if (needed.length === 0) return null;
+    const loaded = readOoxmlPackage(port.save());
+    if (!loaded.ok) return `blob-read:${loaded.reason}`;
+    for (const effect of needed) {
+      if (effect.kind !== 'putBinary') continue;
+      const key = effect.descriptor.storageKey;
+      const bytes =
+        loaded.package.partBytes.get(key) ??
+        loaded.package.partBytes.get(key.startsWith('/') ? key.slice(1) : `/${key}`);
+      if (!bytes) return `missing-local-blob:${key}`;
+      try {
+        this.blobs.put(effect.descriptor.digest, bytes);
+      } catch (error) {
+        return error instanceof CollaborationSchemaError ? error.code : 'blob-store-full';
+      }
+    }
+    return null;
   }
 
   private readonly onYjsTransaction = (transaction: Y.Transaction): void => {
@@ -585,13 +637,23 @@ class DocumentSession implements YjsCollaborationSession {
   }
 }
 
+function sharedBinariesReady(registry: DocumentRegistry, blobs: SharedBlobStore): boolean {
+  for (const descriptor of registry.binaries()) {
+    if (!blobs.has(descriptor.digest)) return false;
+  }
+  return true;
+}
+
 function waitForSharedInitialization(
   registry: DocumentRegistry,
+  blobs: SharedBlobStore,
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<void> {
   const meta = registry.schema.meta;
-  if (meta.get('initialized') === true) return Promise.resolve();
+  const ready = (): boolean =>
+    meta.get('initialized') === true && sharedBinariesReady(registry, blobs);
+  if (ready()) return Promise.resolve();
   if (signal?.aborted) {
     return Promise.reject(new CollaborationSchemaError('initialization-aborted'));
   }
@@ -599,12 +661,13 @@ function waitForSharedInitialization(
     const finish = (error?: Error): void => {
       clearTimeout(timer);
       meta.unobserve(onChange);
+      registry.doc.off('afterTransaction', onChange);
       signal?.removeEventListener('abort', onAbort);
       if (error) reject(error);
       else resolve();
     };
     const onChange = (): void => {
-      if (meta.get('initialized') === true) finish();
+      if (ready()) finish();
     };
     const onAbort = (): void => finish(new CollaborationSchemaError('initialization-aborted'));
     const timer = setTimeout(
@@ -612,6 +675,7 @@ function waitForSharedInitialization(
       timeoutMs
     );
     meta.observe(onChange);
+    registry.doc.on('afterTransaction', onChange);
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
@@ -654,6 +718,7 @@ export async function createDocumentCollaboration(
   } else {
     await waitForSharedInitialization(
       registry,
+      blobs,
       options.bootstrap.timeoutMs ?? DEFAULT_INITIALIZATION_TIMEOUT_MS,
       options.bootstrap.signal
     );
@@ -680,7 +745,8 @@ export async function createDocumentCollaboration(
     identity,
     registry,
     materializer,
-    identityMap
+    identityMap,
+    blobs
   );
   return Object.freeze({
     document: writeOoxmlPackage(materialized.package),

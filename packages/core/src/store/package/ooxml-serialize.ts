@@ -479,25 +479,65 @@ function significantChildren(node: OoxmlElement, preserve: boolean): readonly Oo
   );
 }
 
+/**
+ * Nodes the fingerprint oracle has walked in this process.
+ *
+ * The oracle materializes the whole subtree before it can answer, so its cost is the size of
+ * the document, not the size of the difference. Hot paths that only need "did anything
+ * change" assert against this counter to prove they never reach it.
+ */
+let fingerprintNodeVisits = 0;
+
+/** Test-observable count of nodes {@link canonicalOoxmlFingerprint} has walked. */
+export function canonicalFingerprintNodeVisits(): number {
+  return fingerprintNodeVisits;
+}
+
+/**
+ * Extend inherited bindings with a node's own declarations.
+ *
+ * A node that declares none reads the parent map unchanged, so the copy is skipped. The map
+ * is only ever read below this point, which makes sharing the instance identical to copying
+ * it — and the copy was one allocation per element of the document.
+ */
+function extendedBindings(
+  inherited: ReadonlyMap<string, string>,
+  node: OoxmlElement
+): ReadonlyMap<string, string> {
+  if (node.namespaceBindings.length === 0) return inherited;
+  const bindings = new Map(inherited);
+  for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
+  return bindings;
+}
+
+function normalizedFingerprintAttributes(node: OoxmlElement): readonly OoxmlAttribute[] {
+  // `w:delText` is `CT_Text` exactly as `w:t` is (§17.3.3.7), so it needs the same
+  // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
+  // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
+  // deletion later restored the words with the spacing already gone.
+  return node.kind === 'text' || node.kind === 'deletedText' || node.kind === 'instrText'
+    ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
+    : node.attributes;
+}
+
+function inheritedPreserveOf(
+  attributes: readonly OoxmlAttribute[],
+  inheritedPreserve: boolean
+): boolean {
+  const ownSpace = xmlSpaceValue(attributes);
+  return ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
+}
+
 function fingerprintNode(
   node: OoxmlNode,
   inheritedPreserve: boolean,
   inheritedBindings: ReadonlyMap<string, string>
 ): FingerprintValue {
+  fingerprintNodeVisits += 1;
   if (node.kind === 'textValue') return ['text', node.value];
-  const bindings = new Map(inheritedBindings);
-  for (const binding of node.namespaceBindings) bindings.set(binding.prefix, binding.namespaceUri);
-  const elementAttributes =
-    // `w:delText` is `CT_Text` exactly as `w:t` is (§17.3.3.7), so it needs the same
-    // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
-    // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
-    // deletion later restored the words with the spacing already gone.
-    node.kind === 'text' || node.kind === 'deletedText' || node.kind === 'instrText'
-      ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
-      : node.attributes;
-  const ownSpace = xmlSpaceValue(elementAttributes);
-  const preserve =
-    ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
+  const bindings = extendedBindings(inheritedBindings, node);
+  const elementAttributes = normalizedFingerprintAttributes(node);
+  const preserve = inheritedPreserveOf(elementAttributes, inheritedPreserve);
   const attributes = sortedAttributes(elementAttributes).map(
     (attribute) =>
       [
@@ -544,4 +584,284 @@ export function ooxmlTreesEqual(
   right: OoxmlPart | OoxmlNode
 ): boolean {
   return canonicalOoxmlFingerprint(left) === canonicalOoxmlFingerprint(right);
+}
+
+/** How far the difference between two canonical trees reaches. */
+export type CanonicalDifferenceReach =
+  | 'equal'
+  /** Only `w:t` character data differs, and only inside paragraphs. */
+  | 'paragraph-text'
+  /** Element structure or attributes differ, but only inside paragraphs. */
+  | 'paragraph-content'
+  /** At least one difference sits above every paragraph. */
+  | 'outside-paragraph';
+
+/** What an incremental comparison of two canonical trees found. */
+export interface CanonicalTreeDifference {
+  /** True when the two trees say the same thing, by the same rules as the fingerprint. */
+  readonly equal: boolean;
+  /**
+   * True when the walk stopped without an answer. `equal` and `reach` mean nothing then,
+   * and the caller must ask the full oracle instead.
+   */
+  readonly undecided: boolean;
+  readonly reach: CanonicalDifferenceReach;
+  /** Paragraph ids from `next` that own a difference. Complete only when decided. */
+  readonly paragraphIds: readonly string[];
+  /** True when every node pair the walk compared carried the same canonical id. */
+  readonly idsPreserved: boolean;
+  /** Node pairs the walk compared. An identity-equal subtree counts as one. */
+  readonly visited: number;
+}
+
+const REACH_RANK: Record<CanonicalDifferenceReach, number> = {
+  equal: 0,
+  'paragraph-text': 1,
+  'paragraph-content': 2,
+  'outside-paragraph': 3,
+};
+
+/**
+ * Node pairs one comparison may look at before it gives up.
+ *
+ * The ceiling is high because giving up is the expensive outcome, not the cheap one: the
+ * caller's fallback is the fingerprint oracle, which allocates a nested array for every node
+ * of both trees and then stringifies it. Finishing the walk is cheaper than that even when
+ * the two trees share nothing. The budget is here so recursion over a hostile tree cannot
+ * run unbounded, not to steer ordinary work toward the oracle.
+ */
+const DEFAULT_DIFFERENCE_BUDGET = 250_000;
+
+interface DifferenceWalk {
+  readonly budget: number;
+  visited: number;
+  undecided: boolean;
+  reach: CanonicalDifferenceReach;
+  idsPreserved: boolean;
+  readonly paragraphIds: Set<string>;
+}
+
+function namespaceBindingsMatch(left: OoxmlElement, right: OoxmlElement): boolean {
+  if (left.namespaceBindings === right.namespaceBindings) return true;
+  if (left.namespaceBindings.length !== right.namespaceBindings.length) return false;
+  return left.namespaceBindings.every((binding, index) => {
+    const other = right.namespaceBindings[index]!;
+    return binding.prefix === other.prefix && binding.namespaceUri === other.namespaceUri;
+  });
+}
+
+function fingerprintAttributesMatch(
+  left: readonly OoxmlAttribute[],
+  right: readonly OoxmlAttribute[],
+  bindings: ReadonlyMap<string, string>,
+  owner: OoxmlElement
+): boolean {
+  if (left.length !== right.length) return false;
+  const leftSorted = sortedAttributes(left);
+  const rightSorted = sortedAttributes(right);
+  return leftSorted.every((attribute, index) => {
+    const other = rightSorted[index]!;
+    return (
+      attribute.namespaceUri === other.namespaceUri &&
+      attribute.localName === other.localName &&
+      canonicalQNameAttributeValue(attribute, bindings, owner.namespaceUri, owner.localName) ===
+        canonicalQNameAttributeValue(other, bindings, owner.namespaceUri, owner.localName)
+    );
+  });
+}
+
+/**
+ * Elements whose content only ever re-breaks the paragraph that holds it.
+ *
+ * A local `insertText` publishes `text-local` however it lands — merged into a run, split
+ * across two, or wrapped in a tracked insertion — so a received one has to be allowed to say
+ * the same thing. Everything absent from this list re-flows more than one paragraph, or
+ * might: a drawing changes height, a `w:br` moves a page boundary, a note reference reaches
+ * another story. The list is an allowlist on purpose. An element nobody has classified yet
+ * reads as flow-affecting and costs a wider invalidation, which is the safe direction.
+ */
+const TEXT_FLOW_ELEMENTS = new Set(['r', 't', 'delText', 'ins', 'del', 'rPr']);
+
+function isTextFlowElement(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    node.namespaceUri === WML_NAMESPACE_URI &&
+    TEXT_FLOW_ELEMENTS.has(node.localName)
+  );
+}
+
+function isTextFlowSubtree(node: OoxmlNode, walk: DifferenceWalk): boolean {
+  walk.visited += 1;
+  if (walk.visited > walk.budget) {
+    walk.undecided = true;
+    return false;
+  }
+  if (node.kind === 'textValue') return true;
+  if (!isTextFlowElement(node)) return false;
+  // Run properties are formatting only: no flow content can hang under them.
+  if (node.localName === 'rPr') return true;
+  return node.children.every((child) => isTextFlowSubtree(child, walk));
+}
+
+/** True when every child either side does not share by identity only re-breaks its paragraph. */
+function replacedChildrenAreTextFlow(
+  left: readonly OoxmlNode[],
+  right: readonly OoxmlNode[],
+  walk: DifferenceWalk
+): boolean {
+  const inLeft = new Set(left);
+  const inRight = new Set(right);
+  return (
+    left.every((child) => inRight.has(child) || isTextFlowSubtree(child, walk)) &&
+    right.every((child) => inLeft.has(child) || isTextFlowSubtree(child, walk))
+  );
+}
+
+function recordDifference(
+  walk: DifferenceWalk,
+  paragraphId: string | null,
+  reach: 'paragraph-text' | 'paragraph-content'
+): void {
+  if (paragraphId === null) {
+    walk.reach = 'outside-paragraph';
+    return;
+  }
+  walk.paragraphIds.add(paragraphId);
+  if (REACH_RANK[reach] > REACH_RANK[walk.reach]) walk.reach = reach;
+}
+
+/**
+ * Compare two canonical subtrees in lockstep, skipping the parts that never moved.
+ *
+ * The engine hands identical node objects back for content it did not rebuild, so an
+ * identity match proves a whole subtree is equal for free. Everything else mirrors
+ * `fingerprintNode` exactly — same attribute normalization, same `xml:space` inheritance,
+ * same QName canonicalization, same whitespace-significance rule — so the two agree on
+ * every pair of trees.
+ */
+function diffNodes(
+  left: OoxmlNode,
+  right: OoxmlNode,
+  inheritedPreserve: boolean,
+  inheritedBindings: ReadonlyMap<string, string>,
+  paragraphId: string | null,
+  textIsCharacterData: boolean,
+  walk: DifferenceWalk
+): void {
+  if (walk.undecided) return;
+  walk.visited += 1;
+  if (walk.visited > walk.budget) {
+    walk.undecided = true;
+    return;
+  }
+  // An identity match is only sound because every ancestor pair matched: the inherited
+  // bindings and `xml:space` state both sides carry into this subtree are the same.
+  if (left === right) return;
+  if (left.kind === 'textValue') {
+    if (right.kind !== 'textValue') {
+      recordDifference(walk, paragraphId, 'paragraph-content');
+      return;
+    }
+    if (left.value !== right.value) {
+      recordDifference(
+        walk,
+        paragraphId,
+        textIsCharacterData ? 'paragraph-text' : 'paragraph-content'
+      );
+    }
+    return;
+  }
+  if (right.kind === 'textValue') {
+    recordDifference(walk, paragraphId, 'paragraph-content');
+    return;
+  }
+  if (left.id !== right.id) walk.idsPreserved = false;
+  if (
+    left.kind !== right.kind ||
+    left.namespaceUri !== right.namespaceUri ||
+    left.localName !== right.localName
+  ) {
+    const replaced =
+      isTextFlowSubtree(left, walk) && isTextFlowSubtree(right, walk) && !walk.undecided;
+    recordDifference(walk, paragraphId, replaced ? 'paragraph-text' : 'paragraph-content');
+    return;
+  }
+  // Two prefix sets can resolve every QName the same way and still differ as declarations.
+  // Proving that costs more than the walk saves, so an unmatched pair goes to the oracle.
+  if (!namespaceBindingsMatch(left, right)) {
+    walk.undecided = true;
+    return;
+  }
+  const scope = left.kind === 'paragraph' ? right.id : paragraphId;
+  const bindings = extendedBindings(inheritedBindings, left);
+  const leftAttributes = normalizedFingerprintAttributes(left);
+  const rightAttributes = normalizedFingerprintAttributes(right);
+  if (!fingerprintAttributesMatch(leftAttributes, rightAttributes, bindings, left)) {
+    // Only this element's own attributes moved, so its subtree does not need classifying.
+    recordDifference(walk, scope, isTextFlowElement(left) ? 'paragraph-text' : 'paragraph-content');
+    return;
+  }
+  const preserve = inheritedPreserveOf(leftAttributes, inheritedPreserve);
+  const leftChildren = significantChildren(left, preserve);
+  const rightChildren = significantChildren(right, preserve);
+  if (leftChildren.length !== rightChildren.length) {
+    const rearranged =
+      (left.kind === 'paragraph' || isTextFlowElement(left)) &&
+      replacedChildrenAreTextFlow(leftChildren, rightChildren, walk) &&
+      !walk.undecided;
+    recordDifference(walk, scope, rearranged ? 'paragraph-text' : 'paragraph-content');
+    return;
+  }
+  const characterData = left.kind === 'text' || left.kind === 'deletedText';
+  for (let index = 0; index < leftChildren.length; index += 1) {
+    diffNodes(
+      leftChildren[index]!,
+      rightChildren[index]!,
+      preserve,
+      bindings,
+      scope,
+      characterData,
+      walk
+    );
+    if (walk.undecided) return;
+  }
+}
+
+/**
+ * Where two canonical trees differ, answered in the size of the difference.
+ *
+ * This agrees with {@link ooxmlTreesEqual} on the verdict whenever it returns a decided
+ * result, and it reports which paragraphs own the difference so a caller does not have to
+ * declare that everything changed.
+ */
+export function canonicalTreeDifference(
+  previous: OoxmlPart | OoxmlNode,
+  next: OoxmlPart | OoxmlNode,
+  budget: number = DEFAULT_DIFFERENCE_BUDGET
+): CanonicalTreeDifference {
+  const walk: DifferenceWalk = {
+    budget,
+    visited: 0,
+    undecided: false,
+    reach: 'equal',
+    idsPreserved: true,
+    paragraphIds: new Set<string>(),
+  };
+  diffNodes(
+    'root' in previous ? previous.root : previous,
+    'root' in next ? next.root : next,
+    false,
+    DEFAULT_FINGERPRINT_BINDINGS,
+    null,
+    false,
+    walk
+  );
+  return {
+    equal: !walk.undecided && walk.reach === 'equal',
+    undecided: walk.undecided,
+    reach: walk.reach,
+    paragraphIds: [...walk.paragraphIds],
+    idsPreserved: walk.idsPreserved,
+    visited: walk.visited,
+  };
 }

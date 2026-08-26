@@ -4,13 +4,27 @@
 // lives in the replication layer, so this path records no legacy history and emits no
 // primitive journal — the incoming package is the result of a remote journal, not new
 // local intent.
+//
+// It installs the package VERBATIM, through `installAuthoritativePackageSnapshot`. The shell
+// merge the local path performs exists for LOCAL history, where a snapshot can predate a
+// numbering or hyperlink write this replica made. A remotely materialized package is the
+// opposite case: every replica already agreed on the whole package, `numbering.xml` included,
+// so merging this replica's shell back over it would revert the remote list or link change
+// here and leave the two replicas permanently different.
 
 import { runObservedStoreTransaction } from '../package/canonical-primitive-capture.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
 import type { OoxmlExternalTarget, OoxmlPackage } from '../package/ooxml-package.ts';
-import { ooxmlTreesEqual, validateOoxmlPart } from '../package/ooxml-tree.ts';
+import { canonicalTreeDifference } from '../package/ooxml-serialize.ts';
+import {
+  ooxmlTreesEqual,
+  validateOoxmlPart,
+  validateOoxmlPartDelta,
+  type OoxmlPart,
+} from '../package/ooxml-tree.ts';
 import type { RelationshipRecord } from '../package/relationships.ts';
-import type { TreeOpRejection } from './tree-ops.ts';
+import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
+import type { ImpactClass, TreeOpRejection } from './tree-ops.ts';
 import type { TreeModelChange } from './tree-store.ts';
 
 /** Attribution stamped on one remote canonical publication. */
@@ -117,40 +131,140 @@ function partBytesEqual(
   return true;
 }
 
-/** True when identity or the canonical fingerprint oracle says the packages match. */
-export function remotePackagesAreEquivalent(left: OoxmlPackage, right: OoxmlPackage): boolean {
-  if (left === right) return true;
-  if (left.mainDocumentPart !== right.mainDocumentPart) return false;
-  if (left.parts.size !== right.parts.size) return false;
-  if (!partBytesEqual(left.partBytes, right.partBytes)) return false;
-  if (!relationshipsEqual(left.relationships, right.relationships)) return false;
-  if (!externalTargetsEqual(left.externalTargets, right.externalTargets)) return false;
+function contentTypesEqual(left: OoxmlPackage, right: OoxmlPackage): boolean {
+  return (
+    left.contentTypes === right.contentTypes ||
+    (stringMapsEqual(left.contentTypes.defaults, right.contentTypes.defaults) &&
+      stringMapsEqual(left.contentTypes.overrides, right.contentTypes.overrides))
+  );
+}
+
+/**
+ * What one incoming package changes relative to the installed one.
+ *
+ * `equal` decides whether to install at all. The rest decides what to TELL the engine the
+ * revision changed, which is the difference between re-breaking one paragraph and
+ * invalidating the document.
+ */
+export interface RemotePackageDelta {
+  readonly equal: boolean;
+  readonly dirty: readonly string[];
+  readonly dependencyKeys: readonly string[];
+  readonly impact: ImpactClass;
+}
+
+const EQUAL_DELTA: RemotePackageDelta = Object.freeze({
+  equal: true,
+  dirty: Object.freeze([]),
+  dependencyKeys: Object.freeze([]),
+  impact: 'global',
+});
+
+const WHOLESALE_DELTA: RemotePackageDelta = Object.freeze({
+  equal: false,
+  dirty: Object.freeze([]),
+  dependencyKeys: Object.freeze([]),
+  impact: 'global',
+});
+
+function wholesaleVerdict(changed: readonly [OoxmlPart, OoxmlPart][]): RemotePackageDelta {
+  for (const [part, other] of changed) {
+    if (!ooxmlTreesEqual(part, other)) return WHOLESALE_DELTA;
+  }
+  return EQUAL_DELTA;
+}
+
+/**
+ * Compare an incoming package with the installed one and classify the difference.
+ *
+ * A replica receives a package that shares every object it did not change, so the parts and
+ * the subtrees that moved are found by identity and everything else costs nothing. Only the
+ * main document part can narrow the verdict: a difference anywhere else — bytes,
+ * relationships, content types, a furniture or notes part — is reported wholesale, because
+ * proving which pages a style or numbering change reaches is not this function's job.
+ */
+export function remotePackageDelta(next: OoxmlPackage, current: OoxmlPackage): RemotePackageDelta {
+  if (next === current) return EQUAL_DELTA;
   if (
-    left.contentTypes !== right.contentTypes &&
-    (!stringMapsEqual(left.contentTypes.defaults, right.contentTypes.defaults) ||
-      !stringMapsEqual(left.contentTypes.overrides, right.contentTypes.overrides))
+    next.mainDocumentPart !== current.mainDocumentPart ||
+    next.parts.size !== current.parts.size ||
+    !partBytesEqual(next.partBytes, current.partBytes) ||
+    !relationshipsEqual(next.relationships, current.relationships) ||
+    !externalTargetsEqual(next.externalTargets, current.externalTargets) ||
+    !contentTypesEqual(next, current)
   ) {
-    return false;
+    return WHOLESALE_DELTA;
   }
-  for (const [name, part] of left.parts) {
-    const other = right.parts.get(name);
-    if (!other) return false;
-    if (part !== other && !ooxmlTreesEqual(part, other)) return false;
+  const changed: [OoxmlPart, OoxmlPart][] = [];
+  for (const [name, part] of next.parts) {
+    const other = current.parts.get(name);
+    if (!other) return WHOLESALE_DELTA;
+    if (part !== other) changed.push([part, other]);
   }
-  return true;
+  if (changed.length === 0) return EQUAL_DELTA;
+  const [part, other] = changed[0]!;
+  if (changed.length > 1 || part.name !== next.mainDocumentPart) {
+    return wholesaleVerdict(changed);
+  }
+  const difference = canonicalTreeDifference(other.root, part.root);
+  if (difference.undecided) return wholesaleVerdict(changed);
+  if (difference.equal) return EQUAL_DELTA;
+  // A narrowed impact tells layout it may keep what it has for every paragraph outside
+  // `dirty`. That is only true when the paragraphs still exist under the same ids and no
+  // block moved, so anything else falls back to the wholesale answer.
+  if (
+    !difference.idsPreserved ||
+    difference.reach === 'outside-paragraph' ||
+    difference.paragraphIds.length === 0
+  ) {
+    return WHOLESALE_DELTA;
+  }
+  return {
+    equal: false,
+    dirty: difference.paragraphIds,
+    dependencyKeys: [DEPENDENCY_KEY_IDS.story],
+    impact: difference.reach === 'paragraph-text' ? 'text-local' : 'flow-structural',
+  };
+}
+
+/** True when identity or the canonical equality oracle says the packages match. */
+export function remotePackagesAreEquivalent(left: OoxmlPackage, right: OoxmlPackage): boolean {
+  return remotePackageDelta(left, right).equal;
 }
 
 function reject(detail: string): RemotePublishResult {
   return { ok: false, reason: 'package-invariant', detail };
 }
 
-/** Validate every modeled part and the package invariants. Does not install. */
-export function validateRemoteCanonicalPackage(pkg: OoxmlPackage): RemotePublishResult | null {
+/**
+ * Validate every modeled part and the package invariants. Does not install.
+ *
+ * `installed` is the package this replica already holds, and every part of it has already
+ * been proven valid — a remote install validates before it installs, a local commit
+ * validates in `TreeDocumentStore`, and the first package is validated on open. So a part
+ * that arrives as the SAME OBJECT needs nothing, and a part that arrives changed is proven
+ * against its own predecessor, which re-proves every node the edit could have touched and
+ * skips the object-identical subtrees it could not. Omitting `installed` validates in full,
+ * which is what a first install and a resync do.
+ *
+ * The saving comes from not re-proving unchanged nodes, never from proving less about
+ * changed ones: `validateOoxmlPartDelta` runs the identical rules on every node it visits.
+ * Its one narrowing is that an id duplicated ACROSS a pruned and a rebuilt subtree is not
+ * observed. That case cannot be constructed by a peer here, hostile or not: the ids of a
+ * remotely materialized part are the keys of one shared map, and the materializer refuses
+ * to place a key twice in one pass.
+ */
+export function validateRemoteCanonicalPackage(
+  pkg: OoxmlPackage,
+  installed?: OoxmlPackage
+): RemotePublishResult | null {
   if (!pkg.parts.get(pkg.mainDocumentPart)) {
     return reject('no-main-document');
   }
   for (const [name, part] of pkg.parts) {
-    const result = validateOoxmlPart(part);
+    const previous = installed?.parts.get(name);
+    if (previous === part) continue;
+    const result = previous ? validateOoxmlPartDelta(previous, part) : validateOoxmlPart(part);
     if (!result.ok) {
       return reject(`invalid-part:${name}:${result.issues[0]?.code ?? 'invalid'}`);
     }
@@ -165,8 +279,19 @@ export function validateRemoteCanonicalPackage(pkg: OoxmlPackage): RemotePublish
 /**
  * Install one remotely materialized package as one canonical revision.
  *
- * Duplicate identity or fingerprint matches publish nothing. Capture runs so nested
- * package hooks cannot leak a journal; the commit predicate stays false.
+ * A package that says the same thing as the installed one publishes nothing. That guard is
+ * load-bearing rather than an optimization: the engine's layout, line-breaking and story
+ * caches are keyed on object identity, so installing a content-equal package would bump the
+ * revision, miss every cache, and re-render a document that did not change.
+ *
+ * The published change describes the difference, not the package. A remote keystroke
+ * reaches the engine as the same `text-local` commit over the same paragraph id that the
+ * author's own keystroke published, so no consumer can tell the two apart. `global` remains
+ * the answer whenever the difference is genuinely wholesale — a seed, a resync, a
+ * membership change, or anything outside the main document part.
+ *
+ * Capture runs so nested package hooks cannot leak a journal; the commit predicate stays
+ * false.
  */
 export function publishRemoteCanonicalPackage(
   store: object & RemotePackagePublishHost,
@@ -174,11 +299,16 @@ export function publishRemoteCanonicalPackage(
   attribution: RemotePackageAttribution
 ): RemotePublishResult {
   const current = store.currentPackage();
-  if (remotePackagesAreEquivalent(pkg, current)) {
+  const delta = remotePackageDelta(pkg, current);
+  if (delta.equal) {
     return { ok: true, change: null };
   }
-  const rejection = validateRemoteCanonicalPackage(pkg);
+  const rejection = validateRemoteCanonicalPackage(pkg, current);
   if (rejection) return rejection;
+  const bodyPartName = store.bodyStore().part.name;
+  // The narrowed dirty set names paragraphs of the main document part. A body store that is
+  // not that part means the ids would address the wrong story.
+  const narrowed = delta.impact !== 'global' && pkg.mainDocumentPart === bodyPartName;
   return runObservedStoreTransaction(
     store,
     () => {
@@ -192,13 +322,13 @@ export function publishRemoteCanonicalPackage(
         origin: attribution.origin,
         ...(attribution.actorId ? { actorId: attribution.actorId } : {}),
         ...(attribution.operationId ? { operationId: attribution.operationId } : {}),
-        dirty: [],
+        dirty: narrowed ? delta.dirty : [],
         created: [],
         deleted: [],
         splitJoin: [],
-        dependencyKeys: [],
-        impact: 'global',
-        story: { kind: 'body', partName: store.bodyStore().part.name },
+        dependencyKeys: narrowed ? delta.dependencyKeys : [],
+        impact: narrowed ? delta.impact : 'global',
+        story: { kind: 'body', partName: bodyPartName },
       });
       return { ok: true as const, change };
     },

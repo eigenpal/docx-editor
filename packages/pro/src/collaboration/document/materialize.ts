@@ -35,6 +35,15 @@ import {
 import type { DocumentRegistry } from './registry.ts';
 import type { BlobBytesStore } from './seed.ts';
 import {
+  childrenMatchRecords,
+  emptyRelsPart,
+  isRelsPartName,
+  relationshipChildrenOf,
+  relationshipsByOwner,
+  relsOwnerOf,
+  relsShellMatches,
+} from './materialize-rels.ts';
+import {
   customXmlDirectoryChanged,
   customXmlPropsOverrides,
   customXmlRepairNeeded,
@@ -45,21 +54,7 @@ import {
   planCustomXmlStores,
 } from './materialize-custom-xml.ts';
 
-const PACKAGE_RELATIONSHIPS_NAMESPACE =
-  'http://schemas.openxmlformats.org/package/2006/relationships';
-const RELATIONSHIPS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
-const RELS_PART_NAME_RE = /^(.*)\/_rels\/([^/]*)\.rels$/;
 const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
-
-function isRelsPartName(name: string): boolean {
-  return RELS_PART_NAME_RE.test(name);
-}
-
-function relsOwnerOf(relsName: string): string | null {
-  const match = RELS_PART_NAME_RE.exec(relsName);
-  if (!match) return null;
-  return match[2] === '' ? '/' : `${match[1]}/${match[2]}`;
-}
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
   return node.attributes.find((attribute) => attribute.localName === localName)?.value;
@@ -68,132 +63,6 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
 function payloadIdOfNode(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.id;
   return attributeValue(node, 'id') ?? node.id;
-}
-
-function freezeRelationshipAttribute(localName: string, value: string): OoxmlAttribute {
-  return Object.freeze({
-    kind: 'genericExtension',
-    namespaceUri: '',
-    localName,
-    value,
-  });
-}
-
-/**
- * Build one Relationship element the way `readOoxmlPackage` models a `.rels` child.
- *
- * The relationship map is the source of truth. This tree is a projection for save.
- */
-function freezeRelationshipElement(
-  logicalId: LogicalId,
-  record: EncodedRelationship
-): OoxmlElement {
-  const attributes: OoxmlAttribute[] = [
-    freezeRelationshipAttribute('Id', record.id),
-    freezeRelationshipAttribute('Type', record.type),
-    freezeRelationshipAttribute('Target', record.rawTarget),
-  ];
-  if (record.targetMode === 'External') {
-    attributes.push(freezeRelationshipAttribute('TargetMode', 'External'));
-  }
-  return Object.freeze({
-    id: logicalId,
-    kind: 'generic',
-    namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE,
-    localName: 'Relationship',
-    namespaceBindings: Object.freeze([]),
-    attributes: Object.freeze(attributes),
-    children: Object.freeze([]),
-  }) as OoxmlElement;
-}
-
-function relationshipMatchesRecord(node: OoxmlNode, record: EncodedRelationship): boolean {
-  if (node.kind === 'textValue') return false;
-  if (node.namespaceUri !== PACKAGE_RELATIONSHIPS_NAMESPACE) return false;
-  if (node.localName !== 'Relationship') return false;
-  if (attributeValue(node, 'Id') !== record.id) return false;
-  if (attributeValue(node, 'Type') !== record.type) return false;
-  if (attributeValue(node, 'Target') !== record.rawTarget) return false;
-  const mode = attributeValue(node, 'TargetMode');
-  return record.targetMode === 'External' ? mode === 'External' : mode === undefined;
-}
-
-function childrenMatchRecords(
-  root: OoxmlElement,
-  records: readonly EncodedRelationship[]
-): boolean {
-  if (root.children.length !== records.length) return false;
-  return root.children.every((child, index) => relationshipMatchesRecord(child, records[index]!));
-}
-
-function relsShellMatches(left: OoxmlElement, right: OoxmlElement): boolean {
-  if (left.id !== right.id || left.kind !== right.kind) return false;
-  if (left.namespaceUri !== right.namespaceUri || left.localName !== right.localName) return false;
-  if (left.prefix !== right.prefix) return false;
-  if (left.attributes.length !== right.attributes.length) return false;
-  for (let index = 0; index < left.attributes.length; index += 1) {
-    const a = left.attributes[index]!;
-    const b = right.attributes[index]!;
-    if (
-      a.namespaceUri !== b.namespaceUri ||
-      a.localName !== b.localName ||
-      a.value !== b.value ||
-      a.prefix !== b.prefix
-    ) {
-      return false;
-    }
-  }
-  if (left.namespaceBindings.length !== right.namespaceBindings.length) return false;
-  return left.namespaceBindings.every((binding, index) => {
-    const other = right.namespaceBindings[index]!;
-    return binding.prefix === other.prefix && binding.namespaceUri === other.namespaceUri;
-  });
-}
-
-function relationshipChildrenOf(
-  previous: readonly OoxmlNode[],
-  records: readonly EncodedRelationship[],
-  relsName: string
-): readonly OoxmlNode[] {
-  const next: OoxmlNode[] = [];
-  for (const record of records) {
-    if (rejectDangerousKey(record.id)) continue;
-    const existing = previous.find(
-      (child) => child.kind !== 'textValue' && attributeValue(child, 'Id') === record.id
-    );
-    if (existing && relationshipMatchesRecord(existing, record)) {
-      next.push(existing);
-      continue;
-    }
-    const logicalId =
-      existing && existing.kind !== 'textValue' ? existing.id : `${relsName}#rel-${record.id}`;
-    if (rejectDangerousKey(logicalId)) continue;
-    next.push(freezeRelationshipElement(logicalId, record));
-  }
-  return next;
-}
-
-function emptyRelationshipsRoot(relsName: string): OoxmlElement {
-  return Object.freeze({
-    id: `${relsName}#root`,
-    kind: 'generic',
-    namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE,
-    localName: 'Relationships',
-    namespaceBindings: Object.freeze([
-      Object.freeze({ prefix: '', namespaceUri: PACKAGE_RELATIONSHIPS_NAMESPACE }),
-    ]),
-    attributes: Object.freeze([]),
-    children: Object.freeze([]),
-  }) as OoxmlElement;
-}
-
-function emptyRelsPart(relsName: string): OoxmlPart {
-  return Object.freeze({
-    id: relsName,
-    name: relsName,
-    contentType: RELATIONSHIPS_CONTENT_TYPE,
-    root: emptyRelationshipsRoot(relsName),
-  });
 }
 
 /**
@@ -241,20 +110,6 @@ function withRelsChildren(part: OoxmlPart, children: readonly OoxmlNode[]): Ooxm
     children: replaceChildRange(root.children, children),
   }) as OoxmlElement;
   return Object.freeze({ ...part, root: nextRoot });
-}
-
-function relationshipsByOwner(
-  records: readonly EncodedRelationship[]
-): Map<string, EncodedRelationship[]> {
-  const byOwner = new Map<string, EncodedRelationship[]>();
-  for (const record of records) {
-    if (rejectDangerousKey(record.id)) continue;
-    if (record.ownerPart !== '/' && rejectPartName(record.ownerPart)) continue;
-    const list = byOwner.get(record.ownerPart) ?? [];
-    list.push(record);
-    byOwner.set(record.ownerPart, list);
-  }
-  return byOwner;
 }
 
 export function replaceChildRange(
@@ -313,21 +168,81 @@ function freezeAttribute(attribute: EncodedAttribute): OoxmlAttribute {
   });
 }
 
+/**
+ * Nodes this process has read out of shared state and frozen into canonical form.
+ *
+ * Receiving one remote character must cost the size of the edit, not the size of the
+ * document. A duration cannot say which of the two happened on a loaded machine; this
+ * counter can, so the receive gates assert against it.
+ */
+let materializedBuilds = 0;
+let materializedReads = 0;
+
+/** Test-observable count of canonical nodes the materializer has frozen. */
+export function materializedNodeBuilds(): number {
+  return materializedBuilds;
+}
+
+/** Test-observable count of shared-state records the materializer has read. */
+export function materializedNodeReads(): number {
+  return materializedReads;
+}
+
 function freezeText(logicalId: LogicalId, value: string): OoxmlTextNode {
+  materializedBuilds += 1;
   return Object.freeze({ id: logicalId, kind: 'textValue', value });
 }
 
-function freezeElement(record: ElementRecord, children: readonly OoxmlNode[]): OoxmlElement {
+function sameBindings(previous: OoxmlElement, record: ElementRecord): boolean {
+  if (previous.namespaceBindings.length !== record.bindings.length) return false;
+  return previous.namespaceBindings.every((binding, index) => {
+    const encoded = record.bindings[index]!;
+    return binding.prefix === encoded.prefix && binding.namespaceUri === encoded.namespaceUri;
+  });
+}
+
+function sameAttributes(previous: OoxmlElement, record: ElementRecord): boolean {
+  if (previous.attributes.length !== record.attributes.length) return false;
+  return previous.attributes.every((attribute, index) => {
+    const encoded = record.attributes[index]!;
+    return (
+      attribute.namespaceUri === encoded.namespaceUri &&
+      attribute.localName === encoded.localName &&
+      attribute.value === encoded.value &&
+      attribute.prefix === (encoded.prefix?.length ? encoded.prefix : undefined)
+    );
+  });
+}
+
+/**
+ * Freeze one element, keeping every array the predecessor can still vouch for.
+ *
+ * A rebuilt node is rebuilt because its CHILDREN moved. Handing it a newly allocated
+ * bindings array anyway forfeits every downstream shortcut that keys on that array's
+ * identity to prove the inherited namespace context did not change — the delta validator
+ * stops pruning at the document element and revalidates the whole part for one keystroke.
+ */
+function freezeElement(
+  record: ElementRecord,
+  children: readonly OoxmlNode[],
+  previous?: OoxmlNode
+): OoxmlElement {
+  materializedBuilds += 1;
+  const prior = previous && previous.kind !== 'textValue' ? previous : undefined;
   return Object.freeze({
     id: record.logicalId,
     kind: record.kind,
     namespaceUri: record.namespaceUri,
     localName: record.localName,
     prefix: record.prefix,
-    namespaceBindings: Object.freeze(
-      record.bindings.map((binding) => Object.freeze({ ...binding }))
-    ),
-    attributes: Object.freeze(record.attributes.map(freezeAttribute)),
+    namespaceBindings:
+      prior && sameBindings(prior, record)
+        ? prior.namespaceBindings
+        : Object.freeze(record.bindings.map((binding) => Object.freeze({ ...binding }))),
+    attributes:
+      prior && sameAttributes(prior, record)
+        ? prior.attributes
+        : Object.freeze(record.attributes.map(freezeAttribute)),
     children,
   }) as OoxmlElement;
 }
@@ -348,10 +263,26 @@ function attributesMatch(node: OoxmlElement, record: ElementRecord): boolean {
   return node.localName === record.localName && node.kind === record.kind;
 }
 
-export function markPlaced(node: OoxmlNode, placed: Set<LogicalId>): void {
+/**
+ * Claim a whole reused subtree, and say whether the claim was uncontested.
+ *
+ * Reusing a cached subtree skips the per-node `placed` check that refuses a second parent,
+ * so the claim has to be made for the descendants too. `false` means some node of this
+ * subtree is already in the tree under another parent: two child arrays list the same id
+ * and the cached answer disagrees with the rebuilt one. Emitting the node twice is a silent
+ * corruption, so the caller redoes the pass without the cache instead.
+ */
+export function markPlaced(node: OoxmlNode, placed: Set<LogicalId>): boolean {
+  // One `add` instead of `has` then `add`: this runs once per node of every reused subtree,
+  // so a second hash of an already-long logical id is a measurable share of a receive.
+  const before = placed.size;
   placed.add(node.id);
-  if (node.kind === 'textValue') return;
-  for (const child of node.children) markPlaced(child, placed);
+  let uncontested = placed.size !== before;
+  if (node.kind === 'textValue') return uncontested;
+  for (const child of node.children) {
+    if (!markPlaced(child, placed)) uncontested = false;
+  }
+  return uncontested;
 }
 
 function expandAncestors(registry: DocumentRegistry, ids: ReadonlySet<LogicalId>): Set<LogicalId> {
@@ -382,6 +313,8 @@ export type MaterializeResult =
  */
 export class PackageMaterializer {
   private readonly cache = new Map<LogicalId, OoxmlNode>();
+  /** Depth of each cached subtree, so reuse cannot smuggle a node past `maxTreeDepth`. */
+  private readonly heights = new Map<LogicalId, number>();
   private readonly partCache = new Map<string, OoxmlPart>();
   /** Last `.rels` projection. The node tree is not the relationship authority. */
   private readonly relsProjection = new Map<string, OoxmlPart>();
@@ -389,6 +322,9 @@ export class PackageMaterializer {
   private pendingMembership = false;
   private pendingPackage = false;
   private lastDirty: ReadonlySet<LogicalId> = new Set();
+  /** Adoptee signature per survivor at the end of the last pass. */
+  private lastAdoption = new Map<LogicalId, string>();
+  private placementContested = false;
   private pkg: OoxmlPackage | null = null;
   private customXmlRels: readonly EncodedRelationship[] = [];
   private customXmlOverrides = new Map<string, string>();
@@ -426,26 +362,84 @@ export class PackageMaterializer {
     return this.rebuild();
   }
 
+  /**
+   * Survivors whose derived adoption set moved since the last pass.
+   *
+   * A join tombstones one node with a replacement and the survivor grows the orphaned
+   * children. Nothing about the survivor's own record changes, so no observer names it: the
+   * only witness is this index. The node cache would hand the survivor back untouched and
+   * the joined content would vanish, which is why the whole document used to rebuild
+   * whenever membership moved. The index holds one entry per join survivor, so comparing it
+   * costs nothing next to the walk it replaces.
+   */
+  private adoptionChanges(): readonly LogicalId[] {
+    const moved: LogicalId[] = [];
+    const next = new Map<LogicalId, string>();
+    for (const [survivor, adopted] of this.registry.adoptionIndex()) {
+      const signature = adopted.join('\u0001');
+      next.set(survivor, signature);
+      if (this.lastAdoption.get(survivor) !== signature) moved.push(survivor);
+    }
+    for (const survivor of this.lastAdoption.keys()) {
+      if (!next.has(survivor)) moved.push(survivor);
+    }
+    this.lastAdoption = next;
+    return moved;
+  }
+
   rebuild(): MaterializeResult {
-    this.issues.length = 0;
     const rawDirty = new Set(this.pendingDirty);
     const membershipChanged = this.pendingMembership;
     const packageChanged = this.pendingPackage;
     this.pendingDirty.clear();
     this.pendingMembership = false;
     this.pendingPackage = false;
-    this.lastDirty = expandAncestors(this.registry, rawDirty);
-    this.customXmlRels = [];
-    this.customXmlOverrides.clear();
+    // A write whose Yjs events are still queued is invisible to every derived index and to
+    // the dirty set: shared state already holds the edit, while `parentOf` and the adoption
+    // index still describe the tree without it. That happens on the one path that matters
+    // most — a queued local keystroke flushed the moment a remote update arrives. Reusing a
+    // cached subtree there would publish the document as it was BEFORE the author's own
+    // character, so the pass rebuilds the indexes and reads everything from shared state.
+    const unobserved = this.registry.hasUnobservedWrites();
+    if (unobserved) this.registry.rebuildDerivedIndexes();
+    for (const survivor of this.adoptionChanges()) rawDirty.add(survivor);
+    const dirty = expandAncestors(this.registry, rawDirty);
     // A relationship-only change dirties no nodes. Reuse the node cache, then project `.rels`.
-    const incremental =
-      this.pkg !== null && !membershipChanged && (this.lastDirty.size > 0 || packageChanged);
+    //
+    // Membership does NOT disqualify the cache. Every child array that moved names its own
+    // parent, `expandAncestors` names that parent's ancestors, and both the adoption index
+    // and the recorded subtree heights are checked, so a rebuilt spine over cached children
+    // reaches the same tree a full pass does — proven by the equivalence oracle in
+    // `remote-receive-equivalence.test.ts`.
+    const incremental = this.pkg !== null && !unobserved && (dirty.size > 0 || packageChanged);
+    // Orphan collection has to see the WHOLE placement, because a move or a tombstone can
+    // leave a node reachable from no part at all, and the cache cannot see that.
     const collectOrphans =
       membershipChanged ||
+      unobserved ||
       !this.pkg ||
-      [...this.lastDirty].some(
+      [...dirty].some(
         (id) => this.registry.isTombstoned(id) || this.registry.parentOf(id) === null
       );
+    const first = this.materializePass(dirty, packageChanged, incremental, collectOrphans);
+    if (!this.placementContested) return first;
+    // Two child arrays list one id and the cache disagrees with the rebuilt parent about
+    // which one owns it. A full pass decides it the one deterministic way: first preorder
+    // placement wins, the rest report `duplicate-parent`.
+    return this.materializePass(dirty, packageChanged, false, true);
+  }
+
+  private materializePass(
+    dirty: ReadonlySet<LogicalId>,
+    packageChanged: boolean,
+    incremental: boolean,
+    collectOrphans: boolean
+  ): MaterializeResult {
+    this.issues.length = 0;
+    this.lastDirty = dirty;
+    this.placementContested = false;
+    this.customXmlRels = [];
+    this.customXmlOverrides.clear();
     const placed = new Set<LogicalId>();
     const parts = new Map<string, OoxmlPart>();
     for (const entry of this.registry.partEntries()) {
@@ -526,14 +520,18 @@ export class PackageMaterializer {
     }
     if (incremental && !this.lastDirty.has(logicalId)) {
       const cached = this.cache.get(logicalId);
-      if (cached) {
-        if (collectOrphans) markPlaced(cached, placed);
-        else placed.add(logicalId);
+      // A cached subtree carries the depth it was built at. Grafting it under a deeper
+      // parent is how a peer would push the tree past `maxTreeDepth` without any walk ever
+      // reaching the bottom, and every downstream oracle — validate, fingerprint, save —
+      // recurses. So the recorded height is checked before the reuse, not after.
+      if (cached && path.size + this.heightOf(cached) <= this.registry.limits.maxTreeDepth) {
+        if (!markPlaced(cached, placed)) this.placementContested = true;
         return cached;
       }
     }
     if (this.registry.isTombstoned(logicalId)) return null;
     placed.add(logicalId);
+    materializedReads += 1;
     const record = this.registry.record(logicalId);
     if (!record) {
       this.push('missing-node', logicalId);
@@ -543,7 +541,7 @@ export class PackageMaterializer {
       const previous = this.cache.get(logicalId);
       if (previous?.kind === 'textValue' && previous.value === record.value) return previous;
       const next = freezeText(logicalId, record.value);
-      this.cache.set(logicalId, next);
+      this.remember(logicalId, next);
       return next;
     }
     path.add(logicalId);
@@ -567,7 +565,10 @@ export class PackageMaterializer {
         this.push('deleted-referenced', childId);
         continue;
       }
-      if (!this.registry.record(childId)) {
+      // Existence only. Decoding the child's whole record here — attributes, bindings and
+      // its own child array — for every entry of every rebuilt child list is the same cost
+      // as materializing it, and a cached child never needs it decoded at all.
+      if (rejectDangerousKey(childId) || !this.registry.hasNode(childId)) {
         this.push('child-id-not-in-registry', childId);
         continue;
       }
@@ -586,9 +587,31 @@ export class PackageMaterializer {
       return previous;
     }
     const previousChildren = previous && previous.kind !== 'textValue' ? previous.children : [];
-    const next = freezeElement(record, replaceChildRange(previousChildren, children));
-    this.cache.set(logicalId, next);
+    const next = freezeElement(record, replaceChildRange(previousChildren, children), previous);
+    this.remember(logicalId, next);
     return next;
+  }
+
+  private remember(logicalId: LogicalId, node: OoxmlNode): void {
+    this.cache.set(logicalId, node);
+    this.heights.delete(logicalId);
+  }
+
+  /**
+   * Depth of one cached subtree, memoized.
+   *
+   * A rebuilt node forgets its height, and a node whose height moved is necessarily rebuilt
+   * with a new identity, which rebuilds every ancestor. So a surviving entry is current.
+   */
+  private heightOf(node: OoxmlNode): number {
+    const known = this.heights.get(node.id);
+    if (known !== undefined) return known;
+    let height = 1;
+    if (node.kind !== 'textValue') {
+      for (const child of node.children) height = Math.max(height, this.heightOf(child) + 1);
+    }
+    this.heights.set(node.id, height);
+    return height;
   }
 
   private projectedRelationships(): EncodedRelationship[] {
@@ -705,8 +728,8 @@ export class PackageMaterializer {
       if (nextChildren === part.root.children) continue;
       const record = this.registry.record(part.root.id);
       if (!record || !isElementRecord(record)) continue;
-      const nextRoot = freezeElement(record, nextChildren);
-      this.cache.set(part.root.id, nextRoot);
+      const nextRoot = freezeElement(record, nextChildren, part.root);
+      this.remember(part.root.id, nextRoot);
       const nextPart = Object.freeze({ ...part, root: nextRoot });
       parts.set(name, nextPart);
       this.partCache.set(name, nextPart);
@@ -751,8 +774,8 @@ export class PackageMaterializer {
     const record = this.registry.record(rootId);
     if (!record || !isElementRecord(record)) return root;
     const nextChildren = replaceChildRange(root.children, members);
-    const nextRoot = freezeElement(record, nextChildren);
-    this.cache.set(rootId, nextRoot);
+    const nextRoot = freezeElement(record, nextChildren, root);
+    this.remember(rootId, nextRoot);
     return nextRoot;
   }
 

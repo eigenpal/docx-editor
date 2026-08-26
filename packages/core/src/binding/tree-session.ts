@@ -37,6 +37,7 @@ import {
   type CustomNodeWriteResult,
 } from '../store/store/custom-node-writes.ts';
 import { resolveNotesPart } from '../store/package/note-references.ts';
+import { runObservedStoreTransaction } from '../store/package/canonical-primitive-capture.ts';
 import {
   ORIGIN_IDS,
   TreePackageStore,
@@ -890,11 +891,21 @@ export function openTreeSession(
         // handed to the write; `currentPackage()` being memoized only strengthens that.
         const part = packageStore.partFor(scope);
         if (!part) return null;
-        const before = currentPackage();
-        const ensured = ensureHyperlinkRelationship(before, url, part.name);
-        if (!ensured) return null;
-        if (ensured.pkg !== before) packageStore.replacePackageShell(ensured.pkg);
-        return ensured.relationshipId;
+        // Capture is armed here, not left to the caller's tree transaction: the relationship is
+        // a PACKAGE write that lands before the op naming its rId, and outside a capture frame
+        // `recordPutRelationship` has nowhere to record. A peer then received a `w:hyperlink`
+        // whose rId resolved to nothing — the link painted inert on every screen but this one.
+        return runObservedStoreTransaction(
+          packageStore,
+          () => {
+            const before = currentPackage();
+            const ensured = ensureHyperlinkRelationship(before, url, part.name);
+            if (!ensured) return null;
+            if (ensured.pkg !== before) packageStore.replacePackageShell(ensured.pkg);
+            return ensured.relationshipId;
+          },
+          (relationshipId) => relationshipId !== null
+        );
       },
 
       reviewItems() {
@@ -1046,25 +1057,34 @@ export function openTreeSession(
         return removePackageCustomNode(packageStore, controlNodeId, scope);
       },
 
+      // Capture is armed even though this is not a user intent. The sweep converges on its
+      // own — same document, same orphan payloads — but a host whose module list differs from
+      // a peer's would otherwise drop a `customXml` item locally and nowhere else.
       sweepCustomNodePayloads(namespaces) {
-        const store = bodyStore();
-        const swept = sweepCustomNodePayloads(
-          packageStore.currentPackage(),
-          store.part.name,
-          namespaces
+        return runObservedStoreTransaction(
+          packageStore,
+          (): CustomNodeSweepOutcome => {
+            const store = bodyStore();
+            const swept = sweepCustomNodePayloads(
+              packageStore.currentPackage(),
+              store.part.name,
+              namespaces
+            );
+            // A refusal leaves the document exactly as it arrived, which is the safe half of a
+            // sweep that could not run. Reported rather than swallowed: the caller is the open
+            // path, and a store that refuses a rewrite will refuse it on every later open too.
+            if (!swept.ok) return { ok: false, reason: swept.reason };
+            if (swept.removed.length === 0) return { ok: true, removed: [] };
+            // NO UNDO ENTRY and no published revision. The sweep is not an edit anyone made: it
+            // collects payloads whose controls were already gone when the document arrived, and a
+            // user who pressed Ctrl+Z straight after opening a file must not get them back.
+            // `replacePackageShell` is the lane for exactly that — a package write that is not a
+            // user intent.
+            packageStore.replacePackageShell(swept.pkg);
+            return { ok: true, removed: swept.removed };
+          },
+          (outcome) => outcome.ok && outcome.removed.length > 0
         );
-        // A refusal leaves the document exactly as it arrived, which is the safe half of a
-        // sweep that could not run. Reported rather than swallowed: the caller is the open
-        // path, and a store that refuses a rewrite will refuse it on every later open too.
-        if (!swept.ok) return { ok: false, reason: swept.reason };
-        if (swept.removed.length === 0) return { ok: true, removed: [] };
-        // NO UNDO ENTRY and no published revision. The sweep is not an edit anyone made: it
-        // collects payloads whose controls were already gone when the document arrived, and a
-        // user who pressed Ctrl+Z straight after opening a file must not get them back.
-        // `replacePackageShell` is the lane for exactly that — a package write that is not a
-        // user intent.
-        packageStore.replacePackageShell(swept.pkg);
-        return { ok: true, removed: swept.removed };
       },
 
       ensureListDefinition(kind) {
@@ -1072,12 +1092,22 @@ export function openTreeSession(
         // monotonic in-session and persist across lifecycle package undo/redo so story
         // `numId` references cannot go dead. The memoized numbering root is cleared so
         // layout re-reads the definitions this just added.
-        const ensured = ensureListDefinition(currentPackage(), kind);
-        if (!ensured) return null;
-        packageStore.replacePackageShell(ensured.pkg);
-        numberingRootResolved = false;
-        numberingRoot = null;
-        return ensured.numId;
+        // Armed for the same reason as `ensureHyperlinkRelationship`: the part, its
+        // relationship and its content-type override are package writes, and a `w:numPr`
+        // replicated without them names a definition the peer cannot resolve — the list
+        // renders as plain paragraphs there and nothing reports why.
+        return runObservedStoreTransaction(
+          packageStore,
+          () => {
+            const ensured = ensureListDefinition(currentPackage(), kind);
+            if (!ensured) return null;
+            packageStore.replacePackageShell(ensured.pkg);
+            numberingRootResolved = false;
+            numberingRoot = null;
+            return ensured.numId;
+          },
+          (numId) => numId !== null
+        );
       },
 
       ensureNumberingLevel(numId, level, kind) {
@@ -1085,15 +1115,22 @@ export function openTreeSession(
         // and the memoized numbering root must forget what it read before this write.
         // The identity check compares the write's output against the SAME `before`
         // instance handed to the write; the `currentPackage()` memo preserves that.
-        const before = currentPackage();
-        const ensured = ensureNumberingLevel(before, numId, level, kind);
-        if (!ensured) return false;
-        if (ensured !== before) {
-          packageStore.replacePackageShell(ensured);
-          numberingRootResolved = false;
-          numberingRoot = null;
-        }
-        return true;
+        return runObservedStoreTransaction(
+          packageStore,
+          () => {
+            const before = currentPackage();
+            const ensured = ensureNumberingLevel(before, numId, level, kind);
+            if (!ensured) return { ok: false, changed: false };
+            if (ensured !== before) {
+              packageStore.replacePackageShell(ensured);
+              numberingRootResolved = false;
+              numberingRoot = null;
+              return { ok: true, changed: true };
+            }
+            return { ok: true, changed: false };
+          },
+          (outcome) => outcome.changed
+        ).ok;
       },
 
       insertImage(scope, input) {

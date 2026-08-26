@@ -556,6 +556,25 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       end: 5,
       type: 'plainText',
     })),
+    {
+      kind: 'insertFragment',
+      bytes: plainDoc(),
+      apply: (store) => {
+        const fragment = zipDoc({
+          body: '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>BoldPaste</w:t></w:r></w:p>',
+        });
+        const result = store.applyFragmentPaste(
+          { kind: 'body' },
+          {
+            paragraphId: firstParagraphId(store),
+            offset: 0,
+            fragmentBytes: fragment,
+            lastMarkCovered: true,
+          }
+        );
+        return result.ok ? { ok: true } : { ok: false, reason: result.reason };
+      },
+    },
     story('insertDrawing', drawingDoc(INLINE_DRAWING), (store) => ({
       op: 'insertDrawing',
       paragraphId: paragraphIds(store)[1]!,

@@ -984,13 +984,8 @@ export class TreePackageStore {
   }
 
   /**
-   * Install a package this replica did not author, verbatim.
-   *
-   * The shell merge below exists for LOCAL history, where a snapshot can predate a
-   * numbering or hyperlink write this replica made. A remotely materialized package is the
-   * opposite case: every replica already agreed on the whole package, `numbering.xml`
-   * included, so merging this replica's shell back over it would revert the remote list or
-   * link change here and leave the two replicas permanently different.
+   * Install a package this replica did not author, verbatim. No shell merge — see
+   * `publishRemoteCanonicalPackage` for why merging one here diverges two replicas.
    */
   installAuthoritativePackageSnapshot(snapshot: OoxmlPackage): void {
     this.installPackageSnapshotInternal(snapshot, false);

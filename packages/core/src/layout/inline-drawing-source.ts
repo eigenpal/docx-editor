@@ -624,11 +624,13 @@ export function createInlineDrawingLayoutBundle(
       return `${slotMintBySlot.get(slot) ?? 0}|${slot.cacheTokenForPart()}`;
     },
     drawingTokenForParagraph(paragraph: OoxmlNode, ownerPartName: string) {
-      return slotFor(ownerPartName, options.session).drawingTokenForParagraph(paragraph);
+      const slot = slotFor(ownerPartName, options.session);
+      // Slot mint belongs in the token: a package swap recreates the slot and
+      // drops handle tracking, and a token that only names resource state would
+      // reuse cached line records whose ready handles the new registry cannot mint.
+      return `${slotMintBySlot.get(slot) ?? 0}|${slot.drawingTokenForParagraph(paragraph)}`;
     },
     mintValidatedBytes(handle: ValidatedImageBytesHandle, expectedContentId: string) {
-      const tracked = handlesByKey.get(handle.resourceKey);
-      if (!tracked || tracked.contentId !== handle.contentId) return null;
       return mintValidatedImageBytes(handle, expectedContentId);
     },
     sync(reader: InlineDrawingPackageReader) {

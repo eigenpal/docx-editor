@@ -70,6 +70,15 @@ export interface CollaborationDocumentPort {
   readonly documentId: string;
   paragraphs(): readonly CollaborationParagraph[];
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
+  /**
+   * Resolve a stable `w14:paraId` in any story this replica holds.
+   *
+   * `paragraphs()` stays body-only because text publication transacts against the body
+   * store. Presence may name a header, a footer, a note, or a cell, so this lookup covers
+   * those parts too. It resolves through an index, not a scan, because a remote caret
+   * resolves two addresses per selection on every caret move.
+   */
+  paragraphByStableId(paragraphId: string): CollaborationParagraph | null;
   applyParagraphText(
     paragraphId: string,
     text: string,
@@ -120,6 +129,17 @@ export interface CollaborationSelectionAddress {
 }
 
 /**
+ * How a published selection covers the document.
+ *
+ * Absent or omitted means a character range. `cells` means the table rectangle whose
+ * corner cells contain the two endpoints. The payload still carries only those endpoints,
+ * so a large table selection does not grow with the number of selected cells.
+ *
+ * @public
+ */
+export type CollaborationSelectionKind = 'cells';
+
+/**
  * One endpoint of a remote selection resolved into this replica's canonical addresses.
  *
  * `paragraphId` is the stable `w14:paraId`. `nodeId` is replica-local and is used to paint.
@@ -145,6 +165,7 @@ export interface CollaborationRemoteSelection {
   readonly color?: string;
   readonly anchor: CollaborationRemoteSelectionAddress;
   readonly head: CollaborationRemoteSelectionAddress;
+  readonly kind?: CollaborationSelectionKind;
 }
 
 /**
@@ -157,6 +178,7 @@ export interface CollaborationRemoteSelection {
 export interface CollaborationLocalSelection {
   readonly anchor: CollaborationSelectionAddress;
   readonly head: CollaborationSelectionAddress;
+  readonly kind?: CollaborationSelectionKind;
 }
 
 /**

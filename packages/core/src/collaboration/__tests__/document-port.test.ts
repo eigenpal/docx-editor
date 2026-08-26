@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { createCollaborationDocumentPort } from '../document-port.ts';
-import { normalizeParagraphIdentity } from '../../store/package/para-id.ts';
+import { normalizeParagraphIdentity, paraIdOf } from '../../store/package/para-id.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { TreePackageStore } from '../../store/store/tree-package-store.ts';
 import { ORIGIN_IDS } from '../../store/registry/frozen-ids.ts';
@@ -151,5 +151,105 @@ describe('canonical collaboration document port', () => {
       })
     ).toEqual({ ok: true, changed: true });
     expect(port.paragraphs()[0]!.text).toBe('Local follow-up');
+  });
+
+  test('paragraphByStableId finds a header paragraph the body list omits', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+    const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<?xml version="1.0"?><Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${REL}">` +
+          `<Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${REL}">` +
+          `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<?xml version="1.0"?><w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:w14="${W14}">` +
+          '<w:body><w:p w14:paraId="11111111" w14:textId="11111111"><w:r><w:t>Body</w:t></w:r></w:p>' +
+          '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/></w:sectPr></w:body></w:document>'
+      ),
+      'word/header1.xml': strToU8(
+        `<?xml version="1.0"?><w:hdr xmlns:w="${W}" xmlns:w14="${W14}">` +
+          '<w:p w14:paraId="12345678" w14:textId="12345678"><w:r><w:t>Header</w:t></w:r></w:p></w:hdr>'
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
+    if (!main) throw new Error('missing main part');
+    const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+    const port = createCollaborationDocumentPort(store, { documentId: 'header-port' });
+    expect(port.paragraphs().map((paragraph) => paragraph.paragraphId)).toEqual(['11111111']);
+    const header = port.paragraphByStableId('12345678');
+    expect(header).toMatchObject({ paragraphId: '12345678', text: 'Header' });
+    expect(port.paragraphByNodeId(header!.nodeId)).toBeNull();
+  });
+
+  test('paragraphByStableId mints a header paraId the package does not store', () => {
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+    const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<?xml version="1.0"?><Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${REL}">` +
+          `<Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<?xml version="1.0"?><Relationships xmlns="${REL}">` +
+          `<Relationship Id="rId7" Type="${R}/header" Target="header1.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<?xml version="1.0"?><w:document xmlns:w="${W}" xmlns:r="${R}">` +
+          '<w:body><w:p><w:r><w:t>Body</w:t></w:r></w:p>' +
+          '<w:sectPr><w:headerReference w:type="default" r:id="rId7"/></w:sectPr></w:body></w:document>'
+      ),
+      'word/header1.xml': strToU8(
+        `<?xml version="1.0"?><w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:hdr>`
+      ),
+    });
+    const loaded = readOoxmlPackage(bytes);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
+    if (!main) throw new Error('missing main part');
+    const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
+    const port = createCollaborationDocumentPort(store, { documentId: 'header-mint' });
+    const headerPart = [...store.currentPackage().parts.values()].find(
+      (part) => part.root.localName === 'hdr'
+    );
+    if (!headerPart) throw new Error('missing header part');
+    const live = headerPart.root.children.find((node) => node.kind !== 'textValue');
+    expect(live && live.kind !== 'textValue' ? paraIdOf(live) : null).toBeNull();
+    const identified = normalizeParagraphIdentity(headerPart);
+    const paragraph = identified.root.children.find((node) => node.kind !== 'textValue');
+    const minted = paragraph && paragraph.kind !== 'textValue' ? paraIdOf(paragraph) : null;
+    expect(minted).toMatch(/^[0-9A-Fa-f]{8}$/);
+    expect(port.paragraphByStableId(minted!)).toMatchObject({
+      paragraphId: minted!.toUpperCase(),
+      text: 'Header',
+    });
   });
 });

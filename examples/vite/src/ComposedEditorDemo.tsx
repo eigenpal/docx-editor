@@ -648,10 +648,15 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         // Authoring is ambient: comments and tracked changes take their `@w:author` from
         // `author`, the way the Office JS API sources it from context. A real app supplies
         // the signed-in user; a demo supplies a name so replies can be written at all.
+        //
+        // In a room that name is the one the author typed when they joined. Two names for one
+        // person is a bug the document keeps: the room showed "Timur" while every comment they
+        // wrote was signed "Demo Reviewer", and `@w:author` is what a reviewer opening the file
+        // in Word reads months later.
         <DocxEditor.Root
           key={collaborationRoom?.session.documentId ?? 'local-document'}
           {...(activeDocument ? { document: activeDocument } : {})}
-          author="Demo Reviewer"
+          author={collaborationRoom?.session.identity.name ?? 'Demo Reviewer'}
           // The demo always opens ready to type: without an explicit mode, a document
           // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
           mode="edit"

@@ -2,20 +2,31 @@
 //
 // The awareness payload names only an anchor and a head. This module walks the receiver's
 // layout to cover every line between them, including a range that crosses a page or a cell.
+// A `kind: 'cells'` payload reconstructs the table rectangle those endpoints name.
 
-import { caretAt, selectionRects } from '@docx-editor.dev/core/layout';
+import {
+  caretAt,
+  cellSelectionBetween,
+  cellSelectionRects,
+  everyStoryOrder,
+} from '@docx-editor.dev/core/layout';
 import type { SemanticLayout, SemanticSelection } from '@docx-editor.dev/core/layout';
+import { cellAddressAt } from '../layout/semantic-cell-selection.ts';
+import { presenceSelectionRects, storyContentOffset } from '../layout/selection-rects.ts';
+import { findNode, isValidParaId, paraIdOf, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 import type {
   CollaborationLocalSelection,
   CollaborationParagraph,
   CollaborationRemoteSelection,
-} from '@docx-editor.dev/core/collaboration';
+  CollaborationSelectionKind,
+} from '../collaboration/index.ts';
 
 /** Map a surface selection to the stable paragraph ids awareness publishes. */
 export function localCollaborationSelection(
   selection: SemanticSelection,
-  paragraphByNodeId: (nodeId: string) => CollaborationParagraph | null
+  paragraphByNodeId: (nodeId: string) => CollaborationParagraph | null,
+  kind?: CollaborationSelectionKind
 ): CollaborationLocalSelection | null {
   const anchor = paragraphByNodeId(selection.anchor.paragraphId);
   const head = paragraphByNodeId(selection.head.paragraphId);
@@ -23,17 +34,41 @@ export function localCollaborationSelection(
   return {
     anchor: { paragraphId: anchor.paragraphId, offset: Math.max(0, selection.anchor.offset) },
     head: { paragraphId: head.paragraphId, offset: Math.max(0, selection.head.offset) },
+    ...(kind ? { kind } : {}),
   };
+}
+
+/** Stable paraId of one node in a known part. One index lookup, not a document scan. */
+export function collaborationParagraphAt(
+  part: OoxmlPart,
+  nodeId: string
+): CollaborationParagraph | null {
+  const node = findNode(part, nodeId);
+  if (!node || node.kind === 'textValue') return null;
+  const authoredId = paraIdOf(node);
+  if (!authoredId || !isValidParaId(authoredId)) return null;
+  return { paragraphId: authoredId.toUpperCase(), nodeId, text: '' };
 }
 
 export interface RemoteSelectionPaintOptions {
   readonly scale: number;
   readonly pageOffsetX?: ReadonlyMap<number, number>;
-  readonly paragraphOrder: readonly string[];
 }
 
 function isCollapsed(remote: CollaborationRemoteSelection): boolean {
   return remote.anchor.nodeId === remote.head.nodeId && remote.anchor.offset === remote.head.offset;
+}
+
+function cellRects(layout: SemanticLayout, remote: CollaborationRemoteSelection): OverlayRect[] {
+  const anchorCell = cellAddressAt(layout, remote.anchor.nodeId);
+  const headCell = cellAddressAt(layout, remote.head.nodeId);
+  if (!anchorCell || !headCell) return [];
+  const rectangle = cellSelectionBetween(layout, anchorCell, headCell);
+  if (!rectangle) return [];
+  return cellSelectionRects(layout, rectangle.cellIds).map((rect) => ({
+    ...rect,
+    className: 'docx-remote-selection-rect',
+  }));
 }
 
 /**
@@ -49,7 +84,8 @@ export function paintRemoteSelections(
   selections: readonly CollaborationRemoteSelection[],
   options: RemoteSelectionPaintOptions
 ): void {
-  const { scale, pageOffsetX, paragraphOrder } = options;
+  const { scale, pageOffsetX } = options;
+  const order = everyStoryOrder(layout);
   const rects: OverlayRect[] = [];
   const rectColors: (string | undefined)[] = [];
   const labels: {
@@ -65,13 +101,24 @@ export function paintRemoteSelections(
       offset: remote.head.offset,
     });
     if (labelGeometry) {
+      const offset = storyContentOffset(layout, remote.head.nodeId, labelGeometry.pageIndex);
       labels.push({
         name: remote.name,
         ...(remote.color ? { color: remote.color } : {}),
         pageIndex: labelGeometry.pageIndex,
-        x: labelGeometry.x,
-        y: labelGeometry.y,
+        x: labelGeometry.x + offset.x,
+        y: labelGeometry.y + offset.y,
       });
+    }
+    if (remote.kind === 'cells') {
+      const painted = cellRects(layout, remote);
+      if (painted.length > 0) {
+        for (const rect of painted) {
+          rects.push(rect);
+          rectColors.push(remote.color);
+        }
+        continue;
+      }
     }
     if (isCollapsed(remote)) {
       const geometry = caretAt(layout, {
@@ -79,10 +126,11 @@ export function paintRemoteSelections(
         offset: remote.anchor.offset,
       });
       if (!geometry) continue;
+      const offset = storyContentOffset(layout, remote.anchor.nodeId, geometry.pageIndex);
       rects.push({
         pageIndex: geometry.pageIndex,
-        x: geometry.x,
-        y: geometry.y,
+        x: geometry.x + offset.x,
+        y: geometry.y + offset.y,
         width: Math.max(1 / scale, 1),
         height: geometry.height,
         className: 'docx-remote-caret',
@@ -94,7 +142,7 @@ export function paintRemoteSelections(
       anchor: { paragraphId: remote.anchor.nodeId, offset: remote.anchor.offset },
       head: { paragraphId: remote.head.nodeId, offset: remote.head.offset },
     };
-    for (const rect of selectionRects(layout, selection, paragraphOrder)) {
+    for (const rect of presenceSelectionRects(layout, selection, order)) {
       rects.push({ ...rect, className: 'docx-remote-selection-rect' });
       rectColors.push(remote.color);
     }

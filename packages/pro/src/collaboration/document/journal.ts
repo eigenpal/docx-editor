@@ -396,6 +396,11 @@ export function applyPrimitiveJournal(
     projectEffect(projection, effect);
   }
   registry.doc.transact(() => {
+    // Inside the transaction, so the flag is set before Yjs can deliver the events that clear
+    // it. A flush that runs while a remote update is still being processed opens a DEFERRED
+    // transaction: shared state takes the edit now and the events arrive later, so anything
+    // reading a derived index in between has to know it is looking at the older tree.
+    registry.noteWrite();
     const removedBefore = captureRemovedChildren(registry, journal.effects);
     const formerChildren = captureChildLists(registry, removedBefore);
     const reinserted = new Set<LogicalId>();

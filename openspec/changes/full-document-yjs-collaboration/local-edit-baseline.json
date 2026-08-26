@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "task": "full-document-yjs-collaboration/1.7",
-  "capturedAt": "2026-08-24T20:22:39.110Z",
+  "capturedAt": "2026-08-26T09:47:07.167Z",
   "fixture": "/Users/timurkramar/GitHub/docx-editor/e2e/fixtures/synthetic-long-edit.docx",
   "fixtureBytes": 27897,
   "fixtureSha256": "ca8ee28a8d40ae7914a820303b96ddbbe8f06d37325b0fc2ae6f1140aea96321",
@@ -23,54 +23,54 @@
   },
   "timings": {
     "transaction": {
-      "medianMs": 9.306209000000308,
-      "p95Ms": 10.815375000000131,
-      "minMs": 7.671124999999847,
-      "maxMs": 10.815375000000131
+      "medianMs": 6.770292000000154,
+      "p95Ms": 8.56491700000015,
+      "minMs": 6.038292000000183,
+      "maxMs": 8.56491700000015
     },
     "layout": {
-      "medianMs": 3.4442079999998896,
-      "p95Ms": 4.3104999999995925,
-      "minMs": 2.8523340000001554,
-      "maxMs": 4.3104999999995925
+      "medianMs": 1.8675419999999576,
+      "p95Ms": 2.3654159999998683,
+      "minMs": 1.658958999999868,
+      "maxMs": 2.3654159999998683
     },
     "paint": {
-      "medianMs": 16.125707999999577,
-      "p95Ms": 21.746624999999767,
-      "minMs": 14.20049999999992,
-      "maxMs": 21.746624999999767
+      "medianMs": 12.715791000000081,
+      "p95Ms": 14.397958000000017,
+      "minMs": 12.157874999999876,
+      "maxMs": 14.397958000000017
     },
     "total": {
-      "medianMs": 28.06408399999964,
-      "p95Ms": 35.79899999999998,
-      "minMs": 25.998083999999835,
-      "maxMs": 35.79899999999998
+      "medianMs": 21.434749999999894,
+      "p95Ms": 24.36049899999989,
+      "minMs": 20.266958999999588,
+      "maxMs": 24.36049899999989
     }
   },
   "memory": {
     "afterWarmLayout": {
-      "heapUsed": 1121758852,
-      "heapTotal": 1661902848,
-      "rss": 2566127616,
-      "external": 341954400
+      "heapUsed": 1142320382,
+      "heapTotal": 1644746752,
+      "rss": 2565767168,
+      "external": 353848110
     },
     "afterEdit": {
-      "heapUsed": 1121758852,
-      "heapTotal": 1662328832,
-      "rss": 2577137664,
-      "external": 341954400
+      "heapUsed": 1142320382,
+      "heapTotal": 1644812288,
+      "rss": 2565963776,
+      "external": 353848110
     },
     "afterLayout": {
-      "heapUsed": 1121758852,
-      "heapTotal": 1668669440,
-      "rss": 2597601280,
-      "external": 341954400
+      "heapUsed": 1142320382,
+      "heapTotal": 1645500416,
+      "rss": 2571255808,
+      "external": 353848110
     },
     "afterPaint": {
-      "heapUsed": 1121758852,
-      "heapTotal": 1685463040,
-      "rss": 2615902208,
-      "external": 341954400
+      "heapUsed": 1142320382,
+      "heapTotal": 1654020096,
+      "rss": 2580987904,
+      "external": 353848110
     },
     "heapUsedDeltaMedian": {
       "edit": 0,
@@ -79,7 +79,7 @@
       "editThroughPaint": 0
     },
     "rssDeltaMedian": {
-      "editThroughPaint": 20152320
+      "editThroughPaint": 19628032
     },
     "externalDeltaMedian": {
       "editThroughPaint": 0
@@ -89,7 +89,7 @@
     "layout": {
       "placed": 13,
       "total": 3200,
-      "reusedPages": 203,
+      "reusedPages": 154,
       "fullPasses": 1,
       "pagesBefore": 204,
       "pagesAfter": 204,
@@ -137,7 +137,8 @@
     "Insert one character with insertText at UTF-16 offset 0.",
     "Canonical allocation compares object identity of every node in the main part before and after the transaction.",
     "Dirty scope is TreeModelChange.dirty/created/deleted/impact/dependencyKeys from the committed transaction.",
-    "Layout work counters come from the warmed LayoutSession plus ParagraphLayoutCache.stats. Page-record identity reuse is 203 of 204 after main's incremental layout.",
+    "Layout work counters come from the warmed LayoutSession plus ParagraphLayoutCache.stats. LayoutSession.stats.reusedPages is 154 and matches edit-bench-gates steady-middle-text. That counter is not page-record object identity.",
+    "Page-record identity is paint.reusedPageRecords: after.pages filtered by object identity against before.pages. On origin/main 56848c853f5e0b5e9c1a19d6adb80f311f71424e this is 203 of 204, with 1 new page record.",
     "Paint uses happy-dom. The viewport pins the edited page plus one overscan page. Incremental paint reuse counts retained page element identity.",
     "Memory samples process.memoryUsage() with no GC between stages. RSS and external bytes are the usable process-level signals on this Bun runtime.",
     "Yjs size seeds the proof paragraph map (docx-body-paragraphs-v1) with every w14:paraId text, fixes clientID=1, then encodes the incremental update for inserting X at the start of the target Y.Text."
@@ -148,6 +149,8 @@
     "Paint runs in happy-dom, not Chromium. It excludes React, selection sync, and the review rail. Use bench:edit:browser for those layers.",
     "Viewport materialization paints the edited page plus overscan, not every sheet. Page-record identity still covers the whole document.",
     "Bun 1.3.14 did not change process.memoryUsage().heapUsed between edit, layout, and paint samples. Canonical node counts and RSS are the allocation signals.",
-    "Wall-clock medians are hardware-sensitive. Compare them on the same machine."
+    "Work counters (canonical, dirty, layout session stats, page-record identity, paint reuse, Yjs bytes) are deterministic for this fixture, edit, and measurer. They are the gate.",
+    "Wall-clock medians and RSS deltas are hardware-sensitive and machine-load-sensitive. They are advisory only. Do not fail a pull request from them.",
+    "Measured on origin/main 56848c853f5e0b5e9c1a19d6adb80f311f71424e in a detached worktree. The collaboration bench script is not on main; the worktree ran that harness against main store, layout, and paint."
   ]
 }
