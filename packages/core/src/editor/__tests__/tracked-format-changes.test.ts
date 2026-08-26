@@ -479,6 +479,43 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
+  test('two wrappers keep two addresses even when the first op records nothing', () => {
+    // The shared id is taken LAZILY. An op that records nothing — a run inside this author's
+    // own `w:ins` — still opens its wrapper's group, and minting from the part as it looked
+    // THEN handed the other wrapper's id straight back: two cards, one address, and rejecting
+    // either resolved both.
+    const own = `<w:ins w:id="9" w:author="${AUTHOR}" w:date="2026-01-01T00:00:00Z">`;
+    const body =
+      '<w:p><w:pPr><w:jc w:val="center"/></w:pPr>' +
+      own +
+      // Authored, so the eraser DOES emit an op for it — and inside this author's own `w:ins`,
+      // so that op records nothing. Both halves are what opens the group without minting.
+      textRun('mine', '<w:rPr><w:i/></w:rPr>') +
+      '</w:ins></w:p><w:p>' +
+      textRun('theirs', '<w:rPr><w:color w:val="FF0000"/></w:rPr>') +
+      '</w:p>';
+    withSuggesting(body, (surface) => {
+      const ids = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: ids[0]!, offset: 0 },
+        head: { paragraphId: ids[1]!, offset: 6 },
+      });
+      surface.clearFormatting();
+      const runIds = rPrChanges(surface).map((change) => attributeOf(change, 'id'));
+      const paragraphIds = findAll(surface.session.part().root, 'pPrChange').map((change) =>
+        attributeOf(change, 'id')
+      );
+      expect(runIds.length).toBeGreaterThan(0);
+      expect(paragraphIds.length).toBeGreaterThan(0);
+      // The two wrapper kinds never share an address.
+      for (const runId of runIds) expect(paragraphIds).not.toContain(runId);
+      const cards = revisionItemsOf(surface.session.part()).filter(
+        (item) => item.revisionKind === 'format'
+      );
+      expect(new Set(cards.map((card) => card.id)).size).toBe(cards.length);
+    });
+  });
+
   test('Accept All survives a record with no author on the wrapper', () => {
     // `CT_TrackChange` requires `@w:author` and other generators omit it anyway, so an
     // unaddressed record is an ordinary file — and the record's contents are still a copy.

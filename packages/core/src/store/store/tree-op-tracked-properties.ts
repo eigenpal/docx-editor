@@ -61,12 +61,16 @@ export type PropertyChangeContainer = 'runProperties' | 'paragraphProperties';
  * so one press is one card. Spelled twice, the two lists drifted apart the moment a fourth
  * property op appeared.
  */
-export const PROPERTY_CHANGE_WRAPPER_OF_OP: Readonly<Record<string, 'rPrChange' | 'pPrChange'>> =
-  Object.freeze({
-    setRunProperties: 'rPrChange',
-    setParagraphMarkProperties: 'rPrChange',
-    setParagraphProperties: 'pPrChange',
-  });
+export const PROPERTY_CHANGE_WRAPPER_OF_OP: ReadonlyMap<string, 'rPrChange' | 'pPrChange'> =
+  // A MAP, not an object literal: the key is an op name off a `TreeDocOp`, which reaches this
+  // from untyped JS and before validation. An object literal answers `__proto__`,
+  // `constructor` and `toString` through its prototype, so a crafted op name would read as a
+  // property op (D14).
+  new Map([
+    ['setRunProperties', 'rPrChange'],
+    ['setParagraphMarkProperties', 'rPrChange'],
+    ['setParagraphProperties', 'pPrChange'],
+  ]);
 
 /** `w:rPr` records through `w:rPrChange`; `w:pPr` through `w:pPrChange`. */
 function changeNameOf(container: PropertyChangeContainer): 'rPrChange' | 'pPrChange' {

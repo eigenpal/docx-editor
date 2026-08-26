@@ -436,22 +436,26 @@ export class TreeDocumentStore {
      * the first of them is still free when the last lands. A paste carries its own revision
      * ids, so an id that survived one would be an address the document had just started using.
      */
-    const revisionIdOfGroup = new Map<string, () => string>();
+    const revisionIdOfGroup = new Map<string, { id: string | null }>();
     const sharedRevisionIds = (op: TreeDocOp, part: OoxmlPart): (() => string) | null => {
-      const wrapper = PROPERTY_CHANGE_WRAPPER_OF_OP[op.op];
+      const wrapper = PROPERTY_CHANGE_WRAPPER_OF_OP.get(op.op);
       if (wrapper === undefined) {
         revisionIdOfGroup.clear();
         return null;
       }
       const key = `${part.name}\u0000${wrapper}`;
-      const existing = revisionIdOfGroup.get(key);
-      if (existing) return existing;
+      let group = revisionIdOfGroup.get(key);
+      if (!group) {
+        group = { id: null };
+        revisionIdOfGroup.set(key, group);
+      }
       // Taken LAZILY on the first record actually written, so an untracked format — the
-      // common case — never pays the walk at all.
-      let id: string | null = null;
-      const shared = (): string => (id ??= nextRevisionId(part)());
-      revisionIdOfGroup.set(key, shared);
-      return shared;
+      // common case — never pays the walk at all. AGAINST THIS OP'S OWN PART, not the one
+      // that happened to open the group: an op that records nothing (a run inside this
+      // author's own `w:ins`) opens it against a part that does not yet hold the other
+      // wrapper's id, and minting from that snapshot later handed both wrappers one address.
+      const held = group;
+      return (): string => (held.id ??= nextRevisionId(part)());
     };
 
     const applyToPart = (partName: string, op: TreeDocOp): boolean => {

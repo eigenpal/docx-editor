@@ -2881,7 +2881,7 @@ export function mountPaginatedSurface(
    * per wrapper name for the same set, and two lists of it would drift.
    */
   const isPropertyChangeOp = (op: TreeDocOp['op']): boolean =>
-    PROPERTY_CHANGE_WRAPPER_OF_OP[op] !== undefined;
+    PROPERTY_CHANGE_WRAPPER_OF_OP.has(op);
 
   /** Whether this document wants its formatting changes recorded at all. */
   const formattingTracked = (): boolean => !session.trackingSettings().doNotTrackFormatting;
