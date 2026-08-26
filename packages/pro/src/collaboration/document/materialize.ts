@@ -568,13 +568,23 @@ export class PackageMaterializer {
       // it asks the listings index instead: one lister means one parent, and more than one is
       // the contest that sends the whole rebuild back through a full pass to be resolved
       // deterministically. This rides inside the loop the rebuild already runs.
-      if (!this.claimsWholeSubtrees && this.registry.listingParents(childId).length > 1) {
-        this.placementContested = true;
-        this.contestEncountered.add(childId);
-        // Placing the child here reproduces the full pass only when here is where the
-        // registry resolves it. A child already placed was checked at its own placement.
-        if (!placed.has(childId) && this.registry.parentOf(childId) !== logicalId) {
-          this.contestMatchesResolution = false;
+      if (!this.claimsWholeSubtrees) {
+        const listers = this.registry.listingParents(childId);
+        if (listers.length > 1) {
+          this.placementContested = true;
+          this.contestEncountered.add(childId);
+          // A tombstoned lister routes the child through survivor ADOPTION, which places it
+          // somewhere `parentOf` does not model — the skip's oracle would approve a pass
+          // that leaves the child in the survivor's reused subtree AND under the rebuilt
+          // live lister. Adoption-involved contests always take the full pass.
+          if (listers.some((lister) => this.registry.isTombstoned(lister))) {
+            this.contestMatchesResolution = false;
+          }
+          // Placing the child here reproduces the full pass only when here is where the
+          // registry resolves it. A child already placed was checked at its own placement.
+          else if (!placed.has(childId) && this.registry.parentOf(childId) !== logicalId) {
+            this.contestMatchesResolution = false;
+          }
         }
       }
       const child = this.materialize(childId, placed, path, incremental);
