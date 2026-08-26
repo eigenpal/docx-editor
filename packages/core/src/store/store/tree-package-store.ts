@@ -88,6 +88,11 @@ import {
   publishRemoteCanonicalPackage,
   type RemotePackageAttribution,
 } from './tree-package-remote.ts';
+import {
+  retainedHyperlinkOwnerParts,
+  retainedStoryPartNames,
+  type HistoryPointer,
+} from './story-retention.ts';
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
 
@@ -174,19 +179,6 @@ export interface TreePackageStoreOptions {
   readonly cascadeDeletedNoteReferences?: NoteCascadeFn;
 }
 
-interface StoryHistoryPointer {
-  readonly kind: 'story';
-  readonly partName: string;
-  readonly story: TreeStoryRef;
-}
-
-interface PackageHistoryPointer {
-  readonly kind: 'package';
-  readonly before: OoxmlPackage;
-  readonly after: OoxmlPackage;
-}
-
-type HistoryPointer = StoryHistoryPointer | PackageHistoryPointer;
 
 /**
  * Package-level mutation authority: routes `TreeDocOp`s to the store for a story part,
@@ -1194,7 +1186,12 @@ export class TreePackageStore {
    * live and not history-reachable (see `pruneUnreachableHyperlinkShell`).
    */
   private evictUnreachableStories(): void {
-    const retained = this.retainedStoryPartNames();
+    const retained = retainedStoryPartNames(
+      this.pkg,
+      this.stories.keys(),
+      this.undoOrder,
+      this.redoOrder
+    );
     for (const [name] of [...this.stories]) {
       if (retained.has(name)) continue;
       this.stories.delete(name);
@@ -1202,7 +1199,13 @@ export class TreePackageStore {
         if (partName === name) this.rIdToPartName.delete(rId);
       }
     }
-    const hyperlinkOwners = this.retainedHyperlinkOwnerParts(retained);
+    const hyperlinkOwners = retainedHyperlinkOwnerParts(
+      retained,
+      this.pkg.mainDocumentPart,
+      this.body.part.name,
+      this.undoOrder,
+      this.redoOrder
+    );
     const pruned = pruneUnreachableHyperlinkShell(this.pkg, hyperlinkOwners);
     if (pruned !== this.pkg) this.pkg = pruned;
     this.shellHyperlinks = retainShellHyperlinks(
@@ -1210,60 +1213,6 @@ export class TreePackageStore {
       hyperlinkOwners,
       this.pkg.mainDocumentPart
     );
-  }
-
-  private retainedStoryPartNames(): Set<string> {
-    const retained = new Set<string>();
-    const live = this.pkg;
-    for (const name of this.stories.keys()) {
-      if (live.parts.has(name)) retained.add(name);
-    }
-    for (const pointer of this.undoOrder) {
-      this.retainPointerStoryParts(pointer, retained);
-    }
-    for (const pointer of this.redoOrder) {
-      this.retainPointerStoryParts(pointer, retained);
-    }
-    return retained;
-  }
-
-  /**
-   * Owners whose scoped hyperlink shell must survive while furniture/notes parts are
-   * temporarily absent: opened/parked story retention plus every part name that package
-   * history can still restore (even when the story store was never opened).
-   */
-  private retainedHyperlinkOwnerParts(storyRetained: ReadonlySet<string>): Set<string> {
-    const retained = new Set<string>(storyRetained);
-    retained.add(this.pkg.mainDocumentPart);
-    retained.add(this.body.part.name);
-    for (const pointer of this.undoOrder) {
-      this.retainPointerHyperlinkOwners(pointer, retained);
-    }
-    for (const pointer of this.redoOrder) {
-      this.retainPointerHyperlinkOwners(pointer, retained);
-    }
-    return retained;
-  }
-
-  private retainPointerStoryParts(pointer: HistoryPointer, retained: Set<string>): void {
-    if (pointer.kind === 'story') {
-      retained.add(pointer.partName);
-      return;
-    }
-    for (const name of this.stories.keys()) {
-      if (pointer.before.parts.has(name) || pointer.after.parts.has(name)) {
-        retained.add(name);
-      }
-    }
-  }
-
-  private retainPointerHyperlinkOwners(pointer: HistoryPointer, retained: Set<string>): void {
-    if (pointer.kind === 'story') {
-      retained.add(pointer.partName);
-      return;
-    }
-    for (const name of pointer.before.parts.keys()) retained.add(name);
-    for (const name of pointer.after.parts.keys()) retained.add(name);
   }
 
   private publish(change: TreeModelChange): void {
