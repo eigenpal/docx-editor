@@ -16,6 +16,9 @@ import type {
   CanonicalNodeDescriptor,
 } from './canonical-primitive-journal.ts';
 
+/** Membership of ids already in the part. Callers only ask `has`; they must not copy. */
+export type KnownIds = { readonly has: (id: string) => boolean };
+
 function attributeNameOf(attribute: OoxmlAttribute): CanonicalAttributeName {
   return attribute.prefix === undefined
     ? { namespaceUri: attribute.namespaceUri, localName: attribute.localName }
@@ -108,7 +111,7 @@ function nodeDescriptor(node: OoxmlNode): CanonicalNodeDescriptor {
   };
 }
 
-function expandInserted(node: OoxmlNode, knownIds?: ReadonlySet<string>): void {
+function expandInserted(node: OoxmlNode, knownIds?: KnownIds): void {
   if (knownIds?.has(node.id)) return;
   recordPutNode(nodeDescriptor(node));
   if (node.kind === 'textValue') {
@@ -151,7 +154,7 @@ function indexSubtree(node: OoxmlNode, into: Map<string, OoxmlNode>): void {
 function lowerSameIdentity(
   previous: OoxmlNode,
   next: OoxmlNode,
-  knownIds?: ReadonlySet<string>,
+  knownIds?: KnownIds,
   previousNodes?: ReadonlyMap<string, OoxmlNode>
 ): void {
   if (previous === next) return;
@@ -172,7 +175,7 @@ function lowerChildList(
   parentLogicalId: string,
   previous: readonly OoxmlNode[],
   next: readonly OoxmlNode[],
-  knownIds?: ReadonlySet<string>,
+  knownIds?: KnownIds,
   previousNodes?: ReadonlyMap<string, OoxmlNode>
 ): void {
   if (previous === next) return;
@@ -228,7 +231,7 @@ function lowerChildList(
 export function captureReplaceChildren(
   target: OoxmlElement,
   children: readonly OoxmlNode[],
-  knownIds?: ReadonlySet<string>
+  knownIds?: KnownIds
 ): void {
   if (!isCanonicalPrimitiveCaptureActive()) return;
   const previousNodes = new Map<string, OoxmlNode>();
@@ -241,7 +244,7 @@ export function captureInsertChildren(
   target: OoxmlElement,
   index: number,
   children: readonly OoxmlNode[],
-  knownIds?: ReadonlySet<string>
+  knownIds?: KnownIds
 ): void {
   if (!isCanonicalPrimitiveCaptureActive() || children.length === 0) return;
   const at = Math.max(0, Math.min(index, target.children.length));
@@ -271,7 +274,7 @@ export function captureReplaceNode(
   previous: OoxmlNode,
   parent: OoxmlElement | null,
   replacement: OoxmlNode,
-  knownIds?: ReadonlySet<string>
+  knownIds?: KnownIds
 ): void {
   if (!isCanonicalPrimitiveCaptureActive()) return;
   if (previous.id === replacement.id) {
@@ -288,7 +291,7 @@ export function captureReplaceNode(
 }
 
 /** Lower a new or replaced XML part root before `putXmlPart`. */
-export function captureXmlPartRoot(part: OoxmlPart, knownIds?: ReadonlySet<string>): void {
+export function captureXmlPartRoot(part: OoxmlPart, knownIds?: KnownIds): void {
   if (!isCanonicalPrimitiveCaptureActive()) return;
   expandInserted(part.root, knownIds);
   recordPutXmlPart(part.name, part.root.id);

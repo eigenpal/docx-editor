@@ -24,12 +24,17 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
-import { isCanonicalPrimitiveCaptureActive } from './canonical-primitive-capture.ts';
+import {
+  isCanonicalPrimitiveCaptureActive,
+  journalCaptureMark,
+  truncateJournalCapture,
+} from './canonical-primitive-capture.ts';
 import {
   captureInsertChildren,
   captureRemoveNode,
   captureReplaceChildren,
   captureReplaceNode,
+  type KnownIds,
 } from './canonical-primitive-lower.ts';
 
 /** An edited part, or the invariant violations that rejected the edit. */
@@ -381,12 +386,15 @@ function finish(part: OoxmlPart | null, options?: EditOptions): OoxmlEditResult 
 }
 
 /**
- * Pre-edit ids for journal lowering. Copying them is O(part) per primitive, so skip
- * the copy when no observed transaction is recording.
+ * Pre-edit ids for journal lowering.
+ *
+ * The index Map already answers `has`. Callers must capture BEFORE `stealPatchedIndex`
+ * mutates that Map: a Set copy of every key was O(document) per primitive, and a live
+ * read after the steal treated minted ids as already known, so `putNode` never ran.
  */
-function knownIdsIfCapturing(part: OoxmlPart): Set<string> | undefined {
+function knownIdsIfCapturing(part: OoxmlPart): KnownIds | undefined {
   if (!isCanonicalPrimitiveCaptureActive()) return undefined;
-  return new Set(nodeIndexFor(part.root).nodes.keys());
+  return nodeIndexFor(part.root).nodes;
 }
 
 /** Replace one node's children wholesale. */
@@ -401,8 +409,10 @@ export function replaceChildren(
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
   const knownIds = knownIdsIfCapturing(part);
+  const mark = journalCaptureMark();
+  captureReplaceChildren(target, children, knownIds);
   const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
-  if (result.ok) captureReplaceChildren(target, children, knownIds);
+  if (!result.ok) truncateJournalCapture(mark);
   return result;
 }
 
@@ -421,8 +431,10 @@ export function insertChildren(
   const at = Math.max(0, Math.min(index, target.children.length));
   const next = [...target.children.slice(0, at), ...children, ...target.children.slice(at)];
   const knownIds = knownIdsIfCapturing(part);
+  const mark = journalCaptureMark();
+  captureInsertChildren(target, at, children, knownIds);
   const result = finish(rebuild(part, nodeId, withChildren(target, next)), options);
-  if (result.ok) captureInsertChildren(target, at, children, knownIds);
+  if (!result.ok) truncateJournalCapture(mark);
   return result;
 }
 
@@ -439,8 +451,10 @@ export function replaceNode(
   }
   const knownIds = knownIdsIfCapturing(part);
   const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
+  const mark = journalCaptureMark();
+  captureReplaceNode(previous, parent, replacement, knownIds);
   const result = finish(rebuild(part, nodeId, replacement), options);
-  if (result.ok) captureReplaceNode(previous, parent, replacement, knownIds);
+  if (!result.ok) truncateJournalCapture(mark);
   return result;
 }
 

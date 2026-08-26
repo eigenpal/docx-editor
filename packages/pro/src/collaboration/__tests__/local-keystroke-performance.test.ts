@@ -394,7 +394,7 @@ describe('local keystroke path with a replica attached', () => {
   });
 
   test(
-    '200-page fixture insert stays inside the 2x 1.7 transact budget',
+    '200-page fixture insert stays within 2x solo',
     async () => {
       const fixture = resolve(
         import.meta.dir,
@@ -416,14 +416,14 @@ describe('local keystroke path with a replica attached', () => {
       const soloId = soloIds[Math.floor((soloIds.length - 1) * 0.5)];
       if (!soloId) throw new Error('no middle paragraph');
       const soloTimes: number[] = [];
-      for (let round = 0; round < 2 + 9; round += 1) {
+      for (let round = 0; round < WARMUP + RUNS; round += 1) {
         const started = performance.now();
         const result = soloStore.transact(BODY, (context) => {
           context.apply({ op: 'insertText', paragraphId: soloId, offset: 0, text: 'X' });
         });
         const ms = performance.now() - started;
         if (!result.ok) throw new Error(result.detail ?? result.reason);
-        if (round >= 2) soloTimes.push(ms);
+        if (round >= WARMUP) soloTimes.push(ms);
       }
       const solo = summarize(soloTimes);
 
@@ -461,18 +461,26 @@ describe('local keystroke path with a replica attached', () => {
       const transact: number[] = [];
       const flush: number[] = [];
       let yUpdatesDuringTransact = 0;
-      for (let round = 0; round < 2 + 9; round += 1) {
+      for (let round = 0; round < WARMUP + RUNS; round += 1) {
         const sample = runOps(replicaPeer, [
           { op: 'insertText', paragraphId: live.id, offset: live.length + round, text: 'X' },
         ]);
         yUpdatesDuringTransact += sample.yUpdatesDuringTransact;
-        if (round >= 2) {
+        if (round >= WARMUP) {
           transact.push(sample.transactMs);
           flush.push(sample.flushMs);
         }
       }
       const attached = summarize(transact);
       const attachedFlush = summarize(flush);
+      // The ratio is the gate, and the absolute pair is only a backstop.
+      //
+      // These absolute numbers were measured when lowering copied every id in the part into a
+      // Set on each primitive, which cost O(document) per keystroke — 34,555 string hashes on
+      // this fixture. Attached now runs at about 1.2x solo, so 18.6 ms would let a 10x
+      // regression through unnoticed. The ratio rule scales with the machine instead, which
+      // matters because this file shares a CI runner with the rest of its shard: an absolute
+      // budget silently becomes a different test on slower hardware.
       const TRANSACTION_MEDIAN_MAX_MS = 18.612418000000616;
       const TRANSACTION_P95_MAX_MS = 21.630750000000262;
       console.log(
@@ -482,11 +490,13 @@ describe('local keystroke path with a replica attached', () => {
           attached,
           attachedFlush,
           yUpdatesDuringTransact,
-          medianBudgetMs: TRANSACTION_MEDIAN_MAX_MS,
-          p95BudgetMs: TRANSACTION_P95_MAX_MS,
+          ratioPass: ratioPass(solo, attached),
+          medianBackstopMs: TRANSACTION_MEDIAN_MAX_MS,
+          p95BackstopMs: TRANSACTION_P95_MAX_MS,
         })
       );
       expect(yUpdatesDuringTransact).toBeGreaterThan(0);
+      expect(ratioPass(solo, attached)).toBe(true);
       expect(attached.medianMs).toBeLessThanOrEqual(TRANSACTION_MEDIAN_MAX_MS);
       expect(attached.p95Ms).toBeLessThanOrEqual(TRANSACTION_P95_MAX_MS);
       detach();

@@ -716,4 +716,35 @@ describe('journal capture is silent without observers (task 3.9)', () => {
     expect(journals).toHaveLength(1);
     expect(journals[0]!.effects.length).toBeGreaterThan(0);
   });
+
+  test('an edit rejected by validation leaves no effects behind it', () => {
+    // Lowering reads the pre-edit id index, which `rebuild` mutates, so capture runs BEFORE
+    // the edit is known to be valid and is truncated when it is not. A transaction that
+    // commits DESPITE a failed primitive is the only place that difference is observable:
+    // a throw and an uncommitted result both discard the frame wholesale.
+    const part = openStore().bodyStore().part;
+    const paragraph = findNode(part, (node) => node.kind === 'paragraph') as OoxmlElement;
+    const run = findNode(part, (node) => node.kind === 'run') as OoxmlElement;
+    const value = findNode(part, (node) => node.kind === 'textValue' && node.value === 'Hello');
+
+    const captured = captureJournal(() => {
+      // A second copy of a live run: every id already exists, so validation reports
+      // `duplicate-id` and the edit yields no part.
+      const rejected = insertChildren(part, paragraph.id, 0, [run]);
+      expect(rejected.ok).toBe(false);
+      const accepted = replaceNode(
+        part,
+        value.id,
+        { ...value, value: 'Help' },
+        { deferValidation: true }
+      );
+      return { ok: accepted.ok, change: accepted.ok ? accepted.part : null };
+    });
+
+    // Only the accepted edit is described. Had the rejected insert stayed, a replica would
+    // splice in children whose ids the sender never committed.
+    expect(captured.journal?.effects).toEqual([
+      { kind: 'spliceText', logicalId: value.id, utf16Start: 3, deleteCount: 2, insert: 'p' },
+    ]);
+  });
 });

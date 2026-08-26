@@ -46,6 +46,18 @@ function topFrame(): CaptureFrame | undefined {
   return frames[frames.length - 1];
 }
 
+/** Length of the current observed frame's effect list. Used to drop a capture that then failed. */
+export function journalCaptureMark(): number {
+  return topFrame()?.effects?.length ?? 0;
+}
+
+/** Drop effects recorded after {@link journalCaptureMark}, when the edit that produced them failed. */
+export function truncateJournalCapture(mark: number): void {
+  const frame = topFrame();
+  if (!frame?.effects || frame.effects.length <= mark) return;
+  frame.effects.length = mark;
+}
+
 /** True only while the top frame is observed and that frame is not suppressed. */
 export function isCanonicalPrimitiveCaptureActive(): boolean {
   const frame = topFrame();
