@@ -3291,13 +3291,16 @@ function applySetRunProperties(
     }
   }
   const nextId = createNodeIdAllocator(current);
-  // Minted LAZILY, and once for the whole op: `nextRevisionId` walks the part, and a write
-  // that records nothing — every run inside this author's own `w:ins` — must not pay it.
-  // The TRANSACTION's minter is preferred when it lent one, because formatting emits an op
-  // per run and the walk is document-wide (`EditOptions.revisionIds`).
-  let revisionIds: (() => string) | null = null;
+  // ONE id for the whole op, taken LAZILY: `nextRevisionId` walks the part, and a write that
+  // records nothing — every run inside this author's own `w:ins` — must not pay it. One id,
+  // not one per run, because the op's records are one decision.
+  //
+  // The TRANSACTION's id is preferred when it lent one, which widens that from the op to the
+  // press: formatting emits an op per run, and the walk is document-wide
+  // (`EditOptions.revisionIds`).
+  let ownId: string | null = null;
   const mintRevisionId = (): string =>
-    options?.revisionIds?.() ?? (revisionIds ??= nextRevisionId(current))();
+    options?.revisionIds?.() ?? (ownId ??= nextRevisionId(current)());
   for (const runId of runIds) {
     const run = findNode(current, runId);
     if (!run || run.kind !== 'run') continue;

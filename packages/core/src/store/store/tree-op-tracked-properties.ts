@@ -41,7 +41,7 @@ import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/oo
 import { parentNodeOf } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
 import { attributeValueOf, cloneWithNewIds, isParagraphMarkRevision } from './tree-op-nodes.ts';
-import { build, revisionAttributes } from './tree-op-tracked.ts';
+import { build, isWmlNamed, revisionAttributes } from './tree-op-tracked.ts';
 import type { RevisionAttributionInput } from './tree-op-validate.ts';
 
 /**
@@ -53,6 +53,21 @@ import type { RevisionAttributionInput } from './tree-op-validate.ts';
  */
 export type PropertyChangeContainer = 'runProperties' | 'paragraphProperties';
 
+/**
+ * The change wrapper each property op writes, and — by omission — which ops write none.
+ *
+ * ONE table, because two rules read it and they must stay in step: the surface decides which
+ * ops `w:doNotTrackFormatting` silences, and a transaction shares one `@w:id` per wrapper name
+ * so one press is one card. Spelled twice, the two lists drifted apart the moment a fourth
+ * property op appeared.
+ */
+export const PROPERTY_CHANGE_WRAPPER_OF_OP: Readonly<Record<string, 'rPrChange' | 'pPrChange'>> =
+  Object.freeze({
+    setRunProperties: 'rPrChange',
+    setParagraphMarkProperties: 'rPrChange',
+    setParagraphProperties: 'pPrChange',
+  });
+
 /** `w:rPr` records through `w:rPrChange`; `w:pPr` through `w:pPrChange`. */
 function changeNameOf(container: PropertyChangeContainer): 'rPrChange' | 'pPrChange' {
   return container === 'runProperties' ? 'rPrChange' : 'pPrChange';
@@ -61,14 +76,6 @@ function changeNameOf(container: PropertyChangeContainer): 'rPrChange' | 'pPrCha
 /** The element the wrapper holds its copy in. */
 function recordNameOf(container: PropertyChangeContainer): 'rPr' | 'pPr' {
   return container === 'runProperties' ? 'rPr' : 'pPr';
-}
-
-function isWmlNamed(node: OoxmlNode, localName: string): boolean {
-  return (
-    node.kind !== 'textValue' &&
-    node.namespaceUri === WML_NAMESPACE_URI &&
-    node.localName === localName
-  );
 }
 
 /**
@@ -123,13 +130,17 @@ function sameProperties(left: readonly OoxmlNode[], right: readonly OoxmlNode[])
   return equivalentNodes(byName(left), byName(right));
 }
 
-/** The copy an existing change wrapper already holds, or null when it holds none. */
-function recordedIn(
-  wrapper: OoxmlNode,
-  container: PropertyChangeContainer
-): readonly OoxmlNode[] | null {
+/**
+ * The copy a change wrapper holds, or null when it holds none.
+ *
+ * `w:rPrChange` holds a `w:rPr`, `w:pPrChange` a `w:pPr`; the wrapper's own name says which,
+ * so this answers for either. Both the write side (what the ORIGINAL was) and the resolve side
+ * (what a reject restores) read it — two copies of this lookup drifted on how the caller
+ * narrows the result, which is the whole reason the record is fiddly.
+ */
+export function recordedProperties(wrapper: OoxmlNode): readonly OoxmlNode[] | null {
   if (wrapper.kind === 'textValue') return null;
-  const inner = recordNameOf(container);
+  const inner = wrapper.localName === 'rPrChange' ? 'rPr' : 'pPr';
   for (const child of wrapper.children) {
     if (child.kind === 'textValue' || !isWmlNamed(child, inner)) continue;
     const children: readonly OoxmlNode[] = child.children;
@@ -171,10 +182,7 @@ export function withPropertyChangeRecord(options: {
   // made the two sides unequal for good: a write landing exactly on the recorded original
   // re-attributed somebody else's proposal instead of dropping it, and copied their `w:ins`
   // in beside the live one, two revisions sharing an `@w:id`.
-  const recorded = recordable(
-    (existing ? recordedIn(existing, container) : null) ?? prior,
-    container
-  );
+  const recorded = recordable((existing ? recordedProperties(existing) : null) ?? prior, container);
   const body = next.filter((child) => !isWmlNamed(child, changeName));
   if (sameProperties(recordable(body, container), recorded)) {
     // Back at the original. This author's own record goes; anyone else's stays exactly as

@@ -22,6 +22,7 @@ import { settingsPartOf } from '../package/note-properties.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { formsProtectionRefusal } from './tree-op-content-controls.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
+import { PROPERTY_CHANGE_WRAPPER_OF_OP } from './tree-op-tracked-properties.ts';
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
@@ -212,17 +213,6 @@ export interface TreeDocumentCheckpoint {
     readonly committed: boolean;
   } | null;
 }
-
-/**
- * The ops whose tracked form MINTS a revision id and never imports one.
- *
- * A transaction may share one id minter across a run of these; see `sharedRevisionIds`.
- */
-const SHARED_REVISION_ID_OPS: ReadonlySet<TreeDocOp['op']> = new Set<TreeDocOp['op']>([
-  'setRunProperties',
-  'setParagraphProperties',
-  'setParagraphMarkProperties',
-]);
 
 /**
  * The document store: one transaction is one atomic publication and one history entry.
@@ -424,7 +414,7 @@ export class TreeDocumentStore {
     let opCaret: SelectionMark | null = null;
 
     /**
-     * ONE `@w:id` for the format records of this transaction, per part.
+     * ONE `@w:id` for the format records of this transaction, per part and per WRAPPER NAME.
      *
      * Two problems, one answer. `nextRevisionId` walks the whole part, and a formatting write
      * emits an op per RUN — so a Select All + Bold in suggesting mode paid a document-wide
@@ -434,25 +424,33 @@ export class TreeDocumentStore {
      * writes one. A revision spanning many elements that share an id is the shape this module
      * is built around.
      *
-     * Shared only across the three property ops, and dropped the moment anything else runs —
-     * including `applyPackage`. Those three MINT ids and never import one, so an id taken
-     * before the first of them is still free when the last lands. A paste carries its own
-     * revision ids, so an id that survived one would be an address the document had just
-     * started using, and two decisions sharing an address are one card.
+     * PER WRAPPER NAME because the grouping is, and the CARD is not. `w:rPrChange` and
+     * `w:pPrChange` are both `format` revisions, so two cards built from one address carry the
+     * same key — one of them unreachable in the rail, both matched by `setActiveReviewItem`,
+     * and React handed two children under one key. Worse, `resolveRevisions` matches on the
+     * address alone unless the op names an element, and the chrome path never does: answering
+     * the run's card silently answered a paragraph-property change the reviewer never saw.
+     *
+     * Shared only across the property ops, and dropped the moment anything else runs —
+     * including `applyPackage`. Those ops MINT ids and never import one, so an id taken before
+     * the first of them is still free when the last lands. A paste carries its own revision
+     * ids, so an id that survived one would be an address the document had just started using.
      */
-    const revisionIdOfPart = new Map<string, () => string>();
+    const revisionIdOfGroup = new Map<string, () => string>();
     const sharedRevisionIds = (op: TreeDocOp, part: OoxmlPart): (() => string) | null => {
-      if (!SHARED_REVISION_ID_OPS.has(op.op)) {
-        revisionIdOfPart.clear();
+      const wrapper = PROPERTY_CHANGE_WRAPPER_OF_OP[op.op];
+      if (wrapper === undefined) {
+        revisionIdOfGroup.clear();
         return null;
       }
-      const existing = revisionIdOfPart.get(part.name);
+      const key = `${part.name}\u0000${wrapper}`;
+      const existing = revisionIdOfGroup.get(key);
       if (existing) return existing;
       // Taken LAZILY on the first record actually written, so an untracked format — the
       // common case — never pays the walk at all.
       let id: string | null = null;
       const shared = (): string => (id ??= nextRevisionId(part)());
-      revisionIdOfPart.set(part.name, shared);
+      revisionIdOfGroup.set(key, shared);
       return shared;
     };
 
@@ -523,7 +521,7 @@ export class TreeDocumentStore {
         // The SECOND write channel, and it imports whole parts — a pasted fragment carries
         // its own revision ids. The shared id is taken from the part it first saw, so it goes
         // here for the same reason a non-property op drops it.
-        revisionIdOfPart.clear();
+        revisionIdOfGroup.clear();
         const next = edit(working);
         if (next === working) return true;
         for (const [name, part] of next.parts) {

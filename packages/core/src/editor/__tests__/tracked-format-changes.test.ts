@@ -455,6 +455,54 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
+  test('a run record and a paragraph record are two cards with two addresses', () => {
+    // Both wrappers are `format` revisions, so two cards built from ONE address carry the same
+    // key: one is unreachable in the rail, both match the active item, and React sees two
+    // children under one key. Worse, a resolve op names no element, so answering the run's
+    // card silently answered a paragraph-property change the reviewer never saw.
+    const styled =
+      '<w:p><w:pPr><w:jc w:val="center"/><w:rPr><w:b/></w:rPr></w:pPr>' +
+      textRun('hello', '<w:rPr><w:i/></w:rPr>') +
+      '</w:p>';
+    withSuggesting(styled, (surface) => {
+      select(surface, 0, 5);
+      surface.clearFormatting();
+      const cards = revisionItemsOf(surface.session.part()).filter(
+        (item) => item.revisionKind === 'format'
+      );
+      expect(cards).toHaveLength(2);
+      expect(new Set(cards.map((card) => card.id)).size).toBe(2);
+      // Answering one leaves the other standing.
+      const runCard = rPrChanges(surface)[0]!;
+      resolve(surface, 'accept', runCard);
+      expect(findAll(surface.session.part().root, 'pPrChange')).toHaveLength(1);
+    });
+  });
+
+  test('Accept All survives a record with no author on the wrapper', () => {
+    // `CT_TrackChange` requires `@w:author` and other generators omit it anyway, so an
+    // unaddressed record is an ordinary file — and the record's contents are still a copy.
+    const authorless =
+      '<w:p><w:pPr><w:rPr><w:b/>' +
+      '<w:rPrChange w:id="7" w:date="2026-01-02T00:00:00Z"><w:rPr>' +
+      '<w:ins w:id="8" w:author="Ann" w:date="2026-01-01T00:00:00Z"/>' +
+      '</w:rPr></w:rPrChange>' +
+      '</w:rPr></w:pPr>' +
+      '<w:ins w:id="9" w:author="Ann" w:date="2026-01-01T00:00:00Z">' +
+      textRun('added') +
+      '</w:ins></w:p>';
+    withSuggesting(authorless, (surface) => {
+      const result = surface.applyAutomationOps(() => [{ op: 'acceptAllRevisions' as const }]);
+      expect(result.rejected).toBe(false);
+      // Ann's content insertion is resolved; the copy inside the record is untouched, because
+      // it is the container as it WAS and not a decision anyone can answer.
+      expect(revisionItemsOf(surface.session.part())).toEqual([]);
+      expect(
+        findAll(surface.session.part().root, 'rPrChange').flatMap((w) => findAll(w, 'ins'))
+      ).toHaveLength(1);
+    });
+  });
+
   test('a second press is a second card, not a merge into the first', () => {
     withSuggesting(`<w:p>${textRun('hello')}${textRun(' there')}</w:p>`, (surface) => {
       select(surface, 0, 5);

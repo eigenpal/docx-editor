@@ -34,6 +34,7 @@ import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { isContentControl } from '../package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { isParagraphMarkRevision } from './tree-op-nodes.ts';
+import { recordedProperties } from './tree-op-tracked-properties.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
@@ -268,18 +269,22 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
           nesting,
         });
-        // A CHANGE RECORD'S CONTENTS ARE A COPY, NOT A DECISION. `CT_ParaRPrOriginal` admits
-        // `EG_ParaRPrTrackChanges` and `CT_PPrBase` admits `w:numPr/w:ins`, so a Word-written
-        // record legitimately holds revision elements — and they are the paragraph as it WAS,
-        // already answered by accepting or rejecting the record around them.
-        //
-        // Descending classified those copies as sites of their own. A `w:ins` inside
-        // `w:pPr/w:rPr/w:rPrChange/w:rPr` has parent `rPr` and grandparent `rPrChange`, so it
-        // read as a misplaced mark, and one refused site refuses the whole decision: Accept All
-        // and Reject All failed for EVERY revision in a document Word had written normally,
-        // with a reason no reviewer can act on.
-        if (PROPERTY_CHANGE_NAMES.has(node.localName)) return;
       }
+      // A CHANGE RECORD'S CONTENTS ARE A COPY, NOT A DECISION. `CT_ParaRPrOriginal` admits
+      // `EG_ParaRPrTrackChanges` and `CT_PPrBase` admits `w:numPr/w:ins`, so a Word-written
+      // record legitimately holds revision elements — and they are the container as it WAS,
+      // already answered by accepting or rejecting the record around them.
+      //
+      // Descending classified those copies as sites of their own. A `w:ins` inside
+      // `w:pPr/w:rPr/w:rPrChange/w:rPr` has parent `rPr` and grandparent `rPrChange`, so it
+      // read as a misplaced mark, and one refused site refuses the whole decision: Accept All
+      // and Reject All failed for EVERY revision in a document Word had written normally,
+      // with a reason no reviewer can act on.
+      //
+      // OUTSIDE the addressed-site branch, because a wrapper missing `@w:id` or `@w:author` is
+      // still a record. `CT_TrackChange` requires the author and other generators omit it
+      // anyway, so an unaddressed record is an ordinary file — and it reached the same refusal.
+      if (PROPERTY_CHANGE_NAMES.has(node.localName)) return;
     }
     // Only a CONTENT wrapper deepens the count. A structural or property-change revision
     // encloses no run content, so counting it would rank an unrelated site as nested.
@@ -529,22 +534,6 @@ function withDeletedTextRestored(node: OoxmlNode): OoxmlNode {
     return { ...rebuilt, localName: 'instrText' } as OoxmlElement;
   }
   return rebuilt;
-}
-
-/**
- * The properties a change wrapper recorded, for a reject.
- *
- * `w:rPrChange` holds a `w:rPr`, `w:pPrChange` a `w:pPr`. Their children are the previous
- * state of the container the wrapper sits in.
- */
-function recordedProperties(node: OoxmlElement): readonly OoxmlNode[] | null {
-  const inner = node.localName === 'rPrChange' ? 'rPr' : 'pPr';
-  for (const child of node.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri === WML_NAMESPACE_URI && child.localName === inner)
-      return child.children;
-  }
-  return null;
 }
 
 interface RebuildPlan {

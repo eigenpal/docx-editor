@@ -75,6 +75,7 @@ import {
   DEFAULT_REVISION_DISPLAY_MODE,
   type RevisionDisplayMode,
 } from '../layout/revision-projection.ts';
+import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { selectionMarkRects } from '../layout/selection-rects.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
@@ -2869,18 +2870,18 @@ export function mountPaginatedSurface(
   ]);
 
   /**
-   * The three ops whose tracked form is a PROPERTY CHANGE record.
+   * Whether this op's tracked form is a PROPERTY CHANGE record.
    *
-   * Named apart because `w:doNotTrackFormatting` (§17.15.1.50) turns exactly these off: a
-   * document may ask for its formatting changes to be applied without a `w:rPrChange` while
-   * its text edits stay tracked. That is a producer instruction, so it gates the WRITE and
-   * never how an existing record is read.
+   * Asked because `w:doNotTrackFormatting` (§17.15.1.50) turns exactly those off: a document
+   * may ask for its formatting changes to be applied without a `w:rPrChange` while its text
+   * edits stay tracked. That is a producer instruction, so it gates the WRITE and never how an
+   * existing record is read.
+   *
+   * Read from the STORE's own table rather than restated here — the store shares one `@w:id`
+   * per wrapper name for the same set, and two lists of it would drift.
    */
-  const PROPERTY_CHANGE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<TreeDocOp['op']>([
-    'setRunProperties',
-    'setParagraphProperties',
-    'setParagraphMarkProperties',
-  ]);
+  const isPropertyChangeOp = (op: TreeDocOp['op']): boolean =>
+    PROPERTY_CHANGE_WRAPPER_OF_OP[op] !== undefined;
 
   /** Whether this document wants its formatting changes recorded at all. */
   const formattingTracked = (): boolean => !session.trackingSettings().doNotTrackFormatting;
@@ -2911,7 +2912,7 @@ export function mountPaginatedSurface(
     return ops.flatMap((op): TreeDocOp[] => {
       // Already-attributed ops pass through untouched — a caller that named an author keeps it.
       if (isRevisionCapable(op)) {
-        if (!trackFormatting && PROPERTY_CHANGE_OPS.has(op.op)) return [op];
+        if (!trackFormatting && isPropertyChangeOp(op.op)) return [op];
         return [op.revision !== undefined ? op : { ...op, revision }];
       }
       // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
