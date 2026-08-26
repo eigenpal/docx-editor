@@ -16,7 +16,7 @@ import {
   rejectString,
   type LimitCode,
 } from './limits.ts';
-import { JOURNAL_ORIGIN, isElementRecord } from './schema.ts';
+import { JOURNAL_ORIGIN } from './schema.ts';
 import { JournalProjection, projectEffect } from './journal-projection.ts';
 import type { DocumentRegistry } from './registry.ts';
 
@@ -218,24 +218,6 @@ function validateEffect(
   }
 }
 
-/**
- * Text nodes this journal describes with a `putNode`, whatever shared state currently holds.
- *
- * The test cannot consult the registry. On a second apply the node already exists, so a
- * state-dependent test would call the replay an insert and duplicate the text again — the bug
- * this guards. What the registry does decide is whether the fill has already landed; see
- * `applyEffect`.
- */
-function mintedTextIds(effects: readonly CanonicalPrimitiveEffect[]): ReadonlySet<string> {
-  const ids = new Set<string>();
-  for (const effect of effects) {
-    if (effect.kind === 'putNode' && effect.descriptor.kind === 'textValue') {
-      ids.add(effect.descriptor.logicalId);
-    }
-  }
-  return ids;
-}
-
 function applyEffect(
   registry: DocumentRegistry,
   effect: CanonicalPrimitiveEffect,
@@ -340,10 +322,8 @@ function applyEffect(
 }
 
 function isContentWitness(registry: DocumentRegistry, id: LogicalId): boolean {
-  const record = registry.record(id);
-  if (!record) return false;
-  if (!isElementRecord(record)) return record.kind === 'textValue';
-  return !record.kind.endsWith('Properties');
+  const kind = registry.kindOf(id);
+  return kind !== null && !kind.endsWith('Properties');
 }
 
 /**
@@ -369,6 +349,73 @@ function inferReplacement(
   return undefined;
 }
 
+/** What applying a validated journal needs, gathered while it was validated. */
+interface JournalPlan {
+  /** Children a `spliceChildren` drops, named against the list each splice actually sees. */
+  readonly removed: LogicalId[];
+  /** Ids this journal puts back somewhere, so a removal is a move and not a death. */
+  readonly reinserted: ReadonlySet<LogicalId>;
+  /**
+   * Text nodes this journal describes with a `putNode`, whatever shared state currently holds.
+   *
+   * The test cannot consult the registry. On a second apply the node already exists, so a
+   * state-dependent test would call the replay an insert and duplicate the text again — the
+   * bug this guards. What the registry does decide is whether the fill has already landed;
+   * see `applyEffect`.
+   */
+  readonly mintedText: ReadonlySet<string>;
+}
+
+/**
+ * Validate every effect, and record what applying them will need.
+ *
+ * Effects in one journal compose, so each is checked against the state its predecessors leave
+ * behind. Everything gathered here replays the same effects against that same state, so it is
+ * gathered in the same pass: a commit publishes its own journal now, and this runs on every
+ * keystroke.
+ *
+ * Indices compose too. `removeNode` records the start as it stood AFTER the previous splice in
+ * this transaction. Reading every start against the list from BEFORE the journal names the
+ * wrong sibling — a comment-marker strip then tombstones the anchored run, and the peer loses
+ * the text the markers wrapped.
+ */
+function planJournal(
+  registry: DocumentRegistry,
+  effects: readonly CanonicalPrimitiveEffect[]
+): ApplyJournalResult | JournalPlan {
+  const projection = new JournalProjection(registry);
+  const removed: LogicalId[] = [];
+  const reinserted = new Set<LogicalId>();
+  const mintedText = new Set<string>();
+  for (const effect of effects) {
+    const refusal = validateEffect(registry, effect, projection);
+    if (refusal) return refusal;
+    if (effect.kind === 'spliceChildren') {
+      const parent = effect.deleteCount > 0 ? projection.node(effect.parentLogicalId) : null;
+      if (parent && !parent.isText) {
+        const end = effect.start + effect.deleteCount;
+        for (let at = effect.start; at < end; at += 1) {
+          const childId = parent.children[at];
+          if (childId !== undefined) removed.push(childId);
+        }
+      }
+      for (const childId of effect.childLogicalIds) reinserted.add(childId);
+    } else if (effect.kind === 'moveNode') {
+      reinserted.add(effect.logicalId);
+    } else if (effect.kind === 'putNode' && effect.descriptor.kind === 'textValue') {
+      mintedText.add(effect.descriptor.logicalId);
+    }
+    projectEffect(projection, effect);
+  }
+  return { removed, reinserted, mintedText };
+}
+
+function mintedNodeCount(effects: readonly CanonicalPrimitiveEffect[]): number {
+  let count = 0;
+  for (const effect of effects) if (effect.kind === 'putNode') count += 1;
+  return count;
+}
+
 /**
  * Apply one journal inside exactly one Y.Doc transaction.
  * Validation runs first. A refusal leaves shared state unchanged.
@@ -381,72 +428,47 @@ export function applyPrimitiveJournal(
   registry: DocumentRegistry,
   journal: CanonicalPrimitiveJournal
 ): ApplyJournalResult {
-  if (
-    registry.nodeCount() + journal.effects.filter((effect) => effect.kind === 'putNode').length >
-    registry.limits.maxNodes
-  ) {
+  if (registry.nodeCount() + mintedNodeCount(journal.effects) > registry.limits.maxNodes) {
     return { ok: false, code: 'too-many-nodes' };
   }
-  // Effects in one journal compose, so each is checked against the state its predecessors
-  // leave behind. Nothing is written until every effect is admitted.
-  const projection = new JournalProjection(registry);
-  for (const effect of journal.effects) {
-    const refusal = validateEffect(registry, effect, projection);
-    if (refusal) return refusal;
-    projectEffect(projection, effect);
-  }
+  // Nothing is written until every effect is admitted.
+  const planned = planJournal(registry, journal.effects);
+  if ('ok' in planned) return planned;
   registry.doc.transact(() => {
     // Inside the transaction, so the flag is set before Yjs can deliver the events that clear
     // it. A flush that runs while a remote update is still being processed opens a DEFERRED
     // transaction: shared state takes the edit now and the events arrive later, so anything
     // reading a derived index in between has to know it is looking at the older tree.
     registry.noteWrite();
-    const removedBefore = captureRemovedChildren(registry, journal.effects);
-    const formerChildren = captureChildLists(registry, removedBefore);
-    const reinserted = new Set<LogicalId>();
-    for (const effect of journal.effects) {
-      if (effect.kind === 'spliceChildren') {
-        for (const childId of effect.childLogicalIds) reinserted.add(childId);
-      }
-      if (effect.kind === 'moveNode') reinserted.add(effect.logicalId);
-    }
-    const initialText = mintedTextIds(journal.effects);
-    for (const effect of journal.effects) applyEffect(registry, effect, initialText);
-    for (const id of removedBefore) {
-      if (reinserted.has(id) || !registry.hasNode(id) || registry.isTombstoned(id)) continue;
-      if (registry.partEntries().some((part) => part.rootLogicalId === id)) continue;
-      const survivor = inferReplacement(registry, id, formerChildren, journal.effects);
-      // The survivor adopts whatever the tombstone still lists, and the tombstone still lists
-      // the children this edit REPLACED — a split run keeps the `w:t` the split superseded.
-      // Dropping the seen children leaves the survivor adopting only what a concurrent peer
-      // added, which is the case adoption exists for.
-      if (survivor) registry.unlistChildren(id, formerChildren.get(id) ?? []);
-      registry.tombstone(id, survivor);
-    }
+    const formerChildren = captureChildLists(registry, planned.removed);
+    for (const effect of journal.effects) applyEffect(registry, effect, planned.mintedText);
+    tombstoneRemoved(registry, journal.effects, planned, formerChildren);
   }, JOURNAL_ORIGIN);
   return { ok: true };
 }
 
-function captureRemovedChildren(
+function tombstoneRemoved(
   registry: DocumentRegistry,
-  effects: readonly CanonicalPrimitiveEffect[]
-): LogicalId[] {
-  const removed: LogicalId[] = [];
-  // Indices in one journal compose. `removeNode` records the start as it stood AFTER the
-  // previous splice in this transaction. Reading every start against the list from BEFORE
-  // the journal names the wrong sibling — a comment-marker strip then tombstones the
-  // anchored run, and the peer loses the text the markers wrapped.
-  const projection = new JournalProjection(registry);
-  for (const effect of effects) {
-    if (effect.kind === 'spliceChildren' && effect.deleteCount > 0) {
-      const parent = projection.node(effect.parentLogicalId);
-      if (parent && !parent.isText) {
-        removed.push(...parent.children.slice(effect.start, effect.start + effect.deleteCount));
-      }
-    }
-    projectEffect(projection, effect);
+  effects: readonly CanonicalPrimitiveEffect[],
+  planned: JournalPlan,
+  formerChildren: ReadonlyMap<LogicalId, readonly LogicalId[]>
+): void {
+  if (planned.removed.length === 0) return;
+  // Read once. `partEntries` walks the whole part directory and sorts it, and asking it per
+  // removed id gave the same answer every time.
+  const partRoots = new Set<LogicalId>();
+  for (const part of registry.partEntries()) partRoots.add(part.rootLogicalId);
+  for (const id of planned.removed) {
+    if (planned.reinserted.has(id) || !registry.hasNode(id) || registry.isTombstoned(id)) continue;
+    if (partRoots.has(id)) continue;
+    const survivor = inferReplacement(registry, id, formerChildren, effects);
+    // The survivor adopts whatever the tombstone still lists, and the tombstone still lists
+    // the children this edit REPLACED — a split run keeps the `w:t` the split superseded.
+    // Dropping the seen children leaves the survivor adopting only what a concurrent peer
+    // added, which is the case adoption exists for.
+    if (survivor) registry.unlistChildren(id, formerChildren.get(id) ?? []);
+    registry.tombstone(id, survivor);
   }
-  return removed;
 }
 
 function captureChildLists(
@@ -455,8 +477,8 @@ function captureChildLists(
 ): Map<LogicalId, readonly LogicalId[]> {
   const lists = new Map<LogicalId, readonly LogicalId[]>();
   for (const id of ids) {
-    const record = registry.record(id);
-    if (record && isElementRecord(record)) lists.set(id, record.childIds);
+    const shape = registry.nodeShape(id);
+    if (shape && !shape.isText) lists.set(id, shape.children);
   }
   return lists;
 }

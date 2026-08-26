@@ -20,16 +20,12 @@ import type {
   CanonicalNodeDescriptor,
   CanonicalPrimitiveEffect,
 } from '@docx-editor.dev/core/collaboration';
-import { isTextRecord } from './schema.ts';
 import type { LogicalId } from './identity.ts';
+import type { NodeShape } from './registry-node-reads.ts';
 import type { DocumentRegistry } from './registry.ts';
 
 /** What one node looks like at one point in a journal. */
-interface ProjectedNode {
-  isText: boolean;
-  textLength: number;
-  children: LogicalId[];
-}
+type ProjectedNode = NodeShape;
 
 export class JournalProjection {
   /** Only nodes a journal touches are projected; everything else is read on demand. */
@@ -42,17 +38,20 @@ export class JournalProjection {
     return this.created.has(id) || this.touched.has(id) || this.registry.hasNode(id);
   }
 
-  /** Null when the node does not exist, so callers can tell absence from an empty node. */
+  /**
+   * Null when the node does not exist, so callers can tell absence from an empty node.
+   *
+   * The shape is read narrowly and owned outright: `record` would build the node's attribute
+   * and binding arrays, and turn a paragraph's `Y.Text` into a string only to measure it,
+   * then this would copy the child ids a second time.
+   */
   node(id: string): ProjectedNode | null {
     const projected = this.touched.get(id);
     if (projected) return projected;
-    const record = this.registry.record(id as LogicalId);
-    if (!record) return null;
-    const node: ProjectedNode = isTextRecord(record)
-      ? { isText: true, textLength: record.value.length, children: [] }
-      : { isText: false, textLength: 0, children: [...record.childIds] };
-    this.touched.set(id, node);
-    return node;
+    const shape = this.registry.nodeShape(id as LogicalId);
+    if (!shape) return null;
+    this.touched.set(id, shape);
+    return shape;
   }
 
   /** A `putNode` for a known id renames it in place, so class and content survive. */

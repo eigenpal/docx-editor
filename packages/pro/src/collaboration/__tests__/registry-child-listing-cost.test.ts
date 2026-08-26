@@ -42,6 +42,27 @@ function countScans<T>(run: () => T): { readonly result: T; readonly comparisons
   }
 }
 
+/**
+ * Count listing writes, not wall time.
+ *
+ * `addListing` used to run for every child of the parent whose array changed, so appending one
+ * block to an 800-block body rewrote all 800 listings to record one.
+ */
+function countListingWrites<T>(run: () => T): { readonly result: T; readonly writes: number } {
+  const prototype = DocumentRegistry.prototype as unknown as Record<string, unknown>;
+  const original = prototype.addListing as (...args: unknown[]) => unknown;
+  let writes = 0;
+  prototype.addListing = function (this: unknown, ...args: unknown[]) {
+    writes += 1;
+    return original.apply(this, args);
+  };
+  try {
+    return { result: run(), writes };
+  } finally {
+    prototype.addListing = original;
+  }
+}
+
 function element(registry: DocumentRegistry, logicalId: string, localName: string): void {
   registry.putElement({
     logicalId,
@@ -132,6 +153,23 @@ describe('child-listing maintenance is linear in child count', () => {
     expect(registry.listingParents('twin')).toEqual([]);
   });
 
+  test('appending one child writes one listing, not one per sibling', () => {
+    const childCount = 800;
+    const { doc, registry } = wideParent(childCount);
+
+    const { writes } = countListingWrites(() => {
+      doc.transact(() => {
+        element(registry, 'newborn', 'p');
+        registry.spliceChildren('parent', childCount, 0, ['newborn']);
+      });
+    });
+
+    expect(writes).toBe(1);
+    expect(registry.listingParents('newborn')).toEqual(['parent']);
+    expect(registry.listingParents('child-0')).toEqual(['parent']);
+    expect(registry.listingParents(`child-${childCount - 1}`)).toEqual(['parent']);
+  });
+
   test('a child moved between two wide parents ends up under the destination only', () => {
     const doc = new Y.Doc();
     const registry = new DocumentRegistry(doc);
@@ -148,5 +186,80 @@ describe('child-listing maintenance is linear in child count', () => {
     });
     expect(registry.listingParents('mover')).toEqual(['right']);
     expect(registry.parentOf('mover')).toBe('right');
+  });
+});
+
+/**
+ * `nodeCount` reads a maintained total, because `Y.Map.size` walks every key and allocates an
+ * array to measure it — 630us on a 200-page document, once per commit. A count that drifts
+ * from `size` either lets a document past its node cap or refuses one that is inside it, so
+ * the two are compared after every kind of write.
+ */
+describe('the maintained node count matches shared state', () => {
+  const sizeOf = (registry: DocumentRegistry): number => registry.schema.nodes.size;
+
+  test('counts the nodes a transaction adds before its events are delivered', () => {
+    const doc = new Y.Doc();
+    const registry = new DocumentRegistry(doc);
+    expect(registry.nodeCount()).toBe(0);
+
+    doc.transact(() => {
+      element(registry, 'parent', 'body');
+      element(registry, 'child', 'p');
+      registry.putText('text', 'hello');
+      // Read inside the transaction: Yjs has not delivered the events yet, and the journal's
+      // node cap is checked at exactly this point when one commit publishes two journals.
+      expect(registry.nodeCount()).toBe(3);
+    });
+    expect(registry.nodeCount()).toBe(sizeOf(registry));
+    expect(registry.nodeCount()).toBe(3);
+  });
+
+  test('a repeated put of the same id does not raise the count', () => {
+    const doc = new Y.Doc();
+    const registry = new DocumentRegistry(doc);
+    doc.transact(() => element(registry, 'node', 'p'));
+    doc.transact(() => element(registry, 'node', 'p'));
+    doc.transact(() => registry.putText('node', 'replaced'));
+    expect(registry.nodeCount()).toBe(sizeOf(registry));
+    expect(registry.nodeCount()).toBe(1);
+  });
+
+  test('a remote update and a rebuild both leave the count exact', () => {
+    const doc = new Y.Doc();
+    const registry = new DocumentRegistry(doc);
+    doc.transact(() => {
+      element(registry, 'parent', 'body');
+      registry.spliceChildren('parent', 0, 0, []);
+    });
+
+    const peerDoc = new Y.Doc();
+    const peerRegistry = new DocumentRegistry(peerDoc);
+    peerDoc.transact(() => {
+      element(peerRegistry, 'remote-one', 'p');
+      element(peerRegistry, 'remote-two', 'p');
+    });
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(peerDoc));
+    expect(registry.nodeCount()).toBe(sizeOf(registry));
+    expect(registry.nodeCount()).toBe(3);
+
+    registry.rebuildDerivedIndexes();
+    expect(registry.nodeCount()).toBe(sizeOf(registry));
+
+    doc.transact(() => registry.schema.nodes.delete('remote-one'));
+    expect(registry.nodeCount()).toBe(sizeOf(registry));
+    expect(registry.nodeCount()).toBe(2);
+  });
+
+  test('a bulk load ends with the count rebuilt', () => {
+    const doc = new Y.Doc();
+    const registry = new DocumentRegistry(doc);
+    registry.beginBulkLoad();
+    doc.transact(() => {
+      for (let index = 0; index < 40; index += 1) element(registry, `bulk-${index}`, 'p');
+    });
+    registry.endBulkLoad();
+    expect(registry.nodeCount()).toBe(sizeOf(registry));
+    expect(registry.nodeCount()).toBe(40);
   });
 });

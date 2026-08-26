@@ -176,7 +176,9 @@ export function limitFailure(
   blobs: SharedBlobStore
 ): CollaborationFailure | null {
   const { limits } = registry;
-  const nodes = registry.schema.nodes.size;
+  // The maintained count, not `nodes.size`: that getter walks every key and allocates an
+  // array to measure it, and this runs on every received edit.
+  const nodes = registry.nodeCount();
   if (nodes > limits.maxNodes) return failure('too-many-nodes', `${nodes}`);
   const parts = registry.schema.parts.size;
   if (parts > limits.maxParts) return failure('too-many-parts', `${parts}`);

@@ -52,6 +52,13 @@ import {
   type TextRecord,
 } from './schema.ts';
 import { readRelationships, relationshipKey } from './relationship-store.ts';
+import { nodeKindOf, nodeShapeOf, sameChildOrder, type NodeShape } from './registry-node-reads.ts';
+import {
+  readBinaries,
+  readContentTypeDefaults,
+  readContentTypeOverrides,
+  readPartEntries,
+} from './registry-package-reads.ts';
 import { nodeRecordDeleteFilter } from './undo-delete-filter.ts';
 
 function itemKeyOf(type: Y.Map<unknown>): string | null {
@@ -87,6 +94,10 @@ export class DocumentRegistry {
   private bindingsByNode = new Map<LogicalId, Map<string, EncodedBinding>>();
   private bulkLoad = 0;
   private unobservedWrites = 0;
+  /** Node total as of the last observed event batch. Negative means "not counted yet". */
+  private nodeCountCache = -1;
+  /** Nodes written since that batch. Yjs delivers a nested transaction's events late. */
+  private pendingNodeAdds = 0;
 
   constructor(
     readonly doc: Y.Doc,
@@ -151,20 +162,7 @@ export class DocumentRegistry {
   }
 
   partEntries(): readonly PartDirectoryEntry[] {
-    const entries: PartDirectoryEntry[] = [];
-    this.schema.parts.forEach((value, name) => {
-      if (!isNodeMap(value) || rejectDangerousKey(name)) return;
-      const rootLogicalId = readString(value.get('rootId'));
-      if (rootLogicalId.length === 0) return;
-      entries.push({
-        name,
-        id: readString(value.get('id')),
-        rootLogicalId,
-        contentType: readString(value.get('contentType')),
-      });
-    });
-    entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
-    return entries;
+    return readPartEntries(this.schema.parts);
   }
 
   mainDocumentPart(): string {
@@ -262,11 +260,38 @@ export class DocumentRegistry {
     return [...this.schema.nodes.keys()].filter((key) => !rejectDangerousKey(key));
   }
 
+  /**
+   * How many nodes shared state holds.
+   *
+   * `Y.Map.size` walks every key and allocates an array to measure it, and the journal's
+   * node cap reads this once per commit. That made a keystroke cost the whole document:
+   * 630us on a 200-page fixture, against a whole attached commit of about 4ms. The count is
+   * maintained instead, from the same events every other derived index here is built from,
+   * plus the writes those events have not described yet.
+   */
   nodeCount(): number {
-    return this.schema.nodes.size;
+    if (this.nodeCountCache < 0) this.nodeCountCache = this.schema.nodes.size;
+    return this.nodeCountCache + this.pendingNodeAdds;
+  }
+
+  /** The quantities a bound check reads, without the attribute arrays {@link record} builds. */
+  nodeShape(logicalId: LogicalId): NodeShape | null {
+    if (rejectDangerousKey(logicalId)) return null;
+    return nodeShapeOf(this.schema.nodes, logicalId);
+  }
+
+  /** One node's kind, without building its text. */
+  kindOf(logicalId: LogicalId): string | null {
+    if (rejectDangerousKey(logicalId)) return null;
+    return nodeKindOf(this.schema.nodes, logicalId);
+  }
+
+  private noteNodeWrite(logicalId: LogicalId): void {
+    if (!this.schema.nodes.has(logicalId)) this.pendingNodeAdds += 1;
   }
 
   putElement(record: Omit<ElementRecord, 'childIds'>): void {
+    this.noteNodeWrite(record.logicalId);
     const namespaceId = internNamespace(
       this.schema.namespaces,
       record.namespaceUri,
@@ -320,6 +345,7 @@ export class DocumentRegistry {
   }
 
   putText(logicalId: LogicalId, value: string): void {
+    this.noteNodeWrite(logicalId);
     this.schema.nodes.set(logicalId, makeTextRecord(value));
   }
 
@@ -466,39 +492,15 @@ export class DocumentRegistry {
   }
 
   contentTypeOverrides(): ReadonlyMap<string, string> {
-    const overrides = new Map<string, string>();
-    this.schema.overrides.forEach((mediaType, partName) => {
-      if (typeof mediaType === 'string' && !rejectDangerousKey(partName)) {
-        // Journals captured the authored spelling (`/customXml/itemProps1.xml`).
-        // Resolution looks up the OPC-folded key; keep the index that way.
-        overrides.set(partNameKey(partName), mediaType);
-      }
-    });
-    return overrides;
+    return readContentTypeOverrides(this.schema.overrides);
   }
 
   contentTypeDefaults(): ReadonlyMap<string, string> {
-    const defaults = new Map<string, string>();
-    this.schema.defaults.forEach((mediaType, extension) => {
-      if (typeof mediaType === 'string' && !rejectDangerousKey(extension)) {
-        defaults.set(extension, mediaType);
-      }
-    });
-    return defaults;
+    return readContentTypeDefaults(this.schema.defaults);
   }
 
   binaries(): readonly CanonicalBinaryDescriptor[] {
-    const descriptors: CanonicalBinaryDescriptor[] = [];
-    this.schema.binaries.forEach((value, storageKey) => {
-      if (!isNodeMap(value) || rejectDangerousKey(storageKey)) return;
-      const digest = readString(value.get('digest'));
-      const size = value.get('size');
-      const mediaType = readString(value.get('mediaType'));
-      const key = readString(value.get('storageKey')) || storageKey;
-      if (digest.length === 0 || typeof size !== 'number') return;
-      descriptors.push({ digest, size, mediaType, storageKey: key });
-    });
-    return descriptors;
+    return readBinaries(this.schema.binaries);
   }
 
   hasNode(logicalId: LogicalId): boolean {
@@ -566,6 +568,8 @@ export class DocumentRegistry {
 
   rebuildDerivedIndexes(): void {
     this.unobservedWrites = 0;
+    this.nodeCountCache = -1;
+    this.pendingNodeAdds = 0;
     this.parentIndex = new Map();
     this.listings = new Map();
     this.childrenSnapshot = new Map();
@@ -613,6 +617,8 @@ export class DocumentRegistry {
 
   private applyChildArrayEvents(events: Y.YEvent<Y.AbstractType<unknown>>[]): void {
     this.unobservedWrites = 0;
+    // These events describe every write, local or remote, so they carry the whole count.
+    this.pendingNodeAdds = 0;
     const changed = new Set<LogicalId>();
     for (const event of events) {
       // A remote applyUpdate delivers a new element record with its children already filled.
@@ -621,6 +627,9 @@ export class DocumentRegistry {
       // receiving replica kept the cached `commentsExtended.xml`.
       if (event.path.length === 0 && event.target instanceof Y.Map) {
         for (const [key, change] of event.changes.keys) {
+          if (this.nodeCountCache >= 0 && change.action !== 'update') {
+            this.nodeCountCache += change.action === 'add' ? 1 : -1;
+          }
           if (change.action === 'delete' || rejectDangerousKey(String(key))) continue;
           for (const childId of this.syncChildListings(String(key))) changed.add(childId);
         }
@@ -682,6 +691,10 @@ export class DocumentRegistry {
     const rec = this.schema.nodes.get(parentId);
     const next = rec ? (childArrayOf(rec)?.toArray() ?? []) : [];
     const prev = this.childrenSnapshot.get(parentId) ?? [];
+    // The top-level node map reports a whole record as one key change, so this runs for every
+    // node a journal writes, whether or not that node's children moved. An unchanged listing
+    // has nothing to say and no snapshot to replace.
+    if (sameChildOrder(prev, next)) return [];
     // Membership by set, not by scan. The body root lists every block in the document, and a
     // journal now publishes on the commit that produces it, so this sits on the keystroke
     // path: a scan per child cost ~640,000 comparisons to append one block to a list of 800.
@@ -694,8 +707,12 @@ export class DocumentRegistry {
       affected.push(childId);
     }
     for (const childId of next) {
+      // A child the snapshot already listed here is already in `listings`, because the two
+      // only ever move together. Re-adding it cost three map operations per sibling, so
+      // appending one block to a list of 800 rewrote all 800 listings to change one.
+      if (prevSet.has(childId)) continue;
       this.addListing(childId, parentId);
-      if (!prevSet.has(childId)) affected.push(childId);
+      affected.push(childId);
     }
     this.childrenSnapshot.set(parentId, next);
     return affected;
@@ -777,10 +794,8 @@ export class DocumentRegistry {
   }
 
   private isContentWitness(id: LogicalId): boolean {
-    const record = this.record(id);
-    if (!record) return false;
-    if (!isElementRecord(record)) return record.kind === 'textValue';
-    return !record.kind.endsWith('Properties');
+    const kind = this.kindOf(id);
+    return kind !== null && !kind.endsWith('Properties');
   }
 
   private recomputeAdoptees(survivorId: LogicalId): void {

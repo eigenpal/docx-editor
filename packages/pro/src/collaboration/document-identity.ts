@@ -71,34 +71,53 @@ export class LogicalIdentityMap {
    */
   translate(journal: CanonicalPrimitiveJournal): CanonicalPrimitiveJournal {
     const effects: CanonicalPrimitiveEffect[] = [];
+    let changed = false;
     for (const effect of journal.effects) {
-      effects.push(this.translateEffect(effect));
+      const translated = this.translateEffect(effect);
+      if (translated !== effect) changed = true;
+      effects.push(translated);
     }
+    // Most journals name only baseline ids, which translate to themselves. This runs on the
+    // keystroke path, and rebuilding an identical journal there buys nothing.
+    if (!changed) return journal;
     return Object.freeze({ effects: Object.freeze(effects) });
   }
 
+  /** Returns the effect itself when every id it names already stands in shared identity. */
   private translateEffect(effect: CanonicalPrimitiveEffect): CanonicalPrimitiveEffect {
     switch (effect.kind) {
-      case 'putNode':
-        return { ...effect, descriptor: this.translateDescriptor(effect.descriptor) };
+      case 'putNode': {
+        const descriptor = this.translateDescriptor(effect.descriptor);
+        return descriptor.logicalId === effect.descriptor.logicalId
+          ? effect
+          : { ...effect, descriptor };
+      }
       case 'spliceText':
       case 'setAttribute':
-      case 'setNamespaceBinding':
-        return { ...effect, logicalId: this.resolve(effect.logicalId) };
-      case 'spliceChildren':
-        return {
-          ...effect,
-          parentLogicalId: this.resolve(effect.parentLogicalId),
-          childLogicalIds: effect.childLogicalIds.map((id) => this.resolve(id)),
-        };
-      case 'moveNode':
-        return {
-          ...effect,
-          logicalId: this.resolve(effect.logicalId),
-          destinationParentLogicalId: this.resolve(effect.destinationParentLogicalId),
-        };
-      case 'putXmlPart':
-        return { ...effect, rootLogicalId: this.resolve(effect.rootLogicalId) };
+      case 'setNamespaceBinding': {
+        const logicalId = this.resolve(effect.logicalId);
+        return logicalId === effect.logicalId ? effect : { ...effect, logicalId };
+      }
+      case 'spliceChildren': {
+        const parentLogicalId = this.resolve(effect.parentLogicalId);
+        const childLogicalIds = effect.childLogicalIds.map((id) => this.resolve(id));
+        const same =
+          parentLogicalId === effect.parentLogicalId &&
+          childLogicalIds.every((id, index) => id === effect.childLogicalIds[index]);
+        return same ? effect : { ...effect, parentLogicalId, childLogicalIds };
+      }
+      case 'moveNode': {
+        const logicalId = this.resolve(effect.logicalId);
+        const destinationParentLogicalId = this.resolve(effect.destinationParentLogicalId);
+        return logicalId === effect.logicalId &&
+          destinationParentLogicalId === effect.destinationParentLogicalId
+          ? effect
+          : { ...effect, logicalId, destinationParentLogicalId };
+      }
+      case 'putXmlPart': {
+        const rootLogicalId = this.resolve(effect.rootLogicalId);
+        return rootLogicalId === effect.rootLogicalId ? effect : { ...effect, rootLogicalId };
+      }
       default:
         return effect;
     }
