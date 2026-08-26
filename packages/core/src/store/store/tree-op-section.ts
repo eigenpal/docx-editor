@@ -38,6 +38,7 @@ import type {
   TreeOpResult,
 } from './tree-op-types.ts';
 import { ownProposedMark, withPropertyChangeRecord } from './tree-op-tracked-properties.ts';
+import { build } from './tree-op-tracked.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   TEXT_DEPS,
@@ -778,16 +779,7 @@ export function applySetParagraphMarkProperties(
   // the mark format record the very same press had just written.
   const rPr = existing
     ? ({ ...existing, children } as OoxmlNode)
-    : ({
-        id: nextId(),
-        kind: 'runProperties',
-        namespaceUri: WML_NAMESPACE_URI,
-        localName: 'rPr',
-        prefix: 'w',
-        namespaceBindings: [],
-        attributes: [],
-        children,
-      } as unknown as OoxmlNode);
+    : build(nextId(), 'runProperties', 'rPr', [], children);
   if (existing) return fromEdit(replaceNode(part, existing.id, rPr, options), effect);
   if (pPr) {
     const before = pPr.children.findIndex(
@@ -798,16 +790,7 @@ export function applySetParagraphMarkProperties(
   }
   // The TYPED kind: every reader finds paragraph properties by
   // `kind === 'paragraphProperties'`, so a generic `w:pPr` is invisible to all of them.
-  const created = {
-    id: nextId(),
-    kind: 'paragraphProperties',
-    namespaceUri: WML_NAMESPACE_URI,
-    localName: 'pPr',
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes: [],
-    children: [rPr],
-  } as unknown as OoxmlNode;
+  const created = build(nextId(), 'paragraphProperties', 'pPr', [], [rPr]);
   // `w:pPr` must be the paragraph's FIRST child per the schema.
   return fromEdit(insertChildren(part, paragraph.id, 0, [created], options), effect);
 }

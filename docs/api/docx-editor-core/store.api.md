@@ -1423,9 +1423,6 @@ export function formattableRanges(part: OoxmlPart, paragraphId: string, start: n
 }[];
 
 // @public
-export function formattableRunsOfParagraph(paragraph: OoxmlParagraphNode, displayMode?: FormattingDisplayMode): readonly OoxmlNode[];
-
-// @public
 export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 // @public

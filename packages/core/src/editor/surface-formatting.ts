@@ -36,10 +36,14 @@ import {
 } from '@docx-editor.dev/core/store';
 import {
   DEFAULT_FORMATTING_DISPLAY_MODE,
-  formattableRunsOfParagraph,
-  mergedMultiSettingProperty,
   type FormattingDisplayMode,
 } from '@docx-editor.dev/core/store';
+// By path, not through the store's public entry: the walk and its clip are the engine's own
+// answer to "which runs does this range cover", not surface a consumer builds on.
+import {
+  clippedFormattableRuns,
+  formattableRunsOfParagraph,
+} from '../store/store/formattable-runs.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { lineSegments } from '../layout/line-segments.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
@@ -290,48 +294,16 @@ export {
 } from '@docx-editor.dev/core/store';
 
 /**
- * Surface range formatting over the shared run-container walk.
+ * Range run-property planning: THE STORE'S, re-exported under the name the editor lane uses.
  *
- * Kept as a wrapper rather than folded into the store lane because the surface knows one
- * thing the store lane cannot: which revision halves the reader is LOOKING at. Everything
- * else — which containers hold addressable runs, how a bag merges — is the store's, so the
- * two lanes cannot drift per container kind (#498).
+ * It was a second implementation for as long as the surface knew something the store could
+ * not — which containers hold addressable runs, and which revision halves the reader is
+ * looking at. Both moved into the store lane (`formattable-runs.ts`, and the `displayMode`
+ * parameter), and what was left here was the same function written twice. Two copies of "which
+ * runs does this range cover" is the bug class #493, #497 and #498 all came out of, so the
+ * answer lives in one place and this is a name for it.
  */
-export function runPropertyEdits(
-  part: OoxmlPart,
-  paragraphId: string,
-  start: number,
-  end: number,
-  incoming: SurfaceProperty,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
-): readonly RunPropertyEdit[] {
-  const paragraph = findNode(part, paragraphId);
-  if (!paragraph || paragraph.kind !== 'paragraph') return [];
-  const edits: RunPropertyEdit[] = [];
-  const runRanges = runAddressRanges(paragraph);
-  const formatOwned = formatOwnedRunIds(paragraph);
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
-    const range = runRanges.get(run.id);
-    if (!range || range.end <= range.start) continue;
-    const from = Math.max(range.start, start);
-    const to = Math.min(range.end, end);
-    if (from >= to) continue;
-    const authored = authoredProperties(
-      propertyContainer(run, 'runProperties', 'rPr'),
-      AUTHORABLE_RUN_PROPERTIES
-    );
-    edits.push({
-      start: from,
-      end: to,
-      // Merged per attribute for the two run properties carrying several independent
-      // settings, the same rule the store lane's own walk applies — see
-      // `mergedMultiSettingProperty`.
-      properties: mergedProperties(authored, mergedMultiSettingProperty(authored, incoming)),
-      ...(formatOwned.has(run.id) ? { targetRunIds: [run.id] } : {}),
-    });
-  }
-  return edits;
-}
+export { runPropertyEdits } from '@docx-editor.dev/core/store';
 
 /**
  * Whether any run the range covers authors a property an op could clear.
@@ -353,17 +325,18 @@ export function hasAuthoredRunProperties(
 ): boolean {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return false;
-  const runRanges = runAddressRanges(paragraph);
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
-    const range = runRanges.get(run.id);
-    if (!range || range.end <= range.start) continue;
-    if (Math.max(range.start, start) >= Math.min(range.end, end)) continue;
-    if (
-      authoredProperties(propertyContainer(run, 'runProperties', 'rPr'), AUTHORABLE_RUN_PROPERTIES)
-        .length > 0
-    ) {
-      return true;
-    }
+  for (const covered of clippedFormattableRuns(
+    paragraph,
+    runAddressRanges(paragraph),
+    start,
+    end,
+    displayMode
+  )) {
+    const authored = authoredProperties(
+      propertyContainer(covered.run, 'runProperties', 'rPr'),
+      AUTHORABLE_RUN_PROPERTIES
+    );
+    if (authored.length > 0) return true;
   }
   return false;
 }

@@ -199,6 +199,41 @@ describe('reverse mapping (task 6.2)', () => {
     ]);
   });
 
+  test('a run carrying a tracked format record still takes a formatting edit', () => {
+    // `w:rPrChange` holds the run as it WAS, in children of its own, and neither the
+    // projection nor an op can express that. Projecting it put a name outside the accepted
+    // boundary into the bag this diff builds its op from, so the store refused the whole
+    // transaction as `unsupported-property` and a formatting edit over a run with a pending
+    // record did nothing at all.
+    const recorded = load(
+      '<w:p><w:r><w:rPr><w:b/>' +
+        '<w:rPrChange w:id="3" w:author="Ada" w:date="2026-01-01T00:00:00Z">' +
+        '<w:rPr/></w:rPrChange>' +
+        '</w:rPr><w:t>Hello world</w:t></w:r></w:p>'
+    );
+    const id = bodyParagraphs(recorded)[0]!.id;
+    const projected = treeToDoc(recorded);
+    expect(JSON.stringify(projected.toJSON())).not.toContain('rPrChange');
+    const doc = treeSchema.node('doc', null, [
+      treeSchema.node('paragraph', { nodeId: id, props: [] }, [
+        treeSchema.text('Hello', [
+          treeSchema.marks.runProps.create({
+            props: [{ localName: 'b' }, { localName: 'i' }],
+          }),
+        ]),
+        treeSchema.text(' world', [
+          treeSchema.marks.runProps.create({ props: [{ localName: 'b' }] }),
+        ]),
+      ]),
+    ]);
+    const mapped = docToTreeOps(recorded, doc);
+    expect(mapped.ok).toBe(true);
+    if (!mapped.ok) return;
+    // And it commits: the record is preserved on the node the write rebuilds.
+    const after = commit(recorded, doc);
+    expect(paragraphTextOf(after, id)).toBe('Hello world');
+  });
+
   test('a paragraph property change maps to setParagraphProperties', () => {
     const part = load(SIMPLE);
     const id = bodyParagraphs(part)[0]!.id;

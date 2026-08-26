@@ -106,6 +106,43 @@ export function formattableRunsOfParagraph(
   return runs;
 }
 
+/** One formattable run and the slice of the asked-for range it covers. */
+export interface ClippedFormattableRun {
+  readonly run: OoxmlNode;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Every formattable run that contributes a character to `[start, end)`, with its slice.
+ *
+ * The clip every write does, written once: pair each run with the range `runAddressRanges`
+ * gives it, intersect, and drop the runs that fall outside. Four call sites did it by hand —
+ * one per lane and one per question — and a lane that clipped differently is exactly how the
+ * two formatting lanes came to disagree in the first place.
+ *
+ * `runAddressRanges` needs the paragraph, so the caller passes it rather than the part: the
+ * writes already have it and would otherwise look it up twice.
+ */
+export function clippedFormattableRuns(
+  paragraph: OoxmlParagraphNode,
+  runRanges: ReadonlyMap<string, { start: number; end: number }>,
+  start: number,
+  end: number,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+): readonly ClippedFormattableRun[] {
+  const clipped: ClippedFormattableRun[] = [];
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+    const range = runRanges.get(run.id);
+    if (!range || range.end <= range.start) continue;
+    const from = Math.max(range.start, start);
+    const to = Math.min(range.end, end);
+    if (from >= to) continue;
+    clipped.push({ run, start: from, end: to });
+  }
+  return clipped;
+}
+
 function collectFormattableRuns(
   children: readonly OoxmlNode[],
   displayMode: FormattingDisplayMode,

@@ -21,6 +21,7 @@ import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { nullRecord } from '../package/safe-record.ts';
 import {
+  clippedFormattableRuns,
   DEFAULT_FORMATTING_DISPLAY_MODE,
   formattableRunsOfParagraph,
   type FormattingDisplayMode,
@@ -326,25 +327,26 @@ export function runPropertyEdits(
   const edits: RunPropertyEdit[] = [];
   // Field/note atoms contribute one unit on the begin run (segmentsOf). Field format
   // ownership maps the atom onto result runs via `formatRunIds`.
-  const runRanges = runAddressRanges(paragraph);
   const formatOwned = formatOwnedRunIds(paragraph);
-  // ONE container walk, shared with the surface lane — see `formattable-runs.ts`. The two
-  // lanes disagreeing about which runs a range covers is the whole bug class this replaces.
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
-    const range = runRanges.get(run.id);
-    if (!range || range.end <= range.start) continue;
-    const from = Math.max(range.start, start);
-    const to = Math.min(range.end, end);
-    if (from >= to) continue;
+  // ONE container walk and ONE clip, shared with every other formatting question — see
+  // `formattable-runs.ts`. Two lanes disagreeing about which runs a range covers is the whole
+  // bug class this replaces.
+  for (const covered of clippedFormattableRuns(
+    paragraph,
+    runAddressRanges(paragraph),
+    start,
+    end,
+    displayMode
+  )) {
     const authored = authoredProperties(
-      propertyContainer(run, 'runProperties', 'rPr'),
+      propertyContainer(covered.run, 'runProperties', 'rPr'),
       AUTHORABLE_RUN_PROPERTIES
     );
     edits.push({
-      start: from,
-      end: to,
+      start: covered.start,
+      end: covered.end,
       properties: mergedProperties(authored, withMultiSettingsKept(authored, incoming)),
-      ...(formatOwned.has(run.id) ? { targetRunIds: [run.id] } : {}),
+      ...(formatOwned.has(covered.run.id) ? { targetRunIds: [covered.run.id] } : {}),
     });
   }
   return edits;
@@ -373,18 +375,18 @@ export function formattableRanges(
 ): readonly { readonly start: number; readonly end: number }[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph' || end <= start) return [];
-  const runRanges = runAddressRanges(paragraph);
   const slices: { start: number; end: number }[] = [];
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
-    const range = runRanges.get(run.id);
-    if (!range) continue;
-    const from = Math.max(range.start, start);
-    const to = Math.min(range.end, end);
-    if (from >= to) continue;
+  for (const covered of clippedFormattableRuns(
+    paragraph,
+    runAddressRanges(paragraph),
+    start,
+    end,
+    displayMode
+  )) {
     // Field result runs share ONE atom offset, so slices overlap as often as they abut.
     const last = slices[slices.length - 1];
-    if (last && from <= last.end) last.end = Math.max(last.end, to);
-    else slices.push({ start: from, end: to });
+    if (last && covered.start <= last.end) last.end = Math.max(last.end, covered.end);
+    else slices.push({ start: covered.start, end: covered.end });
   }
   return slices;
 }
