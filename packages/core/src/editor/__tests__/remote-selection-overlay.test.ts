@@ -10,8 +10,13 @@ import type {
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import { zipSync, strToU8 } from 'fflate';
+import {
+  collaborationParagraphScanRecorder,
+  paragraphSnapshot,
+} from '../../collaboration/paragraph-addresses.ts';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
-import { docx, paragraph, selectCellRectangle } from './paginated-surface-fixtures.ts';
+import { docx, paragraph, putCaret, selectCellRectangle } from './paginated-surface-fixtures.ts';
 
 const opened: { surface: PaginatedSurface; container: HTMLElement }[] = [];
 
@@ -225,6 +230,98 @@ describe('remote selection overlay', () => {
     expect(published?.anchor.paragraphId).toMatch(/^[0-9A-F]{8}$/);
     expect(published?.head.paragraphId).toBe(published?.anchor.paragraphId);
     expect(published?.kind).toBeUndefined();
+  });
+
+  // A remote caret that STOPS is not a slow one. Presence was published only by the paths
+  // that move the caret deliberately — a click, an arrow key, entering a header — and never
+  // by a commit, which is how typing moves it. A burst therefore published nothing at all
+  // after the click that started it, and every peer painted that one stale position for as
+  // long as the author kept typing. Typing one character with a settle between hides this:
+  // the settle is what used to produce the only publish.
+  test('a burst of keystrokes publishes the caret each edit left', () => {
+    const published: (CollaborationLocalSelection | null)[] = [];
+    const { surface } = mountBody(
+      paragraph('Font Variations'),
+      () => [],
+      (selection) => {
+        published.push(selection);
+      }
+    );
+    const start = 'Font Variations'.length;
+    putCaret(surface, start);
+    published.length = 0;
+    const digits = '12345678123456765432';
+    for (const digit of digits) surface.type(digit);
+    const caret = surface.state().selection.head.offset;
+    expect(caret).toBe(start + digits.length);
+    expect(published.at(-1)?.head.offset).toBe(caret);
+    // Never behind, never ahead: each publish names a position the author was actually at.
+    expect(published.map((selection) => selection?.head.offset)).toEqual(
+      digits.split('').map((_unused, index) => start + index + 1)
+    );
+  });
+
+  // Presence now leaves on every commit, so its addressing runs at typing rate. It resolves
+  // through the store's node index; a document walk there would put the whole document back
+  // on the keystroke path (see `collaboration/paragraph-addresses.ts`).
+  test('a burst publishes without enumerating paragraphs', () => {
+    const { surface } = mountBody(paragraph('Font Variations'), () => []);
+    const recorder = collaborationParagraphScanRecorder();
+    // The recorder is live: the enumerating read reports into it. Without this the zero
+    // below would pass on a counter nothing ever increments.
+    const loaded = readOoxmlPackage(docx(paragraph('Font Variations')));
+    if (!loaded.ok) throw new Error(loaded.reason);
+    recorder.reset();
+    paragraphSnapshot(loaded.package.parts.get(loaded.package.mainDocumentPart)!);
+    expect(recorder.visits).toBeGreaterThan(0);
+
+    putCaret(surface, 'Font Variations'.length);
+    recorder.reset();
+    for (const digit of '12345678123456765432') surface.type(digit);
+    expect(`${recorder.enumerations} enumerations / ${recorder.visits} visits`).toBe(
+      '0 enumerations / 0 visits'
+    );
+  });
+
+  test('a caret this surface cannot address withdraws presence instead of leaving it', () => {
+    const published: (CollaborationLocalSelection | null)[] = [];
+    const { surface } = mountBody(
+      paragraph('Alpha') + paragraph('Bravo'),
+      () => [],
+      (selection) => {
+        published.push(selection);
+      }
+    );
+    putCaret(surface, 2, 1);
+    expect(published.at(-1)).not.toBeNull();
+    surface.setSelection({
+      anchor: { paragraphId: 'no-such-node', offset: 0 },
+      head: { paragraphId: 'no-such-node', offset: 0 },
+    });
+    expect(published.at(-1)).toBeNull();
+  });
+
+  // A withdrawn caret must LEAVE the screen. Keeping the last paint is the failure the
+  // report described from the other side: a name pinned to a position nobody is at.
+  test('a withdrawn remote selection clears what it painted', () => {
+    let remotes: CollaborationRemoteSelection[] = [];
+    const { surface, container, notify } = mountBody(THREE, () => remotes);
+    const ids = surface.session.paragraphIds();
+    remotes = [
+      {
+        actorId: 'bob',
+        name: 'Bob',
+        anchor: { paragraphId: 'AAAAAAAA', nodeId: ids[0]!, offset: 1 },
+        head: { paragraphId: 'AAAAAAAA', nodeId: ids[0]!, offset: 1 },
+      },
+    ];
+    notify();
+    expect(container.querySelectorAll('.docx-remote-caret')).toHaveLength(1);
+    expect(container.querySelectorAll('.docx-remote-caret-label')).toHaveLength(1);
+    remotes = [];
+    notify();
+    expect(container.querySelectorAll('.docx-remote-caret')).toHaveLength(0);
+    expect(container.querySelectorAll('.docx-remote-caret-label')).toHaveLength(0);
   });
 
   test('a remote caret in a header paints in the header band', () => {

@@ -1470,6 +1470,16 @@ export function mountPaginatedSurface(
   let detachCollaboration: () => void = () => {};
   let unsubscribeCollaborationStatus: () => void = () => {};
   let remoteSelectionRenderingReady = false;
+  /**
+   * The last payload handed to the session, so an unchanged caret publishes once.
+   *
+   * `null` means nothing has been published yet, which is distinct from the empty string a
+   * WITHDRAWN selection hashes to — the first withdrawal has to reach the room. Declared with
+   * the rest of the collaboration state, above every commit path that reads it: a commit
+   * reaching a `let` further down would throw a temporal-dead-zone `ReferenceError` out of an
+   * edit, which is how attaching the replica too early used to break the room.
+   */
+  let publishedCollaborationSelection: string | null = null;
   const unsubscribeRemoteSelections = collaborationSession
     ? collaborationSession.subscribeRemoteSelections(() => {
         if (remoteSelectionRenderingReady) renderRemoteSelections();
@@ -3255,6 +3265,11 @@ export function mountPaginatedSurface(
         }
       }
     }
+    // An edit moves the caret, and a caret move is presence. Published HERE rather than from
+    // the paint: under input pressure `publishAfterCommit` hands layout to a later task, and
+    // a remote caret must not wait on this author's repaint to stop pointing at a position
+    // they have left.
+    publishLocalCollaborationSelection();
     // A committed edit repaints through the scheduler's publish; a REFUSED one commits
     // nothing, so the surface still has to refresh the state it just changed. Under input
     // pressure the publish may hand layout+paint to the scheduler's own task — see
@@ -3280,19 +3295,40 @@ export function mountPaginatedSurface(
     return true;
   }
 
+  /**
+   * Publish this author's caret to the room.
+   *
+   * EVERY caret move calls this, an edit's post-edit caret included. Presence used to be
+   * published only by the paths that move the caret on purpose — a click, an arrow key,
+   * entering a header — and never by a commit, which is how typing moves it. So a remote
+   * caret did not lag behind a typing burst, it STOPPED: awareness still held the position
+   * of the last click, every keystroke after it published nothing, and the peer painted that
+   * stale position for as long as the author kept typing. A remote caret nobody is at is
+   * worse than none, so an endpoint this surface cannot address publishes `null` — which
+   * withdraws the caret at every peer — rather than leaving the last one standing.
+   *
+   * Addressing is two node-index lookups, not a document walk (see `paragraph-addresses.ts`),
+   * and typing reaches this once per COMMIT, which the type buffer already coalesces.
+   */
   function publishLocalCollaborationSelection(): void {
-    collaborationSession?.setLocalSelection(
-      collaborationPort
-        ? localCollaborationSelection(
-            cellSelection?.text ?? selection,
-            (nodeId) => {
-              const part = partOfNodeId(session, nodeId) ?? session.part();
-              return collaborationParagraphAt(part, nodeId);
-            },
-            cellSelection ? 'cells' : undefined
-          )
-        : null
-    );
+    const collaboration = collaborationSession;
+    if (!collaboration) return;
+    const next = collaborationPort
+      ? localCollaborationSelection(
+          cellSelection?.text ?? selection,
+          (nodeId) => {
+            const part = partOfNodeId(session, nodeId) ?? session.part();
+            return collaborationParagraphAt(part, nodeId);
+          },
+          cellSelection ? 'cells' : undefined
+        )
+      : null;
+    const key = next
+      ? `${next.anchor.paragraphId}:${next.anchor.offset}|${next.head.paragraphId}:${next.head.offset}|${next.kind ?? ''}`
+      : '';
+    if (key === publishedCollaborationSelection) return;
+    publishedCollaborationSelection = key;
+    collaboration.setLocalSelection(next);
   }
 
   function setSelection(next: SemanticSelection, keepDesiredX = false): void {
@@ -3390,6 +3426,10 @@ export function mountPaginatedSurface(
       selection = next;
       desiredX = null;
       caretFollowPending = true;
+      // A gesture the queued `selectionchange` had not delivered still MOVED this caret, so
+      // the room hears about it here too. The render around this one reports state and
+      // repaints; presence is not part of either.
+      publishLocalCollaborationSelection();
     },
     commit: (run) => commit(run),
     // The composition readback writes through the SAME lane as every other edit. Calling the

@@ -61,6 +61,7 @@ interface Peer {
   readonly ydoc: Y.Doc;
   readonly awareness: Awareness;
   readonly room: YjsCollaborationRoom;
+  readonly store: TreePackageStore;
   readonly port: CollaborationDocumentPort;
   readonly detach: () => void;
 }
@@ -88,7 +89,7 @@ function attachPeer(ydoc: Y.Doc, awareness: Awareness, room: YjsCollaborationRoo
   const store = storeFrom(room.document);
   const port = createCollaborationDocumentPort(store, { documentId: DOCUMENT_ID });
   const detach = room.session.attach(port);
-  const peer: Peer = { ydoc, awareness, room, port, detach };
+  const peer: Peer = { ydoc, awareness, room, store, port, detach };
   opened.push(peer);
   return peer;
 }
@@ -126,6 +127,10 @@ function syncAwareness(from: Peer, to: Peer): void {
     encodeAwarenessUpdate(from.awareness, [from.awareness.clientID]),
     'test-provider'
   );
+}
+
+function syncDocument(from: Peer, to: Peer): void {
+  Y.applyUpdate(to.ydoc, Y.encodeStateAsUpdate(from.ydoc, Y.encodeStateVector(to.ydoc)), 'relay');
 }
 
 function range(
@@ -234,6 +239,53 @@ describe('full-document presence selection', () => {
         head: { paragraphId: first.paragraphId, nodeId: first.nodeId, offset: 4 },
       },
     ]);
+  });
+
+  // Awareness leaves the author on the keystroke; the document publication is deliberately
+  // batched off it. So a burst puts the receiver in the window where the caret it is told
+  // about is past the end of the text it holds. It must not settle there: once the document
+  // lands, the painted caret has to name the position the author is actually at.
+  test('a typing burst leaves the remote caret where the author is', async () => {
+    const alice = await createPeer('alice');
+    const bob = await joinPeer(alice, 'bob');
+    const first = alice.port.paragraphs()[0]!;
+    const digits = '12345678123456765432';
+    let offset = first.text.length;
+    const painted: number[] = [];
+    for (let index = 0; index < digits.length; index += 1) {
+      const committed = alice.store.transact({ kind: 'body' }, (context) => {
+        context.apply({
+          op: 'insertText',
+          paragraphId: first.nodeId,
+          offset,
+          text: digits[index]!,
+        });
+      });
+      if (!committed.ok) throw new Error(committed.detail ?? committed.reason);
+      offset += 1;
+      alice.room.session.setLocalSelection(
+        range(
+          { paragraphId: first.paragraphId, offset },
+          { paragraphId: first.paragraphId, offset }
+        )
+      );
+      syncAwareness(alice, bob);
+      // The batched publication catches up every fourth keystroke, as deferral does.
+      if ((index + 1) % 4 === 0) {
+        alice.port.flushPendingJournals();
+        syncDocument(alice, bob);
+      }
+      const remote = bob.room.session.remoteSelections()[0];
+      const held = bob.port.paragraphByStableId(first.paragraphId)?.text.length ?? 0;
+      // Never a position this replica cannot hold, and never behind one it already painted.
+      expect(remote?.head.offset).toBeLessThanOrEqual(held);
+      painted.push(remote?.head.offset ?? -1);
+    }
+    alice.port.flushPendingJournals();
+    syncDocument(alice, bob);
+    expect(painted).toEqual([...painted].sort((left, right) => left - right));
+    expect(bob.port.paragraphByStableId(first.paragraphId)?.text).toBe(`${first.text}${digits}`);
+    expect(bob.room.session.remoteSelections()[0]?.head.offset).toBe(offset);
   });
 
   test('presence does not emit a journal or a revision', async () => {
