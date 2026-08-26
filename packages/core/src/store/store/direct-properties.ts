@@ -17,7 +17,7 @@
 // `surface-formatting.ts` re-exports these under the names the editor lane already used.
 
 import { findNode } from '../package/ooxml-edit.ts';
-import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { isContentRevisionKind, WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { nullRecord } from '../package/safe-record.ts';
 import { segmentsOf } from './tree-op-segments.ts';
@@ -324,16 +324,11 @@ export function runPropertyEdits(
   const runRanges = runAddressRanges(paragraph);
   const formatOwned = formatOwnedRunIds(paragraph);
   const visit = (child: OoxmlNode): void => {
+    if (child.kind === 'textValue') return;
     // A revision wrapper (`w:ins`/`w:del`/`w:moveFrom`/`w:moveTo`) is a run container the
     // same way a link is, and `segmentsOf` gives its runs offsets — stopping at the wrapper
     // made every property write over tracked text plan zero edits, silently.
-    if (
-      child.kind === 'hyperlink' ||
-      child.kind === 'revisionInsert' ||
-      child.kind === 'revisionDelete' ||
-      child.kind === 'revisionMoveFrom' ||
-      child.kind === 'revisionMoveTo'
-    ) {
+    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visit(inner);
       return;
     }
@@ -382,14 +377,9 @@ export function runsCovering(
   const runRanges = runAddressRanges(paragraph);
   const runs: OoxmlNode[] = [];
   const visit = (child: OoxmlNode): void => {
+    if (child.kind === 'textValue') return;
     // Same containers as `runPropertyEdits` — the read must cover the runs the write splits.
-    if (
-      child.kind === 'hyperlink' ||
-      child.kind === 'revisionInsert' ||
-      child.kind === 'revisionDelete' ||
-      child.kind === 'revisionMoveFrom' ||
-      child.kind === 'revisionMoveTo'
-    ) {
+    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visit(inner);
       return;
     }
