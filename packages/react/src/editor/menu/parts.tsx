@@ -31,7 +31,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
-import { useImageInsert } from '../images/ImageInsert';
+import { useImageInsertOptional } from '../images/ImageInsert';
 
 /** Word's insert-table grid is 6 columns by 6 rows. */
 const TABLE_GRID_COLUMNS = 6;
@@ -396,12 +396,17 @@ export const MenuPageSetup = Object.assign(MenuPageSetupImpl, {
 });
 
 function MenuImageInsertImpl({ className, hidden }: MenuActionProps) {
-  const { openFilePicker, isEnabled, disabledReason } = useImageInsert();
+  // Optional, like every other row's graceful degrade: a menu mounted outside
+  // `DocxEditor.Root` (no `ImageInsertProvider`) renders the row present-and-disabled
+  // instead of throwing during render.
+  const insert = useImageInsertOptional();
   const context = useMenuContext();
   const label = useMenuLabel();
   if (hidden) return null;
   const control = chromeControlForSlot('image.insert');
   const text = label(control?.labelKey ?? 'toolbar.image');
+  const isEnabled = insert?.isEnabled ?? false;
+  const disabledReason = insert?.disabledReason ?? null;
   return (
     <MenuRow
       slot="image.insert"
@@ -409,7 +414,7 @@ function MenuImageInsertImpl({ className, hidden }: MenuActionProps) {
       disabled={!isEnabled}
       {...(disabledReason ? { title: disabledReason } : {})}
       onSelect={() => {
-        openFilePicker();
+        insert?.openFilePicker();
         context.setOpenMenu(null);
       }}
       {...(className ? { className } : {})}

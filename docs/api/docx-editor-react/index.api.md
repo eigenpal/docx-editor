@@ -553,6 +553,7 @@ export interface DocxEditorMenuNamespace {
     readonly Group: typeof MenuGroup;
     // (undocumented)
     readonly Help: MenuPartComponent;
+    readonly ImageInsert: typeof MenuImageInsert;
     // (undocumented)
     readonly Insert: MenuPartComponent;
     readonly Item: typeof MenuItem;

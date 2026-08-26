@@ -1240,7 +1240,15 @@ export interface EditorCommands
     borderColor?: ColorValue;
   };
 
-  /** Insert a raster image at the caret as one package undo unit. */
+  /**
+   * Insert a raster image at the caret as one package undo unit.
+   *
+   * `widthPoints`/`heightPoints` are the extent to insert AT MOST: Word's insert rule, an
+   * extent that does not fit where the caret flows (its cell, column, or page content box)
+   * is scaled down proportionally to fit. Read the committed extent back from
+   * `snapshot().image` or `getSelectedImage()`; use `setImageProperties` to enlarge past
+   * the fit afterwards.
+   */
   insertImage: {
     data: Uint8Array;
     mime: SupportedImageMime;

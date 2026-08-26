@@ -126,6 +126,24 @@ function inlinePictureDocument(
   });
 }
 
+/** A picture-less package around `body`, for the insert tests. No `w:sectPr`: Letter, 1in margins. */
+function pictureLessDocument(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Default Extension="png" ContentType="image/png"/>' +
+        `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"></Relationships>`),
+  });
+}
+
 function mountEditor(bytes: Uint8Array): DocxEditorInstance {
   const container = document.createElement('div');
   const editor = createDocxEditor({
@@ -496,22 +514,7 @@ describe('docx-editor image commands', () => {
   });
 
   test('routes insertImage through package transactions', async () => {
-    const editor = mountEditor(
-      zipSync({
-        '[Content_Types].xml': strToU8(
-          `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-            '<Default Extension="png" ContentType="image/png"/>' +
-            `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
-        ),
-        '_rels/.rels': strToU8(
-          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-        ),
-        'word/document.xml': strToU8(
-          `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hello</w:t></w:r></w:p></w:body></w:document>`
-        ),
-        'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"></Relationships>`),
-      })
-    );
+    const editor = mountEditor(pictureLessDocument('<w:p><w:r><w:t>hello</w:t></w:r></w:p>'));
     const paragraphId = drawingParagraphId(editor);
     editor.surface!.setSelection({
       anchor: { paragraphId, offset: 5 },
@@ -539,24 +542,9 @@ describe('docx-editor image commands', () => {
   });
 
   test('insertImage scales a too-wide extent down to the section content box', async () => {
-    // Word's insert behavior: natural size when it fits, page scale when it does not. The
-    // fixture has no `w:sectPr`, so the content box is Letter minus 1in margins — 468pt wide.
-    const editor = mountEditor(
-      zipSync({
-        '[Content_Types].xml': strToU8(
-          `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-            '<Default Extension="png" ContentType="image/png"/>' +
-            `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
-        ),
-        '_rels/.rels': strToU8(
-          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-        ),
-        'word/document.xml': strToU8(
-          `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hello</w:t></w:r></w:p></w:body></w:document>`
-        ),
-        'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"></Relationships>`),
-      })
-    );
+    // Word's insert behavior: natural size when it fits, page scale when it does not.
+    // 468pt content width: Letter minus 1in margins.
+    const editor = mountEditor(pictureLessDocument('<w:p><w:r><w:t>hello</w:t></w:r></w:p>'));
     const paragraphId = drawingParagraphId(editor);
     editor.surface!.setSelection({
       anchor: { paragraphId, offset: 5 },
@@ -583,6 +571,46 @@ describe('docx-editor image commands', () => {
     // 936×468pt halves to fit the 468pt content width; aspect ratio is preserved.
     expect(image!.widthEmu).toBe(468 * 12_700);
     expect(image!.heightEmu).toBe(234 * 12_700);
+  });
+
+  test('insertImage in a narrow table cell fits the cell measure, not the page', async () => {
+    // A 2000-twip (100pt) fixed cell. The caret line's box is the measure the paragraph was
+    // broken against — cell margins included — so the fit lands well under the cell width
+    // while the section box alone would have said 468pt.
+    const editor = mountEditor(
+      pictureLessDocument(
+        '<w:tbl><w:tblPr><w:tblW w:w="2000" w:type="dxa"/><w:tblLayout w:type="fixed"/></w:tblPr>' +
+          '<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+          '<w:tr><w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
+          '<w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+          '<w:p><w:r><w:t>after</w:t></w:r></w:p>'
+      )
+    );
+    const cellParagraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: cellParagraphId, offset: 4 },
+      head: { paragraphId: cellParagraphId, offset: 4 },
+    });
+    const result = await editor.executeImageCommand({
+      type: 'insertImage',
+      data: PNG_1X1,
+      mime: 'image/png',
+      widthPoints: 936,
+      heightPoints: 468,
+    });
+    expect(result.ok).toBe(true);
+    await settleDrawingResources(editor);
+    editor.surface!.setSelection({
+      anchor: { paragraphId: cellParagraphId, offset: 5 },
+      head: { paragraphId: cellParagraphId, offset: 5 },
+    });
+    await settleDrawingResources(editor);
+    const image = editor.snapshot().image;
+    expect(image).not.toBeNull();
+    // At most the 100pt cell, far below the 468pt section box; 2:1 aspect preserved.
+    expect(image!.widthEmu).toBeLessThanOrEqual(100 * 12_700);
+    expect(image!.widthEmu).toBeGreaterThan(0);
+    expect(image!.widthEmu).toBeCloseTo(image!.heightEmu * 2, -2);
   });
 
   test('refuses setImageWrapType with stale drawing id', () => {

@@ -28,6 +28,7 @@ import {
   MenuFile,
   MenuFormat,
   MenuHelp,
+  MenuImageInsert,
   MenuInsert,
   MenuItem,
   MenuOpen,
@@ -340,6 +341,7 @@ export interface DocxEditorMenuNamespace {
   readonly Open: typeof MenuOpen;
   readonly Save: typeof MenuSave;
   readonly PageSetup: typeof MenuPageSetup;
+  readonly ImageInsert: typeof MenuImageInsert;
   readonly ReportIssue: typeof MenuReportIssue;
 }
 
@@ -360,5 +362,6 @@ export const DocxEditorMenu = Object.assign(DocxEditorMenuRoot, {
   Open: MenuOpen,
   Save: MenuSave,
   PageSetup: MenuPageSetup,
+  ImageInsert: MenuImageInsert,
   ReportIssue: MenuReportIssue,
 }) as unknown as DocxEditorMenuNamespace;

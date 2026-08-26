@@ -16,7 +16,7 @@ import type { DrawingTreeDocOp } from '../store/store/tree-op-types.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 
 const VIEWING_REFUSAL = 'the document is open for viewing';
-const SUGGESTING_IMAGE_REFUSAL = 'image property edits are not supported in suggesting mode';
+const SUGGESTING_IMAGE_REFUSAL = 'image changes are not supported in suggesting mode';
 const TRACKED_DRAWING_DELETION = 'trackedDrawingDeletionUnsupported';
 
 export function createImageOps(deps: {

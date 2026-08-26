@@ -449,7 +449,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. Both adapters ship insert and overlay authoring: toolbar, properties dialog, and keyboard resize through the shared engine commands.',
+      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. Both adapters ship insert and overlay authoring: the Insert menu, toolbar, properties dialog, and keyboard resize through the shared engine commands. An inserted image keeps its natural size when it fits and scales down proportionally to its cell, column, or page content box when it does not.',
   },
   {
     id: 'images.anchored',

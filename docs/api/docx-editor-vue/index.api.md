@@ -2349,6 +2349,8 @@ export interface DocxEditorMenuNamespace {
     // (undocumented)
     readonly Help: MenuPartComponent;
     // (undocumented)
+    readonly ImageInsert: typeof MenuImageInsert;
+    // (undocumented)
     readonly Insert: MenuPartComponent;
     // (undocumented)
     readonly Item: typeof MenuItem;
