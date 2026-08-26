@@ -13,7 +13,7 @@
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
     "chromeSlots": 55,
-    "chromeCommandWired": 28,
+    "chromeCommandWired": 29,
     "chromeProbe": 6,
     "acceptedRunProperties": 19,
     "acceptedParagraphProperties": 12,
@@ -1205,6 +1205,7 @@
       "insert.pageXofY",
       "insert.pageBreak",
       "insert.sectionBreakNextPage",
+      "insert.sectionBreakContinuous",
       "insert.toc"
     ],
     "probe": [

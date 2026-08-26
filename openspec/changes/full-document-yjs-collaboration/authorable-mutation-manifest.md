@@ -75,7 +75,7 @@ XML part rename has no API. It stays unsupported.
 
 ## Command exposure
 
-55 chrome slots. 28 map through `commandForSlot`. 6 use
+55 chrome slots. 29 map through `commandForSlot`. 6 use
 `chromeProbeForSlot`. Value-typed slots use `commandForSlotValue`.
 
 Unwired command-shaped slots:
