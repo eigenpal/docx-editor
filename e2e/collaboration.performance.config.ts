@@ -30,7 +30,12 @@ export default defineConfig({
     command: `bun run dev -- --port ${PORT} --strictPort --force`,
     cwd: '../examples/vite',
     url: `http://localhost:${PORT}/`,
-    reuseExistingServer: true,
+    // The vite config reads this to disable HMR, so a concurrent source edit
+    // cannot remount the editor mid-suite. `reuseExistingServer: false` matches
+    // the other collaboration configs: a stale server without this env would
+    // run the suite with HMR live.
+    env: { COLLAB_E2E: '1' },
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

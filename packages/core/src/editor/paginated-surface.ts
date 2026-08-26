@@ -3,7 +3,11 @@
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
-import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
+import {
+  openTreeSession,
+  type TreeApplyResult,
+  type TreeDocxSession,
+} from '@docx-editor.dev/core/binding';
 import {
   TOC_MAX_PAGE_PASSES,
   deepParagraphOrderOfPart,
@@ -21,6 +25,7 @@ import {
   type DetectedToc,
   type OoxmlElement,
   type OoxmlNode,
+  type SelectionMark,
   type StoryScope,
   type TreeDocOp,
   type TreeModelChange,
@@ -210,6 +215,19 @@ export type {
 
 type ScaleMutableSurface = PaginatedSurface & {
   setScale(nextScale: number): boolean;
+  /**
+   * The gated, attributed session write for command lanes that live OUTSIDE this file —
+   * today the content-control commands. Same collaboration gate and actor attribution as
+   * the typing lane (`applyJournaledOps`); the command's own mode/lock gate has already
+   * run. Internal, reached by cast like `setScale` — see `applyGatedSurfaceTreeOps` in
+   * `content-controls.ts` for the accessor.
+   */
+  applyGatedTreeOps(
+    ops: readonly TreeDocOp[],
+    selectionBefore?: SelectionMark | null,
+    selectionAfter?: SelectionMark | null,
+    scope?: StoryScope
+  ): TreeApplyResult;
 };
 
 /**
@@ -4445,6 +4463,7 @@ export function mountPaginatedSurface(
       storyScope,
       paragraphOrder,
       actorId: () => collaborationSession?.identity.actorId,
+      collaborationGate: (ops, scope) => collaborationSession?.gateOperations(ops, scope) ?? null,
       now,
       flushPendingInputAndLayout,
       orderedRange,
@@ -4458,6 +4477,11 @@ export function mountPaginatedSurface(
 
   const surface: ScaleMutableSurface = {
     session,
+    // The internal gated write — see the `ScaleMutableSurface` note. The content-control
+    // commands wrote `session.applyTreeOps` directly, which skipped the collaboration gate
+    // and actor binding every other lane goes through.
+    applyGatedTreeOps: (ops, before, after, scope) =>
+      applyJournaledOps(ops, before, after, scope ?? storyScope()),
     storyScope,
     imageDecodePort: () => decodePort,
     // Flushes first: a commit made straight on the session — undo, or another editor
@@ -5120,6 +5144,17 @@ export function mountPaginatedSurface(
               opCount: 0,
               reason: 'experimental-collaboration-body-text-only',
             };
+          }
+          // The READINESS gate the typing lane asks (`applyJournaledOps`). Review writes
+          // reach the store past `applyOps`, so without this a disconnected replica still
+          // committed a comment locally and never replicated it. The ops are opaque here —
+          // the callback builds them — so the gate sees an empty batch: its readiness and
+          // attachment ladder still answers, which is the half this lane was missing.
+          if (collaborationSession) {
+            const collaborationRefusal = collaborationSession.gateOperations([], storyScope());
+            if (collaborationRefusal) {
+              return { committed: false, rejected: true, opCount: 0, reason: collaborationRefusal };
+            }
           }
           // Bound to the collaboration actor: review writes mint comment and content-control
           // ids outside `applyOps`, so nothing else would bind one. Two peers commenting on

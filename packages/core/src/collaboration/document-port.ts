@@ -237,6 +237,17 @@ export function createCollaborationDocumentPort(
       ) {
         return { ok: false as const, reason: 'collaboration-text-limit' };
       }
+      // Validated like `text` above: this is the @public port, and a non-string id threw a
+      // TypeError at `.toUpperCase()` instead of returning the typed result. The bound is
+      // generous — a `w14:paraId` is 8 hex characters — and exists so a hostile payload
+      // cannot make the snapshot filter below scan against an arbitrarily long string.
+      if (
+        typeof update.paragraphId !== 'string' ||
+        update.paragraphId.length === 0 ||
+        update.paragraphId.length > 256
+      ) {
+        return { ok: false as const, reason: 'unknown-paragraph-id' };
+      }
       const paragraphId = update.paragraphId.toUpperCase();
       if (seen.has(paragraphId)) {
         return { ok: false as const, reason: 'duplicate-paragraph-id' };

@@ -11,6 +11,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import type { EditorCollaborationSession } from '../../collaboration/index.ts';
 import type { ReviewWriteIntent } from '../paginated-surface-contract.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { stubCollaborationSession } from './collaboration-test-module.ts';
@@ -25,11 +26,16 @@ afterEach(() => {
   }
 });
 
-function mount(withReplica: boolean): PaginatedSurface {
+function mount(
+  withReplica: boolean,
+  overrides: Partial<EditorCollaborationSession> = {}
+): PaginatedSurface {
   const container = document.createElement('div');
   const result = mountPaginatedSurface(container, docx(paragraph('Alpha')), {
     scale: 1,
-    ...(withReplica ? { collaborationModel: { session: stubCollaborationSession() } } : {}),
+    ...(withReplica
+      ? { collaborationModel: { session: stubCollaborationSession(overrides) } }
+      : {}),
   });
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
   opened.push({ surface: result.surface, container });
@@ -85,6 +91,28 @@ describe('review writes with a replica attached', () => {
 
   test('refuses an unnamed write, so a new call site cannot slip through', () => {
     expect(attempted(mount(true), undefined)).toBe(false);
+  });
+});
+
+describe('review writes with a replica that is not ready', () => {
+  // Readiness is asked in addition to the intent set: an admitted intent on a replica that
+  // is not `ready` would commit locally and replicate nothing, which is the silent-divergence
+  // failure the gate exists to prevent.
+  test('refuses an admitted intent and records the gate reason', () => {
+    const surface = mount(true, {
+      status: () => 'disconnected',
+      statusSnapshot: () =>
+        Object.freeze({
+          status: 'disconnected' as const,
+          reason: undefined,
+          lastFailure: undefined,
+        }),
+      gateOperations: () => 'collaboration-session-not-ready',
+    });
+    for (const intent of PROVEN) {
+      expect(attempted(surface, intent)).toBe(false);
+    }
+    expect(surface.state().lastRejection).toBe('collaboration-session-not-ready');
   });
 });
 

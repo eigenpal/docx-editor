@@ -49,6 +49,12 @@ export interface SurfaceClipboardDeps {
   paragraphOrder(): readonly string[];
   /** The collaboration actor, or undefined when no session is attached. */
   actorId(): string | undefined;
+  /**
+   * The collaboration write gate the typing lane asks: the refusal code, or null when the
+   * gate admits — always null with no session attached, so the non-collaborative paste
+   * path stays exactly as it was.
+   */
+  collaborationGate(ops: readonly TreeDocOp[], scope: StoryScope): string | null;
   /** Monotonic clock for the force-plain deadline. */
   now(): number;
   flushPendingInputAndLayout(): void;
@@ -231,6 +237,19 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     let landed = false;
     deps.commit(
       () => {
+        // The readiness gate the typing lane asks. A fragment paste reaches the store
+        // through `applyFragmentPaste`, past `applyOps`, so without this a disconnected
+        // replica landed a rich paste locally and never replicated it. The selection-
+        // clearing plan is the op-shaped half of the write, so it is what the gate sees.
+        const collaborationRefusal = deps.collaborationGate(plan.ops, { kind: 'body' });
+        if (collaborationRefusal) {
+          return {
+            committed: false,
+            rejected: true,
+            opCount: 0,
+            reason: collaborationRefusal,
+          } as TreeApplyResult;
+        }
         const actorId = deps.actorId();
         const result = session.applyFragmentPaste(
           { kind: 'body' },

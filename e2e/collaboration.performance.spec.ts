@@ -177,9 +177,8 @@ async function installProbe(page: Page): Promise<void> {
     let beforeInputs = 0;
     let stopped = false;
     const memoryOf = (): number | null => {
-      const memory = (
-        performance as Performance & { memory?: { readonly usedJSHeapSize: number } }
-      ).memory;
+      const memory = (performance as Performance & { memory?: { readonly usedJSHeapSize: number } })
+        .memory;
       return memory?.usedJSHeapSize ?? null;
     };
     const heapStart = memoryOf();
@@ -289,9 +288,7 @@ async function collectRow(
   await delay(120);
   const probe = await page.evaluate(() => window.__COLLAB_PERF__!.stop());
   const processed =
-    gesture.includes('backspace') || gesture.includes('bold')
-      ? probe.keydowns
-      : probe.beforeInputs;
+    gesture.includes('backspace') || gesture.includes('bold') ? probe.keydowns : probe.beforeInputs;
   return {
     gesture,
     requested,
@@ -300,9 +297,7 @@ async function collectRow(
     presentation: summarize(probe.presentationMs),
     maxFrameGapMs: probe.frameGapsMs.length > 0 ? Math.max(...probe.frameGapsMs) : 0,
     heapDeltaBytes:
-      probe.heapStart !== null && probe.heapEnd !== null
-        ? probe.heapEnd - probe.heapStart
-        : null,
+      probe.heapStart !== null && probe.heapEnd !== null ? probe.heapEnd - probe.heapStart : null,
   };
 }
 
@@ -366,7 +361,10 @@ async function measureMode(page: Page, prefix: string): Promise<GestureRow[]> {
 }
 
 function presentationBudget(row: GestureRow): 'pass' | 'fail' {
-  if (row.presentation.medianMs <= ELIGIBLE_MEDIAN_MS && row.presentation.p95Ms <= ELIGIBLE_P95_MS) {
+  if (
+    row.presentation.medianMs <= ELIGIBLE_MEDIAN_MS &&
+    row.presentation.p95Ms <= ELIGIBLE_P95_MS
+  ) {
     return 'pass';
   }
   return 'fail';
@@ -375,8 +373,10 @@ function presentationBudget(row: GestureRow): 'pass' | 'fail' {
 function ratioBudget(solo: GestureRow, attached: GestureRow): 'pass' | 'fail' {
   const slack = 4;
   if (
-    attached.presentation.medianMs <= Math.max(solo.presentation.medianMs * RATIO, solo.presentation.medianMs + slack) &&
-    attached.presentation.p95Ms <= Math.max(solo.presentation.p95Ms * RATIO, solo.presentation.p95Ms + slack) &&
+    attached.presentation.medianMs <=
+      Math.max(solo.presentation.medianMs * RATIO, solo.presentation.medianMs + slack) &&
+    attached.presentation.p95Ms <=
+      Math.max(solo.presentation.p95Ms * RATIO, solo.presentation.p95Ms + slack) &&
     attached.handler.p95Ms <= Math.max(solo.handler.p95Ms * RATIO, solo.handler.p95Ms + slack)
   ) {
     return 'pass';
@@ -418,18 +418,16 @@ test('local typing with a replica stays within collaboration budgets', async ({
   await bobTyping;
 
   const leakBefore = await page.evaluate(() => {
-    const memory = (
-      performance as Performance & { memory?: { readonly usedJSHeapSize: number } }
-    ).memory;
+    const memory = (performance as Performance & { memory?: { readonly usedJSHeapSize: number } })
+      .memory;
     return memory?.usedJSHeapSize ?? null;
   });
   await focusEnd(page, await firstTextParagraph(page));
   await dispatchChars(page, 200, 'z');
   await delay(500);
   const leakAfter = await page.evaluate(() => {
-    const memory = (
-      performance as Performance & { memory?: { readonly usedJSHeapSize: number } }
-    ).memory;
+    const memory = (performance as Performance & { memory?: { readonly usedJSHeapSize: number } })
+      .memory;
     return memory?.usedJSHeapSize ?? null;
   });
 
@@ -440,8 +438,7 @@ test('local typing with a replica stays within collaboration budgets', async ({
     solo,
     attached,
     peerEditing: peerRow,
-    heapDeltaBytes:
-      leakBefore !== null && leakAfter !== null ? leakAfter - leakBefore : null,
+    heapDeltaBytes: leakBefore !== null && leakAfter !== null ? leakAfter - leakBefore : null,
   };
   // The line reporter keeps this JSON for the measurement write-up.
   console.log(`COLLAB_PERF_REPORT ${JSON.stringify(report)}`);
@@ -453,7 +450,14 @@ test('local typing with a replica stays within collaboration budgets', async ({
     expect(ratioBudget(soloRow!, row), `${row.gesture} vs solo`).toBe('pass');
   }
   expect(ratioBudget(solo[0]!, peerRow), 'peer-editing vs solo type').toBe('pass');
+  // The solo pass is the warmup baseline for the ratio; the absolute frame budget applies to
+  // every measurement taken with the collaboration session attached.
   for (const row of [...attached, peerRow]) {
-    expect(row.processed, row.gesture).toBeGreaterThan(row.requested * 0.5);
+    expect(presentationBudget(row), `${row.gesture} presentation budget`).toBe('pass');
+  }
+  for (const row of [...attached, peerRow]) {
+    // A run that drops keystrokes is not the run the budgets describe: 0.9 tolerates burst
+    // coalescing, not a surface that ignores input.
+    expect(row.processed, row.gesture).toBeGreaterThan(row.requested * 0.9);
   }
 });

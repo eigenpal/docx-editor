@@ -31,9 +31,11 @@ import {
   type OoxmlGenericElementNode,
   type OoxmlNode,
   type OoxmlPart,
+  type SelectionMark,
+  type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import type { TreeDocxSessionView } from '../binding/tree-session.ts';
+import type { TreeApplyResult, TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
 import {
@@ -809,6 +811,39 @@ export function runContentControlCommand(
   return execContentControlCommand(surface!, command);
 }
 
+/**
+ * The surface's internal gated write, when this surface carries one.
+ *
+ * The paginated surface exposes it by cast (the `setScale` idiom): the same collaboration
+ * gate and actor attribution the typing lane commits through, without widening the public
+ * surface contract. Writing `session.applyTreeOps` directly skipped both — with a replica
+ * attached, a content-control edit committed locally while not ready and replicated with no
+ * actor bound. A stub or foreign surface without the member falls back to the raw session
+ * write, which for a surface with no replica is the identical path.
+ */
+type GatedTreeOpsSurface = PaginatedSurface & {
+  applyGatedTreeOps(
+    ops: readonly TreeDocOp[],
+    selectionBefore?: SelectionMark | null,
+    selectionAfter?: SelectionMark | null,
+    scope?: StoryScope
+  ): TreeApplyResult;
+};
+
+function applyGatedSurfaceTreeOps(
+  surface: PaginatedSurface,
+  ops: readonly TreeDocOp[],
+  selectionBefore: SelectionMark | null,
+  selectionAfter: SelectionMark | null,
+  scope: StoryScope
+): TreeApplyResult {
+  const gated = (surface as Partial<GatedTreeOpsSurface>).applyGatedTreeOps;
+  if (typeof gated === 'function') {
+    return gated.call(surface, ops, selectionBefore, selectionAfter, scope);
+  }
+  return surface.session.applyTreeOps(ops, selectionBefore, selectionAfter, scope);
+}
+
 /** Commit a content-control tree op through the surface session and refresh layout. */
 export function execContentControlCommand(
   surface: PaginatedSurface,
@@ -838,7 +873,11 @@ export function execContentControlCommand(
   // The STORY the control is in, from its own id. Left to default, this wrote against the body
   // store, which has never heard of a control in a header — so the facade refused a verb the
   // surface performs happily, on the same control.
-  const result = surface.session.applyTreeOps(
+  //
+  // Through the GATED apply, not `session.applyTreeOps`: with a replica attached the write
+  // must ask the collaboration gate and carry the actor, like every other lane.
+  const result = applyGatedSurfaceTreeOps(
+    surface,
     [op],
     mark,
     mark,
@@ -886,7 +925,9 @@ function execInsertContentControl(
   const { paragraphId, start, end } = insertion.span;
   const before = selectionMarkOf(surface.state().selection);
   const after = { paragraphId, start, end };
-  const result = surface.session.applyTreeOps(
+  // The gated apply, for the reason the value/remove path states above.
+  const result = applyGatedSurfaceTreeOps(
+    surface,
     [insertion.op],
     before,
     after,

@@ -108,6 +108,33 @@ describe('canonical collaboration document port', () => {
     expect(publications).toBe(1);
   });
 
+  test('an invalid paragraphId returns the typed refusal instead of throwing', () => {
+    // The port is @public and the update is wire-shaped: a non-string id used to throw a
+    // TypeError at `.toUpperCase()` before the id was ever looked up.
+    const { port } = open(['11111111']);
+    const mutation = {
+      origin: ORIGIN_IDS.mutationRemote,
+      actorId: 'bob',
+      operationId: 'bob-bad-id-1',
+    };
+    const refused = { ok: false, reason: 'unknown-paragraph-id' };
+
+    expect(
+      port.applyParagraphTexts(
+        [{ paragraphId: 42 as unknown as string, text: 'Remote text' }],
+        mutation
+      )
+    ).toEqual(refused);
+    expect(port.applyParagraphTexts([{ paragraphId: '', text: 'Remote text' }], mutation)).toEqual(
+      refused
+    );
+    // Bounded like the file's other limits, so a hostile id cannot drive a long scan.
+    expect(
+      port.applyParagraphTexts([{ paragraphId: 'A'.repeat(257), text: 'Remote text' }], mutation)
+    ).toEqual(refused);
+    expect(port.paragraphs()[0]?.text).toBe('Paragraph 0');
+  });
+
   test('applyRemotePackage publishes one revision and emits no primitive journal', () => {
     const source = open(['11111111']);
     expect(

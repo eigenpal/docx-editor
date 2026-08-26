@@ -285,6 +285,11 @@ export function packageStorePort(
     applyCommentWrites(writes, scope): AutomationCommentWriteResult {
       if (!live) return { ok: false, reason: 'disposed' };
       if (writes.length === 0) return { ok: true, changed: false };
+      // The same readiness gate `apply` and `applyLifecycle` ask. Comment writes carry no
+      // tree ops of their own, so the gate sees an empty batch — its readiness and
+      // attachment ladder still answers, which is what this port was skipping.
+      const collaborationRefusal = collaboration?.gateOperations([], scope);
+      if (collaborationRefusal) return { ok: false, reason: collaborationRefusal };
       const story = store.resolveStory(scope);
       if (!story.ok) return { ok: false, reason: story.reason };
       // The story store keeps a package of its own, and the coordinator's copy carries writes the
@@ -360,6 +365,10 @@ export function packageStorePort(
     },
     applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
       if (!live) return { ok: false, reason: 'disposed' };
+      // Same readiness gate as `applyCommentWrites`: the write is not op-shaped, so the
+      // gate judges only readiness, attachment, and scope.
+      const collaborationRefusal = collaboration?.gateOperations([], scope);
+      if (collaborationRefusal) return { ok: false, reason: collaborationRefusal };
       const story = store.resolveStory(scope);
       if (!story.ok) return { ok: false, reason: story.reason };
       // Through the coordinator, which grafts, runs an observed transaction, replaces the shell and
