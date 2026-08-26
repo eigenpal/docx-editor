@@ -516,17 +516,86 @@ describe('a cell rectangle is the table gesture, so it refuses like one', () => 
     }
   });
 
-  test('a refused press publishes its reason when it happens, not on the next tick', () => {
-    // The gate refuses this one before any write is attempted, so the reason comes straight
-    // back from `exec`. The publishing path is pinned by the bounded case below, where the
-    // gate allows and the write is the only thing that knows.
+  test('a refused press invalidates the snapshot, it does not wait for the next tick', () => {
     const editor = mount(p('before') + TABLE_2X2 + p('after'));
     selectCellRectangle(editor.surface!, { row: 0, column: 0 }, { row: 1, column: 1 });
+    // WARM the snapshot cache first. `snapshot()` is version-cached, so reading it on a cold
+    // cache derives fresh whatever the refusal did — which is how this passed with the
+    // publishing removed. Only a warm cache can tell "invalidated" from "never cached".
+    expect(editor.snapshot().lastRejection).toBeNull();
     expect(editor.surface!.insertSectionBreak('nextPage')).toBe(false);
-    // Fresh AT the refusal. Stored without publishing, the snapshot still read null here and
-    // only caught up on whatever bumped the state version next.
     expect(editor.snapshot().lastRejection).toBe(
       'a section break cannot be inserted inside a table cell'
     );
+  });
+});
+
+describe('a section a locked control holds is reported, not discovered on press', () => {
+  // The retype lands on a paragraph the caret is nowhere near, so the store's guard can
+  // refuse a break the caret's own paragraph would have allowed. Left ungated, the row was
+  // live and the press failed with the store's `locked` — a word that names no cause, and
+  // read as a sentence would claim the SELECTION is locked, which it is not.
+  const sdt = (properties: string, inner: string) =>
+    `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+  const held = (properties: string) =>
+    p('Alpha') +
+    sdt(
+      properties,
+      '<w:p><w:pPr><w:sectPr><w:type w:val="oddPage"/><w:pgSz w:w="12240" w:h="15840"/>' +
+        '</w:sectPr></w:pPr><w:r><w:t>Inside</w:t></w:r></w:p>'
+    ) +
+    p('Beta') +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  const REASON =
+    'a section break cannot change a section that a locked or linked content control holds';
+
+  test.each([
+    ['locked', '<w:lock w:val="contentLocked"/>'],
+    ['data-bound', '<w:dataBinding w:xpath="/root/a" w:storeItemID="{1}"/>'],
+  ])('%s: can reports it and the document is untouched', (_label, properties) => {
+    const editor = mount(held(properties));
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 3 },
+      head: { paragraphId: id, offset: 3 },
+    });
+    for (const kind of ['section', 'sectionContinuous'] as const) {
+      expect(editor.can({ type: 'insertBreak', kind } as never)).toEqual({
+        ok: false,
+        code: 'unsupported',
+        reason: REASON,
+      });
+      expect(editor.exec({ type: 'insertBreak', kind } as never)).toMatchObject({
+        ok: false,
+        reason: REASON,
+      });
+    }
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(3);
+  });
+
+  test('a break that retypes NOTHING is still allowed through the same control', () => {
+    // Precise, not blanket. The guard exists for the write the store refuses; a break with
+    // no type to write never reaches the control at all.
+    const editor = mount(
+      p('Alpha') +
+        sdt(
+          '<w:lock w:val="contentLocked"/>',
+          '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+            '<w:r><w:t>Inside</w:t></w:r></w:p>'
+        ) +
+        p('Beta') +
+        '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 3 },
+      head: { paragraphId: id, offset: 3 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+    expect(editor.exec({ type: 'insertBreak', kind: 'section' } as never)).toEqual({
+      ok: true,
+      changed: true,
+    });
   });
 });

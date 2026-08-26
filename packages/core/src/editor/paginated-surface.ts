@@ -880,9 +880,12 @@ export function mountPaginatedSurface(
     editingMode: () => editingMode,
     publishRefusal: (reason) => {
       lastRejection = reason;
-      // PUBLISHED, like every other early-return refusal in this file. Stored alone it was
-      // invisible when it happened and then arrived attached to the next unrelated tick that
-      // bumped the state version — a caret move carrying a section break's message.
+      // Published like every other early-return refusal in this file. It does not EMIT: the
+      // facade treats a publish that moves neither the selection nor the pending format as
+      // quiet, which a refusal is. What it does do is invalidate the version-cached
+      // `snapshot()`, so the reason is there the moment anyone reads it. Stored alone it was
+      // not — the snapshot kept its stale value until an unrelated tick bumped the version,
+      // and then delivered a section break's message on a caret move.
       options.onChange?.(currentState());
     },
     // RAW, on purpose: `orderedRange()` flushes pending input, and this is asked from `can`.

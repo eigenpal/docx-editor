@@ -29,6 +29,15 @@ export const SUGGESTED_BREAK_REFUSAL =
 export const TABLE_CELL_BREAK_REFUSAL = 'a section break cannot be inserted inside a table cell';
 
 /**
+ * The store refuses a retype reaching a locked or data-bound control, and names the paragraph
+ * the section hangs on — which is not the one the caret is in. Said in the lane's own words,
+ * because the store's `locked` is a diagnostic: read as a sentence it would claim the
+ * SELECTION is locked, and the selection is ordinary editable text.
+ */
+export const LOCKED_SECTION_BREAK_REFUSAL =
+  'a section break cannot change a section that a locked or linked content control holds';
+
+/**
  * How far a break gate will plan a deletion to find its exact answer.
  *
  * Planning is superlinear in the range, and the gate runs on every toolbar derivation, so an
