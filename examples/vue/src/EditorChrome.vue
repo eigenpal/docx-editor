@@ -3,8 +3,10 @@
     <header class="demo-header">
       <div class="demo-header__left">
         <BrandLogo />
-        <AdapterSwitcher v-if="showAdapterSwitcher" current="vue" />
-        <SourceLink example="Vue" />
+        <div class="demo-header__adapter">
+          <AdapterSwitcher v-if="showAdapterSwitcher" current="vue" />
+          <SourceLink example="Vue" />
+        </div>
       </div>
 
       <div class="demo-header__title-block">

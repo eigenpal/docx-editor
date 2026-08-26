@@ -10,7 +10,7 @@
     rel="noreferrer"
     :title="`Read the ${example} example source on GitHub`"
   >
-    (see source)
+    see source
   </a>
 </template>
 
@@ -31,6 +31,7 @@ const href = computed(() => sourceUrlFor(props.example));
 /* The header row is a flex container with its own gap, so this needs no margin. */
 .source-link {
   font-size: 12px;
+  line-height: 1;
   white-space: nowrap;
   color: var(--doc-text-muted);
   text-decoration: underline;

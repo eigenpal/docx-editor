@@ -411,8 +411,10 @@ function EditorChrome({
       <header className="demo-header">
         <div className="demo-header__left">
           <BrandLogo />
-          {showAdapterSwitcher ? <AdapterSwitcher current="react" /> : null}
-          <SourceLink example="Vite" />
+          <div className="demo-header__adapter">
+            {showAdapterSwitcher ? <AdapterSwitcher current="react" /> : null}
+            <SourceLink example="Vite" />
+          </div>
         </div>
 
         {/* Title with the LIBRARY menu bar beneath, Docs-style.

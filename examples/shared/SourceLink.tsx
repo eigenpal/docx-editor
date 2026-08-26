@@ -10,6 +10,7 @@ interface Props {
 // The header row is a flex container with its own gap, so this needs no margin.
 const style: React.CSSProperties = {
   fontSize: '12px',
+  lineHeight: 1,
   whiteSpace: 'nowrap',
   color: 'var(--doc-text-muted)',
   textDecoration: 'underline',
@@ -29,7 +30,7 @@ export function SourceLink({ example }: Props) {
       style={style}
       title={`Read the ${example} example source on GitHub`}
     >
-      (see source)
+      see source
     </a>
   );
 }
