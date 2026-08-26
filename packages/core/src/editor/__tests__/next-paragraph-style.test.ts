@@ -95,10 +95,20 @@ function authoredStyles(surface: PaginatedSurface): (string | null)[] {
 }
 
 function pressEnterAt(surface: PaginatedSurface, index: number, offset: number): void {
+  pressEnterOver(surface, index, offset, offset);
+}
+
+/** Select `[start, end)` in one paragraph, then press Enter over it. */
+function pressEnterOver(
+  surface: PaginatedSurface,
+  index: number,
+  start: number,
+  end: number
+): void {
   const id = surface.session.paragraphIds()[index]!;
   surface.setSelection({
-    anchor: { paragraphId: id, offset },
-    head: { paragraphId: id, offset },
+    anchor: { paragraphId: id, offset: start },
+    head: { paragraphId: id, offset: end },
   });
   surface.splitParagraph();
 }
@@ -121,6 +131,33 @@ describe('Enter and the style for the following paragraph', () => {
     const { surface } = mount(docx(STYLES, HEADING));
     pressEnterAt(surface, 0, 0);
     expect(authoredStyles(surface)).toEqual(['Heading1', 'Heading1']);
+  });
+
+  test('Enter over a heading’s last word starts a body paragraph', () => {
+    // A replacing Enter has two positions: the split point, and the end of what it deletes.
+    // The deletion runs to the end of the heading, so the break does end the paragraph.
+    const { surface } = mount(docx(STYLES, HEADING));
+    pressEnterOver(surface, 0, 2, 5);
+    expect(authoredStyles(surface)).toEqual(['Heading1', null]);
+  });
+
+  test('Enter over the middle of a heading gives two headings', () => {
+    const { surface } = mount(docx(STYLES, HEADING));
+    pressEnterOver(surface, 0, 1, 3);
+    expect(authoredStyles(surface)).toEqual(['Heading1', 'Heading1']);
+  });
+
+  test('Enter over a range that ends in the next paragraph starts a body paragraph', () => {
+    // The plan joins the two paragraphs, so what survives the break is what followed the
+    // range's END — and the range ran to the end of the paragraph below.
+    const { surface } = mount(docx(STYLES, `${HEADING}<w:p><w:r><w:t>Body</w:t></w:r></w:p>`));
+    const ids = surface.session.paragraphIds();
+    surface.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 2 },
+      head: { paragraphId: ids[1]!, offset: 4 },
+    });
+    surface.splitParagraph();
+    expect(authoredStyles(surface)).toEqual(['Heading1', null]);
   });
 
   test('a style that follows itself leaves the new paragraph alone', () => {

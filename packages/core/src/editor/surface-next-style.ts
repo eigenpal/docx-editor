@@ -34,29 +34,37 @@ export interface NextStyleDeps {
 
 export interface NextStyleWrites {
   /**
-   * The `w:pStyle` the paragraph an Enter mints takes, as `splitParagraph.tailStyleId`.
+   * Whether an offset sits at the very end of a paragraph's MODEL text.
    *
-   * `undefined` means "clone the head's own style", which is the answer whenever the rule
-   * does not apply: a split inside the text, a style that names no `w:next`, a `w:next`
-   * that points back at the same style, or one that names a style the document never
-   * defines. `null` means "author no `w:pStyle`" and is how the document's DEFAULT style
-   * is spelled — writing `<w:pStyle w:val="Normal"/>` on every new body paragraph would be
-   * legal but is not what Word emits.
+   * Model, not layout. `paragraphTextFromLayout` reconstructs from painted spans, and in
+   * `proposed` display mode a deletion struck at the END of a paragraph is not painted at
+   * all — the caret then read as "at the end" with model content still after it, and the
+   * struck words fell into the tail wearing the follower style. `paragraphTextOf` is the
+   * vocabulary the split op's own offsets are in.
    */
-  tailStyleId(paragraphId: string, offset: number): string | null | undefined;
+  atParagraphEnd(paragraphId: string, offset: number): boolean;
+  /**
+   * The `w:pStyle` the paragraph FOLLOWING this one takes, as `splitParagraph.tailStyleId`.
+   *
+   * `undefined` means "clone this paragraph's own style", which is the answer whenever the
+   * rule does not apply: a style that names no `w:next`, a `w:next` that points back at the
+   * same style, or one that names a style the document never defines. `null` means "author
+   * no `w:pStyle`" and is how the document's DEFAULT style is spelled — writing
+   * `<w:pStyle w:val="Normal"/>` on every new body paragraph would be legal but is not what
+   * Word emits.
+   */
+  followerStyleId(paragraphId: string): string | null | undefined;
 }
 
 export function createNextStyleWrites(deps: NextStyleDeps): NextStyleWrites {
   return {
-    tailStyleId(paragraphId, offset) {
+    atParagraphEnd(paragraphId, offset) {
+      const text = paragraphTextOf(deps.partOf(paragraphId), paragraphId);
+      return text !== null && offset === text.length;
+    },
+
+    followerStyleId(paragraphId) {
       const part = deps.partOf(paragraphId);
-      // Model text, not layout text. `paragraphTextFromLayout` reconstructs from painted
-      // spans, and in `proposed` display mode a deletion struck at the END of a paragraph
-      // is not painted at all — the caret then sat at "the end" with model content still
-      // after it, and the struck words fell into the tail wearing the follower style.
-      // `paragraphTextOf` is the vocabulary the split op's own offsets are in.
-      const text = paragraphTextOf(part, paragraphId);
-      if (text === null || offset !== text.length) return undefined;
       const table = deps.styleCascade();
       if (!table) return undefined;
       const authored = directParagraphProperties(part, paragraphId).find(
@@ -70,7 +78,7 @@ export function createNextStyleWrites(deps: NextStyleDeps): NextStyleWrites {
       const next = table.styles.get(current)?.next;
       if (!next || next === current) return undefined;
       // A `w:next` nobody defined would render as the default here and as a missing style
-      // everywhere else. Leaving the head's style alone is the smaller wrong answer.
+      // everywhere else. Leaving this paragraph's style alone is the smaller wrong answer.
       const target = table.styles.get(next);
       if (!target || target.type !== 'paragraph') return undefined;
       return next === table.defaultParagraphStyleId ? null : next;

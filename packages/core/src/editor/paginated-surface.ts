@@ -4422,18 +4422,9 @@ export function mountPaginatedSurface(
       // Word's `w:next`: Enter at the END of a paragraph starts one in the style that
       // paragraph's style names as its follower, which is what stops a heading from being
       // followed by a second heading.
-      //
-      // Asked only for a plain caret in an untracked edit. With a RANGE, the split point
-      // sits in a paragraph whose text the same transaction is still deleting, so the store
-      // cannot be asked yet whether the caret is at its end. And a SUGGESTED break proposes
-      // a `w:ins` mark on the head, whose Reject merges the two paragraphs back and keeps
-      // the SURVIVING tail's `w:pPr` — so a tail wearing the follower style would demote the
-      // heading the user took the break back from. Word records a `w:pPrChange` for that
-      // case; this engine has no tracked paragraph-property write, so it declines instead.
-      const tailStyleId =
-        plan.ops.length === 0 && trackedAuthorOrNone() === undefined
-          ? nextStyle.tailStyleId(position.paragraphId, position.offset)
-          : undefined;
+      const tailStyleId = splitEndsTheParagraph(position)
+        ? nextStyle.followerStyleId(position.paragraphId)
+        : undefined;
       commit(
         () =>
           applyOps(
@@ -5415,6 +5406,36 @@ export function mountPaginatedSurface(
    * one has no start left to insert at, and an op naming a paragraph the same transaction
    * deleted vetoes the whole transaction.
    */
+  /**
+   * Whether this Enter ends the paragraph it leaves behind, so Word's follower style applies
+   * to the one it starts.
+   *
+   * A REPLACING Enter has two positions, not one: the split point, and the end of the text
+   * the same transaction deletes. Everything between them goes — including whole paragraphs,
+   * which the plan joins into the first — so what survives after the break is whatever
+   * followed the range's END. Select a heading's last word and press Enter, and Word gives
+   * you a body paragraph; reading only the split point said "not at the end" and gave a
+   * second heading.
+   *
+   * Declines outright for a SUGGESTED break and for a CELL RECTANGLE. A suggested break
+   * proposes a `w:ins` mark on the head, and rejecting it merges the paragraphs back keeping
+   * the SURVIVING tail's `w:pPr` — a tail in the follower style would demote the heading the
+   * reviewer took the break back from. Word records a `w:pPrChange` for that case, and this
+   * engine has no tracked paragraph-property write. A rectangle is not the range it stands
+   * in for, so its ends do not describe what the plan deletes.
+   */
+  function splitEndsTheParagraph(position: SemanticPosition): boolean {
+    if (trackedAuthorOrNone() !== undefined || cellSelection) return false;
+    const range = orderedRange();
+    const collapsed =
+      range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset;
+    // A collapsed caret may have been relocated past struck text on its way into the plan,
+    // so the split point is the plan's position rather than the selection's.
+    return collapsed
+      ? nextStyle.atParagraphEnd(position.paragraphId, position.offset)
+      : nextStyle.atParagraphEnd(range.to.paragraphId, range.to.offset);
+  }
+
   function deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan {
     // Every replacing lane reads `replaceAt` from the plan it already holds, so the landing
     // rule cannot be skipped by a lane that never heard of it — that is how tabs, breaks and

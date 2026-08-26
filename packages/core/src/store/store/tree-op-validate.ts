@@ -116,9 +116,11 @@ const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/;
  *
  * The layout lane refuses the same three things over `styles.xml` — over-long, control
  * bearing, or a dangerous object key — and cannot be borrowed here, because `store` does
- * not depend on `layout`. The lists must agree: a value one side accepts and the other
- * drops writes a `w:pStyle` that resolves nowhere, so the paragraph reports a style it
- * does not render in.
+ * not depend on `layout`. Those three must not diverge: a value one side accepts and the
+ * other drops writes a `w:pStyle` that resolves nowhere, so the paragraph reports a style
+ * it does not render in. The fourth, `isValidXmlText`, is the store's alone and is meant to
+ * be: this side is the one that serializes, and a caller hand-building a `TreeDocOp` is not
+ * bounded by what an XML parser could have produced.
  */
 function isStyleId(value: string): boolean {
   return (
