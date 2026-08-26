@@ -2276,6 +2276,7 @@ function layoutBlocksPass(
           parityDependent: session.parityDependent,
           usedPageParity,
           markPageCount: mark.pageCount,
+          continuedInsets: continuedInsets !== undefined,
           hasNoteReserves: pageBottomReserves !== undefined,
           hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
         });

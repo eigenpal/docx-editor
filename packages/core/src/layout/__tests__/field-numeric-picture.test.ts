@@ -4,11 +4,7 @@ import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { createFixedMeasurer, layoutSemanticDocument } from '../index.ts';
 import { formatNumericPicture, MAX_NUMERIC_PICTURE_CHARS } from '../field-numeric-picture.ts';
-import {
-  allowlistedPageField,
-  matchAllowlistedPageField,
-  pageFieldNumericPicture,
-} from '../field-instruction.ts';
+import { allowlistedPageField, matchAllowlistedPageField } from '../field-instruction.ts';
 import {
   pageFieldPlaceholder,
   projectPageFieldValue,
@@ -20,7 +16,9 @@ describe('numeric picture rendering', () => {
     expect(formatNumericPicture(2, '0#')).toBe('02');
     expect(formatNumericPicture(12, '0#')).toBe('12');
     expect(formatNumericPicture(7, '000')).toBe('007');
-    expect(formatNumericPicture(7, '###')).toBe('7');
+    // An unfilled `#` paints a space, as Word does: `{ = 9 + 6 \# $### }` renders `$ 15`.
+    expect(formatNumericPicture(7, '###')).toBe('  7');
+    expect(formatNumericPicture(15, '$###')).toBe('$ 15');
   });
 
   test('keeps every digit of a value wider than the picture', () => {
@@ -31,7 +29,7 @@ describe('numeric picture rendering', () => {
   test('paints literals, and a grouping comma only with a digit to its left', () => {
     expect(formatNumericPicture(2, 'Page 0')).toBe('Page 2');
     expect(formatNumericPicture(1234, '#,##0')).toBe('1,234');
-    expect(formatNumericPicture(5, '#,##0')).toBe('5');
+    expect(formatNumericPicture(5, '#,##0')).toBe('   5');
   });
 
   test('refuses a picture with no digit position, an oversized one, or a bad value', () => {
@@ -53,20 +51,22 @@ describe('numeric picture rendering', () => {
 describe('page-field instructions carrying a picture', () => {
   test('allowlists the keyword and reads its picture', () => {
     expect(allowlistedPageField(' PAGE \\# 0# ')).toBe('PAGE');
-    expect(pageFieldNumericPicture(' PAGE \\# 0# ')).toBe('0#');
-    expect(pageFieldNumericPicture('NUMPAGES \\# "000"')).toBe('000');
-    expect(matchAllowlistedPageField('PAGE \\# 0#')).toEqual({ kind: 'PAGE', picture: '0#' });
+    expect(matchAllowlistedPageField(' PAGE \\# 0# ')).toEqual({ kind: 'PAGE', picture: '0#' });
+    expect(matchAllowlistedPageField('NUMPAGES \\# "000"')).toEqual({
+      kind: 'NUMPAGES',
+      picture: '000',
+    });
     expect(matchAllowlistedPageField('PAGE')).toEqual({ kind: 'PAGE' });
   });
 
   test('keeps the picture case the author wrote', () => {
-    expect(pageFieldNumericPicture('PAGE \\# "Page 0"')).toBe('Page 0');
+    expect(matchAllowlistedPageField('PAGE \\# "Page 0"')?.picture).toBe('Page 0');
   });
 
   test('leaves a field inert when another switch rides with the picture', () => {
     expect(allowlistedPageField('PAGE \\n 3 \\# 0#')).toBeNull();
     expect(allowlistedPageField('INCLUDETEXT "http://example.invalid" \\# 0#')).toBeNull();
-    expect(pageFieldNumericPicture('DATE \\# 0#')).toBeUndefined();
+    expect(matchAllowlistedPageField('DATE \\# 0#')).toBeNull();
   });
 
   test('projects the computed value through the picture', () => {
@@ -89,6 +89,10 @@ describe('page-field instructions carrying a picture', () => {
     // shape of every value that can replace it.
     expect(pageFieldPlaceholder(undefined)).toBe(PAGE_FIELD_PLACEHOLDER);
     expect(pageFieldPlaceholder('0#')).toBe('00');
+    // A `#`-only picture is as wide as every value it can hold, not one digit wide: zero
+    // fills the last position and the unfilled ones pad, so `15` and `7` measure the same.
+    expect(pageFieldPlaceholder('###')).toBe('  0');
+    expect(formatNumericPicture(15, '###')).toHaveLength(3);
     expect(pageFieldPlaceholder('Page 0 of')).toBe('Page 0 of');
     // An unusable picture paints the plain number, so its placeholder is the plain digit.
     expect(pageFieldPlaceholder('Page')).toBe(PAGE_FIELD_PLACEHOLDER);

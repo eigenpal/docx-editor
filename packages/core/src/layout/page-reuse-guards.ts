@@ -104,6 +104,14 @@ export interface TailShiftInputs {
   readonly usedPageParity: boolean;
   /** Completed pages at the previous pass's matching checkpoint. */
   readonly markPageCount: number;
+  /**
+   * This section's local page 0 is a CONTINUED sheet, flowing against the host's content box.
+   *
+   * The second reason index 0 differs from every other page in a section: a `continuous`
+   * section resumes the previous one's last sheet, so `createPageContentInsets` hands local
+   * page 0 the host's box instead of resolving this section's own variant.
+   */
+  readonly continuedInsets: boolean;
   /** Per-page-index footnote reserves are in play. */
   readonly hasNoteReserves: boolean;
   /** Per-page-index wrap exclusion zones are in play. */
@@ -114,23 +122,35 @@ export interface TailShiftInputs {
  * Whether a convergence tail whose in-page flow matches may be reused `delta` sheets away.
  *
  * `remapPage` renumbers a shell and moves its boxes but re-picks nothing, so the shift is
- * refused when anything on the tail reads a page's absolute index: a title-page variant on
- * a moving first page, page parity over an odd delta (even/odd headers, inside/outside
- * anchors), per-page-index note reserves, or per-page-index wrap exclusion zones.
+ * refused when anything on the tail reads a page's absolute index: an index-0 page that
+ * differs from its neighbours, page parity over an odd delta (even/odd headers,
+ * inside/outside anchors), per-page-index note reserves, or per-page-index wrap exclusion
+ * zones.
  *
- * The title-page test has TWO halves, because index 0 is special in both directions. A
- * positive delta must not carry the title sheet along inside the tail (`markPageCount > 0`
- * proves the tail starts after it). A negative delta must not land the tail ON index 0
- * either: `delta + markPageCount` is the number of pages completed before the join, and at
- * zero the tail's first sheet becomes page 0 — keeping the `default` variant's header record
- * AND its content box on a page that must resolve `first`.
+ * INDEX 0 is special for two reasons — a `w:titlePg` variant, and a continued sheet whose
+ * content box comes from the section before it — and the test has two halves either way. A
+ * positive delta must not carry page 0 along inside the tail (`markPageCount > 0` proves the
+ * tail starts after it). A negative delta must not land the tail ON index 0 either:
+ * `delta + markPageCount` is the number of pages completed before the join, and at zero the
+ * tail's first sheet becomes page 0, keeping a header record and a content box that page 0
+ * does not resolve to.
+ *
+ * The `continuedInsets` half is defence in depth rather than a fix for an observed failure.
+ * Reaching it needs both flows parked on an EMPTY page at the join — `sameFragments` compares
+ * content signatures that include each paragraph's unique id, so two different pages can only
+ * agree by being empty — which for a continued section means `flowStartY === 0`, a state the
+ * flow does not appear to produce (every `flushPage` is followed by placing the block that
+ * forced it, and a section ended by a page break reports `endsOpenPage === false`, which
+ * refuses continuation outright). It is stated here anyway, because index 0 IS now different
+ * and a guard that depends on an unrelated condition holding is not a guard.
  */
 export function convergenceTailShiftAllowed(inputs: TailShiftInputs): boolean {
   if (inputs.delta === 0) return true;
   const parityHolds =
     inputs.delta % 2 === 0 ||
     (!inputs.evenAndOddHeaders && !inputs.parityDependent && !inputs.usedPageParity);
-  const titlePageHolds =
-    !inputs.titlePage || (inputs.markPageCount > 0 && inputs.delta + inputs.markPageCount > 0);
-  return parityHolds && titlePageHolds && !inputs.hasNoteReserves && !inputs.hasExclusionZones;
+  const indexZeroIsSpecial = inputs.titlePage || inputs.continuedInsets;
+  const indexZeroHolds =
+    !indexZeroIsSpecial || (inputs.markPageCount > 0 && inputs.delta + inputs.markPageCount > 0);
+  return parityHolds && indexZeroHolds && !inputs.hasNoteReserves && !inputs.hasExclusionZones;
 }

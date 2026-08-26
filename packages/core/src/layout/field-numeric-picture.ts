@@ -20,7 +20,9 @@ export const MAX_NUMERIC_PICTURE_CHARS = 64;
  * Positions fill from the right, exactly as Word aligns a picture against a value:
  *
  *   - `0` — a digit position that is always shown; an unfilled one paints `0`.
- *   - `#` — a digit position shown only when a digit reaches it.
+ *   - `#` — a digit position; an unfilled one paints a SPACE, which is what Word does
+ *     (`{ = 9 + 6 \# $### }` renders `$ 15`) and what keeps every value the field can hold
+ *     the same width as the placeholder it was measured at.
  *   - `,` — a grouping separator, painted only when a digit still remains to its left.
  *   - anything else — a literal, painted as authored.
  *
@@ -48,8 +50,8 @@ export function formatNumericPicture(value: number, picture: string): string | n
       if (remaining > 0) {
         remaining -= 1;
         out.push(digits[remaining]!);
-      } else if (glyph === '0') {
-        out.push('0');
+      } else {
+        out.push(glyph === '0' ? '0' : ' ');
       }
       continue;
     }

@@ -119,7 +119,8 @@ function splitPageFieldInstruction(
  * The allowlisted kind and its picture, from ONE read of the instruction.
  *
  * A trailing `\#` numeric picture rides along: the keyword still has to match exactly, and the
- * picture only decides how the computed value is rendered. Broader keywords (DATE, TOC,
+ * picture only decides how the computed value is rendered — it is undefined when the field
+ * states none. Broader keywords (DATE, TOC,
  * INCLUDE*, DDE, …) remain unevaluated here on purpose, and so does every other switch —
  * `\n`, `\* Arabic` and friends leave the field inert.
  */
@@ -134,16 +135,6 @@ export function matchAllowlistedPageField(instruction: string): AllowlistedPageF
 /** Exact allowlist for live page-field projection — {@link matchAllowlistedPageField}'s kind. */
 export function allowlistedPageField(instruction: string): AllowlistedPageField | null {
   return matchAllowlistedPageField(instruction)?.kind ?? null;
-}
-
-/**
- * The `\#` picture of an allowlisted page field.
- *
- * Undefined when the field states no picture, or when the instruction is not an allowlisted
- * page field at all.
- */
-export function pageFieldNumericPicture(instruction: string): string | undefined {
-  return matchAllowlistedPageField(instruction)?.picture;
 }
 
 export function isFldChar(node: OoxmlNode, type: 'begin' | 'separate' | 'end'): boolean {

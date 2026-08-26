@@ -205,14 +205,6 @@ function samePageSize(a: PageGeometry, b: PageGeometry): boolean {
   return a.width === b.width && a.height === b.height;
 }
 
-/**
- * Append a continued section's first-page fragments to the sheet it continues.
- *
- * The fragments already carry content-relative offsets past the host page's used height
- * (the section was laid out with `flowStartY`), so this is a concatenation, not a shift.
- * The host page keeps its own furniture: the header/footer belong to the sheet, and the
- * continued section contributes content to it, not chrome.
- */
 /** One sheet's content box, as the insets a section pass flows against. */
 function contentInsetsOf(page: PageRecord): PageContentInsets {
   const top = page.contentBox.y - page.box.y;
@@ -223,6 +215,15 @@ function contentInsetsOf(page: PageRecord): PageContentInsets {
   };
 }
 
+/**
+ * Append a continued section's first-page fragments to the sheet it continues.
+ *
+ * The fragments already carry content-relative offsets past the host page's used height
+ * (the section was laid out with `flowStartY` and, since per-page insets, the host's own
+ * content box through {@link contentInsetsOf}), so this is a concatenation, not a shift.
+ * The host page keeps its own furniture: the header/footer belong to the sheet, and the
+ * continued section contributes content to it, not chrome.
+ */
 function withAppendedFragments(page: PageRecord, continued: PageRecord): PageRecord {
   if (
     continued.fragments.length === 0 &&

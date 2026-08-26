@@ -25,6 +25,8 @@ Page-number fields are stored as real Word fields, not static text. The page vie
 
 A "Page X of Y" footer is the two inserts with literal text between them: type the text "Page ", insert the page number, type " of " with the surrounding spaces, insert the total page count.
 
+A field can also carry a numeric picture switch, such as `PAGE \# 0#`, which pads page 2 to `02`. The editor evaluates the picture against the computed value, so a stale result saved into the file never reaches the page. Pictures support digit placeholders, a grouping comma, and literal text.
+
 ## Per-section headers and footers
 
 The OOXML model attaches header and footer references to sections, and the editor implements that model:
@@ -33,6 +35,7 @@ The OOXML model attaches header and footer references to sections, and the edito
 - **Different first page** (`w:titlePg`) shows the `first` variant on a section's first page. Typical use: no header on a title page.
 - **Different odd and even pages** (`w:evenAndOddHeaders`) alternates `default` and `even` variants, as in book-style layouts.
 - Sections without their own references inherit from earlier sections, matching Word's "link to previous" behavior.
+- A page whose variant has no reference shows no header or footer, and its body starts at the page margin. A title page in a section that references only a `default` header is the common case.
 
 Documents using any of these render and round-trip correctly; editing a header edits the specific part the page displays.
 

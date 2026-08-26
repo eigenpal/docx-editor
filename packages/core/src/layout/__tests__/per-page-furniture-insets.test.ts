@@ -240,30 +240,43 @@ describe('per-page header/footer variant insets', () => {
   });
 });
 
-describe('convergence tail shift over a title page', () => {
+describe('convergence tail shift over a page-0 that differs from its neighbours', () => {
   const base = {
-    titlePage: true,
+    titlePage: false,
+    continuedInsets: false,
     evenAndOddHeaders: false,
     parityDependent: false,
     usedPageParity: false,
     hasNoteReserves: false,
     hasExclusionZones: false,
   };
+  // The two reasons index 0 resolves a box its neighbours do not.
+  const reasons = [
+    ['a title-page variant', { titlePage: true }],
+    ['a continued host sheet', { continuedInsets: true }],
+  ] as const;
 
-  test('refuses a tail that would carry the title sheet, or land on it', () => {
-    // The tail starts at page 0 and moves: the title sheet is IN it.
-    expect(convergenceTailShiftAllowed({ ...base, delta: 1, markPageCount: 0 })).toBe(false);
-    // The tail starts after page 0 but a negative delta lands it ON page 0, where `remapPage`
-    // would keep the `default` variant's header record and content box.
-    expect(convergenceTailShiftAllowed({ ...base, delta: -2, markPageCount: 2 })).toBe(false);
-  });
+  for (const [reason, special] of reasons) {
+    test(`refuses a tail that would carry page 0, or land on it, with ${reason}`, () => {
+      const inputs = { ...base, ...special };
+      // The tail starts at page 0 and moves: the special sheet is IN it.
+      expect(convergenceTailShiftAllowed({ ...inputs, delta: 1, markPageCount: 0 })).toBe(false);
+      // The tail starts after page 0 but a negative delta lands it ON page 0, where
+      // `remapPage` would keep a header record and a content box page 0 never resolves to.
+      expect(convergenceTailShiftAllowed({ ...inputs, delta: -2, markPageCount: 2 })).toBe(false);
+    });
 
-  test('allows a shift that keeps the tail clear of page 0', () => {
-    expect(convergenceTailShiftAllowed({ ...base, delta: 2, markPageCount: 1 })).toBe(true);
-    expect(convergenceTailShiftAllowed({ ...base, delta: -1, markPageCount: 2 })).toBe(true);
-    // Without a title page, index 0 carries nothing a shift can invalidate.
-    expect(
-      convergenceTailShiftAllowed({ ...base, titlePage: false, delta: -2, markPageCount: 2 })
-    ).toBe(true);
+    test(`allows a shift that keeps the tail clear of page 0, with ${reason}`, () => {
+      const inputs = { ...base, ...special };
+      expect(convergenceTailShiftAllowed({ ...inputs, delta: 2, markPageCount: 1 })).toBe(true);
+      expect(convergenceTailShiftAllowed({ ...inputs, delta: -1, markPageCount: 2 })).toBe(true);
+    });
+  }
+
+  test('a page 0 like every other page carries nothing a shift can invalidate', () => {
+    // NEITHER reason: no title-page variant and not a continued sheet. Before per-page insets
+    // every page in a section shared one box and this was true of any section at all.
+    expect(convergenceTailShiftAllowed({ ...base, delta: -2, markPageCount: 2 })).toBe(true);
+    expect(convergenceTailShiftAllowed({ ...base, delta: 1, markPageCount: 0 })).toBe(true);
   });
 });
