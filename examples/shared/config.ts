@@ -73,14 +73,16 @@ export const examples = [
 /** The name of one entry above — the only accepted key for {@link sourceUrlFor}. */
 export type ExampleName = (typeof examples)[number]['name'];
 
+const REPO_URL = 'https://github.com/eigenpal/docx-editor';
+
 /**
  * The GitHub directory that builds a given demo. One home for the URL, so a demo's own
  * "see source" link and the cross-example switcher can never point at different trees.
+ *
+ * `ExampleName` is the real guard, but no CI gate typechecks the demo apps, so a wrong
+ * name reaches the browser. It falls back to the repository root rather than throwing:
+ * this renders in a header during setup, and a link one level too high beats a blank page.
  */
 export function sourceUrlFor(name: ExampleName): string {
-  const example = examples.find((entry) => entry.name === name);
-  // `ExampleName` is derived from `examples`, so this cannot miss at runtime; the throw
-  // is here so a hand-widened type fails loudly instead of rendering a dead link.
-  if (!example) throw new Error(`no example named ${name}`);
-  return example.sourceUrl;
+  return examples.find((entry) => entry.name === name)?.sourceUrl ?? REPO_URL;
 }

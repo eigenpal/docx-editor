@@ -185,6 +185,11 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
     .locator('input[type="file"][accept*=".docx"]')
     .first()
     .setInputFiles(savedPath);
+  // Unlike the first open, this gate does NOT prove the reopen landed: `load()` keeps the
+  // outgoing document's pages mounted while the new bytes parse, and those pages match
+  // `PAINTED_PAGE` too. The `settle` + `materializeDocument` below are what make the
+  // assertions honest here. Left in place because it costs nothing and still excludes the
+  // skeleton; a real reopen gate needs a signal the painted DOM does not carry.
   await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
   await settle(page);
   await materializeDocument(page);
