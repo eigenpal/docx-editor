@@ -578,12 +578,20 @@ describe('clipboard fragment round trip', () => {
       }
     );
     expect(pasted.ok).toBe(true);
-    const documentXml = serializeOoxmlPart(
-      store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!
-    );
-    // The splice may keep separate runs; the TEXT is what must read "HelloXX".
-    expect(documentXml.replace(/<[^>]+>/g, '')).toContain('HelloXX');
-    expect(documentXml.includes('World')).toBe(false);
+    // The splice may keep separate runs; the TEXT is what must read "HelloXX". Read it
+    // from the tree's text values rather than de-tagging serialized XML with a regex.
+    const part = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
+    let text = '';
+    const collect = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') {
+        text += node.value;
+        return;
+      }
+      for (const child of node.children) collect(child);
+    };
+    collect(part.root);
+    expect(text).toContain('HelloXX');
+    expect(text.includes('World')).toBe(false);
   });
 
   test('footnote and endnote id namespaces stay separate across repeated pastes', () => {
