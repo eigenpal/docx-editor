@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { stubReviewModule } from './review-test-module.ts';
+import { selectCellRectangle } from './paginated-surface-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -474,5 +475,58 @@ describe('the gate bounds how far it will plan', () => {
     expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toMatchObject({
       ok: false,
     });
+  });
+});
+
+describe('a cell rectangle is the table gesture, so it refuses like one', () => {
+  // A rectangle installs a NON-collapsed text selection over the cell text, so the caret
+  // check never saw it and both rows stayed enabled and always failing — not the narrow
+  // "range that starts in a table" gap, but the one selection shape that is always a table.
+  const tc = (c: string) => `<w:tc>${c}</w:tc>`;
+  const tr = (c: string) => `<w:tr>${c}</w:tr>`;
+  const TABLE_2X2 =
+    '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+    `${tr(tc(p('A1')) + tc(p('B1')))}${tr(tc(p('A2')) + tc(p('B2')))}</w:tbl>`;
+
+  test('every rectangle reports the cell through can, and never lies', () => {
+    for (const corner of [
+      [
+        { row: 0, column: 0 },
+        { row: 0, column: 0 },
+      ],
+      [
+        { row: 0, column: 0 },
+        { row: 1, column: 0 },
+      ],
+      [
+        { row: 0, column: 0 },
+        { row: 1, column: 1 },
+      ],
+    ] as const) {
+      const editor = mount(p('before') + TABLE_2X2 + p('after'));
+      selectCellRectangle(editor.surface!, corner[0], corner[1]);
+      for (const kind of ['section', 'sectionContinuous'] as const) {
+        expect(editor.can({ type: 'insertBreak', kind } as never)).toEqual({
+          ok: false,
+          code: 'unsupported',
+          reason: 'a section break cannot be inserted inside a table cell',
+        });
+      }
+    }
+  });
+
+  test('a refused press publishes its reason when it happens, not on the next tick', () => {
+    // The gate refuses this one before any write is attempted, so the reason comes straight
+    // back from `exec`. The publishing path is pinned by the bounded case below, where the
+    // gate allows and the write is the only thing that knows.
+    const editor = mount(p('before') + TABLE_2X2 + p('after'));
+    selectCellRectangle(editor.surface!, { row: 0, column: 0 }, { row: 1, column: 1 });
+    expect(editor.surface!.insertSectionBreak('nextPage')).toBe(false);
+    // Fresh AT the refusal. Stored without publishing, the snapshot still read null here and
+    // only caught up on whatever bumped the state version next.
+    expect(editor.snapshot().lastRejection).toBe(
+      'a section break cannot be inserted inside a table cell'
+    );
   });
 });

@@ -880,6 +880,10 @@ export function mountPaginatedSurface(
     editingMode: () => editingMode,
     publishRefusal: (reason) => {
       lastRejection = reason;
+      // PUBLISHED, like every other early-return refusal in this file. Stored alone it was
+      // invisible when it happened and then arrived attached to the next unrelated tick that
+      // bumped the state version — a caret move carrying a section break's message.
+      options.onChange?.(currentState());
     },
     // RAW, on purpose: `orderedRange()` flushes pending input, and this is asked from `can`.
     caretParagraphId: () =>

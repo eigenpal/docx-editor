@@ -876,15 +876,20 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // `can(insertBreak)` take seconds on a select-all in a long document, on the next-page
       // row that had no gate at all before this feature as well as on the new one.
       if (deps.storyScope().kind !== 'body') return null;
-      const part = session.part();
-      // A caret in a table cell refuses whatever the mode: a section cannot end there, Word
-      // never writes one there, and the read side would ignore it. Collapsed only — that is
-      // the case where the landing is known to be the caret's own paragraph, and where the
-      // answer costs no ordering. A RANGE that starts in a table still reports at `exec`.
+      // In a table cell a section cannot end at all: Word never writes one there, and the
+      // read side would ignore it. Refused whatever the mode, from the two selections that
+      // say so without ordering anything. A RECTANGLE is by construction inside a table —
+      // it IS the table gesture, and leaving it out left both rows enabled and always
+      // failing. A caret answers for itself. A plain RANGE that starts in a table is the one
+      // shape still left to `exec`, because only the landing settles it.
+      if (deps.selectedCells?.()?.length) return TABLE_CELL_BREAK_REFUSAL;
       const caret = deps.caretParagraphId?.() ?? null;
-      if (caret !== null && isTableNested(part, caret)) return TABLE_CELL_BREAK_REFUSAL;
+      if (caret !== null && isTableNested(session.part(), caret)) return TABLE_CELL_BREAK_REFUSAL;
       if (deps.editingMode?.() !== 'suggest') return null;
+      // AFTER the flush `orderedRange` runs, so the tree the sections are read from is the
+      // one the plan below would be built against.
       const { from, to } = orderedRange();
+      const part = session.part();
       // Two exact short-circuits, so nearly every answer costs no deletion plan. The landing
       // is somewhere in `[from, to]` — `replacementTarget` walks it BACK from `to` through the
       // author's own pending paragraph marks — so any rule that holds for EVERY paragraph in

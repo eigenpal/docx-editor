@@ -41,6 +41,11 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'a section break that changes where the next section starts cannot be suggested; turn off suggesting to insert it':
     'disabledReason.suggestingSectionBreak',
   'a section break cannot be inserted inside a table cell': 'disabledReason.tableCellSectionBreak',
+  // Two `TreeOpRejection` members that reach chrome verbatim through `lastRejection`. They
+  // are the store's vocabulary, not a sentence — a reader shown the bare word "locked" in
+  // any locale learns nothing about what to do next.
+  locked: 'disabledReason.contentLocked',
+  bound: 'disabledReason.contentBound',
 });
 
 /**
