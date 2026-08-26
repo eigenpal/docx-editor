@@ -32,6 +32,22 @@ const active: React.CSSProperties = {
   boxShadow: '0 1px 2px var(--doc-shadow-subtle)',
 };
 
+// The header row is a flex container with its own gap, so this needs no margin.
+const sourceLink: React.CSSProperties = {
+  fontSize: '12px',
+  whiteSpace: 'nowrap',
+  color: 'var(--doc-text-muted)',
+  textDecoration: 'underline',
+  textUnderlineOffset: '2px',
+};
+
+// This screen IS the sample app: the switcher points at the directory that builds it,
+// so a visitor comparing the two adapters can read the exact composition on screen.
+const sourceUrl: Record<Adapter, string> = {
+  react: 'https://github.com/eigenpal/docx-editor/tree/main/examples/vite',
+  vue: 'https://github.com/eigenpal/docx-editor/tree/main/examples/vue',
+};
+
 // The production build (`bun run build`) serves both demos from the same
 // origin under `/react/` + `/vue/`. In dev each adapter has its own port
 // (5173 React, 5174 Vue), so we hop ports for the cross-adapter link.
@@ -43,23 +59,34 @@ const vueHref = isDev ? 'http://localhost:5174/vue/' : '/vue/';
 
 export function AdapterSwitcher({ current }: Props) {
   return (
-    <span style={wrap} role="tablist" aria-label="Adapter">
+    <>
+      <span style={wrap} role="tablist" aria-label="Adapter">
+        <a
+          href={reactHref}
+          role="tab"
+          aria-selected={current === 'react'}
+          style={current === 'react' ? active : pill}
+        >
+          React
+        </a>
+        <a
+          href={vueHref}
+          role="tab"
+          aria-selected={current === 'vue'}
+          style={current === 'vue' ? active : pill}
+        >
+          Vue
+        </a>
+      </span>
       <a
-        href={reactHref}
-        role="tab"
-        aria-selected={current === 'react'}
-        style={current === 'react' ? active : pill}
+        href={sourceUrl[current]}
+        target="_blank"
+        rel="noreferrer"
+        style={sourceLink}
+        title={`Read the ${current === 'react' ? 'React' : 'Vue'} demo source on GitHub`}
       >
-        React
+        (see source)
       </a>
-      <a
-        href={vueHref}
-        role="tab"
-        aria-selected={current === 'vue'}
-        style={current === 'vue' ? active : pill}
-      >
-        Vue
-      </a>
-    </span>
+    </>
   );
 }
