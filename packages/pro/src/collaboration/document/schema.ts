@@ -123,6 +123,63 @@ export interface RepairIssue {
   readonly logicalId?: LogicalId;
 }
 
+/**
+ * Repair codes that mean shared state held content the materialized package does not.
+ *
+ * The rest of {@link RepairIssueCode} describes structure the materializer can drop without
+ * losing anything a reader could have seen: `self-child` and `duplicate-child` name a
+ * placement that was never possible in a tree, and a plain `orphan` has no text, no children
+ * and no attributes. Those repair silently, which is correct.
+ *
+ * Two codes are deliberately absent, both because they are what healthy editing looks like:
+ *
+ * - `deleted-referenced` — a parent that still lists a tombstoned child is the ordinary shape
+ *   of a concurrent delete, since the tombstone lands before the author's new child list
+ *   reaches every replica.
+ * - `orphan-with-content` — deleting a run unlinks it and leaves the record behind, so its text
+ *   is unreferenced content by design. Measured, not assumed: including this code took every
+ *   delete in `document-session.test.ts` to `error`, which stopped the remote apply and left
+ *   the deletion unreplicated. A status that fires on every delete tells a reader nothing.
+ *
+ * The consequence is that the one loss shape which presents AS an orphan — content stranded by
+ * a concurrent first-create of a part — is still not reported. Separating that from a deleted
+ * run needs the tombstone to say which it was, so it waits on the same work as D15.
+ *
+ * What remains cannot arise from healthy editing: each one means a parent names a child this
+ * replica cannot produce, so the document is short of something shared state says is there.
+ */
+export const DROPPED_CONTENT_REPAIR_CODES: ReadonlySet<RepairIssueCode> = Object.freeze(
+  new Set<RepairIssueCode>([
+    'missing-node',
+    'child-id-not-in-registry',
+    'duplicate-parent',
+    'cycle',
+  ])
+);
+
+/** Longest detail string built from an issue list. Enough for every distinct code twice over. */
+const MAX_DROPPED_DETAIL_LENGTH = 200;
+
+/**
+ * Summarize the dropped-content issues in `issues`, or `null` when there are none.
+ *
+ * Counts by code rather than listing logical ids: an id means nothing to a reader, and one
+ * malformed subtree can produce thousands of them.
+ */
+export function droppedContentDetail(issues: readonly RepairIssue[]): string | null {
+  const counts = new Map<RepairIssueCode, number>();
+  for (const issue of issues) {
+    if (!DROPPED_CONTENT_REPAIR_CODES.has(issue.code)) continue;
+    counts.set(issue.code, (counts.get(issue.code) ?? 0) + 1);
+  }
+  if (counts.size === 0) return null;
+  return [...counts]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([code, count]) => `${code}=${count}`)
+    .join(',')
+    .slice(0, MAX_DROPPED_DETAIL_LENGTH);
+}
+
 export interface DirtyPaths {
   readonly logicalIds: ReadonlySet<LogicalId>;
   readonly membershipChanged: boolean;

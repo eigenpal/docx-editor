@@ -159,20 +159,44 @@ export const PACKAGES = [
         collaboration: [
           'CollaborationFailureCode',
           'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
           'EditorCollaborationSession',
           'EditorModule',
           'ProLicenseOptions',
         ],
         'collaboration-webrtc': [
           'CollaborationIdentity',
-          'TextCollaborationBootstrap',
+          'CollaborationBootstrap',
           'DocumentCollaborationHandle',
         ],
-        // The WebRTC hook entries take an identity, hand back a session, and append a
-        // module. All three are core's, and a host already depends on core to mount an
-        // editor at all.
-        'react-webrtc': ['CollaborationIdentity', 'EditorCollaborationSession', 'EditorModule'],
-        'vue-webrtc': ['CollaborationIdentity', 'EditorCollaborationSession', 'EditorModule'],
+        // The WebRTC hook entries take an identity, hand back a host session, and
+        // append a module. Failure codes come from core. Session is this package's
+        // collaboration entry. A host already depends on core to mount an editor.
+        'react-webrtc': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
+        ],
+        'vue-webrtc': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
+        ],
       },
     },
   },
@@ -183,7 +207,6 @@ export const PACKAGES = [
     tsconfigPath: 'packages/fonts/tsconfig.api.json',
   },
 ];
-
 
 // Derived: build invocation hint shown in `api:check` drift error
 // output. Every package builds via the same `bun run --filter` shape,

@@ -105,6 +105,7 @@
     "test:e2e:editor": "playwright test --config e2e/editor-smoke.config.ts",
     "test:watch": "bun test --watch",
     "typecheck": "bun run --filter '*' typecheck",
+    "typecheck:root": "tsc -p tsconfig.json --noEmit",
     "version-packages": "changeset version && bun run --filter '@docx-editor.dev/editor-api' compat:generate"
   },
   "devDependencies": {

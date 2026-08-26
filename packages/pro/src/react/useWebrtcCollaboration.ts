@@ -4,18 +4,21 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type {
-  CollaborationIdentity,
-  EditorCollaborationSession,
+import {
+  isCollaborationFailureCode,
+  type CollaborationFailure,
+  type CollaborationIdentity,
+  type EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
+import type { CollaborationBootstrap, CollaborationSession } from '../collaboration/session.ts';
 import { collaborationModule } from '../collaboration/collaboration-module.ts';
 import { webrtcRoomOwnerFor } from './webrtc-room-owner.ts';
 
+export type { CollaborationSession };
+
 /** Bootstrap for one WebRTC room. @public */
-export type UseWebrtcCollaborationBootstrap =
-  | { readonly kind: 'create'; readonly document: Uint8Array }
-  | { readonly kind: 'join'; readonly timeoutMs?: number; readonly signal?: AbortSignal };
+export type UseWebrtcCollaborationBootstrap = CollaborationBootstrap;
 
 /** Arguments for {@link UseWebrtcCollaborationReturn.connect}. @public */
 export interface UseWebrtcCollaborationConnectOptions {
@@ -68,9 +71,9 @@ export interface UseWebrtcCollaborationOptions {
 export interface UseWebrtcCollaborationReturn {
   readonly document: Uint8Array | null;
   readonly modules: readonly EditorModule[];
-  readonly session: EditorCollaborationSession | null;
+  readonly session: CollaborationSession | null;
   readonly pending: boolean;
-  readonly error: Error | null;
+  readonly error: CollaborationFailure | null;
   readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
   /**
    * Destroy the room and carry on editing locally.
@@ -91,6 +94,24 @@ function assertHostModulesHaveNoCollaboration(modules: readonly EditorModule[]):
   for (const module of modules) {
     if (module.collaboration) throw new Error(HOST_COLLABORATION_CONFLICT);
   }
+}
+
+function collaborationFailureOf(cause: unknown): CollaborationFailure {
+  if (typeof cause === 'object' && cause !== null && 'code' in cause) {
+    const code = (cause as { code: unknown }).code;
+    if (typeof code === 'string' && isCollaborationFailureCode(code)) {
+      const detail = (cause as { detail?: unknown }).detail;
+      return typeof detail === 'string' && detail.length > 0 ? { code, detail } : { code };
+    }
+  }
+  if (cause instanceof Error && cause.message.length > 0) {
+    return { code: 'transport', detail: cause.message };
+  }
+  return { code: 'transport' };
+}
+
+function throwCollaborationFailure(failure: CollaborationFailure): never {
+  throw Object.assign(new Error(failure.detail ?? failure.code), failure);
 }
 
 function roomKeyOf(room: UseWebrtcCollaborationConnectOptions | null | undefined): string {
@@ -143,7 +164,7 @@ export function useWebrtcCollaboration(
     () => owner.current()?.session ?? null
   );
   const [pending, setPending] = useState(() => autoRoom !== null && owner.current() === null);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<CollaborationFailure | null>(null);
 
   const publish = useCallback((room: WebrtcRoomHandle | null) => {
     setDocument(room?.document ?? null);
@@ -165,9 +186,9 @@ export function useWebrtcCollaboration(
         publish(room);
       } catch (cause) {
         if (generation !== generationRef.current) return;
-        const nextError = cause instanceof Error ? cause : new Error(String(cause));
-        setError(nextError);
-        throw nextError;
+        const failure = collaborationFailureOf(cause);
+        setError(failure);
+        throwCollaborationFailure(failure);
       } finally {
         if (generation === generationRef.current) setPending(false);
       }

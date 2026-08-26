@@ -28,6 +28,7 @@ import {
   flushPendingCanonicalJournals,
   observeCanonicalPrimitiveJournal,
   storeHasPendingCanonicalJournals,
+  type CanonicalPrimitiveJournal,
 } from './primitive-journal.ts';
 import type { TreeModelChange } from '../store/store/tree-store.ts';
 
@@ -269,7 +270,7 @@ export function createCollaborationDocumentPort(
       : { ok: false as const, reason: result.detail ?? result.reason };
   };
 
-  const port: CollaborationDocumentPort = {
+  const port = {
     documentId,
     paragraphs,
     paragraphByNodeId(nodeId: string) {
@@ -302,12 +303,21 @@ export function createCollaborationDocumentPort(
     },
     revision: () => store.packageRevision,
     subscribe: (listener: (change: TreeModelChange) => void) => store.subscribe(listener),
-    observePrimitiveJournal: (listener) => observeCanonicalPrimitiveJournal(store, listener),
+    observePrimitiveJournal: (listener: (journal: CanonicalPrimitiveJournal) => void) =>
+      observeCanonicalPrimitiveJournal(store, listener),
     hasPendingJournals: () => storeHasPendingCanonicalJournals(store),
     flushPendingJournals: () => {
       flushPendingCanonicalJournals(store);
     },
     save: () => writeOoxmlPackage(store.currentPackage()),
+    binaryPart(storageKey: string): Uint8Array | null {
+      const pkg = store.currentPackage();
+      return (
+        pkg.partBytes.get(storageKey) ??
+        pkg.partBytes.get(storageKey.startsWith('/') ? storageKey.slice(1) : `/${storageKey}`) ??
+        null
+      );
+    },
   };
   return Object.freeze(port);
 }

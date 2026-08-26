@@ -183,4 +183,62 @@ describe('webrtc chunked framing', () => {
 
     expect(sender.send).toBe(patched);
   });
+
+  test('abandons a stalled partial so a later update lands and the failure is visible', async () => {
+    const receiver = createPeer();
+    // Collected rather than a mutable flag: the order is the point (nothing reported while the
+    // partial is merely young), and a `let` narrowed by its initializer cannot be compared
+    // against the other arm without the assertion itself becoming a type error.
+    const reported: string[] = [];
+    installChunkedFraming(receiver, {
+      partialTimeoutMs: 25,
+      onAbandonedMessage: () => {
+        reported.push('abandoned');
+      },
+    });
+    const stalled = chunkFrame(1, 0, 3, pattern(8));
+    const later = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    const complete = pattern(24);
+
+    receiver._onChannelMessage({ data: stalled });
+    receiver._onChannelMessage({ data: later });
+    receiver._onChannelMessage({ data: chunkFrame(2, 0, 2, complete.subarray(0, 12)) });
+    receiver._onChannelMessage({ data: chunkFrame(2, 1, 2, complete.subarray(12)) });
+    expect(receiver.passthrough).toEqual([later]);
+    expect(receiver.delivered).toEqual([complete]);
+    expect(reported).toEqual([]);
+
+    await sleep(80);
+
+    expect(reported).toEqual(['abandoned']);
+    expect(receiver.delivered).toEqual([complete]);
+
+    receiver._onChannelMessage({ data: chunkFrame(1, 1, 3, pattern(8)) });
+    receiver._onChannelMessage({ data: chunkFrame(1, 2, 3, pattern(8)) });
+    expect(receiver.delivered).toEqual([complete]);
+    // Still one report: the abandoned message's late chunks must not re-arm and re-report it.
+    expect(reported).toEqual(['abandoned']);
+  });
 });
+
+function writeUint32(bytes: Uint8Array, offset: number, value: number): void {
+  bytes[offset] = (value >>> 24) & 0xff;
+  bytes[offset + 1] = (value >>> 16) & 0xff;
+  bytes[offset + 2] = (value >>> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
+}
+
+function chunkFrame(
+  messageId: number,
+  index: number,
+  count: number,
+  payload: Uint8Array
+): Uint8Array {
+  const frame = new Uint8Array(HEADER_BYTES + payload.byteLength);
+  frame[0] = 0xfb;
+  writeUint32(frame, 1, messageId);
+  writeUint32(frame, 5, index);
+  writeUint32(frame, 9, count);
+  frame.set(payload, HEADER_BYTES);
+  return frame;
+}

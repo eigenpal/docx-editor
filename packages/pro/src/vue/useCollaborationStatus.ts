@@ -7,8 +7,8 @@ import { readonly, shallowRef, toValue, watch, type MaybeRefOrGetter, type Ref }
 import type {
   CollaborationFailure,
   CollaborationStatus,
-  EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
+import type { CollaborationSession } from '../collaboration/session.ts';
 
 /** Reactive collaboration status for Vue hosts. @public */
 export interface UseCollaborationStatusReturn {
@@ -17,9 +17,17 @@ export interface UseCollaborationStatusReturn {
   readonly lastFailure: Readonly<Ref<CollaborationFailure | undefined>>;
 }
 
-/** Subscribe to an externally owned collaboration session. @public */
+/**
+ * Subscribe to an externally owned collaboration session.
+ *
+ * Takes the host-facing {@link CollaborationSession}, which is what
+ * `useWebrtcCollaboration` hands back. The engine session satisfies that type too, so a host
+ * holding either one can pass it here.
+ *
+ * @public
+ */
 export function useCollaborationStatus(
-  session: MaybeRefOrGetter<EditorCollaborationSession | null>
+  session: MaybeRefOrGetter<CollaborationSession | null>
 ): UseCollaborationStatusReturn {
   const status = shallowRef<CollaborationStatus | 'inactive'>('inactive');
   const reason = shallowRef<CollaborationFailure | undefined>(undefined);

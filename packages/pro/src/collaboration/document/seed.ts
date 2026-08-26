@@ -4,7 +4,10 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import type { OoxmlElement, OoxmlPackage, OoxmlTextNode } from '@docx-editor.dev/core/store';
-import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration';
+import type {
+  CanonicalBinaryDescriptor,
+  CanonicalPrimitiveEffect,
+} from '@docx-editor.dev/core/collaboration';
 import {
   DEFAULT_DOCUMENT_LIMITS,
   rejectDangerousKey,
@@ -44,6 +47,95 @@ export async function sha256Digest(bytes: Uint8Array): Promise<string> {
     bytes.slice().buffer as ArrayBuffer
   );
   return `sha256:${[...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * Bytes for one binary part, including the leading-slash variant OPC allows.
+ *
+ * Image insert stores `/word/media/…` while some zip entries omit the slash. One lookup
+ * must not walk the rest of the package.
+ */
+export function partBytesOf(
+  partBytes: ReadonlyMap<string, Uint8Array>,
+  storageKey: string
+): Uint8Array | null {
+  return (
+    partBytes.get(storageKey) ??
+    partBytes.get(storageKey.startsWith('/') ? storageKey.slice(1) : `/${storageKey}`) ??
+    null
+  );
+}
+
+export type BinaryPartReader = (storageKey: string) => Uint8Array | null;
+
+/** Live package reader attached to a collaboration port. Absent when the port cannot see bytes. */
+export function binaryPartReaderOf(port: object): BinaryPartReader | null {
+  const reader = (port as { readonly binaryPart?: BinaryPartReader }).binaryPart;
+  return typeof reader === 'function' ? reader : null;
+}
+
+export type BinaryPayload = {
+  readonly digest: string;
+  readonly bytes: Uint8Array;
+};
+
+export type CollectJournalBinariesResult =
+  | { readonly ok: true; readonly payloads: readonly BinaryPayload[] }
+  | {
+      readonly ok: false;
+      readonly failure: {
+        readonly code: 'missing-local-blob' | 'blob-read';
+        readonly detail?: string;
+      };
+    };
+
+let journalBinaryLookups = 0;
+
+/** Test-observable count of `putBinary` byte lookups. */
+export function journalBinaryLookupCount(): number {
+  return journalBinaryLookups;
+}
+
+/**
+ * Resolve `putBinary` payloads from live part bytes.
+ *
+ * Call this outside the Yjs transaction. The journal names a digest, not bytes, and those
+ * bytes already live in the local package. A save/re-parse would walk every XML node while
+ * the transaction is open.
+ */
+export function collectJournalBinaryPayloads(
+  effects: readonly CanonicalPrimitiveEffect[],
+  bytesFor: BinaryPartReader | null
+): CollectJournalBinariesResult | null {
+  const descriptors: CanonicalBinaryDescriptor[] = [];
+  for (const effect of effects) {
+    if (effect.kind === 'putBinary') descriptors.push(effect.descriptor);
+  }
+  if (descriptors.length === 0) return null;
+  if (!bytesFor) {
+    return { ok: false, failure: { code: 'blob-read', detail: 'binary-part-reader' } };
+  }
+  const payloads: BinaryPayload[] = [];
+  for (const descriptor of descriptors) {
+    journalBinaryLookups += 1;
+    const bytes = bytesFor(descriptor.storageKey);
+    if (!bytes) {
+      return {
+        ok: false,
+        failure: { code: 'missing-local-blob', detail: descriptor.storageKey },
+      };
+    }
+    payloads.push({ digest: descriptor.digest, bytes });
+  }
+  return { ok: true, payloads };
+}
+
+/** Put already-resolved image bytes. Safe inside a Yjs transaction: no parse, no serialize. */
+export function publishBinaryPayloads(
+  blobs: BlobBytesStore,
+  payloads: readonly BinaryPayload[]
+): void {
+  for (const payload of payloads) blobs.put(payload.digest, payload.bytes);
 }
 
 function encodedAttributesOf(node: OoxmlElement): EncodedAttribute[] {

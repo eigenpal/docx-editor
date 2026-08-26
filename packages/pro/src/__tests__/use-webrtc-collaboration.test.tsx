@@ -197,7 +197,7 @@ describe('useWebrtcCollaboration', () => {
     expect(latest?.session).not.toBeNull();
   });
 
-  test('a failed auto-connect reports through error and rejects nothing', async () => {
+  test('a failed auto-connect reports a typed collaboration failure', async () => {
     // Nobody awaits the auto-connect, so a rejection here would surface as an unhandled
     // rejection on a room the host already renders as failed.
     const rejections: unknown[] = [];
@@ -221,10 +221,40 @@ describe('useWebrtcCollaboration', () => {
     } finally {
       process.off('unhandledRejection', onRejection);
     }
-    expect(latest?.error?.message).toBe('signaling refused');
+    expect(latest?.error).toEqual({ code: 'transport', detail: 'signaling refused' });
     expect(latest?.pending).toBe(false);
     expect(latest?.session).toBeNull();
     expect(rejections).toEqual([]);
+  });
+
+  test('connect rejects with the failure code from a schema error', async () => {
+    let latest: UseWebrtcCollaborationReturn | undefined;
+    await act(async () => {
+      render(
+        <Probe
+          autoConnect={false}
+          createRoom={() =>
+            Promise.reject(
+              Object.assign(new Error('initialization-timeout'), {
+                code: 'initialization-timeout',
+              })
+            )
+          }
+          onState={(value) => (latest = value)}
+        />
+      );
+    });
+    let thrown: unknown;
+    await act(async () => {
+      try {
+        await latest?.connect(CONNECT);
+      } catch (cause) {
+        thrown = cause;
+      }
+    });
+    expect(latest?.error).toEqual({ code: 'initialization-timeout' });
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
   });
 
   test('idle modules stay the same reference across renders', async () => {

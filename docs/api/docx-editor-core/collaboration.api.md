@@ -146,6 +146,7 @@ export interface CollaborationDocumentPort {
     // (undocumented)
     applyParagraphTexts(updates: readonly CollaborationParagraphTextUpdate[], mutation: CollaborationMutation): CollaborationApplyResult;
     applyRemotePackage(pkg: OoxmlPackage, mutation: CollaborationMutation): CollaborationApplyResult;
+    binaryPart(storageKey: string): Uint8Array | null;
     // (undocumented)
     readonly documentId: string;
     flushPendingJournals(): void;
@@ -336,6 +337,9 @@ export interface EditorCollaborationSession {
 
 // @public
 export function isCollaborationFailureCode(value: string): value is CollaborationFailureCode;
+
+// @public
+export function safeParticipantColor(value: string | undefined): string | undefined;
 
 // (No @packageDocumentation comment for this package)
 

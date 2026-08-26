@@ -51,6 +51,8 @@ import {
   type SharedRecord,
   type TextRecord,
 } from './schema.ts';
+import { readRelationships, relationshipKey } from './relationship-store.ts';
+import { nodeRecordDeleteFilter } from './undo-delete-filter.ts';
 
 function itemKeyOf(type: Y.Map<unknown>): string | null {
   const item = (type as unknown as { _item?: { id: { client: number; clock: number } } })._item;
@@ -127,6 +129,17 @@ export class DocumentRegistry {
       asTrackedType(this.schema.attributes),
       asTrackedType(this.schema.bindings),
     ];
+  }
+
+  /**
+   * The `deleteFilter` an undo manager over {@link trackedTypes} has to be built with.
+   *
+   * Undo reverses `nodes.set(id, record)` by deleting the record, and a deleted record takes a
+   * peer's concurrently typed characters with it, unreachably. See
+   * {@link nodeRecordDeleteFilter}. Omitting this is silent data loss, not a missing nicety.
+   */
+  undoDeleteFilter(): (item: Y.Item) => boolean {
+    return nodeRecordDeleteFilter(this.schema.nodes);
   }
 
   encodeSnapshot(): Uint8Array {
@@ -403,16 +416,28 @@ export class DocumentRegistry {
     this.schema.parts.delete(name);
   }
 
+  /**
+   * Write one relationship under a key of its own.
+   *
+   * Keying by part alone meant two peers adding the FIRST relationship to the same part both
+   * took the "create the owner map" branch, and a nested `Y.Map` at one key resolves
+   * last-writer-wins: the loser's map went away with its rId inside it, leaving a broken image
+   * or a dead hyperlink that no later edit could repair. Part AND id means concurrent writers
+   * touch different keys and cannot collide. Two writers of the same id still resolve
+   * last-writer-wins, which is the honest answer to one id with two targets.
+   *
+   * The value stays a map of entries, so a reader also sees owner maps written by a peer on an
+   * earlier build.
+   */
   putRelationship(record: EncodedRelationship): void {
-    let owner = this.schema.relationships.get(record.ownerPart);
-    if (!owner) {
-      owner = new Y.Map<Y.Map<unknown>>();
-      this.schema.relationships.set(record.ownerPart, owner);
-    }
-    owner.set(record.id, makeRelationshipEntry(record));
+    if (rejectDangerousKey(record.ownerPart) || rejectDangerousKey(record.id)) return;
+    const holder = new Y.Map<Y.Map<unknown>>();
+    holder.set(record.id, makeRelationshipEntry(record));
+    this.schema.relationships.set(relationshipKey(record.ownerPart, record.id), holder);
   }
 
   deleteRelationship(ownerPart: string, relationshipId: string): void {
+    this.schema.relationships.delete(relationshipKey(ownerPart, relationshipId));
     this.schema.relationships.get(ownerPart)?.delete(relationshipId);
   }
 
@@ -437,28 +462,7 @@ export class DocumentRegistry {
   }
 
   relationships(): readonly EncodedRelationship[] {
-    const records: EncodedRelationship[] = [];
-    this.schema.relationships.forEach((ownerMap, ownerPart) => {
-      if (!isNodeMap(ownerMap) || rejectDangerousKey(ownerPart)) return;
-      ownerMap.forEach((value) => {
-        if (!isNodeMap(value)) return;
-        const id = readString(value.get('id'));
-        const type = readString(value.get('type'));
-        if (id.length === 0 || type.length === 0) return;
-        const targetMode = value.get('targetMode') === 'External' ? 'External' : 'Internal';
-        const order = value.get('order');
-        records.push({
-          ownerPart: readString(value.get('ownerPart')) || ownerPart,
-          id,
-          type,
-          rawTarget: readString(value.get('rawTarget')),
-          targetMode,
-          order: typeof order === 'number' && Number.isSafeInteger(order) ? order : 0,
-        });
-      });
-    });
-    records.sort((left, right) => left.order - right.order);
-    return records;
+    return readRelationships(this.schema.relationships);
   }
 
   contentTypeOverrides(): ReadonlyMap<string, string> {
@@ -678,15 +682,20 @@ export class DocumentRegistry {
     const rec = this.schema.nodes.get(parentId);
     const next = rec ? (childArrayOf(rec)?.toArray() ?? []) : [];
     const prev = this.childrenSnapshot.get(parentId) ?? [];
+    // Membership by set, not by scan. The body root lists every block in the document, and a
+    // journal now publishes on the commit that produces it, so this sits on the keystroke
+    // path: a scan per child cost ~640,000 comparisons to append one block to a list of 800.
+    const nextSet = new Set(next);
+    const prevSet = new Set(prev);
     const affected: LogicalId[] = [];
     for (const childId of prev) {
-      if (next.includes(childId)) continue;
+      if (nextSet.has(childId)) continue;
       this.removeListing(childId, parentId);
       affected.push(childId);
     }
     for (const childId of next) {
       this.addListing(childId, parentId);
-      if (!prev.includes(childId)) affected.push(childId);
+      if (!prevSet.has(childId)) affected.push(childId);
     }
     this.childrenSnapshot.set(parentId, next);
     return affected;

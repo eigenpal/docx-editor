@@ -17,6 +17,8 @@ import {
   runWithTransactionActor,
 } from '../package/actor-scoped-ids.ts';
 import { allocateContentControlId } from '../package/content-control-nodes.ts';
+import { allocateNoteId, type NoteKind } from '../package/note-nodes.ts';
+import { applyNoteLifecycleOp } from '../package/note-lifecycle.ts';
 import { allocateOwnerRelationshipId } from '../package/package-edit.ts';
 import { readOoxmlPackage } from '../package/ooxml-package.ts';
 import { planTocEntries } from '../package/toc-build.ts';
@@ -678,6 +680,91 @@ describe('content-control ids stay one-past-max without an actor', () => {
         `<w:sdtContent><w:p/></w:sdtContent></w:sdt>`
     );
     expect(allocateContentControlId(before.root)).toBe(1);
+  });
+});
+
+const FOOTNOTES_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
+/** The furniture `ensureNotesPart` writes: reserved ids `-1` and `0`, never allocated. */
+const NOTE_SEPARATORS =
+  '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>' +
+  '<w:footnote w:type="continuationSeparator" w:id="0">' +
+  '<w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>';
+
+function footnotesPart(notes = ''): OoxmlPart {
+  const read = readOoxmlPart(
+    `<w:footnotes xmlns:w="${W}">${NOTE_SEPARATORS}${notes}</w:footnotes>`,
+    { name: '/word/footnotes.xml', contentType: FOOTNOTES_CT }
+  );
+  if (!read.ok) throw new Error(read.reason);
+  return read.part;
+}
+
+/** The id a peer's FIRST note takes, minted the way the session binds the actor. */
+function insertFirstNote(store: TreeDocumentStore, noteKind: NoteKind, actorId?: string): number {
+  const paragraphId = firstParagraphId(store.part);
+  const result = runWithTransactionActor(actorId, () =>
+    applyNoteLifecycleOp(store.package, { op: 'insertNote', noteKind, paragraphId, offset: 0 })
+  );
+  if (!result.ok) throw new Error(result.detail ?? result.reason);
+  if (result.noteId === undefined) throw new Error('no note id');
+  return result.noteId;
+}
+
+/** Deterministic actor whose residue is `target`, so stripe 0 is testable at all. */
+function actorWithStripe(target: number): string {
+  for (let index = 0; index < 1_000_000; index += 1) {
+    const candidate = `stripe-probe-${index}`;
+    if (actorStripe(candidate) === target) return candidate;
+  }
+  throw new Error('no actor for stripe');
+}
+
+describe('note ids stay one-past-max without an actor', () => {
+  test('a part holding only separators still mints 1', () => {
+    expect(allocateNoteId(footnotesPart().root)).toBe(1);
+  });
+
+  test('an existing 7 still mints 8', () => {
+    expect(allocateNoteId(footnotesPart('<w:footnote w:id="7"><w:p/></w:footnote>').root)).toBe(8);
+  });
+
+  test('insertNote without an actor still writes w:id="1"', () => {
+    expect(insertFirstNote(storeOf(), 'footnote')).toBe(1);
+    expect(insertFirstNote(storeOf(), 'endnote')).toBe(1);
+  });
+});
+
+describe('an attached actor stripes note ids', () => {
+  test('two actors mint different ids from one notes part', () => {
+    const part = footnotesPart();
+    const alice = allocateNoteId(part.root, 'alice');
+    const bob = allocateNoteId(part.root, 'bob');
+    expect(alice).toBe(actorStripe('alice'));
+    expect(bob).toBe(actorStripe('bob'));
+    expect(alice).not.toBe(bob);
+  });
+
+  test('two transact actors adding a first footnote mint different w:id', () => {
+    // The defect this pins: both peers took `w:id="1"`, so after the merge both
+    // `w:footnoteReference` marks resolved to one body and the other note was unreachable.
+    const alice = insertFirstNote(storeOf(), 'footnote', 'alice');
+    const bob = insertFirstNote(storeOf(), 'footnote', 'bob');
+    expect(alice).toBe(actorStripe('alice'));
+    expect(bob).toBe(actorStripe('bob'));
+    expect(alice).not.toBe(bob);
+  });
+
+  test('two transact actors adding a first endnote mint different w:id', () => {
+    const alice = insertFirstNote(storeOf(), 'endnote', 'alice');
+    const bob = insertFirstNote(storeOf(), 'endnote', 'bob');
+    expect(alice).not.toBe(bob);
+  });
+
+  test('a stripe that lands on 0 skips the continuation-separator id', () => {
+    // `w:id="0"` owns the continuation separator and `-1` the separator rule. A striped
+    // mint that handed either back would rewrite Word's note furniture.
+    const actor = actorWithStripe(0);
+    expect(allocateNoteId(footnotesPart().root, actor)).toBe(ACTOR_ID_STRIPE);
   });
 });
 

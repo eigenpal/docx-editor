@@ -5,17 +5,40 @@
 ```ts
 
 // @public
+export interface CollaborationSession {
+    // (undocumented)
+    canRedo(): boolean;
+    // (undocumented)
+    canUndo(): boolean;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    // (undocumented)
+    participants(): readonly CollaborationParticipant[];
+    // (undocumented)
+    redo(): boolean;
+    // (undocumented)
+    remoteSelections(): readonly CollaborationRemoteSelection[];
+    readonly sessionId: string;
+    // (undocumented)
+    status(): CollaborationStatus;
+    statusSnapshot(): CollaborationStatusSnapshot;
+    // (undocumented)
+    subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
+    // (undocumented)
+    subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
+    // (undocumented)
+    subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
+    // (undocumented)
+    undo(): boolean;
+}
+
+// @public
 export function useWebrtcCollaboration(options?: UseWebrtcCollaborationOptions): UseWebrtcCollaborationReturn;
 
 // @public
-export type UseWebrtcCollaborationBootstrap = {
-    readonly document: Uint8Array;
-    readonly kind: 'create';
-} | {
-    readonly kind: 'join';
-    readonly signal?: AbortSignal;
-    readonly timeoutMs?: number;
-};
+export type UseWebrtcCollaborationBootstrap = CollaborationBootstrap;
 
 // @public
 export interface UseWebrtcCollaborationConnectOptions {
@@ -35,7 +58,6 @@ export interface UseWebrtcCollaborationConnectOptions {
 
 // @public
 export interface UseWebrtcCollaborationOptions {
-    readonly createRoom?: (options: UseWebrtcCollaborationConnectOptions) => Promise<UseWebrtcCollaborationRoomHandle>;
     readonly modules?: readonly EditorModule[];
     readonly room?: UseWebrtcCollaborationConnectOptions | null;
 }
@@ -47,25 +69,14 @@ export interface UseWebrtcCollaborationReturn {
     // (undocumented)
     readonly document: Uint8Array | null;
     // (undocumented)
-    readonly error: Error | null;
-    // (undocumented)
+    readonly error: CollaborationFailure | null;
     readonly leave: (nextDocument?: Uint8Array) => void;
     // (undocumented)
     readonly modules: readonly EditorModule[];
     // (undocumented)
     readonly pending: boolean;
     // (undocumented)
-    readonly session: EditorCollaborationSession | null;
-}
-
-// @public
-export interface UseWebrtcCollaborationRoomHandle {
-    // (undocumented)
-    destroy(): void;
-    // (undocumented)
-    readonly document: Uint8Array;
-    // (undocumented)
-    readonly session: EditorCollaborationSession;
+    readonly session: CollaborationSession | null;
 }
 
 // (No @packageDocumentation comment for this package)

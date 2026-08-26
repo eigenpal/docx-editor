@@ -3261,7 +3261,7 @@ export interface ReadEmbeddedFontsOptions {
 // @public
 export function readOnOffChild(parent: OoxmlNode, localName: string, namespaceUri?: string): boolean;
 
-// @public
+// @public (undocumented)
 export function readOoxmlPackage(bytes: Uint8Array, limits?: OoxmlPackageLimits): OoxmlPackageResult;
 
 // @public

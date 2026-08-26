@@ -31,6 +31,10 @@ The hook lives on a WebRTC subpath so a review-only bundle does not load a netwo
 
 Pass `room` to connect when the component mounts. Call `leave` when the session should end. While `pending` is true, wait before you mount the editor.
 
+The hook returns a host session (`CollaborationSession`). That type exposes identity, status, presence, and undo. It does not expose `attach` or `gateOperations`.
+
+`error` is a `CollaborationFailure`. Branch on `error.code` instead of matching message strings.
+
 The sugar `<DocxEditor>` host accepts `document` and `modules`. You do not need `DocxEditor.Root` to collaborate.
 
 <FrameworkTabs>
@@ -49,7 +53,7 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
     },
   });
 
-  if (error) return <p>{error.message}</p>;
+  if (error) return <p>{error.detail ?? error.code}</p>;
   if (pending || !document) return <p>Connecting…</p>;
 
   return (
@@ -81,7 +85,7 @@ const { document, modules, pending, error, leave } = useWebrtcCollaboration({
 </script>
 
 <template>
-  <p v-if="error">{{ error.message }}</p>
+  <p v-if="error">{{ error.detail ?? error.code }}</p>
   <p v-else-if="pending || !document">Connecting…</p>
   <template v-else>
     <button type="button" @click="leave()">Leave</button>

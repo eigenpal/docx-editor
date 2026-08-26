@@ -324,6 +324,19 @@ function controlledRootDeclares(
   return false;
 }
 
+/**
+ * Nodes {@link serializeOoxmlPart} has walked in this process.
+ *
+ * A full-package save walks every XML node. Collaboration paths that only need one image
+ * assert against this counter so a large document cannot hide behind a fast machine.
+ */
+let serializeNodeVisits = 0;
+
+/** Test-observable count of nodes {@link serializeOoxmlPart} has walked. */
+export function canonicalSerializeNodeVisits(): number {
+  return serializeNodeVisits;
+}
+
 function serializeNode(
   node: OoxmlNode,
   prefixes: ControlledPrefixes,
@@ -333,6 +346,7 @@ function serializeNode(
   /** Output accumulator — one flat join at the end beats per-element string assembly. */
   out: string[]
 ): void {
+  serializeNodeVisits += 1;
   if (node.kind === 'textValue') {
     out.push(escapeXmlChecked(node.value, 'OOXML text'));
     return;

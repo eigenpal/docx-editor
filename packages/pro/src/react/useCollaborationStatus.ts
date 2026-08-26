@@ -8,8 +8,8 @@ import type {
   CollaborationFailure,
   CollaborationStatus,
   CollaborationStatusSnapshot,
-  EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
+import type { CollaborationSession } from '../collaboration/session.ts';
 
 /** Status returned by {@link useCollaborationStatus}. @public */
 export interface UseCollaborationStatusReturn {
@@ -45,7 +45,7 @@ function sameSnapshot(
 }
 
 function readSnapshot(
-  session: EditorCollaborationSession | null,
+  session: CollaborationSession | null,
   cache: { current: UseCollaborationStatusReturn }
 ): UseCollaborationStatusReturn {
   if (!session) {
@@ -63,9 +63,17 @@ function readSnapshot(
   return snapshot;
 }
 
-/** Reactive status for an externally owned collaboration session. @public */
+/**
+ * Reactive status for an externally owned collaboration session.
+ *
+ * Takes the host-facing {@link CollaborationSession}, which is what
+ * `useWebrtcCollaboration` hands back. The engine session satisfies that type too, so a host
+ * holding either one can pass it here.
+ *
+ * @public
+ */
 export function useCollaborationStatus(
-  session: EditorCollaborationSession | null
+  session: CollaborationSession | null
 ): UseCollaborationStatusReturn {
   const cache = useRef(INACTIVE);
   return useSyncExternalStore(

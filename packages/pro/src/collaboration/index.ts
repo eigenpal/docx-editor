@@ -16,9 +16,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 export { collaborationModule, type CollaborationModuleOptions } from './collaboration-module.ts';
 export {
   createTextCollaboration,
+  type CollaborationBootstrap,
   type CollaborationHandle,
+  type CollaborationSession,
   type CreateTextCollaborationOptions,
-  type TextCollaborationBootstrap,
   type TextCollaborationHandle,
   type TextCollaborationSession,
 } from './session.ts';

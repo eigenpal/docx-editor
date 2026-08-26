@@ -34,6 +34,7 @@ import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
 } from '../document-session.ts';
+import { NODE_CHILDREN_FIELD, NODE_DELETED_FIELD, PACKAGE_NODES_KEY } from '../document/schema.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 const DOCUMENT_ID = 'full-document-room';
@@ -927,6 +928,32 @@ describe('full-document collaboration replicates every authorable change class',
     }
     expect(alice.room.session.canUndo()).toBe(true);
     expect(alice.room.session.undo()).toBe(true);
+    expect(textOf(alice)).toBe(before);
+    expect(textOf(bob)).toBe(before);
+    expectConverged(alice, bob);
+  });
+
+  test('undo of a paragraph split restores the whole paragraph', async () => {
+    // Guards `registry.undoDeleteFilter()`, wired into this session's UndoManager, against
+    // overshooting. The filter pins node records so a peer's concurrent characters survive an
+    // undo. A split supersedes the original run by setting `deleted` on it, and an earlier
+    // filter pinned that flag along with the record: the run stayed tombstoned, the registry
+    // re-unlisted it, and this reverted to 'BravoCharlie' with the whole paragraph's text gone.
+    const { alice, bob } = await pair(PROSE);
+    const before = textOf(alice);
+    const originalId = paragraphIdAt(alice, 0);
+    const nodes = alice.ydoc.getMap(PACKAGE_NODES_KEY) as Y.Map<Y.Map<unknown>>;
+    const childrenOf = (id: string): Y.Array<string> =>
+      nodes.get(id)?.get(NODE_CHILDREN_FIELD) as Y.Array<string>;
+    const originalRun = childrenOf(originalId).get(0);
+    apply(alice, [{ op: 'splitParagraph', paragraphId: originalId, offset: 2 }]);
+    expect(nodes.get(originalRun)?.get(NODE_DELETED_FIELD)).toBe(true);
+
+    expect(alice.room.session.undo()).toBe(true);
+    // The run the split superseded is un-tombstoned and listed again. Both only happen if the
+    // filter let the `deleted` flag revert; pinning it is what emptied the paragraph.
+    expect(nodes.get(originalRun)?.get(NODE_DELETED_FIELD)).toBeUndefined();
+    expect(childrenOf(originalId).toArray()).toEqual([originalRun]);
     expect(textOf(alice)).toBe(before);
     expect(textOf(bob)).toBe(before);
     expectConverged(alice, bob);

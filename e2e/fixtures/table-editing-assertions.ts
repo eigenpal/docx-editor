@@ -10,6 +10,7 @@ import {
   readOoxmlPart,
   semanticDigest,
   serializeOoxmlPart,
+  type DigestDifference,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
@@ -74,9 +75,10 @@ function collectByKind(root: OoxmlNode, kind: OoxmlElement['kind']): OoxmlElemen
 }
 
 function wmlChild(node: OoxmlElement, localName: string): OoxmlElement | undefined {
-  return node.children?.find(
-    (child): child is OoxmlElement => child.kind !== 'textValue' && child.localName === localName
-  );
+  for (const child of node.children ?? []) {
+    if (child.kind !== 'textValue' && child.localName === localName) return child;
+  }
+  return undefined;
 }
 
 function wmlAttr(node: OoxmlElement, localName: string): string | undefined {
@@ -101,20 +103,31 @@ function paragraphText(cell: OoxmlElement): string {
 function gridColumnWidthsTwips(table: OoxmlElement): number[] {
   const grid = wmlChild(table, 'tblGrid');
   if (!grid) return [];
-  return grid.children
-    .filter((child): child is OoxmlElement => child.kind !== 'textValue' && child.localName === 'gridCol')
-    .map((col) => Number(wmlAttr(col, 'w') ?? '0'));
+  const widths: number[] = [];
+  for (const child of grid.children ?? []) {
+    if (child.kind !== 'textValue' && child.localName === 'gridCol') {
+      widths.push(Number(wmlAttr(child, 'w') ?? '0'));
+    }
+  }
+  return widths;
 }
 
 function gridColumnIds(table: OoxmlElement): string[] {
   const grid = wmlChild(table, 'tblGrid');
   if (!grid) return [];
-  return grid.children
-    .filter((child): child is OoxmlElement => child.kind !== 'textValue' && child.localName === 'gridCol')
-    .map((col) => col.id);
+  const ids: string[] = [];
+  for (const child of grid.children ?? []) {
+    if (child.kind !== 'textValue' && child.localName === 'gridCol') {
+      ids.push(child.id);
+    }
+  }
+  return ids;
 }
 
-function borderSideSnapshot(cell: OoxmlElement, side: 'top' | 'left' | 'bottom' | 'right'): BorderSideSnapshot {
+function borderSideSnapshot(
+  cell: OoxmlElement,
+  side: 'top' | 'left' | 'bottom' | 'right'
+): BorderSideSnapshot {
   const tcPr = wmlChild(cell, 'tcPr');
   const tcBorders = tcPr && wmlChild(tcPr, 'tcBorders');
   const sideEl = tcBorders && wmlChild(tcBorders, side);
@@ -146,28 +159,33 @@ function cellWidthTwips(cell: OoxmlElement): number | null {
 }
 
 function cloneNode(node: OoxmlNode): OoxmlNode {
-  if (node.kind === 'textValue') return { ...node };
+  if (node.kind === 'textValue') {
+    return { kind: 'textValue', id: node.id, value: node.value };
+  }
   return {
     ...node,
     attributes: [...node.attributes],
-    namespaceBindings: [...(node.namespaceBindings ?? [])],
+    namespaceBindings: [...node.namespaceBindings],
     children: node.children?.map(cloneNode),
-  };
+  } as OoxmlNode;
+}
+
+function cloneElement(node: OoxmlElement): OoxmlElement {
+  return cloneNode(node) as OoxmlElement;
 }
 
 function tcPrDecorationFingerprint(cell: OoxmlElement): string {
   const tcPr = wmlChild(cell, 'tcPr');
   if (!tcPr) return '';
-  const children = (tcPr.children ?? []).filter(
-    (child) => child.kind === 'textValue' || (child as OoxmlElement).localName !== 'tcW'
+  const decorationChildren = (tcPr.children ?? []).filter(
+    (child) => child.kind === 'textValue' || child.localName !== 'tcW'
   );
-  const decorationRoot: OoxmlElement = {
+  const decorationRoot = cloneElement({
     ...tcPr,
-    attributes: [...tcPr.attributes],
-    namespaceBindings: [...(tcPr.namespaceBindings ?? [])],
-    children: children.map((child) => cloneNode(child)),
-  };
+    children: decorationChildren,
+  } as OoxmlElement);
   return serializeOoxmlPart({
+    id: 'fragment/tcPr-decoration',
     name: 'fragment/tcPr-decoration',
     contentType: 'application/xml',
     root: decorationRoot,
@@ -178,6 +196,7 @@ function tcPrFingerprint(cell: OoxmlElement): string {
   const tcPr = wmlChild(cell, 'tcPr');
   if (!tcPr) return '';
   return serializeOoxmlPart({
+    id: 'fragment/tcPr',
     name: 'fragment/tcPr',
     contentType: 'application/xml',
     root: tcPr,
@@ -256,7 +275,6 @@ const INNER_ISOLATION_SENTINEL: OoxmlElement = {
   id: '__inner_isolation_sentinel__',
   namespaceUri: W,
   localName: 'tbl',
-  qName: 'w:tbl',
   attributes: [],
   namespaceBindings: [],
   children: [
@@ -265,7 +283,6 @@ const INNER_ISOLATION_SENTINEL: OoxmlElement = {
       id: '__inner_isolation_sentinel_grid__',
       namespaceUri: W,
       localName: 'tblGrid',
-      qName: 'w:tblGrid',
       attributes: [],
       namespaceBindings: [],
       children: [
@@ -274,8 +291,7 @@ const INNER_ISOLATION_SENTINEL: OoxmlElement = {
           id: '__inner_isolation_sentinel_col__',
           namespaceUri: W,
           localName: 'gridCol',
-          qName: 'w:gridCol',
-          attributes: [{ localName: 'w', namespaceUri: W, value: '1' }],
+          attributes: [{ kind: 'genericExtension', localName: 'w', namespaceUri: W, value: '1' }],
           namespaceBindings: [],
           children: [],
         },
@@ -297,37 +313,52 @@ function findNestedTableInHost(host: OoxmlElement, innerMarker: string): OoxmlEl
   return null;
 }
 
-function replaceNodeById(root: OoxmlElement, targetId: string, replacement: OoxmlElement): boolean {
-  for (let index = 0; index < (root.children?.length ?? 0); index += 1) {
-    const child = root.children![index]!;
-    if (child.kind !== 'textValue' && child.id === targetId) {
-      root.children![index] = cloneNode(replacement);
-      return true;
+function replaceNodeById(
+  root: OoxmlElement,
+  targetId: string,
+  replacement: OoxmlElement
+): OoxmlElement | null {
+  if (root.id === targetId) return cloneElement(replacement);
+  if (!root.children) return null;
+  let replaced = false;
+  const children = root.children.map((child) => {
+    if (child.kind === 'textValue') return child;
+    if (child.id === targetId) {
+      replaced = true;
+      return cloneNode(replacement);
     }
-    if (child.kind !== 'textValue' && replaceNodeById(child, targetId, replacement)) return true;
-  }
-  return false;
+    const updated = replaceNodeById(child, targetId, replacement);
+    if (updated) {
+      replaced = true;
+      return updated;
+    }
+    return child;
+  });
+  if (!replaced) return null;
+  return cloneElement({ ...root, children } as OoxmlElement);
 }
 
 /** Canonical fingerprint of the outer host table with the nested inner subtree replaced by a sentinel. */
 export function outerTableIsolationFingerprint(part: OoxmlPart, innerMarker = 'INNER-NW'): string {
   const outer = findTableByMarker(part, 'OUTER-TR');
   if (!outer) throw new Error('outer table missing');
-  const cloned = cloneNode(outer) as OoxmlElement;
+  const cloned = cloneElement(outer);
   const inner = findNestedTableInHost(cloned, innerMarker);
   if (!inner) throw new Error('inner table missing in outer host');
-  if (!replaceNodeById(cloned, inner.id, INNER_ISOLATION_SENTINEL)) {
-    throw new Error('failed to replace inner table with sentinel');
-  }
-  return canonicalOoxmlFingerprint({
-    name: part.name,
-    contentType: part.contentType,
-    root: cloned,
-  });
+  const isolated = replaceNodeById(cloned, inner.id, INNER_ISOLATION_SENTINEL);
+  if (!isolated) throw new Error('failed to replace inner table with sentinel');
+  return canonicalOoxmlFingerprint(isolated);
 }
 
-export function outerTableIsolationEqual(before: OoxmlPart, after: OoxmlPart, innerMarker = 'INNER-NW'): boolean {
-  return outerTableIsolationFingerprint(before, innerMarker) === outerTableIsolationFingerprint(after, innerMarker);
+export function outerTableIsolationEqual(
+  before: OoxmlPart,
+  after: OoxmlPart,
+  innerMarker = 'INNER-NW'
+): boolean {
+  return (
+    outerTableIsolationFingerprint(before, innerMarker) ===
+    outerTableIsolationFingerprint(after, innerMarker)
+  );
 }
 
 function findTableByMarker(part: OoxmlPart, marker: string): OoxmlElement | undefined {
@@ -371,7 +402,7 @@ export function reopenPart(part: OoxmlPart): OoxmlPart {
   return reopened.part;
 }
 
-export function saveReopenDigestDiff(before: OoxmlPart, after: OoxmlPart): readonly string[] {
+export function saveReopenDigestDiff(before: OoxmlPart, after: OoxmlPart): DigestDifference[] {
   return diffSemanticDigests(semanticDigest([before]), semanticDigest([after]));
 }
 
@@ -449,10 +480,6 @@ function cellAtGrid(snapshot: DetailedTableSnapshot, row: number, col: number): 
   return cell;
 }
 
-function cellIdAtGrid(snapshot: DetailedTableSnapshot, row: number, col: number): string {
-  return cellAtGrid(snapshot, row, col).cellId;
-}
-
 function assertTrue(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
 }
@@ -510,7 +537,12 @@ function normalizeSelection(selection: TableSelectionRect): TableSelectionRect {
 }
 
 function cellIsInSelection(row: number, col: number, selection: TableSelectionRect): boolean {
-  return row >= selection.rowFrom && row <= selection.rowTo && col >= selection.colFrom && col <= selection.colTo;
+  return (
+    row >= selection.rowFrom &&
+    row <= selection.rowTo &&
+    col >= selection.colFrom &&
+    col <= selection.colTo
+  );
 }
 
 /** Selected/unselected ID partition must be disjoint, exhaustive, strict subset, unselected non-empty. */
@@ -532,8 +564,14 @@ export function assertSelectionIdPartition(
 
   const unselectedIds = allIds.filter((id) => !selectedSet.has(id));
   assertTrue(unselectedIds.length > 0, 'unselected cell set must be non-empty');
-  assertTrue(selectedSet.size + unselectedIds.length === allIds.length, 'selected/unselected must partition all inner cells');
-  assertTrue(selectedSet.size < allIds.length, 'selection must be a strict subset of inner table cells');
+  assertTrue(
+    selectedSet.size + unselectedIds.length === allIds.length,
+    'selected/unselected must partition all inner cells'
+  );
+  assertTrue(
+    selectedSet.size < allIds.length,
+    'selection must be a strict subset of inner table cells'
+  );
 
   for (const id of selectedSet) {
     assertTrue(!unselectedIds.includes(id), `selected ID appears in unselected set: ${id}`);
@@ -586,7 +624,10 @@ export function assertTableFormattingOracle(
   options?: { allowUnselectedWidthDrift?: boolean }
 ): void {
   const normalized = normalizeSelection(selection);
-  assertTrue(edited.rowCount === baseline.rowCount, 'edited inner rowCount must match pre-format baseline');
+  assertTrue(
+    edited.rowCount === baseline.rowCount,
+    'edited inner rowCount must match pre-format baseline'
+  );
   assertTrue(
     edited.columnWidthsTwips.length === baseline.columnWidthsTwips.length,
     'edited inner column count must match pre-format baseline'
@@ -596,13 +637,24 @@ export function assertTableFormattingOracle(
     const baselineRow = baseline.rows[row]!;
     const editedRow = edited.rows[row];
     assertTrue(!!editedRow, `edited row missing at index ${row}`);
-    assertTrue(editedRow!.cells.length === baselineRow.cells.length, `cell count drift at row ${row}`);
+    assertTrue(
+      editedRow!.cells.length === baselineRow.cells.length,
+      `cell count drift at row ${row}`
+    );
 
     for (let col = 0; col < baselineRow.cells.length; col += 1) {
       const baselineCell = baselineRow.cells[col]!;
       const editedCell = editedRow!.cells[col]!;
       if (cellIsInSelection(row, col, normalized)) {
-        assertSelectedCellFormatting(editedCell, baselineCell, row, col, normalized, border, fillHex);
+        assertSelectedCellFormatting(
+          editedCell,
+          baselineCell,
+          row,
+          col,
+          normalized,
+          border,
+          fillHex
+        );
       } else {
         assertTrue(
           decorationSnapshotsEqual(

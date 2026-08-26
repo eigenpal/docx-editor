@@ -141,6 +141,10 @@ export function ensureHyperlinkRelationship(
   const existing = prepared.parts.get(relsName);
   if (!existing) return null;
   const id = freeRelationshipId(prepared);
+  const order =
+    [...prepared.relationships.values()]
+      .flat()
+      .reduce((max, entry) => Math.max(max, entry.order), -1) + 1;
   const authored = readOoxmlPart(
     `<Relationships xmlns="${REL}">` +
       `<Relationship Id="${escapeXmlChecked(id, 'relationship id')}"` +
@@ -174,19 +178,22 @@ export function ensureHyperlinkRelationship(
     ])
   );
   if (!inserted.ok) return null;
-  recordPutRelationship(owner, {
+  const owned = prepared.relationships.get(owner) ?? [];
+  const record = {
     ownerPart: owner,
     id,
     type: HYPERLINK_RELATIONSHIP_TYPE,
     rawTarget: target,
-    targetMode: 'External',
-    order: existing.root.children.length,
-  });
+    targetMode: 'External' as const,
+    order,
+  };
+  recordPutRelationship(owner, record);
   return {
     pkg: Object.freeze({
       ...prepared,
       parts: new Map([...prepared.parts, [relsName, inserted.part]]),
       externalTargets,
+      relationships: new Map([...prepared.relationships, [owner, [...owned, record]]]),
     }),
     relationshipId: id,
   };

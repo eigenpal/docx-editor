@@ -42,13 +42,20 @@ import {
   PackageMaterializer,
   applyPrimitiveJournal,
   seedPackage,
-  type BlobBytesStore,
 } from './document/index.ts';
+import {
+  binaryPartReaderOf,
+  collectJournalBinaryPayloads,
+  publishBinaryPayloads,
+  type BinaryPayload,
+} from './document/seed.ts';
+import { droppedContentDetail } from './document/schema.ts';
+import { SharedBlobStore, limitFailure } from './shared-blob-store.ts';
 import { LogicalIdentityMap } from './document-identity.ts';
 import { CollaborationSchemaError } from './schema.ts';
 import type {
+  CollaborationBootstrap,
   CollaborationHandle,
-  TextCollaborationBootstrap,
   TextCollaborationSession,
 } from './session.ts';
 
@@ -57,7 +64,6 @@ const BLOBS_KEY = 'docx-package-blobs-v1';
 const MAX_IDENTITY_LENGTH = 256;
 const MAX_AWARENESS_STATES = 256;
 const MAX_BASELINE_BYTES = 20 * 1024 * 1024;
-const MAX_SHARED_BLOB_BYTES = 64 * 1024 * 1024;
 const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
 /** One refused journal recovers; a run of them means the next edit refuses too. */
 const MAX_REFUSALS_IN_A_ROW = 3;
@@ -81,46 +87,6 @@ interface AwarenessPayload {
   readonly color?: string;
   readonly role: 'human' | 'agent';
   readonly selection?: EncodedSelection;
-}
-
-function sharedBlobBytes(value: unknown): Uint8Array | null {
-  if (value instanceof Uint8Array) return new Uint8Array(value);
-  if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  if (ArrayBuffer.isView(value)) {
-    const view = value;
-    return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-  }
-  return null;
-}
-
-/**
- * Content-addressed bytes carried beside shared state.
- *
- * Digests are immutable, so two replicas writing the same key write the same bytes and no
- * conflict is possible. Bytes stay out of the node registry, which keeps a one-character edit
- * from re-encoding an image.
- */
-class SharedBlobStore implements BlobBytesStore {
-  constructor(private readonly shared: Y.Map<Uint8Array>) {}
-
-  get(digest: string): Uint8Array | null {
-    return sharedBlobBytes(this.shared.get(digest));
-  }
-
-  has(digest: string): boolean {
-    return sharedBlobBytes(this.shared.get(digest)) !== null;
-  }
-
-  put(digest: string, bytes: Uint8Array): void {
-    if (this.shared.has(digest)) return;
-    let total = bytes.byteLength;
-    this.shared.forEach((value) => {
-      const blob = sharedBlobBytes(value);
-      total += blob ? blob.byteLength : 0;
-    });
-    if (total > MAX_SHARED_BLOB_BYTES) throw new CollaborationSchemaError('blob-store-full');
-    this.shared.set(digest, new Uint8Array(bytes));
-  }
 }
 
 function validateIdentity(identity: CollaborationIdentity): CollaborationIdentity {
@@ -263,6 +229,7 @@ class DocumentSession implements DocumentCollaborationSession {
   private remoteCounter = 0;
   private destroyed = false;
   private refusedInARow = 0;
+  private readonly stopBlobWatch: () => void;
 
   constructor(
     private readonly ydoc: Y.Doc,
@@ -273,7 +240,7 @@ class DocumentSession implements DocumentCollaborationSession {
     private readonly registry: DocumentRegistry,
     private readonly materializer: PackageMaterializer,
     private readonly identityMap: LogicalIdentityMap,
-    private readonly blobs: BlobBytesStore
+    private readonly blobs: SharedBlobStore
   ) {
     this.documentId = documentId;
     this.sessionId = sessionId;
@@ -281,9 +248,14 @@ class DocumentSession implements DocumentCollaborationSession {
     this.undoManager = new Y.UndoManager([...registry.trackedTypes()], {
       trackedOrigins: new Set([this.localOrigin]),
       captureTimeout: UNDO_CAPTURE_TIMEOUT_MS,
+      deleteFilter: registry.undoDeleteFilter(),
     });
     ydoc.on('afterTransaction', this.onYjsTransaction);
     awareness.on('change', this.onAwarenessChange);
+    this.stopBlobWatch = blobs.observeChanges((digests) => {
+      const poisoned = blobs.verifyNow(digests);
+      if (poisoned) this.setStatus('error', 'blob-digest-mismatch', poisoned);
+    });
     this.publishAwareness();
     this.setStatus('ready');
   }
@@ -505,6 +477,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.flushPendingJournals();
     this.detachPort?.();
     this.destroyed = true;
+    this.stopBlobWatch();
     this.ydoc.off('afterTransaction', this.onYjsTransaction);
     this.awareness.off('change', this.onAwarenessChange);
     this.awareness.setLocalState(null);
@@ -518,9 +491,16 @@ class DocumentSession implements DocumentCollaborationSession {
 
   private applyJournal(journal: CanonicalPrimitiveJournal): void {
     const shared = this.identityMap.translate(journal);
+    const blobs = this.collectJournalBlobs(journal);
+    if (blobs !== null && blobs.ok === false) {
+      this.refuseLocalJournal(blobs.failure);
+      return;
+    }
     const refusal = this.ydoc.transact((): CollaborationFailure | null => {
-      const published = this.publishJournalBlobs(journal);
-      if (published !== null) return published;
+      if (blobs !== null) {
+        const published = this.putJournalBlobs(blobs.payloads);
+        if (published !== null) return published;
+      }
       const result = applyPrimitiveJournal(this.registry, shared);
       if (!result.ok) {
         return {
@@ -534,6 +514,57 @@ class DocumentSession implements DocumentCollaborationSession {
       this.refusedInARow = 0;
       return;
     }
+    this.refuseLocalJournal(refusal);
+  }
+
+  /**
+   * Resolve local binary bytes named by this journal before the Yjs transaction opens.
+   *
+   * `putBinary` carries a digest, not the bytes. A peer that applies the descriptor
+   * without the payload fails materialize with `missing-blob` and keeps the old
+   * document — the image paste never arrives, even when the story text did.
+   * Bytes already live in the local package; a save/re-parse would walk every XML
+   * node while the transaction is open.
+   */
+  private collectJournalBlobs(
+    journal: CanonicalPrimitiveJournal
+  ):
+    | { readonly ok: true; readonly payloads: readonly BinaryPayload[] }
+    | { readonly ok: false; readonly failure: CollaborationFailure }
+    | null {
+    const port = this.port;
+    if (!port) {
+      const needed = journal.effects.some((effect) => effect.kind === 'putBinary');
+      return needed
+        ? {
+            ok: false,
+            failure: Object.freeze({ code: 'collaboration-session-not-attached' as const }),
+          }
+        : null;
+    }
+    const collected = collectJournalBinaryPayloads(journal.effects, binaryPartReaderOf(port));
+    if (collected === null) return null;
+    if (!collected.ok) {
+      return { ok: false, failure: Object.freeze(collected.failure) };
+    }
+    return collected;
+  }
+
+  private putJournalBlobs(payloads: readonly BinaryPayload[]): CollaborationFailure | null {
+    try {
+      publishBinaryPayloads(this.blobs, payloads);
+    } catch (error) {
+      return error instanceof CollaborationSchemaError
+        ? Object.freeze({
+            code: error.code,
+            ...(error.detail ? { detail: error.detail } : {}),
+          })
+        : Object.freeze({ code: 'blob-store-full' as const });
+    }
+    return null;
+  }
+
+  private refuseLocalJournal(refusal: CollaborationFailure): void {
     this.undoManager.stopCapturing();
     // The local store already committed this edit, so leaving it would make this replica
     // silently different from the room. Shared state is the authority: take it back.
@@ -562,41 +593,6 @@ class DocumentSession implements DocumentCollaborationSession {
     }
   }
 
-  /**
-   * Put local binary bytes into the shared blob map before the journal names them.
-   *
-   * `putBinary` carries a digest, not the bytes. A peer that applies the descriptor
-   * without the payload fails materialize with `missing-blob` and keeps the old
-   * document — the image paste never arrives, even when the story text did.
-   */
-  private publishJournalBlobs(journal: CanonicalPrimitiveJournal): CollaborationFailure | null {
-    const port = this.port;
-    if (!port) return Object.freeze({ code: 'collaboration-session-not-attached' as const });
-    const needed = journal.effects.filter((effect) => effect.kind === 'putBinary');
-    if (needed.length === 0) return null;
-    const loaded = readOoxmlPackage(port.save());
-    if (!loaded.ok) return Object.freeze({ code: 'blob-read' as const, detail: loaded.reason });
-    for (const effect of needed) {
-      if (effect.kind !== 'putBinary') continue;
-      const key = effect.descriptor.storageKey;
-      const bytes =
-        loaded.package.partBytes.get(key) ??
-        loaded.package.partBytes.get(key.startsWith('/') ? key.slice(1) : `/${key}`);
-      if (!bytes) return Object.freeze({ code: 'missing-local-blob' as const, detail: key });
-      try {
-        this.blobs.put(effect.descriptor.digest, bytes);
-      } catch (error) {
-        return error instanceof CollaborationSchemaError
-          ? Object.freeze({
-              code: error.code,
-              ...(error.detail ? { detail: error.detail } : {}),
-            })
-          : Object.freeze({ code: 'blob-store-full' as const });
-      }
-    }
-    return null;
-  }
-
   private readonly onYjsTransaction = (transaction: Y.Transaction): void => {
     if (this.destroyed || !this.port) return;
     // The canonical store already holds a local commit. Materializing it back would rebuild
@@ -616,9 +612,30 @@ class DocumentSession implements DocumentCollaborationSession {
     if (!port || this.applyingRemote) return;
     this.applyingRemote = true;
     try {
+      const exceeded = limitFailure(this.registry, this.blobs);
+      if (exceeded) {
+        this.setStatus('error', exceeded.code, exceeded.detail);
+        return;
+      }
       const materialized = this.materializer.current();
+      // After materializing, because that is what reads the blobs and so what hashes them.
+      const poisoned = this.blobs.poisonedDigest();
+      if (poisoned) {
+        this.setStatus('error', 'blob-digest-mismatch', poisoned);
+        return;
+      }
       if (!materialized.ok) {
         this.setStatus('error', materialized.code);
+        return;
+      }
+      // The materializer repairs shared state it cannot express as a tree, and repair means
+      // leaving something out. Dropping the issue list made that repair silent: a room could
+      // converge on a document missing a peer's paragraph and still report `ready`. This does
+      // not apply the package either, because rendering a document already known to be short
+      // of content is the one outcome worse than refusing.
+      const dropped = droppedContentDetail(materialized.issues);
+      if (dropped) {
+        this.setStatus('error', 'materialize-dropped-content', dropped);
         return;
       }
       this.remoteCounter += 1;
@@ -693,7 +710,15 @@ function waitForSharedInitialization(
   const meta = registry.schema.meta;
   const ready = (): boolean =>
     meta.get('initialized') === true && sharedBinariesReady(registry, blobs);
+  // A blob that does not hash to its key reads as absent here, so without this the wait ends in
+  // `initialization-timeout` — a joiner told to retry a room that will never satisfy it.
+  const poison = (): CollaborationSchemaError | null => {
+    const digest = blobs.poisonedDigest();
+    return digest ? new CollaborationSchemaError('blob-digest-mismatch', digest) : null;
+  };
   if (ready()) return Promise.resolve();
+  const poisonedNow = poison();
+  if (poisonedNow) return Promise.reject(poisonedNow);
   if (signal?.aborted) {
     return Promise.reject(new CollaborationSchemaError('initialization-aborted'));
   }
@@ -707,6 +732,11 @@ function waitForSharedInitialization(
       else resolve();
     };
     const onChange = (): void => {
+      const poisoned = poison();
+      if (poisoned) {
+        finish(poisoned);
+        return;
+      }
       if (ready()) finish();
     };
     const onAbort = (): void => finish(new CollaborationSchemaError('initialization-aborted'));
@@ -744,7 +774,7 @@ export interface CreateDocumentCollaborationOptions {
   /** Unique attachment identity. Omit it to generate a new identity for this session. */
   readonly sessionId?: string;
   readonly identity: CollaborationIdentity;
-  readonly bootstrap: TextCollaborationBootstrap;
+  readonly bootstrap: CollaborationBootstrap;
 }
 
 /**
@@ -792,8 +822,18 @@ export async function createDocumentCollaboration(
     registry.rebuildDerivedIndexes();
   }
 
+  const exceeded = limitFailure(registry, blobs);
+  if (exceeded) throw new CollaborationSchemaError(exceeded.code, exceeded.detail);
+
   const materializer = new PackageMaterializer(registry, blobs);
   const materialized = materializer.current();
+  const poisoned = blobs.poisonedDigest();
+  if (poisoned) {
+    materializer.destroy();
+    // A blob that does not hash to its key reads downstream as a blob that is not there. Say
+    // which it was, so a poisoned room is not reported as a truncated one.
+    throw new CollaborationSchemaError('blob-digest-mismatch', poisoned);
+  }
   if (!materialized.ok) {
     materializer.destroy();
     throw new CollaborationSchemaError(materialized.code);

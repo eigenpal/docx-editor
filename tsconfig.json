@@ -20,9 +20,21 @@
     "declaration": true,
     "declarationMap": true,
     "baseUrl": ".",
+    // Core resolves to SOURCE here, the way `react` above already does. Without it this project
+    // held two copies of the engine: `dist` for anything importing the package name, and `src`
+    // for the harnesses that reach in by relative path. Identical classes from two copies are
+    // different types, so the store's private field made every call across the seam an error —
+    // 7 of them in `binding/tree-session.ts` alone, blamed on a file that is correct.
     "paths": {
       "@/*": ["./packages/react/src/*"],
-      "@docx-editor.dev/react": ["./packages/react/src/index.ts"]
+      "@docx-editor.dev/react": ["./packages/react/src/index.ts"],
+      "@docx-editor.dev/core": ["./packages/core/src/index.ts"],
+      "@docx-editor.dev/core/*": ["./packages/core/src/*"],
+      "@docx-editor.dev/pro": ["./packages/pro/src/index.ts"],
+      "@docx-editor.dev/pro/*": ["./packages/pro/src/*"],
+      "@docx-editor.dev/i18n": ["./packages/i18n/src/index.ts"],
+      "@docx-editor.dev/editor-api": ["./packages/editor-api/src/index.ts"],
+      "@docx-editor.dev/editor-api/*": ["./packages/editor-api/src/*"]
     }
   },
   // `docs/site/data` holds the typed feature matrix that CLAUDE.md makes the single source of

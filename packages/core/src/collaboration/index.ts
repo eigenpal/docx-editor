@@ -125,6 +125,8 @@ export interface CollaborationDocumentPort {
    */
   flushPendingJournals(): void;
   save(): Uint8Array;
+  /** Bytes of one binary package part, or null when the part is absent. */
+  binaryPart(storageKey: string): Uint8Array | null;
 }
 
 /**

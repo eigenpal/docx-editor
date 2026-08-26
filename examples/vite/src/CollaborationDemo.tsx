@@ -4,14 +4,16 @@ import { useDocxEditor } from '@docx-editor.dev/react';
 import type {
   CollaborationParticipant,
   CollaborationStatus,
-  EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import { createT, en } from '@docx-editor.dev/i18n';
 import {
   createCollaborationRoomId,
   validateRoomId,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
-import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/react/webrtc';
+import type {
+  CollaborationSession,
+  UseWebrtcCollaborationConnectOptions,
+} from '@docx-editor.dev/pro/react/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
 const NAME_KEY = 'docx-editor-collaboration-name';
@@ -94,6 +96,39 @@ function roomIdFrom(value: string): string {
   }
 }
 
+/**
+ * The room's encryption key, carried in the URL fragment.
+ *
+ * The room id is the signaling topic, so it cannot double as the key — the signaling host sees
+ * it. A fragment is never sent to that host, so two peers who opened the same invite share a
+ * secret it never learns. Anyone holding the whole link can still decrypt, which is what
+ * joining the room means anyway.
+ */
+function createRoomSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
+}
+
+const COLLAB_FRAGMENT = '#collab=';
+
+/** Read the key out of a pasted invite, or out of the address bar for a link opened directly. */
+function roomSecretFrom(value: string): string | undefined {
+  for (const candidate of [value.trim(), location.href]) {
+    if (!candidate) continue;
+    let hash = '';
+    try {
+      hash = new URL(candidate).hash;
+    } catch {
+      continue;
+    }
+    if (hash.startsWith(COLLAB_FRAGMENT)) return hash.slice(COLLAB_FRAGMENT.length);
+  }
+  return undefined;
+}
+
 function shareUrl(roomId: string): string {
   const url = new URL(location.href);
   // Keep `fixture` so the joiner opens the same small file the creator did. Dropping it
@@ -123,7 +158,7 @@ function ParticipantStack({ participants }: { participants: readonly Collaborati
 }
 
 export interface CollaborationControlProps {
-  readonly session: EditorCollaborationSession | null;
+  readonly session: CollaborationSession | null;
   readonly pending: boolean;
   readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
   readonly leave: (nextDocument?: Uint8Array) => void;
@@ -207,6 +242,9 @@ export function CollaborationControl({
     try {
       const displayName = rememberName();
       const roomId = kind === 'create' ? createCollaborationRoomId() : roomIdFrom(roomInput);
+      // Passed explicitly rather than left for the engine to read off the address bar, so the
+      // URL only changes once a room actually exists.
+      const secret = kind === 'create' ? createRoomSecret() : roomSecretFrom(roomInput);
       await connect({
         roomId,
         identity: {
@@ -218,10 +256,13 @@ export function CollaborationControl({
           kind === 'create'
             ? { kind: 'create', document: new Uint8Array(await editor.save()) }
             : { kind: 'join' },
+        ...(secret ? { password: secret } : {}),
       });
       const url = new URL(location.href);
       url.search = '';
       url.searchParams.set('room', roomId);
+      // The invite carries the key, so `shareUrl` below hands the joiner both halves.
+      url.hash = secret ? `${COLLAB_FRAGMENT.slice(1)}${secret}` : '';
       history.replaceState(null, '', url);
       setMode('connected');
     } catch (cause) {
@@ -240,6 +281,9 @@ export function CollaborationControl({
       leave(new Uint8Array(await editor.save()));
       const url = new URL(location.href);
       url.searchParams.delete('room');
+      // Drop the key too. Leaving it in the address bar would hand the next room's invite a
+      // secret from a room this peer is no longer in.
+      url.hash = '';
       history.replaceState(null, '', url);
       setMode('choice');
       setOpen(false);

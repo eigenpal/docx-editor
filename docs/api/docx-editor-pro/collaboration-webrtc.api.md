@@ -11,17 +11,16 @@ import * as Y from 'yjs';
 export function createCollaborationRoomId(): string;
 
 // @public
-export function createWebrtcCollaboration(options: CreateWebrtcCollaborationOptions): Promise<WebrtcCollaborationRoom>;
+export function createWebrtcCollaboration(options: CreateWebrtcCollaborationOptions): Promise<WebrtcCollaborationHandle>;
 
 // @public
 export interface CreateWebrtcCollaborationOptions {
     // (undocumented)
-    readonly bootstrap: YjsCollaborationBootstrap;
+    readonly bootstrap: CollaborationBootstrap;
     // (undocumented)
     readonly iceServers?: readonly RTCIceServer[];
     // (undocumented)
     readonly identity: CollaborationIdentity;
-    // (undocumented)
     readonly password?: string;
     // (undocumented)
     readonly roomId: string;
@@ -30,13 +29,19 @@ export interface CreateWebrtcCollaborationOptions {
 }
 
 // @public
-export const DEFAULT_SIGNALING_ENDPOINTS: readonly string[];
+export const DEMO_SIGNALING_ENDPOINTS: readonly string[];
+
+// @internal
+export function resolveWebrtcRoomPassword(options: {
+    readonly href?: string;
+    readonly password?: string;
+}): string | undefined;
 
 // @public
 export function validateRoomId(value: string): string;
 
 // @public
-export interface WebrtcCollaborationRoom extends YjsCollaborationRoom {
+export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {
     // (undocumented)
     readonly provider: WebrtcProvider;
     // (undocumented)

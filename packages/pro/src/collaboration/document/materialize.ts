@@ -4,21 +4,16 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import {
-  XML_NAMESPACE_URI,
-  WML_NAMESPACE_URI,
   buildRelationshipSet,
   relsPartNameFor,
   resolveRelationship,
   CUSTOM_XML_PROPS_TYPE,
-  DATASTORE_NAMESPACE_URI,
   type ContentTypeIndex,
-  type OoxmlAttribute,
   type OoxmlElement,
   type OoxmlExternalTarget,
   type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
-  type OoxmlTextNode,
   type RelationshipRecord,
 } from '@docx-editor.dev/core/store';
 import type { LogicalId } from './identity.ts';
@@ -27,7 +22,6 @@ import {
   isElementRecord,
   isTextRecord,
   type ElementRecord,
-  type EncodedAttribute,
   type EncodedRelationship,
   type RepairIssue,
   type RepairIssueCode,
@@ -53,249 +47,30 @@ import {
   mergeCustomXmlRelationships,
   planCustomXmlStores,
 } from './materialize-custom-xml.ts';
+import { partMemberSpecFor } from './materialize-part-members.ts';
+import {
+  attributesMatch,
+  countBlobBytes,
+  countPass,
+  countRecordRead,
+  expandAncestors,
+  freezeElement,
+  freezeText,
+  markPlaced,
+  payloadIdOfNode,
+  replaceChildRange,
+  withRelsChildren,
+} from './materialize-freeze.ts';
 
-const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
-
-function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
-}
-
-function payloadIdOfNode(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return node.id;
-  return attributeValue(node, 'id') ?? node.id;
-}
-
-/**
- * A comment or `commentEx` that belongs under this part root.
- *
- * Concurrent first-time `putXmlPart` of `comments.xml` mints a different logical root on
- * each replica. The part map is last-write-wins, so one root vanishes from the directory
- * and its comment children are no longer reachable from a part. Markers in the story still
- * name them. Adopting by KIND, not by canonical id prefix, is required because new nodes
- * are translated into `lid:` space before they hit shared state. CustomXml `node` children
- * use the same scan: two first-creates both mint `item1.xml`, and last-write-wins would
- * otherwise hide one payload. Sibling order is payload `@id`, so a later local insert
- * and the peer's rematerialize land on the same sequence.
- */
-function isDirectoryMemberOrphan(record: ElementRecord, part: OoxmlPart): boolean {
-  if (record.logicalId === part.root.id) return false;
-  if (part.root.localName === 'comments') return record.kind === 'comment';
-  if (
-    part.root.localName === 'commentsEx' &&
-    record.namespaceUri === W15_NAMESPACE_URI &&
-    record.localName === 'commentEx'
-  ) {
-    return true;
-  }
-  if (isCustomXmlItemPartName(part.name)) {
-    return record.localName === 'node' && record.namespaceUri === part.root.namespaceUri;
-  }
-  return (
-    isCustomXmlPropsPartName(part.name) &&
-    record.localName === 'schemaRefs' &&
-    record.namespaceUri === DATASTORE_NAMESPACE_URI
-  );
-}
-
-function withRelsChildren(part: OoxmlPart, children: readonly OoxmlNode[]): OoxmlPart {
-  const root = part.root;
-  if (
-    root.children.length === children.length &&
-    root.children.every((child, index) => child === children[index])
-  ) {
-    return part;
-  }
-  const nextRoot = Object.freeze({
-    ...root,
-    children: replaceChildRange(root.children, children),
-  }) as OoxmlElement;
-  return Object.freeze({ ...part, root: nextRoot });
-}
-
-export function replaceChildRange(
-  previous: readonly OoxmlNode[],
-  next: readonly OoxmlNode[]
-): readonly OoxmlNode[] {
-  if (previous.length === next.length && previous.every((child, index) => child === next[index])) {
-    return previous;
-  }
-  let start = 0;
-  const maxStart = Math.min(previous.length, next.length);
-  while (start < maxStart && previous[start] === next[start]) start += 1;
-  let previousEnd = previous.length;
-  let nextEnd = next.length;
-  while (
-    previousEnd > start &&
-    nextEnd > start &&
-    previous[previousEnd - 1] === next[nextEnd - 1]
-  ) {
-    previousEnd -= 1;
-    nextEnd -= 1;
-  }
-  return Object.freeze([
-    ...previous.slice(0, start),
-    ...next.slice(start, nextEnd),
-    ...previous.slice(previousEnd),
-  ]);
-}
-
-function freezeAttribute(attribute: EncodedAttribute): OoxmlAttribute {
-  if (attribute.namespaceUri === XML_NAMESPACE_URI && attribute.localName === 'space') {
-    const value = attribute.value === 'preserve' ? 'preserve' : 'default';
-    return Object.freeze({
-      kind: 'xmlSpace',
-      namespaceUri: XML_NAMESPACE_URI,
-      localName: 'space',
-      prefix: 'xml',
-      value,
-    });
-  }
-  if (attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'val') {
-    return Object.freeze({
-      kind: 'wmlVal',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'val',
-      prefix: attribute.prefix,
-      value: attribute.value,
-    });
-  }
-  return Object.freeze({
-    kind: 'genericExtension',
-    namespaceUri: attribute.namespaceUri,
-    localName: attribute.localName,
-    prefix: attribute.prefix,
-    value: attribute.value,
-  });
-}
-
-/**
- * Nodes this process has read out of shared state and frozen into canonical form.
- *
- * Receiving one remote character must cost the size of the edit, not the size of the
- * document. A duration cannot say which of the two happened on a loaded machine; this
- * counter can, so the receive gates assert against it.
- */
-let materializedBuilds = 0;
-let materializedReads = 0;
-
-/** Test-observable count of canonical nodes the materializer has frozen. */
-export function materializedNodeBuilds(): number {
-  return materializedBuilds;
-}
-
-/** Test-observable count of shared-state records the materializer has read. */
-export function materializedNodeReads(): number {
-  return materializedReads;
-}
-
-function freezeText(logicalId: LogicalId, value: string): OoxmlTextNode {
-  materializedBuilds += 1;
-  return Object.freeze({ id: logicalId, kind: 'textValue', value });
-}
-
-function sameBindings(previous: OoxmlElement, record: ElementRecord): boolean {
-  if (previous.namespaceBindings.length !== record.bindings.length) return false;
-  return previous.namespaceBindings.every((binding, index) => {
-    const encoded = record.bindings[index]!;
-    return binding.prefix === encoded.prefix && binding.namespaceUri === encoded.namespaceUri;
-  });
-}
-
-function sameAttributes(previous: OoxmlElement, record: ElementRecord): boolean {
-  if (previous.attributes.length !== record.attributes.length) return false;
-  return previous.attributes.every((attribute, index) => {
-    const encoded = record.attributes[index]!;
-    return (
-      attribute.namespaceUri === encoded.namespaceUri &&
-      attribute.localName === encoded.localName &&
-      attribute.value === encoded.value &&
-      attribute.prefix === (encoded.prefix?.length ? encoded.prefix : undefined)
-    );
-  });
-}
-
-/**
- * Freeze one element, keeping every array the predecessor can still vouch for.
- *
- * A rebuilt node is rebuilt because its CHILDREN moved. Handing it a newly allocated
- * bindings array anyway forfeits every downstream shortcut that keys on that array's
- * identity to prove the inherited namespace context did not change — the delta validator
- * stops pruning at the document element and revalidates the whole part for one keystroke.
- */
-function freezeElement(
-  record: ElementRecord,
-  children: readonly OoxmlNode[],
-  previous?: OoxmlNode
-): OoxmlElement {
-  materializedBuilds += 1;
-  const prior = previous && previous.kind !== 'textValue' ? previous : undefined;
-  return Object.freeze({
-    id: record.logicalId,
-    kind: record.kind,
-    namespaceUri: record.namespaceUri,
-    localName: record.localName,
-    prefix: record.prefix,
-    namespaceBindings:
-      prior && sameBindings(prior, record)
-        ? prior.namespaceBindings
-        : Object.freeze(record.bindings.map((binding) => Object.freeze({ ...binding }))),
-    attributes:
-      prior && sameAttributes(prior, record)
-        ? prior.attributes
-        : Object.freeze(record.attributes.map(freezeAttribute)),
-    children,
-  }) as OoxmlElement;
-}
-
-function attributesMatch(node: OoxmlElement, record: ElementRecord): boolean {
-  if (node.attributes.length !== record.attributes.length) return false;
-  const encoded = new Map(
-    record.attributes.map((attribute) => [
-      `${attribute.namespaceUri}\n${attribute.localName}`,
-      attribute.value,
-    ])
-  );
-  for (const attribute of node.attributes) {
-    if (encoded.get(`${attribute.namespaceUri}\n${attribute.localName}`) !== attribute.value) {
-      return false;
-    }
-  }
-  return node.localName === record.localName && node.kind === record.kind;
-}
-
-/**
- * Claim a whole reused subtree, and say whether the claim was uncontested.
- *
- * Reusing a cached subtree skips the per-node `placed` check that refuses a second parent,
- * so the claim has to be made for the descendants too. `false` means some node of this
- * subtree is already in the tree under another parent: two child arrays list the same id
- * and the cached answer disagrees with the rebuilt one. Emitting the node twice is a silent
- * corruption, so the caller redoes the pass without the cache instead.
- */
-export function markPlaced(node: OoxmlNode, placed: Set<LogicalId>): boolean {
-  // One `add` instead of `has` then `add`: this runs once per node of every reused subtree,
-  // so a second hash of an already-long logical id is a measurable share of a receive.
-  const before = placed.size;
-  placed.add(node.id);
-  let uncontested = placed.size !== before;
-  if (node.kind === 'textValue') return uncontested;
-  for (const child of node.children) {
-    if (!markPlaced(child, placed)) uncontested = false;
-  }
-  return uncontested;
-}
-
-function expandAncestors(registry: DocumentRegistry, ids: ReadonlySet<LogicalId>): Set<LogicalId> {
-  const expanded = new Set(ids);
-  for (const id of ids) {
-    let parent = registry.parentOf(id);
-    while (parent) {
-      expanded.add(parent);
-      parent = registry.parentOf(parent);
-    }
-  }
-  return expanded;
-}
+export {
+  markPlaced,
+  materializedBlobBytesRead,
+  materializedNodeBuilds,
+  materializedNodeReads,
+  materializedPassCounts,
+  materializedPlacementClaims,
+  replaceChildRange,
+} from './materialize-freeze.ts';
 
 export type MaterializeFailureCode = 'missing-blob' | 'missing-root' | 'invalid-relationships';
 
@@ -316,6 +91,8 @@ export class PackageMaterializer {
   /** Depth of each cached subtree, so reuse cannot smuggle a node past `maxTreeDepth`. */
   private readonly heights = new Map<LogicalId, number>();
   private readonly partCache = new Map<string, OoxmlPart>();
+  /** Media payload per storage key, with the digest it was read for. */
+  private readonly blobBytes = new Map<string, { digest: string; bytes: Uint8Array }>();
   /** Last `.rels` projection. The node tree is not the relationship authority. */
   private readonly relsProjection = new Map<string, OoxmlPart>();
   private readonly pendingDirty = new Set<LogicalId>();
@@ -325,6 +102,30 @@ export class PackageMaterializer {
   /** Adoptee signature per survivor at the end of the last pass. */
   private lastAdoption = new Map<LogicalId, string>();
   private placementContested = false;
+  /**
+   * Whether this pass claims every node of a reused subtree, or only its root.
+   *
+   * The claim set answers two questions: which node is already in the tree under some other
+   * parent, and which node is in no part at all. Both need the WHOLE placement — but only
+   * when the placement can have moved. A second parent for a node appears exactly when some
+   * child array gains an entry, when a node is added or removed, or when a tombstone shifts
+   * adoption, and every one of those sets `membershipChanged`, which is one of the conditions
+   * that turns orphan collection on. So a pass with orphan collection off inherits the
+   * placement the previous pass already resolved, and the cached subtrees it hands back are
+   * the ones that pass built. Claiming their roots is enough there, and it is the difference
+   * between a received keystroke costing the edit and costing the document.
+   */
+  private claimsWholeSubtrees = true;
+  /**
+   * Duplicate parents found by the last pass that walked the whole placement.
+   *
+   * A pass that claims roots only cannot rediscover them, and they are unchanged by
+   * construction. Re-reporting them keeps the issue list a property of the tree rather than
+   * of which pass happened to produce it.
+   */
+  private lastDuplicateParents: readonly LogicalId[] = [];
+  /** Ids that left a parent's child array during this pass. Reset per pass. */
+  private readonly droppedChildren = new Set<LogicalId>();
   private pkg: OoxmlPackage | null = null;
   private customXmlRels: readonly EncodedRelationship[] = [];
   private customXmlOverrides = new Map<string, string>();
@@ -389,7 +190,6 @@ export class PackageMaterializer {
 
   rebuild(): MaterializeResult {
     const rawDirty = new Set(this.pendingDirty);
-    const membershipChanged = this.pendingMembership;
     const packageChanged = this.pendingPackage;
     this.pendingDirty.clear();
     this.pendingMembership = false;
@@ -411,40 +211,58 @@ export class PackageMaterializer {
     // and the recorded subtree heights are checked, so a rebuilt spine over cached children
     // reaches the same tree a full pass does — proven by the equivalence oracle in
     // `remote-receive-equivalence.test.ts`.
-    const incremental = this.pkg !== null && !unobserved && (dirty.size > 0 || packageChanged);
-    // Orphan collection has to see the WHOLE placement, because a move or a tombstone can
-    // leave a node reachable from no part at all, and the cache cannot see that.
-    const collectOrphans =
-      membershipChanged ||
-      unobserved ||
-      !this.pkg ||
-      [...dirty].some(
-        (id) => this.registry.isTombstoned(id) || this.registry.parentOf(id) === null
-      );
-    const first = this.materializePass(dirty, packageChanged, incremental, collectOrphans);
+    // Concurrent first-create of a part is the one case that still earns a full pass, which is
+    // also what it used to get. `parts.set(name, …)` and `nodes.set(rootId, …)` are both
+    // last-write-wins, so the loser's root — or its child array — leaves shared state before
+    // any pass could have seen it. Its members are then reachable from nothing, and neither a
+    // comparison against the previous pass nor a derived index is guaranteed to say so.
+    //
+    // Two shapes signal it: a part root was written, or a written node has no parent at all.
+    // Note both read `rawDirty`, the ids shared state actually reported. The condition this
+    // replaces asked the ancestor-EXPANDED set whether anything lacked a parent — and every
+    // edit expands up to a part root, which by definition has none, so it answered yes to
+    // every keystroke ever typed and no pass has been incremental since.
+    const partRoots = new Set(this.registry.partEntries().map((entry) => entry.rootLogicalId));
+    const structureArrived = [...rawDirty].some(
+      (id) =>
+        partRoots.has(id) ||
+        (this.registry.parentOf(id) === null && !this.registry.isTombstoned(id))
+    );
+    const incremental =
+      this.pkg !== null && !unobserved && !structureArrived && (dirty.size > 0 || packageChanged);
+    const first = this.materializePass(dirty, packageChanged, incremental);
     if (!this.placementContested) return first;
     // Two child arrays list one id and the cache disagrees with the rebuilt parent about
     // which one owns it. A full pass decides it the one deterministic way: first preorder
     // placement wins, the rest report `duplicate-parent`.
-    return this.materializePass(dirty, packageChanged, false, true);
+    return this.materializePass(dirty, packageChanged, false);
   }
 
   private materializePass(
     dirty: ReadonlySet<LogicalId>,
     packageChanged: boolean,
-    incremental: boolean,
-    collectOrphans: boolean
+    incremental: boolean
   ): MaterializeResult {
     this.issues.length = 0;
     this.lastDirty = dirty;
     this.placementContested = false;
+    // A full pass builds the tree from shared state alone, so it is the only one that can
+    // claim placement by walking, and the only one that has to.
+    this.claimsWholeSubtrees = !incremental;
+    this.droppedChildren.clear();
+    countPass(!incremental);
+    // An incremental pass never revisits the parents a full pass found contested, so it has
+    // to carry that report forward or the issue disappears after one keystroke.
+    if (incremental) {
+      for (const id of this.lastDuplicateParents) this.push('duplicate-parent', id);
+    }
     this.customXmlRels = [];
     this.customXmlOverrides.clear();
     const placed = new Set<LogicalId>();
     const parts = new Map<string, OoxmlPart>();
     for (const entry of this.registry.partEntries()) {
       const path = new Set<LogicalId>();
-      const root = this.materialize(entry.rootLogicalId, placed, path, incremental, collectOrphans);
+      const root = this.materialize(entry.rootLogicalId, placed, path, incremental);
       if (!root || root.kind === 'textValue') {
         return { ok: false, code: 'missing-root', issues: [...this.issues] };
       }
@@ -462,16 +280,25 @@ export class PackageMaterializer {
       parts.set(entry.name, part);
       this.partCache.set(entry.name, part);
     }
+    // Reachability candidates. A full pass has to consider every node, because it knows
+    // nothing about what came before. An incremental pass saw every child that left a parent,
+    // and no other id can have lost its last parent while it was running.
+    const candidates = incremental ? this.droppedChildren : this.registry.allLogicalIds();
     this.projectRelsParts(parts);
-    this.adoptOrphanPartMembers(parts, placed, incremental, collectOrphans);
-    this.applyCustomXmlStores(parts, placed, incremental, collectOrphans);
+    this.adoptOrphanPartMembers(parts, placed, incremental, candidates);
+    this.applyCustomXmlStores(parts, placed, incremental);
     for (const name of [...this.partCache.keys()]) {
       if (!parts.has(name)) this.partCache.delete(name);
     }
     for (const name of [...this.relsProjection.keys()]) {
       if (!parts.has(name)) this.relsProjection.delete(name);
     }
-    if (collectOrphans) this.collectOrphans(placed);
+    this.reportOrphans(candidates, placed, incremental);
+    if (!incremental) {
+      this.lastDuplicateParents = this.issues
+        .filter((issue) => issue.code === 'duplicate-parent' && issue.logicalId !== undefined)
+        .map((issue) => issue.logicalId as LogicalId);
+    }
     const assembled = this.assemblePackage(parts);
     if (!assembled.ok) return assembled;
     if (
@@ -490,9 +317,52 @@ export class PackageMaterializer {
     this.issues.push(logicalId ? { code, logicalId } : { code });
   }
 
-  private collectOrphans(placed: ReadonlySet<LogicalId>): void {
-    for (const id of this.registry.allLogicalIds()) {
-      if (placed.has(id) || this.registry.isTombstoned(id)) continue;
+  /**
+   * Report nodes that no part can reach.
+   *
+   * Reachability is read off the listings index rather than off a placement set built by
+   * walking, because filling that set was the whole cost of a received keystroke: every
+   * block the edit did not touch got visited to record that it is still where it was. A node
+   * that any live parent lists is in the tree, and a part root is reachable by definition.
+   *
+   * This reports the ROOT of a detached subtree rather than every node inside it — the nodes
+   * beneath it still have a parent, it just is not connected to a part. That is the more
+   * useful signal anyway: one issue names the break instead of one per node below it.
+   */
+  /**
+   * Whether some parent's CURRENT child array still names this id.
+   *
+   * The listings index answers "who has ever listed it", which is not the same question: a
+   * parent whose whole record was replaced can leave a listing behind for a child it no
+   * longer has. Reading the arrays back makes the answer authoritative, and the callers only
+   * ask it about ids this pass watched leave a parent, so the read is bounded by the edit.
+   *
+   * A tombstoned parent counts. Its children are adopted by the survivor rather than lost, so
+   * they have a place in the tree and must not be adopted into a part on top of it.
+   */
+  private stillListed(logicalId: LogicalId): boolean {
+    for (const parent of this.registry.listingParents(logicalId)) {
+      const record = this.registry.record(parent);
+      if (record && isElementRecord(record) && record.childIds.includes(logicalId)) return true;
+    }
+    return false;
+  }
+
+  private reportOrphans(
+    candidates: Iterable<LogicalId>,
+    placed: ReadonlySet<LogicalId>,
+    incremental: boolean
+  ): void {
+    const partRoots = incremental
+      ? new Set(this.registry.partEntries().map((entry) => entry.rootLogicalId))
+      : null;
+    for (const id of candidates) {
+      if (this.registry.isTombstoned(id)) continue;
+      if (partRoots === null) {
+        if (placed.has(id)) continue;
+      } else if (partRoots.has(id) || this.stillListed(id)) {
+        continue;
+      }
       const record = this.registry.record(id);
       const hasContent =
         !!record &&
@@ -507,8 +377,7 @@ export class PackageMaterializer {
     logicalId: LogicalId,
     placed: Set<LogicalId>,
     path: Set<LogicalId>,
-    incremental: boolean,
-    collectOrphans: boolean
+    incremental: boolean
   ): OoxmlNode | null {
     if (path.has(logicalId) || path.size >= this.registry.limits.maxTreeDepth) {
       this.push('cycle', logicalId);
@@ -525,13 +394,21 @@ export class PackageMaterializer {
       // reaching the bottom, and every downstream oracle — validate, fingerprint, save —
       // recurses. So the recorded height is checked before the reuse, not after.
       if (cached && path.size + this.heightOf(cached) <= this.registry.limits.maxTreeDepth) {
-        if (!markPlaced(cached, placed)) this.placementContested = true;
+        // Claiming the subtree node by node is what made receiving one character cost the
+        // whole document: the body root rebuilds, every other block is reused, and the walk
+        // visits all of them to fill a set. It is only needed when this pass has to decide
+        // reachability for itself — see `claimsWholeSubtrees`.
+        if (this.claimsWholeSubtrees) {
+          if (!markPlaced(cached, placed)) this.placementContested = true;
+        } else {
+          placed.add(cached.id);
+        }
         return cached;
       }
     }
     if (this.registry.isTombstoned(logicalId)) return null;
     placed.add(logicalId);
-    materializedReads += 1;
+    countRecordRead();
     const record = this.registry.record(logicalId);
     if (!record) {
       this.push('missing-node', logicalId);
@@ -572,7 +449,14 @@ export class PackageMaterializer {
         this.push('child-id-not-in-registry', childId);
         continue;
       }
-      const child = this.materialize(childId, placed, path, incremental, collectOrphans);
+      // A pass that claims subtree roots only cannot notice a second parent by placement, so
+      // it asks the listings index instead: one lister means one parent, and more than one is
+      // the contest that sends the whole rebuild back through a full pass to be resolved
+      // deterministically. This rides inside the loop the rebuild already runs.
+      if (!this.claimsWholeSubtrees && this.registry.listingParents(childId).length > 1) {
+        this.placementContested = true;
+      }
+      const child = this.materialize(childId, placed, path, incremental);
       if (child) children.push(child);
     }
     path.delete(logicalId);
@@ -587,9 +471,26 @@ export class PackageMaterializer {
       return previous;
     }
     const previousChildren = previous && previous.kind !== 'textValue' ? previous.children : [];
+    this.recordDroppedChildren(previousChildren, children);
     const next = freezeElement(record, replaceChildRange(previousChildren, children), previous);
     this.remember(logicalId, next);
     return next;
+  }
+
+  /**
+   * Note every child that this rebuild removed from its parent.
+   *
+   * These are the only ids that can have lost their last parent during the pass, which is
+   * what lets orphan reporting and member adoption stop scanning the whole node table. The
+   * comments-part race lands here: the losing replica's child array is overwritten, so its
+   * members show up as dropped and get adopted back.
+   */
+  private recordDroppedChildren(previous: readonly OoxmlNode[], next: readonly OoxmlNode[]): void {
+    if (previous.length === 0) return;
+    const kept = new Set(next.map((child) => child.id));
+    for (const child of previous) {
+      if (!kept.has(child.id)) this.droppedChildren.add(child.id);
+    }
   }
 
   private remember(logicalId: LogicalId, node: OoxmlNode): void {
@@ -670,55 +571,45 @@ export class PackageMaterializer {
   }
 
   /**
-   * Re-parent comment nodes the children-array LWW dropped.
+   * Re-parent directory members the part-map LWW dropped.
    *
-   * Both replicas mint `/word/comments.xml#0` when the file has no comments part yet.
-   * `nodes.set(id, newMap)` is last-write-wins, so one replica's nested children array
-   * vanishes on merge. The comment element itself is a different key and still exists.
+   * Both replicas mint `/word/comments.xml#0` when the file has no comments part yet, and
+   * the same holds for the footnotes, endnotes and numbering parts. `parts.set(name, …)` is
+   * last-write-wins, so the loser's root leaves shared state and its children are reachable
+   * from no part. The children themselves are separate keys and still exist, so the repair
+   * is to give them an edge back. `materialize-part-members.ts` says which elements qualify
+   * for which part, and why headers cannot be among them.
    */
   private adoptOrphanPartMembers(
     parts: Map<string, OoxmlPart>,
     placed: Set<LogicalId>,
     incremental: boolean,
-    collectOrphans: boolean
+    candidates: Iterable<LogicalId>
   ): void {
     for (const [name, part] of parts) {
-      if (
-        part.root.localName !== 'comments' &&
-        part.root.localName !== 'commentsEx' &&
-        !isCustomXmlItemPartName(name) &&
-        !isCustomXmlPropsPartName(name)
-      ) {
-        continue;
-      }
-      const members: OoxmlNode[] = [];
+      const spec = partMemberSpecFor(name, part.root);
+      if (!spec) continue;
+      const isMember = (record: ElementRecord): boolean =>
+        record.logicalId !== part.root.id && spec.isMember(record);
+      const members: OoxmlElement[] = [];
       const seen = new Set<LogicalId>();
       for (const child of part.root.children) {
         if (child.kind === 'textValue') continue;
         const record = this.registry.record(child.id);
-        if (!record || !isElementRecord(record)) continue;
-        if (!isDirectoryMemberOrphan(record, part)) continue;
+        if (!record || !isElementRecord(record) || !isMember(record)) continue;
         members.push(child);
         seen.add(child.id);
       }
-      let adopted = 0;
-      for (const id of this.registry.allLogicalIds()) {
-        if (placed.has(id) || seen.has(id) || this.registry.isTombstoned(id)) continue;
-        const record = this.registry.record(id);
-        if (!record || !isElementRecord(record)) continue;
-        if (!isDirectoryMemberOrphan(record, part)) continue;
-        const node = this.materialize(id, placed, new Set(), incremental, collectOrphans);
-        if (!node || node.kind === 'textValue') continue;
-        members.push(node);
-        seen.add(id);
-        adopted += 1;
-      }
-      if (isCustomXmlItemPartName(name) || isCustomXmlPropsPartName(name)) {
-        members.sort((left, right) => payloadIdOfNode(left).localeCompare(payloadIdOfNode(right)));
-      } else {
-        if (adopted === 0) continue;
-        members.sort((left, right) => left.id.localeCompare(right.id));
-      }
+      const adopted = this.adoptLooseMembers(
+        members,
+        seen,
+        isMember,
+        placed,
+        incremental,
+        candidates
+      );
+      if (adopted === 0 && !spec.sortWithoutAdoption) continue;
+      members.sort((left, right) => spec.sortKey(left).localeCompare(spec.sortKey(right)));
       const kept: OoxmlNode[] = [];
       for (const child of part.root.children) {
         if (seen.has(child.id)) continue;
@@ -736,18 +627,52 @@ export class PackageMaterializer {
     }
   }
 
+  /**
+   * Find members of this part that no live parent lists, and give them an edge back.
+   *
+   * `candidates` is the whole node table only on a full pass. On an incremental one it is the
+   * ids that left a child array during this very pass, which is the only way a member can
+   * lose its last parent — and it is why receiving a character in a document that happens to
+   * have a comments part no longer reads every node key once per adoptable part.
+   */
+  private adoptLooseMembers(
+    members: OoxmlElement[],
+    seen: Set<LogicalId>,
+    isMember: (record: ElementRecord) => boolean,
+    placed: Set<LogicalId>,
+    incremental: boolean,
+    candidates: Iterable<LogicalId>
+  ): number {
+    let adopted = 0;
+    for (const id of candidates) {
+      if (placed.has(id) || seen.has(id) || this.registry.isTombstoned(id)) continue;
+      // `placed` is complete only on a full pass. On an incremental one a surviving parent may
+      // sit inside a subtree claimed by its root alone, so reachability has to be established
+      // another way — otherwise a child that merely MOVED would be adopted into the part as a
+      // second copy.
+      if (incremental && this.stillListed(id)) continue;
+      const record = this.registry.record(id);
+      if (!record || !isElementRecord(record) || !isMember(record)) continue;
+      const node = this.materialize(id, placed, new Set(), incremental);
+      if (!node || node.kind === 'textValue') continue;
+      members.push(node);
+      seen.add(id);
+      adopted += 1;
+    }
+    return adopted;
+  }
+
   private adoptNodesIntoRoot(
     rootId: LogicalId,
     nodeIds: readonly LogicalId[],
     placed: Set<LogicalId>,
-    incremental: boolean,
-    collectOrphans: boolean
+    incremental: boolean
   ): OoxmlElement | null {
     const existing = this.cache.get(rootId);
     const root =
       existing && existing.kind !== 'textValue'
         ? existing
-        : this.materialize(rootId, placed, new Set(), incremental, collectOrphans);
+        : this.materialize(rootId, placed, new Set(), incremental);
     if (!root || root.kind === 'textValue') return null;
     const members: OoxmlNode[] = [...root.children];
     const seen = new Set(members.map((child) => child.id));
@@ -761,7 +686,7 @@ export class PackageMaterializer {
         adopted += 1;
         continue;
       }
-      const node = this.materialize(id, placed, new Set(), incremental, collectOrphans);
+      const node = this.materialize(id, placed, new Set(), incremental);
       if (!node || node.kind === 'textValue') continue;
       members.push(node);
       seen.add(id);
@@ -782,8 +707,7 @@ export class PackageMaterializer {
   private applyCustomXmlStores(
     parts: Map<string, OoxmlPart>,
     placed: Set<LogicalId>,
-    incremental: boolean,
-    collectOrphans: boolean
+    incremental: boolean
   ): void {
     const stores = planCustomXmlStores(this.registry, parts);
     if (stores.length === 0 || !customXmlRepairNeeded(parts, stores)) return;
@@ -796,16 +720,9 @@ export class PackageMaterializer {
         store.dataRootId,
         store.nodeIds,
         placed,
-        incremental,
-        collectOrphans
+        incremental
       );
-      const propsRoot = this.materialize(
-        store.propsRootId,
-        placed,
-        new Set(),
-        incremental,
-        collectOrphans
-      );
+      const propsRoot = this.materialize(store.propsRootId, placed, new Set(), incremental);
       if (!dataRoot || !propsRoot || propsRoot.kind === 'textValue') continue;
       const dataPart = Object.freeze({
         id: store.itemName,
@@ -836,6 +753,38 @@ export class PackageMaterializer {
     this.projectRelsParts(parts);
   }
 
+  /**
+   * Media bytes for every binary part, keyed the way the package wants them.
+   *
+   * The blob store returns a defensive copy on every read, and a descriptor names its bytes
+   * by content digest — so a descriptor whose digest is unchanged names bytes this
+   * materializer already holds. Re-reading them would copy every image in the document to
+   * learn they are the same images, on every pass, which is to say on every received
+   * character. The map is rebuilt each pass because a caller may own it; the payloads are
+   * not, because they are addressed by their own hash.
+   */
+  private resolvePartBytes(): Map<string, Uint8Array> | null {
+    const partBytes = new Map<string, Uint8Array>();
+    const live = new Set<string>();
+    for (const descriptor of this.registry.binaries()) {
+      live.add(descriptor.storageKey);
+      const held = this.blobBytes.get(descriptor.storageKey);
+      if (held && held.digest === descriptor.digest) {
+        partBytes.set(descriptor.storageKey, held.bytes);
+        continue;
+      }
+      const bytes = this.blobs.get(descriptor.digest);
+      if (!bytes) return null;
+      countBlobBytes(bytes.length);
+      this.blobBytes.set(descriptor.storageKey, { digest: descriptor.digest, bytes });
+      partBytes.set(descriptor.storageKey, bytes);
+    }
+    for (const key of [...this.blobBytes.keys()]) {
+      if (!live.has(key)) this.blobBytes.delete(key);
+    }
+    return partBytes;
+  }
+
   private assemblePackage(parts: Map<string, OoxmlPart>): MaterializeResult {
     const relationships = this.projectedRelationships() as RelationshipRecord[];
     const set = buildRelationshipSet(relationships);
@@ -853,12 +802,8 @@ export class PackageMaterializer {
         });
       }
     }
-    const partBytes = new Map<string, Uint8Array>();
-    for (const descriptor of this.registry.binaries()) {
-      const bytes = this.blobs.get(descriptor.digest);
-      if (!bytes) return { ok: false, code: 'missing-blob', issues: [...this.issues] };
-      partBytes.set(descriptor.storageKey, bytes);
-    }
+    const partBytes = this.resolvePartBytes();
+    if (!partBytes) return { ok: false, code: 'missing-blob', issues: [...this.issues] };
     const overrides = new Map(this.registry.contentTypeOverrides());
     for (const [name, mediaType] of this.customXmlOverrides) overrides.set(name, mediaType);
     const contentTypes: ContentTypeIndex = {

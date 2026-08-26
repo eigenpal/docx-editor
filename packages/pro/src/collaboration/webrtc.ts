@@ -19,7 +19,7 @@ import {
   type DocumentCollaborationHandle,
 } from './document-session.ts';
 import { installChunkedFraming, type ChunkablePeer } from './webrtc-chunking.ts';
-import type { TextCollaborationBootstrap } from './session.ts';
+import type { CollaborationBootstrap } from './session.ts';
 
 /**
  * Public demo signaling endpoints. Use these endpoints for demos only.
@@ -34,9 +34,17 @@ export const DEMO_SIGNALING_ENDPOINTS = Object.freeze(['wss://turn.0docker.com/w
 export interface CreateWebrtcCollaborationOptions {
   readonly roomId: string;
   readonly identity: CollaborationIdentity;
-  readonly bootstrap: TextCollaborationBootstrap;
+  readonly bootstrap: CollaborationBootstrap;
   readonly signaling?: readonly string[];
   readonly iceServers?: readonly RTCIceServer[];
+  /**
+   * Signaling encryption secret for `y-webrtc`.
+   *
+   * Do not pass the room id. That value is in shareable join URLs and is the
+   * signaling topic, so the signaling host already has it. Put a secret in the
+   * URL fragment as `#collab=...` — fragments are not sent to the server — and
+   * pass the same value here, or omit both and accept plaintext signaling.
+   */
   readonly password?: string;
 }
 
@@ -62,6 +70,58 @@ export function validateRoomId(value: string): string {
   return roomId;
 }
 
+const ROOM_SECRET_PATTERN = /^[A-Za-z0-9_-]{24,256}$/;
+
+const COLLAB_FRAGMENT_PREFIX = '#collab=';
+
+/**
+ * Resolve the `y-webrtc` signaling password.
+ *
+ * The room id is public (query string and signaling topic), so it is never the
+ * default key. An explicit `password` wins. Otherwise a `#collab=` URL fragment
+ * is used: the fragment never reaches the signaling host, and two peers who
+ * opened the same link share it.
+ *
+ * Residual: a host that passes neither value gets no encryption. Anyone who
+ * has the full link, including the fragment, can decrypt — that is join
+ * access, not a separate authorization check. A secret that never appears in
+ * the URL at all cannot be agreed from the link alone.
+ *
+ * @internal
+ */
+export function resolveWebrtcRoomPassword(options: {
+  readonly password?: string;
+  readonly href?: string;
+}): string | undefined {
+  const explicit = options.password?.trim() ?? '';
+  if (explicit.length > 0) return explicit;
+  return passwordFromUrlFragment(options.href);
+}
+
+const passwordFromUrlFragment = (href?: string): string | undefined => {
+  const source =
+    href ??
+    (typeof globalThis.location === 'object' && globalThis.location !== null
+      ? String(globalThis.location.href ?? '')
+      : '');
+  if (source.length === 0) return undefined;
+  let hash: string;
+  try {
+    hash = new URL(source).hash;
+  } catch {
+    return undefined;
+  }
+  if (!hash.startsWith(COLLAB_FRAGMENT_PREFIX)) return undefined;
+  let secret: string;
+  try {
+    secret = decodeURIComponent(hash.slice(COLLAB_FRAGMENT_PREFIX.length));
+  } catch {
+    return undefined;
+  }
+  if (!ROOM_SECRET_PATTERN.test(secret)) return undefined;
+  return secret;
+};
+
 /**
  * Frame oversize messages on every peer of one provider.
  *
@@ -72,13 +132,16 @@ export function validateRoomId(value: string): string {
  * Wrapping `webrtcConns.set` then catches every connection at creation, which is
  * always before its channel carries data.
  */
-const installChunkedTransport = (provider: WebrtcProvider): void => {
+const installChunkedTransport = (
+  provider: WebrtcProvider,
+  onAbandonedMessage: () => void
+): void => {
   void Promise.resolve(provider.key).then(() => {
     const room = provider.room;
     if (!room) return;
     const connections = room.webrtcConns;
     const attach = (connection: { readonly peer: unknown }): void => {
-      installChunkedFraming(connection.peer as ChunkablePeer);
+      installChunkedFraming(connection.peer as ChunkablePeer, { onAbandonedMessage });
     };
     for (const connection of connections.values()) attach(connection);
     const originalSet = connections.set.bind(connections);
@@ -94,14 +157,16 @@ export async function createWebrtcCollaboration(
   options: CreateWebrtcCollaborationOptions
 ): Promise<WebrtcCollaborationHandle> {
   const roomId = validateRoomId(options.roomId);
+  const password = resolveWebrtcRoomPassword({ password: options.password });
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   let provider: WebrtcProvider | null = null;
+  let onAbandonedChunk = (): void => {};
   const connectProvider = (): WebrtcProvider => {
     const created = new WebrtcProvider(roomId, ydoc, {
       awareness,
       signaling: [...(options.signaling ?? DEMO_SIGNALING_ENDPOINTS)],
-      password: options.password ?? roomId,
+      ...(password !== undefined ? { password } : {}),
       ...(options.iceServers
         ? {
             peerOpts: {
@@ -112,7 +177,7 @@ export async function createWebrtcCollaboration(
           }
         : {}),
     });
-    installChunkedTransport(created);
+    installChunkedTransport(created, () => onAbandonedChunk());
     return created;
   };
   let handle: DocumentCollaborationHandle;
@@ -141,6 +206,9 @@ export async function createWebrtcCollaboration(
   const connectedProvider = provider;
 
   const session = handle.session;
+  onAbandonedChunk = () => {
+    session.setTransportStatus('error', 'incomplete-chunk');
+  };
   const onStatus = (event: { readonly connected: boolean }): void => {
     session.setTransportStatus(
       event.connected ? 'ready' : 'disconnected',

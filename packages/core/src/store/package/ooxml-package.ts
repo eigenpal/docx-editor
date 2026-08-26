@@ -346,10 +346,24 @@ function contentTypeFor(partName: string, index: ContentTypeIndex): string {
  * normalization, content-type indexing, relationship validation, entity-free XML — into one
  * loader, and returns a typed rejection rather than throwing from inside a decoder.
  */
+/**
+ * Times {@link readOoxmlPackage} has run in this process.
+ *
+ * Publishing one image used to save and re-parse the whole package. Tests count this so a
+ * large document cannot hide the extra parse behind wall-clock noise.
+ */
+let packageReadCount = 0;
+
+/** Test-observable count of {@link readOoxmlPackage} calls. */
+export function ooxmlPackageReadCount(): number {
+  return packageReadCount;
+}
+
 export function readOoxmlPackage(
   bytes: Uint8Array,
   limits: OoxmlPackageLimits = {}
 ): OoxmlPackageResult {
+  packageReadCount += 1;
   const zip = readZip(bytes, limits.zip ?? DEFAULT_ZIP_LIMITS);
   if (!zip.ok) return { ok: false, reason: zip.reason, detail: zip.detail };
 

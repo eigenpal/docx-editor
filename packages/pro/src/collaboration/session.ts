@@ -42,12 +42,52 @@ const DEFAULT_INITIALIZATION_TIMEOUT_MS = 30_000;
 /**
  * Create or join bootstrap for one collaboration replica.
  *
- * Text and document factories share this union.
+ * Text, document, and WebRTC factories share this union.
  * @public
  */
-export type TextCollaborationBootstrap =
+export type CollaborationBootstrap =
   | { readonly kind: 'create'; readonly document: Uint8Array }
   | { readonly kind: 'join'; readonly timeoutMs?: number; readonly signal?: AbortSignal };
+
+/**
+ * Host-facing collaboration session.
+ *
+ * A host reads identity, status, presence, and undo. The editor attaches
+ * {@link EditorCollaborationSession} internally and never through this type.
+ * @public
+ */
+export interface CollaborationSession {
+  readonly documentId: string;
+  /** Unique identity for this attachment lifetime. */
+  readonly sessionId: string;
+  readonly identity: CollaborationIdentity;
+  status(): CollaborationStatus;
+  /**
+   * Cached status, current reason, and last failure.
+   *
+   * Same reference until any of those values change.
+   */
+  statusSnapshot(): CollaborationStatusSnapshot;
+  subscribeStatus(
+    listener: (
+      status: CollaborationStatus,
+      reason?: CollaborationFailureCode,
+      detail?: string
+    ) => void
+  ): () => void;
+  canUndo(): boolean;
+  canRedo(): boolean;
+  undo(): boolean;
+  redo(): boolean;
+  participants(): readonly CollaborationParticipant[];
+  subscribeParticipants(
+    listener: (participants: readonly CollaborationParticipant[]) => void
+  ): () => void;
+  remoteSelections(): readonly CollaborationRemoteSelection[];
+  subscribeRemoteSelections(
+    listener: (selections: readonly CollaborationRemoteSelection[]) => void
+  ): () => void;
+}
 
 /**
  * Options for a paragraph-text collaboration replica.
@@ -62,10 +102,15 @@ export interface CreateTextCollaborationOptions {
   /** Unique attachment identity. Omit it to generate a new identity for this session. */
   readonly sessionId?: string;
   readonly identity: CollaborationIdentity;
-  readonly bootstrap: TextCollaborationBootstrap;
+  readonly bootstrap: CollaborationBootstrap;
 }
 
-/** Paragraph-text collaboration session with transport status integration. @public */
+/**
+ * Engine-facing paragraph-text session, including attach and operation gating.
+ *
+ * Hosts consume {@link CollaborationSession}. Providers call `setTransportStatus`.
+ * @public
+ */
 export interface TextCollaborationSession extends EditorCollaborationSession {
   /** Provider convenience seam. Low-level consumers normally leave the session ready. */
   setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void;
@@ -74,10 +119,11 @@ export interface TextCollaborationSession extends EditorCollaborationSession {
 /**
  * Owned collaboration replica: document bytes, session, and teardown.
  *
- * Text and document factories share this shape. The session type names the engine.
+ * Text and document factories share this shape. A host reads
+ * {@link CollaborationSession}; the engine session remains assignable.
  * @public
  */
-export interface CollaborationHandle<TSession extends EditorCollaborationSession> {
+export interface CollaborationHandle<TSession extends CollaborationSession> {
   readonly document: Uint8Array;
   readonly session: TSession;
   destroy(): void;

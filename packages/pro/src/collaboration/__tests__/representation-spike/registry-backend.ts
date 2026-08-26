@@ -400,13 +400,25 @@ export class RegistryBackend implements RepresentationBackend {
     for (const target of targets) this.recomputeAdoptees(target);
   }
 
+  private isContentWitness(id: LogicalId): boolean {
+    const record = this.record(id);
+    if (!record) return false;
+    if (!isElementRecord(record)) return record.kind === 'textValue';
+    return !record.kind.endsWith('Properties');
+  }
+
   private recomputeAdoptees(survivorId: LogicalId): void {
     const extras: LogicalId[] = [];
     for (const tombstoneId of this.tombstoneSources.get(survivorId) ?? []) {
       const rec = this.nodes.get(tombstoneId);
       if (!rec) continue;
       for (const childId of childArrayOf(rec)?.toArray() ?? []) {
-        if (!this.isTombstoned(childId) && this.nodes.has(childId)) extras.push(childId);
+        if (this.isTombstoned(childId) || !this.nodes.has(childId)) continue;
+        // A join drops the removed paragraph's `w:pPr`. Adopting that property node onto the
+        // survivor produced two `paragraphProperties` children, which `known-node-invariant`
+        // refused, so the receiving replica never installed the joined tree.
+        if (!this.isContentWitness(childId)) continue;
+        extras.push(childId);
       }
     }
     if (extras.length > 0) this.adoptees.set(survivorId, extras);

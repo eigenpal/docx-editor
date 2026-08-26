@@ -194,6 +194,51 @@ describe('useWebrtcCollaboration (Vue)', () => {
     mounted.unmount();
   });
 
+  test('a failed auto-connect reports a typed collaboration failure', async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+    process.on('unhandledRejection', onRejection);
+    let mounted: ReturnType<typeof mountHook> | undefined;
+    try {
+      mounted = mountHook(() => Promise.reject(new Error('signaling refused')));
+      await Promise.resolve();
+      await nextTick();
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+    expect(mounted?.latest()?.error.value).toEqual({
+      code: 'transport',
+      detail: 'signaling refused',
+    });
+    expect(mounted?.latest()?.pending.value).toBe(false);
+    expect(mounted?.latest()?.session.value).toBeNull();
+    expect(rejections).toEqual([]);
+    mounted?.unmount();
+  });
+
+  test('connect rejects with the failure code from a schema error', async () => {
+    const mounted = mountHook(
+      () =>
+        Promise.reject(
+          Object.assign(new Error('initialization-timeout'), { code: 'initialization-timeout' })
+        ),
+      false
+    );
+    await nextTick();
+    let thrown: unknown;
+    try {
+      await mounted.latest()?.connect(CONNECT);
+    } catch (cause) {
+      thrown = cause;
+    }
+    expect(mounted.latest()?.error.value).toEqual({ code: 'initialization-timeout' });
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
+    mounted.unmount();
+  });
+
   test('the public webrtc entry does not export the test room factory', () => {
     const source = readFileSync(join(import.meta.dir, '..', 'vue', 'webrtc.ts'), 'utf8');
     expect(source).not.toContain('WEBRTC_CREATE_ROOM_FOR_TESTS');

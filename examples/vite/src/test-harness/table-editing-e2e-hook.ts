@@ -239,7 +239,11 @@ export function createDocxEditorE2EHook(getEditor: () => Editor | null): DocxEdi
       if (!opened.ok) return [`package: ${opened.reason}`];
       const expectedPart = opened.package.parts.get(opened.package.mainDocumentPart);
       if (!expectedPart) return ['word/document.xml missing'];
-      return diffSemanticDigests(semanticDigest([expectedPart]), semanticDigest([part]));
+      // Flattened here rather than widening the contract: this value crosses into the spec as
+      // a diagnostic to print, and the two refusals above are already strings.
+      return diffSemanticDigests(semanticDigest([expectedPart]), semanticDigest([part])).map(
+        (difference) => `${difference.path}: ${difference.before} -> ${difference.after}`
+      );
     },
     getSelectedTable() {
       return getEditor()?.getSelectedTable() ?? null;

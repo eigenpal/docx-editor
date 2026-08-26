@@ -8,6 +8,26 @@ import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 // @public
+export type CollaborationBootstrap = {
+    readonly document: Uint8Array;
+    readonly kind: 'create';
+} | {
+    readonly kind: 'join';
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+};
+
+// @public
+export interface CollaborationHandle<TSession extends CollaborationSession> {
+    // (undocumented)
+    destroy(): void;
+    // (undocumented)
+    readonly document: Uint8Array;
+    // (undocumented)
+    readonly session: TSession;
+}
+
+// @public
 export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
 
 // @public
@@ -26,14 +46,44 @@ export class CollaborationSchemaError extends Error {
 }
 
 // @public
-export function createDocumentCollaboration(options: CreateDocumentCollaborationOptions): Promise<YjsCollaborationRoom>;
+export interface CollaborationSession {
+    // (undocumented)
+    canRedo(): boolean;
+    // (undocumented)
+    canUndo(): boolean;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    // (undocumented)
+    participants(): readonly CollaborationParticipant[];
+    // (undocumented)
+    redo(): boolean;
+    // (undocumented)
+    remoteSelections(): readonly CollaborationRemoteSelection[];
+    readonly sessionId: string;
+    // (undocumented)
+    status(): CollaborationStatus;
+    statusSnapshot(): CollaborationStatusSnapshot;
+    // (undocumented)
+    subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
+    // (undocumented)
+    subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
+    // (undocumented)
+    subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
+    // (undocumented)
+    undo(): boolean;
+}
+
+// @public
+export function createDocumentCollaboration(options: CreateDocumentCollaborationOptions): Promise<DocumentCollaborationHandle>;
 
 // @public
 export interface CreateDocumentCollaborationOptions {
     // (undocumented)
     readonly awareness: Awareness;
     // (undocumented)
-    readonly bootstrap: YjsCollaborationBootstrap;
+    readonly bootstrap: CollaborationBootstrap;
     // (undocumented)
     readonly documentId: string;
     // (undocumented)
@@ -44,16 +94,14 @@ export interface CreateDocumentCollaborationOptions {
 }
 
 // @public
-function createYjsCollaboration(options: CreateYjsCollaborationOptions): Promise<YjsCollaborationRoom>;
-export { createYjsCollaboration as createTextCollaboration }
-export { createYjsCollaboration }
+export function createTextCollaboration(options: CreateTextCollaborationOptions): Promise<TextCollaborationHandle>;
 
 // @public
-export interface CreateYjsCollaborationOptions {
+export interface CreateTextCollaborationOptions {
     // (undocumented)
     readonly awareness: Awareness;
     // (undocumented)
-    readonly bootstrap: YjsCollaborationBootstrap;
+    readonly bootstrap: CollaborationBootstrap;
     // (undocumented)
     readonly documentId: string;
     // (undocumented)
@@ -62,6 +110,12 @@ export interface CreateYjsCollaborationOptions {
     // (undocumented)
     readonly ydoc: Y.Doc;
 }
+
+// @public
+export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;
+
+// @public
+export type DocumentCollaborationSession = TextCollaborationSession;
 
 // @public
 export const MAX_BASELINE_BYTES: number;
@@ -73,27 +127,10 @@ export const PROTOCOL_VERSION = 1;
 export const SCHEMA_VERSION = 1;
 
 // @public
-export type YjsCollaborationBootstrap = {
-    readonly document: Uint8Array;
-    readonly kind: 'create';
-} | {
-    readonly kind: 'join';
-    readonly signal?: AbortSignal;
-    readonly timeoutMs?: number;
-};
+export type TextCollaborationHandle = CollaborationHandle<TextCollaborationSession>;
 
 // @public
-export interface YjsCollaborationRoom {
-    // (undocumented)
-    destroy(): void;
-    // (undocumented)
-    readonly document: Uint8Array;
-    // (undocumented)
-    readonly session: YjsCollaborationSession;
-}
-
-// @public
-export interface YjsCollaborationSession extends EditorCollaborationSession {
+export interface TextCollaborationSession extends EditorCollaborationSession {
     setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void;
 }
 

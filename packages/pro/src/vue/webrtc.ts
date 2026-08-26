@@ -15,6 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 export {
   useWebrtcCollaboration,
+  type CollaborationSession,
   type UseWebrtcCollaborationBootstrap,
   type UseWebrtcCollaborationConnectOptions,
   type UseWebrtcCollaborationOptions,

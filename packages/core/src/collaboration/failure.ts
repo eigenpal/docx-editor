@@ -31,6 +31,7 @@ export type CollaborationFailureCode =
   | 'already-initialized'
   | 'baseline-digest-mismatch'
   | 'baseline-too-large'
+  | 'blob-digest-mismatch'
   | 'blob-read'
   | 'blob-store-full'
   | 'blob-too-large'
@@ -60,6 +61,7 @@ export type CollaborationFailureCode =
   | 'invalid-shared-metadata'
   | 'invalid-string'
   | 'local-mirror-failed'
+  | 'materialize-dropped-content'
   | 'missing-blob'
   | 'missing-local-blob'
   | 'missing-root'
@@ -89,6 +91,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'already-initialized': true,
   'baseline-digest-mismatch': true,
   'baseline-too-large': true,
+  'blob-digest-mismatch': true,
   'blob-read': true,
   'blob-store-full': true,
   'blob-too-large': true,
@@ -118,6 +121,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'invalid-shared-metadata': true,
   'invalid-string': true,
   'local-mirror-failed': true,
+  'materialize-dropped-content': true,
   'missing-blob': true,
   'missing-local-blob': true,
   'missing-root': true,

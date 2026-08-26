@@ -17,6 +17,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * unchanged, so a peer without this shim still exchanges awareness and
  * incremental updates normally.
  *
+ * An incomplete frame must not sit forever. Yjs updates are causal: a missing
+ * payload parks every later update, while the transport still looks connected.
+ *
  * @packageDocumentation
  * @internal
  */
@@ -52,6 +55,13 @@ const MAX_CHUNKS_PER_MESSAGE = 8192;
 
 const MAX_PARTIAL_MESSAGES = 4;
 
+/**
+ * Drop an incomplete message that has gone quiet. A live transfer resets this
+ * on every frame. A dropped peer does not, and Yjs will not apply later
+ * updates that depend on the missing payload.
+ */
+const DEFAULT_PARTIAL_IDLE_MS = 30_000;
+
 /** The part of a `simple-peer` instance this shim replaces. @internal */
 export interface ChunkablePeer {
   send(payload: Uint8Array | string): void;
@@ -61,11 +71,18 @@ export interface ChunkablePeer {
   readonly _channel?: { readonly bufferedAmount: number } | null;
 }
 
+/** Receive-side limits for {@link installChunkedFraming}. @internal */
+export interface ChunkedFramingOptions {
+  readonly partialTimeoutMs?: number;
+  readonly onAbandonedMessage?: () => void;
+}
+
 interface PartialMessage {
   readonly chunks: (Uint8Array | undefined)[];
   readonly count: number;
   received: number;
   bytes: number;
+  timer: ReturnType<typeof setTimeout> | undefined;
 }
 
 const installed = new WeakSet<object>();
@@ -102,17 +119,43 @@ const sleep = (ms: number): Promise<void> =>
  *
  * @internal
  */
-export function installChunkedFraming(peer: ChunkablePeer): void {
+export function installChunkedFraming(peer: ChunkablePeer, options?: ChunkedFramingOptions): void {
   if (installed.has(peer)) return;
   installed.add(peer);
 
   const originalSend = peer.send.bind(peer);
   const originalReceive = peer._onChannelMessage.bind(peer);
+  const requestedTimeout = options?.partialTimeoutMs;
+  const partialTimeoutMs =
+    typeof requestedTimeout === 'number' &&
+    Number.isFinite(requestedTimeout) &&
+    requestedTimeout > 0
+      ? requestedTimeout
+      : DEFAULT_PARTIAL_IDLE_MS;
+  const onAbandonedMessage = options?.onAbandonedMessage;
 
   const queue: Uint8Array[] = [];
   const partials = new Map<number, PartialMessage>();
   let draining = false;
   let nextMessageId = 1;
+
+  const abandon = (messageId: number): void => {
+    const partial = partials.get(messageId);
+    if (!partial) return;
+    if (partial.timer !== undefined) clearTimeout(partial.timer);
+    partials.delete(messageId);
+    if (peer.destroyed === true) return;
+    onAbandonedMessage?.();
+  };
+
+  const watchIdle = (messageId: number): void => {
+    const partial = partials.get(messageId);
+    if (!partial) return;
+    if (partial.timer !== undefined) clearTimeout(partial.timer);
+    partial.timer = setTimeout(() => {
+      abandon(messageId);
+    }, partialTimeoutMs);
+  };
 
   const bufferedAmount = (): number => peer._channel?.bufferedAmount ?? 0;
 
@@ -189,9 +232,15 @@ export function installChunkedFraming(peer: ChunkablePeer): void {
     if (!partial) {
       if (partials.size >= MAX_PARTIAL_MESSAGES) {
         const oldest = partials.keys().next();
-        if (!oldest.done) partials.delete(oldest.value);
+        if (!oldest.done) abandon(oldest.value);
       }
-      partial = { chunks: new Array<Uint8Array | undefined>(count), count, received: 0, bytes: 0 };
+      partial = {
+        chunks: new Array<Uint8Array | undefined>(count),
+        count,
+        received: 0,
+        bytes: 0,
+        timer: undefined,
+      };
       partials.set(messageId, partial);
     }
     if (partial.count !== count || partial.chunks[index]) return;
@@ -200,8 +249,12 @@ export function installChunkedFraming(peer: ChunkablePeer): void {
     partial.chunks[index] = payload;
     partial.received += 1;
     partial.bytes += payload.byteLength;
-    if (partial.received !== partial.count) return;
+    if (partial.received !== partial.count) {
+      watchIdle(messageId);
+      return;
+    }
 
+    if (partial.timer !== undefined) clearTimeout(partial.timer);
     partials.delete(messageId);
     const message = new Uint8Array(partial.bytes);
     let offset = 0;
