@@ -451,7 +451,7 @@ export function gateCommand(
     // `w:trackRevisions` opens suggesting with nobody passing it — and the paragraph the break
     // lands in, which for a range in suggesting mode is past the struck words rather than the
     // selection's head. Deriving either of them here made the control and the write disagree.
-    const refusal = surface.sectionBreakRefusal?.(
+    const refusal = surface.sectionBreakRefusal(
       command.kind === 'section' ? 'nextPage' : 'continuous'
     );
     if (refusal) {

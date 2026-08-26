@@ -21,7 +21,11 @@ import {
   sectionBreakRetypesFollowing,
   sectionIndexForCaret,
 } from './section-scope.ts';
-import { isTableNested } from '../store/store/tree-op-section-address.ts';
+import {
+  isTableNested,
+  sectionBreakTypeOf,
+  targetSectionNodes,
+} from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
 import { paragraphTabStopsOf } from './surface-formatting.ts';
@@ -223,6 +227,15 @@ function writeFirstLine(
   return attributes;
 }
 
+/**
+ * The one break this engine cannot propose. Spelled once, and listed in
+ * `DISABLED_REASON_KEYS` so chrome renders it in the reader's language rather than raw
+ * English — an engine `disabledReason` is text a user reads.
+ */
+const SUGGESTED_BREAK_REFUSAL =
+  'a section break that changes where the next section starts cannot be suggested; ' +
+  'turn off suggesting to insert it';
+
 export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMethods {
   const { session, commit, orderedStart, orderedRange, selectionMark, collapsedAt } = deps;
   const deleteSelectionPlan = deps.deleteSelectionPlan;
@@ -258,8 +271,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
   ): string | null =>
     deps.editingMode?.() === 'suggest' &&
     sectionBreakRetypesFollowing(session.part(), paragraphId, breakType)
-      ? 'a section break that changes where the next section starts cannot be suggested; ' +
-        'turn off suggesting to insert it'
+      ? SUGGESTED_BREAK_REFUSAL
       : null;
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
@@ -862,7 +874,24 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     },
 
     sectionBreakRefusal(breakType = 'nextPage' as const) {
+      // Cheap questions first, because `can` runs this on every toolbar derivation while the
+      // Insert menu is open — twice, once per section-break row — and the landing below costs
+      // a range-deletion plan that scales with the SELECTION. Asking it eagerly made
+      // `can(insertBreak)` take seconds on a select-all in a long document, on the next-page
+      // row that had no gate at all before this feature as well as on the new one.
+      if (deps.editingMode?.() !== 'suggest') return null;
       if (deps.storyScope().kind !== 'body') return null;
+      // Still cheap, and still EXACT. The governing section is the first `w:sectPr` at or
+      // after a paragraph, which only moves FORWARD through the document — so when both ends
+      // of the range resolve to the same one, every paragraph between them does too, and the
+      // landing cannot be anywhere else. A range inside one section, which is nearly every
+      // range, is answered without planning a deletion at all.
+      const part = session.part();
+      const { from, to } = orderedRange();
+      const atStart = sectionBreakTypeOf(targetSectionNodes(part, from.paragraphId)[0] ?? null);
+      const atEnd = sectionBreakTypeOf(targetSectionNodes(part, to.paragraphId)[0] ?? null);
+      if (atStart === atEnd) return atStart === breakType ? null : SUGGESTED_BREAK_REFUSAL;
+      // The range STRADDLES a boundary, so only the plan says which side the break lands on.
       return sectionBreakRefusalFor(
         sectionBreakLanding(deleteSelectionPlan()).paragraphId,
         breakType

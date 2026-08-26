@@ -724,7 +724,8 @@
     "bodyOnlyNote": null,
     "bodyOnlySectionBreak": null,
     "bodyOnlyToc": null,
-    "furnitureOnlyPageField": null
+    "furnitureOnlyPageField": null,
+    "suggestingSectionBreak": null
   },
   "equationPopup": {
     "apply": null,

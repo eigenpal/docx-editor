@@ -506,27 +506,30 @@ export function applySetSectionMark(
     : sectionElement(nextId(), 'sectPr', [], defaultSectionChildren(metrics, nextId));
 
   const pPr = paragraphPropertiesNodeOf(paragraph);
-  const markedParagraph = (node: OoxmlParagraphNode): OoxmlNode => {
-    if (!pPr) {
-      const minted = {
-        id: nextId(),
-        kind: 'paragraphProperties',
-        namespaceUri: WML_NAMESPACE_URI,
-        localName: 'pPr',
-        prefix: 'w',
-        namespaceBindings: [],
-        attributes: [],
-        children: [sectPr],
-      } as unknown as OoxmlNode;
-      // `w:pPr` must be the paragraph's FIRST child per the schema.
-      return { ...node, children: [minted, ...node.children] } as OoxmlNode;
-    }
-    // `w:sectPr` sits near the END of CT_PPr's sequence, before only `w:pPrChange`.
-    const change = pPr.children.findIndex(
+  /** A fresh `w:pPr` holding only the mark, for a paragraph that has no properties yet. */
+  const mintedProperties = (): OoxmlNode =>
+    ({
+      id: nextId(),
+      kind: 'paragraphProperties',
+      namespaceUri: WML_NAMESPACE_URI,
+      localName: 'pPr',
+      prefix: 'w',
+      namespaceBindings: [],
+      attributes: [],
+      children: [sectPr],
+    }) as unknown as OoxmlNode;
+  /** Where the mark goes in an existing `w:pPr`: last, but before `w:pPrChange` (CT_PPr). */
+  const markIndexIn = (properties: OoxmlNode & { children: readonly OoxmlNode[] }): number => {
+    const change = properties.children.findIndex(
       (child) => 'localName' in child && child.localName === 'pPrChange'
     );
+    return change === -1 ? properties.children.length : change;
+  };
+  const markedParagraph = (node: OoxmlParagraphNode): OoxmlNode => {
+    // `w:pPr` must be the paragraph's FIRST child per the schema.
+    if (!pPr) return { ...node, children: [mintedProperties(), ...node.children] } as OoxmlNode;
     const children = [...pPr.children];
-    children.splice(change === -1 ? children.length : change, 0, sectPr);
+    children.splice(markIndexIn(pPr), 0, sectPr);
     return {
       ...node,
       children: node.children.map((child) =>
@@ -575,25 +578,10 @@ export function applySetSectionMark(
   // about 40ms per gesture for no gain. The rebuild is reserved for the two writes that
   // genuinely reach a second, distant node.
   if (!retypedGoverning && !mintedBodySection) {
-    if (!pPr) {
-      const minted = {
-        id: nextId(),
-        kind: 'paragraphProperties',
-        namespaceUri: WML_NAMESPACE_URI,
-        localName: 'pPr',
-        prefix: 'w',
-        namespaceBindings: [],
-        attributes: [],
-        children: [sectPr],
-      } as unknown as OoxmlNode;
-      // `w:pPr` must be the paragraph's FIRST child per the schema.
-      return fromEdit(insertChildren(part, paragraph.id, 0, [minted], options), effect);
-    }
-    const change = pPr.children.findIndex(
-      (child) => 'localName' in child && child.localName === 'pPrChange'
-    );
     return fromEdit(
-      insertChildren(part, pPr.id, change === -1 ? pPr.children.length : change, [sectPr], options),
+      pPr
+        ? insertChildren(part, pPr.id, markIndexIn(pPr), [sectPr], options)
+        : insertChildren(part, paragraph.id, 0, [mintedProperties()], options),
       effect
     );
   }

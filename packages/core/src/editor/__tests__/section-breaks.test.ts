@@ -264,3 +264,60 @@ describe('the gate and the write read ONE authority', () => {
     expect(committed).toBe(can.ok);
   });
 });
+
+describe('the break gate stays cheap enough to run on every toolbar derivation', () => {
+  // `can` runs once per section-break row on every snapshot change while the Insert menu is
+  // open. Asking for the landing eagerly costs a range-deletion plan that scales with the
+  // SELECTION, so a select-all in a long document stopped the main thread for seconds — on
+  // the next-page row, which had no gate at all before this feature, as well as the new one.
+  const LONG = Array.from({ length: 400 }, (_, i) => p(`paragraph ${i}`)).join('');
+
+  test('editing mode answers without planning a deletion, whatever is selected', () => {
+    const editor = mount(LONG);
+    editor.surface!.selectAll();
+    let changes = 0;
+    // The observable proof that no plan ran: planning a deletion FLUSHES the pending type
+    // buffer, so a `can` that plans one commits the queued keystrokes. It must not.
+    editor.surface!.enqueueType('ZZZ');
+    const before = editor.surface!.session.bodyText();
+    editor.on('change', () => {
+      changes += 1;
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toEqual({
+      ok: true,
+    });
+    expect(editor.surface!.session.bodyText()).toBe(before);
+    expect(changes).toBe(0);
+  });
+
+  test('a suggesting range inside ONE section is answered without a plan either', () => {
+    const editor = mount(LONG, 'suggesting');
+    editor.surface!.selectAll();
+    // Both ends resolve to the same governing section, so the landing cannot be anywhere
+    // else and the exact answer needs no deletion plan.
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toMatchObject({
+      ok: false,
+    });
+  });
+
+  test('the shortcut agrees with the plan on a range that STRADDLES a boundary', () => {
+    // The one case that still plans. Whatever it answers, the write must agree.
+    const editor = mount(
+      p('one') +
+        '<w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+        '<w:r><w:t>two</w:t></w:r></w:p>' +
+        p('three') +
+        '<w:sectPr><w:type w:val="continuous"/><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>',
+      'suggesting'
+    );
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 1 },
+      head: { paragraphId: ids[2]!, offset: 1 },
+    });
+    const can = editor.can({ type: 'insertBreak', kind: 'section' } as never);
+    expect(editor.surface!.insertSectionBreak('nextPage')).toBe(can.ok);
+  });
+});
