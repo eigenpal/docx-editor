@@ -15,6 +15,13 @@ export type CollaborationBootstrap = {
     readonly kind: 'join';
     readonly signal?: AbortSignal;
     readonly timeoutMs?: number;
+} | {
+    readonly document: Uint8Array;
+    readonly electionWindowMs?: number;
+    readonly kind: 'create-or-join';
+    readonly probeTimeoutMs?: number;
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
 };
 
 // @public
