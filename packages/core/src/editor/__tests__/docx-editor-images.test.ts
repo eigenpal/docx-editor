@@ -538,6 +538,53 @@ describe('docx-editor image commands', () => {
     expect(editor.snapshot().image!.resourceStatus).toBe('ready');
   });
 
+  test('insertImage scales a too-wide extent down to the section content box', async () => {
+    // Word's insert behavior: natural size when it fits, page scale when it does not. The
+    // fixture has no `w:sectPr`, so the content box is Letter minus 1in margins — 468pt wide.
+    const editor = mountEditor(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+            '<Default Extension="png" ContentType="image/png"/>' +
+            `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>hello</w:t></w:r></w:p></w:body></w:document>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"></Relationships>`),
+      })
+    );
+    const paragraphId = drawingParagraphId(editor);
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 5 },
+    });
+    const result = await editor.executeImageCommand({
+      type: 'insertImage',
+      data: PNG_1X1,
+      mime: 'image/png',
+      widthPoints: 936,
+      heightPoints: 468,
+    });
+    expect(result.ok).toBe(true);
+    await settleDrawingResources(editor);
+    // Offset 6 — the drawing's anchor + 1. The scaled drawing fills its own layout line, so
+    // offset 5 resolves to the end of the text line and would miss it.
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 6 },
+      head: { paragraphId, offset: 6 },
+    });
+    await settleDrawingResources(editor);
+    const image = editor.snapshot().image;
+    expect(image).not.toBeNull();
+    // 936×468pt halves to fit the 468pt content width; aspect ratio is preserved.
+    expect(image!.widthEmu).toBe(468 * 12_700);
+    expect(image!.heightEmu).toBe(234 * 12_700);
+  });
+
   test('refuses setImageWrapType with stale drawing id', () => {
     const editor = mountEditor(inlinePictureDocument());
     selectInlineDrawing(editor);

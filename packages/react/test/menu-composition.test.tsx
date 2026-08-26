@@ -260,7 +260,9 @@ describe('rows carry the engine, not a paraphrase', () => {
     expect(row(view, 'file.save').getAttribute('aria-disabled')).toBeNull();
     expect(row(view, 'file.pageSetup').getAttribute('aria-disabled')).toBeNull();
     // The shortcut column is filled from the registry's keys.
-    expect(row(view, 'file.save').textContent).toContain(label('toolbar.saveShortcut' as TranslationKey));
+    expect(row(view, 'file.save').textContent).toContain(
+      label('toolbar.saveShortcut' as TranslationKey)
+    );
   });
 
   test('a host `onSave` replaces the packaged download', async () => {
@@ -301,11 +303,9 @@ describe('rows carry the engine, not a paraphrase', () => {
     // file input came first fed a .docx to the image signature check once that landed.
     const input = view.container.querySelector('input[type="file"][accept*=".docx"]');
     expect(input).not.toBeNull();
-    const file = new File(
-      [docx('<w:p><w:r><w:t>reopened</w:t></w:r></w:p>')],
-      'contract-v2.docx',
-      { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
-    );
+    const file = new File([docx('<w:p><w:r><w:t>reopened</w:t></w:r></w:p>')], 'contract-v2.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
     await act(async () => {
       fireEvent.change(input, { target: { files: [file] } });
       // `file.arrayBuffer()` resolves on a later microtask; give the load a turn to land.
@@ -639,7 +639,9 @@ describe('chrome contracts', () => {
   test('ARIA containment: the menubar owns its items through role="none" wrappers', () => {
     const { view } = mountMenu(<DocxEditorMenu />);
     const menubar = bar(view);
-    expect(menubar.getAttribute('aria-label')).toBe(label('titleBar.menuBarAriaLabel' as TranslationKey));
+    expect(menubar.getAttribute('aria-label')).toBe(
+      label('titleBar.menuBarAriaLabel' as TranslationKey)
+    );
     // `menubar` -> unrole'd div -> menuitem breaks the required-owned-elements
     // relationship AT derives item counts and "x of y" announcements from.
     for (const child of menubar.children) {
@@ -674,7 +676,7 @@ describe('chrome contracts', () => {
     // The whole registry arrangement is still there, TOC still in its own position.
     // Table is absent from this list because it is a live size grid, which is a submenu and
     // carries no row slot of its own — the arrangement around it is what this pins down.
-    expect(slots).toEqual(['insert.footnote', 'insert.endnote', 'insert.toc']);
+    expect(slots).toEqual(['image.insert', 'insert.footnote', 'insert.endnote', 'insert.toc']);
     expect(row(view, 'insert.toc').className).toContain('my-toc');
     // The host's own row appends.
     expect(view.container.textContent).toContain('Clause library');

@@ -896,6 +896,39 @@ export function execImageCommand(
   }
 }
 
+const TWIPS_PER_POINT = 20;
+
+/**
+ * Scale a natural extent down to the caret section's content box, preserving aspect ratio —
+ * Word's insert behavior: an image that fits keeps its size, a wider or taller one lands at
+ * page scale. Only ever shrinks; a degenerate content box (margins swallow the page) leaves
+ * the extent alone rather than inverting it.
+ */
+function fitExtentToSectionContentBox(
+  surface: PaginatedSurface,
+  paragraphId: string,
+  widthPoints: number,
+  heightPoints: number
+): { readonly widthPoints: number; readonly heightPoints: number } {
+  const section = surface.sectionPropertiesAt(paragraphId);
+  const contentWidthPoints =
+    (section.pageSize.widthTwips -
+      section.margins.leftTwips -
+      section.margins.rightTwips -
+      section.margins.gutterTwips) /
+    TWIPS_PER_POINT;
+  const contentHeightPoints =
+    (section.pageSize.heightTwips - section.margins.topTwips - section.margins.bottomTwips) /
+    TWIPS_PER_POINT;
+  if (contentWidthPoints <= 0 || contentHeightPoints <= 0) return { widthPoints, heightPoints };
+  const scale = Math.min(1, contentWidthPoints / widthPoints, contentHeightPoints / heightPoints);
+  if (scale >= 1) return { widthPoints, heightPoints };
+  return {
+    widthPoints: Math.max(1, Math.round(widthPoints * scale * 100) / 100),
+    heightPoints: Math.max(1, Math.round(heightPoints * scale * 100) / 100),
+  };
+}
+
 /**
  * Run an insert or replace, re-checking the same gates {@link canExecuteImageCommand} applies.
  *
@@ -923,13 +956,19 @@ export async function executeImageCommand(
     ) {
       return { ok: false, code: 'notFound', reason: 'stale package revision' };
     }
+    const fitted = fitExtentToSectionContentBox(
+      surface,
+      anchor.paragraphId,
+      command.widthPoints,
+      command.heightPoints
+    );
     const result = await surface.insertImage({
       paragraphId: anchor.paragraphId,
       offset: anchor.offset,
       bytes: command.data,
       mime: command.mime,
-      widthPoints: command.widthPoints,
-      heightPoints: command.heightPoints,
+      widthPoints: fitted.widthPoints,
+      heightPoints: fitted.heightPoints,
       expectedPackageRevision: expectedRevision,
       commitGuard: () => isStaleImageMutation(editor, pre) === null,
       ...(command.title !== undefined ? { title: command.title } : {}),
