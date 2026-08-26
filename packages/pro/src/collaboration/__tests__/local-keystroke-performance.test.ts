@@ -66,10 +66,14 @@ function ratioPass(
   solo: { readonly medianMs: number; readonly p95Ms: number },
   attached: { readonly medianMs: number; readonly p95Ms: number }
 ): boolean {
-  const slack = 2;
+  // The median is the sharp gate: it is stable under a loaded CI worker pool. The p95 of a
+  // sub-millisecond baseline is scheduler-dominated there — one preemption during one of 40
+  // samples blows a 2x bound — so it gets a wider flat slack instead of a looser ratio.
+  const medianSlack = 2;
+  const p95Slack = 8;
   return (
-    attached.medianMs <= Math.max(solo.medianMs * BUDGET_RATIO, solo.medianMs + slack) &&
-    attached.p95Ms <= Math.max(solo.p95Ms * BUDGET_RATIO, solo.p95Ms + slack)
+    attached.medianMs <= Math.max(solo.medianMs * BUDGET_RATIO, solo.medianMs + medianSlack) &&
+    attached.p95Ms <= Math.max(solo.p95Ms * BUDGET_RATIO, solo.p95Ms + p95Slack)
   );
 }
 
