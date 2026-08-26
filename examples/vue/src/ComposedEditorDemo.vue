@@ -86,11 +86,7 @@ import {
   DocxEditorLoading,
   useDocxSource,
 } from '@docx-editor.dev/vue';
-import {
-  customNodesModule,
-  reviewModule,
-  type ActivatedCustomNode,
-} from '@docx-editor.dev/pro';
+import { customNodesModule, reviewModule, type ActivatedCustomNode } from '@docx-editor.dev/pro';
 import {
   CustomNodeChrome,
   CustomNodeContextMenu,
@@ -100,10 +96,7 @@ import { defaultFonts } from '@docx-editor.dev/fonts';
 import EditorChrome from './EditorChrome.vue';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
-import {
-  DEMO_CITATION,
-  type CitationFormState,
-} from './demoCitation';
+import { DEMO_CITATION, type CitationFormState } from './demoCitation';
 
 void DocxEditorToolbar;
 void DocxEditorMenu;
@@ -124,12 +117,19 @@ const proModules = [
 ];
 
 const title = ref(
-  props.fixtureUrl.split('/').pop()?.replace(/\.docx$/i, '') ?? 'Document'
+  props.fixtureUrl
+    .split('/')
+    .pop()
+    ?.replace(/\.docx$/i, '') ?? 'Document'
 );
 const colorMode = ref<'light' | 'dark'>('light');
 const citationForm = ref<CitationFormState | null>(null);
 
-const { document: bytes, fonts, error: loadError } = useDocxSource(props.fixtureUrl, {
+const {
+  document: bytes,
+  fonts,
+  error: loadError,
+} = useDocxSource(props.fixtureUrl, {
   fonts: defaultFonts,
 });
 

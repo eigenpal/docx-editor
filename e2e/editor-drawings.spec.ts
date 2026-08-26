@@ -4,6 +4,7 @@
 // moves and resizes by keyboard, undo/redo, then save/reopen via download + file input.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -32,7 +33,7 @@ interface SelectedImageSnapshot {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 });
 
 async function settle(page: Page): Promise<void> {
@@ -184,7 +185,7 @@ test('image layout modes demo — wrap, move, alt text, resize, undo/redo, save/
     .locator('input[type="file"][accept*=".docx"]')
     .first()
     .setInputFiles(savedPath);
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
   await settle(page);
   await materializeDocument(page);
 
