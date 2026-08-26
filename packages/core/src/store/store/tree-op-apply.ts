@@ -66,6 +66,7 @@ import {
   inlineContainerOf,
   innermostContentControlAround,
   isContentControlNode,
+  isParagraphMarkRevision,
   isParagraphPropertiesNode,
   isRunPropertiesNode,
   isShowingPlaceholder,
@@ -550,7 +551,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
           next: children,
           revision: op.revision,
           mint: nextId,
-          nextRevisionId: nextRevisionId(part),
+          // Lazy: the id walk only happens if a record is actually written.
+          nextRevisionId: () => nextRevisionId(part)(),
         });
       }
       const effect: TreeOpEffect = {
@@ -3091,14 +3093,6 @@ function applyJoin(
   return result;
 }
 
-/** `EG_ParaRPrTrackChanges` — the four revisions a paragraph mark can carry (§17.13.5). */
-const MARK_REVISION_NAMES: ReadonlySet<string> = new Set(['ins', 'del', 'moveFrom', 'moveTo']);
-
-const isMarkRevision = (node: OoxmlNode): boolean =>
-  node.kind !== 'textValue' &&
-  node.namespaceUri === WML_NAMESPACE_URI &&
-  MARK_REVISION_NAMES.has(node.localName);
-
 /**
  * The join survivor, carrying the TRACKED STATE of the mark that survives.
  *
@@ -3121,10 +3115,10 @@ function withSectionMarkOf(
 ): OoxmlNode & { readonly children: readonly OoxmlNode[] } {
   const secondMarkRevisions = (
     namedChild(paragraphPropertiesNodeOf(second), 'rPr')?.children ?? []
-  ).filter(isMarkRevision);
+  ).filter(isParagraphMarkRevision);
   const survivorHasMarkRevision = (
     namedChild(paragraphPropertiesNodeOf(first), 'rPr')?.children ?? []
-  ).some(isMarkRevision);
+  ).some(isParagraphMarkRevision);
   const withMark =
     secondMarkRevisions.length > 0 || survivorHasMarkRevision
       ? withMarkRevisionsOf(first, secondMarkRevisions, nextId)
@@ -3208,7 +3202,7 @@ function withMarkRevisionsOf(
     };
   }
   const existingRPr = namedChild(pPr, 'rPr');
-  const keptFace = (existingRPr?.children ?? []).filter((child) => !isMarkRevision(child));
+  const keptFace = (existingRPr?.children ?? []).filter((child) => !isParagraphMarkRevision(child));
   const rebuiltRPr =
     existingRPr === undefined
       ? carried.length > 0
@@ -3288,7 +3282,10 @@ function applySetRunProperties(
     }
   }
   const nextId = createNodeIdAllocator(current);
-  const mintRevisionId = revision ? nextRevisionId(current) : null;
+  // Minted LAZILY, and once for the whole op: `nextRevisionId` walks the part, and a write
+  // that records nothing — every run inside this author's own `w:ins` — must not pay it.
+  let revisionIds: (() => string) | null = null;
+  const mintRevisionId = (): string => (revisionIds ??= nextRevisionId(current))();
   for (const runId of runIds) {
     const run = findNode(current, runId);
     if (!run || run.kind !== 'run') continue;
@@ -3305,7 +3302,7 @@ function applySetRunProperties(
     // `w:rPrChange`, so Reject restores them. Skipped inside this author's own `w:ins`: the
     // whole run is already their proposal, and rejecting it takes words and formatting
     // together (#495).
-    if (revision && mintRevisionId && !insideOwnInsertion(current, run.id, revision.author)) {
+    if (revision && !insideOwnInsertion(current, run.id, revision.author)) {
       children = withPropertyChangeRecord({
         container: 'runProperties',
         prior,

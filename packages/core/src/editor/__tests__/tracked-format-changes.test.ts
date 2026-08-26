@@ -232,6 +232,57 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
+  test('rejecting a format change leaves a pending paragraph-mark decision standing', () => {
+    // The mark's own `w:ins` lives in the same `w:pPr/w:rPr` the format record sits in, and
+    // it is somebody's pending decision about the BREAK. Restoring the container from the
+    // record alone deleted it, so rejecting a formatting suggestion silently answered an
+    // unrelated one.
+    const marked =
+      '<w:p><w:pPr><w:rPr>' +
+      '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p>';
+    withSuggesting(marked, (surface) => {
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      const onMark = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
+        findAll(pPr, 'rPrChange')
+      );
+      expect(onMark).toHaveLength(1);
+      // The record does NOT carry Ada's mark insertion.
+      expect(recorded(onMark[0]!)).not.toContain('ins');
+      for (const change of [...rPrChanges(surface)]) resolve(surface, 'reject', change);
+      // Ada's decision is still there to answer.
+      const marks = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
+        findAll(pPr, 'ins')
+      );
+      expect(marks).toHaveLength(1);
+      expect(attributeOf(marks[0]!, 'author')).toBe('Ada');
+    });
+  });
+
+  test('a mark this author proposed adding takes no record of its own', () => {
+    // Rejecting that `w:ins` runs the paragraph into the next one and takes the mark's
+    // properties with it, so a record of what they used to be decides nothing.
+    const marked =
+      '<w:p><w:pPr><w:rPr>' +
+      `<w:ins w:id="4" w:author="${AUTHOR}" w:date="2026-01-01T00:00:00Z"/>` +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p>';
+    withSuggesting(marked, (surface) => {
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      const onMark = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
+        findAll(pPr, 'rPrChange')
+      );
+      expect(onMark).toHaveLength(0);
+      // The RUN still records: its words are not this author's.
+      expect(runRPrChanges(surface)).toHaveLength(1);
+    });
+  });
+
   test('editing mode writes the properties with no record at all', () => {
     const container = document.createElement('div');
     document.body.append(container);

@@ -705,6 +705,25 @@ function sectionInsertIndex(children: readonly OoxmlNode[], localName: string): 
 const AFTER_PARAGRAPH_MARK = new Set(['sectPr', 'pPrChange']);
 
 /**
+ * Whether the paragraph mark carries a `w:ins` THIS author proposed.
+ *
+ * `EG_ParaRPrTrackChanges` sits in the same `w:pPr/w:rPr` the format record does, so the
+ * answer is in the container the write is rewriting.
+ */
+function ownProposedMark(markProperties: readonly OoxmlNode[], author: string): boolean {
+  for (const child of markProperties) {
+    if (child.kind === 'textValue') continue;
+    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'ins') continue;
+    const owner = child.attributes.find(
+      (attribute) =>
+        attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === 'author'
+    );
+    return (owner?.value ?? '') === author;
+  }
+  return false;
+}
+
+/**
  * Write the run properties of the paragraph MARK (`w:pPr/w:rPr`, 17.3.1.29).
  *
  * Surgical on `w:rPr`, like `setListNumbering` is on `w:numPr`: the mark is one nested
@@ -749,14 +768,19 @@ export function applySetParagraphMarkProperties(
   // The mark's tracked format change is `w:pPr/w:rPr/w:rPrChange` (§17.13.5.31) — the same
   // element a run writes, over `CT_ParaRPrOriginal` rather than `CT_RPrOriginal`. It is what
   // keeps a list marker's face reversible when a whole-paragraph format is proposed.
-  if (revision) {
+  //
+  // Skipped on a mark THIS author proposed adding, the run rule one level up: rejecting that
+  // `w:ins` runs the paragraph into the next one and takes the mark's properties with it, so
+  // a record of what they used to be decides nothing. The mark never existed for anyone else.
+  if (revision && !ownProposedMark(prior, revision.author)) {
     children = withPropertyChangeRecord({
       container: 'runProperties',
       prior,
       next: children,
       revision,
       mint: nextId,
-      nextRevisionId: nextRevisionId(part),
+      // Lazy: the id walk only happens if a record is actually written.
+      nextRevisionId: () => nextRevisionId(part)(),
     });
   }
 

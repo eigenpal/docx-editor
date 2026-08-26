@@ -17,6 +17,25 @@ import type { TreeOpEffect, TreeOpResult } from './tree-op-types.ts';
 
 export const TEXT_DEPS = [DEPENDENCY_KEY_IDS.story];
 
+/**
+ * `EG_ParaRPrTrackChanges` — the four revisions a paragraph MARK can carry (§17.13.5).
+ *
+ * They sit in `w:pPr/w:rPr` beside ordinary run properties, which is why every lane that
+ * rewrites that container has to tell them apart: a rebuild that treats them as formatting
+ * either drops somebody's pending decision about the paragraph break or copies it somewhere
+ * it does not belong. One spelling, so the lanes cannot disagree about the four names.
+ */
+export function isParagraphMarkRevision(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    node.namespaceUri === WML_NAMESPACE_URI &&
+    (node.localName === 'ins' ||
+      node.localName === 'del' ||
+      node.localName === 'moveFrom' ||
+      node.localName === 'moveTo')
+  );
+}
+
 /** `w15` wordml-2012 — `w15:repeatingSection` lives here. */
 const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
 

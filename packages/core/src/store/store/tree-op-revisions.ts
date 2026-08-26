@@ -33,6 +33,7 @@ import {
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import { isContentControl } from '../package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
+import { isParagraphMarkRevision } from './tree-op-nodes.ts';
 import { scopedRevisionRoot } from './tree-op-revision-scope.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import type { TreeOpEffect, TreeOpRejection } from './tree-op-validate.ts';
@@ -698,11 +699,29 @@ function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
       //
       // `CT_RPrChange` is the opposite case: `CT_RPrOriginal` genuinely is the whole `w:rPr`
       // content minus the change wrapper, so there wholesale replacement is correct.
+      // A `w:rPrChange` on a paragraph MARK sits in the same `w:pPr/w:rPr` as
+      // `EG_ParaRPrTrackChanges`, and those are somebody's pending decision about the
+      // paragraph BREAK — a decision that may have been taken after this format change was
+      // proposed. Restoring the container from the record alone deleted them, so rejecting a
+      // formatting suggestion silently answered an unrelated one. Preserved, not recorded, for
+      // the same reason `w:pPrChange` preserves `w:rPr` and `w:sectPr`. A run's own `w:rPr`
+      // holds no such children, so this costs it nothing.
       const preserved =
         restoring.localName === 'pPrChange'
           ? node.children.filter((child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr'))
-          : [];
-      return [{ ...node, children: [...recorded, ...preserved] } as OoxmlElement];
+          : node.children.filter((child) => isParagraphMarkRevision(child));
+      // Both groups OPEN their container's sequence (`EG_ParaRPrTrackChanges` leads
+      // `CT_ParaRPr`), while `w:rPr`/`w:sectPr` close `CT_PPr` — so each goes on the side the
+      // schema puts it.
+      return [
+        {
+          ...node,
+          children:
+            restoring.localName === 'pPrChange'
+              ? [...recorded, ...preserved]
+              : [...preserved, ...recorded],
+        } as OoxmlElement,
+      ];
     }
   }
 

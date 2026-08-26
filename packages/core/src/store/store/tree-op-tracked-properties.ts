@@ -32,7 +32,7 @@
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { parentNodeOf } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
-import { cloneWithNewIds } from './tree-op-nodes.ts';
+import { cloneWithNewIds, isParagraphMarkRevision } from './tree-op-nodes.ts';
 import { build, revisionAttributes } from './tree-op-tracked.ts';
 import type { RevisionAttributionInput } from './tree-op-validate.ts';
 
@@ -66,13 +66,21 @@ function isWmlNamed(node: OoxmlNode, localName: string): boolean {
 /**
  * What a container's children reduce to for the RECORD.
  *
+ * Three families come out, and each for its own reason.
+ *
+ * The change wrapper never records itself.
+ *
  * `CT_PPrChange` records a `CT_PPrBase`, which by construction cannot hold `w:rPr` or
  * `w:sectPr` — `CT_PPr` is `CT_PPrBase`, then `w:rPr`, then `w:sectPr`, then the change
  * wrapper. So the paragraph mark and the section break are not part of what a paragraph
  * property change records, and putting them in produces a `w:pPr` Word calls unreadable.
- * `resolveRevisions` preserves them on the container for the same reason.
  *
- * The change wrapper itself never records itself.
+ * The MARK REVISIONS come out even though `CT_ParaRPrOriginal` admits them, because a reject
+ * restores the container from the record and they are somebody's PENDING DECISION about the
+ * paragraph break — a decision that may have been taken after this format change was
+ * proposed. Recording them made rejecting a formatting suggestion silently delete an
+ * unrelated `w:pPr/w:rPr/w:ins`, taking a break the reviewer had not answered. They are
+ * preserved on the container instead, exactly as `w:rPr` and `w:sectPr` are for `w:pPrChange`.
  */
 function recordable(
   children: readonly OoxmlNode[],
@@ -80,12 +88,31 @@ function recordable(
 ): readonly OoxmlNode[] {
   const changeName = changeNameOf(container);
   return children.filter((child) => {
+    if (child.kind === 'textValue') return true;
     if (isWmlNamed(child, changeName)) return false;
     if (container === 'paragraphProperties') {
       return !isWmlNamed(child, 'rPr') && !isWmlNamed(child, 'sectPr');
     }
-    return true;
+    return !isParagraphMarkRevision(child);
   });
+}
+
+/**
+ * Whether two property sets say the same thing, ignoring the order the schema imposes.
+ *
+ * `mergedPropertyChildren` re-sorts what it rewrites into `xsd:sequence` order, so a
+ * container the file authored out of order comes back reordered even when no value moved.
+ * Comparing positionally would call that a change and raise a card for a press that did
+ * nothing. A reorder alone is not a formatting change.
+ */
+function sameProperties(left: readonly OoxmlNode[], right: readonly OoxmlNode[]): boolean {
+  const byName = (nodes: readonly OoxmlNode[]): readonly OoxmlNode[] =>
+    [...nodes].sort((a, b) => {
+      const first = a.kind === 'textValue' ? '' : a.localName;
+      const second = b.kind === 'textValue' ? '' : b.localName;
+      return first < second ? -1 : first > second ? 1 : 0;
+    });
+  return equivalentNodes(byName(left), byName(right));
 }
 
 /** The copy an existing change wrapper already holds, or null when it holds none. */
@@ -129,7 +156,7 @@ export function withPropertyChangeRecord(options: {
   const recorded =
     (existing ? recordedIn(existing, container) : null) ?? recordable(prior, container);
   const body = next.filter((child) => !isWmlNamed(child, changeName));
-  if (equivalentNodes(recordable(body, container), recorded)) return body;
+  if (sameProperties(recordable(body, container), recorded)) return body;
 
   const copy = recorded.map((child) => cloneWithNewIds(child, mint));
   // The record's inner container carries the TYPED kind, because that is what re-reading the
