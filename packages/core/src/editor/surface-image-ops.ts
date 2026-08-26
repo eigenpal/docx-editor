@@ -142,16 +142,21 @@ export function createImageOps(deps: {
       if (deps.editingMode() === 'view') {
         return Promise.resolve({ ok: false, reason: 'invalidArgs', detail: VIEWING_REFUSAL });
       }
-      if (deps.editingMode() === 'suggest') {
+      // Suggesting PROPOSES the picture: the inserted run goes into a `w:ins`, so the page
+      // paints it with the insertion cues and the review queue offers one Accept.
+      const tracked = deps.editingMode() === 'suggest';
+      const author = deps.author();
+      if (tracked && (author === undefined || author === '')) {
         return Promise.resolve({
           ok: false,
           reason: 'invalidArgs',
-          detail: SUGGESTING_IMAGE_REFUSAL,
+          detail: TRACKED_AUTHOR_REFUSAL,
         });
       }
       return deps.session.insertImage(deps.storyScope(), {
         ...input,
         decodePort: deps.decodePort(),
+        ...(tracked ? { revision: { author: author!, date: deps.trackedDate() } } : {}),
       });
     },
 

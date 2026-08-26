@@ -4350,6 +4350,7 @@ export type TreeDocOp = {
     readonly offset: number;
     readonly op: 'insertDrawing';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly drawingNodeId: string;
     readonly op: 'replaceDrawingResource';

@@ -28,6 +28,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
+import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
@@ -5944,6 +5945,32 @@ export function mountPaginatedSurface(
   };
   const onDrawingKeyGesture = (event: Event): void => {
     if (event instanceof KeyboardEvent && NON_DESELECTING_KEYS.has(event.key)) return;
+    // Delete/Backspace ON a selected drawing deletes THE DRAWING — Word's object gesture.
+    // Without this the key fell through to the text keymap at a collapsed caret, where a
+    // Delete beside the picture read as a paragraph JOIN: in suggesting mode that proposed
+    // a "deleted paragraph break" while the selected picture stayed untouched. Handled
+    // here, in the same capture listener that owns the intent, because it must consume the
+    // key BEFORE the text keymap on this element sees it. The host overlay's own handler
+    // (when the overlay is focused) never reaches this listener at all.
+    const deleteKey =
+      (event instanceof KeyboardEvent &&
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey) ||
+      (event instanceof InputEvent &&
+        (event.inputType === 'deleteContentBackward' ||
+          event.inputType === 'deleteContentForward'));
+    if (deleteKey && drawingIntent.kind === 'pointer') {
+      const target = resolveSelectedDrawingRecord(surface);
+      if (target !== null) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setDrawingIntent({ kind: 'none' }, true);
+        surface.deleteImage(target.drawingNodeId);
+        return;
+      }
+    }
     setDrawingIntent({ kind: 'none' }, true);
   };
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });

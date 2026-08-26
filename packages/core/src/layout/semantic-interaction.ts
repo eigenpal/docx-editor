@@ -155,6 +155,26 @@ function endsWithLineBreak(line: {
   return last === '\n' || last === PAGE_BREAK_CHAR;
 }
 
+/**
+ * Whether this paragraph's slice of the line is ONE inline drawing and nothing else — a
+ * picture too wide to share its line, painted as a block in text clothing.
+ *
+ * That is the other case where the position shared by two lines is not ambiguous, and it is
+ * the hard-break case wearing an image: the drawing is what ended the line, so the caret at
+ * the offset after it belongs before the text that follows. Painting it at the picture's
+ * right edge instead meant a click before that text resolved the right offset but drew the
+ * caret a full picture away — the caret looked stuck beside the following words, and there
+ * was no click that showed one at the text's start.
+ */
+function isDrawingOnlySegment(line: LineRecord, segment: LineSegment): boolean {
+  if (segment.end - segment.start !== 1) return false;
+  if (!line.drawings?.some((drawing) => drawing.start === segment.start)) return false;
+  for (const span of segment.spans) {
+    if (span.range.end > span.range.start) return false;
+  }
+  return true;
+}
+
 function pushLineCaretStops(
   stops: CaretGeometry[],
   layout: SemanticLayout,
@@ -415,10 +435,12 @@ export function caretAt(
       position.offset === segment.end &&
       position.offset > segment.start &&
       lineSegments(line).length === 1 &&
-      endsWithLineBreak(line)
+      (endsWithLineBreak(line) || isDrawingOnlySegment(line, segment))
     ) {
       // Remember it, but keep looking for the line that STARTS here. Falling back to it
-      // keeps a caret placed rather than lost if no such line was laid out.
+      // keeps a caret placed rather than lost if no such line was laid out — for the
+      // drawing-only line, that fallback is exactly the picture-ends-its-paragraph case,
+      // where the right edge of the picture IS the answer.
       afterBreak ??= { line, pageIndex };
       continue;
     }

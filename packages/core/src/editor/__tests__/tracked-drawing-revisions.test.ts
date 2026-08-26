@@ -281,6 +281,84 @@ describe('tracked drawings carry and paint their revision', () => {
     }
   });
 
+  test('suggesting insertImage proposes the picture as a tracked insertion', async () => {
+    const { surface, container } = await mount(
+      docx('<w:p><w:r><w:t xml:space="preserve">text</w:t></w:r></w:p>'),
+      undefined,
+      { author: 'Demo Reviewer', editingMode: 'suggest' }
+    );
+    try {
+      const [p1] = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: p1!, offset: 4 },
+        head: { paragraphId: p1!, offset: 4 },
+      });
+      const result = await surface.insertImage({
+        paragraphId: p1!,
+        offset: 4,
+        bytes: PNG_1X1,
+        mime: 'image/png',
+        widthPoints: 36,
+        heightPoints: 36,
+        expectedPackageRevision: surface.session.packageRevision(),
+      });
+      expect(result.ok).toBe(true);
+      await settle();
+
+      const drawings = lineDrawings(surface);
+      expect(drawings).toHaveLength(1);
+      expect(drawings[0]!.revisions![0]).toMatchObject({
+        kind: 'insert',
+        author: 'Demo Reviewer',
+      });
+      const element = container.querySelector<HTMLElement>('.docx-drawing');
+      expect(element!.classList.contains('docx-drawing--revision-insertion')).toBe(true);
+
+      const items = revisionItemsOf(surface.session.part());
+      expect(items).toHaveLength(1);
+      expect(items[0]!.revisionKind).toBe('insert');
+
+      // One undo takes the whole proposal back — the picture and its wrapper together.
+      surface.undo();
+      expect(lineDrawings(surface)).toHaveLength(0);
+      expect(revisionItemsOf(surface.session.part())).toHaveLength(0);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
+  test('Delete on a pointer-selected picture strikes the picture, not the paragraph break', async () => {
+    const { surface, container } = await mount(
+      docx(
+        `<w:p>${inlinePicture(6)}</w:p><w:p><w:r><w:t xml:space="preserve">after</w:t></w:r></w:p>`
+      ),
+      undefined,
+      { author: 'Demo Reviewer', editingMode: 'suggest' }
+    );
+    try {
+      const painted = container.querySelector<HTMLElement>('.docx-drawing')!;
+      // The object-selection gesture: a primary press on the painted drawing.
+      painted.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(surface.drawingSelectionIntent().kind).toBe('pointer');
+      painted.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true })
+      );
+
+      const drawings = lineDrawings(surface);
+      expect(drawings).toHaveLength(1);
+      expect(drawings[0]!.revisions![0]!.kind).toBe('delete');
+      // No paragraph-mark card: the key deleted the OBJECT, not the break beside it.
+      const items = revisionItemsOf(surface.session.part());
+      expect(items).toHaveLength(1);
+      expect(items[0]!.revisionKind).toBe('delete');
+      expect(items[0]!.markDirection).toBeUndefined();
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
   test('suggesting deleteImage without an author is refused', async () => {
     const { surface, container } = await mount(docx(`<w:p>${inlinePicture(6)}</w:p>`), undefined, {
       editingMode: 'suggest',

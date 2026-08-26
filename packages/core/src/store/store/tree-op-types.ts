@@ -952,6 +952,8 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly offset: number;
       readonly drawing: OoxmlDrawingNode;
+      /** Present in suggesting mode: the drawing's run goes into a `w:ins` as one proposal. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       readonly op: 'replaceDrawingResource';

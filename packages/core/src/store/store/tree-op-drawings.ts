@@ -40,6 +40,8 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { cloneWithNewIds, fromEdit, parentOf, TEXT_DEPS } from './tree-op-nodes.ts';
+import { applyInsertTrackedRun, build as buildTrackedNode } from './tree-op-tracked.ts';
+import { invalidRevisionAttribution } from './tree-op-types.ts';
 import { insertRunPayloadAtOffset, offsetInsideAtomicSegment } from './tree-op-insert-offset.ts';
 import { isTableNested } from './tree-op-section-address.ts';
 import { isParagraph, paragraphLength, segmentsOf, splitsSurrogate } from './tree-op-segments.ts';
@@ -379,6 +381,11 @@ export function validateDrawingOp(part: OoxmlPart, op: DrawingTreeDocOp): TreeOp
       if (!anchor) return 'not-a-drawing';
       const projection = projectionOf(part, op.drawing);
       if (!isPictureProjection(projection)) return 'not-a-picture-drawing';
+      // `CT_TrackChange` makes `@w:author` required, so a tracked variant with an empty one
+      // would serialize a proposal no reader can attribute or resolve.
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
+        return 'invalid-property-value';
+      }
       if (isTableNested(part, op.paragraphId) && op.offset !== len && op.offset !== 0) {
         const boundary = segmentsOf(paragraph).find((segment) => segment.start === op.offset);
         if (!boundary) return 'cross-cell-drawing';
@@ -1495,6 +1502,40 @@ export function applyDrawingOp(
   switch (op.op) {
     case 'insertDrawing': {
       const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
+      // Tracked: the drawing's run goes into a `w:ins` through the SAME placement typed text
+      // follows (own-insertion extension, relocation past struck words), so suggesting mode
+      // proposes the picture rather than committing an unattributed edit. The drawing clones
+      // inside the tracked mint — a second allocator over the same part would collide.
+      if (op.revision) {
+        let clonedId: string | null = null;
+        const result = applyInsertTrackedRun(
+          part,
+          paragraph,
+          op.offset,
+          (mint) => {
+            const cloned = withDrawingNamespaceBindings(
+              cloneWithNewIds(op.drawing, mint) as OoxmlDrawingNode
+            );
+            clonedId = cloned.id;
+            return buildTrackedNode(mint(), 'run', 'r', [], [cloned]);
+          },
+          op.revision,
+          options
+        );
+        if (!result.ok) return result;
+        // The tracked apply reports the text-lane effect; a drawing insert moves geometry
+        // beyond the line, so it keeps the drawing op's own impact and created set.
+        return {
+          ...result,
+          effect: {
+            dirty: [paragraph.id, ...(clonedId !== null ? [clonedId] : [])],
+            created: clonedId !== null ? [clonedId] : [],
+            deleted: [],
+            dependencyKeys: TEXT_DEPS,
+            impact: drawingOpImpact(op),
+          },
+        };
+      }
       const cloned = withDrawingNamespaceBindings(
         cloneWithNewIds(op.drawing, nextId) as OoxmlDrawingNode
       );

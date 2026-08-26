@@ -486,13 +486,19 @@ export function asyncImageCommandRefusal(
   };
 }
 
-function asyncImageExecutionGate(surface: PaginatedSurface | null): ExecResult | null {
+function asyncImageExecutionGate(
+  surface: PaginatedSurface | null,
+  commandType: 'insertImage' | 'replaceImage'
+): ExecResult | null {
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   const mode = surface.editingMode();
   if (mode === 'view') {
     return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
   }
-  if (mode === 'suggest') {
+  // Suggesting inserts a picture as a TRACKED insertion (the surface lane wraps it in
+  // `w:ins`); replacing one still refuses — swapping bytes inside an existing drawing has
+  // no tracked-change representation.
+  if (mode === 'suggest' && commandType === 'replaceImage') {
     return {
       ok: false,
       code: 'invalidArgs',
@@ -744,7 +750,7 @@ export function canExecuteImageCommand(
   command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>,
   surface: PaginatedSurface | null
 ): CanResult {
-  const modeGate = asyncImageExecutionGate(surface);
+  const modeGate = asyncImageExecutionGate(surface, command.type);
   if (modeGate) return modeGate;
   const gate = gateImageCommand(command, surface);
   if (gate) return gate;
@@ -934,7 +940,7 @@ export async function executeImageCommand(
 ): Promise<ExecResult> {
   const surface = editor.surface;
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
-  const modeGate = asyncImageExecutionGate(surface);
+  const modeGate = asyncImageExecutionGate(surface, command.type);
   if (modeGate) return modeGate;
   const gate = gateImageCommand(command, surface);
   if (gate) return gate;

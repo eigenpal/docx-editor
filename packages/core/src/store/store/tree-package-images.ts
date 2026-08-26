@@ -52,6 +52,8 @@ export interface InsertImageInput {
   readonly title?: string;
   readonly description?: string;
   readonly hyperlink?: string;
+  /** Present in suggesting mode: the inserted drawing's run goes into a `w:ins`. */
+  readonly revision?: RevisionAttributionInput;
 }
 
 export interface ReplaceImageOptions {
@@ -337,6 +339,7 @@ export async function insertImage(
           paragraphId: input.paragraphId,
           offset: input.offset,
           drawing: drawing as OoxmlDrawingNode,
+          ...(input.revision ? { revision: input.revision } : {}),
         })
       ) {
         return null;

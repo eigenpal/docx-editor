@@ -26,7 +26,8 @@ const SCANNED_ROOTS = ['core/src', 'pro/src', 'editor-api/src', 'react/src', 'vu
 /** file (relative to packages/) → number of `partFor(` occurrences, definitions included. */
 const PINNED_CALL_SITES: Readonly<Record<string, number>> = {
   'core/src/automation/server-host.ts': 1,
-  'core/src/binding/tree-session.ts': 7, // includes the TreeEditingSession facade definition
+  'core/src/binding/tree-session.ts': 6, // includes the TreeEditingSession facade definition
+  'core/src/binding/tree-session-contract.ts': 1, // the session view's partFor declaration
   'core/src/editor/doc-target-resolution.ts': 2,
   'core/src/editor/docx-editor-derive.ts': 1,
   'core/src/editor/docx-editor-images.ts': 1,
