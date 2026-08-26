@@ -569,6 +569,59 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
+  test('the paragraph mark container keeps its typed kind, so its revisions still paint', () => {
+    // Layout finds a mark's revisions and its format record by `kind === 'runProperties'`, with
+    // no name fallback. Minting a generic replacement made one Bold press hide somebody's
+    // struck pilcrow and change bar — and hide the record the same press had just written.
+    const marked =
+      '<w:p><w:pPr><w:rPr>' +
+      '<w:del w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p><w:p>' +
+      textRun('second') +
+      '</w:p>';
+    withSuggesting(marked, (surface) => {
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      const pPr = findAll(surface.session.part().root, 'pPr')[0]!;
+      const container = findAll(pPr, 'rPr')[0]!;
+      expect(container.kind).toBe('runProperties');
+      const fragment = surface.layout().pages[0]!.fragments[0]!;
+      expect(fragment.kind).toBe('paragraph');
+      if (fragment.kind !== 'paragraph') return;
+      expect(fragment.markRevisions.map((entry) => entry.author)).toContain('Ada');
+      expect(fragment.markFormatRevision?.author).toBe(AUTHOR);
+    });
+  });
+
+  test('text typed inside a recorded run does not inherit the record', () => {
+    // Those characters were never in the state the record describes. Inheriting it put them
+    // under somebody's pending decision: reject the format card and the words just typed came
+    // back in a colour nobody had given them, their own insertion card still unanswered.
+    withSuggesting(
+      `<w:p>${textRun('hello', '<w:rPr><w:color w:val="FF0000"/></w:rPr>')}</w:p>`,
+      (surface) => {
+        select(surface, 0, 5);
+        surface.setRunProperty('color', { val: '0000FF' });
+        expect(runRPrChanges(surface)).toHaveLength(1);
+        const id = surface.session.paragraphIds()[0]!;
+        surface.setSelection({
+          anchor: { paragraphId: id, offset: 2 },
+          head: { paragraphId: id, offset: 2 },
+        });
+        surface.type('XX');
+        const insertedRuns = findAll(surface.session.part().root, 'ins').flatMap((wrapper) =>
+          findAll(wrapper, 'r')
+        );
+        expect(insertedRuns).toHaveLength(1);
+        expect(findAll(insertedRuns[0]!, 'rPrChange')).toHaveLength(0);
+        // The FACE still comes across — only the pending record does not.
+        expect(findAll(insertedRuns[0]!, 'color')).toHaveLength(1);
+      }
+    );
+  });
+
   test('editing mode writes the properties with no record at all', () => {
     const container = document.createElement('div');
     document.body.append(container);

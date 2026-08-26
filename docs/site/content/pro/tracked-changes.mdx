@@ -126,7 +126,7 @@ const modules = [reviewModule()];
 | -------------------- | ---------------------------------------------------------------------------- |
 | Text                 | Tracks insertions, deletions, and replacements. A replacement uses one card. |
 | Paragraph structure  | Tracks inserted and deleted paragraph marks.                                 |
-| Paragraph properties | Tracks property changes in a separate card.                                  |
+| Paragraph properties | Tracks alignment, indents, spacing, and style in a separate card.            |
 | Tables               | Tracks row and cell insertion, deletion, and property changes.               |
 | Run formatting       | Tracks formatting changes in a separate card.                                |
 
@@ -135,19 +135,28 @@ old ones, so a reviewer can put them back. A run records `w:rPrChange`, a
 paragraph mark records `w:pPr/w:rPr/w:rPrChange`, and paragraph properties
 record `w:pPrChange`. Accept drops the record; reject restores what it holds.
 
-Two presses on the same run produce one card, because the record holds the
-properties the run started with. Setting a property back to the value the record
-holds removes the record.
+One press is one card, however many runs the selection covers. The record holds
+the properties each run started with, so a second press on the same run adds no
+second card. Setting a property back to the value your own record holds removes
+that record.
 
 A toggle pressed twice is not that case. Turning bold off writes an explicit off
 value rather than removing the property, because the property might come from a
 style. The run's properties therefore differ from the ones it started with, and
 the change is recorded.
 
-Formatting text inside your own pending insertion records nothing either: the
-whole run is already your proposal, so rejecting the insertion takes the words
-and the formatting together. Formatting text inside another author's pending
-insertion does record a change, and it is theirs to accept or reject.
+Formatting text inside your own pending insertion records nothing: the whole run
+is already your proposal, so rejecting the insertion takes the words and the
+formatting together. Formatting text inside another author's pending insertion
+does record a change, and that record is yours. Their insertion is untouched.
+
+If your change lands on the properties another author's record holds, their
+record stays. Resolving their proposal is a review decision, so take it in the
+review pane rather than through a formatting press.
+
+Lists, indent level, and tab stops are not recorded. Changing them in suggesting
+mode applies the change with no card. Table property changes made in the editor
+are not recorded either; a `w:tblPrChange` a file already carries still renders.
 
 A document that sets `w:doNotTrackFormatting` in `settings.xml` gets no
 formatting records. Its text edits stay tracked.

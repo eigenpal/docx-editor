@@ -78,7 +78,7 @@ function usedRevisionIds(part: OoxmlPart): Set<string> {
  * insertion minted an id already in use — and the new edit then shared an address with a
  * structural revision the engine refuses, which marked the user's own insertion read-only.
  */
-const REVISION_ID_BEARING: ReadonlySet<string> = new Set([
+export const REVISION_ID_BEARING: ReadonlySet<string> = new Set([
   'ins',
   'del',
   'moveFrom',
@@ -96,6 +96,23 @@ const REVISION_ID_BEARING: ReadonlySet<string> = new Set([
   'tblGridChange',
   'numberingChange',
 ]);
+
+/**
+ * Whether this node carries a REVISION `@w:id`, by local name in the WML namespace.
+ *
+ * The one predicate for the question, because two lanes ask it: this module mints past the
+ * highest id in use, and the clipboard re-mints every id a pasted fragment brings with it.
+ * Matching on the typed KIND instead — which only the four content wrappers have — let a
+ * pasted `w:rPrChange` keep its id, so one review card covered the original text and the copy,
+ * and rejecting it reverted formatting in a place nobody had proposed anything.
+ */
+export function carriesRevisionId(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    node.namespaceUri === WML_NAMESPACE_URI &&
+    REVISION_ID_BEARING.has(node.localName)
+  );
+}
 
 /** `ST_DecimalNumber` is unbounded; Word's reader is not. */
 const MAX_REVISION_ID = 2147483647;

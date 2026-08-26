@@ -770,7 +770,24 @@ export function applySetParagraphMarkProperties(
     return fromEdit(removeNode(part, existing.id, options), effect);
   }
 
-  const rPr = sectionElement(existing?.id ?? nextId(), 'rPr', [], children);
+  // THE TYPED KIND, and an EXISTING container rewritten in place — the same rule
+  // `applySetRunProperties` states for a run's own `w:rPr`, and the one the `w:pPr` branch
+  // below states for the paragraph. Layout finds the mark's revisions and its format record by
+  // `kind === 'runProperties'` with no name fallback, so minting a generic replacement made
+  // one Bold press over a paragraph hide somebody's struck pilcrow and change bar — and hide
+  // the mark format record the very same press had just written.
+  const rPr = existing
+    ? ({ ...existing, children } as OoxmlNode)
+    : ({
+        id: nextId(),
+        kind: 'runProperties',
+        namespaceUri: WML_NAMESPACE_URI,
+        localName: 'rPr',
+        prefix: 'w',
+        namespaceBindings: [],
+        attributes: [],
+        children,
+      } as unknown as OoxmlNode);
   if (existing) return fromEdit(replaceNode(part, existing.id, rPr, options), effect);
   if (pPr) {
     const before = pPr.children.findIndex(

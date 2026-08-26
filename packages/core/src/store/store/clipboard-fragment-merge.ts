@@ -52,7 +52,7 @@ import {
 import { withRequiredNamespaceBindings } from './tree-op-fragment.ts';
 import { sanitizeFragmentBlocks } from './clipboard-fragment-sanitize.ts';
 import {
-  REVISION_KINDS,
+  carriesPastedRevisionId,
   freshUniqueId,
   freshUniqueName,
   rewriteIdentifiers,
@@ -737,7 +737,7 @@ export function mergeFragmentIntoPackage(
       }
       return;
     }
-    if (REVISION_KINDS.has(node.kind)) {
+    if (carriesPastedRevisionId(node)) {
       fragmentHasRevision = true;
       return;
     }
@@ -829,12 +829,10 @@ export function mergeFragmentIntoPackage(
   if (fragmentHasRevision) {
     let nextRevisionId =
       maxNumericAttribute(ownerPart.root, (node) =>
-        node.kind !== 'textValue' && REVISION_KINDS.has(node.kind)
-          ? attributeValueOf(node, 'id')
-          : undefined
+        carriesPastedRevisionId(node) ? attributeValueOf(node, 'id') : undefined
       ) + 1;
     walkAll(allTravelling, (node) => {
-      if (node.kind === 'textValue' || !REVISION_KINDS.has(node.kind)) return;
+      if (!carriesPastedRevisionId(node)) return;
       const id = attributeValueOf(node, 'id');
       if (id !== undefined && !revisionIdMap.has(id)) {
         revisionIdMap.set(id, String(nextRevisionId++));

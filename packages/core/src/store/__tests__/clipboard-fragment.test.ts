@@ -387,6 +387,48 @@ describe('clipboard fragment round trip', () => {
     }
   });
 
+  test('a pasted format record takes a fresh @w:id, so one card cannot cover both copies', () => {
+    // The id remap matched the four content wrappers by their typed KIND. `w:rPrChange` and
+    // `w:pPrChange` are generic, so a pasted format record kept the id of the one it was
+    // copied from: the review pane showed ONE card covering the original text and the copy,
+    // and rejecting it reverted formatting in a place nobody had proposed anything.
+    const recorded =
+      '<w:p><w:r><w:rPr><w:b/>' +
+      '<w:rPrChange w:id="3" w:author="Ada" w:date="2026-01-01T00:00:00Z">' +
+      '<w:rPr/></w:rPrChange>' +
+      '</w:rPr><w:t>hello</w:t></w:r></w:p>';
+    const source = buildPackage(recorded);
+    const extracted = extractFragmentPackage(source, fullBodyCoverage(source));
+    expect(extracted.ok).toBe(true);
+    if (!extracted.ok) return;
+
+    const store = openStore(source);
+    const hostId = paragraphIdsUnder(
+      bodyOf(store.currentPackage().parts.get(source.mainDocumentPart)!)
+    )[0]!;
+    const pasted = store.applyFragmentPaste(
+      { kind: 'body' },
+      {
+        paragraphId: hostId,
+        offset: 5,
+        fragmentBytes: extracted.bytes,
+        lastMarkCovered: extracted.lastMarkCovered,
+      }
+    );
+    expect(pasted.ok).toBe(true);
+
+    const after = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
+    const ids: string[] = [];
+    const walk = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') return;
+      if (node.localName === 'rPrChange') ids.push(attributeValueOf(node, 'id') ?? '');
+      for (const child of node.children) walk(child);
+    };
+    walk(after.root);
+    expect(ids.length).toBeGreaterThan(1);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   test('undo after a fragment paste reverts imported resources with the tree', () => {
     const sample = samplePackage();
     const extracted = extractFragmentPackage(sample, fullBodyCoverage(sample));

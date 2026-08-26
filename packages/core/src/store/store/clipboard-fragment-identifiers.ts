@@ -13,6 +13,7 @@ import {
   type OoxmlNode,
 } from '../package/ooxml-tree.ts';
 import { attributeValueOf } from './tree-op-nodes.ts';
+import { carriesRevisionId } from './tree-op-revision-ids.ts';
 import { isWml } from './clipboard-fragment-defaults.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -46,12 +47,15 @@ const STYLE_REF_NAMES = new Set([
   'numStyleLink',
 ]);
 
-export const REVISION_KINDS = new Set([
-  'revisionInsert',
-  'revisionDelete',
-  'revisionMoveFrom',
-  'revisionMoveTo',
-]);
+/**
+ * Whether a pasted node brings a revision `@w:id` that has to be re-minted.
+ *
+ * BY LOCAL NAME, through the store's own predicate. The four content wrappers are the only
+ * ones with a typed kind, so a kind test missed `w:rPrChange`, `w:cellIns` and the rest — and
+ * a pasted format record kept the id of the one it was copied from, which made one review card
+ * cover the original text and the copy at once.
+ */
+export const carriesPastedRevisionId = carriesRevisionId;
 
 export interface RewriteMaps {
   readonly styleIds?: ReadonlyMap<string, string>;
@@ -117,7 +121,7 @@ export function rewriteIdentifiers(node: OoxmlNode, maps: RewriteMaps): OoxmlNod
       if (mapped !== undefined)
         next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'val', mapped);
     }
-    if (REVISION_KINDS.has(current.kind)) {
+    if (carriesPastedRevisionId(current)) {
       const value = attributeValueOf(current, 'id');
       const mapped = value !== undefined ? revisionIds.get(value) : undefined;
       if (mapped !== undefined)
