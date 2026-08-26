@@ -364,6 +364,34 @@ export class DocumentRegistry {
     if (replacedBy) rec.set(NODE_REPLACED_BY_FIELD, replacedBy);
   }
 
+  /**
+   * Drop from a node's child array the children this replica had already seen there.
+   *
+   * Adoption rescues what a CONCURRENT peer put inside a node this replica tombstoned. It must
+   * not rescue what this replica's own edit superseded. A run split leaves the replaced `w:t`
+   * listed under the run the edit dropped, and adopting it puts the pre-edit text back beside
+   * the new text on every replica but the author's.
+   *
+   * Each id is deleted as many times as the caller saw it, newest occurrence first, so the
+   * delete stays item-level: an id a peer inserted concurrently is a different Yjs item, keeps
+   * its place in the array, and still reaches the survivor.
+   */
+  unlistChildren(parentId: LogicalId, childIds: readonly LogicalId[]): void {
+    if (childIds.length === 0) return;
+    const rec = this.schema.nodes.get(parentId);
+    const children = rec ? childArrayOf(rec) : null;
+    if (!children) return;
+    const remaining = new Map<LogicalId, number>();
+    for (const childId of childIds) remaining.set(childId, (remaining.get(childId) ?? 0) + 1);
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const value = children.get(index);
+      const left = remaining.get(value) ?? 0;
+      if (left === 0) continue;
+      remaining.set(value, left - 1);
+      children.delete(index, 1);
+    }
+  }
+
   putXmlPart(entry: PartDirectoryEntry): void {
     this.schema.parts.set(
       entry.name,

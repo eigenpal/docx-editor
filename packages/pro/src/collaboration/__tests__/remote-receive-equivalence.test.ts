@@ -21,9 +21,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // their object identity, because reuse that quietly stops happening is a performance
 // regression no fingerprint can see.
 //
-// Both sides of the comparison read the SAME shared state, one with a warm node cache and one
-// with none. Whether shared state says what the author's own local tree says is a different
-// property, owned by the journal tests, so this file does not assert it.
+// Two of the three comparisons read the SAME shared state, one with a warm node cache and one
+// with none. The third reads the AUTHOR's own local tree, which never round-trips through
+// shared state, so it is the only one that can see a journal describe the author's edit
+// wrongly. It used to be left out: a tombstoned run handed its superseded `w:t` to the
+// survivor, so every replica but the author's carried a second copy of the pre-edit text, and
+// the two never reconciled. Leaving the author out of the oracle is what let that live.
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
@@ -454,6 +457,14 @@ describe('incremental materialization equals a cold full rebuild', () => {
           coldPackage(alice.ydoc),
           coldPackage(bob.ydoc),
           `${step.name} (shared state)`
+        );
+        // And shared state has to say what the AUTHOR committed. The author's tree is the one
+        // input no rebuild can check against itself, so a journal that describes the edit
+        // wrongly shows up here and nowhere else.
+        expectSameDocument(
+          harness.packageOf(author),
+          coldPackage(author.ydoc),
+          `${step.name} (author)`
         );
       }
       expect(replayed).toBe(STEPS.length);

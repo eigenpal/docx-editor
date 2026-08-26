@@ -415,7 +415,13 @@ export function applyPrimitiveJournal(
     for (const id of removedBefore) {
       if (reinserted.has(id) || !registry.hasNode(id) || registry.isTombstoned(id)) continue;
       if (registry.partEntries().some((part) => part.rootLogicalId === id)) continue;
-      registry.tombstone(id, inferReplacement(registry, id, formerChildren, journal.effects));
+      const survivor = inferReplacement(registry, id, formerChildren, journal.effects);
+      // The survivor adopts whatever the tombstone still lists, and the tombstone still lists
+      // the children this edit REPLACED — a split run keeps the `w:t` the split superseded.
+      // Dropping the seen children leaves the survivor adopting only what a concurrent peer
+      // added, which is the case adoption exists for.
+      if (survivor) registry.unlistChildren(id, formerChildren.get(id) ?? []);
+      registry.tombstone(id, survivor);
     }
   }, JOURNAL_ORIGIN);
   return { ok: true };
