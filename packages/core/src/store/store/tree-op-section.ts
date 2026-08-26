@@ -779,8 +779,8 @@ export function applySetParagraphMarkProperties(
       next: children,
       revision,
       mint: nextId,
-      // Lazy: the id walk only happens if a record is actually written.
-      nextRevisionId: () => nextRevisionId(part)(),
+      // The transaction's minter when it lent one, else a lazy walk of this part.
+      nextRevisionId: () => options?.revisionIds?.() ?? nextRevisionId(part)(),
     });
   }
 

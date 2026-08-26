@@ -1180,6 +1180,7 @@ export type DrawingTreeDocOp = Extract<TreeDocOp, {
 export interface EditOptions {
     // (undocumented)
     readonly deferValidation?: boolean;
+    readonly revisionIds?: () => string;
 }
 
 // @public
@@ -1416,7 +1417,10 @@ export function formatOwnedRunIds(paragraph: Extract<OoxmlNode, {
 }>): ReadonlySet<string>;
 
 // @public
-export function formattableRunsOf(child: OoxmlNode, displayMode?: FormattingDisplayMode): readonly OoxmlNode[];
+export function formattableRanges(part: OoxmlPart, paragraphId: string, start: number, end: number, displayMode?: FormattingDisplayMode): readonly {
+    readonly end: number;
+    readonly start: number;
+}[];
 
 // @public
 export function formattableRunsOfParagraph(paragraph: OoxmlParagraphNode, displayMode?: FormattingDisplayMode): readonly OoxmlNode[];

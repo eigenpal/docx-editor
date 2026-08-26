@@ -26,6 +26,7 @@ import {
   withPendingFormatting,
   type SurfaceProperty,
 } from './surface-formatting.ts';
+import { formattableRanges } from '@docx-editor.dev/core/store';
 import type { FormattingDisplayMode, TreeDocOp } from '@docx-editor.dev/core/store';
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
 import { mergedParagraphMarkProperties } from '@docx-editor.dev/core/store';
@@ -42,9 +43,10 @@ export interface SurfaceFormatDeps {
    * Which revision halves the reader is LOOKING at.
    *
    * The formatting walks take it because a write must not restyle text the view hides: in the
-   * default `proposed` result a tracked deletion paints nothing and still owns its offsets, so
-   * a selection across visible words sweeps it (#497). Read per call — the surface's own mode
-   * is a mount option today, and a future `setRevisionDisplayMode` must move this with it.
+   * resolved result a tracked deletion paints nothing and still owns its offsets, so a
+   * selection across visible words sweeps it (#497). In All Markup that text is on the page
+   * and the write reaches it. Read per call — the surface's own mode is a mount option today,
+   * and a future `setRevisionDisplayMode` must move this with it.
    */
   displayMode(): FormattingDisplayMode;
   commit(
@@ -499,17 +501,29 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         // A rectangle stands for whole cells, so every paragraph in it clears entirely.
         const start = rectangular || paragraphId !== from.paragraphId ? 0 : from.offset;
         const end = rectangular || paragraphId !== to.paragraphId ? text.length : to.offset;
-        // ONE op for the whole range rather than one per run: the other writes split per run
-        // so each keeps its own bag, and here there is no bag to keep. Clearing is the one
-        // change that legitimately homogenises the range.
+        // ONE op per SLICE rather than one per run: the other writes split per run so each
+        // keeps its own bag, and here there is no bag to keep — clearing is the one change
+        // that legitimately homogenises what it covers. A slice, though, and not the whole
+        // range: the applier derives its run set from `segmentsOf`, which knows nothing about
+        // display modes, so one op end to end reached the hidden revision halves sitting at
+        // the same offsets. `formattableRanges` leaves a gap where one of those sits.
         //
         // Each op is emitted only where there is something to drop. An op that names nothing
         // still counts as APPLIED — the store publishes a revision and pushes an undo entry
         // for it even though the tree comes back identical — so an unconditional three ops
         // per paragraph made the eraser report `changed: true` over clean text and cost an
         // undo press that undid nothing.
-        if (start < end && hasAuthoredRunProperties(part, paragraphId, start, end, displayMode())) {
-          ops.push({ op: 'setRunProperties', paragraphId, start, end, properties: [] });
+        for (const slice of formattableRanges(part, paragraphId, start, end, displayMode())) {
+          if (!hasAuthoredRunProperties(part, paragraphId, slice.start, slice.end, displayMode())) {
+            continue;
+          }
+          ops.push({
+            op: 'setRunProperties',
+            paragraphId,
+            start: slice.start,
+            end: slice.end,
+            properties: [],
+          });
         }
         // The MARK first: `setParagraphProperties` cannot name `w:rPr`, so it preserves the
         // mark and leaves the container non-empty, and the applier drops a `w:pPr` only once

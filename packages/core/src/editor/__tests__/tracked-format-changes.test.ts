@@ -262,6 +262,34 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
+  test('rejecting a Word-written mark record does not double the mark revision', () => {
+    // `CT_ParaRPrOriginal` admits `w:ins`, so a record another producer wrote legitimately
+    // carries one. Keeping the live mark AND the recorded copy emits two `w:ins` in a
+    // container whose schema allows one — a `w:pPr` Word reports as unreadable.
+    const doubled =
+      '<w:p><w:pPr><w:rPr>' +
+      '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '<w:b/>' +
+      '<w:rPrChange w:id="5" w:author="Cy" w:date="2026-01-02T00:00:00Z"><w:rPr>' +
+      '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '</w:rPr></w:rPrChange>' +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p>';
+    withSuggesting(doubled, (surface) => {
+      const change = findAll(surface.session.part().root, 'rPrChange')[0]!;
+      resolve(surface, 'reject', change);
+      const markProperties = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
+        findAll(pPr, 'rPr')
+      )[0]!;
+      const names = (markProperties as { children: OoxmlNode[] }).children.map((child) =>
+        child.kind === 'textValue' ? '' : child.localName
+      );
+      expect(names.filter((name) => name === 'ins')).toHaveLength(1);
+      expect(names).not.toContain('b');
+    });
+  });
+
   test('a mark this author proposed adding takes no record of its own', () => {
     // Rejecting that `w:ins` runs the paragraph into the next one and takes the mark's
     // properties with it, so a record of what they used to be decides nothing.
@@ -280,6 +308,30 @@ describe('tracked format changes in suggesting mode', () => {
       expect(onMark).toHaveLength(0);
       // The RUN still records: its words are not this author's.
       expect(runRPrChanges(surface)).toHaveLength(1);
+    });
+  });
+
+  test('a wide format mints one distinct id per record', () => {
+    // The transaction lends its formatting ops ONE id minter, because `nextRevisionId` walks
+    // the whole part and formatting emits an op per run. A minter that handed the same id
+    // twice would make two changes one card in the review pane.
+    const runs = [
+      textRun('one ', '<w:rPr><w:color w:val="FF0000"/></w:rPr>'),
+      textRun('two ', '<w:rPr><w:color w:val="00FF00"/></w:rPr>'),
+      textRun('three', '<w:rPr><w:color w:val="0000FF"/></w:rPr>'),
+    ].join('');
+    withSuggesting(`<w:p>${runs}</w:p>`, (surface) => {
+      select(surface, 0, 'one two three'.length);
+      surface.toggleRunProperty('b');
+      const ids = rPrChanges(surface).map((change) => attributeOf(change, 'id'));
+      expect(ids).toHaveLength(4);
+      expect(new Set(ids).size).toBe(4);
+      // Each record still holds its own run's colour, not the first run's.
+      expect(runRPrChanges(surface).map((change) => recorded(change))).toEqual([
+        ['color'],
+        ['color'],
+        ['color'],
+      ]);
     });
   });
 

@@ -388,9 +388,10 @@ export function authoredRunPropertiesAt(
   const runRanges = runAddressRanges(paragraph);
   let left: OoxmlNode | null = null;
   let right: OoxmlNode | null = null;
-  // Only runs the reader can SEE. A hidden tracked deletion ending at the caret used to win
-  // as `left`, so the toolbar face and the next typed character took their formatting from
-  // text nobody could look at.
+  // Only runs this view RENDERS. In the resolved result a hidden tracked deletion ending at
+  // the caret used to win as `left`, so the toolbar face and the next typed character took
+  // their formatting from text nobody could look at. In All Markup that same run is on the
+  // page, struck through, and taking its face is what a reader would expect.
   for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
     const range = runRanges.get(run.id);
     if (!range || range.end <= range.start) continue;

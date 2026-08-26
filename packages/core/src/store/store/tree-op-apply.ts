@@ -551,8 +551,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
           next: children,
           revision: op.revision,
           mint: nextId,
-          // Lazy: the id walk only happens if a record is actually written.
-          nextRevisionId: () => nextRevisionId(part)(),
+          // The transaction's minter when it lent one, else a lazy walk of this part.
+          nextRevisionId: () => options?.revisionIds?.() ?? nextRevisionId(part)(),
         });
       }
       const effect: TreeOpEffect = {
@@ -3284,8 +3284,11 @@ function applySetRunProperties(
   const nextId = createNodeIdAllocator(current);
   // Minted LAZILY, and once for the whole op: `nextRevisionId` walks the part, and a write
   // that records nothing — every run inside this author's own `w:ins` — must not pay it.
+  // The TRANSACTION's minter is preferred when it lent one, because formatting emits an op
+  // per run and the walk is document-wide (`EditOptions.revisionIds`).
   let revisionIds: (() => string) | null = null;
-  const mintRevisionId = (): string => (revisionIds ??= nextRevisionId(current))();
+  const mintRevisionId = (): string =>
+    options?.revisionIds?.() ?? (revisionIds ??= nextRevisionId(current))();
   for (const runId of runIds) {
     const run = findNode(current, runId);
     if (!run || run.kind !== 'run') continue;

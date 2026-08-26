@@ -42,6 +42,20 @@ export type OoxmlEditResult =
  */
 export interface EditOptions {
   readonly deferValidation?: boolean;
+  /**
+   * A shared minter for `@w:id` on a NEW revision, for the ops of one transaction.
+   *
+   * `nextRevisionId` walks the whole part to find the highest id in use, and a formatting
+   * write emits one op per run — so a Select All + Bold in suggesting mode paid a
+   * document-wide walk thousands of times over. The transaction hands its ops one minter
+   * instead, and it is DROPPED the moment an op that can import foreign revision ids runs
+   * (a paste carries its own), because a stale minter would hand out an id the document had
+   * just started using — and two revisions sharing an address are one card in the pane.
+   *
+   * Absent means "mint your own": every applier falls back to its own walk, which is what a
+   * caller outside a transaction gets.
+   */
+  readonly revisionIds?: () => string;
 }
 
 /**

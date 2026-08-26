@@ -31,6 +31,7 @@ import {
   mergedProperties,
   runPropertyEdits,
 } from '../store/store/direct-properties.ts';
+import type { FormattingDisplayMode } from '../store/store/formattable-runs.ts';
 import {
   fontProperties,
   fontRead,
@@ -225,6 +226,8 @@ export interface BatchPlannerHost {
   readonly handles: AutomationHandleTable;
   readonly reads: AutomationPackageReads;
   readonly capabilities: AutomationCapabilities;
+  /** The reader's view — see `AutomationDocumentPort.revisionDisplayMode`. */
+  readonly displayMode?: FormattingDisplayMode;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
   readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
 }
@@ -1209,7 +1212,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         share.paragraphId,
         share.start,
         share.end,
-        properties.value
+        properties.value,
+        host.displayMode
       )) {
         ops.push({
           op: 'setRunProperties',
@@ -1868,10 +1872,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
         const story = storyOfSpanRef(operation.span, handles, packageReads);
         if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
-        return query({
-          kind: 'font',
-          font: fontRead(story.value.part, spanOffsets(resolved.value, story.value)),
-        });
+        const spans = spanOffsets(resolved.value, story.value);
+        return query({ kind: 'font', font: fontRead(story.value.part, spans, host.displayMode) });
       }
 
       case 'setFont': {

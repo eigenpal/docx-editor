@@ -34,6 +34,10 @@ import {
   runsCovering,
 } from '../store/store/direct-properties.ts';
 import {
+  DEFAULT_FORMATTING_DISPLAY_MODE,
+  type FormattingDisplayMode,
+} from '../store/store/formattable-runs.ts';
+import {
   namedChild,
   paragraphPropertiesNodeOf,
   runPropertiesNodeOf,
@@ -208,11 +212,14 @@ function agreed<T>(values: readonly (T | null)[]): T | null {
  */
 export function fontRead(
   part: OoxmlPart,
-  spans: readonly { readonly paragraphId: string; readonly start: number; readonly end: number }[]
+  spans: readonly { readonly paragraphId: string; readonly start: number; readonly end: number }[],
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
 ): AutomationFontRead {
   const properties: (OoxmlElement | undefined)[] = [];
   for (const span of spans) {
-    for (const run of runsCovering(part, span.paragraphId, span.start, span.end)) {
+    // The same reach the WRITE uses. A span whose surviving text is uniform must not read
+    // Mixed because a differently formatted hidden half sits inside it.
+    for (const run of runsCovering(part, span.paragraphId, span.start, span.end, displayMode)) {
       properties.push(runPropertiesNodeOf(run));
     }
   }

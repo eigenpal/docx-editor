@@ -10,6 +10,7 @@
 // Those live above the port so both hosts cannot answer the same question two ways, which is
 // the failure mode a second host implementation always ends in.
 
+import type { FormattingDisplayMode } from '../store/store/formattable-runs.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -95,6 +96,19 @@ export interface AutomationDocumentPort {
    * from a projection, a layout, or painted DOM.
    */
   currentPackage(): OoxmlPackage | null;
+  /**
+   * Which revision halves the owner's reader is LOOKING at, when there is a reader.
+   *
+   * The FORMATTING lanes need it, and only this port can supply it: a range's offsets cover
+   * every revision half whatever the view does with them, so "which runs does this span
+   * format" has a different answer in All Markup than in the resolved result. A browser host
+   * answers with the surface's own mode, so the object model and the toolbar agree over the
+   * same selection instead of drifting the moment the review module turns markup on.
+   *
+   * Absent on a headless owner, which has no reader and therefore no view: the lane then reads
+   * the proposed result — the text that survives — which is what a caller with no opinion means.
+   */
+  revisionDisplayMode?(): FormattingDisplayMode;
   /**
    * Commit ops as ONE transaction against ONE story.
    *

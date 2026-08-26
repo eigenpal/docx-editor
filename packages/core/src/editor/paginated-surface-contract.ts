@@ -792,6 +792,15 @@ export interface PaginatedSurface {
     scope?: StoryScope
   ): TreeApplyResult;
   /**
+   * Which revision halves this surface is SHOWING.
+   *
+   * Read by the automation adapter so the object model's formatting reaches the same runs the
+   * toolbar does. A range's offsets cover every revision half whatever the view does with
+   * them, so with markup on, a selection over a struck word means one thing to a reader and
+   * would mean another to a script that assumed the resolved result.
+   */
+  revisionDisplayMode(): RevisionDisplayMode;
+  /**
    * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
    * takes: layout, paint, and a caret clamped to what the document now holds.
    *

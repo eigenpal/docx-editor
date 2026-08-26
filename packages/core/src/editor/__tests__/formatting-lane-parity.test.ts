@@ -22,6 +22,7 @@ import {
   hasAuthoredRunProperties,
   runPropertyEdits as surfaceRunPropertyEdits,
 } from '../surface-formatting.ts';
+import { fontRead } from '../../automation/formatting.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -171,6 +172,25 @@ describe('formatting lane parity per run container', () => {
     expect(spans(surfaceRunPropertyEdits(part, PARAGRAPH, 0, 6, RED, 'original'))).toEqual([
       '3..6',
     ]);
+  });
+
+  test('the automation lane reads the surface display mode, not a default of its own', () => {
+    // The defaults are NOT what the lanes use: with the review module registered the surface
+    // renders `all-markup`, while a lane that passed nothing would read the resolved result.
+    // The port carries the reader's view so a script and the toolbar agree over one selection.
+    const part = load(
+      '<w:p>' +
+        '<w:r><w:t>abc</w:t></w:r>' +
+        '<w:del w:id="3" w:author="A"><w:r><w:delText>XYZ</w:delText></w:r></w:del>' +
+        '</w:p>'
+    );
+    const spans = [{ paragraphId: PARAGRAPH, start: 0, end: 6 }];
+    // Struck text carries its own face; the resolved result never sees it.
+    expect(fontRead(part, spans).bold).toBe(null);
+    expect(fontRead(part, spans, 'proposed').bold).toBe(null);
+    // With the deletion in reach the answers still agree with the write lane's reach.
+    expect(runsCovering(part, PARAGRAPH, 0, 6, 'all-markup')).toHaveLength(2);
+    expect(runsCovering(part, PARAGRAPH, 0, 6, 'proposed')).toHaveLength(1);
   });
 
   test('a move pair takes the write on the half the view renders, and does not mirror', () => {

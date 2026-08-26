@@ -157,6 +157,9 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       handles,
       reads: readsOf(pkg),
       capabilities,
+      // Read ONCE per batch: the formatting lanes must not answer one operation against
+      // All Markup and the next against the resolved result.
+      ...(port.revisionDisplayMode ? { displayMode: port.revisionDisplayMode() } : {}),
       ...(port.select ? { select: port.select.bind(port) } : {}),
     });
 

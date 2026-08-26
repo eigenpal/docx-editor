@@ -39,7 +39,8 @@ function withSurface(
 
 const ins = (runs: string) =>
   `<w:ins w:id="1" w:author="A" w:date="2026-01-01T00:00:00Z">${runs}</w:ins>`;
-const textRun = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+const textRun = (text: string, rPr = '') =>
+  `<w:r>${rPr}<w:t xml:space="preserve">${text}</w:t></w:r>`;
 const del = (text: string, rPr = '') =>
   '<w:del w:id="2" w:author="A" w:date="2026-01-01T00:00:00Z">' +
   `<w:r>${rPr}<w:delText xml:space="preserve">${text}</w:delText></w:r></w:del>`;
@@ -217,6 +218,25 @@ describe('run formatting over tracked-change text', () => {
         select(surface, 0, 'XYZdef'.length);
         surface.clearFormatting();
         expect(surface.session.packageRevision()).toBe(before);
+      },
+      'proposed'
+    );
+  });
+
+  test('Clear Formatting leaves a hidden deletion own w:rPr alone', () => {
+    // The eraser states `properties: []` over a range, and the applier derives its run set
+    // from `segmentsOf` — which knows nothing about display modes. One op end to end cleared
+    // the tracked deletion's own formatting, which surfaces only when somebody rejects it.
+    withSurface(
+      `<w:p>${textRun('abc', '<w:rPr><w:i/></w:rPr>')}${del('XYZ', '<w:rPr><w:i/></w:rPr>')}${textRun('def')}</w:p>`,
+      (surface) => {
+        select(surface, 0, 'abcXYZdef'.length);
+        surface.clearFormatting();
+        expect(runShapes(firstParagraphNode(surface))).toEqual([
+          { props: [], text: 'abc', tracked: false },
+          { props: ['i'], text: 'XYZ', tracked: false },
+          { props: [], text: 'def', tracked: false },
+        ]);
       },
       'proposed'
     );

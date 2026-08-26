@@ -4826,6 +4826,7 @@ export function mountPaginatedSurface(
       );
     },
 
+    revisionDisplayMode,
     applyAutomationOps: (staged, scope) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
       // refuses and where suggesting turns an edit into a proposal, and `commit` is where the

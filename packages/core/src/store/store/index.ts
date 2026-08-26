@@ -97,6 +97,7 @@ export {
   directParagraphMarkProperties,
   directParagraphProperties,
   formatOwnedRunIds,
+  formattableRanges,
   isAuthorableRunProperty,
   mergedFontProperty,
   mergedMultiSettingProperty,
@@ -110,7 +111,6 @@ export {
 } from './direct-properties.ts';
 export {
   DEFAULT_FORMATTING_DISPLAY_MODE,
-  formattableRunsOf,
   formattableRunsOfParagraph,
   revisionReachedInMode,
   type FormattingDisplayMode,

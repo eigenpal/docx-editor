@@ -21,6 +21,7 @@
 // the next `attach`.
 
 import type { AutomationCapabilities, AutomationHost } from '../automation/index.ts';
+import { DEFAULT_FORMATTING_DISPLAY_MODE } from '../store/store/formattable-runs.ts';
 import type {
   AutomationCommentWriteResult,
   AutomationDocumentPort,
@@ -102,6 +103,12 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       return base + seen;
     },
     currentPackage: (): OoxmlPackage | null => sync()?.currentPackage() ?? null,
+    // THE READER'S VIEW, so the object model's formatting reaches the runs the toolbar does.
+    // Per call rather than captured: the editor remounts, and a detached editor has no
+    // surface to ask — the lane then falls back to the resolved result, which is what a
+    // caller with no view means.
+    revisionDisplayMode: () =>
+      editor.surface?.revisionDisplayMode() ?? DEFAULT_FORMATTING_DISPLAY_MODE,
     apply(staged: AutomationStagedOps, scope: StoryScope): AutomationPortApplyResult {
       sync();
       const surface = editor.surface;

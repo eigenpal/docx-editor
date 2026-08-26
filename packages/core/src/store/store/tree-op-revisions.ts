@@ -697,29 +697,30 @@ function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
       // deletes a SECTION BREAK: page size, margins and per-section header/footer references
       // go with it, and every following paragraph reflows into the previous section.
       //
-      // `CT_RPrChange` is the opposite case: `CT_RPrOriginal` genuinely is the whole `w:rPr`
-      // content minus the change wrapper, so there wholesale replacement is correct.
-      // A `w:rPrChange` on a paragraph MARK sits in the same `w:pPr/w:rPr` as
-      // `EG_ParaRPrTrackChanges`, and those are somebody's pending decision about the
-      // paragraph BREAK — a decision that may have been taken after this format change was
-      // proposed. Restoring the container from the record alone deleted them, so rejecting a
-      // formatting suggestion silently answered an unrelated one. Preserved, not recorded, for
-      // the same reason `w:pPrChange` preserves `w:rPr` and `w:sectPr`. A run's own `w:rPr`
-      // holds no such children, so this costs it nothing.
-      const preserved =
-        restoring.localName === 'pPrChange'
-          ? node.children.filter((child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr'))
-          : node.children.filter((child) => isParagraphMarkRevision(child));
-      // Both groups OPEN their container's sequence (`EG_ParaRPrTrackChanges` leads
-      // `CT_ParaRPr`), while `w:rPr`/`w:sectPr` close `CT_PPr` — so each goes on the side the
-      // schema puts it.
+      // `CT_RPrChange` is nearly the opposite case: `CT_RPrOriginal` genuinely is the whole
+      // `w:rPr` content minus the change wrapper, so wholesale replacement is right — EXCEPT
+      // on a paragraph MARK, whose `w:pPr/w:rPr` also holds `EG_ParaRPrTrackChanges`. Those
+      // are somebody's pending decision about the paragraph BREAK, and it may have been taken
+      // after this format change was proposed. Restoring the container from the record alone
+      // deleted them, so rejecting a formatting suggestion silently answered an unrelated one.
+      //
+      // The LIVE ones win and the recorded copies are dropped. Both halves are load-bearing:
+      // `CT_ParaRPrOriginal` admits `w:ins`, so a Word-written record legitimately carries one,
+      // and keeping both emits two `w:ins` in a container whose schema allows one — a `w:pPr`
+      // Word reports as unreadable. A run's own `w:rPr` holds no such children either way.
+      if (restoring.localName === 'pPrChange') {
+        const preserved = node.children.filter(
+          (child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr')
+        );
+        // `w:rPr` and `w:sectPr` CLOSE `CT_PPr`, so they follow the recorded base.
+        return [{ ...node, children: [...recorded, ...preserved] } as OoxmlElement];
+      }
+      const liveMarks = node.children.filter((child) => isParagraphMarkRevision(child));
+      // `EG_ParaRPrTrackChanges` OPENS `CT_ParaRPr`, so the live marks lead.
       return [
         {
           ...node,
-          children:
-            restoring.localName === 'pPrChange'
-              ? [...recorded, ...preserved]
-              : [...preserved, ...recorded],
+          children: [...liveMarks, ...recorded.filter((child) => !isParagraphMarkRevision(child))],
         } as OoxmlElement,
       ];
     }

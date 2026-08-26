@@ -21,6 +21,7 @@ import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { formsProtectionRefusal } from './tree-op-content-controls.ts';
+import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
@@ -211,6 +212,17 @@ export interface TreeDocumentCheckpoint {
     readonly committed: boolean;
   } | null;
 }
+
+/**
+ * The ops whose tracked form MINTS a revision id and never imports one.
+ *
+ * A transaction may share one id minter across a run of these; see `sharedRevisionIds`.
+ */
+const SHARED_REVISION_ID_OPS: ReadonlySet<TreeDocOp['op']> = new Set<TreeDocOp['op']>([
+  'setRunProperties',
+  'setParagraphProperties',
+  'setParagraphMarkProperties',
+]);
 
 /**
  * The document store: one transaction is one atomic publication and one history entry.
@@ -411,6 +423,35 @@ export class TreeDocumentStore {
     let explicitSelectionAfter: SelectionMark | null = null;
     let opCaret: SelectionMark | null = null;
 
+    /**
+     * One `@w:id` minter shared by the FORMATTING ops of this transaction, per part.
+     *
+     * `nextRevisionId` walks the whole part, and a formatting write emits one op per run: a
+     * Select All + Bold in suggesting mode paid a document-wide walk thousands of times over,
+     * which is quadratic in document size.
+     *
+     * Shared only across the three property ops, and dropped the moment anything else runs.
+     * Those three MINT ids and never import one, so a minter seeded before the first of them
+     * still knows every id in use when the last lands. A paste carries its own revision ids,
+     * so a minter that survived one would hand out an address the document had just started
+     * using — and two revisions sharing an address are one card in the review pane.
+     */
+    const minters = new Map<string, () => string>();
+    const sharedRevisionIds = (op: TreeDocOp, part: OoxmlPart): (() => string) | null => {
+      if (!SHARED_REVISION_ID_OPS.has(op.op)) {
+        minters.clear();
+        return null;
+      }
+      const existing = minters.get(part.name);
+      if (existing) return existing;
+      // Built LAZILY on the first formatting op of a run of them, so an untracked format —
+      // the common case — never pays the walk at all.
+      let minted: (() => string) | null = null;
+      const lazy = (): string => (minted ??= nextRevisionId(part))();
+      minters.set(part.name, lazy);
+      return lazy;
+    };
+
     const applyToPart = (partName: string, op: TreeDocOp): boolean => {
       if (failure) return false;
       const target = working.parts.get(partName);
@@ -434,7 +475,11 @@ export class TreeDocumentStore {
       // many-op transaction quadratic in document size, and nothing between here and the
       // commit can observe the intermediate parts. Op-level input validation still runs
       // inside `applyTreeOp` before any tree work.
-      const result = applyTreeOp(target, op, { deferValidation: true });
+      const revisionIds = sharedRevisionIds(op, target);
+      const result = applyTreeOp(target, op, {
+        deferValidation: true,
+        ...(revisionIds ? { revisionIds } : {}),
+      });
       if (!result.ok) {
         failure = { reason: result.reason, ...(result.detail ? { detail: result.detail } : {}) };
         return false;

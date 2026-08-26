@@ -351,6 +351,45 @@ export function runPropertyEdits(
 }
 
 /**
+ * The slices of `[start, end)` a formatting write may reach, coalesced, in document order.
+ *
+ * For the one write that does NOT split per run: the eraser states `properties: []` over a
+ * whole range, and a single op there is right — clearing is the one change that legitimately
+ * homogenises what it covers, since there is no bag to carry forward. But the applier derives
+ * its run set from `segmentsOf`, which knows nothing about display modes, so one op over the
+ * whole range reached hidden revision halves at the same offsets: erasing a visible selection
+ * cleared a tracked deletion's `w:rPr` and — in suggesting mode — raised a review card for a
+ * change nobody could see made.
+ *
+ * Slicing solves it without a per-run op: a hidden half is a GAP in the offset space between
+ * two visible runs, so the ranges either side of it never coalesce across it.
+ */
+export function formattableRanges(
+  part: OoxmlPart,
+  paragraphId: string,
+  start: number,
+  end: number,
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+): readonly { readonly start: number; readonly end: number }[] {
+  const paragraph = findNode(part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph' || end <= start) return [];
+  const runRanges = runAddressRanges(paragraph);
+  const slices: { start: number; end: number }[] = [];
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+    const range = runRanges.get(run.id);
+    if (!range) continue;
+    const from = Math.max(range.start, start);
+    const to = Math.min(range.end, end);
+    if (from >= to) continue;
+    // Field result runs share ONE atom offset, so slices overlap as often as they abut.
+    const last = slices[slices.length - 1];
+    if (last && from <= last.end) last.end = Math.max(last.end, to);
+    else slices.push({ start: from, end: to });
+  }
+  return slices;
+}
+
+/**
  * Every run that contributes at least one character of `[start, end)`, in document order.
  *
  * A COLLAPSED range answers the run it sits inside, which is what a caret reads. Callers that

@@ -40,7 +40,14 @@ import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
  */
 export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
 
-/** What the formatting lanes assume when nobody names a view: Word's "No Markup". */
+/**
+ * What the formatting lanes assume when nobody names a view.
+ *
+ * The RESOLVED result — Word's "No Markup" — because a caller with no view is a caller with
+ * no reader: a headless automation host answers for the text that survives. It is not what a
+ * mounted surface uses; that one names its own mode, and with the review module registered
+ * the layout default is `all-markup`.
+ */
 export const DEFAULT_FORMATTING_DISPLAY_MODE: FormattingDisplayMode = 'proposed';
 
 /**
@@ -96,21 +103,6 @@ export function formattableRunsOfParagraph(
 ): readonly OoxmlNode[] {
   const runs: OoxmlNode[] = [];
   collectFormattableRuns(paragraph.children, displayMode, 0, runs);
-  return runs;
-}
-
-/**
- * The runs ONE paragraph child owns — the child itself when it is a run, or every run inside
- * it when it is a container the formatting lane descends.
- *
- * The per-child entry point, for a caller that already walks a paragraph's inline sequence.
- */
-export function formattableRunsOf(
-  child: OoxmlNode,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
-): readonly OoxmlNode[] {
-  const runs: OoxmlNode[] = [];
-  collectFormattableRuns([child], displayMode, 0, runs);
   return runs;
 }
 
