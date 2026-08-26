@@ -34,10 +34,12 @@ function docx(body: string): Uint8Array {
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-function mount(body: string): DocxEditorInstance {
+function mount(body: string, mode: 'edit' | 'suggesting' = 'edit'): DocxEditorInstance {
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: docx(body),
+    mode,
+    author: 'Ada Lovelace',
   });
   if (!editor.surface) throw new Error('surface failed to mount');
   return editor;
@@ -138,5 +140,61 @@ describe('insertBreak section kinds', () => {
     // Twips to points: 15840/20 = 792 wide landscape sheet, then the portrait one.
     expect([pages[0]!.box.width, pages[0]!.box.height]).toEqual([792, 612]);
     expect([pages[1]!.box.width, pages[1]!.box.height]).toEqual([612, 792]);
+  });
+});
+
+describe('suggesting mode publishes the one break it cannot propose', () => {
+  // The reason has to reach `can`, not just `exec`: a gate the toolbar cannot see is a
+  // button that lies. The row greys out and carries the engine's own words.
+  const SUGGESTED_REASON =
+    'a section break that changes where the next section starts cannot be suggested; ' +
+    'turn off suggesting to insert it';
+
+  function caretIn(editor: DocxEditorInstance): void {
+    const id = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: id, offset: 6 },
+      head: { paragraphId: id, offset: 6 },
+    });
+  }
+
+  test('a continuous break reports the refusal through can, and changes nothing', () => {
+    const editor = mount(p('before after'), 'suggesting');
+    caretIn(editor);
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: SUGGESTED_REASON,
+    });
+    expect(editor.exec({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toMatchObject({
+      ok: false,
+    });
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(1);
+    expect(sectionTypes(editor)).toEqual([]);
+  });
+
+  test('a next-page break that would REMOVE an authored type is refused with it', () => {
+    const editor = mount(
+      p('before after') +
+        '<w:sectPr><w:type w:val="oddPage"/><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>',
+      'suggesting'
+    );
+    caretIn(editor);
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toMatchObject({
+      ok: false,
+      reason: SUGGESTED_REASON,
+    });
+    expect(sectionTypes(editor)).toEqual(['oddPage']);
+  });
+
+  test('the ordinary next-page break is untouched: it retypes nothing', () => {
+    const editor = mount(p('before after'), 'suggesting');
+    caretIn(editor);
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+    expect(editor.exec({ type: 'insertBreak', kind: 'section' } as never)).toEqual({
+      ok: true,
+      changed: true,
+    });
+    expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
   });
 });

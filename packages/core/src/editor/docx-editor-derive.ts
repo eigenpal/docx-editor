@@ -20,6 +20,7 @@ import type { ContainerRef } from '../contracts/types.ts';
 import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
 import { gateImageCommand } from './docx-editor-images.ts';
+import { sectionBreakRetypesFollowing } from './section-scope.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
 export type CommandGate =
@@ -440,6 +441,27 @@ export function gateCommand(
           reason: 'a section break can only be inserted in the editable document body',
         },
       };
+    }
+    // Suggesting mode: a break that RETYPES the following section cannot be proposed. `w:type`
+    // lands on the section that starts at the mark, which hangs on a paragraph the break does
+    // not touch, and Word's record for that — `w:sectPrChange` — is one this engine refuses in
+    // accept and reject. Written untracked it would survive the reject that removes the split,
+    // so the gesture refuses instead, here as well as in the surface, or the control lies.
+    // The ordinary next-page break in a document with no authored `w:type` retypes nothing.
+    const caret = surface.state?.().selection?.head;
+    if (mode === 'suggesting' && caret) {
+      const wanted = command.kind === 'section' ? 'nextPage' : 'continuous';
+      if (sectionBreakRetypesFollowing(surface.session.part(), caret.paragraphId, wanted)) {
+        return {
+          ok: false,
+          refusal: {
+            ok: false,
+            code: 'unsupported',
+            reason:
+              'a section break that changes where the next section starts cannot be suggested; turn off suggesting to insert it',
+          },
+        };
+      }
     }
   }
   // A page break is body structure for the same reason, and the sibling arm above missed it.

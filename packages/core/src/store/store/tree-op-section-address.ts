@@ -199,6 +199,51 @@ export function targetSectionNodes(
   return [governing ?? bodySectionOf(part)];
 }
 
+/**
+ * The paragraph whose `w:pPr/w:sectPr` governs the anchor, or `null` for the body-level one.
+ *
+ * The same walk `targetSectionNodes` does, answering WHO OWNS the section rather than what it
+ * says. A guard needs the owner: `w:sectPr` is not addressable on its own, so a lock or a data
+ * binding that covers it is only findable through the paragraph it hangs on. A body-level
+ * section has no owning paragraph — it is `w:body`'s own last child, which no content control
+ * can wrap — so `null` is the honest answer there rather than a paragraph that does not exist.
+ */
+export function governingSectionOwnerId(part: OoxmlPart, anchorParagraphId: string): string | null {
+  let seenAnchor = false;
+  let owner: string | null | undefined;
+  const walk = (node: OoxmlNode, inTable: boolean): void => {
+    if (owner !== undefined || node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      if (node.id === anchorParagraphId) seenAnchor = true;
+      if (seenAnchor && !inTable) {
+        const pPr = paragraphPropertiesNodeOf(node);
+        if (pPr && sectionChild(pPr, 'sectPr')) owner = node.id;
+      }
+      return;
+    }
+    const below = inTable || node.kind === 'table';
+    for (const child of node.children ?? []) walk(child, below);
+  };
+  walk(part.root, false);
+  return owner ?? null;
+}
+
+/**
+ * A section's effective `w:type` (ECMA-376 §17.6.22) — how it starts relative to the one
+ * before it. An absent or unrecognised value is `nextPage`, which is also what an absent
+ * `w:sectPr` reads as.
+ */
+export function sectionBreakTypeOf(sectPr: OoxmlNode | null): string {
+  const type = sectionChild(sectPr, 'type');
+  const value = type ? sectionAttribute(type, 'val') : undefined;
+  return value === 'continuous' ||
+    value === 'evenPage' ||
+    value === 'oddPage' ||
+    value === 'nextColumn'
+    ? value
+    : 'nextPage';
+}
+
 /** The effective metrics of ONE section node (null reads as Word's defaults). */
 export function metricsOfSection(sectPr: OoxmlNode | null): SectionMetrics {
   const pgSz = sectionChild(sectPr, 'pgSz');

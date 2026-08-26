@@ -26,6 +26,7 @@ import {
   metricsOfSection,
   plannedSectionDimensions,
   sectionAttribute,
+  sectionBreakTypeOf,
   sectionChild,
   targetSectionNodes,
   type SectionMetrics,
@@ -534,23 +535,37 @@ export function applySetSectionMark(
     } as OoxmlNode;
   };
 
-  // The requested break is the FOLLOWING section's `w:type`. A document that never wrote a
-  // section has nowhere to put it, so the implicit body-level section is minted to carry
-  // it — otherwise "continuous" would commit and change nothing the user can see.
+  // The requested break is the FOLLOWING section's `w:type`, and it is written ONLY when that
+  // section does not already start that way.
+  //
+  // The "already does" case has to be a true no-op, not a no-op-shaped rewrite. Two reasons.
+  // Layout caches are keyed by node IDENTITY, so a fresh `w:sectPr` object holding the same
+  // children re-lays the whole tail for nothing. And the write goes to a node OUTSIDE the
+  // paragraph this op marks, which puts it outside the tracked-change unit the surface builds
+  // around the mark: rejecting a suggested break unwinds the split and drops the minted clone,
+  // but nothing unwinds a `w:type`. Touching the governing section only when the caller asked
+  // for a type it does not have keeps the ordinary next-page break — the one every document
+  // with no authored `w:type` takes — exactly as reject-safe as it was before this op could
+  // retype anything at all.
+  const retypeNeeded = op.breakType !== undefined && sectionBreakTypeOf(governing) !== op.breakType;
   const retypedGoverning =
-    op.breakType !== undefined && governing
+    retypeNeeded && governing
       ? ({
           ...governing,
-          children: withSectionBreakType(childrenOf(governing), op.breakType, nextId),
+          children: withSectionBreakType(childrenOf(governing), op.breakType!, nextId),
         } as OoxmlNode)
       : null;
+  // A document that never wrote a section has nowhere to put the type, so the implicit
+  // body-level section is minted to carry it — otherwise "continuous" would commit and change
+  // nothing the user can see. `nextPage` never needs one: an absent section already starts
+  // that way, which is what `retypeNeeded` has just established it does not.
   const mintedBodySection =
-    op.breakType !== undefined && !governing
+    retypeNeeded && !governing
       ? sectionElement(
           nextId(),
           'sectPr',
           [],
-          withSectionBreakType(defaultSectionChildren(metrics, nextId), op.breakType, nextId)
+          withSectionBreakType(defaultSectionChildren(metrics, nextId), op.breakType!, nextId)
         )
       : null;
 

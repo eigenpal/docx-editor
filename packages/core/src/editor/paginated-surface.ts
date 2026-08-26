@@ -877,6 +877,7 @@ export function mountPaginatedSurface(
     // asks. Without it, bulleting or indenting one selected column also hit the cells between
     // its corners in document order.
     selectedCells: () => cellSelection?.cellIds,
+    editingMode: () => editingMode,
     layout: () => currentLayout,
     // Structural edits at the caret KEEP the armed typing format, the way Word does: a
     // Shift+Enter line break, a Tab, a page break or turning the paragraph into a list item

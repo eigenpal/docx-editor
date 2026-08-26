@@ -16,7 +16,11 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
-import { sectionAnchorParagraphFor, sectionIndexForCaret } from './section-scope.ts';
+import {
+  sectionAnchorParagraphFor,
+  sectionBreakRetypesFollowing,
+  sectionIndexForCaret,
+} from './section-scope.ts';
 import { isTableNested } from '../store/store/tree-op-section-address.ts';
 import type { ListMarkerRecord } from '@docx-editor.dev/core/layout';
 import { fragmentHolding } from '../layout/line-segments.ts';
@@ -85,6 +89,16 @@ export interface SurfaceStructureDeps {
   numberingLevelExists(numId: string, level: number): boolean;
   /** Paragraph ids in reading order for the active scope. */
   paragraphOrder(): readonly string[];
+  /**
+   * The surface's editing mode, for the one write here that cannot be PROPOSED.
+   *
+   * A section break's type lands on the section that starts at the mark, which hangs on a
+   * different paragraph than the one the break splits. Word records that as `w:sectPrChange`;
+   * this engine refuses `sectPrChange` in accept and reject (`REFUSED_REVISION_NAMES`), so
+   * the write can only go in untracked — and an untracked write bundled into a tracked
+   * gesture survives the reject that removes everything else the gesture did.
+   */
+  editingMode?(): 'edit' | 'suggest' | 'view';
   /**
    * The cells a RECTANGLE selection covers, when there is one.
    *
@@ -825,6 +839,17 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       // wholly inside one is still refused by the store, as it always was.
       const landing = plan.replaceAt ?? plan.collapseTo;
       const start = isTableNested(session.part(), landing.paragraphId) ? plan.collapseTo : landing;
+      // A break that RETYPES the following section cannot be proposed — see `editingMode` on
+      // the deps. Refused rather than written untracked: the reject that removes the split
+      // would leave the retype standing, and a `w:type` the reviewer never accepted is a
+      // layout change nobody can undo. The ordinary next-page break in a document with no
+      // authored `w:type` retypes nothing and is unaffected.
+      if (
+        deps.editingMode?.() === 'suggest' &&
+        sectionBreakRetypesFollowing(session.part(), start.paragraphId, breakType)
+      ) {
+        return false;
+      }
       const before = new Set(session.paragraphIds());
       let committed = false;
       commit(

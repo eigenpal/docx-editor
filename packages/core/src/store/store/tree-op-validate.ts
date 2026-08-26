@@ -42,9 +42,11 @@ import {
 } from './tree-op-tables.ts';
 import {
   bodyNodeOf,
+  governingSectionOwnerId,
   isTableNested,
   metricsOfSection,
   plannedSectionDimensions,
+  sectionBreakTypeOf,
   sectionChild,
   targetSectionNodes,
 } from './tree-op-section-address.ts';
@@ -793,6 +795,22 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (isTableNested(part, op.paragraphId)) return 'invalid-property-value';
       if (isBoundAt(part, op.paragraphId)) return 'bound';
       if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
+      // The break type is written on the section that STARTS at the mark, which hangs on a
+      // DIFFERENT paragraph — one that can sit inside a locked or bound content control the
+      // marked paragraph is nowhere near. Guarding only `op.paragraphId` let a caret outside
+      // the control rewrite the section inside it. A body-level section has no owning
+      // paragraph and no control can wrap it, so it needs no second check.
+      if (op.breakType !== undefined) {
+        const governing = targetSectionNodes(part, op.paragraphId)[0] ?? null;
+        const owner =
+          sectionBreakTypeOf(governing) === op.breakType
+            ? null
+            : governingSectionOwnerId(part, op.paragraphId);
+        if (owner !== null) {
+          if (isBoundAt(part, owner)) return 'bound';
+          if (effectiveContentLockAt(part, owner).content) return 'locked';
+        }
+      }
       return null;
     }
     default:

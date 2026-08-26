@@ -13,6 +13,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { applyTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
+import { bodySectionOf } from '../store/tree-op-section-address.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -117,5 +118,92 @@ describe('setSectionMark writes the break on the section that STARTS at the mark
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('invalid-property-value');
     expect(canonicalOoxmlFingerprint(part)).toBe(fingerprint);
+  });
+});
+
+describe('setSectionMark leaves the following section alone when nothing changes', () => {
+  const NO_TYPE =
+    '<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  test('a nextPage break writes nothing where the type is already absent', () => {
+    // The ordinary break in the ordinary document. Rewriting the section to the same value
+    // would break node IDENTITY, which every layout cache is keyed by, and would smuggle an
+    // untracked edit into a tracked gesture for no gain at all.
+    const part = load(NO_TYPE);
+    const [first] = paragraphIds(part);
+    const next = apply(part, { op: 'setSectionMark', paragraphId: first!, breakType: 'nextPage' });
+    const body = bodySectionOf(part);
+    expect(body).not.toBeNull();
+    expect(bodySectionOf(next)).toBe(body);
+    expect(serializeOoxmlPart(next)).not.toContain('<w:type');
+  });
+
+  test('an explicit nextPage type is left where the caller asks for nextPage', () => {
+    const part = load(NO_TYPE.replace('<w:sectPr>', '<w:sectPr><w:type w:val="nextPage"/>'));
+    const [first] = paragraphIds(part);
+    const next = apply(part, { op: 'setSectionMark', paragraphId: first!, breakType: 'nextPage' });
+    // Two now: the clone carries one too. Neither was rewritten.
+    expect(serializeOoxmlPart(next).match(/<w:type w:val="nextPage"\/>/g)).toHaveLength(2);
+    expect(bodySectionOf(next)).toBe(bodySectionOf(part));
+  });
+
+  test('a document with no sectPr gains no body section for a nextPage break', () => {
+    // An absent section already starts on a new page, so there is nothing to carry.
+    const part = load(SIMPLE);
+    const [first] = paragraphIds(part);
+    const next = apply(part, { op: 'setSectionMark', paragraphId: first!, breakType: 'nextPage' });
+    expect(serializeOoxmlPart(next).match(/<w:sectPr>/g)).toHaveLength(1);
+  });
+
+  test('a continuous break into a locked control that owns the section is refused', () => {
+    // The type lands on the section that STARTS at the mark, which hangs on a paragraph the
+    // caret is nowhere near. Guarding only the marked paragraph let a caret outside a locked
+    // control rewrite the section inside it.
+    const part = load(
+      '<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>' +
+        '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+        '<w:p><w:pPr><w:sectPr><w:type w:val="oddPage"/><w:pgSz w:w="12240" w:h="15840"/>' +
+        '</w:sectPr></w:pPr><w:r><w:t>Inside</w:t></w:r></w:p>' +
+        '</w:sdtContent></w:sdt>' +
+        '<w:p><w:r><w:t>Beta</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    const [first] = paragraphIds(part);
+    const fingerprint = canonicalOoxmlFingerprint(part);
+    const result = applyTreeOp(part, {
+      op: 'setSectionMark',
+      paragraphId: first!,
+      breakType: 'continuous',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('locked');
+    expect(canonicalOoxmlFingerprint(part)).toBe(fingerprint);
+    // A next-page break would REMOVE the `oddPage` inside the control, so it is refused too.
+    expect(
+      applyTreeOp(part, { op: 'setSectionMark', paragraphId: first!, breakType: 'nextPage' }).ok
+    ).toBe(false);
+  });
+
+  test('a data-bound control owning the section refuses the same way', () => {
+    const part = load(
+      '<w:p><w:r><w:t>Alpha</w:t></w:r></w:p>' +
+        '<w:sdt><w:sdtPr><w:dataBinding w:xpath="/root/a" w:storeItemID="{1}"/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:pPr><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr></w:pPr>' +
+        '<w:r><w:t>Inside</w:t></w:r></w:p></w:sdtContent></w:sdt>' +
+        '<w:p><w:r><w:t>Beta</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>'
+    );
+    const [first] = paragraphIds(part);
+    const result = applyTreeOp(part, {
+      op: 'setSectionMark',
+      paragraphId: first!,
+      breakType: 'continuous',
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('bound');
+    // Precise, not blanket: this control's section carries no `w:type`, so a next-page break
+    // writes nothing into it and the guard has nothing to refuse.
+    expect(
+      applyTreeOp(part, { op: 'setSectionMark', paragraphId: first!, breakType: 'nextPage' }).ok
+    ).toBe(true);
   });
 });
