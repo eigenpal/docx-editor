@@ -52,15 +52,23 @@ export interface BodyPageFieldContext {
 }
 
 /**
- * Whether a `\#` picture renders a PAGE value under `format`.
+ * Whether a `\#` picture renders a `kind` value under `format`.
  *
  * ONE decision, read by the placeholder and by the value, or the two disagree about how wide
  * the field is: a non-decimal page format has no digits for a numeric picture to place, and a
  * placeholder measured through the picture would then reserve a width the roman numeral that
  * replaces it never fills.
+ *
+ * `w:pgNumType/@w:fmt` binds PAGE ALONE. NUMPAGES and SECTIONPAGES are counts, not page
+ * numbers, and stay decimal whatever the section's format says — so their picture applies
+ * either way, and gating them on the format would measure `{ NUMPAGES \# "000" }` at one digit
+ * and then paint three.
  */
-export function numericPictureApplies(format: string | undefined): boolean {
-  return !format || format === 'decimal';
+export function numericPictureApplies(
+  kind: AllowlistedPageField,
+  format: string | undefined
+): boolean {
+  return kind !== 'PAGE' || !format || format === 'decimal';
 }
 
 /**
@@ -72,8 +80,14 @@ export function numericPictureApplies(format: string | undefined): boolean {
  * placeholder the same shape as every value it can be replaced by — `0#` measures `00`, the
  * width of `02` — while a pictureless field keeps the historical single digit.
  */
-export function pageFieldPlaceholder(picture: string | undefined, format?: string): string {
-  if (picture === undefined || !numericPictureApplies(format)) return PAGE_FIELD_PLACEHOLDER;
+export function pageFieldPlaceholder(
+  kind: AllowlistedPageField,
+  picture: string | undefined,
+  format?: string
+): string {
+  if (picture === undefined || !numericPictureApplies(kind, format)) {
+    return PAGE_FIELD_PLACEHOLDER;
+  }
   return formatNumericPicture(0, picture) ?? PAGE_FIELD_PLACEHOLDER;
 }
 
@@ -127,7 +141,7 @@ export function projectPageFieldValue(
   picture?: string
 ): string {
   if (kind === 'PAGE') {
-    if (picture !== undefined && numericPictureApplies(context.format)) {
+    if (picture !== undefined && numericPictureApplies(kind, context.format)) {
       const painted = formatNumericPicture(context.pageNumber, picture);
       if (painted !== null) return painted;
     }

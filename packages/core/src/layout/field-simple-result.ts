@@ -329,7 +329,7 @@ export function projectSimpleFieldResult(args: {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
     return {
-      text: pageFieldPlaceholder(pageField.picture, args.bodyPageFields.format),
+      text: pageFieldPlaceholder(pageField.kind, pageField.picture, args.bodyPageFields.format),
       props,
       style,
       pageField:

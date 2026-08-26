@@ -98,7 +98,7 @@ export function synthesizeAtomicField(
     if (pending.kind && ctx.bodyPageFields) {
       const picture = pending.picture ?? undefined;
       return {
-        text: pageFieldPlaceholder(picture, ctx.bodyPageFields.format),
+        text: pageFieldPlaceholder(pending.kind, picture, ctx.bodyPageFields.format),
         props: pending.props,
         style: pending.style,
         pageField: {

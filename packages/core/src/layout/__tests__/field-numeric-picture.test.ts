@@ -101,23 +101,29 @@ describe('page-field instructions carrying a picture', () => {
   test('measures a body placeholder at the width the picture will paint', () => {
     // Finalize substitutes the value without re-measuring, so the placeholder has to be the
     // shape of every value that can replace it.
-    expect(pageFieldPlaceholder(undefined)).toBe(PAGE_FIELD_PLACEHOLDER);
-    expect(pageFieldPlaceholder('0#')).toBe('00');
+    expect(pageFieldPlaceholder('PAGE', undefined)).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder('PAGE', '0#')).toBe('00');
     // A `#`-only picture is as wide as every value it can hold, not one digit wide: zero
     // fills the last position and the unfilled ones pad, so `15` and `7` measure the same.
-    expect(pageFieldPlaceholder('###')).toBe('  0');
+    expect(pageFieldPlaceholder('PAGE', '###')).toBe('  0');
     expect(formatNumericPicture(15, '###')).toHaveLength(3);
-    expect(pageFieldPlaceholder('Page 0 of')).toBe('Page 0 of');
+    expect(pageFieldPlaceholder('PAGE', 'Page 0 of')).toBe('Page 0 of');
     // An unusable picture paints the plain number, so its placeholder is the plain digit.
-    expect(pageFieldPlaceholder('Page')).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder('PAGE', 'Page')).toBe(PAGE_FIELD_PLACEHOLDER);
     // And a non-decimal page format wins over the picture, so the placeholder drops it too —
     // measuring `Page 0 of` for a value the section renders as `III` reserves 9 for 3.
-    expect(pageFieldPlaceholder('Page 0 of', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
-    expect(pageFieldPlaceholder('0#', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
-    expect(pageFieldPlaceholder('0#', 'decimal')).toBe('00');
-    expect(numericPictureApplies(undefined)).toBe(true);
-    expect(numericPictureApplies('decimal')).toBe(true);
-    expect(numericPictureApplies('upperRoman')).toBe(false);
+    expect(pageFieldPlaceholder('PAGE', 'Page 0 of', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder('PAGE', '0#', 'upperRoman')).toBe(PAGE_FIELD_PLACEHOLDER);
+    expect(pageFieldPlaceholder('PAGE', '0#', 'decimal')).toBe('00');
+    expect(numericPictureApplies('PAGE', undefined)).toBe(true);
+    expect(numericPictureApplies('PAGE', 'decimal')).toBe(true);
+    expect(numericPictureApplies('PAGE', 'upperRoman')).toBe(false);
+    // A COUNT is not a page number: `w:pgNumType/@w:fmt` never reformats it, so its picture
+    // applies whatever the section says — and the placeholder has to be measured that way.
+    expect(numericPictureApplies('NUMPAGES', 'upperRoman')).toBe(true);
+    expect(numericPictureApplies('SECTIONPAGES', 'upperRoman')).toBe(true);
+    expect(pageFieldPlaceholder('NUMPAGES', '000', 'upperRoman')).toBe('000');
+    expect(projectPageFieldValue('NUMPAGES', { pageNumber: 2, pageCount: 12 }, '000')).toBe('012');
   });
 });
 
@@ -210,6 +216,14 @@ describe('a body page field carrying a picture', () => {
     const line = fieldLine('PAGE');
     expect(line.field).toBe('2');
     expect(line.gap).toBeCloseTo(line.charWidth, 6);
+  });
+
+  test('keeps the picture for a COUNT under a non-decimal section format', () => {
+    // `w:pgNumType/@w:fmt` reformats PAGE only. NUMPAGES stays decimal and still renders its
+    // picture, so gating the placeholder on the format would measure one digit and paint three.
+    const line = fieldLine('NUMPAGES \\# "000"', 'upperRoman');
+    expect(line.field).toBe('002');
+    expect(line.gap).toBeCloseTo(3 * line.charWidth, 6);
   });
 
   test('measures the format, not the picture, when the section is not decimal', () => {

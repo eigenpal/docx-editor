@@ -292,3 +292,161 @@ describe('note overflow sheets at a section boundary', () => {
     }
   });
 });
+
+describe('note overflow sheets under even/odd headers', () => {
+  /**
+   * Drain sheets, then a doc-end endnote overflow sheet, with `w:evenAndOddHeaders`.
+   *
+   * The endnote run starts from the last page that can HOST endnotes, which deliberately skips
+   * the drain sheets the footnote run just appended. So the sheet lands that many slots further
+   * along than the run's anchor, and a shell resolved for the anchor's own neighbourhood picks
+   * the variant — and with it the content box — of the wrong page number.
+   */
+  /**
+   * `footnoteLines` is tuned to drain exactly ONE sheet. An odd drain count is what makes the
+   * bug visible: an even one shifts every endnote sheet by an even number of pages, and
+   * even/odd parity survives that unchanged.
+   */
+  function parityDoc(footnoteLines = 10): Uint8Array {
+    const footnoteParas = Array.from(
+      { length: footnoteLines },
+      (_, i) => `<w:p><w:r><w:t>Footnote ${i} ${'x'.repeat(60)}</w:t></w:r></w:p>`
+    ).join('');
+    const endnoteParas = Array.from(
+      { length: 40 },
+      (_, i) => `<w:p><w:r><w:t>Endnote ${i} ${'z'.repeat(60)}</w:t></w:r></w:p>`
+    ).join('');
+    const body = Array.from(
+      { length: 8 },
+      (_, i) => `<w:p><w:r><w:t>Body ${i}</w:t></w:r></w:p>`
+    ).join('');
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>' +
+          '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}">` +
+          `<Relationship Id="rIdS" Type="${R}/settings" Target="settings.xml"/>` +
+          `<Relationship Id="rIdH1" Type="${R}/header" Target="header1.xml"/>` +
+          `<Relationship Id="rIdH2" Type="${R}/header" Target="header2.xml"/>` +
+          `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+          `<Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/>` +
+          '</Relationships>'
+      ),
+      'word/settings.xml': strToU8(
+        `<w:settings xmlns:w="${W}"><w:evenAndOddHeaders/></w:settings>`
+      ),
+      'word/header1.xml': strToU8(
+        `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Odd</w:t></w:r></w:p></w:hdr>`
+      ),
+      // Four lines against one, so picking the wrong variant moves the content box visibly.
+      'word/header2.xml': strToU8(
+        `<w:hdr xmlns:w="${W}">` +
+          '<w:p><w:r><w:t>Even a</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Even b</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Even c</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>Even d</w:t></w:r></w:p>' +
+          '</w:hdr>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          body +
+          '<w:p><w:r><w:t>Refs</w:t>' +
+          '<w:footnoteReference w:id="1"/><w:endnoteReference w:id="1"/></w:r></w:p>' +
+          '<w:sectPr>' +
+          `<w:headerReference w:type="default" r:id="rIdH1"/>` +
+          `<w:headerReference w:type="even" r:id="rIdH2"/>` +
+          '<w:pgSz w:w="12240" w:h="4320"/>' +
+          '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720" w:header="360" w:footer="360"/>' +
+          '</w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>' +
+          '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>' +
+          `<w:footnote w:id="1">${footnoteParas}</w:footnote>` +
+          '</w:footnotes>'
+      ),
+      'word/endnotes.xml': strToU8(
+        `<w:endnotes xmlns:w="${W}">` +
+          '<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>' +
+          '<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>' +
+          `<w:endnote w:id="1">${endnoteParas}</w:endnote>` +
+          '</w:endnotes>'
+      ),
+    });
+  }
+
+  test('every minted sheet shows the variant its own page number resolves', () => {
+    const loaded = readOoxmlPackage(parityDoc());
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const docEnd = resolveEndnoteProperties({ pos: 'docEnd' });
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
+      footnotePropsBySection: [documentFootnoteProps],
+      endnotePropsBySection: [docEnd],
+      documentFootnoteProps,
+      documentEndnoteProps: docEnd,
+      measurer,
+      producer: 'parity',
+    };
+    const sections = enumerateDocumentSections(part);
+    const bySection = resolveHeaderFooterPartsBySection(loaded.package);
+    const parts = bySection[0]!;
+    expect(parts.evenAndOddHeaders).toBe(true);
+    const geometry = geometryOfSection(sections[0]!.properties);
+    const width = geometry.width - geometry.margin.left - geometry.margin.right;
+    const headers = new Map();
+    for (const [variant, hfPart] of parts.headers) {
+      headers.set(variant, layoutHeaderFooterStory(hfPart, width, measurer, 'parity'));
+    }
+    expect(headers.get('default')!.flowHeight).not.toBe(headers.get('even')!.flowHeight);
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      notes,
+      producer: 'parity',
+      sectionFurniture: [
+        {
+          titlePage: parts.titlePage,
+          evenAndOddHeaders: parts.evenAndOddHeaders,
+          headers,
+          footers: new Map(),
+        },
+      ],
+    });
+
+    const drain = layout.pages.filter((page) => page.noteStream === 'footnote-drain');
+    const overflow = layout.pages.filter((page) => page.noteStream === 'endnote-overflow');
+    // An ODD number of drain sheets between the endnote run's anchor and where it inserts is
+    // exactly what an offset counting only this run's own sheets gets wrong.
+    expect(drain.length % 2).toBe(1);
+    expect(overflow.length).toBeGreaterThan(0);
+
+    for (const page of layout.pages) {
+      // `w:evenAndOddHeaders` alternates on the page's number in the DOCUMENT, so the variant
+      // a sheet shows is decided by where it finally lands — drain sheets in front of it
+      // included.
+      const expected = (page.index + 1) % 2 === 0 ? 'even' : 'default';
+      expect(page.header?.variant).toBe(expected);
+      const flow = headers.get(expected)!.flowHeight;
+      const top = Math.max(geometry.margin.top, (geometry.headerDistance ?? 36) + flow);
+      expect(page.contentBox.y - page.box.y).toBeCloseTo(top, 6);
+      expect(page.contentBox.height).toBeCloseTo(geometry.height - top - geometry.margin.bottom, 6);
+    }
+  });
+});

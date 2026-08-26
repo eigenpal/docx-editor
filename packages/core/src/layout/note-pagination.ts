@@ -1367,13 +1367,21 @@ function buildFootnoteArea(
 /**
  * Mints the blank sheets a note run needs, each resolving its OWN shell.
  *
- * ANCHOR-AND-OFFSET comes from the caller, not from the template, and both have to. The
- * template can be a sheet this pass already minted, whose `index` is an insertion position
- * rather than a layout index — the notes pass reindexes only at the end. And a `sectEnd` sheet
- * is inserted at the first page of the NEXT section, so its landing index names the wrong
- * section entirely. Every run instead anchors on an ORIGINAL page of the owning section (whose
- * `index` still reads in the layout's index space however many sheets have been spliced in
- * around it) and counts the sheets it has minted since.
+ * ANCHOR-AND-OFFSET comes from the caller, not from the template, and each half answers a
+ * different question.
+ *
+ * The ANCHOR is an ORIGINAL page of the section the new sheet belongs to, and it picks the
+ * SECTION. It has to be a page whose `index` still reads in the layout's index space — the
+ * notes pass reindexes only at the end — and it has to be a page of the owning section, because
+ * a `sectEnd` sheet is inserted at the first page of the NEXT one and its landing index would
+ * name that section instead.
+ *
+ * The OFFSET is how many ARRAY SLOTS the new sheet sits past the anchor, and it gives the local
+ * index — which decides the variant, and through it the content box. Slots, not sheets minted
+ * by this run: the footnote drain runs first and appends its own sheets between the anchor and
+ * wherever the endnote run inserts, so counting only this run's sheets lands the shell an
+ * entire drain run early. Under `w:evenAndOddHeaders` an odd drain count then inverts the
+ * variant of every endnote sheet behind it.
  */
 function createOverflowSheetMinter(layout: SemanticLayout): OverflowSheetMinter {
   return (args) => {
@@ -1749,18 +1757,18 @@ function drainFootnoteCarryPages(
   let nextPages = pages;
   let nextCarry = carry;
   // The drain run appends after the last page, which is still an ORIGINAL one: this runs
-  // before any endnote insertion. Every drained sheet is that page's section, one further on.
-  const anchorIndex = pages[pages.length - 1]!.index;
-  let minted = 0;
+  // before any endnote insertion. Offsets count ARRAY SLOTS from that page's own position.
+  const anchorPosition = pages.length - 1;
+  const anchorIndex = pages[anchorPosition]!.index;
   while (nextCarry.size > 0 && overflowBudget.remaining > 0) {
     const template = nextPages[nextPages.length - 1]!;
-    minted += 1;
+    const landingPosition = nextPages.length;
     const page = mint({
       template,
-      index: template.index + 1,
+      index: landingPosition,
       noteStream: 'footnote-drain',
       anchorIndex,
-      offset: minted,
+      offset: landingPosition - anchorPosition,
     });
     const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons, {
       separatorCache,
@@ -1857,9 +1865,10 @@ function placeEndnotesFromPage(
   if (refs.length === 0 || pages.length === 0) return pages;
   // Anchored on the page the run starts from — an original body page in the owning section,
   // never a drain sheet (`lastEndnoteHostIndex` / `lastPageIndexForSection` both skip those).
-  // Sheets only ever append after that section's pages, so the nth minted sits n further on.
-  const anchorIndex = pages[Math.min(Math.max(startIndex, 0), pages.length - 1)]!.index;
-  let minted = 0;
+  // Its ARRAY POSITION is the offset origin: the drain sheets those helpers skipped sit between
+  // it and wherever this run inserts, and the new sheet's local index has to count them.
+  const anchorPosition = Math.min(Math.max(startIndex, 0), pages.length - 1);
+  const anchorIndex = pages[anchorPosition]!.index;
   let nextPages = [...pages];
   let pending = [...refs];
   let carry: NoteCarryMap = new Map();
@@ -1882,14 +1891,13 @@ function placeEndnotesFromPage(
         nextPages[Math.min(Math.max(index, 1), nextPages.length) - 1] ??
         nextPages[nextPages.length - 1]!;
       const insertAt = Math.min(index, stopBefore, nextPages.length);
-      minted += 1;
       const inserted = insertOverflowPageAt(
         nextPages,
         insertAt,
         template,
         options.mint,
         anchorIndex,
-        minted,
+        insertAt - anchorPosition,
         'endnote-overflow'
       );
       nextPages = inserted.pages;
