@@ -20,6 +20,7 @@
 //   heading into view and places the caret at the bookmark target.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const DEMO_URL = 'http://localhost:5273/?fixture=comprehensive-word-element-test.docx';
 const SCROLLER = '.docx-editor__scroll-container';
@@ -32,7 +33,7 @@ test.beforeEach(async ({ page }) => {
   // `domcontentloaded`: the demo shell pulls a woff2 from fonts.gstatic.com, and a
   // hanging request means the load event never fires.
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 });
 
 /**
@@ -205,7 +206,7 @@ test.describe('external link activation', () => {
 
     await clickLink(page, link);
     await expect(page.locator(POPUP)).toBeVisible();
-    await page.locator('.docx-page').first().click({ position: { x: 30, y: 30 } });
+    await page.locator(PAINTED_PAGE).first().click({ position: { x: 30, y: 30 } });
     await expect(page.locator(POPUP)).not.toBeVisible();
   });
 });

@@ -10,14 +10,15 @@ interface Props {
 const wrap: React.CSSProperties = {
   display: 'inline-flex',
   background: 'var(--doc-bg-subtle)',
-  padding: '3px',
+  padding: '2px',
   borderRadius: '8px',
   border: '1px solid var(--doc-border)',
 };
 
 const pill: React.CSSProperties = {
-  padding: '4px 12px',
+  padding: '3px 10px',
   fontSize: '12px',
+  lineHeight: 1.4,
   fontWeight: 500,
   color: 'var(--doc-text-muted)',
   textDecoration: 'none',

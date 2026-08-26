@@ -1343,6 +1343,7 @@ export function lineEndOffset(layout: SemanticLayout, line: LineRecord): number;
 
 // @public
 export interface LineRecord {
+    readonly anchorRevisions?: readonly RevisionAttribution[];
     readonly baseline: number;
     // (undocumented)
     readonly box: LayoutBox;
@@ -3035,6 +3036,7 @@ export interface StyleDefinition {
     // (undocumented)
     readonly basedOn: string | null;
     readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
+    readonly next: string | null;
     // (undocumented)
     readonly paragraphProperties: readonly OoxmlProperty[];
     readonly paragraphPropertiesNode: OoxmlElement | undefined;

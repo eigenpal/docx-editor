@@ -379,6 +379,7 @@ export default [
   {
     files: [
       'packages/core/src/layout/drawing-layout.ts',
+      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/__tests__/image-resources.test.ts',
     ],
     rules: {
@@ -427,7 +428,6 @@ export default [
 
   {
     files: [
-      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/contracts/editor.ts',
       'packages/core/src/layout/paragraph-flow.ts',
       'packages/pro/src/__tests__/review-facade.test.ts',

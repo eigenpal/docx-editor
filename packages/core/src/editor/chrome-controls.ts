@@ -839,9 +839,9 @@ export function defaultChromeGroups(): readonly ChromeGroup[] {
 
 /**
  * The formatting-bar groups for one editor snapshot: the default bar, plus the
- * contextual `image` group when a drawing is selected. Insertion without a selection is
- * not in the packaged chrome at all — a host that wants it places `image.insert` itself,
- * through `DocxEditor.Toolbar.ImageInsert` or `DocxEditor.Menu.ImageInsert`.
+ * contextual `image` group when a drawing is selected. Insertion without a selection
+ * lives in the packaged Insert menu (`CHROME_MENUS`), not in the bar — a host that wants
+ * a bar button places `DocxEditor.Toolbar.ImageInsert` itself.
  *
  * @public
  */
@@ -988,11 +988,11 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
   {
     id: 'insert',
     labelKey: 'toolbar.insert',
-    // No `image.insert` row. Picture insertion is a host decision — it opens a file picker,
-    // and which pictures a product admits, from where, is the product's question, not the
-    // menu's. The slot, its toolbar control and `DocxEditor.Menu.ImageInsert` all remain, so
-    // placing the row back is one child element.
+    // `image.insert` opens the adapters' shared file picker; the row dispatches through the
+    // same slot as `DocxEditor.Toolbar.ImageInsert`, so a host that wants a different picker
+    // still replaces one part, not a second registry.
     entries: [
+      { kind: 'item', slot: 'image.insert' },
       { kind: 'item', slot: 'table.insert', picker: 'tableGrid' },
       { kind: 'separator' },
       { kind: 'item', slot: 'insert.footnote' },

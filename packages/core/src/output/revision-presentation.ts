@@ -457,6 +457,19 @@ function blockAuthors(blocks: readonly BlockFragmentRecord[]): readonly string[]
         }
       }
     }
+    for (const line of fragment.lines) {
+      // Tracked inline DRAWINGS, after the line's spans: a reviewer whose only change is a
+      // picture is still a reviewer, and leaving them out silently painted their cue in
+      // slot 0's colour. A separate pass so a drawing mid-line cannot renumber the text
+      // authors around it relative to the pre-#479 assignment.
+      const drawings = line.drawings;
+      if (drawings === undefined) continue;
+      for (let i = 0; i < drawings.length; i += 1) {
+        const revisions = drawings[i]!.revisions;
+        if (revisions === undefined) continue;
+        for (let j = 0; j < revisions.length; j += 1) see(revisions[j]!.author);
+      }
+    }
     // The paragraph MARK last: it carries no span of its own, and the pilcrow paints at the
     // END of the fragment's final line. Reading it first gave a reviewer who only pressed
     // Enter a lower slot than the author of the text beside them.
@@ -517,6 +530,14 @@ export function authorSlotsOf(layout: SemanticLayout): ReadonlyMap<string, numbe
     ]) {
       if (!anchored) continue;
       for (const drawing of anchored) {
+        // The anchored drawing's own tracked change, then any story inside it.
+        const revisions = drawing.revisions;
+        if (revisions !== undefined) {
+          for (let i = 0; i < revisions.length; i += 1) {
+            const author = revisions[i]!.author;
+            if (author !== '' && !slots.has(author)) slots.set(author, slots.size);
+          }
+        }
         if (drawing.textboxStory) fold(drawing.textboxStory.fragments);
       }
     }

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const ADAPTERS = [
   { name: 'React', url: 'http://localhost:5273/' },
@@ -16,8 +17,8 @@ for (const adapter of ADAPTERS) {
     await page.goto(adapter.url);
 
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await expect(page.locator('.docx-page').first()).toBeVisible();
-    await expect(page.locator('.docx-page')).toHaveCount(27);
+    await expect(page.locator(PAINTED_PAGE).first()).toBeVisible();
+    await expect(page.locator(PAINTED_PAGE)).toHaveCount(27);
     await expect(page.getByRole('textbox', { name: 'Document title' })).toHaveValue('sample');
 
     const link = page.getByRole('button', { name: /^Insert link/ });

@@ -32,3 +32,35 @@ export function writeClipboardText(text: string): void {
     // Some environments throw synchronously rather than rejecting. Same answer.
   }
 }
+
+/**
+ * Put both clipboard flavours on the system clipboard, same never-throws contract.
+ *
+ * Both payloads are built by the caller BEFORE this runs — Safari requires `ClipboardItem`
+ * payloads resolvable inside the user gesture. Where `ClipboardItem` or `write` is missing
+ * (Firefox behind a flag, headless hosts), the plain text still lands via `writeText`;
+ * the richer flavour is an enhancement, never the difference between copy working and not.
+ */
+export function writeClipboardRich(text: string, html: string | null): void {
+  if (text === '' && (html === null || html === '')) return;
+  const clipboard = globalThis.navigator?.clipboard;
+  if (!clipboard) return;
+  const ClipboardItemCtor = (
+    globalThis as { ClipboardItem?: new (items: Record<string, Blob>) => ClipboardItem }
+  ).ClipboardItem;
+  if (html && clipboard.write && ClipboardItemCtor && typeof Blob !== 'undefined') {
+    try {
+      const item = new ClipboardItemCtor({
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+        'text/html': new Blob([html], { type: 'text/html' }),
+      });
+      void clipboard.write([item]).catch(() => {
+        writeClipboardText(text);
+      });
+      return;
+    } catch {
+      // Fall through to the plain write below.
+    }
+  }
+  writeClipboardText(text);
+}

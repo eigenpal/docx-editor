@@ -770,15 +770,21 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'cut':
       return { supported: true, mutating: true };
     case 'paste':
+    case 'pasteWithoutFormatting': {
       if (typeof command.text !== 'string') {
         return { supported: false, code: 'invalidArgs', reason: 'paste requires text' };
       }
-      // Empty text is refused rather than run. `paste` replaces the selection, so "paste
-      // nothing" over a select-all is a whole-document delete wearing the wrong name — and
-      // an empty clipboard is the ordinary way to reach it.
-      return command.text === ''
+      const html = command.type === 'paste' ? command.html : undefined;
+      if (html !== undefined && typeof html !== 'string') {
+        return { supported: false, code: 'invalidArgs', reason: 'paste html must be a string' };
+      }
+      // An empty payload is refused rather than run. `paste` replaces the selection, so
+      // "paste nothing" over a select-all is a whole-document delete wearing the wrong
+      // name — and an empty clipboard is the ordinary way to reach it.
+      return command.text === '' && (html === undefined || html === '')
         ? { supported: false, code: 'invalidArgs', reason: 'there is nothing to paste' }
         : { supported: true, mutating: true };
+    }
     case 'insertRow':
     case 'deleteRow':
     case 'insertColumn':

@@ -20,6 +20,11 @@ import type {
 import { forEachStoryDrawing } from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
+import {
+  REVIEW_AUTHOR_SLOTS,
+  revisionPresentationOf,
+  type RevisionStyleContext,
+} from './revision-presentation.ts';
 
 /** Host port for safe blob URLs — only called for {@link ImageResourceState.kind} `ready`. */
 export interface PaintImageUrlPort {
@@ -60,6 +65,8 @@ export interface DrawingPaintContext {
     document: Document,
     fragment: ParagraphFragmentRecord | TableFragmentRecord
   ) => HTMLElement;
+  /** Resolved author colouring, so a tracked drawing's cue follows the span scheme. */
+  readonly revisionStyles?: RevisionStyleContext;
 }
 
 const MIME_FORMAT_LABEL: Readonly<Record<string, string>> = Object.freeze({
@@ -620,7 +627,89 @@ function paintTextboxStory(
   return outer;
 }
 
+/**
+ * The tracked-change cue on a painted drawing (#479).
+ *
+ * The same statement `applyRevisionPresentation` makes for text, translated to a box: the
+ * stylesheet draws an insertion- or deletion-coloured outline under
+ * `docx-drawing--revision-*` and dims a pending removal, and the element carries the same
+ * `data-revision-*` datasets spans do, so review chrome resolves a hovered picture to its
+ * decision exactly like a hovered word.
+ *
+ * Applied on EVERY paint — including the ready-image path's signature-matched reuse, whose
+ * cached element would otherwise keep the marking of a decision the document no longer
+ * records. That is also why the untracked branch scrubs rather than returns.
+ */
+function applyDrawingRevisionPresentation(
+  element: HTMLElement,
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  ctx: DrawingPaintContext
+): void {
+  const colors = ctx.revisionStyles;
+  const presentation = revisionPresentationOf(
+    drawing.revisions,
+    colors?.authorSlots,
+    colors?.styles
+  );
+  if (!presentation) {
+    if (element.dataset.revisionKind === undefined) return;
+    element.classList.remove(
+      'docx-drawing--revision',
+      'docx-drawing--revision-insertion',
+      'docx-drawing--revision-deletion'
+    );
+    delete element.dataset.revisionKind;
+    delete element.dataset.revisionId;
+    delete element.dataset.reviewAuthor;
+    delete element.dataset.revisionDate;
+    delete element.dataset.reviewAuthorSlot;
+    element.style.outlineColor = '';
+    return;
+  }
+  const { attribution } = presentation;
+  element.classList.add(
+    'docx-drawing--revision',
+    presentation.deleted ? 'docx-drawing--revision-deletion' : 'docx-drawing--revision-insertion'
+  );
+  element.classList.remove(
+    presentation.deleted ? 'docx-drawing--revision-insertion' : 'docx-drawing--revision-deletion'
+  );
+  element.dataset.revisionKind = attribution.kind;
+  element.dataset.revisionId = attribution.id;
+  if (attribution.author !== '') element.dataset.reviewAuthor = attribution.author;
+  else delete element.dataset.reviewAuthor;
+  if (attribution.date !== undefined) element.dataset.revisionDate = attribution.date;
+  else delete element.dataset.revisionDate;
+  // The spans' selective ink rule: the outline follows the author under author colouring
+  // (inline style beats the stylesheet's kind colour), and stays on the kind tokens
+  // otherwise. `spanClassName` tokens are NOT mirrored here — they are documented as span
+  // classes, and a reused image element would accumulate stale host tokens no scrub knows.
+  const authorStyle = colors?.styles.get(attribution.author);
+  const byAuthor =
+    colors !== undefined && (authorStyle?.color !== undefined || colors.others === 'author');
+  if (colors) {
+    element.dataset.reviewAuthorSlot = String(
+      (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
+    );
+  } else {
+    delete element.dataset.reviewAuthorSlot;
+  }
+  element.style.outlineColor = byAuthor ? presentation.authorColor : '';
+}
+
 export function paintDrawingRecord(
+  document: Document,
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  ctx: DrawingPaintContext,
+  urlRegistry: UrlRegistry | null,
+  origin?: LayoutBox
+): HTMLElement | null {
+  const element = paintDrawingRecordElement(document, drawing, ctx, urlRegistry, origin);
+  if (element) applyDrawingRevisionPresentation(element, drawing, ctx);
+  return element;
+}
+
+function paintDrawingRecordElement(
   document: Document,
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   ctx: DrawingPaintContext,

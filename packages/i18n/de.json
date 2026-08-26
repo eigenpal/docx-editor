@@ -333,7 +333,9 @@
     "selectAll": "Alles markieren",
     "selectAllShortcut": "Strg+A",
     "editCustomNode": "{label} bearbeiten",
-    "removeCustomNode": "{label} entfernen"
+    "removeCustomNode": "{label} entfernen",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Dokumentgliederung",

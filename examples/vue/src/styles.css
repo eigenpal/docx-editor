@@ -75,6 +75,17 @@
   min-width: 0;
 }
 
+/* The adapter switcher with its source link stacked underneath. A column so the link
+   sits below the pills instead of beside them, and `line-height: 1` on the link keeps
+   the pair inside the header's existing height rather than growing it. */
+.demo-header__adapter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
 .demo-header__right {
   justify-content: flex-end;
 }

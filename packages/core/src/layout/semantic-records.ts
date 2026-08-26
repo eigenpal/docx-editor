@@ -290,6 +290,15 @@ export interface LineRecord {
    * are omitted — they remain in the tree and projection but publish no geometry.
    */
   readonly drawings?: readonly InlineDrawingRecord[];
+  /**
+   * Revision attributions of tracked ANCHORED drawings whose anchor sits on this line,
+   * absent when there are none.
+   *
+   * An anchored drawing paints from the page layer and leaves no span or line drawing at its
+   * anchor offset, so this is the only carrier the margin change bar can read for it. Only
+   * attributions the display mode lays out are recorded, matching the published records.
+   */
+  readonly anchorRevisions?: readonly RevisionAttribution[];
 }
 
 /**

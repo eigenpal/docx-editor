@@ -239,7 +239,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'The style picker applies document styles, including custom styles with their numbering and indents. Defining a new style in the UI is not supported yet.',
+      'The style picker applies document styles, including custom styles with their numbering and indents. Pressing Enter at the end of a paragraph starts the next one in the style that the current style names as its follower (w:next), so a heading is followed by body text. Defining a new style in the UI is not supported yet.',
   },
   {
     id: 'paragraphs.borders',
@@ -449,7 +449,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. Both adapters ship insert and overlay authoring: toolbar, properties dialog, and keyboard resize through the shared engine commands.',
+      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. Both adapters ship insert and overlay authoring: the Insert menu, toolbar, properties dialog, and keyboard resize through the shared engine commands. An inserted image keeps its natural size when it fits and scales down proportionally to its cell, column, or page content box when it does not.',
   },
   {
     id: 'images.anchored',
@@ -998,6 +998,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Copy writes plain text and HTML with an embedded document fragment; paste restores styles, lists, tables, links, images, and footnotes. Sections, headers, footers, and comments do not travel on the clipboard.',
   },
   {
     id: 'collab.undo-redo',

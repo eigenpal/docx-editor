@@ -36,13 +36,14 @@ const vueHref = isDev ? 'http://localhost:5174/vue/' : '/vue/';
 .adapter-switcher {
   display: inline-flex;
   background: var(--doc-bg-subtle);
-  padding: 3px;
+  padding: 2px;
   border-radius: 8px;
   border: 1px solid var(--doc-border);
 }
 .pill {
-  padding: 4px 12px;
+  padding: 3px 10px;
   font-size: 12px;
+  line-height: 1.4;
   font-weight: 500;
   color: var(--doc-text-muted);
   text-decoration: none;

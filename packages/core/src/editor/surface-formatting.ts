@@ -286,6 +286,36 @@ export {
 } from '@docx-editor.dev/core/store';
 
 /**
+ * The runs one paragraph child contributes to the formatting lane: the run itself, or every
+ * run inside a SURVIVING revision wrapper (`w:ins` / `w:moveTo`).
+ *
+ * `walkParagraphInline` descends links and content controls but hands a revision wrapper
+ * over whole, and `segmentsOf` gives tracked runs offsets — so stopping at the wrapper made
+ * every property write over tracked text plan zero edits, silently.
+ *
+ * The DELETION halves (`w:del` / `w:moveFrom`) stay out, subtree and all: their runs are
+ * hidden in the default display mode, so a write over a visible selection must not restyle
+ * text the user cannot see, and a `w:moveFrom` write would desynchronize the move pair (its
+ * `w:moveTo` twin sits at other offsets). Display-mode-aware inclusion is #497.
+ */
+function formattableRunsOf(child: OoxmlNode, depth = 0): readonly OoxmlNode[] {
+  if (child.kind === 'run') return [child];
+  if (child.kind === 'textValue' || depth >= MAX_FORMATTABLE_RUN_DEPTH) return [];
+  if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return [];
+  if (
+    child.kind === 'hyperlink' ||
+    child.kind === 'revisionInsert' ||
+    child.kind === 'revisionMoveTo'
+  ) {
+    return child.children.flatMap((inner) => formattableRunsOf(inner, depth + 1));
+  }
+  return [];
+}
+
+/** Matches the nesting cap `runsUnder` applies to the same containers. */
+const MAX_FORMATTABLE_RUN_DEPTH = 32;
+
+/**
  * Surface range formatting uses the shared authored-property model while retaining v2's
  * content-control-aware inline walk. The automation lane consumes the same store primitives;
  * this wrapper is only the layout-backed surface traversal.
@@ -303,25 +333,26 @@ export function runPropertyEdits(
   const runRanges = runAddressRanges(paragraph);
   const formatOwned = formatOwnedRunIds(paragraph);
   walkParagraphInline(paragraph.children, 0, (child) => {
-    if (child.kind !== 'run') return;
-    const range = runRanges.get(child.id);
-    if (!range || range.end <= range.start) return;
-    const from = Math.max(range.start, start);
-    const to = Math.min(range.end, end);
-    if (from >= to) return;
-    const authored = authoredProperties(
-      propertyContainer(child, 'runProperties', 'rPr'),
-      AUTHORABLE_RUN_PROPERTIES
-    );
-    edits.push({
-      start: from,
-      end: to,
-      // Merged per attribute for the two run properties carrying several independent
-      // settings, the same rule the store lane's own walk applies — see
-      // `mergedMultiSettingProperty`.
-      properties: mergedProperties(authored, mergedMultiSettingProperty(authored, incoming)),
-      ...(formatOwned.has(child.id) ? { targetRunIds: [child.id] } : {}),
-    });
+    for (const run of formattableRunsOf(child)) {
+      const range = runRanges.get(run.id);
+      if (!range || range.end <= range.start) continue;
+      const from = Math.max(range.start, start);
+      const to = Math.min(range.end, end);
+      if (from >= to) continue;
+      const authored = authoredProperties(
+        propertyContainer(run, 'runProperties', 'rPr'),
+        AUTHORABLE_RUN_PROPERTIES
+      );
+      edits.push({
+        start: from,
+        end: to,
+        // Merged per attribute for the two run properties carrying several independent
+        // settings, the same rule the store lane's own walk applies — see
+        // `mergedMultiSettingProperty`.
+        properties: mergedProperties(authored, mergedMultiSettingProperty(authored, incoming)),
+        ...(formatOwned.has(run.id) ? { targetRunIds: [run.id] } : {}),
+      });
+    }
   });
   return edits;
 }
@@ -349,17 +380,19 @@ export function hasAuthoredRunProperties(
   let found = false;
   const visitRun = (child: OoxmlNode): void => {
     if (found) return;
-    if (child.kind !== 'run') return;
-    const range = runRanges.get(child.id);
-    if (!range || range.end <= range.start) return;
-    if (Math.max(range.start, start) >= Math.min(range.end, end)) return;
-    if (
-      authoredProperties(
-        propertyContainer(child, 'runProperties', 'rPr'),
-        AUTHORABLE_RUN_PROPERTIES
-      ).length > 0
-    ) {
-      found = true;
+    for (const run of formattableRunsOf(child)) {
+      const range = runRanges.get(run.id);
+      if (!range || range.end <= range.start) continue;
+      if (Math.max(range.start, start) >= Math.min(range.end, end)) continue;
+      if (
+        authoredProperties(
+          propertyContainer(run, 'runProperties', 'rPr'),
+          AUTHORABLE_RUN_PROPERTIES
+        ).length > 0
+      ) {
+        found = true;
+        return;
+      }
     }
   };
   walkParagraphInline(paragraph.children, 0, visitRun);
@@ -386,11 +419,12 @@ export function authoredRunPropertiesAt(
   let left: OoxmlNode | null = null;
   let right: OoxmlNode | null = null;
   const visitRun = (child: OoxmlNode): void => {
-    if (child.kind !== 'run') return;
-    const range = runRanges.get(child.id);
-    if (!range || range.end <= range.start) return;
-    if (range.start < offset && offset <= range.end) left = child;
-    if (right === null && range.start <= offset && offset < range.end) right = child;
+    for (const run of formattableRunsOf(child)) {
+      const range = runRanges.get(run.id);
+      if (!range || range.end <= range.start) continue;
+      if (range.start < offset && offset <= range.end) left = run;
+      if (right === null && range.start <= offset && offset < range.end) right = run;
+    }
   };
   walkParagraphInline(paragraph.children, 0, visitRun);
   const owner = left ?? right;

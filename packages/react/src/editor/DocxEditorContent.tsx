@@ -61,6 +61,15 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       const items = event.clipboardData;
       if (!items) return;
       if (!hasImageFile(items)) return;
+      // STAND DOWN only for payloads the ENGINE will land. Real word-processor clipboards
+      // carry `text/html` AND an image file for the same content, and the engine's paste
+      // router lands that image through the fragment or `data:` lane — intercepting here
+      // inserted it twice. But a browser "copy image" payload carries `text/html` with an
+      // EXTERNAL `<img src>` the projection drops by design, and a bare screenshot has no
+      // HTML at all; both still need this file lane. (`defaultPrevented` says nothing —
+      // the engine prevents every paste, even ones it ignores.)
+      const html = typeof items.getData === 'function' ? (items.getData('text/html') ?? '') : '';
+      if (html.includes('data-docx-fragment') || html.includes('data:image')) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(items);
     },

@@ -88,7 +88,7 @@ import {
   type PositionalTab,
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
-import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
+import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { legacyFormFieldDataOf, parsedFieldSpansOf } from '../store/package/field-nodes.ts';
 import {
   emptyNamespaceScope,
@@ -237,6 +237,7 @@ export function piecesOfParagraph(
       readonly measureText?: string;
       readonly noteNav?: FieldAwarePiece['noteNav'];
       readonly inlineDrawing?: InlineDrawingLayoutInput;
+      readonly anchoredAtom?: true;
       readonly equation?: FieldAwarePiece['equation'];
       /**
        * Attribution to attach INSTEAD of the walk's live stack, for text emitted after the
@@ -265,6 +266,7 @@ export function piecesOfParagraph(
         ...(extras?.measureText !== undefined ? { measureText: extras.measureText } : {}),
         ...(extras?.noteNav ? { noteNav: extras.noteNav } : {}),
         ...(extras?.inlineDrawing ? { inlineDrawing: extras.inlineDrawing } : {}),
+        ...(extras?.anchoredAtom ? { anchoredAtom: true as const } : {}),
         ...(extras?.equation ? { equation: extras.equation } : {}),
         ...(extras?.fieldAtom ? { fieldAtom: extras.fieldAtom } : {}),
         ...link,
@@ -405,56 +407,22 @@ export function piecesOfParagraph(
     props: readonly OoxmlProperty[],
     style: ResolvedRunStyle
   ): void => {
-    const emitInlineDrawing = (
-      drawingNodeId: string,
-      projection: NonNullable<ReturnType<InlineDrawingLayoutContext['project']>>,
-      start: number,
-      end: number
-    ): void => {
-      const deleted = revisionsAreDeletion(revisions);
-      const suppressed = style.hidden || !revisionsVisible(revisions, displayMode) || deleted;
-      if (projection.hidden || suppressed) {
-        if (deleted && deletedRanges) appendModelRange(deletedRanges, start, end);
-        if (!projection.hidden) return;
-        push('\uFFFC', props, style, true, start, end);
-        return;
-      }
-      push('\uFFFC', props, style, true, start, end, {
-        inlineDrawing: Object.freeze({
-          drawingNodeId,
-          ownerPartName: inlineDrawingLayout!.ownerPartName,
-          projection,
-          resource: inlineDrawingLayout!.resourceOf(projection),
-        }),
+    // One branch for both run-level drawing atoms \u2014 `w:drawing` and an MC wrapper carrying
+    // one; the plan itself (visibility, deletion, payload) lives in field-drawing-atom.ts.
+    if (isRunDrawingAtom(grand)) {
+      const start = offset;
+      offset += 1;
+      const end = offset;
+      if (!inlineDrawingLayout) return;
+      const plan = runDrawingAtomPlan({
+        node: grand,
+        layout: inlineDrawingLayout,
+        hiddenRun: style.hidden,
+        revisions,
+        displayMode,
       });
-    };
-
-    if (grand.kind === 'drawing') {
-      const start = offset;
-      offset += 1;
-      const end = offset;
-      if (!inlineDrawingLayout) return;
-      const projection =
-        inlineDrawingLayout.projectionForAtom?.(grand.id) ??
-        (grand.kind === 'drawing' ? inlineDrawingLayout.project(grand) : null);
-      if (!projection || projection.kind !== 'inline') {
-        push('\uFFFC', props, style, true, start, end);
-        return;
-      }
-      emitInlineDrawing(grand.id, projection, start, end);
-      return;
-    }
-    if (isRunLevelMcAlternateContent(grand)) {
-      const start = offset;
-      offset += 1;
-      const end = offset;
-      if (!inlineDrawingLayout) return;
-      const projection = inlineDrawingLayout.projectionForAtom?.(grand.id) ?? null;
-      if (!projection || projection.kind !== 'inline') {
-        push('\uFFFC', props, style, true, start, end);
-        return;
-      }
-      emitInlineDrawing(grand.id, projection, start, end);
+      if (plan.recordDeleted && deletedRanges) appendModelRange(deletedRanges, start, end);
+      if (plan.emit) push('\uFFFC', props, style, true, start, end, plan.extras);
       return;
     }
     if (isProjectableNoteAtom(grand)) {

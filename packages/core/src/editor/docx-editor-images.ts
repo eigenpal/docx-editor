@@ -10,7 +10,7 @@ import type {
   ImageContext,
   SelectedImageState,
 } from '../contracts/editor.ts';
-import { lineAtPosition } from '../layout/index.ts';
+import { geometryOfSection, lineAtPosition } from '../layout/index.ts';
 import { lineAtIndexedPosition } from '../layout/paragraph-lines.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import { findDrawingOverlayFrameInLayout } from '../layout/semantic-hit-test.ts';
@@ -486,17 +486,23 @@ export function asyncImageCommandRefusal(
   };
 }
 
-function asyncImageExecutionGate(surface: PaginatedSurface | null): ExecResult | null {
+function asyncImageExecutionGate(
+  surface: PaginatedSurface | null,
+  commandType: 'insertImage' | 'replaceImage'
+): ExecResult | null {
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
   const mode = surface.editingMode();
   if (mode === 'view') {
     return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
   }
-  if (mode === 'suggest') {
+  // Suggesting inserts a picture as a TRACKED insertion (the surface lane wraps it in
+  // `w:ins`); replacing one still refuses — swapping bytes inside an existing drawing has
+  // no tracked-change representation.
+  if (mode === 'suggest' && commandType === 'replaceImage') {
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image property edits are not supported in suggesting mode',
+      reason: 'image changes are not supported in suggesting mode',
     };
   }
   return null;
@@ -587,18 +593,14 @@ export function gateImageCommand(
   if (!image) {
     return { ok: false, code: 'notFound', reason: 'no drawing is selected' };
   }
-  if (surface.editingMode() === 'suggest') {
-    if (command.type === 'deleteImage') {
-      return {
-        ok: false,
-        code: 'invalidArgs',
-        reason: 'trackedDrawingDeletionUnsupported',
-      };
-    }
+  // Suggesting supports exactly one image command: proposing the deletion. Every other
+  // image edit (resize, wrap, position, replace) still refuses — a tracked form of those
+  // does not exist yet, and a silent untracked commit is the one thing the mode forbids.
+  if (surface.editingMode() === 'suggest' && command.type !== 'deleteImage') {
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image property edits are not supported in suggesting mode',
+      reason: 'image changes are not supported in suggesting mode',
     };
   }
   switch (command.type) {
@@ -748,7 +750,7 @@ export function canExecuteImageCommand(
   command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>,
   surface: PaginatedSurface | null
 ): CanResult {
-  const modeGate = asyncImageExecutionGate(surface);
+  const modeGate = asyncImageExecutionGate(surface, command.type);
   if (modeGate) return modeGate;
   const gate = gateImageCommand(command, surface);
   if (gate) return gate;
@@ -897,6 +899,36 @@ export function execImageCommand(
 }
 
 /**
+ * Scale a natural extent down to fit where the caret flows, preserving aspect ratio —
+ * Word's insert behavior: an image that fits keeps its size, a wider or taller one lands at
+ * the width of its cell, column, or page. Only ever shrinks.
+ *
+ * Width fits the caret LINE's measure, not the section box alone: a table cell or a text
+ * column is narrower than the page, and layout hard-clips an inline drawing that overflows
+ * its box. `geometryOfSection` carries layout's own degenerate-margins fallback, so a page
+ * whose margins swallow it still fits against the box it actually paginates into.
+ */
+function fitInsertExtent(
+  surface: PaginatedSurface,
+  paragraphId: string,
+  offset: number,
+  widthPoints: number,
+  heightPoints: number
+): { readonly widthPoints: number; readonly heightPoints: number } {
+  const geometry = geometryOfSection(surface.sectionPropertiesAt(paragraphId));
+  const contentWidth = geometry.width - geometry.margin.left - geometry.margin.right;
+  const contentHeight = geometry.height - geometry.margin.top - geometry.margin.bottom;
+  const line = lineAtIndexedPosition(surface.layout(), paragraphId, offset);
+  const flowWidth =
+    line && line.box.width > 0 ? Math.min(line.box.width, contentWidth) : contentWidth;
+  const scale = Math.min(1, flowWidth / widthPoints, contentHeight / heightPoints);
+  if (scale >= 1) return { widthPoints, heightPoints };
+  // ONE shared scale, unrounded: independent per-axis rounding or floors distort an
+  // extreme-aspect image (a hairline rule, a tall banner).
+  return { widthPoints: widthPoints * scale, heightPoints: heightPoints * scale };
+}
+
+/**
  * Run an insert or replace, re-checking the same gates {@link canExecuteImageCommand} applies.
  *
  * Async because image bytes must be decoded to derive their natural extent before the drawing can
@@ -908,7 +940,7 @@ export async function executeImageCommand(
 ): Promise<ExecResult> {
   const surface = editor.surface;
   if (!surface) return { ok: false, code: 'notFound', reason: 'no document is loaded' };
-  const modeGate = asyncImageExecutionGate(surface);
+  const modeGate = asyncImageExecutionGate(surface, command.type);
   if (modeGate) return modeGate;
   const gate = gateImageCommand(command, surface);
   if (gate) return gate;
@@ -923,13 +955,20 @@ export async function executeImageCommand(
     ) {
       return { ok: false, code: 'notFound', reason: 'stale package revision' };
     }
+    const fitted = fitInsertExtent(
+      surface,
+      anchor.paragraphId,
+      anchor.offset,
+      command.widthPoints,
+      command.heightPoints
+    );
     const result = await surface.insertImage({
       paragraphId: anchor.paragraphId,
       offset: anchor.offset,
       bytes: command.data,
       mime: command.mime,
-      widthPoints: command.widthPoints,
-      heightPoints: command.heightPoints,
+      widthPoints: fitted.widthPoints,
+      heightPoints: fitted.heightPoints,
       expectedPackageRevision: expectedRevision,
       commitGuard: () => isStaleImageMutation(editor, pre) === null,
       ...(command.title !== undefined ? { title: command.title } : {}),

@@ -28,6 +28,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
+import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
@@ -109,18 +110,22 @@ import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
+  fragmentCoverageOf,
   orderedRangeOf,
   planRangeDeletion,
   selectedTextIn,
   selectionMarkOf,
   type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
+import { buildCopyFlavours } from './clipboard-copy-payload.ts';
+import { routePaste } from './clipboard-paste-router.ts';
 import {
   createBeforeInputHandler,
   createClipboardHandlers,
   createKeyDownHandler,
 } from './surface-input.ts';
 import { insertableText } from './clipboard-plain-text.ts';
+import { createNextStyleWrites } from './surface-next-style.ts';
 import {
   createFurnitureSource,
   createNotesLayoutInput,
@@ -683,6 +688,14 @@ export function mountPaginatedSurface(
 
   // Style and numbering indexes are identity-memoized and shared by every story.
   const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
+  // Word's "style for following paragraph". Its own lane, because it is a question about
+  // `styles.xml` rather than about the selection an Enter is standing in.
+  const nextStyle = createNextStyleWrites({
+    styleCascade,
+    // A pure read: `partOfNodeId`, never `partFor`, which would permanently retain a story
+    // store just to answer what style a paragraph is in.
+    partOf: (paragraphId) => partOfNodeId(session, paragraphId) ?? session.part(),
+  });
   let onDrawingResourcesChanged: (() => void) | null = null;
   const decodePort =
     options.imageDecodePort ??
@@ -2914,13 +2927,24 @@ export function mountPaginatedSurface(
     });
   }
 
+  /**
+   * The author this edit will be attributed to, or undefined when it lands untracked.
+   *
+   * `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
+   * to write. The edit lands untracked rather than being refused: losing the user's typing
+   * to a missing configuration value would be the worse failure. ONE answer, because a
+   * lane that decides what to write by re-deriving this condition drifts from the lane
+   * that decides how to attribute it.
+   */
+  function trackedAuthorOrNone(): string | undefined {
+    const author = options.author?.trim();
+    return editingMode === 'suggest' && author ? author : undefined;
+  }
+
   /** Suggesting attributes text and structural row edits as Word tracked changes. */
   function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
-    const author = options.author?.trim();
-    // `CT_TrackChange` makes `@w:author` required, so with no author there is nothing valid
-    // to write. The edit lands untracked rather than being refused: losing the user's typing
-    // to a missing configuration value would be the worse failure.
-    if (editingMode !== 'suggest' || !author) return [...ops];
+    const author = trackedAuthorOrNone();
+    if (author === undefined) return [...ops];
     return attributeTrackedOps(ops, { author, date: trackedDate() });
   }
 
@@ -4414,6 +4438,12 @@ export function mountPaginatedSurface(
       // Word carries the typing format across Enter: bold armed before the split applies
       // to the first characters typed in the new paragraph.
       const armed = armedAtCaret() ?? undefined;
+      // Word's `w:next`: Enter at the END of a paragraph starts one in the style that
+      // paragraph's style names as its follower, which is what stops a heading from being
+      // followed by a second heading.
+      const tailStyleId = splitEndsTheParagraph(position)
+        ? nextStyle.followerStyleId(position.paragraphId)
+        : undefined;
       commit(
         () =>
           applyOps(
@@ -4423,6 +4453,7 @@ export function mountPaginatedSurface(
                 op: 'splitParagraph',
                 paragraphId: position.paragraphId,
                 offset: position.offset,
+                tailStyleId,
               },
             ],
             selectionMark()
@@ -4975,6 +5006,12 @@ export function mountPaginatedSurface(
       return selectedTextIn(currentLayout, from, to, paragraphOrder());
     },
 
+    copyFlavours: () => copyFlavoursNow(),
+    pasteRich: (text: string, html: string | null) => pasteRichNow(text, html),
+    armForcePlainPaste: () => {
+      forcePlainPasteArmedAt = now();
+    },
+
     deleteSelection() {
       const plan = deleteSelectionPlan();
       if (plan.ops.length === 0) return false;
@@ -5381,6 +5418,36 @@ export function mountPaginatedSurface(
   }
 
   /**
+   * Whether this Enter ends the paragraph it leaves behind, so Word's follower style applies
+   * to the one it starts.
+   *
+   * A REPLACING Enter has two positions, not one: the split point, and the end of the text
+   * the same transaction deletes. Everything between them goes — including whole paragraphs,
+   * which the plan joins into the first — so what survives after the break is whatever
+   * followed the range's END. Select a heading's last word and press Enter, and Word gives
+   * you a body paragraph; reading only the split point said "not at the end" and gave a
+   * second heading.
+   *
+   * Declines outright for a SUGGESTED break and for a CELL RECTANGLE. A suggested break
+   * proposes a `w:ins` mark on the head, and rejecting it merges the paragraphs back keeping
+   * the SURVIVING tail's `w:pPr` — a tail in the follower style would demote the heading the
+   * reviewer took the break back from. Word records a `w:pPrChange` for that case, and this
+   * engine has no tracked paragraph-property write. A rectangle is not the range it stands
+   * in for, so its ends do not describe what the plan deletes.
+   */
+  function splitEndsTheParagraph(position: SemanticPosition): boolean {
+    if (trackedAuthorOrNone() !== undefined || cellSelection) return false;
+    const range = orderedRange();
+    const collapsed =
+      range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset;
+    // A collapsed caret may have been relocated past struck text on its way into the plan,
+    // so the split point is the plan's position rather than the selection's.
+    return collapsed
+      ? nextStyle.atParagraphEnd(position.paragraphId, position.offset)
+      : nextStyle.atParagraphEnd(range.to.paragraphId, range.to.offset);
+  }
+
+  /**
    * The plan that removes the current selection, or an empty one when it is collapsed.
    *
    * `collapseTo` rather than `orderedStart()` is what every caller must address afterwards:
@@ -5733,7 +5800,7 @@ export function mountPaginatedSurface(
     if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
     dispatchKeyDown(event);
   };
-  const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
+  const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);
   const dispatchBeforeInput = createBeforeInputHandler(surface, {
     isComposing: () => selectionSync.isComposing(),
     insertPlainText,
@@ -5829,6 +5896,97 @@ export function mountPaginatedSurface(
     );
   }
 
+  /**
+   * Armed by Cmd+Shift+V; the next paste routes plain. Deadline-bound: when no paste
+   * event follows the chord (denied clipboard, focus loss), a stale arm must not silently
+   * downgrade a LATER ordinary Cmd+V.
+   */
+  let forcePlainPasteArmedAt: number | null = null;
+  const FORCE_PLAIN_PASTE_WINDOW_MS = 2000;
+
+  /** Every clipboard flavour for the current selection — see clipboard-copy-payload.ts. */
+  function copyFlavoursNow(): { text: string; html: string | null } {
+    flushPendingInputAndLayout();
+    if (cellSelection) {
+      return buildCopyFlavours({
+        text: cellSelectionText(currentLayout, cellSelection),
+        cellRectangle: true,
+        coverage: null,
+        pkg: null,
+      });
+    }
+    const { from, to } = orderedRange();
+    const text = selectedTextIn(currentLayout, from, to, paragraphOrder());
+    const scope = storyScope();
+    if (text.length === 0 || scope.kind !== 'body') return { text, html: null };
+    // A copy is a pure READ: `session.part()` is the body part, and the body-only guard
+    // above is what keeps this off `partFor`, which would retain a story-store slot.
+    const part = session.part();
+    const coverage = fragmentCoverageOf(currentLayout, part, from, to, paragraphOrder());
+    return buildCopyFlavours({
+      text,
+      cellRectangle: false,
+      coverage,
+      pkg: session.currentPackage(),
+    });
+  }
+
+  /**
+   * Land a fragment package at the selection, ONE commit: the selection-clearing ops plus
+   * the resource merge plus `insertFragment`, promoted to a package undo unit in the
+   * session. False on any refusal — the paste router degrades to the next flavour.
+   */
+  function pasteFragmentBytes(bytes: Uint8Array, lastMarkCovered: boolean): boolean {
+    if (editingMode !== 'edit') return false;
+    if (storyScope().kind !== 'body') return false;
+    if (cellSelection) return false;
+    flushPendingInputAndLayout();
+    const plan = deleteSelectionPlan();
+    const target = plan.replaceAt ?? plan.collapseTo;
+    let landed = false;
+    commit(
+      () => {
+        const result = session.applyFragmentPaste(
+          { kind: 'body' },
+          {
+            paragraphId: target.paragraphId,
+            offset: target.offset,
+            fragmentBytes: bytes,
+            lastMarkCovered,
+            priorOps: plan.ops as unknown as TreeDocOp[],
+          }
+        );
+        landed = result.ok;
+        return {
+          committed: result.ok,
+          rejected: !result.ok,
+          opCount: result.ok ? 1 : 0,
+          ...(result.ok ? {} : { reason: result.detail ?? result.reason }),
+        } as unknown as ReturnType<TreeDocxSession['applyPmDoc']>;
+      },
+      () => collapsedAt(target)
+    );
+    return landed;
+  }
+
+  /** The paste router entry — fidelity order with continuous degrade to plain. */
+  function pasteRichNow(text: string, html: string | null): boolean {
+    const forcePlain =
+      forcePlainPasteArmedAt !== null &&
+      now() - forcePlainPasteArmedAt < FORCE_PLAIN_PASTE_WINDOW_MS;
+    forcePlainPasteArmedAt = null;
+    const lane = routePaste(
+      {
+        richLaneOpen:
+          editingMode === 'edit' && storyScope().kind === 'body' && cellSelection === null,
+        pasteFragment: (bytes, lastMarkCovered) => pasteFragmentBytes(bytes, lastMarkCovered),
+        insertPlainText,
+      },
+      { html, text, forcePlain }
+    );
+    return lane !== 'none';
+  }
+
   // Selection lives on the document, so this is where the browser reports it changing —
   // whatever produced it: a drag, a double-click, Select All, or a caret move.
   document.addEventListener('selectionchange', onSelectionChange);
@@ -5862,6 +6020,32 @@ export function mountPaginatedSurface(
   };
   const onDrawingKeyGesture = (event: Event): void => {
     if (event instanceof KeyboardEvent && NON_DESELECTING_KEYS.has(event.key)) return;
+    // Delete/Backspace ON a selected drawing deletes THE DRAWING — Word's object gesture.
+    // Without this the key fell through to the text keymap at a collapsed caret, where a
+    // Delete beside the picture read as a paragraph JOIN: in suggesting mode that proposed
+    // a "deleted paragraph break" while the selected picture stayed untouched. Handled
+    // here, in the same capture listener that owns the intent, because it must consume the
+    // key BEFORE the text keymap on this element sees it. The host overlay's own handler
+    // (when the overlay is focused) never reaches this listener at all.
+    const deleteKey =
+      (event instanceof KeyboardEvent &&
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey) ||
+      (event instanceof InputEvent &&
+        (event.inputType === 'deleteContentBackward' ||
+          event.inputType === 'deleteContentForward'));
+    if (deleteKey && drawingIntent.kind === 'pointer') {
+      const target = resolveSelectedDrawingRecord(surface);
+      if (target !== null) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setDrawingIntent({ kind: 'none' }, true);
+        surface.deleteImage(target.drawingNodeId);
+        return;
+      }
+    }
     setDrawingIntent({ kind: 'none' }, true);
   };
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });

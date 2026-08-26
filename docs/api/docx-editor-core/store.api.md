@@ -64,6 +64,9 @@ export interface AnchorSnapshot {
 export function applyEdits(part: OoxmlPart, edits: readonly ((current: OoxmlPart) => OoxmlEditResult)[], options?: EditOptions): OoxmlEditResult;
 
 // @public
+export function applyFragmentPaste(store: TreePackageStore, scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
+
+// @public
 export function applyHeaderFooterLifecycleOp(pkg: OoxmlPackage, op: HeaderFooterLifecycleOp): HeaderFooterLifecycleResult;
 
 // @public
@@ -1276,6 +1279,11 @@ export interface ExternalResourceConsentPort {
 }
 
 // @public
+export function extractFragmentPackage(pkg: OoxmlPackage, coverage: FragmentCoverage, options?: {
+    readonly omitMedia?: boolean;
+}): FragmentExtractResult;
+
+// @public
 export interface FeatureBundle {
     // (undocumented)
     readonly conflicts?: readonly string[];
@@ -1403,6 +1411,66 @@ export function formatNoteScopeId(noteKind: NoteKind, noteId: number): string;
 export function formatOwnedRunIds(paragraph: Extract<OoxmlNode, {
     kind: 'paragraph';
 }>): ReadonlySet<string>;
+
+// @public
+export interface FragmentCoverage {
+    readonly coveredParagraphIds: readonly string[];
+    readonly endOffset: number;
+    readonly fullyCoveredBlockIds: readonly string[];
+    readonly lastMarkCovered: boolean;
+    readonly paragraphIds: readonly string[];
+    readonly partName: string;
+    readonly startOffset: number;
+}
+
+// @public (undocumented)
+export type FragmentExtractRejection = 'unknown-part' | 'empty-range' | 'trim-refused' | 'resource-limit';
+
+// @public (undocumented)
+export type FragmentExtractResult = {
+    readonly blockCount: number;
+    readonly bytes: Uint8Array;
+    readonly lastMarkCovered: boolean;
+    readonly mediaBytes: number;
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: FragmentExtractRejection;
+};
+
+// @public (undocumented)
+export type FragmentMergeRejection = 'no-fragment-document' | 'no-target-part' | 'merge-refused';
+
+// @public (undocumented)
+export type FragmentMergeResult = {
+    readonly blocks: readonly OoxmlNode[];
+    readonly ok: true;
+    readonly pkg: OoxmlPackage;
+} | {
+    readonly ok: false;
+    readonly reason: FragmentMergeRejection;
+};
+
+// @public (undocumented)
+export interface FragmentPasteInput {
+    readonly fragmentBytes: Uint8Array;
+    // (undocumented)
+    readonly lastMarkCovered: boolean;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    readonly priorOps?: readonly TreeDocOp[];
+}
+
+// @public (undocumented)
+export type FragmentPasteResult = (Extract<PackageTransactResult, {
+    ok: true;
+}> & {
+    readonly blockCount: number;
+}) | Extract<PackageTransactResult, {
+    ok: false;
+}>;
 
 // @public
 export const HARD_CEILINGS: ResourceLimits;
@@ -2008,6 +2076,9 @@ export const MAX_CUSTOM_NODE_LABEL_LENGTH = 4096;
 export const MAX_CUSTOM_NODE_PAYLOAD_LENGTH: number;
 
 // @public
+export const MAX_FRAGMENT_DECODED_BYTES: number;
+
+// @public
 export const MAX_NOTE_REFERENCE_PARTS = 256;
 
 // @public
@@ -2033,6 +2104,9 @@ export function mergedParagraphMarkProperties(part: OoxmlPart, paragraphId: stri
 
 // @public
 export function mergedProperties(existing: readonly OoxmlProperty[], incoming: OoxmlProperty | readonly OoxmlProperty[]): OoxmlProperty[];
+
+// @public
+export function mergeFragmentIntoPackage(target: OoxmlPackage, fragment: OoxmlPackage, ownerPartName: string): FragmentMergeResult;
 
 // @public
 export function mintedParagraphIdentityAttributes(prefix: string, value: string): readonly OoxmlAttribute[];
@@ -3917,7 +3991,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers"];
 
 // @public
 export type TreeDocOp = {
@@ -4026,6 +4100,7 @@ export type TreeDocOp = {
     readonly offset: number;
     readonly op: 'splitParagraph';
     readonly paragraphId: string;
+    readonly tailStyleId?: string | null;
 } | {
     readonly offsets: readonly number[];
     readonly op: 'splitParagraphMany';
@@ -4267,10 +4342,17 @@ export type TreeDocOp = {
     readonly scope: 'document' | 'section';
     readonly sectionIndex?: number;
 } | {
+    readonly blocks: readonly OoxmlNode[];
+    readonly lastMarkCovered?: boolean;
+    readonly offset: number;
+    readonly op: 'insertFragment';
+    readonly paragraphId: string;
+} | {
     readonly drawing: OoxmlDrawingNode;
     readonly offset: number;
     readonly op: 'insertDrawing';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
 } | {
     readonly drawingNodeId: string;
     readonly op: 'replaceDrawingResource';
@@ -4519,7 +4601,13 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 /** Suggesting-mode drawing deletion is not implemented in this change. */
 | 'trackedDrawingDeletionUnsupported'
 /** Hyperlink target creation or change needs an OPC relationship in a package transaction. */
-| 'packageTransactionRequired';
+| 'packageTransactionRequired'
+/** A clipboard fragment block nests deeper than the recursion cap. */
+| 'fragment-too-deep'
+/** A clipboard fragment block is not a paragraph, table, or content control subtree. */
+| 'fragment-invalid-block'
+/** A clipboard fragment exceeds its block or node budget. */
+| 'fragment-resource-budget';
 
 // @public
 export type TreeOpResult = {
@@ -4536,6 +4624,7 @@ export type TreeOpResult = {
 export class TreePackageStore {
     constructor(pkg: OoxmlPackage, main: OoxmlPart, options?: TreePackageStoreOptions);
     adoptPackageUnit(before: OoxmlPackage): void;
+    applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyLifecycleOp(op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp): PackageTransactResult;
     // (undocumented)
@@ -4550,6 +4639,7 @@ export class TreePackageStore {
     compositionSessionOpen(): boolean;
     currentPackage(): OoxmlPackage;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
+    deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
     embedExternalImage(scope: StoryScope, drawingNodeId: string, url: string, port: ExternalImageFetchPort, signal: AbortSignal, decodePort: ImageDecodePort): Promise<ImageIntentResult>;
     // (undocumented)
     endComposition(): void;

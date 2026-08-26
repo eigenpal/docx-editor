@@ -1,6 +1,7 @@
 // Vue review rail and chrome — user-report flows on the composed demo.
 
 import { expect, test, type Page } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const VUE_URL = 'http://localhost:5274/';
 const CLEAN_URL = `${VUE_URL}?fixture=review-clean-demo.docx`;
@@ -10,7 +11,7 @@ const SCROLLER = '.docx-editor__scroll-container';
 async function waitForEditor(page: Page, url = VUE_URL): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('composed-mount')).toBeVisible();
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 }
 
 async function openContextMenu(page: Page): Promise<{ x: number; y: number }> {
@@ -69,7 +70,7 @@ test.describe('Vue review chrome', () => {
 
   test('rulers match the page and Page Setup stays a dialog', async ({ page }) => {
     await waitForEditor(page, CLEAN_URL);
-    const pageBox = await page.locator('.docx-page').first().boundingBox();
+    const pageBox = await page.locator(PAINTED_PAGE).first().boundingBox();
     const horizontal = await page.locator('.docx-horizontal-ruler').boundingBox();
     const vertical = await page.locator('.docx-vertical-ruler').boundingBox();
     expect(pageBox).not.toBeNull();
@@ -97,7 +98,7 @@ test.describe('Vue review chrome', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
     const headerBand = page.locator('[data-docx-hf="header"]').first();
     await headerBand.dblclick();
     const chrome = page.locator('[data-testid="docx-hf-chrome"]');
@@ -116,7 +117,7 @@ test.describe('Vue review chrome', () => {
   test('commented fixture renders existing review cards', async ({ page }) => {
     await page.goto(COMMENTED_URL, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
     await expect(page.locator('[data-testid="review-card"]')).toHaveCount(1, { timeout: 15_000 });
     await expect(page.locator('[data-testid="review-rail"]')).toContainText('Check this.');
   });

@@ -169,9 +169,11 @@ export function ContextMenuPaste({
       onSelect={() => {
         void (async () => {
           try {
-            const text = await navigator.clipboard.readText();
+            const { text, html } = await readClipboardPayload();
             // An empty clipboard is not a refusal — there is simply nothing to insert.
-            if (text) editor?.exec({ type: 'paste', text });
+            if (text || html) {
+              editor?.exec({ type: 'paste', text, ...(html ? { html } : {}) });
+            }
           } catch (error) {
             reportClipboardRefusal(
               error instanceof Error ? error.message : 'the clipboard is not readable'
@@ -189,6 +191,90 @@ export function ContextMenuPaste({
 }
 
 ContextMenuPaste.docxRow = 'edit.paste' as const;
+
+/**
+ * Both clipboard flavours where the async read allows it, plain text where it does not.
+ *
+ * Some engines strip attributes from async-read HTML, which can drop the embedded
+ * fragment — the engine's paste router degrades to the remaining flavours, so the read
+ * never has to guess what survived.
+ */
+async function readClipboardPayload(): Promise<{ text: string; html: string | null }> {
+  const clipboard = navigator.clipboard;
+  if (typeof clipboard.read === 'function' && typeof ClipboardItem !== 'undefined') {
+    try {
+      const items = await clipboard.read();
+      let text = '';
+      let html: string | null = null;
+      for (const item of items) {
+        if (item.types.includes('text/plain')) {
+          text = await (await item.getType('text/plain')).text();
+        }
+        if (item.types.includes('text/html')) {
+          html = await (await item.getType('text/html')).text();
+        }
+      }
+      if (text || html) return { text, html };
+    } catch {
+      // Fall through to the plain read; a refusal there is the one reported.
+    }
+  }
+  return { text: await clipboard.readText(), html: null };
+}
+
+/**
+ * Paste the clipboard's plain text as if typed, whatever richer flavours it holds.
+ *
+ * The Cmd+Shift+V twin as a menu row: same clipboard-read contract as
+ * {@link ContextMenuPaste}, routed through the `pasteWithoutFormatting` command.
+ *
+ * @public
+ */
+export function ContextMenuPasteWithoutFormatting({
+  icon,
+  labelKey,
+  shortcutKey,
+  className,
+  hidden,
+}: ContextMenuCommandProps) {
+  const editor = useDocxEditor();
+  const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
+  const label = useMenuLabel();
+  const probe = useMemo((): EditorCommand => ({ type: 'pasteWithoutFormatting', text: ' ' }), []);
+  const { isEnabled, disabledReason } = useEditorCommand(probe);
+  if (hidden) return null;
+  const blocked = clipboardRefusal !== null;
+  return (
+    <MenuRow
+      slot="edit.pasteWithoutFormatting"
+      icon={icon ?? chromeIcon(PASTE_PATHS)}
+      shortcut={label(shortcutKey ?? 'contextMenu.pasteWithoutFormattingShortcut')}
+      disabled={!isEnabled || blocked}
+      {...((clipboardRefusal ?? disabledReason)
+        ? { title: clipboardRefusal ?? disabledReason ?? '' }
+        : {})}
+      onSelect={() => {
+        void (async () => {
+          try {
+            const text = await navigator.clipboard.readText();
+            if (text) editor?.exec({ type: 'pasteWithoutFormatting', text });
+          } catch (error) {
+            reportClipboardRefusal(
+              error instanceof Error ? error.message : 'the clipboard is not readable'
+            );
+          } finally {
+            close(true);
+          }
+        })();
+      }}
+      {...(className ? { className } : {})}
+    >
+      {label(labelKey ?? 'contextMenu.pasteWithoutFormatting')}
+    </MenuRow>
+  );
+}
+
+ContextMenuPasteWithoutFormatting.docxRow = 'edit.pasteWithoutFormatting' as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Table context rows — fixed commands, not chrome slots

@@ -22,7 +22,7 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'a comment needs a selected range': 'disabledReason.commentSelection',
   'cell merge is not supported yet': 'disabledReason.mergeUnsupported',
   'cell split is not supported yet': 'disabledReason.splitUnsupported',
-  'image property edits are not supported in suggesting mode': 'disabledReason.imageSuggesting',
+  'image changes are not supported in suggesting mode': 'disabledReason.imageSuggesting',
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',

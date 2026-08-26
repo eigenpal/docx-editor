@@ -333,7 +333,9 @@
     "selectAll": "בחר הכל",
     "selectAllShortcut": "Ctrl+A",
     "editCustomNode": "ערוך {label}",
-    "removeCustomNode": "הסר {label}"
+    "removeCustomNode": "הסר {label}",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "מתווה המסמך",

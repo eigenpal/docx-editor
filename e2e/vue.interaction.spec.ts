@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const VUE_URL = 'http://localhost:5274/';
 
@@ -8,7 +9,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     await page.getByTestId('editing-mode-trigger').click();
     const checked = page.locator('[role="menuitemradio"][aria-checked="true"]');
@@ -21,7 +22,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     const trigger = page.locator('[data-slot="toolbar.more"]');
     await expect(trigger).toBeVisible();
@@ -37,7 +38,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     await page.locator('.docx-table-cell').first().click();
     const root = page.locator('[data-slot="table.borderTarget"]').first();
@@ -67,7 +68,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     await page.getByRole('menuitem', { name: 'Insert', exact: true }).click();
     const breakRow = page.getByRole('menuitem', { name: 'Break', exact: true });
@@ -84,7 +85,7 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
     const link = page.locator('.docx-hyperlink').filter({ hasText: 'Example' });
     await expect(link).toBeVisible();
@@ -105,7 +106,20 @@ test.describe('Vue contextual interactions', () => {
       waitUntil: 'domcontentloaded',
     });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
-    await page.waitForSelector('.docx-page', { timeout: 30_000 });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
+
+    // Stub the link's real target at the CONTEXT level, so the route also covers the
+    // popup. Every other spec draws its bytes from the local dev middleware; this was the
+    // one place the suite reached the public internet, which fails on a runner with no
+    // egress and reads as a hyperlink regression rather than a network one. What the test
+    // is about — the editor opening the sanitized external URL in a new tab — is unchanged.
+    await page.context().route('https://example.com/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><title>Example</title>',
+      })
+    );
 
     const link = page.locator('.docx-hyperlink').filter({ hasText: 'Example' });
     await link.click();

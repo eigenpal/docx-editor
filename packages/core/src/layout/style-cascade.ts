@@ -63,6 +63,14 @@ export interface StyleDefinition {
   readonly styleId: string;
   readonly type: string;
   readonly basedOn: string | null;
+  /**
+   * `w:next` — the style Word gives the paragraph that FOLLOWS one in this style.
+   *
+   * Nothing in layout reads it: it is a rule about authoring, not about painting. It is
+   * read here because this is the one place `styles.xml` is parsed, and a second reader
+   * would be a second answer to what a style id means.
+   */
+  readonly next: string | null;
   readonly paragraphProperties: readonly OoxmlProperty[];
   readonly runProperties: readonly OoxmlProperty[];
   /** The style's `w:pPr` node, when present — needed for nested `w:pBdr`. */
@@ -275,6 +283,11 @@ function readStyleDefinition(
     return basedOn ? attributeValue(basedOn, 'val') : undefined;
   })();
   const basedOn = isValidStyleId(basedOnRaw) ? basedOnRaw : null;
+  const nextRaw = (() => {
+    const next = childNamed(node, 'next');
+    return next ? attributeValue(next, 'val') : undefined;
+  })();
+  const next = isValidStyleId(nextRaw) ? nextRaw : null;
   const paragraphPropertiesNode = findParagraphProperties(node);
   const runPropertiesNode = findRunProperties(node);
   const conditionalTableFormats = new Map<string, OoxmlElement>();
@@ -294,6 +307,7 @@ function readStyleDefinition(
     styleId,
     type,
     basedOn,
+    next,
     isDefault: isDefaultFlag(attributeValue(node, 'default')),
     paragraphProperties: withoutChangeRecords(propertiesOf(paragraphPropertiesNode)),
     runProperties: withoutChangeRecords(propertiesOf(runPropertiesNode)),

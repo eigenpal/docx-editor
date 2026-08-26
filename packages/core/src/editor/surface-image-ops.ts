@@ -16,8 +16,8 @@ import type { DrawingTreeDocOp } from '../store/store/tree-op-types.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 
 const VIEWING_REFUSAL = 'the document is open for viewing';
-const SUGGESTING_IMAGE_REFUSAL = 'image property edits are not supported in suggesting mode';
-const TRACKED_DRAWING_DELETION = 'trackedDrawingDeletionUnsupported';
+const SUGGESTING_IMAGE_REFUSAL = 'image changes are not supported in suggesting mode';
+const TRACKED_AUTHOR_REFUSAL = 'tracked changes need a non-empty author';
 
 export function createImageOps(deps: {
   session: TreeDocxSessionView;
@@ -110,16 +110,24 @@ export function createImageOps(deps: {
       if (deps.editingMode() === 'view') {
         return { ok: false, reason: 'invalidArgs', detail: VIEWING_REFUSAL };
       }
-      if (deps.editingMode() === 'suggest') {
-        return {
-          ok: false,
-          reason: 'invalidArgs',
-          detail: TRACKED_DRAWING_DELETION,
-        };
+      // Suggesting PROPOSES the deletion instead of performing it: the drawing's model unit
+      // goes into a `w:del` through the same tracked lane a struck word takes, so the page
+      // keeps the picture (dimmed, outlined, change-barred) and the review queue offers one
+      // Accept. Deleting it outright here would be a silent untracked edit in a mode whose
+      // whole promise is that nothing changes without a reviewable proposal.
+      const tracked = deps.editingMode() === 'suggest';
+      const author = deps.author();
+      if (tracked && (author === undefined || author === '')) {
+        return { ok: false, reason: 'invalidArgs', detail: TRACKED_AUTHOR_REFUSAL };
       }
       let result: ImageIntentResult = { ok: false, reason: 'invalidArgs' };
       deps.commit(() => {
-        result = deps.session.deleteImage(deps.storyScope(), drawingNodeId);
+        result = tracked
+          ? deps.session.deleteImageTracked(deps.storyScope(), drawingNodeId, {
+              author: author!,
+              date: deps.trackedDate(),
+            })
+          : deps.session.deleteImage(deps.storyScope(), drawingNodeId);
         return {
           committed: result.ok,
           rejected: !result.ok,
@@ -134,16 +142,21 @@ export function createImageOps(deps: {
       if (deps.editingMode() === 'view') {
         return Promise.resolve({ ok: false, reason: 'invalidArgs', detail: VIEWING_REFUSAL });
       }
-      if (deps.editingMode() === 'suggest') {
+      // Suggesting PROPOSES the picture: the inserted run goes into a `w:ins`, so the page
+      // paints it with the insertion cues and the review queue offers one Accept.
+      const tracked = deps.editingMode() === 'suggest';
+      const author = deps.author();
+      if (tracked && (author === undefined || author === '')) {
         return Promise.resolve({
           ok: false,
           reason: 'invalidArgs',
-          detail: SUGGESTING_IMAGE_REFUSAL,
+          detail: TRACKED_AUTHOR_REFUSAL,
         });
       }
       return deps.session.insertImage(deps.storyScope(), {
         ...input,
         decodePort: deps.decodePort(),
+        ...(tracked ? { revision: { author: author!, date: deps.trackedDate() } } : {}),
       });
     },
 

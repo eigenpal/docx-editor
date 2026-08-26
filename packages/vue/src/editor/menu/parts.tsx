@@ -17,7 +17,7 @@ import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel, type MenuContextValue, type MenuId } from './menu-context';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
-import { useImageInsert } from '../images/ImageInsert';
+import { useImageInsertOptional } from '../images/ImageInsert';
 //
 // A row is PRESENTATION over a chrome slot: the icon, the label and the enabled state all
 // come from the registry entry the row names, exactly like a toolbar button, so the same
@@ -463,7 +463,12 @@ const MenuImageInsertImpl = defineComponent({
     hidden: { type: null as unknown as PropType<unknown>, default: undefined },
   },
   setup(props) {
-    const { openFilePicker, isEnabled, disabledReason } = useImageInsert();
+    // Optional, like every other row's graceful degrade: a menu mounted outside
+    // `DocxEditor.Root` (no `ImageInsertProvider`) renders the row present-and-disabled
+    // instead of throwing during setup. Read through the context object in render —
+    // `isEnabled`/`disabledReason` are live getters, and destructuring them here would
+    // freeze the row's enabled state at mount.
+    const insert = useImageInsertOptional();
     const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
@@ -471,6 +476,8 @@ const MenuImageInsertImpl = defineComponent({
       const context = menuContext.value;
       const control = chromeControlForSlot('image.insert');
       const text = label(control?.labelKey ?? 'toolbar.image');
+      const isEnabled = insert?.isEnabled ?? false;
+      const disabledReason = insert?.disabledReason ?? null;
       return (
         <MenuRow
           {...menuRowSlot('image.insert')}
@@ -478,7 +485,7 @@ const MenuImageInsertImpl = defineComponent({
           disabled={!isEnabled}
           {...(disabledReason ? { title: disabledReason } : {})}
           selectHandler={() => {
-            openFilePicker();
+            insert?.openFilePicker();
             context.setOpenMenu(null);
           }}
           {...(props.className ? { className: props.className } : {})}

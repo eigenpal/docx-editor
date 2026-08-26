@@ -56,6 +56,11 @@ export const DocxEditorContent = defineComponent({
       const items = event.clipboardData;
       if (!items) return;
       if (!hasImageFile(items)) return;
+      // STAND DOWN only for payloads the ENGINE will land (fragment or `data:` image in
+      // the HTML). External `<img src>` payloads and bare screenshots still need this
+      // file lane. Mirrors the React adapter exactly.
+      const html = typeof items.getData === 'function' ? (items.getData('text/html') ?? '') : '';
+      if (html.includes('data-docx-fragment') || html.includes('data:image')) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(items);
     };

@@ -19,6 +19,16 @@ import {
 } from '../store/package/drawing-projection.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  NO_REVISIONS,
+  isRevisionWrapper,
+  revisionAttributionOf,
+  revisionsVisible,
+  withRevision,
+  type RevisionAttribution,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import { measureDisplayText } from './run-style.ts';
 import {
   drawingGeometryFromProjection,
@@ -316,6 +326,12 @@ export interface InlineDrawingRecord {
   readonly placeholderGraphicKind: string | null;
   /** Typed solid-geometry payload for a renderable `wps:wsp` shape; null otherwise. */
   readonly vectorShape: VectorShapeProjection | null;
+  /**
+   * The revision wrappers enclosing the owning run, outermost first — the same stack spans
+   * carry, so paint and review chrome give a tracked picture the same cues as tracked text.
+   * Absent when the drawing is untracked.
+   */
+  readonly revisions?: readonly RevisionAttribution[];
 }
 
 export type LineLayoutAtom =
@@ -965,6 +981,7 @@ export function buildAnchoredDrawingRecord(options: {
   readonly clipRegion?: LayoutBox;
   readonly sourceOrder?: number;
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout | null;
+  readonly revisions?: readonly RevisionAttribution[];
 }): AnchoredDrawingRecord {
   const projection = options.input.projection;
   const anchorMeta = projection.anchor;
@@ -1006,6 +1023,7 @@ export function buildAnchoredDrawingRecord(options: {
     ...(options.sourceOrder !== undefined ? { sourceOrder: options.sourceOrder } : {}),
     ...(options.resolved.layoutFallback ? { layoutFallback: options.resolved.layoutFallback } : {}),
     ...(options.textboxStory ? { textboxStory: options.textboxStory } : {}),
+    ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
     paintBounds,
     hitBounds,
     geometry: options.clipRegion ? clipGeometryToRegion(geometry, options.clipRegion) : geometry,
@@ -1019,27 +1037,38 @@ export function buildAnchoredDrawingRecord(options: {
 export function anchoredDrawingAtomsInParagraph(
   paragraph: OoxmlNode,
   context: InlineDrawingLayoutContext
-): readonly { readonly atomId: string; readonly projection: DrawingProjection }[] {
+): readonly {
+  readonly atomId: string;
+  readonly projection: DrawingProjection;
+  /** Enclosing revision wrappers, outermost first — the stack spans carry (see #479). */
+  readonly revisions: readonly RevisionAttribution[];
+}[] {
   if (paragraph.kind !== 'paragraph') return [];
-  const atoms: { atomId: string; projection: DrawingProjection }[] = [];
-  const visit = (node: OoxmlNode): void => {
+  const atoms: {
+    atomId: string;
+    projection: DrawingProjection;
+    revisions: readonly RevisionAttribution[];
+  }[] = [];
+  const visit = (node: OoxmlNode, revisions: readonly RevisionAttribution[]): void => {
     if (node.kind === 'drawing') {
       const projection =
         context.projectionForAtom?.(node.id) ??
         context.project(node as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode);
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection });
+      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
       return;
     }
     if (isRunLevelMcAlternateContent(node)) {
       const projection = context.projectionForAtom?.(node.id) ?? null;
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection });
+      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
       return;
     }
     if ('children' in node) {
-      for (const child of node.children) visit(child);
+      const attribution = isRevisionWrapper(node) ? revisionAttributionOf(node) : null;
+      const enclosing = attribution ? withRevision(revisions, attribution) : revisions;
+      for (const child of node.children) visit(child, enclosing);
     }
   };
-  for (const child of paragraph.children) visit(child);
+  for (const child of paragraph.children) visit(child, NO_REVISIONS);
   return Object.freeze(atoms);
 }
 
@@ -1061,19 +1090,19 @@ export function drawingModelOffsetsInParagraph(paragraph: OoxmlNode): ReadonlyMa
       for (const child of node.children) visitRunContent(child);
     }
   };
-  for (const child of paragraph.children) {
+  // Descends hyperlinks and revision wrappers in either order: a `w:ins` wraps runs and
+  // hyperlinks the model still counts, so skipping it left every drawing after (or inside)
+  // the wrapper at a stale offset and an anchored drawing in a tracked insertion invisible.
+  const visitInlineChild = (child: OoxmlNode): void => {
     if (child.kind === 'run') {
       for (const grand of child.children) visitRunContent(grand);
-      continue;
+      return;
     }
-    if (child.kind === 'hyperlink') {
-      for (const grand of child.children) {
-        if (grand.kind === 'run') {
-          for (const great of grand.children) visitRunContent(great);
-        }
-      }
+    if (child.kind === 'hyperlink' || isRevisionWrapper(child)) {
+      for (const grand of child.children) visitInlineChild(grand);
     }
-  }
+  };
+  for (const child of paragraph.children) visitInlineChild(child);
   return offsets;
 }
 
@@ -1206,6 +1235,12 @@ export function publishAnchoredDrawingsForParagraph(options: {
   readonly measurer?: import('./semantic-records.ts').TextMeasurer;
   readonly sourceOrderOf?: (drawingNodeId: string) => number | undefined;
   /**
+   * Which revisions are resolved before publishing. A deleted anchor survives `all-markup`
+   * (marked, like deleted text) and disappears from the proposed result; an inserted one
+   * disappears from the original. Defaults to `all-markup`, which shows everything.
+   */
+  readonly displayMode?: RevisionDisplayMode;
+  /**
    * Lays out a textbox drawing's story (host-supplied closure over flow deps and the page
    * context). Absent hosts degrade textbox drawings to the placeholder path.
    */
@@ -1216,10 +1251,12 @@ export function publishAnchoredDrawingsForParagraph(options: {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return [];
   const offsets = drawingModelOffsetsInParagraph(options.paragraph);
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const records: AnchoredDrawingRecord[] = [];
   for (const atom of atoms) {
     const projection = atom.projection;
     if (projection.hidden) continue;
+    if (!revisionsVisible(atom.revisions, displayMode)) continue;
     const start = offsets.get(atom.atomId);
     if (start === undefined) continue;
     if (
@@ -1265,6 +1302,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
       start: characterFrameOffset,
       resolved,
       clipRegion,
+      revisions: atom.revisions,
       ...(options.sourceOrderOf ? { sourceOrder: options.sourceOrderOf(atom.atomId) } : {}),
       ...(projection.textboxStory && options.layoutTextboxStory
         ? { textboxStory: options.layoutTextboxStory(projection) }
@@ -1286,6 +1324,7 @@ export function buildInlineDrawingRecord(options: {
   readonly contentRight: number;
   readonly contentTop?: number;
   readonly contentBottom?: number;
+  readonly revisions?: readonly RevisionAttribution[];
 }): InlineDrawingRecord {
   const measure = measureInlineDrawing(options.input.projection);
   const extentX = options.slotX + measure.distL + measure.effectL;
@@ -1338,5 +1377,6 @@ export function buildInlineDrawingRecord(options: {
     resource: options.input.resource,
     accessibility: drawingAccessibility(options.input.projection),
     ...drawingPaintFields(options.input.projection),
+    ...(options.revisions && options.revisions.length > 0 ? { revisions: options.revisions } : {}),
   });
 }

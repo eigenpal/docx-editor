@@ -6,7 +6,7 @@
 
 import type { ParagraphTabStop } from '../../contracts/types.ts';
 import type { ContentControlLock } from '../package/content-control-nodes.ts';
-import type { OoxmlDrawingNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import type { OoxmlDrawingNode, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import type {
   DrawingLocksInput,
   DrawingPositionInput,
@@ -146,43 +146,12 @@ export interface OoxmlProperty {
  * distinct revisions; and one logical revision — a tracked row insertion — is deliberately
  * many elements sharing an id, which a uniqueness rule could not express at all.
  */
-/**
- * How a tracked change is addressed: its numeric id plus the PART it lives in.
- *
- * Both, always — `@w:id` is unique only within a part, so an id alone names two revisions in any
- * package with a header or a comments part.
- */
-export interface RevisionAddress {
-  readonly id: string;
-  readonly author: string;
-  /** Absent when the file wrote no `@w:date`; part of the identity either way. */
-  readonly date?: string;
-}
-
-/** Who a tracked edit is attributed to. `CT_TrackChange` requires an author. */
-/** The author and timestamp a tracked edit is recorded under. */
-export interface RevisionAttributionInput {
-  readonly author: string;
-  /** ISO-8601. Omitted writes no `@w:date`. */
-  readonly date?: string;
-}
-
-/**
- * Whether an attribution cannot serialize, spelled ONCE for every validator.
- *
- * `CT_TrackChange` makes `@w:author` required, so an absent or whitespace-only author is a
- * proposal no reader can attribute or resolve. Callers whose op makes the attribution
- * OPTIONAL pass `op.revision` and skip the check when it is undefined; callers that require
- * one refuse undefined themselves. The guard used to be copy-pasted per op, and the copies
- * drifted: table rows refused a whitespace-only author while text inserts accepted it.
- */
-export function invalidRevisionAttribution(revision: RevisionAttributionInput): boolean {
-  return (
-    typeof revision.author !== 'string' ||
-    revision.author.trim().length === 0 ||
-    (revision.date !== undefined && typeof revision.date !== 'string')
-  );
-}
+import type { RevisionAddress, RevisionAttributionInput } from './tree-op-revision-attribution.ts';
+export {
+  invalidRevisionAttribution,
+  type RevisionAddress,
+  type RevisionAttributionInput,
+} from './tree-op-revision-attribution.ts';
 
 /**
  * Every mutation the store accepts, as one JSON-safe discriminated union.
@@ -434,7 +403,21 @@ export type TreeDocOp =
        */
       readonly inForcePositionsTwips?: readonly number[];
     }
-  | { readonly op: 'splitParagraph'; readonly paragraphId: string; readonly offset: number }
+  | {
+      readonly op: 'splitParagraph';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /**
+       * The `w:pStyle` the MINTED tail takes, instead of the head's own.
+       *
+       * A split otherwise clones the whole `w:pPr`, which is right for every property but
+       * the style when the caller is an Enter at the end of a paragraph: Word gives that
+       * new paragraph the style's `w:next`, so a heading is followed by body text rather
+       * than by a second heading. `null` authors no `w:pStyle` at all, which is what the
+       * document's default style is spelled as. Omit to clone the head's style unchanged.
+       */
+      readonly tailStyleId?: string | null;
+    }
   | {
       /**
        * Split one `w:p` at MANY offsets in a single op.
@@ -517,15 +500,11 @@ export type TreeDocOp =
       /**
        * Where the section that STARTS after this mark begins — Word's Breaks menu.
        *
-       * `w:type` states how a section starts relative to the previous one (ECMA-376
-       * §17.6.22), so the break the user asked for is written on the section that
-       * FOLLOWS the mark, never on the minted one. The minted `w:sectPr` keeps the
-       * cloned type, because it still starts exactly where the section it was cut from
-       * did.
-       *
-       * `'nextPage'` clears `w:type` (an absent type is nextPage), so a next-page break
-       * inside a continuous section really does start a page. `'continuous'` writes it.
-       * Omitted leaves the following section's `w:type` untouched.
+       * `w:type` states how a section starts relative to the previous one (§17.6.22), so it
+       * is written on the section FOLLOWING the mark, never on the minted one, which keeps
+       * the cloned type because it starts where the section it was cut from did. `'nextPage'`
+       * clears `w:type` (absent IS nextPage), so a next-page break inside a continuous
+       * section really starts a page. Omitted leaves the following section untouched.
        */
       readonly breakType?: 'nextPage' | 'continuous';
     }
@@ -944,10 +923,29 @@ export type TreeDocOp =
       };
     }
   | {
+      /**
+       * Insert clipboard-fragment blocks at a paragraph position, atomically.
+       *
+       * Blocks only — resources (styles, numbering, media, rels, note parts) merge through
+       * the package-edit path in the same transaction, and the whole commit is promoted to
+       * a package undo unit. A merged edge paragraph takes the properties of the paragraph
+       * mark that ends it: the fragment's first mark leading, the host's original mark
+       * trailing. Nodes receive fresh ids at apply.
+       */
+      readonly op: 'insertFragment';
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly blocks: readonly OoxmlNode[];
+      /** True when the fragment's last paragraph mark travelled (its paragraph stays whole). */
+      readonly lastMarkCovered?: boolean;
+    }
+  | {
       readonly op: 'insertDrawing';
       readonly paragraphId: string;
       readonly offset: number;
       readonly drawing: OoxmlDrawingNode;
+      /** Present in suggesting mode: the drawing's run goes into a `w:ins` as one proposal. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       readonly op: 'replaceDrawingResource';
@@ -1108,6 +1106,7 @@ export const TREE_DOC_OP_KINDS = [
   'setNoteProperties',
   'setContentControlProperties',
   'insertContentControl',
+  'insertFragment',
   'insertDrawing',
   'replaceDrawingResource',
   'deleteDrawing',
@@ -1265,7 +1264,13 @@ export type TreeOpRejection =
   /** Suggesting-mode drawing deletion is not implemented in this change. */
   | 'trackedDrawingDeletionUnsupported'
   /** Hyperlink target creation or change needs an OPC relationship in a package transaction. */
-  | 'packageTransactionRequired';
+  | 'packageTransactionRequired'
+  /** A clipboard fragment block nests deeper than the recursion cap. */
+  | 'fragment-too-deep'
+  /** A clipboard fragment block is not a paragraph, table, or content control subtree. */
+  | 'fragment-invalid-block'
+  /** A clipboard fragment exceeds its block or node budget. */
+  | 'fragment-resource-budget';
 
 /** Whether an op applied, with the effect it produced or the reason it was refused. */
 export type TreeOpResult =

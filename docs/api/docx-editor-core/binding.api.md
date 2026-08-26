@@ -113,6 +113,7 @@ export interface TreeDocxSession extends TreeDocxSessionView {
 
 // @public
 export interface TreeDocxSessionView {
+    applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
     // (undocumented)
@@ -130,6 +131,7 @@ export interface TreeDocxSessionView {
         readonly parentCommentId?: string;
     }[], scope?: StoryScope, noteId?: number): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
+    deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
     documentFonts(): readonly string[];
     documentOutline(): readonly DocumentOutlineEntry[];
     documentProperties(): DocumentProperties;

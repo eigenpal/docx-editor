@@ -48,6 +48,7 @@ import {
   MenuFile,
   MenuFormat,
   MenuHelp,
+  MenuImageInsert,
   MenuInsert,
   MenuItem,
   MenuOpen,
@@ -428,6 +429,8 @@ export interface DocxEditorMenuNamespace {
   readonly Open: typeof MenuOpen;
   readonly Save: typeof MenuSave;
   readonly PageSetup: typeof MenuPageSetup;
+  /** Insert › Image, so a host can hide it or place it elsewhere by name. */
+  readonly ImageInsert: typeof MenuImageInsert;
   /** Help › Report issue, so a host can drop it or point it elsewhere by name. */
   readonly ReportIssue: typeof MenuReportIssue;
 }
@@ -458,5 +461,6 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   Open: MenuOpen,
   Save: MenuSave,
   PageSetup: MenuPageSetup,
+  ImageInsert: MenuImageInsert,
   ReportIssue: MenuReportIssue,
 });

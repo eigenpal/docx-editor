@@ -101,6 +101,14 @@ Both adapters export the same parts under the same names. Default toolbar slots
 | `image.altText`    | `ImageAltText`                                              | `setImageAltText`                                 |
 | `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties`                              |
 
+The packaged Insert menu carries an **Image** row that opens the same file picker as
+`ImageInsertTrigger`. Hide it or place it elsewhere through `DocxEditor.Menu.ImageInsert`.
+
+`widthPoints` and `heightPoints` are the extent to insert at most. An image that fits
+where the caret flows keeps its natural size; a wider or taller one scales down
+proportionally to its cell, column, or page content box. Read the committed extent back
+from `snapshot().image`.
+
 Insert preflight:
 
 <FrameworkTabs>

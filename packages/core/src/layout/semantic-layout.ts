@@ -1907,6 +1907,7 @@ function layoutBlocksPass(
       paragraphStartY: fragmentParagraphStartY,
       anchorLineTopByModelStart,
       columnIndex: flowColumnIndex,
+      displayMode,
     });
     return Object.freeze([...pageZones, ...synthesized]);
   };
@@ -2777,6 +2778,7 @@ function layoutBlocksPass(
             measurer,
             sourceOrderOf,
             layoutTextboxStory: layoutTextboxStoryForBody,
+            displayMode,
           })
         );
       }
@@ -2948,6 +2950,7 @@ function layoutBlocksPass(
         trailingSpacing: pendingLine.trailingSpacing,
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
+        ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
       };
       lineCounter += 1;
       if (pending.length === 0) fragmentFirstLineSkip = skipBefore;

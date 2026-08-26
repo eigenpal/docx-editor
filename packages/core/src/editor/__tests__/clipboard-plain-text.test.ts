@@ -39,38 +39,44 @@ describe('the text behind a clipboard payload', () => {
 });
 
 describe('the paste handler', () => {
+  // The handler's job narrowed with the rich lane: prevent the default, then hand BOTH
+  // flavours to `pasteRich`, whose router owns the fidelity order. The "plain wins" rule
+  // lives on in the PLAIN LANE — `plainTextFromTransfer` above — which is what every
+  // degraded payload lands on.
   const paste = (flavours: Record<string, string>) => {
-    const inserted: string[] = [];
+    const routed: Array<{ text: string; html: string | null }> = [];
     let prevented = false;
-    const handlers = createClipboardHandlers({} as PaginatedSurface, (text) => inserted.push(text));
+    const surface = {
+      pasteRich: (text: string, html: string | null) => routed.push({ text, html }),
+    } as unknown as PaginatedSurface;
+    const handlers = createClipboardHandlers(surface);
     handlers.onPaste({
       clipboardData: transfer(flavours),
       preventDefault: () => {
         prevented = true;
       },
     } as unknown as ClipboardEvent);
-    return { inserted, prevented };
+    return { routed, prevented };
   };
 
-  test('an HTML-only payload reaches the document', () => {
-    const { inserted } = paste({ 'text/html': '<p>alpha</p><p>beta</p>' });
-    // Newlines, so the insert splits into real paragraphs rather than one run.
-    expect(inserted).toEqual(['alpha\nbeta']);
+  test('an HTML-only payload reaches the router with its text fallback', () => {
+    const { routed } = paste({ 'text/html': '<p>alpha</p><p>beta</p>' });
+    expect(routed).toEqual([{ text: 'alpha\nbeta', html: '<p>alpha</p><p>beta</p>' }]);
   });
 
   test('the browser default is prevented either way, including on an empty payload', () => {
     expect(paste({ 'text/html': '<p>alpha</p>' }).prevented).toBe(true);
     const empty = paste({});
     expect(empty.prevented).toBe(true);
-    expect(empty.inserted).toEqual([]);
+    expect(empty.routed).toEqual([]);
   });
 
-  test('a payload with both flavours still inserts the plain one verbatim', () => {
-    const { inserted } = paste({
+  test('a payload with both flavours keeps the plain text verbatim for the plain lane', () => {
+    const { routed } = paste({
       'text/plain': '  spaced  text  ',
       'text/html': '<p>collapsed</p>',
     });
-    expect(inserted).toEqual(['  spaced  text  ']);
+    expect(routed).toEqual([{ text: '  spaced  text  ', html: '<p>collapsed</p>' }]);
   });
 });
 

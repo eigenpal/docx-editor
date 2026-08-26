@@ -8,7 +8,7 @@
 
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-import { writeClipboardText } from './clipboard-write.ts';
+import { writeClipboardRich } from './clipboard-write.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
@@ -439,17 +439,28 @@ export function execEditorCommand(
       mounted.selectAll();
       // Selection is not document state: nothing to save changed.
       return { ok: true, changed: false };
-    case 'copy':
+    case 'copy': {
       // The gate already refused a collapsed selection, so this read is non-empty.
-      writeClipboardText(mounted.selectedText());
+      const flavours = mounted.copyFlavours();
+      writeClipboardRich(flavours.text, flavours.html);
       return { ok: true, changed: false };
-    case 'cut':
-      // Read BEFORE the delete: `selectedText` answers from the selection, and the delete
+    }
+    case 'cut': {
+      // Read BEFORE the delete: `copyFlavours` answers from the selection, and the delete
       // is what removes it.
-      writeClipboardText(mounted.selectedText());
+      const flavours = mounted.copyFlavours();
+      writeClipboardRich(flavours.text, flavours.html);
       mounted.deleteSelection();
       break;
+    }
     case 'paste':
+      // Same fidelity routing as the paste event; a text-only call is the plain lane.
+      // A payload that lands on no lane (empty text, unusable HTML) changed nothing.
+      if (!mounted.pasteRich(command.text, command.html ?? null)) {
+        return { ok: true, changed: false };
+      }
+      break;
+    case 'pasteWithoutFormatting':
       mounted.insertPlainText(command.text);
       break;
     case 'setSelection': {

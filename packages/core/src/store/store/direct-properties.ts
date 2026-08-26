@@ -17,7 +17,7 @@
 // `surface-formatting.ts` re-exports these under the names the editor lane already used.
 
 import { findNode } from '../package/ooxml-edit.ts';
-import { WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import { isContentRevisionKind, WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { nullRecord } from '../package/safe-record.ts';
 import { segmentsOf } from './tree-op-segments.ts';
@@ -324,7 +324,16 @@ export function runPropertyEdits(
   const runRanges = runAddressRanges(paragraph);
   const formatOwned = formatOwnedRunIds(paragraph);
   const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'hyperlink') {
+    if (child.kind === 'textValue') return;
+    // A revision wrapper (`w:ins`/`w:del`/`w:moveFrom`/`w:moveTo`) is a run container the
+    // same way a link is, and `segmentsOf` gives its runs offsets — stopping at the wrapper
+    // made every property write over tracked text plan zero edits, silently.
+    // The DELETION halves stay out: their runs are hidden in the default display mode, so a
+    // write over a visible selection must not restyle text the user cannot see, and a
+    // `w:moveFrom` write would desynchronize the pair anyway (its `w:moveTo` twin sits at
+    // other offsets). Display-mode-aware inclusion is #497.
+    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return;
+    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visit(inner);
       return;
     }
@@ -373,7 +382,14 @@ export function runsCovering(
   const runRanges = runAddressRanges(paragraph);
   const runs: OoxmlNode[] = [];
   const visit = (child: OoxmlNode): void => {
-    if (child.kind === 'hyperlink') {
+    if (child.kind === 'textValue') return;
+    // Same containers as `runPropertyEdits` — the read must cover the runs the write splits.
+    // The DELETION halves stay out: their runs are hidden in the default display mode, so a
+    // write over a visible selection must not restyle text the user cannot see, and a
+    // `w:moveFrom` write would desynchronize the pair anyway (its `w:moveTo` twin sits at
+    // other offsets). Display-mode-aware inclusion is #497.
+    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') return;
+    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
       for (const inner of child.children) visit(inner);
       return;
     }

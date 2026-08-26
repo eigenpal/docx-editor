@@ -19,7 +19,12 @@
         <input v-model="form.locator" />
       </label>
       <div class="actions">
-        <button type="button" :style="DEMO_SECONDARY_BUTTON" @mousedown="keepCaret" @click="emit('close')">
+        <button
+          type="button"
+          :style="DEMO_SECONDARY_BUTTON"
+          @mousedown="keepCaret"
+          @click="emit('close')"
+        >
           Cancel
         </button>
         <button type="submit" :style="DEMO_PRIMARY_BUTTON" @mousedown="keepCaret">

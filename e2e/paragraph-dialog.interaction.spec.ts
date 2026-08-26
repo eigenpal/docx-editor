@@ -23,6 +23,7 @@
 //   bunx playwright test --config e2e/editor-smoke.config.ts paragraph-dialog.interaction
 
 import { expect, test, type Page } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const DEMO_URL = 'http://localhost:5273/';
 const DIALOG = '[role="dialog"][aria-label="Paragraph"]';
@@ -90,7 +91,7 @@ test('closing the dialog moves neither the document nor the text', async ({ page
   // An ordinary 13" viewport: the buttons have to be reachable without scrolling the form.
   await page.setViewportSize({ width: 1440, height: 778 });
   await page.goto(DEMO_URL, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.docx-page', { timeout: 30_000 });
+  await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 
   // Deep enough into the document that a jump to the top is unmistakable.
   const scroller = page.locator('.docx-editor__scroll-container').first();

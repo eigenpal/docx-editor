@@ -1,12 +1,7 @@
 <template>
   <div v-if="editor" class="perf-hud" data-testid="composed-perf">
     <dl v-if="open && reading" class="perf-panel" role="status">
-      <div
-        v-for="row in reading.rows"
-        :key="row.id"
-        class="perf-row"
-        :title="row.tip"
-      >
+      <div v-for="row in reading.rows" :key="row.id" class="perf-row" :title="row.tip">
         <dt>{{ row.label }}</dt>
         <dd :class="{ muted: row.muted }">{{ row.value }}</dd>
       </div>
@@ -119,7 +114,12 @@ function refresh(): void {
     });
   }
   if (perf.staleDiscards > 0) {
-    rows.push({ id: 'stale', label: 'stale', value: String(perf.staleDiscards), tip: PERF_TIPS.stale });
+    rows.push({
+      id: 'stale',
+      label: 'stale',
+      value: String(perf.staleDiscards),
+      tip: PERF_TIPS.stale,
+    });
   }
   if (fontValue) {
     rows.push({

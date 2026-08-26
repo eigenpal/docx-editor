@@ -323,13 +323,11 @@ describe('legacy chrome descriptor', () => {
     ]);
   });
 
-  test('no packaged chrome places image.insert — a host that wants it places it itself', () => {
-    // The slot and its parts stay public; what changed is that the packaged Insert menu no
-    // longer decides that every product wants a picture picker in it. Asserted here rather
-    // than left implicit so re-adding the row is a deliberate edit, not a drift.
-    expect(chromeMenuSlots()).not.toContain('image.insert');
-    // Still a registered slot, so `DocxEditor.Menu.ImageInsert` and the toolbar control keep
-    // their label, icon and enabled state.
+  test('the packaged Insert menu places image.insert', () => {
+    // The row shares its slot with `DocxEditor.Toolbar.ImageInsert`, so both routes keep
+    // one label, one icon and one enabled state. Asserted here so removing the row is a
+    // deliberate edit, not a drift.
+    expect(chromeMenuSlots()).toContain('image.insert');
     expect(allSlots()).toContain('image.insert');
   });
 

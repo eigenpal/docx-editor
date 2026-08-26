@@ -29,6 +29,7 @@ import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semant
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
+  drawingUrlRegistryFor,
   paintDrawingRecord,
   type PaintImageUrlPort,
 } from '../semantic-paint-drawings.ts';
@@ -290,6 +291,35 @@ describe('paints validated raster records', () => {
       null
     );
     expect(element).toBeNull();
+  });
+
+  test('a reused ready element scrubs the revision marking once the decision resolves', () => {
+    const { port } = fakeUrlPort();
+    const registry = drawingUrlRegistryFor(document.createElement('div'), port);
+    const untracked = readyRecordFromXml(inlinePictureXml());
+    const tracked: InlineDrawingRecord = Object.freeze({
+      ...untracked,
+      revisions: Object.freeze([{ kind: 'delete' as const, id: '9', author: 'Bob', nodeId: 'n9' }]),
+    });
+    const ctx = {
+      scale: 1,
+      strings: DEFAULT_DRAWING_PAINT_STRINGS,
+      imageUrlPort: port,
+      paintInstance: 'p0',
+    };
+    const origin = Object.freeze({ x: 0, y: 0, width: 600, height: 800 });
+    const first = paintDrawingRecord(document, tracked, ctx, registry, origin)!;
+    expect(first.classList.contains('docx-drawing--revision-deletion')).toBe(true);
+    expect(first.dataset.revisionKind).toBe('delete');
+    // Same drawing, decision resolved: identical paint signature, so the registry hands the
+    // SAME element back — the marking must be scrubbed, not left to a rebuild.
+    const second = paintDrawingRecord(document, untracked, ctx, registry, origin)!;
+    expect(second).toBe(first);
+    expect(second.classList.contains('docx-drawing--revision')).toBe(false);
+    expect(second.classList.contains('docx-drawing--revision-deletion')).toBe(false);
+    expect(second.dataset.revisionKind).toBeUndefined();
+    expect(second.dataset.revisionId).toBeUndefined();
+    expect(second.dataset.reviewAuthor).toBeUndefined();
   });
 });
 

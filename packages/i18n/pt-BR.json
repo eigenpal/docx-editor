@@ -333,7 +333,9 @@
     "selectAll": "Selecionar tudo",
     "selectAllShortcut": "Ctrl+A",
     "editCustomNode": "Editar {label}",
-    "removeCustomNode": "Remover {label}"
+    "removeCustomNode": "Remover {label}",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Estrutura do documento",

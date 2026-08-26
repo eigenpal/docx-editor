@@ -333,7 +333,9 @@
     "selectAll": "सभी चुनें",
     "selectAllShortcut": "Ctrl+A",
     "editCustomNode": "{label} संपादित करें",
-    "removeCustomNode": "{label} निकालें"
+    "removeCustomNode": "{label} निकालें",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "दस्तावेज़ की रूपरेखा",

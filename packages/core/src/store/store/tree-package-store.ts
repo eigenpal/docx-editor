@@ -20,7 +20,8 @@ import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
-import { resolveRelationship, type RelationshipRecord } from '../package/relationships.ts';
+import { resolveRelationship } from '../package/relationships.ts';
+import { FOOTER_REL_TYPE, HEADER_REL_TYPE, locateHeaderFooterPart } from './story-part-locate.ts';
 import {
   applyHeaderFooterLifecycleOp,
   isHeaderFooterLifecycleOp,
@@ -42,6 +43,7 @@ import {
 } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-ops.ts';
+import type { RevisionAttributionInput } from './tree-op-types.ts';
 import {
   deleteBlockMayStrandNote,
   deleteMayEmptyCommentRange,
@@ -60,6 +62,7 @@ import {
 import {
   applyImagePropertiesIntent,
   deleteImage as deleteImageIntent,
+  deleteImageTracked as deleteImageTrackedIntent,
   embedExternalImage as embedExternalImageIntent,
   insertImage as insertImageIntent,
   replaceImage as replaceImageIntent,
@@ -69,6 +72,11 @@ import {
   type ImageIntentResult,
   type InsertImageInput,
 } from './tree-package-images.ts';
+import {
+  applyFragmentPaste as applyFragmentPasteIntent,
+  type FragmentPasteInput,
+  type FragmentPasteResult,
+} from './tree-package-fragment.ts';
 import type { ImageDecodePort, SupportedImageMime } from '../package/image-resources.ts';
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
@@ -94,11 +102,6 @@ const CONTENT_REMOVING_OPS: ReadonlySet<string> = new Set([
   'removeContentControl',
   'removeRepeatingSectionItem',
 ]);
-
-const HEADER_REL_TYPE =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
-const FOOTER_REL_TYPE =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
 
 /**
  * Editable story target.
@@ -803,6 +806,11 @@ export class TreePackageStore {
     return insertImageIntent(this, scope, input);
   }
 
+  /** Land a clipboard fragment (resource merge + blocks) as one package undo unit. */
+  applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult {
+    return applyFragmentPasteIntent(this, scope, input);
+  }
+
   /** Replace a picture drawing's embedded media in one package undo unit. */
   replaceImage(
     scope: StoryScope,
@@ -818,6 +826,15 @@ export class TreePackageStore {
   /** Delete a picture drawing and collect orphaned media in one package undo unit. */
   deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult {
     return deleteImageIntent(this, scope, drawingNodeId);
+  }
+
+  /** Propose the deletion as a tracked change: the drawing goes into a `w:del`, media stays. */
+  deleteImageTracked(
+    scope: StoryScope,
+    drawingNodeId: string,
+    revision: RevisionAttributionInput
+  ): ImageIntentResult {
+    return deleteImageTrackedIntent(this, scope, drawingNodeId, revision);
   }
 
   /** Fetch external bytes explicitly and embed them; no fetch on open/load. */
@@ -1239,49 +1256,4 @@ export class TreePackageStore {
     this.publish(change);
     return change;
   }
-}
-
-function locateHeaderFooterPart(
-  pkg: OoxmlPackage,
-  rId: string
-):
-  | { readonly ok: true; readonly partName: string; readonly part: OoxmlPart }
-  | { readonly ok: false; readonly reason: StoryTargetRejection; readonly detail?: string } {
-  const relationships = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
-  const record = relationships.find((rel) => rel.id === rId);
-  if (!record) {
-    return { ok: false, reason: 'dangling-relationship', detail: rId };
-  }
-  if (record.type !== HEADER_REL_TYPE && record.type !== FOOTER_REL_TYPE) {
-    return { ok: false, reason: 'wrong-relationship-type', detail: record.type };
-  }
-  return resolveInternalStoryPart(pkg, record);
-}
-
-function resolveInternalStoryPart(
-  pkg: OoxmlPackage,
-  record: RelationshipRecord
-):
-  | { readonly ok: true; readonly partName: string; readonly part: OoxmlPart }
-  | { readonly ok: false; readonly reason: StoryTargetRejection; readonly detail?: string } {
-  const resolved = resolveRelationship(record);
-  if (resolved.mode === 'External') {
-    return { ok: false, reason: 'external-relationship', detail: record.id };
-  }
-  if (!resolved.target.ok) {
-    return {
-      ok: false,
-      reason: 'bad-relationship-target',
-      detail: resolved.target.reason,
-    };
-  }
-  const part = pkg.parts.get(resolved.target.partName);
-  if (!part) {
-    return { ok: false, reason: 'missing-part', detail: resolved.target.partName };
-  }
-  const rootName = part.root.localName;
-  if (rootName !== 'hdr' && rootName !== 'ftr') {
-    return { ok: false, reason: 'not-a-story-part', detail: rootName || part.name };
-  }
-  return { ok: true, partName: part.name, part };
 }
