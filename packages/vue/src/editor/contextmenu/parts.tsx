@@ -133,8 +133,10 @@ export const ContextMenuPaste = defineComponent({
           onSelect={() => {
             void (async () => {
               try {
-                const text = await navigator.clipboard.readText();
-                if (text) editorRef.value?.exec({ type: 'paste', text });
+                const { text, html } = await readClipboardPayload();
+                if (text || html) {
+                  editorRef.value?.exec({ type: 'paste', text, ...(html ? { html } : {}) });
+                }
               } catch (error) {
                 reportClipboardRefusal(
                   error instanceof Error ? error.message : 'the clipboard is not readable'
@@ -154,6 +156,91 @@ export const ContextMenuPaste = defineComponent({
 });
 
 ContextMenuPaste.docxRow = 'edit.paste' as const;
+
+/**
+ * Both clipboard flavours where the async read allows it, plain text where it does not.
+ * Some engines strip attributes from async-read HTML — the engine's paste router degrades
+ * to the surviving flavours, so the read never has to guess what made it through.
+ */
+async function readClipboardPayload(): Promise<{ text: string; html: string | null }> {
+  const clipboard = navigator.clipboard;
+  if (typeof clipboard.read === 'function' && typeof ClipboardItem !== 'undefined') {
+    try {
+      const items = await clipboard.read();
+      let text = '';
+      let html: string | null = null;
+      for (const item of items) {
+        if (item.types.includes('text/plain')) {
+          text = await (await item.getType('text/plain')).text();
+        }
+        if (item.types.includes('text/html')) {
+          html = await (await item.getType('text/html')).text();
+        }
+      }
+      if (text || html) return { text, html };
+    } catch {
+      // Fall through to the plain read; a refusal there is the one reported.
+    }
+  }
+  return { text: await clipboard.readText(), html: null };
+}
+
+/**
+ * Paste the clipboard's plain text as if typed, whatever richer flavours it holds — the
+ * Cmd+Shift+V twin as a menu row.
+ *
+ * @public
+ */
+export const ContextMenuPasteWithoutFormatting = defineComponent({
+  name: 'ContextMenuPasteWithoutFormatting',
+  props: {
+    icon: { type: null as unknown as PropType<VNode>, default: undefined },
+    labelKey: { type: String, default: undefined },
+    shortcutKey: { type: String, default: undefined },
+    className: { type: String, default: undefined },
+    hidden: { type: Boolean, default: undefined },
+  },
+  setup(props) {
+    const editorRef = useDocxEditor();
+    const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
+    const label = useMenuLabel();
+    const cmd = useEditorCommand({ type: 'pasteWithoutFormatting', text: ' ' });
+    return () => {
+      if (props.hidden) return null;
+      const blocked = clipboardRefusal !== null;
+      return (
+        <MenuRow
+          {...menuRowSlot('edit.pasteWithoutFormatting')}
+          icon={props.icon ?? chromeIcon(PASTE_PATHS) ?? undefined}
+          shortcut={label(props.shortcutKey ?? 'contextMenu.pasteWithoutFormattingShortcut')}
+          disabled={!cmd.isEnabled.value || blocked}
+          {...((clipboardRefusal ?? cmd.disabledReason.value)
+            ? { title: clipboardRefusal ?? cmd.disabledReason.value ?? '' }
+            : {})}
+          onSelect={() => {
+            void (async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text) editorRef.value?.exec({ type: 'pasteWithoutFormatting', text });
+              } catch (error) {
+                reportClipboardRefusal(
+                  error instanceof Error ? error.message : 'the clipboard is not readable'
+                );
+              } finally {
+                close(true);
+              }
+            })();
+          }}
+          {...(props.className ? { className: props.className } : {})}
+        >
+          {label(props.labelKey ?? 'contextMenu.pasteWithoutFormatting')}
+        </MenuRow>
+      );
+    };
+  },
+});
+
+ContextMenuPasteWithoutFormatting.docxRow = 'edit.pasteWithoutFormatting' as const;
 
 /** @public */
 export interface ContextMenuTableRowProps extends ContextMenuCommandProps {

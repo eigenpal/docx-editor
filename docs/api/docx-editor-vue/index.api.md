@@ -1433,6 +1433,59 @@ export const ContextMenuPaste: vue.DefineComponent<vue.ExtractPropTypes<{
     shortcutKey: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+// @public
+export const ContextMenuPasteWithoutFormatting: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    shortcutKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+    hidden: boolean;
+    icon: VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>;
+    labelKey: string;
+    shortcutKey: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 // @public (undocumented)
 export const ContextMenuRefreshToc: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
@@ -1968,6 +2021,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
+    // (undocumented)
+    readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
     // (undocumented)
     readonly RefreshToc: typeof ContextMenuRefreshToc;
     // (undocumented)

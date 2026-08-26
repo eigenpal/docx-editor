@@ -28,6 +28,23 @@ export {
   type TreeOpResult,
 } from './tree-ops.ts';
 export {
+  extractFragmentPackage,
+  type FragmentCoverage,
+  type FragmentExtractRejection,
+  type FragmentExtractResult,
+} from './clipboard-fragment-extract.ts';
+export {
+  mergeFragmentIntoPackage,
+  type FragmentMergeRejection,
+  type FragmentMergeResult,
+} from './clipboard-fragment-merge.ts';
+export {
+  MAX_FRAGMENT_DECODED_BYTES,
+  applyFragmentPaste,
+  type FragmentPasteInput,
+  type FragmentPasteResult,
+} from './tree-package-fragment.ts';
+export {
   TreeDocumentStore,
   type SelectionMark,
   type TransactionContext as TreeTransactionContext,

@@ -109,12 +109,15 @@ import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
+  fragmentCoverageOf,
   orderedRangeOf,
   planRangeDeletion,
   selectedTextIn,
   selectionMarkOf,
   type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
+import { buildCopyFlavours } from './clipboard-copy-payload.ts';
+import { routePaste } from './clipboard-paste-router.ts';
 import {
   createBeforeInputHandler,
   createClipboardHandlers,
@@ -4957,6 +4960,12 @@ export function mountPaginatedSurface(
       return selectedTextIn(currentLayout, from, to, paragraphOrder());
     },
 
+    copyFlavours: () => copyFlavoursNow(),
+    pasteRich: (text: string, html: string | null) => pasteRichNow(text, html),
+    armForcePlainPaste: () => {
+      forcePlainPasteArmedAt = now();
+    },
+
     deleteSelection() {
       const plan = deleteSelectionPlan();
       if (plan.ops.length === 0) return false;
@@ -5715,7 +5724,7 @@ export function mountPaginatedSurface(
     if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
     dispatchKeyDown(event);
   };
-  const { onCopy, onCut, onPaste } = createClipboardHandlers(surface, insertPlainText);
+  const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);
   const dispatchBeforeInput = createBeforeInputHandler(surface, {
     isComposing: () => selectionSync.isComposing(),
     insertPlainText,
@@ -5809,6 +5818,97 @@ export function mountPaginatedSurface(
         return landing ? collapsedAt({ paragraphId: landing, offset: lastLine.length }) : null;
       }
     );
+  }
+
+  /**
+   * Armed by Cmd+Shift+V; the next paste routes plain. Deadline-bound: when no paste
+   * event follows the chord (denied clipboard, focus loss), a stale arm must not silently
+   * downgrade a LATER ordinary Cmd+V.
+   */
+  let forcePlainPasteArmedAt: number | null = null;
+  const FORCE_PLAIN_PASTE_WINDOW_MS = 2000;
+
+  /** Every clipboard flavour for the current selection — see clipboard-copy-payload.ts. */
+  function copyFlavoursNow(): { text: string; html: string | null } {
+    flushPendingInputAndLayout();
+    if (cellSelection) {
+      return buildCopyFlavours({
+        text: cellSelectionText(currentLayout, cellSelection),
+        cellRectangle: true,
+        coverage: null,
+        pkg: null,
+      });
+    }
+    const { from, to } = orderedRange();
+    const text = selectedTextIn(currentLayout, from, to, paragraphOrder());
+    const scope = storyScope();
+    if (text.length === 0 || scope.kind !== 'body') return { text, html: null };
+    // A copy is a pure READ: `session.part()` is the body part, and the body-only guard
+    // above is what keeps this off `partFor`, which would retain a story-store slot.
+    const part = session.part();
+    const coverage = fragmentCoverageOf(currentLayout, part, from, to, paragraphOrder());
+    return buildCopyFlavours({
+      text,
+      cellRectangle: false,
+      coverage,
+      pkg: session.currentPackage(),
+    });
+  }
+
+  /**
+   * Land a fragment package at the selection, ONE commit: the selection-clearing ops plus
+   * the resource merge plus `insertFragment`, promoted to a package undo unit in the
+   * session. False on any refusal — the paste router degrades to the next flavour.
+   */
+  function pasteFragmentBytes(bytes: Uint8Array, lastMarkCovered: boolean): boolean {
+    if (editingMode !== 'edit') return false;
+    if (storyScope().kind !== 'body') return false;
+    if (cellSelection) return false;
+    flushPendingInputAndLayout();
+    const plan = deleteSelectionPlan();
+    const target = plan.replaceAt ?? plan.collapseTo;
+    let landed = false;
+    commit(
+      () => {
+        const result = session.applyFragmentPaste(
+          { kind: 'body' },
+          {
+            paragraphId: target.paragraphId,
+            offset: target.offset,
+            fragmentBytes: bytes,
+            lastMarkCovered,
+            priorOps: plan.ops as unknown as TreeDocOp[],
+          }
+        );
+        landed = result.ok;
+        return {
+          committed: result.ok,
+          rejected: !result.ok,
+          opCount: result.ok ? 1 : 0,
+          ...(result.ok ? {} : { reason: result.detail ?? result.reason }),
+        } as unknown as ReturnType<TreeDocxSession['applyPmDoc']>;
+      },
+      () => collapsedAt(target)
+    );
+    return landed;
+  }
+
+  /** The paste router entry — fidelity order with continuous degrade to plain. */
+  function pasteRichNow(text: string, html: string | null): boolean {
+    const forcePlain =
+      forcePlainPasteArmedAt !== null &&
+      now() - forcePlainPasteArmedAt < FORCE_PLAIN_PASTE_WINDOW_MS;
+    forcePlainPasteArmedAt = null;
+    const lane = routePaste(
+      {
+        richLaneOpen:
+          editingMode === 'edit' && storyScope().kind === 'body' && cellSelection === null,
+        pasteFragment: (bytes, lastMarkCovered) => pasteFragmentBytes(bytes, lastMarkCovered),
+        insertPlainText,
+      },
+      { html, text, forcePlain }
+    );
+    return lane !== 'none';
   }
 
   // Selection lives on the document, so this is where the browser reports it changing —

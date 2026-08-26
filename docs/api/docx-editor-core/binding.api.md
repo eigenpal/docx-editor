@@ -113,6 +113,7 @@ export interface TreeDocxSession extends TreeDocxSessionView {
 
 // @public
 export interface TreeDocxSessionView {
+    applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
     // (undocumented)

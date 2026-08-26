@@ -998,6 +998,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Copy writes plain text and HTML with an embedded document fragment; paste restores styles, lists, tables, links, images, and footnotes. Sections, headers, footers, and comments do not travel on the clipboard.',
   },
   {
     id: 'collab.undo-redo',

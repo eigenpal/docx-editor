@@ -42,6 +42,7 @@ import {
   ContextMenuInsertRowBelow,
   ContextMenuItem,
   ContextMenuPaste,
+  ContextMenuPasteWithoutFormatting,
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,
@@ -101,6 +102,11 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },
+  {
+    kind: 'row',
+    id: 'edit.pasteWithoutFormatting',
+    render: () => <ContextMenuPasteWithoutFormatting />,
+  },
   { kind: 'separator', id: 'sep.clipboard' },
   { kind: 'row', id: 'edit.delete', render: () => <ContextMenuDelete /> },
   { kind: 'row', id: 'edit.selectAll', render: () => <ContextMenuSelectAll /> },
@@ -486,6 +492,7 @@ export interface DocxEditorContextMenuNamespace {
   readonly Cut: typeof ContextMenuCut;
   readonly Copy: typeof ContextMenuCopy;
   readonly Paste: typeof ContextMenuPaste;
+  readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
   readonly Delete: typeof ContextMenuDelete;
   readonly SelectAll: typeof ContextMenuSelectAll;
   readonly InsertRowAbove: typeof ContextMenuInsertRowAbove;
@@ -511,6 +518,7 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   Cut: ContextMenuCut,
   Copy: ContextMenuCopy,
   Paste: ContextMenuPaste,
+  PasteWithoutFormatting: ContextMenuPasteWithoutFormatting,
   Delete: ContextMenuDelete,
   SelectAll: ContextMenuSelectAll,
   InsertRowAbove: ContextMenuInsertRowAbove,

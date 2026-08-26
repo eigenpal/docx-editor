@@ -679,6 +679,10 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     // (undocumented)
     mergeCells: Record<never, never>;
     paste: {
+        html?: string;
+        text: string;
+    };
+    pasteWithoutFormatting: {
         text: string;
     };
     // (undocumented)

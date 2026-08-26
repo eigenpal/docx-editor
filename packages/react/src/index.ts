@@ -156,6 +156,7 @@ export {
   ContextMenuDelete,
   ContextMenuItem,
   ContextMenuPaste,
+  ContextMenuPasteWithoutFormatting,
   ContextMenuSelectAll,
   ContextMenuDeleteTable,
   ContextMenuDeleteTableColumn,

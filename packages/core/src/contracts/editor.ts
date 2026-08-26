@@ -1315,19 +1315,30 @@ export interface EditorCommands
   cut: Record<never, never>;
 
   /**
-   * Insert `text` at the selection, replacing it, with newlines becoming real paragraph
-   * boundaries.
+   * Insert the clipboard payload at the selection, replacing it.
    *
-   * TEXT COMES IN. `exec` is synchronous and reading the clipboard is not — it prompts in
-   * Chrome and is refused outright by Firefox and Safari — so an engine-owned read would
-   * have to either turn every command's result into a promise or lie about this one's. The
-   * caller reads the clipboard inside the click or keystroke that asked for the paste,
-   * which is where the permission gesture belongs, and hands the engine a string.
+   * PAYLOAD COMES IN. `exec` is synchronous and reading the clipboard is not — it prompts
+   * in Chrome and is refused outright by Firefox and Safari — so an engine-owned read
+   * would have to either turn every command's result into a promise or lie about this
+   * one's. The caller reads the clipboard inside the click or keystroke that asked for
+   * the paste, which is where the permission gesture belongs, and hands the engine what
+   * it read.
    *
-   * Plain text only. There is no rich lane and no `pastePlain` twin, because a second
-   * command would be a second name for exactly this behavior.
+   * `html`, when present, routes through the same fidelity order as the paste event:
+   * an embedded fragment first, then the bounded external-HTML projection, then `text` —
+   * degrading on any refusal. Without `html`, the plain lane inserts `text` with
+   * newlines becoming real paragraph boundaries, as this command always has.
    */
-  paste: { text: string };
+  paste: { text: string; html?: string };
+
+  /**
+   * Insert `text` as if typed, whatever richer flavours the clipboard held.
+   *
+   * The plain twin `paste` deliberately lacked while there was no rich lane; with one,
+   * "paste" and "paste without formatting" are two different user intentions
+   * (Cmd+V / Cmd+Shift+V) and each needs a name a menu row can call.
+   */
+  pasteWithoutFormatting: { text: string };
 }
 
 /**

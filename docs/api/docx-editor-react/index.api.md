@@ -297,6 +297,15 @@ export namespace ContextMenuPaste {
 }
 
 // @public
+export function ContextMenuPasteWithoutFormatting(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuPasteWithoutFormatting {
+    var // (undocumented)
+    docxRow: "edit.pasteWithoutFormatting";
+}
+
+// @public
 export const ContextMenuRefreshToc: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
@@ -401,6 +410,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
+    // (undocumented)
+    readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
     // (undocumented)
     readonly RefreshToc: typeof ContextMenuRefreshToc;
     // (undocumented)
@@ -782,7 +793,7 @@ export interface DocxEditorRulerProps {
     unit?: 'inch' | 'cm';
 }
 
-// @public @deprecated (undocumented)
+// @public @deprecated
 export function DocxEditorShell(input: {
     className: string | undefined;
     containerRef: React.Ref<HTMLDivElement>;
@@ -791,7 +802,7 @@ export function DocxEditorShell(input: {
     editorContainerStyle: CSSProperties;
     editorContentRef: React.Ref<HTMLDivElement>;
     editorScrollLeft: number;
-    expandedSidebarItem: string | null;
+    expandedSidebarItem?: string | null;
     fileInputs: ReactNode;
     horizontalRulerProps: HorizontalRulerProps_2;
     i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
@@ -815,7 +826,7 @@ export function DocxEditorShell(input: {
     sidebarOpen: boolean;
     toolbar: ReactNode;
     toolbarHeight: number;
-    trackedChanges: readonly TrackedChangeSummary[];
+    trackedChanges?: readonly TrackedChangeSummary[];
     verticalRulerProps: VerticalRulerProps$1;
 }): react.JSX.Element;
 

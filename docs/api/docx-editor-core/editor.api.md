@@ -1299,6 +1299,7 @@ export interface PaginatedSurface {
     // (undocumented)
     applyImageProperties(input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
+    armForcePlainPaste(): void;
     bookmarks(): BookmarkIndex;
     canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
     canInsertTable(rows: number, cols: number): boolean;
@@ -1314,6 +1315,10 @@ export interface PaginatedSurface {
     convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
     // (undocumented)
     convertNote(fromKind: 'footnote' | 'endnote', noteId: number): boolean;
+    copyFlavours(): {
+        readonly html: string | null;
+        readonly text: string;
+    };
     currentPage(mode?: 'viewport' | 'caret'): number;
     // (undocumented)
     deleteBackward(): void;
@@ -1398,6 +1403,7 @@ export interface PaginatedSurface {
     notePreviewText(scopeId: string): string | null;
     notePropertiesState(): NotePropertiesStateSnapshot | null;
     overlayCoordinates(): SurfaceOverlayCoordinates;
+    pasteRich(text: string, html: string | null): boolean;
     proposeTextChange(kind: 'insertion' | 'deletion' | 'replacement', text: string, author?: string): boolean;
     publishedLayout(): SemanticLayout;
     // (undocumented)
@@ -2192,6 +2198,7 @@ export interface TreeApplyResult {
 
 // @public
 export interface TreeDocxSessionView {
+    applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
     // (undocumented)

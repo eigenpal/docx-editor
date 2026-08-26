@@ -98,19 +98,47 @@ function run(command, args, options = {}) {
   return result.stdout ?? '';
 }
 
+// A `~x.y.z` range's satisfaction for a staged internal version, without a semver dep.
+// Only the tilde form appears in this repo's internal peer floors; anything else is
+// treated as unsatisfied so the staging below rewrites it the way `changeset version`
+// would rather than shipping a tarball npm refuses.
+function tildeRangeSatisfies(range, version) {
+  const match = /^~(\d+)\.(\d+)\.(\d+)$/.exec(range);
+  if (!match) return false;
+  const [major, minor, patch] = version.split('.').map(Number);
+  return Number(match[1]) === major && Number(match[2]) === minor && patch >= Number(match[3]);
+}
+
 function packPackage(packagePath) {
   const source = path.join(ROOT, packagePath);
   const manifest = JSON.parse(readFileSync(path.join(source, 'package.json'), 'utf8'));
   const pendingVersion = pendingVersions.get(manifest.name);
+  // Mirror what `changeset version` will publish: the bumped version AND, for a bump that
+  // leaves a peer floor behind (a minor over a `~x.y.z` floor), the rewritten floor.
+  // Staging only the version made every adapter tarball peer-refuse the core tarball on
+  // any pending minor, while the real release rewrites the floor in the same commit.
+  const stagedPeers = {};
+  let peersChanged = false;
+  for (const [peerName, range] of Object.entries(manifest.peerDependencies ?? {})) {
+    const peerPending = pendingVersions.get(peerName);
+    if (peerPending && !tildeRangeSatisfies(range, peerPending)) {
+      stagedPeers[peerName] = `~${peerPending}`;
+      peersChanged = true;
+    } else {
+      stagedPeers[peerName] = range;
+    }
+  }
   let packSource = source;
-  if (pendingVersion && pendingVersion !== manifest.version) {
+  if ((pendingVersion && pendingVersion !== manifest.version) || peersChanged) {
     mkdirSync(stagedPackagesDir, { recursive: true });
     packSource = path.join(stagedPackagesDir, path.basename(packagePath));
     cpSync(source, packSource, { recursive: true });
-    writeFileSync(
-      path.join(packSource, 'package.json'),
-      `${JSON.stringify({ ...manifest, version: pendingVersion }, null, 2)}\n`
-    );
+    const staged = {
+      ...manifest,
+      ...(pendingVersion ? { version: pendingVersion } : {}),
+      ...(manifest.peerDependencies ? { peerDependencies: stagedPeers } : {}),
+    };
+    writeFileSync(path.join(packSource, 'package.json'), `${JSON.stringify(staged, null, 2)}\n`);
   }
   const output = run('npm', ['pack', packSource, '--json', '--pack-destination', packDir], {
     capture: true,
