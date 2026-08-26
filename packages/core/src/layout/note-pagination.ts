@@ -1445,11 +1445,65 @@ function cloneEmptyOverflowPage(
       ? {
           pageFieldSource: {
             ...template.pageFieldSource,
-            pageNumber: template.pageFieldSource.pageNumber + (index - template.index),
+            // ONE PAGE after its template, stated rather than derived. `index` is an array
+            // position and `template.index` is the layout index the body pass gave it, and the
+            // notes pass reindexes only at the end — so once anything has been inserted in
+            // front of the template the two spaces differ, and their difference is a count of
+            // insertions, not a page distance. Every minted sheet sits directly after the page
+            // it was cloned from, which is what this number means.
+            pageNumber: template.pageFieldSource.pageNumber + 1,
           },
         }
       : {}),
   };
+}
+
+/**
+ * Re-resolve the shell of every minted sheet that later insertions slid along.
+ *
+ * A sheet resolves its shell when it is minted, from where it lands at that moment. That is
+ * final for a sheet inserted inside its own section, but not for the footnote drain: the drain
+ * appends at the document's end BEFORE the section loop runs, because that is the document
+ * order Word uses, and an earlier section's `sectEnd` insertion then moves every drain sheet
+ * one position along for each sheet it adds. Under `w:evenAndOddHeaders` an odd number of them
+ * leaves each drain sheet showing the other variant's header over the other variant's box.
+ *
+ * Runs BEFORE `reindexAndFinalizeFields`, while a body-pass page still carries the index the
+ * layout gave it — that is what a section lookup reads. From here an array position IS the
+ * final page index, so the two inputs the resolver wants are both in hand.
+ *
+ * A sheet whose note area would no longer start inside the new content box KEEPS the shell it
+ * was minted with. Its notes were fitted to that box and this pass cannot re-fit them, and a
+ * sheet that is wrong about its variant is better than one whose own notes fall outside it.
+ * The box's BOTTOM is unmoved whenever only the header variant differs, and a `pageBottom` note
+ * area hangs from that bottom, so the common case adopts the new shell untouched.
+ */
+function resettleMintedSheets(pages: readonly PageRecord[], layout: SemanticLayout): PageRecord[] {
+  let sectionAnchorIndex: number | null = null;
+  let changed = false;
+  const next = pages.map((page, position) => {
+    if (page.noteStream === undefined) {
+      sectionAnchorIndex = page.index;
+      return page;
+    }
+    if (sectionAnchorIndex === null) return page;
+    const shell = overflowPageShellAt(layout, sectionAnchorIndex, position, page.box);
+    if (!shell) return page;
+    const top = page.box.y + shell.insets.top;
+    if (top === page.contentBox.y && shell.insets.height === page.contentBox.height) return page;
+    const contentBox = { ...page.contentBox, y: top, height: shell.insets.height };
+    const areas = [page.footnotes, page.endnotes];
+    if (areas.some((area) => area !== undefined && area.box.y < top)) return page;
+    changed = true;
+    const { header: _header, footer: _footer, ...rest } = page;
+    return {
+      ...rest,
+      contentBox,
+      ...(shell.header ? { header: shell.header } : {}),
+      ...(shell.footer ? { footer: shell.footer } : {}),
+    };
+  });
+  return changed ? next : [...pages];
 }
 
 /** Section indexes represented by body paragraph fragments on a page. */
@@ -2240,6 +2294,30 @@ export function attachNotesToLayout(
 
   const pageCountBeforeOverflow = pages.length;
 
+  // Drain footnote continuations that outlive the final body page.
+  //
+  // BEFORE the section loop, because that is the document order: footnote continuation belongs
+  // to the section's running content, and its `sectEnd` endnotes come after all of it. Moving
+  // this after the loop put a last section's endnote sheets in front of its own continuation.
+  //
+  // The cost is that an earlier section's insertion slides these sheets along after they were
+  // minted, so the shell each resolved no longer describes where it sits. `resettleMintedSheets`
+  // below re-resolves them once every insertion is done.
+  if (carry.size > 0) {
+    const drained = drainFootnoteCarryPages(
+      pages,
+      carry,
+      input,
+      noteMarks,
+      reasons,
+      overflowBudget,
+      separatorCache,
+      mint
+    );
+    pages = drained.pages;
+    carry = drained.carry;
+  }
+
   // Place sectEnd notes on the true last page of each section (body fragment ownership),
   // inserting overflow sheets before the next section rather than advancing into it.
   if (endnotesBySection.size > 0 && pages.length > 0) {
@@ -2275,34 +2353,6 @@ export function attachNotesToLayout(
     }
   }
 
-  // Drain footnote continuations that outlive the final body page.
-  //
-  // AFTER the section loop, not before it. A drain sheet resolves its shell from where it
-  // lands, and the shell has to still describe that page when the pass finishes — but a
-  // `sectEnd` run inserts inside its own section, which is in FRONT of sheets appended at the
-  // end. Draining first meant an earlier section's insertion slid every drain sheet one page
-  // along, and under `w:evenAndOddHeaders` an odd number of them left each sheet showing the
-  // other variant's header over the other variant's content box.
-  //
-  // Nothing above depends on these sheets existing yet: `lastPageIndexForSection` and
-  // `sectionEndInsertBound` both walk past a `footnote-drain` page, and `isEndnoteHostEligible`
-  // refuses one as a host. The doc-end run below still lands after them, which is the order it
-  // had before.
-  if (carry.size > 0) {
-    const drained = drainFootnoteCarryPages(
-      pages,
-      carry,
-      input,
-      noteMarks,
-      reasons,
-      overflowBudget,
-      separatorCache,
-      mint
-    );
-    pages = drained.pages;
-    carry = drained.carry;
-  }
-
   if (endnotesDoc.length > 0 && pages.length > 0) {
     // Start on the last eligible host (body / endnote overflow), never the final
     // footnote-drain sheet — room above footnotes on the last body page is fair game.
@@ -2320,6 +2370,8 @@ export function attachNotesToLayout(
   }
 
   if (pages.length !== pageCountBeforeOverflow) {
+    // Every insertion is done, so a minted sheet's array position is the page index it keeps.
+    pages = resettleMintedSheets(pages, layout);
     pages = reindexAndFinalizeFields(pages);
   }
 

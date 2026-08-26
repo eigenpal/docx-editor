@@ -748,6 +748,14 @@ describe('drain sheets behind a later insertion', () => {
       Math.max(...inserted.map((page) => page.index))
     );
 
+    for (const page of drain) {
+      // ONE page after the sheet it was cloned from. Deriving this from the difference between
+      // an array position and a layout index counts the insertions in front of the template
+      // instead, which inflates it by one per sheet an earlier section added.
+      const before = layout.pages[page.index - 1]!;
+      expect(page.pageFieldSource?.pageNumber).toBe((before.pageFieldSource?.pageNumber ?? 0) + 1);
+    }
+
     for (const page of [...drain, ...inserted]) {
       const expected = (page.index + 1) % 2 === 0 ? 'even' : 'default';
       expect(page.header?.variant).toBe(expected);
@@ -756,5 +764,100 @@ describe('drain sheets behind a later insertion', () => {
       expect(page.contentBox.y - page.box.y).toBeCloseTo(top, 6);
       expect(page.contentBox.height).toBeCloseTo(geometry.height - top - geometry.margin.bottom, 6);
     }
+  });
+});
+
+describe('sheet order in a last section that both drains and overflows', () => {
+  /**
+   * One section whose last body page carries a footnote that drains AND whose `sectEnd`
+   * endnotes overflow.
+   *
+   * Footnote continuation is the section's running content, so it comes first; the section's
+   * endnotes come after all of it. `sectionEndInsertBound` returns `pages.length` for a last
+   * section, so its endnote sheets append at the document's end — which only lands after the
+   * continuation while the drain has already run.
+   */
+  function lastSectionDoc(): Uint8Array {
+    const notes = (label: string, count: number) =>
+      Array.from(
+        { length: count },
+        (_, i) => `<w:p><w:r><w:t>${label} ${i} ${'z'.repeat(60)}</w:t></w:r></w:p>`
+      ).join('');
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}">` +
+          `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+          `<Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/>` +
+          '</Relationships>'
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
+          '<w:p><w:r><w:t>Body</w:t>' +
+          '<w:footnoteReference w:id="1"/><w:endnoteReference w:id="1"/></w:r></w:p>' +
+          '<w:sectPr>' +
+          '<w:pgSz w:w="12240" w:h="4320"/>' +
+          '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"' +
+          ' w:header="360" w:footer="360"/>' +
+          '<w:endnotePr><w:pos w:val="sectEnd"/></w:endnotePr>' +
+          '</w:sectPr>' +
+          '</w:body></w:document>'
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}">` +
+          '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>' +
+          '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>' +
+          `<w:footnote w:id="1">${notes('F', 30)}</w:footnote>` +
+          '</w:footnotes>'
+      ),
+      'word/endnotes.xml': strToU8(
+        `<w:endnotes xmlns:w="${W}">` +
+          '<w:endnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>' +
+          '<w:endnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>' +
+          `<w:endnote w:id="1">${notes('E', 30)}</w:endnote>` +
+          '</w:endnotes>'
+      ),
+    });
+  }
+
+  test('footnote continuation comes before the section endnotes', () => {
+    const loaded = readOoxmlPackage(lastSectionDoc());
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const sectEnd = resolveEndnoteProperties({ pos: 'sectEnd' });
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer,
+      producer: 'order',
+      notes: {
+        footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+        endnotesPart: resolveNotesPart(loaded.package, 'endnote'),
+        footnotePropsBySection: [documentFootnoteProps],
+        endnotePropsBySection: [sectEnd],
+        documentFootnoteProps,
+        documentEndnoteProps: sectEnd,
+        measurer,
+        producer: 'order',
+      },
+    });
+
+    const drain = layout.pages.filter((page) => page.noteStream === 'footnote-drain');
+    const overflow = layout.pages.filter((page) => page.noteStream === 'endnote-overflow');
+    expect(drain.length).toBeGreaterThan(0);
+    expect(overflow.length).toBeGreaterThan(0);
+    // Continuation first, endnotes after — every one of them.
+    expect(Math.max(...drain.map((page) => page.index))).toBeLessThan(
+      Math.min(...overflow.map((page) => page.index))
+    );
   });
 });
