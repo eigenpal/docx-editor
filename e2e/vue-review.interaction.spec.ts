@@ -1,17 +1,12 @@
 // Vue review rail and chrome — user-report flows on the composed demo.
 
 import { expect, test, type Page } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const VUE_URL = 'http://localhost:5274/';
 const CLEAN_URL = `${VUE_URL}?fixture=review-clean-demo.docx`;
 const COMMENTED_URL = `${VUE_URL}?fixture=review-nav-demo.docx`;
 const SCROLLER = '.docx-editor__scroll-container';
-
-// The demo mounts the editor Root BEFORE the document bytes arrive, so the packaged
-// loading overlay paints a skeleton sheet that also carries `.docx-page`. Waiting on the
-// bare class clears the gate on that placeholder and measures an 816px default sheet.
-// Every wait below excludes it, so the gate means "the real document is painted".
-const PAINTED_PAGE = '.docx-page:not(.docx-editor__loading-page)';
 
 async function waitForEditor(page: Page, url = VUE_URL): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded' });

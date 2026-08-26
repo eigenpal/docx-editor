@@ -1,12 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { PAINTED_PAGE } from './painted-page.ts';
 
 const VUE_URL = 'http://localhost:5274/';
-
-// The demo mounts the editor Root BEFORE the document bytes arrive, so the packaged
-// loading overlay paints a skeleton sheet that also carries `.docx-page`. Waiting on the
-// bare class clears the gate on that placeholder and measures an 816px default sheet.
-// Every wait below excludes it, so the gate means "the real document is painted".
-const PAINTED_PAGE = '.docx-page:not(.docx-editor__loading-page)';
 
 test.describe('Vue contextual interactions', () => {
   test('editing mode moves focus into its open menu', async ({ page }) => {
