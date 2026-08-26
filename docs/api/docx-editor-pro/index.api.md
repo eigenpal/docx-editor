@@ -27,7 +27,7 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
     // (undocumented)
-    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+    readonly session: EditorCollaborationSession;
 }
 
 // @public

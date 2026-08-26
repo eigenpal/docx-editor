@@ -807,6 +807,8 @@ describe('full-document collaboration replicates every authorable change class',
     };
     await attempt();
     expect(alice.room.session.status()).toBe('ready');
+    expect(alice.room.session.statusSnapshot().reason).toBeUndefined();
+    expect(alice.room.session.statusSnapshot().lastFailure?.code).toBe('unknown-logical-id');
     await attempt();
     await attempt();
     expect(alice.room.session.status()).toBe('error');

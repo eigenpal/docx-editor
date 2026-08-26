@@ -23,7 +23,7 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
     // (undocumented)
-    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+    readonly session: EditorCollaborationSession;
 }
 
 // @public
@@ -771,6 +771,10 @@ export function useCollaborationStatus(session: MaybeRefOrGetter<EditorCollabora
 
 // @public
 export interface UseCollaborationStatusReturn {
+    // (undocumented)
+    readonly lastFailure: Readonly<Ref<CollaborationFailure | undefined>>;
+    // (undocumented)
+    readonly reason: Readonly<Ref<CollaborationFailure | undefined>>;
     // (undocumented)
     readonly status: Readonly<Ref<CollaborationStatus | 'inactive'>>;
 }

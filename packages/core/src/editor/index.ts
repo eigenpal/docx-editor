@@ -178,7 +178,6 @@ export {
   type ReviewModelInput,
   type ReviewModuleContribution,
   type CollaborationModuleContribution,
-  type CollaborationSessionFactory,
 } from '../contracts/modules.ts';
 export {
   applyThemeShade,

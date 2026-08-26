@@ -47,6 +47,8 @@ function stubSession(
       sessionId: 'overlay-session',
       identity: { actorId: 'local', name: 'Local' },
       status: () => 'ready',
+      statusSnapshot: () =>
+        Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
       subscribeStatus: () => () => {},
       attach: () => () => {},
       gateOperations: () => null,

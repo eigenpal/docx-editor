@@ -51,6 +51,7 @@
     "src/vue",
     "src/__tests__/custom-node-vue-chrome.test.ts",
     "src/__tests__/review-sidebar-vue.test.ts",
-    "src/__tests__/review-vue-harness.ts"
+    "src/__tests__/review-vue-harness.ts",
+    "src/__tests__/use-webrtc-collaboration-vue.test.ts"
   ]
 }

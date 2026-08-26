@@ -292,11 +292,7 @@ export function mountPaginatedSurface(
     };
   }
   const session = opened.session;
-  const collaborationContribution = options.collaborationModel;
-  const collaborationSession =
-    typeof collaborationContribution?.session === 'function'
-      ? collaborationContribution.session('document')
-      : collaborationContribution?.session;
+  const collaborationSession = options.collaborationModel?.session;
   let scale = options.scale ?? 96 / 72;
   const tableLabelState = {
     resolve:

@@ -104,7 +104,7 @@ export const PACKAGES = [
       allowlist: {
         // Owned by `core` and imported from there — a consumer CAN name these, just not
         // through this package, which is the boundary `contracts/modules.ts` documents.
-        index: ['Editor', 'EditorModule', 'ExecResult', 'OoxmlPart', 'CollaborationSessionFactory', 'EditorCollaborationSession'],
+        index: ['Editor', 'EditorModule', 'ExecResult', 'OoxmlPart', 'EditorCollaborationSession'],
         // The react entry is a compound-parts barrel: every `Review*` here is a namespace
         // member reachable as `DocxEditorReview.Card`, and the three custom-node types are
         // re-exports of names the package's own index publishes. This is the noise case the
@@ -112,7 +112,7 @@ export const PACKAGES = [
         react: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
-          'CollaborationSessionFactory',
+          'CollaborationFailure',
           'CollaborationStatus',
           'CustomNodeDefinition',
           'Editor',
@@ -145,7 +145,7 @@ export const PACKAGES = [
         vue: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
-          'CollaborationSessionFactory',
+          'CollaborationFailure',
           'CollaborationStatus',
           'CustomNodeDefinition',
           'Editor',
@@ -157,8 +157,8 @@ export const PACKAGES = [
         // Owned by core or by this package's other entries. The collaboration barrel
         // names them in signatures but does not re-export them.
         collaboration: [
+          'CollaborationFailureCode',
           'CollaborationIdentity',
-          'CollaborationSessionFactory',
           'EditorCollaborationSession',
           'EditorModule',
           'ProLicenseOptions',
@@ -168,6 +168,11 @@ export const PACKAGES = [
           'YjsCollaborationBootstrap',
           'YjsCollaborationRoom',
         ],
+        // The WebRTC hook entries take an identity, hand back a session, and append a
+        // module. All three are core's, and a host already depends on core to mount an
+        // editor at all.
+        'react-webrtc': ['CollaborationIdentity', 'EditorCollaborationSession', 'EditorModule'],
+        'vue-webrtc': ['CollaborationIdentity', 'EditorCollaborationSession', 'EditorModule'],
       },
     },
   },

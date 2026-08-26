@@ -35,6 +35,14 @@ const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
 const PRO_REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/react.api.md');
 const PRO_VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/vue.api.md');
+// The WebRTC hook ships from its own subpath so a review-only bundle skips the network
+// provider. That puts it outside the `{react,vue}.api.md` pair above, so without its own
+// gate a React-only hook member would drift past every parity check in the repo.
+const PRO_REACT_WEBRTC_SNAPSHOT = path.join(
+  repoRoot,
+  'docs/api/docx-editor-pro/react-webrtc.api.md'
+);
+const PRO_VUE_WEBRTC_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/vue-webrtc.api.md');
 const CONTRACT_PATH = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 const VUE_DOCX_EDITOR_SOURCE = path.join(repoRoot, 'packages/vue/src/components/DocxEditor.tsx');
 
@@ -356,7 +364,7 @@ function validateProShape(pro) {
     errors.push('Missing or invalid top-level key: pro');
     return errors;
   }
-  for (const sub of ['exports', 'reviewParts']) {
+  for (const sub of ['exports', 'reviewParts', 'webrtcExports']) {
     const section = pro[sub];
     if (!section || typeof section !== 'object') {
       errors.push(`contract.pro.${sub} is required`);
@@ -409,6 +417,27 @@ function validateProShape(pro) {
     }
   }
   return errors;
+}
+
+/**
+ * Twin gate for the `pro/{react,vue}/webrtc` subpath pair. Same bucket semantics as the
+ * main pro entries, exports only: the hook publishes no compound parts and no interface
+ * whose members are pinned.
+ */
+function checkProWebrtcParity(contract, reactSnapshot, vueSnapshot, issues) {
+  const reactExports = extractTopLevelExportNames(reactSnapshot);
+  const vueExports = extractTopLevelExportNames(vueSnapshot);
+  // Freshness oracle: the hook plus its five types. A parse regression that emptied these
+  // sets would otherwise let the gate pass while comparing nothing.
+  const MIN_WEBRTC_EXPORTS = 5;
+  if (reactExports.size < MIN_WEBRTC_EXPORTS || vueExports.size < MIN_WEBRTC_EXPORTS) {
+    console.error(
+      `Pro WebRTC parity gate misconfigured: expected at least ${MIN_WEBRTC_EXPORTS} exports per snapshot, got React ${reactExports.size} / Vue ${vueExports.size}.`
+    );
+    process.exit(1);
+  }
+  applyProBuckets('PRO WEBRTC EXPORT', contract.pro.webrtcExports, reactExports, vueExports, issues);
+  return { reactExports: reactExports.size, vueExports: vueExports.size };
 }
 
 function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
@@ -801,6 +830,12 @@ function main() {
   const proReactSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_REACT_SNAPSHOT, 'utf8'));
   const proVueSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_VUE_SNAPSHOT, 'utf8'));
   const proStats = checkProParity(contract, proReactSnapshot, proVueSnapshot, issues);
+  const webrtcStats = checkProWebrtcParity(
+    contract,
+    normalizeSnapshotText(fs.readFileSync(PRO_REACT_WEBRTC_SNAPSHOT, 'utf8')),
+    normalizeSnapshotText(fs.readFileSync(PRO_VUE_WEBRTC_SNAPSHOT, 'utf8')),
+    issues
+  );
 
   // ── Report ───────────────────────────────────────────────────────────────
   const reactPropsCount = reactProps.size;
@@ -822,6 +857,9 @@ function main() {
   console.log(`  Inherited via EditorRefLike: ${refInherited.length}`);
   console.log(`  Vue-exclusive refs:    ${refVueOnly.length}`);
   console.log(`  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`);
+  console.log(
+    `  Pro webrtc exports:    React ${webrtcStats.reactExports} / Vue ${webrtcStats.vueExports}`
+  );
   console.log(`  Pro review parts:      ${proStats.reviewParts}`);
   console.log(
     `  Pro member-checked interfaces: ${proStats.memberCheckedInterfaces} (${proStats.memberChecks} member checks)`

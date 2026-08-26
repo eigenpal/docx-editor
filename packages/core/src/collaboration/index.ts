@@ -14,8 +14,19 @@ import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { CanonicalPrimitiveJournal } from './primitive-journal.ts';
 
-/** Lifecycle state of one collaboration replica. @public */
-export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
+export {
+  createCollaborationStatusTracker,
+  isCollaborationFailureCode,
+  type CollaborationFailure,
+  type CollaborationFailureCode,
+  type CollaborationStatus,
+  type CollaborationStatusSnapshot,
+} from './failure.ts';
+import type {
+  CollaborationFailureCode,
+  CollaborationStatus,
+  CollaborationStatusSnapshot,
+} from './failure.ts';
 
 /** Human or automation identity attached to authored collaboration transactions. @public */
 export interface CollaborationIdentity {
@@ -195,9 +206,22 @@ export interface EditorCollaborationSession {
   readonly sessionId: string;
   readonly identity: CollaborationIdentity;
   status(): CollaborationStatus;
-  subscribeStatus(listener: (status: CollaborationStatus, reason?: string) => void): () => void;
+  /**
+   * Cached status, current reason, and last failure.
+   *
+   * Same reference until any of those values change. A host that mounts after a
+   * recovered error still reads {@link CollaborationStatusSnapshot.lastFailure}.
+   */
+  statusSnapshot(): CollaborationStatusSnapshot;
+  subscribeStatus(
+    listener: (
+      status: CollaborationStatus,
+      reason?: CollaborationFailureCode,
+      detail?: string
+    ) => void
+  ): () => void;
   attach(port: CollaborationDocumentPort): () => void;
-  gateOperations(ops: readonly TreeDocOp[], scope: StoryScope): string | null;
+  gateOperations(ops: readonly TreeDocOp[], scope: StoryScope): CollaborationFailureCode | null;
   canUndo(): boolean;
   canRedo(): boolean;
   undo(): boolean;
@@ -222,27 +246,19 @@ export interface EditorCollaborationSession {
 }
 
 /**
- * Build a replica from the opened document id. Core calls this at most once
- * per mount. `EditorModule` still has no lifecycle hooks.
- *
- * @public
- */
-export type CollaborationSessionFactory = (documentId: string) => EditorCollaborationSession;
-
-/**
  * What a collaboration module contributes: the replica the surface attaches.
  *
  * @public
  */
 export interface CollaborationModuleContribution {
   /**
-   * A ready session, or a factory invoked once at surface mount with the
-   * opened package's document id.
+   * A ready session. The host creates the Yjs room, then wraps it with
+   * `collaborationModule({ session })`.
    *
-   * A ready session is the ordinary path. The host creates the Yjs room, then
-   * wraps it with `collaborationModule({ session })`.
+   * Core does not build a session from a document id: the opened package has
+   * no collaboration room identity. That identity is chosen before mount.
    */
-  readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+  readonly session: EditorCollaborationSession;
 }
 
 export {

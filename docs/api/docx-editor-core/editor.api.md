@@ -669,11 +669,8 @@ export function chromeSlotId(group: {
 
 // @public
 export interface CollaborationModuleContribution {
-    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+    readonly session: EditorCollaborationSession;
 }
-
-// @public
-export type CollaborationSessionFactory = (documentId: string) => EditorCollaborationSession;
 
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];

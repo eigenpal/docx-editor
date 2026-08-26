@@ -13,11 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * pulling a CRDT into a review-only bundle.
  */
 
-import type {
-  CollaborationModuleContribution,
-  CollaborationSessionFactory,
-  EditorModule,
-} from '@docx-editor.dev/core/editor';
+import type { CollaborationModuleContribution, EditorModule } from '@docx-editor.dev/core/editor';
 import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
 
@@ -28,7 +24,7 @@ import { rememberLicenseKey, type ProLicenseOptions } from '../license.ts';
  * @public
  */
 export interface CollaborationModuleOptions extends ProLicenseOptions {
-  readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+  readonly session: EditorCollaborationSession;
 }
 
 /** Build the collaboration module. Construction never validates the key and never touches the network. */

@@ -132,11 +132,7 @@ export function createServerAutomationHost(
     };
   }
   const store = new TreePackageStore(loaded.package, normalizeParagraphIdentity(main));
-  const collaborationModel = options.collaborationModel;
-  const collaboration =
-    typeof collaborationModel?.session === 'function'
-      ? collaborationModel.session('document')
-      : collaborationModel?.session;
+  const collaboration = options.collaborationModel?.session;
   let detachCollaboration = (): void => {};
   const port = packageStorePort(store, collaboration, () => detachCollaboration());
   const host = createAutomationHost({

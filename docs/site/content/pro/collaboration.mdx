@@ -1,6 +1,6 @@
 ---
 title: 'Realtime collaboration'
-description: 'Replicate a DOCX across peers with the Pro collaboration module. Register the module, then attach a Yjs session.'
+description: 'Replicate a DOCX across peers with the Pro collaboration module. Open a room with the framework hook, then pass the document and modules to the editor.'
 category: 'Pro'
 order: 64
 ---
@@ -15,7 +15,7 @@ Without that module, the editor does not attach a replica. Local undo stays in c
 
 ## Prerequisites
 
-Install the Pro package plus Yjs. Add `y-webrtc` only when you use the WebRTC helper:
+Install the Pro package plus Yjs. Add `y-webrtc` when you use the WebRTC helper:
 
 ```bash
 npm install @docx-editor.dev/pro yjs y-webrtc
@@ -23,42 +23,42 @@ npm install @docx-editor.dev/pro yjs y-webrtc
 
 `yjs` and `y-webrtc` are optional peers of Pro. `y-protocols` installs with Pro.
 
-## Register the module
+## Open a room with the hook
 
-Create a replica, then pass `collaborationModule({ session })` in `modules`.
+`useWebrtcCollaboration` owns the WebRTC room. It creates the replica, builds `modules`, and destroys the room when you leave.
 
-The editor reads modules when it is constructed. Keep the array stable across renders. Remount the editor when the session identity changes.
+The hook lives on a WebRTC subpath so a review-only bundle does not load a network provider. Import `@docx-editor.dev/pro/react/webrtc` or `@docx-editor.dev/pro/vue/webrtc`.
+
+Pass `room` to connect when the component mounts. Call `leave` when the session should end. While `pending` is true, wait before you mount the editor.
+
+The sugar `<DocxEditor>` host accepts `document` and `modules`. You do not need `DocxEditor.Root` to collaborate.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import { collaborationModule } from '@docx-editor.dev/pro';
-import { createWebrtcCollaboration } from '@docx-editor.dev/pro/collaboration/webrtc';
-import { useCollaborationStatus } from '@docx-editor.dev/pro/react';
+import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
-const room = await createWebrtcCollaboration({
-  roomId,
-  identity: { actorId: 'alex', name: 'Alex' },
-  bootstrap: { kind: 'create', document: bytes },
-});
+export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: Uint8Array }) {
+  const { document, modules, pending, error, leave } = useWebrtcCollaboration({
+    room: {
+      roomId,
+      identity: { actorId: 'alex', name: 'Alex' },
+      bootstrap: { kind: 'create', document: bytes },
+    },
+  });
 
-const MODULES = [collaborationModule({ session: room.session })];
+  if (error) return <p>{error.message}</p>;
+  if (pending || !document) return <p>Connecting…</p>;
 
-function Status() {
-  const { status } = useCollaborationStatus(room.session);
-  return <span>{status}</span>;
-}
-
-export function CollaborativeEditor() {
   return (
-    <DocxEditor.Root document={room.document} modules={MODULES}>
-      <Status />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
+    <>
+      <button type="button" onClick={() => leave()}>
+        Leave
+      </button>
+      <DocxEditor document={document} modules={modules} />
+    </>
   );
 }
 ```
@@ -69,40 +69,49 @@ export function CollaborativeEditor() {
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
-import { collaborationModule } from '@docx-editor.dev/pro';
-import { createWebrtcCollaboration } from '@docx-editor.dev/pro/collaboration/webrtc';
-import { useCollaborationStatus } from '@docx-editor.dev/pro/vue';
+import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
 
-const room = await createWebrtcCollaboration({
-  roomId,
-  identity: { actorId: 'alex', name: 'Alex' },
-  bootstrap: { kind: 'join' },
+const { document, modules, pending, error, leave } = useWebrtcCollaboration({
+  room: {
+    roomId,
+    identity: { actorId: 'alex', name: 'Alex' },
+    bootstrap: { kind: 'join' },
+  },
 });
-
-const MODULES = [collaborationModule({ session: room.session })];
-const { status } = useCollaborationStatus(room.session);
 </script>
 
 <template>
-  <DocxEditor.Root :document="room.document" :modules="MODULES">
-    <span>{{ status }}</span>
-    <DocxEditor.Viewport>
-      <DocxEditor.Content />
-    </DocxEditor.Viewport>
-  </DocxEditor.Root>
+  <p v-if="error">{{ error.message }}</p>
+  <p v-else-if="pending || !document">Connecting…</p>
+  <template v-else>
+    <button type="button" @click="leave()">Leave</button>
+    <DocxEditor :document="document" :modules="modules" />
+  </template>
 </template>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-The default Pro entry re-exports `collaborationModule` and does not import a network provider. Import `@docx-editor.dev/pro/collaboration` for the Yjs factories. Import `@docx-editor.dev/pro/collaboration/webrtc` for the WebRTC wrapper.
+Omit `room` when the user chooses share or join later. Call `connect` with the same options after that choice. `connect` and `leave` keep a stable identity across renders.
 
-## Own the Yjs document
+The editor reads `modules` at construction time. Remount when the session identity changes. Set `key` to the session `documentId`.
+
+The default Pro entry re-exports `collaborationModule` and does not import a network provider. Import `@docx-editor.dev/pro/collaboration` for the Yjs factories. Import `@docx-editor.dev/pro/collaboration/webrtc` for room helpers such as `createCollaborationRoomId`.
+
+## Use your own signaling
+
+`DEFAULT_SIGNALING_ENDPOINTS` is a public demo signaling endpoint. It is not a production service.
+
+For production, pass your own `signaling` URLs to `connect` or to the `room` option. You also need your own TURN servers. WebRTC peers cannot connect across many networks without TURN.
+
+## Own a Yjs document
 
 If you already own a `Y.Doc` and awareness instance, call `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It replicates the whole canonical package, which is what the WebRTC wrapper and the module use. You destroy those resources.
 
-The same entry also exports `createYjsCollaboration`, which replicates paragraph text alone. Use `createDocumentCollaboration` unless you want that narrower scope.
+The same entry exports `createTextCollaboration`, which replicates paragraph text alone. Use `createDocumentCollaboration` unless you want that narrower scope.
+
+`createYjsCollaboration` is a deprecated alias of `createTextCollaboration`. The old name does not say that the factory is text-only.
 
 ## Headless replica
 
@@ -124,6 +133,82 @@ const runtime = await DocxEditor.createCollaborative(room.document, room.session
   author: 'Agent',
 });
 ```
+
+Call `room.destroy()` when the replica should stop.
+
+## Compose the editor
+
+Use `DocxEditor.Root`, `Viewport`, and `Content` when you need custom chrome around the same `document` and `modules` values.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { useCollaborationStatus } from '@docx-editor.dev/pro/react';
+import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
+
+function Status({ session }: { session: ReturnType<typeof useWebrtcCollaboration>['session'] }) {
+  const { status } = useCollaborationStatus(session);
+  return <span>{status}</span>;
+}
+
+export function CollaborativeEditor() {
+  const collaboration = useWebrtcCollaboration({
+    room: {
+      roomId,
+      identity: { actorId: 'alex', name: 'Alex' },
+      bootstrap: { kind: 'create', document: bytes },
+    },
+  });
+  if (collaboration.pending || !collaboration.document) return <p>Connecting…</p>;
+  return (
+    <DocxEditor.Root document={collaboration.document} modules={collaboration.modules}>
+      <Status session={collaboration.session} />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { useCollaborationStatus } from '@docx-editor.dev/pro/vue';
+import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
+
+const { document, modules, pending, session } = useWebrtcCollaboration({
+  room: {
+    roomId,
+    identity: { actorId: 'alex', name: 'Alex' },
+    bootstrap: { kind: 'join' },
+  },
+});
+const { status } = useCollaborationStatus(session);
+</script>
+
+<template>
+  <p v-if="pending || !document">Connecting…</p>
+  <DocxEditor.Root v-else :document="document" :modules="modules">
+    <span>{{ status }}</span>
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Destructure the composable return so each ref is a top-level binding. Vue unwraps those bindings in the template.
+
+Do not destroy the room from an effect that lists the room object as a dependency. StrictMode runs that cleanup and can hand a destroyed room to the remount. The hook owns that lifetime.
 
 ## Limits
 

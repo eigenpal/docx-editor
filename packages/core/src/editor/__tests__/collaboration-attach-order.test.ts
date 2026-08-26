@@ -38,6 +38,8 @@ function publishingSession(
     sessionId: 'attach-order-session',
     identity: { actorId: 'local', name: 'Local' },
     status: () => 'ready',
+    statusSnapshot: () =>
+      Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
     attach: (port: CollaborationDocumentPort) => {
       const loaded = readOoxmlPackage(bytes);
@@ -123,5 +125,28 @@ describe('attaching a replica to a paginated surface', () => {
     container.remove();
 
     expect(events).toEqual(['published', 'detached']);
+  });
+
+  test('the attached port uses the session document id, not a placeholder', () => {
+    const ids: string[] = [];
+    const container = document.createElement('div');
+    const session = publishingSession(docx(paragraph('Remote')), () => {});
+    const result = mountPaginatedSurface(container, docx(paragraph('Alpha')), {
+      scale: 1,
+      collaborationModel: {
+        session: {
+          ...session,
+          documentId: 'room-from-host',
+          attach: (port) => {
+            ids.push(port.documentId);
+            return session.attach(port);
+          },
+        },
+      },
+    });
+    if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
+    opened.push({ surface: result.surface, container });
+
+    expect(ids).toEqual(['room-from-host']);
   });
 });

@@ -15,10 +15,20 @@
       "import": "./dist/react/index.js",
       "require": "./dist/react/index.cjs"
     },
+    "./react/webrtc": {
+      "types": "./dist/react/webrtc.d.ts",
+      "import": "./dist/react/webrtc.js",
+      "require": "./dist/react/webrtc.cjs"
+    },
     "./vue": {
       "types": "./dist/vue/index.d.ts",
       "import": "./dist/vue/index.js",
       "require": "./dist/vue/index.cjs"
+    },
+    "./vue/webrtc": {
+      "types": "./dist/vue/webrtc.d.ts",
+      "import": "./dist/vue/webrtc.js",
+      "require": "./dist/vue/webrtc.cjs"
     },
     "./collaboration": {
       "types": "./dist/collaboration/index.d.ts",

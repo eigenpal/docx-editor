@@ -26,8 +26,9 @@ import {
 // review module on the Root and mount the pane; without the module the same
 // document still opens (final-state view) and the review toolbar controls
 // disable with the engine's own "requires the pro review module" reason.
-import { collaborationModule, customNodesModule, reviewModule } from '@docx-editor.dev/pro';
+import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
 import { defaultFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
@@ -39,8 +40,6 @@ import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
 import { keepCaret } from './demoButtons';
 import { DemoHeaderButton } from './DemoHeaderButton';
 import { CollaborationControl } from './CollaborationDemo';
-import { createCollaborationRoomOwner } from './collaboration-room-owner';
-import type { WebrtcCollaborationRoom } from '@docx-editor.dev/pro/collaboration/webrtc';
 import {
   citationCardAt,
   CitationCardActions,
@@ -598,10 +597,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         ?.replace(/\.docx$/i, '') ?? 'Document'
   );
   const [showOutline, setShowOutline] = useState(false);
-  const [workingDocument, setWorkingDocument] = useState<Uint8Array | null>(null);
-  const [collaborationRoom, setCollaborationRoom] = useState<WebrtcCollaborationRoom | null>(null);
-  const [collaborationIntent, setCollaborationIntent] = useState<'share' | 'join' | null>(null);
-  const collaborationRoomOwner = useRef(createCollaborationRoomOwner<WebrtcCollaborationRoom>());
+  const collaboration = useWebrtcCollaboration({ modules: PRO_MODULES });
   // The citation details card, owned HERE so both openers share it: a click on the chip
   // (`CustomNodeChrome.onNodeClick`) and the context menu's Edit row (`onEditNode`).
   const [citationCard, setCitationCard] = useState<CitationCard | null>(null);
@@ -626,13 +622,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
     error: loadError,
   } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
 
-  useEffect(() => {
-    const owner = collaborationRoomOwner.current;
-    owner.reclaimOwner();
-    return () => owner.disposeOwner();
-  }, []);
-
-  const activeDocument = collaborationRoom?.document ?? workingDocument ?? bytes;
+  const activeDocument = collaboration.document ?? bytes;
 
   return (
     <div
@@ -655,17 +645,13 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
         // wrote was signed "Demo Reviewer", and `@w:author` is what a reviewer opening the file
         // in Word reads months later.
         <DocxEditor.Root
-          key={collaborationRoom?.session.documentId ?? 'local-document'}
+          key={collaboration.session?.documentId ?? 'local-document'}
           {...(activeDocument ? { document: activeDocument } : {})}
-          author={collaborationRoom?.session.identity.name ?? 'Demo Reviewer'}
+          author={collaboration.session?.identity.name ?? 'Demo Reviewer'}
           // The demo always opens ready to type: without an explicit mode, a document
           // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
           mode="edit"
-          modules={
-            collaborationRoom
-              ? [...PRO_MODULES, collaborationModule({ session: collaborationRoom.session })]
-              : PRO_MODULES
-          }
+          modules={collaboration.modules}
           {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
         >
@@ -676,23 +662,13 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
             onColorModeChange={setColorMode}
             onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}
             showAdapterSwitcher={showAdapterSwitcher}
-            collaborating={collaborationRoom !== null}
+            collaborating={collaboration.session !== null}
             collaborationControl={
               <CollaborationControl
-                room={collaborationRoom}
-                connectionIntent={collaborationIntent}
-                onStart={(room, intent) => {
-                  collaborationRoomOwner.current.adopt(room);
-                  setWorkingDocument(room.document);
-                  setCollaborationIntent(intent);
-                  setCollaborationRoom(room);
-                }}
-                onLeave={(document) => {
-                  collaborationRoomOwner.current.leave();
-                  setWorkingDocument(document);
-                  setCollaborationIntent(null);
-                  setCollaborationRoom(null);
-                }}
+                session={collaboration.session}
+                pending={collaboration.pending}
+                connect={collaboration.connect}
+                leave={collaboration.leave}
               />
             }
           />

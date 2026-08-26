@@ -8,12 +8,18 @@ import type { Awareness } from 'y-protocols/awareness';
 import { ORIGIN_IDS, type StoryScope, type TreeDocOp } from '@docx-editor.dev/core/store';
 import type {
   CollaborationDocumentPort,
+  CollaborationFailureCode,
   CollaborationIdentity,
   CollaborationLocalSelection,
   CollaborationParticipant,
   CollaborationRemoteSelection,
   CollaborationStatus,
+  CollaborationStatusSnapshot,
   EditorCollaborationSession,
+} from '@docx-editor.dev/core/collaboration';
+import {
+  createCollaborationStatusTracker,
+  isCollaborationFailureCode,
 } from '@docx-editor.dev/core/collaboration';
 import {
   CollaborationSchemaError,
@@ -228,10 +234,9 @@ class Session implements YjsCollaborationSession {
   readonly documentId: string;
   readonly sessionId: string;
   readonly identity: CollaborationIdentity;
-  private currentStatus: CollaborationStatus = 'initializing';
-  private statusReason: string | undefined;
+  private readonly statusState = createCollaborationStatusTracker();
   private readonly statusListeners = new Set<
-    (status: CollaborationStatus, reason?: string) => void
+    (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void
   >();
   private readonly selectionListeners = new Set<
     (selections: readonly CollaborationRemoteSelection[]) => void
@@ -274,18 +279,32 @@ class Session implements YjsCollaborationSession {
   }
 
   status(): CollaborationStatus {
-    return this.currentStatus;
+    return this.statusState.status();
   }
 
-  subscribeStatus(listener: (status: CollaborationStatus, reason?: string) => void): () => void {
+  statusSnapshot(): CollaborationStatusSnapshot {
+    return this.statusState.snapshot();
+  }
+
+  subscribeStatus(
+    listener: (
+      status: CollaborationStatus,
+      reason?: CollaborationFailureCode,
+      detail?: string
+    ) => void
+  ): () => void {
     this.statusListeners.add(listener);
     return () => this.statusListeners.delete(listener);
   }
 
   setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void {
     if (this.destroyed) return;
-    if (this.currentStatus === 'error' && status !== 'error') return;
-    this.setStatus(status, reason);
+    if (this.statusState.status() === 'error' && status !== 'error') return;
+    if (reason !== undefined && reason.length > 0) {
+      this.setStatus(status, 'transport', reason);
+      return;
+    }
+    this.setStatus(status);
   }
 
   attach(port: CollaborationDocumentPort): () => void {
@@ -314,7 +333,8 @@ class Session implements YjsCollaborationSession {
       } catch (error) {
         this.setStatus(
           'error',
-          error instanceof CollaborationSchemaError ? error.code : 'local-mirror-failed'
+          error instanceof CollaborationSchemaError ? error.code : 'local-mirror-failed',
+          error instanceof CollaborationSchemaError ? error.detail : undefined
         );
       }
     });
@@ -327,9 +347,9 @@ class Session implements YjsCollaborationSession {
     return () => this.detachPort?.();
   }
 
-  gateOperations(ops: readonly TreeDocOp[], scope: StoryScope): string | null {
+  gateOperations(ops: readonly TreeDocOp[], scope: StoryScope): CollaborationFailureCode | null {
     if (this.destroyed) return 'collaboration-session-destroyed';
-    if (this.currentStatus !== 'ready') return 'collaboration-session-not-ready';
+    if (this.statusState.status() !== 'ready') return 'collaboration-session-not-ready';
     if (!this.port) return 'collaboration-session-not-attached';
     if (scope.kind !== 'body') return 'experimental-collaboration-body-text-only';
     const paragraphLengths = new Map(
@@ -513,7 +533,8 @@ class Session implements YjsCollaborationSession {
     } catch (error) {
       this.setStatus(
         'error',
-        error instanceof CollaborationSchemaError ? error.code : 'shared-schema-invalid'
+        error instanceof CollaborationSchemaError ? error.code : 'shared-schema-invalid',
+        error instanceof CollaborationSchemaError ? error.detail : undefined
       );
       return;
     }
@@ -637,23 +658,34 @@ class Session implements YjsCollaborationSession {
           actorId: 'remote',
           operationId: `remote:${this.remoteCounter}`,
         });
-        if (!result.ok) throw new CollaborationSchemaError(result.reason);
+        if (!result.ok) {
+          throw new CollaborationSchemaError(
+            isCollaborationFailureCode(result.reason) ? result.reason : 'remote-apply-failed',
+            isCollaborationFailureCode(result.reason) ? undefined : result.reason
+          );
+        }
       }
     } catch (error) {
       this.setStatus(
         'error',
-        error instanceof CollaborationSchemaError ? error.code : 'remote-apply-failed'
+        error instanceof CollaborationSchemaError ? error.code : 'remote-apply-failed',
+        error instanceof CollaborationSchemaError ? error.detail : undefined
       );
     } finally {
       this.applyingSharedState = false;
     }
   }
 
-  private setStatus(status: CollaborationStatus, reason?: string): void {
-    if (this.currentStatus === status && this.statusReason === reason) return;
-    this.currentStatus = status;
-    this.statusReason = reason;
-    for (const listener of [...this.statusListeners]) listener(status, reason);
+  private setStatus(
+    status: CollaborationStatus,
+    code?: CollaborationFailureCode,
+    detail?: string
+  ): void {
+    if (!this.statusState.set(status, code, detail)) return;
+    const snapshot = this.statusState.snapshot();
+    for (const listener of [...this.statusListeners]) {
+      listener(snapshot.status, snapshot.reason?.code, snapshot.reason?.detail);
+    }
   }
 }
 

@@ -74,6 +74,8 @@ describe('document session attach', () => {
     // status here would tell that surface it is collaborating while it silently is not.
     expect(() => room.session.attach(second.port)).not.toThrow();
     expect(room.session.status()).toBe('error');
+    expect(room.session.statusSnapshot().reason?.code).toBe('port-already-attached');
+    expect(room.session.statusSnapshot().lastFailure?.code).toBe('port-already-attached');
     detach();
   });
 
@@ -82,6 +84,8 @@ describe('document session attach', () => {
     const { port } = storeAndPort(room.document, 'other-room');
     expect(() => room.session.attach(port)).not.toThrow();
     expect(room.session.status()).toBe('error');
+    expect(room.session.statusSnapshot().reason?.code).toBe('document-id-mismatch');
+    expect(room.session.statusSnapshot().lastFailure?.code).toBe('document-id-mismatch');
     expect(room.session.gateOperations([], BODY)).toBe('collaboration-session-not-ready');
   });
 });

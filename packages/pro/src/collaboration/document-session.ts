@@ -27,12 +27,16 @@ import {
 import type {
   CanonicalPrimitiveJournal,
   CollaborationDocumentPort,
+  CollaborationFailure,
+  CollaborationFailureCode,
   CollaborationIdentity,
   CollaborationLocalSelection,
   CollaborationParticipant,
   CollaborationRemoteSelection,
   CollaborationStatus,
+  CollaborationStatusSnapshot,
 } from '@docx-editor.dev/core/collaboration';
+import { createCollaborationStatusTracker } from '@docx-editor.dev/core/collaboration';
 import {
   DocumentRegistry,
   PackageMaterializer,
@@ -258,10 +262,9 @@ class DocumentSession implements YjsCollaborationSession {
   readonly documentId: string;
   readonly sessionId: string;
   readonly identity: CollaborationIdentity;
-  private currentStatus: CollaborationStatus = 'initializing';
-  private statusReason: string | undefined;
+  private readonly statusState = createCollaborationStatusTracker();
   private readonly statusListeners = new Set<
-    (status: CollaborationStatus, reason?: string) => void
+    (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void
   >();
   private readonly selectionListeners = new Set<
     (selections: readonly CollaborationRemoteSelection[]) => void
@@ -306,18 +309,32 @@ class DocumentSession implements YjsCollaborationSession {
   }
 
   status(): CollaborationStatus {
-    return this.currentStatus;
+    return this.statusState.status();
   }
 
-  subscribeStatus(listener: (status: CollaborationStatus, reason?: string) => void): () => void {
+  statusSnapshot(): CollaborationStatusSnapshot {
+    return this.statusState.snapshot();
+  }
+
+  subscribeStatus(
+    listener: (
+      status: CollaborationStatus,
+      reason?: CollaborationFailureCode,
+      detail?: string
+    ) => void
+  ): () => void {
     this.statusListeners.add(listener);
     return () => this.statusListeners.delete(listener);
   }
 
   setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void {
     if (this.destroyed) return;
-    if (this.currentStatus === 'error' && status !== 'error') return;
-    this.setStatus(status, reason);
+    if (this.statusState.status() === 'error' && status !== 'error') return;
+    if (reason !== undefined && reason.length > 0) {
+      this.setStatus(status, 'transport', reason);
+      return;
+    }
+    this.setStatus(status);
   }
 
   attach(port: CollaborationDocumentPort): () => void {
@@ -364,9 +381,9 @@ class DocumentSession implements YjsCollaborationSession {
   }
 
   /** Every authorable mutation replicates, so only session readiness gates a write. */
-  gateOperations(_ops: readonly TreeDocOp[], _scope: StoryScope): string | null {
+  gateOperations(_ops: readonly TreeDocOp[], _scope: StoryScope): CollaborationFailureCode | null {
     if (this.destroyed) return 'collaboration-session-destroyed';
-    if (this.currentStatus !== 'ready') return 'collaboration-session-not-ready';
+    if (this.statusState.status() !== 'ready') return 'collaboration-session-not-ready';
     if (!this.port) return 'collaboration-session-not-attached';
     return null;
   }
@@ -508,16 +525,18 @@ class DocumentSession implements YjsCollaborationSession {
   }
 
   private applyJournal(journal: CanonicalPrimitiveJournal): void {
-    let refusal: string | null = null;
     const shared = this.identityMap.translate(journal);
-    this.ydoc.transact(() => {
+    const refusal = this.ydoc.transact((): CollaborationFailure | null => {
       const published = this.publishJournalBlobs(journal);
-      if (published !== null) {
-        refusal = published;
-        return;
-      }
+      if (published !== null) return published;
       const result = applyPrimitiveJournal(this.registry, shared);
-      if (!result.ok) refusal = result.detail ? `${result.code}: ${result.detail}` : result.code;
+      if (!result.ok) {
+        return {
+          code: result.code as CollaborationFailureCode,
+          ...(result.detail ? { detail: result.detail } : {}),
+        };
+      }
+      return null;
     }, this.localOrigin);
     if (refusal === null) {
       this.refusedInARow = 0;
@@ -527,7 +546,7 @@ class DocumentSession implements YjsCollaborationSession {
     // The local store already committed this edit, so leaving it would make this replica
     // silently different from the room. Shared state is the authority: take it back.
     this.refusedInARow += 1;
-    this.setStatus('error', refusal);
+    this.setStatus('error', refusal.code, refusal.detail);
     this.publishSharedToPort();
     // The flush loop took the whole batch before notifying, so the journals after this one are
     // already in flight. A microtask is the earliest point the synchronous batch is over.
@@ -539,10 +558,13 @@ class DocumentSession implements YjsCollaborationSession {
     // `error` for one refusal would leave this author silently read-only for the life of the
     // room. Repeated refusals are a different case: they mean the next edit will refuse too,
     // so the session stops pretending it is healthy.
+    const current = this.statusState.snapshot().reason;
     if (
       this.refusedInARow < MAX_REFUSALS_IN_A_ROW &&
-      this.currentStatus === 'error' &&
-      this.statusReason === refusal
+      this.statusState.status() === 'error' &&
+      current !== undefined &&
+      current.code === refusal.code &&
+      current.detail === refusal.detail
     ) {
       this.setStatus('ready');
     }
@@ -555,24 +577,29 @@ class DocumentSession implements YjsCollaborationSession {
    * without the payload fails materialize with `missing-blob` and keeps the old
    * document — the image paste never arrives, even when the story text did.
    */
-  private publishJournalBlobs(journal: CanonicalPrimitiveJournal): string | null {
+  private publishJournalBlobs(journal: CanonicalPrimitiveJournal): CollaborationFailure | null {
     const port = this.port;
-    if (!port) return 'collaboration-session-not-attached';
+    if (!port) return Object.freeze({ code: 'collaboration-session-not-attached' as const });
     const needed = journal.effects.filter((effect) => effect.kind === 'putBinary');
     if (needed.length === 0) return null;
     const loaded = readOoxmlPackage(port.save());
-    if (!loaded.ok) return `blob-read:${loaded.reason}`;
+    if (!loaded.ok) return Object.freeze({ code: 'blob-read' as const, detail: loaded.reason });
     for (const effect of needed) {
       if (effect.kind !== 'putBinary') continue;
       const key = effect.descriptor.storageKey;
       const bytes =
         loaded.package.partBytes.get(key) ??
         loaded.package.partBytes.get(key.startsWith('/') ? key.slice(1) : `/${key}`);
-      if (!bytes) return `missing-local-blob:${key}`;
+      if (!bytes) return Object.freeze({ code: 'missing-local-blob' as const, detail: key });
       try {
         this.blobs.put(effect.descriptor.digest, bytes);
       } catch (error) {
-        return error instanceof CollaborationSchemaError ? error.code : 'blob-store-full';
+        return error instanceof CollaborationSchemaError
+          ? Object.freeze({
+              code: error.code,
+              ...(error.detail ? { detail: error.detail } : {}),
+            })
+          : Object.freeze({ code: 'blob-store-full' as const });
       }
     }
     return null;
@@ -611,7 +638,7 @@ class DocumentSession implements YjsCollaborationSession {
         operationId: `${this.sessionId}:remote:${this.remoteCounter}`,
       });
       if (!result.ok) {
-        this.setStatus('error', result.reason);
+        this.setStatus('error', 'remote-apply-failed', result.reason);
         return;
       }
       // Every node in the canonical tree now carries a logical id, so no local mapping is
@@ -620,7 +647,8 @@ class DocumentSession implements YjsCollaborationSession {
     } catch (error) {
       this.setStatus(
         'error',
-        error instanceof CollaborationSchemaError ? error.code : 'remote-apply-failed'
+        error instanceof CollaborationSchemaError ? error.code : 'remote-apply-failed',
+        error instanceof CollaborationSchemaError ? error.detail : undefined
       );
     } finally {
       this.applyingRemote = false;
@@ -646,11 +674,16 @@ class DocumentSession implements YjsCollaborationSession {
     this.awareness.setLocalStateField(AWARENESS_FIELD, payload);
   }
 
-  private setStatus(status: CollaborationStatus, reason?: string): void {
-    if (this.currentStatus === status && this.statusReason === reason) return;
-    this.currentStatus = status;
-    this.statusReason = reason;
-    for (const listener of [...this.statusListeners]) listener(status, reason);
+  private setStatus(
+    status: CollaborationStatus,
+    code?: CollaborationFailureCode,
+    detail?: string
+  ): void {
+    if (!this.statusState.set(status, code, detail)) return;
+    const snapshot = this.statusState.snapshot();
+    for (const listener of [...this.statusListeners]) {
+      listener(snapshot.status, snapshot.reason?.code, snapshot.reason?.detail);
+    }
   }
 }
 

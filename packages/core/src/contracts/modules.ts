@@ -19,10 +19,7 @@
  */
 
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
-import type {
-  CollaborationModuleContribution,
-  CollaborationSessionFactory,
-} from '../collaboration/index.ts';
+import type { CollaborationModuleContribution } from '../collaboration/index.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type {
   ReviewItem,
@@ -93,14 +90,11 @@ export interface ReviewModuleContribution {
 }
 
 /**
- * Build one replica when the surface mounts.
- *
- * Core calls this at most once per mount, from the existing attach site in
- * `paginated-surface.ts`. `EditorModule` still has no lifecycle hooks.
+ * The replica the surface attaches. The host passes a ready session.
  *
  * @public
  */
-export type { CollaborationSessionFactory, CollaborationModuleContribution };
+export type { CollaborationModuleContribution };
 
 /**
  * One registered capability module. Registration is construction-time

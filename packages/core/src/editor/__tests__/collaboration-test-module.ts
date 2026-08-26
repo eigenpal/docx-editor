@@ -23,6 +23,8 @@ export function stubCollaborationSession(
     sessionId: 'stub-session',
     identity: { actorId: 'stub-actor', name: 'Stub' },
     status: () => 'ready',
+    statusSnapshot: () =>
+      Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
     attach: (_port: CollaborationDocumentPort) => {
       state.attached = true;

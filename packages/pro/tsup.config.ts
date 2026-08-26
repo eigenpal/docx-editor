@@ -101,6 +101,7 @@ export default defineConfig([
     entry: {
       index: 'src/index.ts',
       'react/index': 'src/react/index.ts',
+      'react/webrtc': 'src/react/webrtc.ts',
       'collaboration/index': 'src/collaboration/index.ts',
       'collaboration/webrtc': 'src/collaboration/webrtc.ts',
     },
@@ -113,6 +114,7 @@ export default defineConfig([
     ...shared,
     entry: {
       'vue/index': 'src/vue/index.ts',
+      'vue/webrtc': 'src/vue/webrtc.ts',
     },
     dts: {
       compilerOptions: {

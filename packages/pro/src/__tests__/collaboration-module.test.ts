@@ -15,6 +15,8 @@ function stubSession(): EditorCollaborationSession {
     sessionId: 'stub-session',
     identity: { actorId: 'stub', name: 'Stub' },
     status: () => 'ready',
+    statusSnapshot: () =>
+      Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
     attach: () => () => {},
     gateOperations: () => null,

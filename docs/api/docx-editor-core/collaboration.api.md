@@ -165,6 +165,17 @@ export interface CollaborationDocumentPort {
 }
 
 // @public
+export interface CollaborationFailure {
+    // (undocumented)
+    readonly code: CollaborationFailureCode;
+    // (undocumented)
+    readonly detail?: string;
+}
+
+// @public
+export type CollaborationFailureCode = 'already-initialized' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
+
+// @public
 export interface CollaborationIdentity {
     // (undocumented)
     readonly actorId: string;
@@ -188,7 +199,7 @@ export interface CollaborationLocalSelection {
 
 // @public
 export interface CollaborationModuleContribution {
-    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+    readonly session: EditorCollaborationSession;
 }
 
 // @public
@@ -260,10 +271,17 @@ export interface CollaborationSelectionAddress {
 export type CollaborationSelectionKind = 'cells';
 
 // @public
-export type CollaborationSessionFactory = (documentId: string) => EditorCollaborationSession;
+export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
 
 // @public
-export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
+export interface CollaborationStatusSnapshot {
+    // (undocumented)
+    readonly lastFailure: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly reason: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly status: CollaborationStatus;
+}
 
 // @public
 export function createCollaborationDocumentPort(store: TreePackageStore, options: CreateCollaborationDocumentPortOptions): CollaborationDocumentPort;
@@ -273,6 +291,9 @@ export interface CreateCollaborationDocumentPortOptions {
     // (undocumented)
     readonly documentId: string;
 }
+
+// @internal (undocumented)
+export function createCollaborationStatusTracker(initial?: CollaborationStatus): CollaborationStatusTracker;
 
 // @public
 export interface EditorCollaborationSession {
@@ -288,7 +309,7 @@ export interface EditorCollaborationSession {
     readonly documentId: string;
     flushPendingJournals(): void;
     // (undocumented)
-    gateOperations(ops: readonly TreeDocOp[], scope: StoryScope): string | null;
+    gateOperations(ops: readonly TreeDocOp[], scope: StoryScope): CollaborationFailureCode | null;
     // (undocumented)
     readonly identity: CollaborationIdentity;
     // (undocumented)
@@ -302,15 +323,19 @@ export interface EditorCollaborationSession {
     setLocalSelection(selection: CollaborationLocalSelection | null): void;
     // (undocumented)
     status(): CollaborationStatus;
+    statusSnapshot(): CollaborationStatusSnapshot;
     // (undocumented)
     subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
     // (undocumented)
     subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
     // (undocumented)
-    subscribeStatus(listener: (status: CollaborationStatus, reason?: string) => void): () => void;
+    subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
     // (undocumented)
     undo(): boolean;
 }
+
+// @public
+export function isCollaborationFailureCode(value: string): value is CollaborationFailureCode;
 
 // (No @packageDocumentation comment for this package)
 

@@ -139,6 +139,10 @@ export default defineConfig(async () => {
               replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/index.ts'),
             },
             {
+              find: '@docx-editor.dev/pro/react/webrtc',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/react/webrtc.ts'),
+            },
+            {
               find: '@docx-editor.dev/pro/react',
               replacement: path.join(monorepoRoot, 'packages/pro/src/react/index.ts'),
             },

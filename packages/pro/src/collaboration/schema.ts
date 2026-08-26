@@ -11,7 +11,10 @@ import {
   writeOoxmlPackage,
 } from '@docx-editor.dev/core/store';
 import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
-import type { CollaborationParagraph } from '@docx-editor.dev/core/collaboration';
+import type {
+  CollaborationFailureCode,
+  CollaborationParagraph,
+} from '@docx-editor.dev/core/collaboration';
 
 /** Collaboration protocol version used by this proof. @public */
 export const PROTOCOL_VERSION = 1;
@@ -35,8 +38,11 @@ export interface CollaborationSchema {
 
 /** Typed collaboration schema or trust-boundary failure. @public */
 export class CollaborationSchemaError extends Error {
-  constructor(readonly code: string) {
-    super(code);
+  constructor(
+    readonly code: CollaborationFailureCode,
+    readonly detail?: string
+  ) {
+    super(detail ? `${code}: ${detail}` : code);
     this.name = 'CollaborationSchemaError';
   }
 }
@@ -78,18 +84,21 @@ export async function sha256(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
-function requiredString(root: Y.Map<unknown>, key: string): string {
+function requiredString(root: Y.Map<unknown>, key: 'documentId' | 'baselineSha256'): string {
   const value = root.get(key);
   if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
-    throw new CollaborationSchemaError(`invalid-${key}`);
+    throw new CollaborationSchemaError('invalid-shared-metadata', key);
   }
   return value;
 }
 
-function requiredInteger(root: Y.Map<unknown>, key: string): number {
+function requiredInteger(
+  root: Y.Map<unknown>,
+  key: 'protocolVersion' | 'schemaVersion' | 'baselineByteLength'
+): number {
   const value = root.get(key);
   if (!Number.isSafeInteger(value) || (value as number) < 0) {
-    throw new CollaborationSchemaError(`invalid-${key}`);
+    throw new CollaborationSchemaError('invalid-shared-metadata', key);
   }
   return value as number;
 }

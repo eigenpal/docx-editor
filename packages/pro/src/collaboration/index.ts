@@ -15,12 +15,21 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 export { collaborationModule, type CollaborationModuleOptions } from './collaboration-module.ts';
 export {
-  createYjsCollaboration,
+  createYjsCollaboration as createTextCollaboration,
   type CreateYjsCollaborationOptions,
   type YjsCollaborationBootstrap,
   type YjsCollaborationRoom,
   type YjsCollaborationSession,
 } from './session.ts';
+/**
+ * Replicate paragraph text only.
+ *
+ * @deprecated Use {@link createTextCollaboration} for paragraph text. Use
+ * {@link createDocumentCollaboration} to replicate the whole canonical package.
+ * `createYjsCollaboration` does not name that scope difference.
+ * @public
+ */
+export { createYjsCollaboration } from './session.ts';
 export {
   createDocumentCollaboration,
   type CreateDocumentCollaborationOptions,

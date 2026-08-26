@@ -13,14 +13,16 @@ export function collaborationModule(options: CollaborationModuleOptions): Editor
 // @public
 export interface CollaborationModuleOptions extends ProLicenseOptions {
     // (undocumented)
-    readonly session: EditorCollaborationSession | CollaborationSessionFactory;
+    readonly session: EditorCollaborationSession;
 }
 
 // @public
 export class CollaborationSchemaError extends Error {
-    constructor(code: string);
+    constructor(code: CollaborationFailureCode, detail?: string | undefined);
     // (undocumented)
-    readonly code: string;
+    readonly code: CollaborationFailureCode;
+    // (undocumented)
+    readonly detail?: string | undefined;
 }
 
 // @public
@@ -42,7 +44,9 @@ export interface CreateDocumentCollaborationOptions {
 }
 
 // @public
-export function createYjsCollaboration(options: CreateYjsCollaborationOptions): Promise<YjsCollaborationRoom>;
+function createYjsCollaboration(options: CreateYjsCollaborationOptions): Promise<YjsCollaborationRoom>;
+export { createYjsCollaboration as createTextCollaboration }
+export { createYjsCollaboration }
 
 // @public
 export interface CreateYjsCollaborationOptions {

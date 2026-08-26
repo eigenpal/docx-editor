@@ -4,14 +4,14 @@ import { useDocxEditor } from '@docx-editor.dev/react';
 import type {
   CollaborationParticipant,
   CollaborationStatus,
+  EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import { createT, en } from '@docx-editor.dev/i18n';
 import {
   createCollaborationRoomId,
-  createWebrtcCollaboration,
   validateRoomId,
-  type WebrtcCollaborationRoom,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
+import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/react/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
 const NAME_KEY = 'docx-editor-collaboration-name';
@@ -123,23 +123,23 @@ function ParticipantStack({ participants }: { participants: readonly Collaborati
 }
 
 export interface CollaborationControlProps {
-  readonly room: WebrtcCollaborationRoom | null;
-  readonly connectionIntent: 'share' | 'join' | null;
-  readonly onStart: (room: WebrtcCollaborationRoom, intent: 'share' | 'join') => void;
-  readonly onLeave: (document: Uint8Array) => void;
+  readonly session: EditorCollaborationSession | null;
+  readonly pending: boolean;
+  readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
+  readonly leave: (document: Uint8Array) => void;
 }
 
 export function CollaborationControl({
-  room,
-  connectionIntent,
-  onStart,
-  onLeave,
+  session,
+  pending,
+  connect,
+  leave,
 }: CollaborationControlProps) {
   const editor = useDocxEditor();
   const initialRoom = new URL(location.href).searchParams.get('room') ?? '';
-  const [open, setOpen] = useState(room ? connectionIntent === 'share' : initialRoom.length > 0);
+  const [open, setOpen] = useState(session !== null || initialRoom.length > 0);
   const [mode, setMode] = useState<'choice' | 'join' | 'connected'>(
-    room ? 'connected' : initialRoom ? 'join' : 'choice'
+    session ? 'connected' : initialRoom ? 'join' : 'choice'
   );
   const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? strings.guest);
   const [roomInput, setRoomInput] = useState(initialRoom);
@@ -151,26 +151,25 @@ export function CollaborationControl({
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!room) {
+    if (!session) {
       setParticipants([]);
       return;
     }
-    const update = () => setParticipants(room.session.participants());
+    const update = () => setParticipants(session.participants());
     update();
-    return room.session.subscribeParticipants(update);
-  }, [room]);
+    return session.subscribeParticipants(update);
+  }, [session]);
 
-  // The room object exists for as long as the transport does, so it cannot report health.
-  // Reading the session keeps the dialog from claiming "Connected" over a session that
-  // refuses every write.
+  // The session reports transport health. Reading it keeps the dialog from claiming
+  // "Connected" over a session that refuses every write.
   useEffect(() => {
-    if (!room) {
+    if (!session) {
       setStatus('initializing');
       return;
     }
-    setStatus(room.session.status());
-    return room.session.subscribeStatus((next) => setStatus(next));
-  }, [room]);
+    setStatus(session.status());
+    return session.subscribeStatus((next) => setStatus(next));
+  }, [session]);
 
   // `error` and `destroyed` are NOT "reconnecting". A replica reaches them by refusing an update
   // and keeping the copy it already had, so this peer is now editing a document the others do not
@@ -193,7 +192,7 @@ export function CollaborationControl({
     return () => removeEventListener('keydown', onKeyDown);
   }, [busy, open]);
 
-  const activeShareUrl = useMemo(() => (room ? shareUrl(room.session.documentId) : ''), [room]);
+  const activeShareUrl = useMemo(() => (session ? shareUrl(session.documentId) : ''), [session]);
 
   const rememberName = (): string => {
     const value = name.trim() || strings.guest;
@@ -202,13 +201,13 @@ export function CollaborationControl({
   };
 
   const start = async (kind: 'create' | 'join') => {
-    if (!editor || busy) return;
+    if (!editor || busy || pending) return;
     setBusy(true);
     setError(null);
     try {
       const displayName = rememberName();
       const roomId = kind === 'create' ? createCollaborationRoomId() : roomIdFrom(roomInput);
-      const next = await createWebrtcCollaboration({
+      await connect({
         roomId,
         identity: {
           actorId: `${displayName}:${crypto.randomUUID()}`,
@@ -224,7 +223,6 @@ export function CollaborationControl({
       url.search = '';
       url.searchParams.set('room', roomId);
       history.replaceState(null, '', url);
-      onStart(next, kind === 'create' ? 'share' : 'join');
       setMode('connected');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : strings.connectFailed);
@@ -233,12 +231,12 @@ export function CollaborationControl({
     }
   };
 
-  const leave = async () => {
-    if (!editor || busy) return;
+  const leaveRoom = async () => {
+    if (!editor || busy || pending) return;
     setBusy(true);
     setError(null);
     try {
-      onLeave(new Uint8Array(await editor.save()));
+      leave(new Uint8Array(await editor.save()));
       const url = new URL(location.href);
       url.searchParams.delete('room');
       history.replaceState(null, '', url);
@@ -254,26 +252,26 @@ export function CollaborationControl({
   return (
     <>
       <DemoHeaderButton
-        className={`demo-collaboration-trigger${room ? ' is-connected' : ''}${
-          room && diverged ? ' is-diverged' : ''
+        className={`demo-collaboration-trigger${session ? ' is-connected' : ''}${
+          session && diverged ? ' is-diverged' : ''
         }`}
         onClick={() => {
           setError(null);
-          setMode(room ? 'connected' : initialRoom ? 'join' : 'choice');
+          setMode(session ? 'connected' : initialRoom ? 'join' : 'choice');
           setOpen(true);
         }}
-        disabled={!editor || busy}
+        disabled={!editor || busy || pending}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-busy={busy}
+        aria-busy={busy || pending}
       >
-        {room ? <ParticipantStack participants={participants} /> : <CollaborationIcon />}
+        {session ? <ParticipantStack participants={participants} /> : <CollaborationIcon />}
         {/* A diverged replica still has peers in its participant list, so a headcount here
             reads as healthy while this copy's edits reach nobody. The trigger is the only
             collaboration state on screen once the dialog closes, so it has to carry the
             warning in WORDS: the class alone would leave the meaning in the colour. */}
         <span>
-          {!room
+          {!session
             ? strings.connect
             : diverged
               ? strings.outOfSyncShort
@@ -303,23 +301,23 @@ export function CollaborationControl({
                     </span>
                     <div>
                       <h2 id="collaboration-dialog-title">
-                        {room ? strings.roomTitle : strings.dialogTitle}
+                        {session ? strings.roomTitle : strings.dialogTitle}
                       </h2>
-                      <p>{room ? strings.roomSubtitle : strings.dialogSubtitle}</p>
+                      <p>{session ? strings.roomSubtitle : strings.dialogSubtitle}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     className="demo-collaboration-close"
                     onClick={() => setOpen(false)}
-                    disabled={busy}
+                    disabled={busy || pending}
                     aria-label={strings.close}
                   >
                     <CloseIcon />
                   </button>
                 </header>
 
-                {room && mode === 'connected' ? (
+                {session && mode === 'connected' ? (
                   <div className="demo-collaboration-body">
                     <div
                       className={`demo-collaboration-status${
@@ -370,7 +368,7 @@ export function CollaborationControl({
                     </label>
                     <p className="demo-collaboration-note">{strings.scope}</p>
                     <footer className="demo-collaboration-actions">
-                      <button type="button" className="is-danger" onClick={() => void leave()}>
+                      <button type="button" className="is-danger" onClick={() => void leaveRoom()}>
                         {strings.leave}
                       </button>
                       <button type="button" className="is-primary" onClick={() => setOpen(false)}>
@@ -397,7 +395,7 @@ export function CollaborationControl({
                           type="button"
                           className="demo-collaboration-choice"
                           onClick={() => void start('create')}
-                          disabled={busy}
+                          disabled={busy || pending}
                         >
                           <span className="demo-collaboration-choice__icon">
                             <CollaborationIcon />
@@ -412,7 +410,7 @@ export function CollaborationControl({
                           type="button"
                           className="demo-collaboration-choice"
                           onClick={() => setMode('join')}
-                          disabled={busy}
+                          disabled={busy || pending}
                         >
                           <span className="demo-collaboration-choice__icon">↗</span>
                           <span>
@@ -436,7 +434,7 @@ export function CollaborationControl({
                           type="button"
                           className="demo-collaboration-back"
                           onClick={() => setMode('choice')}
-                          disabled={busy}
+                          disabled={busy || pending}
                         >
                           ← {strings.back}
                         </button>
@@ -445,7 +443,7 @@ export function CollaborationControl({
                             type="button"
                             className="is-primary"
                             onClick={() => void start('join')}
-                            disabled={busy || !roomInput.trim()}
+                            disabled={busy || pending || !roomInput.trim()}
                           >
                             {busy ? strings.connecting : strings.join}
                           </button>
