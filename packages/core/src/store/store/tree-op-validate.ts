@@ -778,6 +778,13 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       return validateHyperlinkTarget(op);
     }
     case 'setSectionMark': {
+      if (
+        op.breakType !== undefined &&
+        op.breakType !== 'nextPage' &&
+        op.breakType !== 'continuous'
+      ) {
+        return 'invalid-property-value';
+      }
       const pPr = paragraphPropertiesNodeOf(paragraph);
       // A paragraph already ending a section cannot end two.
       if (pPr && sectionChild(pPr, 'sectPr')) return 'invalid-property-value';

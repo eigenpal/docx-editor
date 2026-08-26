@@ -89,7 +89,15 @@ export interface DocEdits {
   insertImage: { target: DocTarget; data: Uint8Array; extent?: Extent };
   insertHyperlink: { target: DocTarget; href: string; text?: string };
   removeHyperlink: { target: DocTarget };
-  insertBreak: { target: DocTarget; kind: 'page' | 'column' | 'line' | 'section' };
+  /**
+   * `'section'` is Word's Next Page break; `'sectionContinuous'` keeps the new section on
+   * the sheet the previous one ended, which is how a mid-page column or margin change is
+   * authored. `'column'` belongs to the multi-column lane and is refused for now.
+   */
+  insertBreak: {
+    target: DocTarget;
+    kind: 'page' | 'column' | 'line' | 'section' | 'sectionContinuous';
+  };
   /**
    * Word's Increase/Decrease Indent.
    *

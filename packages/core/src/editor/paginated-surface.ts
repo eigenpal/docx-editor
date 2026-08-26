@@ -196,6 +196,7 @@ export type {
   SurfaceParagraphFormat,
   ParagraphPropertyEdit,
   ParagraphTabStop,
+  SectionBreakInsertType,
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
 

@@ -28,6 +28,7 @@ import {
   sectionAttribute,
   sectionChild,
   targetSectionNodes,
+  type SectionMetrics,
 } from './tree-op-section-address.ts';
 import type {
   OoxmlProperty,
@@ -68,6 +69,7 @@ export function withoutSectionMark(pPr: OoxmlNode): OoxmlNode | undefined {
 }
 
 type SetSectionPropertiesOp = Extract<TreeDocOp, { op: 'setSectionProperties' }>;
+type SetSectionMarkOp = Extract<TreeDocOp, { op: 'setSectionMark' }>;
 
 function wmlAttribute(localName: string, value: string) {
   return {
@@ -473,15 +475,15 @@ export function applySetParagraphTabStops(
 
 export function applySetSectionMark(
   part: OoxmlPart,
-  paragraphId: string,
+  op: SetSectionMarkOp,
   options?: EditOptions
 ): TreeOpResult {
-  const paragraph = findNode(part, paragraphId) as OoxmlParagraphNode;
+  const paragraph = findNode(part, op.paragraphId) as OoxmlParagraphNode;
   const nextId = createNodeIdAllocator(part);
-  const governing = targetSectionNodes(part, paragraphId)[0] ?? null;
+  const governing = targetSectionNodes(part, op.paragraphId)[0] ?? null;
   const metrics = metricsOfSection(governing);
   const effect: TreeOpEffect = {
-    dirty: [paragraphId],
+    dirty: [op.paragraphId],
     created: [],
     deleted: [],
     dependencyKeys: TEXT_DEPS,
@@ -493,65 +495,138 @@ export function applySetSectionMark(
   // and §17.10.5 header inheritance only looks backwards: cloning just the page
   // geometry would strip the headers off every page before the break. A document with
   // no section at all gets the effective defaults, written out.
+  //
+  // `w:type` travels with the clone untouched. It says how the CLONED section starts
+  // relative to the one before it, and cutting a section in two does not move where its
+  // first half begins. The break the caller asked for belongs to the section that starts
+  // AFTER the mark, which is the governing one.
   const sectPr = governing
     ? cloneWithNewIds(governing, nextId)
-    : sectionElement(
-        nextId(),
-        'sectPr',
-        [],
-        [
-          sectionElement(
-            nextId(),
-            'pgSz',
-            [
-              wmlAttribute('w', String(metrics.widthTwips)),
-              wmlAttribute('h', String(metrics.heightTwips)),
-              ...(metrics.widthTwips > metrics.heightTwips
-                ? [wmlAttribute('orient', 'landscape')]
-                : []),
-            ],
-            []
-          ),
-          sectionElement(
-            nextId(),
-            'pgMar',
-            [
-              wmlAttribute('top', String(metrics.topTwips)),
-              wmlAttribute('right', String(metrics.rightTwips)),
-              wmlAttribute('bottom', String(metrics.bottomTwips)),
-              wmlAttribute('left', String(metrics.leftTwips)),
-              wmlAttribute('header', String(metrics.headerTwips)),
-              wmlAttribute('footer', String(metrics.footerTwips)),
-              wmlAttribute('gutter', String(metrics.gutterTwips)),
-            ],
-            []
-          ),
-        ]
-      );
+    : sectionElement(nextId(), 'sectPr', [], defaultSectionChildren(metrics, nextId));
 
   const pPr = paragraphPropertiesNodeOf(paragraph);
-  if (!pPr) {
-    const minted = {
-      id: nextId(),
-      kind: 'paragraphProperties',
-      namespaceUri: WML_NAMESPACE_URI,
-      localName: 'pPr',
-      prefix: 'w',
-      namespaceBindings: [],
-      attributes: [],
-      children: [sectPr],
-    } as unknown as OoxmlNode;
-    // `w:pPr` must be the paragraph's FIRST child per the schema.
-    return fromEdit(insertChildren(part, paragraph.id, 0, [minted], options), effect);
-  }
-  // `w:sectPr` sits near the END of CT_PPr's sequence, before only `w:pPrChange`.
-  const change = pPr.children.findIndex(
-    (child) => 'localName' in child && child.localName === 'pPrChange'
-  );
+  const markedParagraph = (node: OoxmlParagraphNode): OoxmlNode => {
+    if (!pPr) {
+      const minted = {
+        id: nextId(),
+        kind: 'paragraphProperties',
+        namespaceUri: WML_NAMESPACE_URI,
+        localName: 'pPr',
+        prefix: 'w',
+        namespaceBindings: [],
+        attributes: [],
+        children: [sectPr],
+      } as unknown as OoxmlNode;
+      // `w:pPr` must be the paragraph's FIRST child per the schema.
+      return { ...node, children: [minted, ...node.children] } as OoxmlNode;
+    }
+    // `w:sectPr` sits near the END of CT_PPr's sequence, before only `w:pPrChange`.
+    const change = pPr.children.findIndex(
+      (child) => 'localName' in child && child.localName === 'pPrChange'
+    );
+    const children = [...pPr.children];
+    children.splice(change === -1 ? children.length : change, 0, sectPr);
+    return {
+      ...node,
+      children: node.children.map((child) =>
+        child.id === pPr.id ? ({ ...pPr, children } as OoxmlNode) : child
+      ),
+    } as OoxmlNode;
+  };
+
+  // The requested break is the FOLLOWING section's `w:type`. A document that never wrote a
+  // section has nowhere to put it, so the implicit body-level section is minted to carry
+  // it — otherwise "continuous" would commit and change nothing the user can see.
+  const retypedGoverning =
+    op.breakType !== undefined && governing
+      ? ({
+          ...governing,
+          children: withSectionBreakType(childrenOf(governing), op.breakType, nextId),
+        } as OoxmlNode)
+      : null;
+  const mintedBodySection =
+    op.breakType !== undefined && !governing
+      ? sectionElement(
+          nextId(),
+          'sectPr',
+          [],
+          withSectionBreakType(defaultSectionChildren(metrics, nextId), op.breakType, nextId)
+        )
+      : null;
+
+  const rebuilt = (node: OoxmlNode): OoxmlNode => {
+    if (node.kind === 'textValue') return node;
+    if (node.id === paragraph.id) return markedParagraph(node as OoxmlParagraphNode);
+    if (retypedGoverning && governing && node.id === governing.id) return retypedGoverning;
+    let changed = false;
+    const children = node.children.map((child) => {
+      const next = rebuilt(child);
+      if (next !== child) changed = true;
+      return next;
+    });
+    // A minted body-level section is the body's LAST child per the schema.
+    if (node.kind === 'body' && mintedBodySection) {
+      return { ...node, children: [...children, mintedBodySection] } as OoxmlNode;
+    }
+    return changed ? ({ ...node, children } as OoxmlNode) : node;
+  };
+
   return fromEdit(
-    insertChildren(part, pPr.id, change === -1 ? pPr.children.length : change, [sectPr], options),
+    replaceChildren(part, part.root.id, part.root.children.map(rebuilt), options),
     effect
   );
+}
+
+/** `w:pgSz` and `w:pgMar` written out from effective metrics, for a section being minted. */
+function defaultSectionChildren(metrics: SectionMetrics, nextId: () => string): OoxmlNode[] {
+  return [
+    sectionElement(
+      nextId(),
+      'pgSz',
+      [
+        wmlAttribute('w', String(metrics.widthTwips)),
+        wmlAttribute('h', String(metrics.heightTwips)),
+        ...(metrics.widthTwips > metrics.heightTwips ? [wmlAttribute('orient', 'landscape')] : []),
+      ],
+      []
+    ),
+    sectionElement(
+      nextId(),
+      'pgMar',
+      [
+        wmlAttribute('top', String(metrics.topTwips)),
+        wmlAttribute('right', String(metrics.rightTwips)),
+        wmlAttribute('bottom', String(metrics.bottomTwips)),
+        wmlAttribute('left', String(metrics.leftTwips)),
+        wmlAttribute('header', String(metrics.headerTwips)),
+        wmlAttribute('footer', String(metrics.footerTwips)),
+        wmlAttribute('gutter', String(metrics.gutterTwips)),
+      ],
+      []
+    ),
+  ];
+}
+
+/**
+ * One section's children with `w:type` set to the requested break.
+ *
+ * `nextPage` REMOVES the element rather than writing it: an absent `w:type` already means
+ * nextPage (§17.6.22), and that is the markup Word writes for the plain break. Removing it
+ * is also what makes a next-page break inside a continuous section really start a page —
+ * the cloned type would otherwise keep the two halves on one sheet.
+ */
+function withSectionBreakType(
+  children: readonly OoxmlNode[],
+  breakType: 'nextPage' | 'continuous',
+  nextId: () => string
+): OoxmlNode[] {
+  const without = children.filter(
+    (child) => child.kind === 'textValue' || !('localName' in child) || child.localName !== 'type'
+  );
+  if (breakType === 'nextPage') return without;
+  const index = sectionInsertIndex(without, 'type');
+  const type = sectionElement(nextId(), 'type', [wmlAttribute('val', breakType)], []);
+  return [...without.slice(0, index), type, ...without.slice(index)];
 }
 
 /** One section's rebuilt child list with the op's pgSz/pgMar fields merged in. */
@@ -655,11 +730,15 @@ function mergedSectionChildren(
 }
 
 /**
- * `CT_SectPr`'s child sequence from `w:pgSz` on — a minted element must precede every
- * LATER-sequence sibling already present (`docGrid`, `sectPrChange`, …), or Word
- * reports the file as corrupt.
+ * `CT_SectPr`'s child sequence — a minted element must precede every LATER-sequence
+ * sibling already present (`docGrid`, `sectPrChange`, …), or Word reports the file as
+ * corrupt. `w:headerReference` / `w:footerReference` are deliberately absent: they head
+ * the sequence, so leaving them out keeps them ahead of everything minted here.
  */
 const SECT_PR_SEQUENCE = [
+  'footnotePr',
+  'endnotePr',
+  'type',
   'pgSz',
   'pgMar',
   'paperSrc',

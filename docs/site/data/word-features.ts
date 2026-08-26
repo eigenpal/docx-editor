@@ -635,7 +635,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Page size, orientation, and margins are editable per section or for the whole document, from the Page Setup dialog or a ruler drag. Each section paginates against its own geometry, so a mixed portrait and landscape document renders as Word shows it. You can insert a section break. Even and odd page break parity and per-section columns are not modelled yet.',
+      'Page size, orientation, and margins are editable per section or for the whole document, from the Page Setup dialog or a ruler drag. Each section paginates against its own geometry, so a mixed portrait and landscape document renders as Word shows it. You can insert a next-page or a continuous section break; a continuous one keeps the new section on the sheet the previous section ended. Even and odd page break parity and per-section columns are not modelled yet.',
   },
   {
     id: 'layout.headers-footers',

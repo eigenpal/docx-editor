@@ -812,7 +812,7 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
       return committed;
     },
 
-    insertSectionBreak() {
+    insertSectionBreak(breakType = 'nextPage' as const) {
       // Section breaks are body-only; refuse while a furniture scope is open.
       if (deps.storyScope().kind !== 'body') return false;
       const plan = deleteSelectionPlan();
@@ -836,7 +836,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
               { op: 'splitParagraph', paragraphId: start.paragraphId, offset: start.offset },
               // The HEAD keeps the original id; it ends the new section, cloning the
               // governing setup so the break changes where pages break, not how they look.
-              { op: 'setSectionMark', paragraphId: start.paragraphId },
+              // `breakType` lands on the section that STARTS here, which is the governing
+              // one — see the op's own note.
+              { op: 'setSectionMark', paragraphId: start.paragraphId, breakType },
             ],
             selectionMark(),
             undefined,

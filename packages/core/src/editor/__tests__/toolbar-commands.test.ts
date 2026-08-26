@@ -140,11 +140,11 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test('an unwired slot is disabled without ever calling the editor', () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    const state = toolbarCommandState(editor, 'insert.sectionBreakContinuous');
+    const state = toolbarCommandState(editor, 'zoom.level');
     expect(state.enabled).toBe(false);
     expect(state.disabledReason).toBe('not wired to an editor command');
     expect(calls.can).toEqual([]);
-    expect(runToolbarCommand(editor, 'insert.sectionBreakContinuous')).toEqual({
+    expect(runToolbarCommand(editor, 'zoom.level')).toEqual({
       ok: false,
       code: 'unsupported',
       reason: 'not wired to an editor command',
@@ -197,8 +197,8 @@ describe('toolbar command wiring (task M4.0)', () => {
 
   test("a slot with NO command shape still says so in chrome's words, honestly", () => {
     const { editor, calls } = fakeEditor(ALLOW);
-    expect(chromeProbeForSlot('insert.sectionBreakContinuous')).toBeNull();
-    expect(toolbarCommandState(editor, 'insert.sectionBreakContinuous').disabledReason).toBe(
+    expect(chromeProbeForSlot('zoom.level')).toBeNull();
+    expect(toolbarCommandState(editor, 'zoom.level').disabledReason).toBe(
       'not wired to an editor command'
     );
     expect(calls.can).toEqual([]);

@@ -510,11 +510,24 @@ export type TreeDocOp =
       /**
        * End a section AT this paragraph: mint a `w:pPr/w:sectPr` cloning the governing
        * section's effective page setup, so the blocks up to and including this paragraph
-       * become their own section (a next-page section break). The paragraph must not
-       * already carry one.
+       * become their own section. The paragraph must not already carry one.
        */
       readonly op: 'setSectionMark';
       readonly paragraphId: string;
+      /**
+       * Where the section that STARTS after this mark begins — Word's Breaks menu.
+       *
+       * `w:type` states how a section starts relative to the previous one (ECMA-376
+       * §17.6.22), so the break the user asked for is written on the section that
+       * FOLLOWS the mark, never on the minted one. The minted `w:sectPr` keeps the
+       * cloned type, because it still starts exactly where the section it was cut from
+       * did.
+       *
+       * `'nextPage'` clears `w:type` (an absent type is nextPage), so a next-page break
+       * inside a continuous section really does start a page. `'continuous'` writes it.
+       * Omitted leaves the following section's `w:type` untouched.
+       */
+      readonly breakType?: 'nextPage' | 'continuous';
     }
   | {
       /**

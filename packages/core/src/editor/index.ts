@@ -150,6 +150,7 @@ export {
   type SurfaceParagraphFormat,
   type ParagraphPropertyEdit,
   type ParagraphTabStop,
+  type SectionBreakInsertType,
   type SurfaceFormatting,
 } from './paginated-surface.ts';
 export {

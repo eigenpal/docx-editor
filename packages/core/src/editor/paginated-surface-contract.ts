@@ -376,6 +376,17 @@ export interface ContentControlSurfaceState {
 }
 
 /**
+ * Where the section after an inserted break begins — Word's Layout > Breaks menu.
+ *
+ * The two the engine paginates. `evenPage` / `oddPage` are readable in a file but not
+ * offered here, because layout does not skip the blank sheet they need yet, and a menu
+ * entry that silently behaves like `nextPage` is the lie this vocabulary exists to avoid.
+ *
+ * @public
+ */
+export type SectionBreakInsertType = 'nextPage' | 'continuous';
+
+/**
  * The mounted, painted, editable document — the layer `createDocxEditor` builds its contract on.
  *
  * The painted pages ARE the editable surface: they are `contenteditable`, but the DOM is a
@@ -679,11 +690,15 @@ export interface PaginatedSurface {
     readonly anchorParagraphId?: string;
   }): boolean;
   /**
-   * Insert a next-page section break at the caret: the paragraph splits, and the head
-   * ends a new section cloning the governing section's page setup — Word's Layout >
-   * Breaks > Next Page. One undoable step. Returns whether the break committed.
+   * Insert a section break at the caret: the paragraph splits, and the head ends a new
+   * section cloning the governing section's page setup — Word's Layout > Breaks. One
+   * undoable step. Returns whether the break committed.
+   *
+   * `breakType` says where the section AFTER the break begins: `'nextPage'` (the default,
+   * Word's Next Page) starts a new sheet, `'continuous'` keeps it on the sheet the
+   * previous section ended, which is how a mid-page column or margin change is authored.
    */
-  insertSectionBreak(): boolean;
+  insertSectionBreak(breakType?: SectionBreakInsertType): boolean;
   /** The layout session, so a host or a test can see how much work a pass actually did. */
   layoutSession(): {
     readonly stats: {

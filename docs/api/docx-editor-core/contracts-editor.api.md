@@ -188,9 +188,8 @@ export interface DocEdits {
     deleteText: {
         target: DocTarget;
     };
-    // (undocumented)
     insertBreak: {
-        kind: 'page' | 'column' | 'line' | 'section';
+        kind: 'page' | 'column' | 'line' | 'section' | 'sectionContinuous';
         target: DocTarget;
     };
     insertContentControl: {

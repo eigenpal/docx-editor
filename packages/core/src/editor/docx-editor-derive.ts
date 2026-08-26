@@ -426,7 +426,10 @@ export function gateCommand(
   // refuses outside the body. Without this arm the refusal was never PUBLISHED: `can` saw only
   // the static break vocabulary, so the control rendered live in a header and pressing it did
   // nothing at all. A gate the toolbar cannot see is a button that lies.
-  if (command.type === 'insertBreak' && command.kind === 'section') {
+  if (
+    command.type === 'insertBreak' &&
+    (command.kind === 'section' || command.kind === 'sectionContinuous')
+  ) {
     const active = surface.activeScope?.() ?? { kind: 'body' as const };
     if (active.kind !== 'body') {
       return {

@@ -57,12 +57,14 @@ const EXPECTED_MENUS: readonly string[] = CHROME_MENUS.map((menu) => menu.id);
 
 function mountMenu(
   menu: ReactNode,
-  source: Uint8Array = SOURCE
+  source: Uint8Array = SOURCE,
+  mode: 'edit' | 'view' = 'edit'
 ): { view: ReturnType<typeof render>; editor: () => DocxEditorInstance } {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
       document={source}
+      mode={mode}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -218,11 +220,10 @@ describe('rows carry the engine, not a paraphrase', () => {
     });
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(0);
 
-    // Same treatment inside the submenu: the continuous section break is a real Word
-    // choice the engine cannot express, so it is shown and refused rather than dropped.
+    // Same inside the submenu: Word's three break choices are three live rows.
     openMenu(view, 'toolbar.insert');
     openSubmenu(view, 'toolbar.break');
-    expect(row(view, 'insert.sectionBreakContinuous').getAttribute('aria-disabled')).toBe('true');
+    expect(row(view, 'insert.sectionBreakContinuous').getAttribute('aria-disabled')).toBeNull();
     expect(row(view, 'insert.sectionBreakNextPage').getAttribute('aria-disabled')).toBeNull();
   });
 
@@ -241,11 +242,19 @@ describe('rows carry the engine, not a paraphrase', () => {
     openSubmenu(view, 'toolbar.table');
     expect(view.container.querySelector('.docx-menubar__grid')).not.toBeNull();
 
-    // And a row the engine still refuses carries the engine's own words.
-    openSubmenu(view, 'toolbar.break');
-    const continuous = row(view, 'insert.sectionBreakContinuous');
-    expect(continuous.getAttribute('aria-disabled')).toBe('true');
-    expect(continuous.getAttribute('title')).toBeTruthy();
+    // And the same probe REFUSED renders the row flat and disabled, carrying the engine's
+    // own words rather than a chrome paraphrase. View mode is the refusal here.
+    cleanup();
+    const viewing = mountMenu(<DocxEditorMenu />, SOURCE, 'view').view;
+    await act(async () => {
+      await Promise.resolve();
+    });
+    openMenu(viewing, 'toolbar.insert');
+    // No grid this time: a refused probe collapses the picker back to a flat row.
+    expect(viewing.container.querySelector('.docx-menubar__grid')).toBeNull();
+    const refusedTable = row(viewing, 'table.insert');
+    expect(refusedTable.getAttribute('aria-disabled')).toBe('true');
+    expect(refusedTable.getAttribute('title')).toBeTruthy();
   });
 
   test('Open and Save work with no configuration at all', async () => {
@@ -573,7 +582,8 @@ describe('chrome contracts', () => {
   });
 
   test('a disabled row is still focusable, so its reason is reachable', () => {
-    const { view } = mountMenu(<DocxEditorMenu />);
+    // View mode refuses every editing row, so the break submenu holds one.
+    const { view } = mountMenu(<DocxEditorMenu />, SOURCE, 'view');
     openMenu(view, 'toolbar.insert');
     openSubmenu(view, 'toolbar.break');
     const refused = row(view, 'insert.sectionBreakContinuous');

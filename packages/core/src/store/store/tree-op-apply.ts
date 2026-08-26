@@ -357,7 +357,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     return applySetContentControlValue(part, op.controlId, op.value, options);
   }
   if (op.op === 'setSectionProperties') return applySetSectionProperties(part, op, options);
-  if (op.op === 'setSectionMark') return applySetSectionMark(part, op.paragraphId, options);
+  if (op.op === 'setSectionMark') return applySetSectionMark(part, op, options);
   // Package-lifecycle / note-part ops are refused by validateTreeOp; this arm narrows the
   // union so the story appliers below can address paragraphId safely.
   if (

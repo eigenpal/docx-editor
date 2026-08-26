@@ -252,8 +252,8 @@ export function execEditorCommand(
       }
       break;
     case 'insertBreak':
-      if (command.kind === 'section') {
-        if (!mounted.insertSectionBreak()) {
+      if (command.kind === 'section' || command.kind === 'sectionContinuous') {
+        if (!mounted.insertSectionBreak(command.kind === 'section' ? 'nextPage' : 'continuous')) {
           return {
             ok: false,
             code: 'invalidArgs',
