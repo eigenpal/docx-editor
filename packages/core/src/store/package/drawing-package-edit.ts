@@ -187,7 +187,8 @@ function storedPartBytes(pkg: OoxmlPackage, partName: string): Uint8Array | null
   return null;
 }
 
-function validateEmbeddedImageBytes(bytes: Uint8Array, mime: SupportedImageMime): boolean {
+/** Signature + header + dimension caps — the gate every media WRITE must pass. */
+export function validateEmbeddedImageBytes(bytes: Uint8Array, mime: SupportedImageMime): boolean {
   const limits = resolveImageResourceLimits();
   if (bytes.length === 0 || bytes.length > limits.maxEncodedBytes) return false;
   if (sniffImageMime(bytes) !== mime) return false;

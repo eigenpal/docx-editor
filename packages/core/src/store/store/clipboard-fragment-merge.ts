@@ -26,7 +26,12 @@ import {
   withRelationship,
   withRelationshipsPartFor,
 } from '../package/package-edit.ts';
-import { withBinaryPart, allocateDrawingPropertyId } from '../package/drawing-package-edit.ts';
+import {
+  withBinaryPart,
+  allocateDrawingPropertyId,
+  validateEmbeddedImageBytes,
+} from '../package/drawing-package-edit.ts';
+import { sniffImageMime, type SupportedImageMime } from '../package/image-resources.ts';
 import { ensureHyperlinkRelationship } from '../package/hyperlink-part.ts';
 import { ensureNotesPart } from '../package/note-lifecycle.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
@@ -290,6 +295,43 @@ function withoutDanglingDrawings(
     return changed ? ({ ...node, children } as OoxmlNode) : node;
   };
   return nodes.map((node) => drop(node)).filter((node): node is OoxmlNode => node !== null);
+}
+
+const SUPPORTED_RASTER_MIMES: ReadonlySet<string> = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/bmp',
+  'image/webp',
+]);
+
+/** Aliases OPC files legitimately declare for the same signature class. */
+const DECLARED_MIME_ALIASES: Readonly<Record<string, string>> = {
+  'image/jpg': 'image/jpeg',
+  'image/x-ms-bmp': 'image/bmp',
+  'image/x-bmp': 'image/bmp',
+};
+
+/**
+ * The content type fragment media is admitted under, or null to drop it.
+ *
+ * Signature over claim: the sniffed mime must agree with the declared class, and a
+ * supported raster must additionally pass the same header + dimension gate the
+ * insert-image lane applies (`validateEmbeddedImageBytes`). Vector and preserved formats
+ * (SVG, TIFF, EMF, WMF) travel signature-checked; the paint lane re-validates and renders
+ * them inert.
+ */
+function admittedMediaMime(bytes: Uint8Array, declaredType: string): string | null {
+  const sniffed = sniffImageMime(bytes);
+  if (sniffed === 'unknown') return null;
+  const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declaredType)
+    ? DECLARED_MIME_ALIASES[declaredType]!
+    : declaredType;
+  if (normalizedDeclared !== sniffed) return null;
+  if (SUPPORTED_RASTER_MIMES.has(sniffed)) {
+    if (!validateEmbeddedImageBytes(bytes, sniffed as SupportedImageMime)) return null;
+  }
+  return sniffed;
 }
 
 // ---------------------------------------------------------------------------
@@ -571,11 +613,22 @@ export function mergeFragmentIntoPackage(
       const bytes =
         fragment.partBytes.get(resolved.partName) ??
         fragment.partBytes.get(resolved.partName.replace(/^\//, ''));
-      const contentType = resolveContentTypeOf(fragment, resolved.partName) ?? '';
-      if (!bytes || !contentType.toLowerCase().startsWith('image/')) {
+      const declaredType = (resolveContentTypeOf(fragment, resolved.partName) ?? '').toLowerCase();
+      if (!bytes || !declaredType.startsWith('image/')) {
         dropRelIds.add(record.id);
         continue;
       }
+      // The declared content type is a CLAIM from the fragment's own attacker-controlled
+      // [Content_Types].xml; the signature sniff is authoritative, same as the insert-image
+      // lane. A mismatch, an unknown signature, or a raster that fails the header and
+      // dimension caps drops the relationship (and with it the drawing) instead of copying
+      // spoofed bytes into the target package under an image/* type.
+      const mediaMime = admittedMediaMime(bytes, declaredType);
+      if (mediaMime === null) {
+        dropRelIds.add(record.id);
+        continue;
+      }
+      const contentType = mediaMime;
       const hash = sha256FontBytes(bytes);
       let mediaPart = targetMediaByHash.get(hash);
       if (!mediaPart) {

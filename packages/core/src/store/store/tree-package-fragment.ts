@@ -5,6 +5,12 @@
 
 import { readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { mergeFragmentIntoPackage, type FragmentMergeResult } from './clipboard-fragment-merge.ts';
+import {
+  MAX_FRAGMENT_DEPTH,
+  MAX_FRAGMENT_INSERT_BLOCKS,
+  MAX_FRAGMENT_NODES,
+} from './tree-op-fragment.ts';
+import type { OoxmlNode } from '../package/ooxml-tree.ts';
 import type { PackageTransactResult, StoryScope, TreePackageStore } from './tree-package-store.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 
@@ -25,6 +31,30 @@ export type FragmentPasteResult =
   | (Extract<PackageTransactResult, { ok: true }> & { readonly blockCount: number })
   | Extract<PackageTransactResult, { ok: false }>;
 
+/** One early-exit walk over the fragment body against the insertFragment budgets. */
+function withinFragmentBudget(fragment: OoxmlPackage): boolean {
+  const doc = fragment.parts.get(fragment.mainDocumentPart);
+  if (!doc || doc.root.kind !== 'document') return false;
+  const body = doc.root.children.find((child) => child.kind === 'body');
+  if (!body || body.kind !== 'body') return false;
+  if (body.children.length > MAX_FRAGMENT_INSERT_BLOCKS) return false;
+  let nodes = 0;
+  const walk = (node: OoxmlNode, depth: number): boolean => {
+    if (depth > MAX_FRAGMENT_DEPTH) return false;
+    nodes += 1;
+    if (nodes > MAX_FRAGMENT_NODES) return false;
+    if (node.kind === 'textValue') return true;
+    for (const child of node.children) {
+      if (!walk(child, depth + 1)) return false;
+    }
+    return true;
+  };
+  for (const block of body.children) {
+    if (!walk(block, 1)) return false;
+  }
+  return true;
+}
+
 /**
  * Read the fragment through the bounded file-open trust boundary, merge its resources,
  * and land its blocks — all inside one transaction. Any refusal leaves the document
@@ -43,6 +73,13 @@ export function applyFragmentPaste(
     return { ok: false, reason: 'invalidArgs', detail: `fragment-read:${read.reason}` };
   }
   const fragment: OoxmlPackage = read.package;
+
+  // The insert budgets, applied BEFORE the merge: `insertFragment` would refuse an
+  // oversized fragment anyway, but only after the merge had already walked the whole
+  // decompressed envelope a dozen times. One bounded pass here rejects it first.
+  if (!withinFragmentBudget(fragment)) {
+    return { ok: false, reason: 'invalidArgs', detail: 'fragment-over-budget' };
+  }
 
   const resolved = store.resolveStory(scope);
   if (!resolved.ok) {
