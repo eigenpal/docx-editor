@@ -179,6 +179,46 @@ function applyRunRecolor(xml: string, part: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Normal's paragraph rhythm
+// ---------------------------------------------------------------------------
+
+/**
+ * Word's blank-template paragraph rhythm: 8pt after, 1.08-line spacing.
+ *
+ * The same values `packages/core/src/editor/blank-document.ts` ships, so a New
+ * document and the demo document read alike.
+ */
+const NORMAL_RHYTHM = '<w:spacing w:after="160" w:line="259" w:lineRule="auto"/>';
+
+/** The empty defaults element the source ships, and what replaces it. */
+const EMPTY_PPR_DEFAULT = '<w:pPrDefault/>';
+
+/**
+ * Gives the document's default paragraph style a rhythm, in `w:pPrDefault`.
+ *
+ * The source declares `<w:pPrDefault/>` and a `Normal` with no `w:pPr` at all,
+ * so a paragraph that authors no spacing of its own gets none — 445 of the 635
+ * paragraphs here. The authored body text hides that by carrying
+ * `w:spacing w:after="120"` on each paragraph directly, but anything the editor
+ * CREATES inherits instead: press Enter at the end of a heading and the new
+ * paragraph, correctly in `Normal`, comes out with its lines packed together.
+ *
+ * `w:pPrDefault` rather than the `Normal` style itself, because that is where
+ * Word puts it, and because it is the one tier a table style can override —
+ * `Normal` outranks a table style, the defaults do not.
+ */
+function applyNormalRhythm(xml: string, part: string): string {
+  if (part !== 'word/styles.xml') return xml;
+  if (!xml.includes(EMPTY_PPR_DEFAULT)) {
+    throw new Error(`[${part}] expected ${EMPTY_PPR_DEFAULT} to give a rhythm to`);
+  }
+  return xml.replace(
+    EMPTY_PPR_DEFAULT,
+    `<w:pPrDefault><w:pPr>${NORMAL_RHYTHM}</w:pPr></w:pPrDefault>`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // TOC
 // ---------------------------------------------------------------------------
 
@@ -283,6 +323,7 @@ async function main(): Promise<void> {
     xml = applyText(xml, path);
     xml = applyRunRecolor(xml, path);
     xml = applyPalette(xml);
+    xml = applyNormalRhythm(xml, path);
     source.file(path, xml, { date: ENTRY_DATE });
   }
 
