@@ -12,10 +12,12 @@ import { partDeclaresContentControlLocks } from '../surface-section-breaks.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
 const O = 'urn:schemas-microsoft-com:office:office';
+const X = 'urn:example:foreign';
 
 function load(body: string): OoxmlPart {
   const result = readOoxmlPart(
-    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}"><w:body>${body}</w:body></w:document>`,
+    `<w:document xmlns:w="${W}" xmlns:v="${V}" xmlns:o="${O}" xmlns:x="${X}">` +
+      `<w:body>${body}</w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!result.ok) throw new Error(result.reason);
@@ -40,6 +42,12 @@ describe('partDeclaresContentControlLocks', () => {
     // not a refusal a break can hit.
     ['an sdtLocked shell', sdt('<w:lock w:val="sdtLocked"/>')],
     ['an explicitly unlocked control', sdt('<w:lock w:val="unlocked"/>')],
+    // A foreign element that happens to be NAMED lock, carrying a value that would match.
+    // Matching on the local name alone would read this as a locked control.
+    ['a foreign-namespace lock', sdt('<x:lock x:val="contentLocked"/>')],
+    // The one input the element check alone catches: a foreign element named lock carrying a
+    // genuine `w:val`. Only the ELEMENT's namespace separates it from a real one.
+    ['a foreign lock carrying a real w:val', sdt('<x:lock w:val="contentLocked"/>')],
     ['a control with no lock at all', sdt('<w:alias w:val="Field"/>')],
   ])('is false for %s', (_label, body) => {
     expect(partDeclaresContentControlLocks(load(body))).toBe(false);
@@ -49,6 +57,13 @@ describe('partDeclaresContentControlLocks', () => {
     ['contentLocked', sdt('<w:lock w:val="contentLocked"/>')],
     ['sdtContentLocked', sdt('<w:lock w:val="sdtContentLocked"/>')],
     ['a data binding', sdt('<w:dataBinding w:xpath="/root/a" w:storeItemID="{1}"/>')],
+    // The store reads `@w:val`, so a foreign attribute that merely shares the local name must
+    // not shadow it — a `.docx` is attacker-controlled, and reading the wrong one here would
+    // report an unlocked control the store then refuses.
+    [
+      'a lock whose w:val sits beside a foreign val',
+      sdt('<w:lock x:val="junk" w:val="contentLocked"/>'),
+    ],
     [
       'a lock nested deep in the body',
       `${P}<w:tbl><w:tr><w:tc>${sdt('<w:lock w:val="contentLocked"/>')}</w:tc></w:tr></w:tbl>`,

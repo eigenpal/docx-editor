@@ -66,7 +66,10 @@ export function partDeclaresContentControlLocks(part: OoxmlPart): boolean {
         return;
       }
       if (node.localName === 'lock') {
-        const value = node.attributes?.find((attribute) => attribute.localName === 'val')?.value;
+        const value = node.attributes?.find(
+          (attribute) =>
+            attribute.localName === 'val' && attribute.namespaceUri === WML_NAMESPACE_URI
+        )?.value;
         if (value === 'contentLocked' || value === 'sdtContentLocked') found = true;
         return;
       }
@@ -78,16 +81,38 @@ export function partDeclaresContentControlLocks(part: OoxmlPart): boolean {
 }
 
 /**
+ * Every paragraph the part holds inside a `w:tbl`, in one walk.
+ *
+ * The same predicate `isTableNested` answers one id at a time. A RANGE needs it for the whole
+ * span — the landing is somewhere in there and a section cannot end in a cell — and asking per
+ * paragraph would be a walk each.
+ */
+export function tableNestedParagraphIds(part: OoxmlPart): ReadonlySet<string> {
+  const nested = new Set<string>();
+  const walk = (node: OoxmlNode, inTable: boolean): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      if (inTable) nested.add(node.id);
+      return;
+    }
+    const below = inTable || node.kind === 'table';
+    for (const child of node.children ?? []) walk(child, below);
+  };
+  walk(part.root, false);
+  return nested;
+}
+
+/**
  * How far a break gate will plan a deletion to find its exact answer.
  *
- * Planning is superlinear in the range, and the gate runs on every toolbar derivation — twice,
- * once per section-break row — so an unbounded one turned a select-all in a long document into
- * a seconds-long stall. Measured on an 8000-paragraph part, the plan path costs about
- * 0.37ms per paragraph of the range: 200 paragraphs is 74ms, which is already too much to
- * spend on a read. This bound keeps it near 20ms in the worst case and still covers a caret
- * and any ordinary drag. Past it the row stays enabled and the press reports the refusal.
+ * The gate runs on every toolbar derivation, twice, once per section-break row, and the plan
+ * it needs for an exact answer is not cheap: measured on an 8000-paragraph part it costs about
+ * 15ms before the range is even considered, plus about 0.9ms per paragraph of it. Unbounded,
+ * a select-all was a seconds-long stall. Bounded here it is tens of milliseconds, and only for
+ * a document that declares a lock or holds a table — everything else is answered without a
+ * plan at all. Past the bound the row stays enabled and the press reports the refusal.
  */
-export const MAX_GATED_BREAK_SPAN = 64;
+export const MAX_GATED_BREAK_SPAN = 32;
 
 /**
  * The break type EVERY section in the part starts with, or `null` when they disagree.
@@ -139,6 +164,11 @@ export function landedBreakRefusal(
   breakType: 'nextPage' | 'continuous',
   suggesting: boolean
 ): string | null {
+  // A cell first, in the SAME order the write asks: it falls back to `collapseTo` when the
+  // landing is nested, and refuses when that is nested too. Checking it only at the two cheap
+  // selections left a plain drag inside one cell answering "allowed" from the plan path — the
+  // gate computed the landing and then never asked the one question the write asks about it.
+  if (isTableNested(part, paragraphId)) return TABLE_CELL_BREAK_REFUSAL;
   // The store guards TWO paragraphs, so this mirrors both. First the mark itself: a section
   // cannot end inside content a control holds, whatever the break would do to the section
   // after it. Mirroring only the second one left a caret in a locked control with two live
@@ -201,7 +231,11 @@ export function sectionBreakGate(input: SectionBreakGateInput): string | null {
   // and there is nothing to work out — which is nearly every document, and one walk is what it
   // costs to know that without ordering the selection.
   const mayHold = partDeclaresContentControlLocks(input.part());
-  if (!suggesting && !mayHold) return null;
+  // A cell refuses whatever the mode, so a document holding one cannot take this exit even in
+  // edit mode. Both walks happen before `orderedRange()`, which is fine: flushing pending
+  // input adds no table and declares no lock.
+  const cells = tableNestedParagraphIds(input.part());
+  if (!suggesting && !mayHold && cells.size === 0) return null;
   // AFTER the flush `orderedRange` runs, so the sections come from the tree the plan would be
   // built against.
   const { from, to } = input.orderedRange();
@@ -222,26 +256,39 @@ export function sectionBreakGate(input: SectionBreakGateInput): string | null {
   // Second: every section in the document starts the same way. Then the landing's section does
   // too, whichever it is — which answers a selection spanning sections.
   const settled = oneSection ? sectionBreakTypeOf(atStart.section) : uniformSectionBreakType(part);
-  // A settled type that is NOT the requested one means the break definitely retypes, and the
-  // two refusals that follow from that are answerable right here. Running these only when no
-  // control declares a lock threw them away for any document that has one: past the bound
-  // below, the gate then answered "allowed" for a break it already knew would refuse.
+  // Two things the cheap path cannot see could refuse FIRST: a cell anywhere in the span, and
+  // content a control holds. Both are about the LANDING, which is what the cheap path does not
+  // have — so they are ruled out for the whole span instead.
+  const order = input.paragraphOrder();
+  const first = order.indexOf(from.paragraphId);
+  const last = order.indexOf(to.paragraphId);
+  const mayNest =
+    first === -1 || last === -1 || order.slice(first, last + 1).some((id) => cells.has(id));
+  const exact = !mayHold && !mayNest;
+  // A settled type that is NOT the requested one means the break definitely retypes.
   if (settled !== null && settled !== breakType) {
+    // The section's own owner is known whenever both ends resolve to one section, and it
+    // outranks the mode — see `landedBreakRefusal`.
     if (oneSection && atStart.ownerId !== null && heldByControl(part, atStart.ownerId)) {
       return LOCKED_SECTION_BREAK_REFUSAL;
     }
-    if (suggesting) return SUGGESTED_BREAK_REFUSAL;
+    // Suggesting refuses it, and says so here only when nothing else could have refused
+    // first: otherwise the plan below names the real reason, which is what the press will.
+    if (suggesting && exact) return SUGGESTED_BREAK_REFUSAL;
   }
-  // What is left needs the landing ITSELF: whether the mark lands in content a control holds,
-  // and — where the sections disagree — which section it lands in. Neither can arise when
-  // nothing declares a lock and the type is settled.
-  if (!mayHold && settled !== null) return null;
+  // A settled type that IS the requested one refuses nothing — once the two unseen things
+  // are ruled out.
+  if (exact && settled !== null) return null;
   // So the plan is BOUNDED by how much it would have to walk (see `MAX_GATED_BREAK_SPAN`).
   // Past it the control stays enabled and the press reports the refusal exactly, from `exec`,
   // which has already paid for a write.
-  const order = input.paragraphOrder();
-  const span = order.indexOf(to.paragraphId) - order.indexOf(from.paragraphId);
-  if (span > MAX_GATED_BREAK_SPAN) return null;
+  //
+  // Past it a definite retype still REFUSES while suggesting — the press will too, and the
+  // reason may be the more specific one. Answering `null` there was a live row for a break
+  // the gate already knew would fail.
+  if (last - first > MAX_GATED_BREAK_SPAN) {
+    return suggesting && settled !== null && settled !== breakType ? SUGGESTED_BREAK_REFUSAL : null;
+  }
   const landing = sectionBreakLanding(part, input.deleteSelectionPlan());
   return landedBreakRefusal(part, landing.paragraphId, breakType, suggesting);
 }

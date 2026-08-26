@@ -13,6 +13,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { stubReviewModule } from './review-test-module.ts';
 import { selectCellRectangle } from './paginated-surface-fixtures.ts';
+import { MAX_GATED_BREAK_SPAN } from '../surface-section-breaks.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -801,5 +802,101 @@ describe('a deletion that crosses held content reports the lane, not the store e
       reason: 'a section break cannot be inserted in locked or linked content',
     });
     expect(editor.surface!.session.paragraphIds()).toHaveLength(3);
+  });
+});
+
+describe('a plain range inside a table cell is reported, not discovered on press', () => {
+  // The rectangle and the caret were covered; a plain drag inside one cell was not, in either
+  // mode, and not even on the plan path — the gate worked out the landing and then never
+  // asked it the one question the write asks.
+  const CELL_DOC =
+    p('Alpha') +
+    '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+    '<w:tblGrid><w:gridCol w:w="3000"/></w:tblGrid>' +
+    `<w:tr><w:tc>${p('Cell text here')}</w:tc></w:tr></w:tbl>` +
+    p('Omega') +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+  const REASON = 'a section break cannot be inserted inside a table cell';
+
+  test.each([
+    ['edit', 'section'],
+    ['edit', 'sectionContinuous'],
+    ['suggesting', 'section'],
+    ['suggesting', 'sectionContinuous'],
+  ] as const)('%s / %s', (mode, kind) => {
+    const editor = mount(CELL_DOC, mode);
+    const cell = editor.surface!.session.paragraphIds()[1]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: cell, offset: 1 },
+      head: { paragraphId: cell, offset: 5 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind } as never)).toMatchObject({
+      ok: false,
+      reason: REASON,
+    });
+    expect(editor.surface!.insertSectionBreak(kind === 'section' ? 'nextPage' : 'continuous')).toBe(
+      false
+    );
+  });
+
+  test('and the same document still allows a break outside the table', () => {
+    const editor = mount(CELL_DOC);
+    const first = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 0 },
+      head: { paragraphId: first, offset: 3 },
+    });
+    expect(editor.can({ type: 'insertBreak', kind: 'section' } as never)).toEqual({ ok: true });
+  });
+});
+
+describe('the cheap answers survive a document that declares a real lock', () => {
+  // The two section short-circuits were gated behind "no lock declared", which threw them away
+  // for any document holding a content control: past the span bound the gate then answered
+  // "allowed" for a break it already knew would refuse.
+  const LOCKED_SOMEWHERE =
+    Array.from({ length: 200 }, (_, i) => p(`a ${i}`)).join('') +
+    '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+    p('held') +
+    '</w:sdtContent></w:sdt>' +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  test('a select-all past the bound still refuses a continuous break', () => {
+    const editor = mount(LOCKED_SOMEWHERE, 'suggesting');
+    editor.surface!.selectAll();
+    expect(editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never)).toMatchObject({
+      ok: false,
+    });
+    expect(editor.surface!.insertSectionBreak('continuous')).toBe(false);
+  });
+});
+
+describe('the span bound is what decides when the gate stops planning', () => {
+  // Nothing pinned the bound, so it could be raised back to a number that costs tens of
+  // milliseconds per row per toolbar derivation without a test noticing.
+  const MIXED = (count: number) =>
+    Array.from({ length: count }, (_, i) => p(`a ${i}`)).join('') +
+    '<w:p><w:pPr><w:sectPr><w:type w:val="continuous"/><w:pgSz w:w="12240" w:h="15840"/>' +
+    '</w:sectPr></w:pPr><w:r><w:t>mid</w:t></w:r></w:p>' +
+    Array.from({ length: count }, (_, i) => p(`b ${i}`)).join('') +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>';
+
+  test('MAX_GATED_BREAK_SPAN is small enough to stay off the plan for a long drag', () => {
+    expect(MAX_GATED_BREAK_SPAN).toBeLessThanOrEqual(64);
+  });
+
+  test('a span inside the bound is answered exactly; past it the press answers', () => {
+    // Sections disagree, so neither short-circuit settles it and only the plan can.
+    const editor = mount(MIXED(40), 'suggesting');
+    const ids = editor.surface!.session.paragraphIds();
+    const spanning = (count: number) => {
+      editor.surface!.setSelection({
+        anchor: { paragraphId: ids[40 - Math.floor(count / 2)]!, offset: 0 },
+        head: { paragraphId: ids[40 + Math.ceil(count / 2)]!, offset: 1 },
+      });
+      return editor.can({ type: 'insertBreak', kind: 'sectionContinuous' } as never);
+    };
+    expect(spanning(MAX_GATED_BREAK_SPAN - 2).ok).toBe(false);
+    expect(spanning(MAX_GATED_BREAK_SPAN + 20)).toEqual({ ok: true });
   });
 });

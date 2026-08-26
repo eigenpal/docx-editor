@@ -59,6 +59,10 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
  */
 export function localizeDisabledReason(reason: string | null, t: TFunction): string | null {
   if (!reason) return null;
-  const key = DISABLED_REASON_KEYS[reason];
+  // `Object.hasOwn`, because this is a @public entry point and a plain object answers
+  // `constructor` and `toString` from its prototype — truthy values that are not keys.
+  const key = Object.prototype.hasOwnProperty.call(DISABLED_REASON_KEYS, reason)
+    ? DISABLED_REASON_KEYS[reason]
+    : undefined;
   return key ? t(key) : reason;
 }
