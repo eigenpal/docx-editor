@@ -183,12 +183,16 @@ function applyRunRecolor(xml: string, part: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Word's blank-template paragraph rhythm: 8pt after, 1.08-line spacing.
+ * The gap between paragraphs, at Word's own blank-template value: 8pt after.
  *
- * The same values `packages/core/src/editor/blank-document.ts` ships, so a New
- * document and the demo document read alike.
+ * Word's template pairs that with `w:line="259" w:lineRule="auto"` (1.08 lines),
+ * which `packages/core/src/editor/blank-document.ts` ships for a New document.
+ * Not here: the defaults are the bottom of the cascade, so a line rule set there
+ * reaches every heading, table cell and TOC entry in an already-authored
+ * document and restyles text nobody asked to restyle. The gap is the thing this
+ * document is missing; the line rule is not.
  */
-const NORMAL_RHYTHM = '<w:spacing w:after="160" w:line="259" w:lineRule="auto"/>';
+const NORMAL_RHYTHM = '<w:spacing w:after="160"/>';
 
 /** The empty defaults element the source ships, and what replaces it. */
 const EMPTY_PPR_DEFAULT = '<w:pPrDefault/>';
@@ -218,12 +222,130 @@ function applyNormalRhythm(xml: string, part: string): string {
   );
 }
 
+/**
+ * `CT_PPrBase` children that follow `w:spacing` in the schema's sequence.
+ *
+ * `w:pPr` is an `xsd:sequence`, so a `w:spacing` dropped in the wrong slot makes
+ * the file unreadable in Word even though every value in it is correct. Only the
+ * names that actually occur in this document's cell paragraphs need listing; the
+ * count assertion below is what catches a source that grows a new one.
+ */
+const AFTER_SPACING = ['ind', 'contextualSpacing', 'jc', 'outlineLvl', 'cnfStyle', 'rPr'];
+
+/**
+ * How many cell paragraphs are expected to need the zero.
+ *
+ * 319 state no `w:spacing` at all, 3 state a `w:before` without an `w:after`,
+ * and 3 are empty `<w:p/>`. All of them leave `w:after` to the cascade, which is
+ * the whole question.
+ */
+const CELL_ZERO_EXPECTED = 325;
+
+/** Puts `w:spacing` in its schema slot inside one existing `w:pPr` body. */
+function withZeroAfter(pPrBody: string): string {
+  const zero = '<w:spacing w:after="0"/>';
+  for (const name of AFTER_SPACING) {
+    const at = pPrBody.indexOf(`<w:${name}`);
+    if (at >= 0) return pPrBody.slice(0, at) + zero + pPrBody.slice(at);
+  }
+  return pPrBody + zero;
+}
+
+/**
+ * Holds table cells at the spacing they had before the defaults gained a rhythm.
+ *
+ * 319 of this document's cell paragraphs state no `w:spacing` of their own, so
+ * `applyNormalRhythm` hands each one 8pt after — and the tables come out about
+ * 40% taller. Word keeps cells tight through the table style every table names;
+ * this document's 15 tables name none, and the engine applies a table style only
+ * where a `w:tblStyle` points at one. Writing the zero on the paragraphs is what
+ * Word itself emits when it has no style to hang it on.
+ *
+ * Body paragraphs are deliberately untouched: the rhythm reaching them is the
+ * point of the change.
+ */
+function tightenTableCells(xml: string, part: string): string {
+  if (part !== 'word/document.xml') return xml;
+  let zeroed = 0;
+  // Depth-tracked rather than cell-scoped: this document nests tables, and a
+  // `<w:tc>…</w:tc>` match ends at the INNER cell's close, so the paragraphs an
+  // outer cell holds after a nested table are outside every such match. That is
+  // exactly where the one entry a cell-scoped pass missed lives.
+  let depth = 0;
+  const out = xml.replace(
+    /<w:tbl>|<\/w:tbl>|<w:p\s*\/>|<w:p(?: [^>]*)?>(?:(?!<\/w:p>).)*<\/w:p>/gs,
+    (token) => {
+      if (token === '<w:tbl>') {
+        depth += 1;
+        return token;
+      }
+      if (token === '</w:tbl>') {
+        depth -= 1;
+        return token;
+      }
+      if (depth === 0) return token;
+      // An empty paragraph serializes self-closing, and OOXML requires one after
+      // every nested table — so the cells that hold this document's three-deep
+      // table are exactly where they sit, and exactly what a `</w:p>` scan misses.
+      if (/^<w:p\s*\/>$/.test(token)) {
+        zeroed += 1;
+        return '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p>';
+      }
+      const spacing = token.match(/<w:spacing [^/]*\/>/);
+      // A `w:spacing` that states only `w:before` still leaves `w:after` to the
+      // cascade, so it needs the zero as much as a paragraph with no spacing at all.
+      if (spacing?.[0].includes('w:after=')) return token;
+      zeroed += 1;
+      if (spacing) {
+        return token.replace(
+          spacing[0],
+          spacing[0].replace('<w:spacing ', '<w:spacing w:after="0" ')
+        );
+      }
+      const existing = token.match(/<w:pPr>(.*?)<\/w:pPr>/s);
+      if (existing) {
+        return token.replace(existing[0], `<w:pPr>${withZeroAfter(existing[1])}</w:pPr>`);
+      }
+      // `w:pPr` must be the paragraph's FIRST child.
+      const open = token.indexOf('>') + 1;
+      return `${token.slice(0, open)}<w:pPr><w:spacing w:after="0"/></w:pPr>${token.slice(open)}`;
+    }
+  );
+  if (depth !== 0) throw new Error(`[${part}] unbalanced w:tbl nesting (${depth})`);
+  if (zeroed !== CELL_ZERO_EXPECTED) {
+    throw new Error(`[${part}] zeroed ${zeroed} cell paragraphs, expected ${CELL_ZERO_EXPECTED}`);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // TOC
 // ---------------------------------------------------------------------------
 
 const HEADING_RE =
   /<w:p(?: [^>]*)?>(?:(?!<\/w:p>).)*?<w:pStyle w:val="Heading[1-5]"\/>(?:(?!<\/w:p>).)*?<\/w:p>/gs;
+
+/** The entry spacing the generated block carries: line rule stated, `w:after` left open. */
+const TOC_ENTRY_SPACING = /<w:spacing w:line="\d+" w:lineRule="auto"\/>/g;
+
+/**
+ * Pins each TOC entry's `w:after` to zero.
+ *
+ * An entry states its own line rule and no `w:after`, so what holds the gap
+ * between entries closed is whatever the cascade supplies — nothing, until
+ * `applyNormalRhythm` gave the defaults a rhythm, and then 8pt on all 67 of
+ * them. Word keeps that gap closed with its built-in `TOC1`…`TOC9` styles; this
+ * document names those styles and defines none of them, which is a gap worth
+ * keeping (a `w:pStyle` pointing at nothing is a case the engine must survive).
+ * So the zero goes where the rest of the entry's formatting already sits.
+ */
+function tightenTocSpacing(block: string): string {
+  if (!TOC_ENTRY_SPACING.test(block)) throw new Error('TOC block: no entry spacing to tighten');
+  TOC_ENTRY_SPACING.lastIndex = 0;
+  return block.replace(TOC_ENTRY_SPACING, (m) =>
+    m.replace('<w:spacing ', '<w:spacing w:after="0" ')
+  );
+}
 
 function tocSdt(xml: string): { start: number; end: number } {
   const i = xml.indexOf('TOC \\h');
@@ -319,11 +441,12 @@ async function main(): Promise<void> {
     if (!path.endsWith('.xml')) continue;
 
     let xml = await entry.async('string');
-    if (path === 'word/document.xml') xml = injectToc(xml, tocBlock);
+    if (path === 'word/document.xml') xml = injectToc(xml, tightenTocSpacing(tocBlock));
     xml = applyText(xml, path);
     xml = applyRunRecolor(xml, path);
     xml = applyPalette(xml);
     xml = applyNormalRhythm(xml, path);
+    xml = tightenTableCells(xml, path);
     source.file(path, xml, { date: ENTRY_DATE });
   }
 
