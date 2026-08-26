@@ -15,36 +15,38 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // because shared state records no such provenance. That is what bounds this mechanism: it
 // covers parts whose members are elements that appear nowhere else in a document. `w:comment`,
 // `w:footnote`, `w:endnote`, `w:abstractNum` and `w:num` each live in exactly one part, so a
-// stray one can only have come from there. A header's members are `w:p` and `w:tbl`, which
-// occur in every story, so a scan for orphaned blocks cannot tell a lost header paragraph from
-// a body paragraph that some other defect unparented — and adopting a body paragraph into a
-// header is worse than the loss it repairs. Headers and footers therefore need per-node part
-// provenance in shared state, and are deliberately absent here.
+// stray one can only have come from there.
+//
+// Two part kinds are deliberately absent.
+//
+// A header's members are `w:p` and `w:tbl`, which occur in every story, so a scan for orphaned
+// blocks cannot tell a lost header paragraph from a body paragraph that some other defect
+// unparented — and adopting a body paragraph into a header is worse than the loss it repairs.
+// Headers and footers need per-node part provenance in shared state first.
+//
+// The customXml stores are excluded for the opposite reason: identity is not enough to say
+// WHICH store a `dsp:node` belongs to. A document can hold several, one per namespace, and a
+// concurrent first-create leaves `item1.xml` occupied by whichever root landed last — so the
+// namespace of the part currently sitting at a name says nothing about the namespace of the
+// nodes stranded next to it. Adopting by that rule merges two stores into one. Custom XML is
+// therefore repaired by `planCustomXmlStores`, which pairs data roots to props roots by
+// namespace and hands each store its own nodes.
 
-import {
-  DATASTORE_NAMESPACE_URI,
-  WML_NAMESPACE_URI,
-  type OoxmlElement,
-} from '@docx-editor.dev/core/store';
+import { WML_NAMESPACE_URI, type OoxmlElement } from '@docx-editor.dev/core/store';
 import type { ElementRecord } from './schema.ts';
-import { isCustomXmlItemPartName, isCustomXmlPropsPartName } from './materialize-custom-xml.ts';
 
 export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
 
 export interface PartMemberSpec {
   /** True when this element belongs directly under the part root as a directory member. */
   readonly isMember: (record: ElementRecord) => boolean;
-  /** Sibling order for members, computed identically on every replica. */
-  readonly sortKey: (node: OoxmlElement) => string;
   /**
-   * Order members even when this pass adopted none.
+   * Sibling order for members, computed identically on every replica.
    *
-   * The customXml parts are renumbered by the planner, so their member order is derived and
-   * has to be re-derived every pass. The notes and numbering parts keep the order their author
-   * wrote until an adoption actually adds a sibling, so that a replica which lost nothing
-   * reproduces the input byte-for-byte.
+   * Applied only when a pass actually adopts something, so that a replica which lost nothing
+   * reproduces the order its author wrote.
    */
-  readonly sortWithoutAdoption: boolean;
+  readonly sortKey: (node: OoxmlElement) => string;
 }
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
@@ -65,10 +67,6 @@ function numericKey(value: string | undefined): string {
     return `2${value ?? ''}`;
   }
   return `${parsed < 0 ? '0' : '1'}${String(Math.abs(parsed)).padStart(12, '0')}`;
-}
-
-function payloadIdKey(node: OoxmlElement): string {
-  return attributeValue(node, 'id') ?? node.id;
 }
 
 function wmlMember(localName: string): (record: ElementRecord) => boolean {
@@ -94,12 +92,11 @@ function isNumberingMember(record: ElementRecord): boolean {
   return record.localName === 'abstractNum' || record.localName === 'num';
 }
 
-export function partMemberSpecFor(name: string, root: OoxmlElement): PartMemberSpec | null {
+export function partMemberSpecFor(root: OoxmlElement): PartMemberSpec | null {
   if (root.localName === 'comments') {
     return {
       isMember: (record) => record.kind === 'comment',
       sortKey: (node) => node.id,
-      sortWithoutAdoption: false,
     };
   }
   if (root.localName === 'commentsEx') {
@@ -107,44 +104,24 @@ export function partMemberSpecFor(name: string, root: OoxmlElement): PartMemberS
       isMember: (record) =>
         record.localName === 'commentEx' && record.namespaceUri === W15_NAMESPACE_URI,
       sortKey: (node) => node.id,
-      sortWithoutAdoption: false,
     };
   }
   if (root.localName === 'footnotes' && root.namespaceUri === WML_NAMESPACE_URI) {
     return {
       isMember: wmlMember('footnote'),
       sortKey: (node) => numericKey(attributeValue(node, 'id')),
-      sortWithoutAdoption: false,
     };
   }
   if (root.localName === 'endnotes' && root.namespaceUri === WML_NAMESPACE_URI) {
     return {
       isMember: wmlMember('endnote'),
       sortKey: (node) => numericKey(attributeValue(node, 'id')),
-      sortWithoutAdoption: false,
     };
   }
   if (root.localName === 'numbering' && root.namespaceUri === WML_NAMESPACE_URI) {
     return {
       isMember: isNumberingMember,
       sortKey: numberingSortKey,
-      sortWithoutAdoption: false,
-    };
-  }
-  if (isCustomXmlItemPartName(name)) {
-    return {
-      isMember: (record) =>
-        record.localName === 'node' && record.namespaceUri === root.namespaceUri,
-      sortKey: payloadIdKey,
-      sortWithoutAdoption: true,
-    };
-  }
-  if (isCustomXmlPropsPartName(name)) {
-    return {
-      isMember: (record) =>
-        record.localName === 'schemaRefs' && record.namespaceUri === DATASTORE_NAMESPACE_URI,
-      sortKey: payloadIdKey,
-      sortWithoutAdoption: true,
     };
   }
   return null;

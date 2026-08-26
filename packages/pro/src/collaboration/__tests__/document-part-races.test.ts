@@ -194,9 +194,9 @@ describe('member order a replica derives for an adopted part', () => {
     } as unknown as OoxmlElement;
   }
 
-  function ordered(partName: string, root: OoxmlElement, members: OoxmlElement[]): string[] {
-    const spec = partMemberSpecFor(partName, root);
-    if (!spec) throw new Error(`no spec for ${partName}`);
+  function ordered(root: OoxmlElement, members: OoxmlElement[]): string[] {
+    const spec = partMemberSpecFor(root);
+    if (!spec) throw new Error(`no spec for ${root.localName}`);
     return [...members]
       .sort((left, right) => spec.sortKey(left).localeCompare(spec.sortKey(right)))
       .map((member) => member.id);
@@ -210,12 +210,7 @@ describe('member order a replica derives for an adopted part', () => {
       element('num', { numId: '9' }),
       element('abstractNum', { abstractNumId: '10' }),
     ];
-    expect(ordered('/word/numbering.xml', root, members)).toEqual([
-      'abstractNum-9',
-      'abstractNum-10',
-      'num-9',
-      'num-10',
-    ]);
+    expect(ordered(root, members)).toEqual(['abstractNum-9', 'abstractNum-10', 'num-9', 'num-10']);
   });
 
   test('a notes part keeps the reserved negative ids first and sorts the rest numerically', () => {
@@ -226,7 +221,7 @@ describe('member order a replica derives for an adopted part', () => {
       element('footnote', { id: '0' }),
       element('footnote', { id: '-1' }),
     ];
-    expect(ordered('/word/footnotes.xml', root, members)).toEqual([
+    expect(ordered(root, members)).toEqual([
       'footnote--1',
       'footnote-0',
       'footnote-2',
@@ -238,6 +233,6 @@ describe('member order a replica derives for an adopted part', () => {
     // Adopting a body paragraph into a header is worse than the loss it would repair, so this
     // absence is the design. If a later change gives headers per-node provenance, delete this.
     const root = element('hdr', {});
-    expect(partMemberSpecFor('/word/header1.xml', root)).toBeNull();
+    expect(partMemberSpecFor(root)).toBeNull();
   });
 });

@@ -147,6 +147,14 @@ export interface RepairIssue {
  *
  * What remains cannot arise from healthy editing: each one means a parent names a child this
  * replica cannot produce, so the document is short of something shared state says is there.
+ *
+ * `duplicate-parent` escalates because two child arrays contesting one node drops every
+ * placement but the first. That makes the code load-bearing, and a repair pass that asks for a
+ * node the same pass already produced would spend it on itself: the escalation stops the remote
+ * apply, so a false positive reads to a host as a diverged document. Repair paths must therefore
+ * reach a node through `materializeOnce` or skip the ones already placed. Do not answer a new
+ * false positive by adding a quieter twin of this code — that hands a future repair a way to
+ * report a genuine contest as nothing.
  */
 export const DROPPED_CONTENT_REPAIR_CODES: ReadonlySet<RepairIssueCode> = Object.freeze(
   new Set<RepairIssueCode>([

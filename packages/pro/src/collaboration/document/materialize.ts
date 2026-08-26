@@ -126,6 +126,17 @@ export class PackageMaterializer {
   private lastDuplicateParents: readonly LogicalId[] = [];
   /** Ids that left a parent's child array during this pass. Reset per pass. */
   private readonly droppedChildren = new Set<LogicalId>();
+  /**
+   * Ids a previous pass could not reach from any part, or found stranded content beneath.
+   *
+   * Nothing in shared state says a node is unreachable — every pass derives it — so a pass
+   * that looks only at the children it just watched leave a parent can NOTICE a break but
+   * cannot keep noticing it. The next keystroke drops the report, and, worse, drops the
+   * adoption that repaired it: a member rescued once vanishes again on the following pass.
+   * Carrying these forward is what makes the repair idempotent, and the set holds what is
+   * actually broken rather than growing with the document.
+   */
+  private looseCandidates = new Set<LogicalId>();
   private pkg: OoxmlPackage | null = null;
   private customXmlRels: readonly EncodedRelationship[] = [];
   private customXmlOverrides = new Map<string, string>();
@@ -281,11 +292,15 @@ export class PackageMaterializer {
       this.partCache.set(entry.name, part);
     }
     // Reachability candidates. A full pass has to consider every node, because it knows
-    // nothing about what came before. An incremental pass saw every child that left a parent,
-    // and no other id can have lost its last parent while it was running.
-    const candidates = incremental ? this.droppedChildren : this.registry.allLogicalIds();
+    // nothing about what came before. An incremental pass saw every child that left a parent
+    // — no other id can have lost its last parent while it was running — plus whatever an
+    // earlier pass already found loose, since that verdict has to be reached again to hold.
+    const candidates = incremental
+      ? new Set([...this.droppedChildren, ...this.looseCandidates])
+      : this.registry.allLogicalIds();
+    const loose = new Set<LogicalId>();
     this.projectRelsParts(parts);
-    this.adoptOrphanPartMembers(parts, placed, incremental, candidates);
+    this.adoptOrphanPartMembers(parts, placed, incremental, candidates, loose);
     this.applyCustomXmlStores(parts, placed, incremental);
     for (const name of [...this.partCache.keys()]) {
       if (!parts.has(name)) this.partCache.delete(name);
@@ -293,7 +308,8 @@ export class PackageMaterializer {
     for (const name of [...this.relsProjection.keys()]) {
       if (!parts.has(name)) this.relsProjection.delete(name);
     }
-    this.reportOrphans(candidates, placed, incremental);
+    this.reportOrphans(candidates, placed, incremental, loose);
+    this.looseCandidates = loose;
     if (!incremental) {
       this.lastDuplicateParents = this.issues
         .filter((issue) => issue.code === 'duplicate-parent' && issue.logicalId !== undefined)
@@ -351,26 +367,75 @@ export class PackageMaterializer {
   private reportOrphans(
     candidates: Iterable<LogicalId>,
     placed: ReadonlySet<LogicalId>,
-    incremental: boolean
+    incremental: boolean,
+    loose: Set<LogicalId>
   ): void {
-    const partRoots = incremental
-      ? new Set(this.registry.partEntries().map((entry) => entry.rootLogicalId))
-      : null;
-    for (const id of candidates) {
-      if (this.registry.isTombstoned(id)) continue;
-      if (partRoots === null) {
-        if (placed.has(id)) continue;
-      } else if (partRoots.has(id) || this.stillListed(id)) {
+    if (!incremental) {
+      for (const id of candidates) {
+        if (this.registry.isTombstoned(id) || placed.has(id)) continue;
+        this.pushOrphan(id);
+        loose.add(id);
+      }
+      return;
+    }
+    const partRoots = new Set(this.registry.partEntries().map((entry) => entry.rootLogicalId));
+    const scanned = new Set<LogicalId>();
+    for (const root of candidates) {
+      if (scanned.has(root)) continue;
+      scanned.add(root);
+      if (this.reportOrphansUnder(root, placed, partRoots)) loose.add(root);
+    }
+  }
+
+  /**
+   * Report everything unreachable at or under `root`, and say whether anything was.
+   *
+   * A tombstone is a deliberate delete, so it is not itself a loss — but its CHILDREN can be.
+   * Deleting a paragraph while a peer types inside it leaves that text referenced by nothing,
+   * which is the one shape of silent loss this walk exists to name. A full pass finds it by
+   * scanning every id; descending from the tombstone instead keeps the work proportional to
+   * the subtree the edit removed.
+   */
+  private reportOrphansUnder(
+    root: LogicalId,
+    placed: ReadonlySet<LogicalId>,
+    partRoots: ReadonlySet<LogicalId>
+  ): boolean {
+    let reported = false;
+    const seen = new Set<LogicalId>();
+    const stack = [{ id: root, underTombstone: false }];
+    while (stack.length > 0) {
+      const { id, underTombstone } = stack.pop()!;
+      if (seen.has(id) || seen.size >= this.registry.limits.maxTreeDepth) continue;
+      seen.add(id);
+      if (this.registry.isTombstoned(id)) {
+        const record = this.registry.record(id);
+        if (record && isElementRecord(record)) {
+          for (const child of record.childIds) stack.push({ id: child, underTombstone: true });
+        }
         continue;
       }
-      const record = this.registry.record(id);
-      const hasContent =
-        !!record &&
-        (isTextRecord(record)
-          ? record.value.length > 0
-          : record.childIds.length > 0 || record.attributes.length > 0);
-      this.push(hasContent ? 'orphan-with-content' : 'orphan', id);
+      if (partRoots.has(id)) continue;
+      // Beneath a tombstone the listings index cannot answer reachability: the dead parent
+      // still names the child, and `stillListed` counts that deliberately, because the
+      // registry re-homes an adopted child onto the survivor. Placement is the authority
+      // there — an adopter has to rebuild to take the child, so this pass placed it.
+      if (underTombstone ? placed.has(id) : this.stillListed(id)) continue;
+      this.pushOrphan(id);
+      reported = true;
     }
+    return reported;
+  }
+
+  /** Name a node no part reaches, saying whether anything a reader could see went with it. */
+  private pushOrphan(logicalId: LogicalId): void {
+    const record = this.registry.record(logicalId);
+    const hasContent =
+      !!record &&
+      (isTextRecord(record)
+        ? record.value.length > 0
+        : record.childIds.length > 0 || record.attributes.length > 0);
+    this.push(hasContent ? 'orphan-with-content' : 'orphan', logicalId);
   }
 
   private materialize(
@@ -584,10 +649,11 @@ export class PackageMaterializer {
     parts: Map<string, OoxmlPart>,
     placed: Set<LogicalId>,
     incremental: boolean,
-    candidates: Iterable<LogicalId>
+    candidates: Iterable<LogicalId>,
+    loose: Set<LogicalId>
   ): void {
     for (const [name, part] of parts) {
-      const spec = partMemberSpecFor(name, part.root);
+      const spec = partMemberSpecFor(part.root);
       if (!spec) continue;
       const isMember = (record: ElementRecord): boolean =>
         record.logicalId !== part.root.id && spec.isMember(record);
@@ -606,9 +672,10 @@ export class PackageMaterializer {
         isMember,
         placed,
         incremental,
-        candidates
+        candidates,
+        loose
       );
-      if (adopted === 0 && !spec.sortWithoutAdoption) continue;
+      if (adopted === 0) continue;
       members.sort((left, right) => spec.sortKey(left).localeCompare(spec.sortKey(right)));
       const kept: OoxmlNode[] = [];
       for (const child of part.root.children) {
@@ -641,7 +708,8 @@ export class PackageMaterializer {
     isMember: (record: ElementRecord) => boolean,
     placed: Set<LogicalId>,
     incremental: boolean,
-    candidates: Iterable<LogicalId>
+    candidates: Iterable<LogicalId>,
+    loose: Set<LogicalId>
   ): number {
     let adopted = 0;
     for (const id of candidates) {
@@ -657,9 +725,30 @@ export class PackageMaterializer {
       if (!node || node.kind === 'textValue') continue;
       members.push(node);
       seen.add(id);
+      // The adoption itself is not written anywhere, so the next pass has to find this member
+      // again or it drops back out of the part it was just rescued into.
+      loose.add(id);
       adopted += 1;
     }
     return adopted;
+  }
+
+  /**
+   * The node for `id` in this pass, built only if the pass has not already produced it.
+   *
+   * The customXml repair reaches roots the part loop built minutes earlier in the same pass —
+   * `itemProps1.xml` is both a part and a store's props root. Asking `materialize` for it a
+   * second time trips the placement guard, which reports `duplicate-parent` and returns
+   * nothing. That code means two child arrays are contesting one node, a session-escalating
+   * signal, and it must not be spent on a repair revisiting its own output.
+   */
+  private materializeOnce(
+    id: LogicalId,
+    placed: Set<LogicalId>,
+    incremental: boolean
+  ): OoxmlNode | null {
+    if (placed.has(id)) return this.cache.get(id) ?? null;
+    return this.materialize(id, placed, new Set(), incremental);
   }
 
   private adoptNodesIntoRoot(
@@ -672,21 +761,14 @@ export class PackageMaterializer {
     const root =
       existing && existing.kind !== 'textValue'
         ? existing
-        : this.materialize(rootId, placed, new Set(), incremental);
+        : this.materializeOnce(rootId, placed, incremental);
     if (!root || root.kind === 'textValue') return null;
     const members: OoxmlNode[] = [...root.children];
     const seen = new Set(members.map((child) => child.id));
     let adopted = 0;
     for (const id of nodeIds) {
       if (seen.has(id)) continue;
-      const cached = this.cache.get(id);
-      if (cached && cached.kind !== 'textValue') {
-        members.push(cached);
-        seen.add(id);
-        adopted += 1;
-        continue;
-      }
-      const node = this.materialize(id, placed, new Set(), incremental);
+      const node = this.materializeOnce(id, placed, incremental);
       if (!node || node.kind === 'textValue') continue;
       members.push(node);
       seen.add(id);
@@ -722,7 +804,7 @@ export class PackageMaterializer {
         placed,
         incremental
       );
-      const propsRoot = this.materialize(store.propsRootId, placed, new Set(), incremental);
+      const propsRoot = this.materializeOnce(store.propsRootId, placed, incremental);
       if (!dataRoot || !propsRoot || propsRoot.kind === 'textValue') continue;
       const dataPart = Object.freeze({
         id: store.itemName,
